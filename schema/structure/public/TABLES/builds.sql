@@ -27,6 +27,9 @@ CREATE TABLE public.builds (
     sponsor_address text,
     sponsor_description text,
     sponsor_website_url text,
+    server_address text,
+    server_coordinates text,
+    server_command text,
     CONSTRAINT builds_category_check CHECK ((category = ANY (ARRAY['Door'::text, 'Extender'::text, 'Utility'::text, 'Entrance'::text, 'Other'::text]))),
     CONSTRAINT builds_display_name_valid CHECK (((display_name IS NULL) OR ((display_name = btrim(display_name)) AND (display_name <> ''::text) AND (char_length(display_name) <= 120)))),
     CONSTRAINT builds_lock_lease_complete CHECK ((((locked_at IS NULL) AND (lock_token IS NULL) AND (lock_expires_at IS NULL)) OR ((locked_at IS NOT NULL) AND (lock_token IS NOT NULL) AND (lock_expires_at IS NOT NULL)))),
@@ -55,6 +58,10 @@ COMMENT ON COLUMN public.builds.revision IS 'Optimistic version checked by expli
 COMMENT ON COLUMN public.builds.source_submission_draft_id IS 'Stable finalization key retained even if the short-lived source draft is later pruned.';
 
 COMMENT ON COLUMN public.builds.sponsor_installation_id IS 'Opaque Paper installation ID snapshotted without a mutable foreign key.';
+
+COMMENT ON COLUMN public.builds.server_address IS 'Minecraft server where players can visit the build.';
+
+COMMENT ON COLUMN public.builds.server_command IS 'Command that takes a player to the build on that server.';
 
 ALTER TABLE ONLY public.builds ALTER COLUMN id SET DEFAULT nextval('public.submissions_submission_id_seq'::regclass);
 

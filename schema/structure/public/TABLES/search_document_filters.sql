@@ -7,6 +7,7 @@ CREATE TABLE public.search_document_filters (
     numeric_value numeric,
     timestamp_value timestamp with time zone,
     boolean_value boolean,
+    holder_build_id bigint,
     CONSTRAINT search_document_filters_one_value_check CHECK ((num_nonnulls(text_value, numeric_value, timestamp_value, boolean_value) = 1))
 );
 
@@ -19,6 +20,8 @@ ALTER TABLE ONLY public.search_document_filters
     ADD CONSTRAINT search_document_filters_pkey PRIMARY KEY (id);
 
 CREATE INDEX search_document_filters_boolean_idx ON public.search_document_filters USING btree (field_name, boolean_value) WHERE (boolean_value IS NOT NULL);
+
+CREATE UNIQUE INDEX search_document_filters_holder_idx ON public.search_document_filters USING btree (document_id, holder_build_id, field_name) WHERE (holder_build_id IS NOT NULL);
 
 CREATE INDEX search_document_filters_numeric_idx ON public.search_document_filters USING btree (field_name, numeric_value) WHERE (numeric_value IS NOT NULL);
 

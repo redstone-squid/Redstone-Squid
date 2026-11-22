@@ -121,7 +121,7 @@ CREATE FUNCTION public.build_history_snapshot_v1(target_build_id bigint) RETURNS
     SET "TimeZone" TO 'UTC'
     AS $$
 SELECT jsonb_build_object(
-    'build', jsonb_build_object('submission_status', b.submission_status, 'extra_info', b.extra_info, 'width', b.width, 'height', b.height, 'depth', b.depth, 'completion_time', b.completion_time, 'submission_time', b.submission_time, 'category', b.category, 'ai_generated', b.ai_generated, 'version_spec', b.version_spec, 'completion_at', b.completion_at, 'completion_evidence', b.completion_evidence, 'description', b.description, 'submitter_account_id', b.submitter_account_id, 'display_name', b.display_name, 'source_submission_draft_id', b.source_submission_draft_id, 'sponsor_installation_id', b.sponsor_installation_id, 'sponsor_display_name', b.sponsor_display_name, 'sponsor_address', b.sponsor_address, 'sponsor_description', b.sponsor_description, 'sponsor_website_url', b.sponsor_website_url),
+    'build', jsonb_build_object('submission_status', b.submission_status, 'extra_info', b.extra_info, 'width', b.width, 'height', b.height, 'depth', b.depth, 'completion_time', b.completion_time, 'submission_time', b.submission_time, 'category', b.category, 'ai_generated', b.ai_generated, 'version_spec', b.version_spec, 'completion_at', b.completion_at, 'completion_evidence', b.completion_evidence, 'description', b.description, 'submitter_account_id', b.submitter_account_id, 'display_name', b.display_name, 'server_address', b.server_address, 'server_coordinates', b.server_coordinates, 'server_command', b.server_command, 'source_submission_draft_id', b.source_submission_draft_id, 'sponsor_installation_id', b.sponsor_installation_id, 'sponsor_display_name', b.sponsor_display_name, 'sponsor_address', b.sponsor_address, 'sponsor_description', b.sponsor_description, 'sponsor_website_url', b.sponsor_website_url),
     'doors', (SELECT jsonb_build_object('orientation', d.orientation, 'door_width', d.door_width, 'door_height', d.door_height, 'door_depth', d.door_depth, 'expansion', d.expansion, 'normal_opening_time', d.normal_opening_time, 'normal_closing_time', d.normal_closing_time, 'visible_opening_time', d.visible_opening_time, 'visible_closing_time', d.visible_closing_time) FROM public.doors d WHERE d.build_id = b.id),
     'extenders', (SELECT jsonb_build_object('orientation', d.orientation, 'extension_length', d.extension_length, 'extender_type', d.extender_type, 'extension_time', d.extension_time, 'retraction_time', d.retraction_time) FROM public.extenders d WHERE d.build_id = b.id),
     'creators', COALESCE((SELECT jsonb_agg(jsonb_build_object('alias_id', a.id, 'name', a.name, 'account_id', a.account_id) ORDER BY a.id) FROM public.build_credits c JOIN public.creator_aliases a ON a.id = c.alias_id WHERE c.build_id = b.id), '[]'::jsonb),
@@ -2086,6 +2086,9 @@ CREATE TABLE public.builds (
     sponsor_address text,
     sponsor_description text,
     sponsor_website_url text,
+    server_address text,
+    server_coordinates text,
+    server_command text,
     CONSTRAINT builds_category_check CHECK ((category = ANY (ARRAY['Door'::text, 'Extender'::text, 'Utility'::text, 'Entrance'::text, 'Other'::text]))),
     CONSTRAINT builds_display_name_valid CHECK (((display_name IS NULL) OR ((display_name = btrim(display_name)) AND (display_name <> ''::text) AND (char_length(display_name) <= 120)))),
     CONSTRAINT builds_lock_lease_complete CHECK ((((locked_at IS NULL) AND (lock_token IS NULL) AND (lock_expires_at IS NULL)) OR ((locked_at IS NOT NULL) AND (lock_token IS NOT NULL) AND (lock_expires_at IS NOT NULL)))),
@@ -2149,6 +2152,20 @@ COMMENT ON COLUMN public.builds.source_submission_draft_id IS 'Stable finalizati
 --
 
 COMMENT ON COLUMN public.builds.sponsor_installation_id IS 'Opaque Paper installation ID snapshotted without a mutable foreign key.';
+
+
+--
+-- Name: COLUMN builds.server_address; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.builds.server_address IS 'Minecraft server where players can visit the build.';
+
+
+--
+-- Name: COLUMN builds.server_command; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.builds.server_command IS 'Command that takes a player to the build on that server.';
 
 
 --
@@ -4644,6 +4661,7 @@ CREATE TABLE public.search_document_filters (
     numeric_value numeric,
     timestamp_value timestamp with time zone,
     boolean_value boolean,
+    holder_build_id bigint,
     CONSTRAINT search_document_filters_one_value_check CHECK ((num_nonnulls(text_value, numeric_value, timestamp_value, boolean_value) = 1))
 );
 
@@ -8453,6 +8471,13 @@ CREATE INDEX schematic_render_queue_ready_idx ON public.schematic_render_queue U
 --
 
 CREATE INDEX search_document_filters_boolean_idx ON public.search_document_filters USING btree (field_name, boolean_value) WHERE (boolean_value IS NOT NULL);
+
+
+--
+-- Name: search_document_filters_holder_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX search_document_filters_holder_idx ON public.search_document_filters USING btree (document_id, holder_build_id, field_name) WHERE (holder_build_id IS NOT NULL);
 
 
 --
