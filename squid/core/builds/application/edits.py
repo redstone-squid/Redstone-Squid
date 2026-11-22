@@ -70,7 +70,6 @@ def patch_values(patch: BuildEditPatch) -> EditValues:
 
 def build_values(build: Build) -> EditValues:
     """Capture editable facts without derived values or submission origin."""
-    server = build.extra_info.get("server_info", {})
     patch = BuildEditPatch(
         display_name=build.display_name,
         version_spec=build.version_spec,
@@ -93,9 +92,9 @@ def build_values(build: Build) -> EditValues:
         world_download_urls=list(build.world_download_urls),
         schematic_urls=list(build.schematic_urls),
         render_urls=list(build.render_urls),
-        server_ip=server.get("server_ip"),
-        coordinates=server.get("coordinates"),
-        command_to_get_to_build=server.get("command_to_build"),
+        server_ip=build.server_address,
+        coordinates=build.server_coordinates,
+        command_to_get_to_build=build.server_command,
         completion_time=build.completion_time,
     )
     if isinstance(build, DoorBuild):

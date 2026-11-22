@@ -51,7 +51,7 @@ def test_combine_preserves_every_typed_patch_field() -> None:
         coordinates="1 2 3",
         command_to_get_to_build="/warp door",
         completion_time="2026-08-30",
-        extra_info={"server_info": {"server_ip": "play.example.com"}},
+        extra_info={"unknown_patterns": ["Spiral"]},
         ai_generated=False,
     )
 
@@ -82,6 +82,15 @@ def test_name_and_visible_timings_preserve_omissions_and_allow_clears() -> None:
     assert build.visible_closing_time == 9
     BuildEditPatch(display_name=None).apply(build)
     assert build.display_name is None
+
+
+def test_server_directions_preserve_omissions_and_allow_clears() -> None:
+    build = UtilityBuild(server_address="old.example", server_coordinates="1 2 3")
+    BuildEditPatch(server_ip="play.example", command_to_get_to_build="/warp").apply(build)
+    assert (build.server_address, build.server_coordinates, build.server_command) == ("play.example", "1 2 3", "/warp")
+    BuildEditPatch(coordinates=None).apply(build)
+    assert build.server_coordinates is None
+    assert build.extra_info == {}
 
 
 def test_visible_timings_reject_non_door_builds() -> None:

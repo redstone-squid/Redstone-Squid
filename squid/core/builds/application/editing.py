@@ -2,7 +2,7 @@
 
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
-from typing import Literal, Self, cast
+from typing import Self, cast
 
 from squid.core.builds.application.commands import Dimensions
 from squid.core.builds.application.input import normalize_extender_orientation, validate_extension_length
@@ -10,7 +10,6 @@ from squid.core.builds.domain import (
     DoorOrientationLiteral,
     Info,
     MediaTypeLiteral,
-    ServerInfo,
     ShowcaseTag,
     UnresolvedTags,
     read_showcase_tags,
@@ -300,47 +299,15 @@ class BuildEditPatch:
         if self.extra_user_info is not UNSET:
             build.description = self.extra_user_info
 
-        server_info = ServerInfo(**build.extra_info.get("server_info", {}))
-        server_changed = any(
-            value is not UNSET for value in (self.server_ip, self.coordinates, self.command_to_get_to_build)
-        )
-        self._update_server_info(server_info)
-        if server_changed:
-            if server_info:
-                build.extra_info["server_info"] = server_info
-            else:
-                build.extra_info.pop("server_info", None)
+        if self.server_ip is not UNSET:
+            build.server_address = self.server_ip
+        if self.coordinates is not UNSET:
+            build.server_coordinates = self.coordinates
+        if self.command_to_get_to_build is not UNSET:
+            build.server_command = self.command_to_get_to_build
 
     @staticmethod
     def _replace_reliability(values: list[str], old: tuple[str, str], new: str, empty_value: str) -> None:
         values[:] = [value for value in values if value not in old]
         if new != empty_value:
             values.append(new)
-
-    def _update_server_info(self, server_info: ServerInfo) -> None:
-        self._update_server_value(server_info, "server_ip", self.server_ip)
-        self._update_server_value(server_info, "coordinates", self.coordinates)
-        self._update_server_value(server_info, "command_to_build", self.command_to_get_to_build)
-
-    @staticmethod
-    def _update_server_value(
-        values: ServerInfo,
-        key: Literal["server_ip", "coordinates", "command_to_build"],
-        value: PatchValue[str | None],
-    ) -> None:
-        if value is UNSET:
-            return
-        if value is None:
-            if key == "server_ip":
-                values.pop("server_ip", None)
-            elif key == "coordinates":
-                values.pop("coordinates", None)
-            else:
-                values.pop("command_to_build", None)
-        else:
-            if key == "server_ip":
-                values["server_ip"] = value
-            elif key == "coordinates":
-                values["coordinates"] = value
-            else:
-                values["command_to_build"] = value

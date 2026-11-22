@@ -130,6 +130,11 @@ class Build(Base, StagedMedia, StagedTags, StagedCredits, kw_only=True):
     completion_evidence: Mapped[str | None] = mapped_column(Text, default=None)
     description: Mapped[str | None] = mapped_column(Text, default=None)
     display_name: Mapped[str | None] = mapped_column(Text, default=None)
+    server_address: Mapped[str | None] = mapped_column(Text, default=None)
+    """Minecraft server where players can visit the build."""
+    server_coordinates: Mapped[str | None] = mapped_column(Text, default=None)
+    server_command: Mapped[str | None] = mapped_column(Text, default=None)
+    """Command that takes a player to the build on that server."""
     source_submission_draft_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
     """Stable finalization key retained even if the short-lived source draft is later pruned."""
     sponsor_installation_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None, compare=False)

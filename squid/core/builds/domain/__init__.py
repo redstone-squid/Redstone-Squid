@@ -26,7 +26,6 @@ from squid.core.builds.domain.models import (
     MediaTypeLiteral,
     RecordCategoryLiteral,
     RestrictionTypeLiteral,
-    ServerInfo,
     parse_time_string,
     sort_restrictions,
 )
@@ -62,7 +61,6 @@ __all__ = [
     "RecordCategoryLiteral",
     "RestrictionField",
     "RestrictionTypeLiteral",
-    "ServerInfo",
     "ShowcaseTag",
     "UnresolvedTags",
     "creator_names",

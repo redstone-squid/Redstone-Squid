@@ -2656,3 +2656,66 @@ def test_tag_and_filter_storage_rename_preserves_rows_and_trigger(
             assert connection.execute(text("SELECT numeric_value FROM search_document_facets")).scalar_one() == 3
     finally:
         engine.dispose()
+
+
+def test_server_directions_move_out_of_extra_info_without_history(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config(toml_file="pyproject.toml")
+    parent = "f4b7c28a610d"
+    command.upgrade(config, parent)
+    engine = create_engine(migration_database_url)
+    infos = {
+        "full": {"server_info": {"server_ip": "play.example", "coordinates": "1 2 3", "command_to_build": "/warp"}},
+        "blank": {"server_info": {"server_ip": "", "coordinates": "4 5 6"}, "unknown_patterns": ["Spiral"]},
+        "none": {"unknown_patterns": ["Spiral"]},
+    }
+    try:
+        with engine.begin() as connection:
+            _begin_build_edit(connection)
+            account = connection.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id")).scalar_one()
+            builds = {
+                name: connection.execute(
+                    text(
+                        "INSERT INTO builds (submission_status, category, submitter_account_id, ai_generated, "
+                        "extra_info) VALUES (0, 'Other', :account, false, CAST(:info AS jsonb)) RETURNING id"
+                    ),
+                    {"account": account, "info": json.dumps(info)},
+                ).scalar_one()
+                for name, info in infos.items()
+            }
+            for build_id in builds.values():
+                connection.execute(text("INSERT INTO other_builds (build_id) VALUES (:id)"), {"id": build_id})
+        with engine.connect() as connection:
+            history_before = connection.execute(text("SELECT count(*) FROM build_edit_history")).scalar_one()
+
+        command.upgrade(config, "3c8e1f5a9d27")
+        with engine.connect() as connection:
+            rows = {
+                row.id: (row.server_address, row.server_coordinates, row.server_command, row.extra_info)
+                for row in connection.execute(
+                    text("SELECT id, server_address, server_coordinates, server_command, extra_info FROM builds")
+                )
+            }
+            assert rows == {
+                builds["full"]: ("play.example", "1 2 3", "/warp", {}),
+                builds["blank"]: (None, "4 5 6", None, {"unknown_patterns": ["Spiral"]}),
+                builds["none"]: (None, None, None, {"unknown_patterns": ["Spiral"]}),
+            }
+            assert connection.execute(text("SELECT count(*) FROM build_edit_history")).scalar_one() == history_before
+            snapshot = connection.execute(
+                text("SELECT build_history_snapshot_v1(:id)"), {"id": builds["full"]}
+            ).scalar_one()
+            assert snapshot["build"]["server_command"] == "/warp"
+
+        command.downgrade(config, parent)
+        with engine.connect() as connection:
+            restored = connection.execute(
+                text("SELECT extra_info FROM builds WHERE id = :id"), {"id": builds["full"]}
+            ).scalar_one()
+            assert restored == infos["full"]
+        command.upgrade(config, "head")
+    finally:
+        engine.dispose()

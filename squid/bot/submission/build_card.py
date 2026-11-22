@@ -379,13 +379,12 @@ def build_metadata_fields(build: Build) -> dict[str, str]:
     if showcase:
         fields["Tags"] = ", ".join(showcase)
 
-    server_info = build.extra_info.get("server_info", {})
-    if ip := server_info.get("server_ip"):
-        fields["Server"] = ip
-        if coordinates := server_info.get("coordinates"):
-            fields["Coordinates"] = coordinates
-        if command := server_info.get("command_to_build"):
-            fields["Command"] = command
+    if build.server_address:
+        fields["Server"] = build.server_address
+        if build.server_coordinates:
+            fields["Coordinates"] = build.server_coordinates
+        if build.server_command:
+            fields["Command"] = build.server_command
 
     if build.world_download_urls:
         fields["World Download"] = ", ".join(build.world_download_urls)

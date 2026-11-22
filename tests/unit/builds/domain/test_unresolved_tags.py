@@ -10,7 +10,7 @@ def test_round_trip_preserves_storage_shape_and_unrelated_keys() -> None:
     info: Info = {
         "unknown_restrictions": {"component_restrictions": ["No slime"], "miscellaneous_restrictions": ["1.5 s"]},
         "unknown_patterns": ["Spiral"],
-        "server_info": {"server_ip": "play.example"},
+        "inference_review_notes": ["Check the timing"],
     }
     original = dict(info)
 

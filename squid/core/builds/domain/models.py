@@ -51,14 +51,6 @@ class UnknownRestrictions(TypedDict, total=False):
     miscellaneous_restrictions: list[str]
 
 
-class ServerInfo(TypedDict, total=False):
-    """Server address and directions for finding a build in the world."""
-
-    server_ip: str
-    coordinates: str
-    command_to_build: str
-
-
 class SchematicDuplicateSource(TypedDict):
     """The submitted attachment which produced duplicate evidence."""
 
@@ -95,11 +87,13 @@ class AttachmentResolution(TypedDict):
 
 
 class Info(TypedDict, total=False):
-    """Additional submission details retained in the build's JSON metadata."""
+    """Build data kept until we have a proper way to process it.
+
+    Facts the bot understands belong in columns, not here.
+    """
 
     unknown_patterns: list[str]
     unknown_restrictions: UnknownRestrictions
-    server_info: ServerInfo
     schematic_duplicates: list[SchematicDuplicateInfo]
     attachment_failures: list[AttachmentFailureInfo]
     attachment_resolutions: list[AttachmentResolution]

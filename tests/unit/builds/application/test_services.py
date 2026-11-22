@@ -285,9 +285,8 @@ def existing_build() -> DoorBuild:
         submission_status=BuildStatus.PENDING,
         miscellaneous_restrictions=["Locational", "Directional with fixes", "Other"],
         description="old",
-        extra_info={
-            "server_info": {"server_ip": "old.example", "coordinates": "1 2 3"},
-        },
+        server_address="old.example",
+        server_coordinates="1 2 3",
     )
 
 

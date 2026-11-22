@@ -39,8 +39,6 @@ type CatalogueOptions = Mapping[str, Sequence[ChoiceOption]]
 _EXTENDER_DIRECTIONS = {"Horizontal": "horizontal", "Upward": "vertical_up", "Downward": "vertical_down"}
 _PATCH_EXTENDER_DIRECTIONS = {answer: stored for stored, answer in _EXTENDER_DIRECTIONS.items()}
 
-_SERVER_KEYS = {"server_ip": "server_ip", "coordinates": "coordinates", "command_to_get_to_build": "command_to_build"}
-
 
 @dataclass(frozen=True, slots=True)
 class BuildAnswers:
@@ -56,7 +54,6 @@ def answers_from_build(build: Build, options: CatalogueOptions) -> BuildAnswers:
     `options` must hold the `approved_restrictions` and `approved_patterns` choices; names that
     match none of them become `unresolved` names, after the build's existing unresolved names.
     """
-    server = build.extra_info.get("server_info", {})
     answers: dict[str, JSONValue] = {
         "display_name": build.display_name,
         "description": build.description,
@@ -75,7 +72,9 @@ def answers_from_build(build: Build, options: CatalogueOptions) -> BuildAnswers:
         "image_urls": list(build.image_urls),
         "video_urls": list(build.video_urls),
         "world_download_urls": list(build.world_download_urls),
-        **{field_id: cast(str | None, server.get(key)) for field_id, key in _SERVER_KEYS.items()},
+        "server_ip": build.server_address,
+        "coordinates": build.server_coordinates,
+        "command_to_get_to_build": build.server_command,
     }
     unresolved = UnresolvedTags.read(build.extra_info)
     restriction_keys: list[JSONValue] = []
@@ -142,7 +141,9 @@ def patch_from_answers(
         "visible_opening_time": "visible_opening_time",
         "closing_time": "normal_closing_time",
         "visible_closing_time": "visible_closing_time",
-        **{field_id: field_id for field_id in _SERVER_KEYS},
+        "server_ip": "server_ip",
+        "coordinates": "coordinates",
+        "command_to_get_to_build": "command_to_get_to_build",
     }
     for field_id, attribute in simple.items():
         if changed(field_id):

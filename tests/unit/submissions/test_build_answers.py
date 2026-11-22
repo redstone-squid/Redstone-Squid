@@ -55,7 +55,7 @@ def _utility() -> UtilityBuild:
         moderation_status=TagModerationStatus.APPROVED,
     )
     utility.tags = [TagAssignment(compact), TagAssignment(speed, Decimal("1.5"))]
-    utility.extra_info = {"server_info": {"server_ip": "play.example.com"}}
+    utility.server_address = "play.example.com"
     return utility
 
 
