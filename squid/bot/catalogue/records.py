@@ -3,7 +3,7 @@
 Diagnostics identify a TitleDefinition by its integer definition ID. That rules_revision-specific
 definition is distinct from the stable RecordTitle record_title UUID used by record
 subscriptions. Lookup accepts a definition ID or an exact category; the record
-service persists the requested category and recomputes its standings.
+service persists the requested category and recomputes its records.
 """
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
@@ -66,7 +66,7 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
     Three tabs cover the staff workflow. "Missing evidence" lists record categories
     that cannot be decided until their builds gain measurements, "Unrecognised titles"
     lists categories whose titles contain terms the title rules do not know, and
-    "Recompute" recalculates standings once either has been fixed.
+    "Recompute" recalculates records once either has been fixed.
 
     The grants held at open choose which tabs and forms are visible. Each maintenance
     action rechecks its node before invoking the record service.
@@ -248,7 +248,7 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
         return (
             sl.note(
                 tr(
-                    t"records-maintenance-purpose = Recalculate standings after fixing builds or title rules. "
+                    t"records-maintenance-purpose = Recalculate records after fixing builds or record rules. "
                     t"These actions use the rules of {version}."
                 )
             ),

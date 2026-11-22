@@ -176,7 +176,7 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         },
     )
     async def records_workspace(self, request: sd.Request[Self, BotT], query: str | None = None) -> BuildBrowseScreen:
-        """Open the shared catalogue at its record standings."""
+        """Open the shared catalogue on the records tab."""
         if query is not None:
             return await BuildBrowseScreen.create_search(request, query=query, records=True)
         return await BuildBrowseScreen.create(request, initial_records=True)

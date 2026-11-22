@@ -1,4 +1,4 @@
-"""Shared record rows and standings for catalogue browsing and search."""
+"""Shared record rows for catalogue browsing and search."""
 
 from collections.abc import Awaitable, Callable, Sequence
 from functools import partial

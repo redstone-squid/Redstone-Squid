@@ -1,4 +1,4 @@
-"""Published record standings and links to their holder builds."""
+"""Published records and links to their holder builds."""
 
 from collections.abc import Awaitable, Callable
 

@@ -136,7 +136,7 @@ Sources: [commands.py](../../squid/bot/submission/cog.py),
 | `/build browse id` | Optional numeric ID with labeled build autocomplete; no-argument browser works. | Keep the optional direct shortcut and browse path. | — |
 | Open by ID | Plain numeric modal alongside browsing/search. | Retain as a secondary shortcut; optionally accept supported build links. This is not a forced-ID workflow. | 3 |
 | Search & filters | A query-language text field and a text sort field. Examples and a separate reference help; no structured filter editor. | Separate keyword entry from Add filter and Sort. Use labeled fields, operators, and value controls; retain advanced expression entry. | 2 |
-| Record categories | Smallest/Fastest/First toggles and All standings are discoverable. Combined titles still need query syntax. | Keep toggles and add access to the other supported title types through named choices. | 2 |
+| Record categories | Smallest/Fastest/First toggles and All records are discoverable. Combined titles still need query syntax. | Keep toggles and add access to the other supported title types through named choices. | 2 |
 | Search result actions | Result and holder selection avoids IDs. Search details mostly render cards; the catalogue's full build detail has richer management actions. | Share appropriate detail actions so selection can lead directly to edit, tag, or follow without restarting elsewhere. | 2 |
 
 Search is not wholly undiscoverable: it has runnable examples, syntax guidance,

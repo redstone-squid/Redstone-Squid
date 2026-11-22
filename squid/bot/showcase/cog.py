@@ -33,7 +33,7 @@ class LayoutShowcaseCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
 
     @layout_group.command(
         to_locale_str(tr(t"command-layout-catalogue-name = catalogue")),
-        description=to_locale_str(tr(t"command-layout-catalogue-help = Preview record standings and a build card.")),
+        description=to_locale_str(tr(t"command-layout-catalogue-help = Preview records and a build card.")),
     )
     async def catalogue(self, ctx: Context[BotT]) -> None:
         """Preview the catalogue's record and build components."""

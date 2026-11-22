@@ -5,15 +5,14 @@ select the bot's command to see what you can do there.
 
 ## Find a build
 
-A **build** is a catalogue entry with details about a redstone design. A **record**
-is a standing, such as the smallest build in a particular class, held by one or
-more qualifying builds.
+A **build** is a catalogue entry for a redstone design. A **record** can be
+held by one or more qualifying builds, such as the smallest 3×3 piston door.
 
 - Run `/build browse` to explore the catalogue. If you know a build's ID, pass it
   in the `id` option to open that entry directly.
 - Run `/search` to look for something specific. Try `width:5` in the `query`
   field and select `builds` as the scope. Discord suggests filters as you type.
-- Run `/records` to browse standings and open the builds that hold them.
+- Run `/records` to browse records and open the builds that hold them.
 
 ## Submit a build
 
@@ -30,5 +29,5 @@ The form saves your answers as you go. Use `/build drafts` to return to an
 unfinished submission.
 
 After the bot processes the submission, it assigns a build ID and marks the
-build as pending review. You can still edit it while it waits. An accepted
-build can become a record holder if it qualifies for a standing.
+build as pending review. You can still edit it while it waits. An approved
+build can hold a record if it qualifies.

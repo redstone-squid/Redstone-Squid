@@ -469,7 +469,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
 
         Args:
             build_id: Open this build's detail once the screen loads.
-            initial_records: Start on the record standings instead of the build list.
+            initial_records: Start on the records instead of the build list.
         """
         subject = await request.client.actors.resolve(request)
         grants = await Grants.load(
@@ -1017,9 +1017,7 @@ def _query_summary(query: CatalogueQuery, *, records: bool) -> sl.TextLike:
     expression = query.parsed.expression
     if expression is None:
         return (
-            tr(t"browse-query-all-standings = All standings")
-            if records
-            else tr(t"browse-query-all-builds = All builds")
+            tr(t"browse-query-all-standings = All records") if records else tr(t"browse-query-all-builds = All builds")
         )
     if query.source is not None or _has_or(expression):
         return inline_code(query.text)
