@@ -236,6 +236,7 @@ async def test_setup_hook_supervises_layout_jobs(mocker: MockerFixture, bridge_e
             (metrics_job, "interaction-metrics"),
         ]
         if open_bridge is not None:
+            assert bridge_job is not None
             open_bridge.assert_awaited_once_with(bot.topic_bus)
             assert bot.topic_publisher is bridge
             expected.append((bridge_job, "layout-topic-bridge"))
