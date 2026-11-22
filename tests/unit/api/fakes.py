@@ -318,7 +318,7 @@ class MockTags(TagService):
         return ()
 
     @override
-    async def public_definition(self, tag_id: int) -> TagDefinition | None:
+    async def public_definition(self, tag_id: int | str) -> TagDefinition | None:
         return None
 
 

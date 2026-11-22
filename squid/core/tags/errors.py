@@ -12,6 +12,7 @@ class TagNotFoundError(NotFoundError):
     default_code = ErrorCode.TAG_NOT_FOUND
     default_resource = "tag"
 
-    def __init__(self, tag_id: int) -> None:
-        super().__init__(context={"tag_id": tag_id}, public_context={"tag_id": tag_id})
+    def __init__(self, tag_id: int | str) -> None:
+        context = {"slug" if isinstance(tag_id, str) else "tag_id": tag_id}
+        super().__init__(context=context, public_context=context)
         self.tag_id = tag_id

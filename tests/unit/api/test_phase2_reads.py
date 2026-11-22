@@ -53,7 +53,7 @@ class PublicTagFake(TagService):
         return (self.definition,)
 
     @override
-    async def public_definition(self, tag_id: int) -> TagDefinition | None:
+    async def public_definition(self, tag_id: int | str) -> TagDefinition | None:
         return self.definition if tag_id == self.definition.id else None
 
 
@@ -203,6 +203,7 @@ def test_tag_and_version_collections_use_page_envelope(
         query_name="seamless",
         restriction_type="miscellaneous",
     )
+    definition.slug = "seamless"
     _override(app, tags=PublicTagFake(definition), versions=VersionFake())
 
     with TestClient(app) as client:
@@ -214,6 +215,7 @@ def test_tag_and_version_collections_use_page_envelope(
         {
             "id": 4,
             "key": "official_seamless",
+            "slug": "seamless",
             "name": "Seamless",
             "query_name": "seamless",
             "authority": "official",

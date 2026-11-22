@@ -32,7 +32,7 @@ class TagDefinitionRepository(Protocol):
 
     async def pending(self) -> Sequence[TagDefinition]: ...
 
-    async def get(self, tag_id: int) -> TagDefinition | None: ...
+    async def get(self, tag_id: int | str) -> TagDefinition | None: ...
 
     async def approved(self) -> Sequence[TagDefinition]: ...
 
@@ -64,7 +64,7 @@ class TagService:
         async with self._uow_factory() as uow:
             return await uow.tags.approved()
 
-    async def public_definition(self, tag_id: int) -> TagDefinition | None:
+    async def public_definition(self, tag_id: int | str) -> TagDefinition | None:
         """Return an approved tag, or None if it is missing or has another status."""
         async with self._uow_factory() as uow:
             definition = await uow.tags.get(tag_id)

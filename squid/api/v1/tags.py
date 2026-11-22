@@ -22,6 +22,7 @@ class PublicTagDTO(SQLAlchemyDTO[TagDefinition]):
         include={
             "id",
             "stable_key",
+            "slug",
             "display_name",
             "query_name",
             "authority",
@@ -77,9 +78,25 @@ async def get_tag(tag_id: FromPath[int], tags: Tags) -> TagDefinition:
     return definition
 
 
+@get(
+    "/by-slug/{slug:str}",
+    responses=responses(404, 422, 503),
+    operation_id="tags_get_by_slug",
+    return_dto=PublicTagDTO,
+    security=[ANONYMOUS],
+    opt=contract(cli=transport_only()),
+)
+async def get_tag_by_slug(slug: FromPath[str], tags: Tags) -> TagDefinition:
+    """Resolve a current or former slug to its published tag."""
+    definition = await tags.public_definition(slug)
+    if definition is None:
+        raise TagNotFoundError(slug)
+    return definition
+
+
 router = Router(
     dependencies={"tags": Provide(get_tags, sync_to_thread=False)},
     path="/tags",
     tags=["tags"],
-    route_handlers=[list_tags, get_tag],
+    route_handlers=[list_tags, get_tag, get_tag_by_slug],
 )

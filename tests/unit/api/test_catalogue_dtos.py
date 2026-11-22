@@ -32,6 +32,7 @@ async def test_tag_dto_preserves_public_fields_and_decimal_precision() -> None:
         moderation_status=TagModerationStatus.APPROVED,
         created_by_account_id=123,
     )
+    definition.slug = "height"
     tags = create_autospec(TagService, instance=True)
     tags.public_definitions.return_value = (definition,)
     tags.public_definition.return_value = definition
@@ -48,6 +49,7 @@ async def test_tag_dto_preserves_public_fields_and_decimal_precision() -> None:
 
     expected = {
         "id": 7,
+        "slug": "height",
         "key": "height",
         "name": "Height",
         "query_name": "height",

@@ -11,7 +11,7 @@ from squid.core.edits.domain import Revision
 from squid.core.persistence.revisions import flush_revision
 from squid.core.tags.application import TagDefinitionRepository
 from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
-from squid.core.tags.models import TagAlias, TagApplicability, TagAssignment, TagDefinition
+from squid.core.tags.models import TagAlias, TagApplicability, TagAssignment, TagDefinition, TagSlug
 
 
 class PostgresTagDefinitionRepository(TagDefinitionRepository):
@@ -70,8 +70,12 @@ class PostgresTagDefinitionRepository(TagDefinitionRepository):
         return tuple(row for row in rows)
 
     @override
-    async def get(self, tag_id: int) -> TagDefinition | None:
+    async def get(self, tag_id: int | str) -> TagDefinition | None:
         session = self._session()
+        if isinstance(tag_id, str):
+            return await session.scalar(
+                select(TagDefinition).join(TagSlug, TagSlug.tag_id == TagDefinition.id).where(TagSlug.slug == tag_id)
+            )
         row = await session.get(TagDefinition, tag_id)
         return None if row is None else row
 

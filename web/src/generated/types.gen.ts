@@ -2195,6 +2195,7 @@ export type TagDetail = {
     authority: TagAuthority;
     kind: TagSemanticKind;
     value_type: TagValueType;
+    slug: string;
 };
 
 /**
@@ -7859,6 +7860,45 @@ export type TagsGetResponses = {
 };
 
 export type TagsGetResponse = TagsGetResponses[keyof TagsGetResponses];
+
+export type TagsGetBySlugData = {
+    body?: never;
+    path: {
+        slug: string;
+    };
+    query?: never;
+    url: '/v1/tags/by-slug/{slug}';
+};
+
+export type TagsGetBySlugErrors = {
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type TagsGetBySlugError = TagsGetBySlugErrors[keyof TagsGetBySlugErrors];
+
+export type TagsGetBySlugResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: TagDetail;
+};
+
+export type TagsGetBySlugResponse = TagsGetBySlugResponses[keyof TagsGetBySlugResponses];
 
 export type CreatorAliasGetData = {
     body?: never;
