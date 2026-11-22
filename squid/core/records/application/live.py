@@ -38,7 +38,7 @@ type LookupThreshold = tuple[
 
 
 class DoorRecordCategory(BaseModel):
-    """A taxonomy category; no version means all approved versions.
+    """A record category; no version means all approved versions.
 
     Type IDs match the complete pattern set; restriction IDs select a subset.
     Parameterized restrictions also require (tag ID, operator, value) thresholds.
@@ -73,7 +73,7 @@ class DoorRecordCategory(BaseModel):
 
 
 class DoorRecordLookup(DoorRecordCategory):
-    """A concrete opening and title in a taxonomy category."""
+    """A concrete opening and title in a record category."""
 
     opening: tuple[LookupDimension, LookupDimension, LookupDimension]
     criterion: RecordCriterion = RecordCriterion.SMALLEST
@@ -96,7 +96,7 @@ class DoorRecordLookup(DoorRecordCategory):
 def evaluate_door_record(
     request: DoorRecordLookup, sources: Sequence[CandidateBuild], *, evaluated_at: datetime
 ) -> LiveDoorRecord:
-    """Compare sources already filtered to the requested taxonomy and version."""
+    """Compare sources already filtered to the requested tags and version."""
     configurations: list[LiveDoorConfiguration] = []
     for source in sorted(sources, key=lambda source: source.candidate.build_id):
         build = source.candidate

@@ -17,7 +17,7 @@ from squid.core.builds.application import BuildEditPatch, RestrictionDefinition
 from squid.core.builds.application.services import (
     BuildService,
 )
-from squid.core.builds.application.taxonomy import TaxonomyResolution, apply_build_taxonomy
+from squid.core.builds.application.tags import TagResolution, apply_build_tags
 from squid.core.builds.domain import BuildCategory, BuildStatus, ShowcaseTag, normalize_tag_name
 from squid.core.builds.errors import BuildBusyError, BuildNotFoundError, BuildRevisionMismatchError, InvalidBuildError
 from squid.core.builds.models import Build, DoorBuild, OtherBuild, UtilityBuild
@@ -153,7 +153,7 @@ class FakeVersions:
         return f"{edition} 1.21.0"
 
 
-class FakeTaxonomyResolver:
+class FakeTagResolver:
     """Resolve configured restriction and pattern names to official tag assignments.
 
     known_restrictions maps names to restriction types; known_patterns supplies pattern names.
@@ -181,7 +181,7 @@ class FakeTaxonomyResolver:
         build_kind: str | None,
         restrictions: Sequence[str],
         patterns: Sequence[str],
-    ) -> TaxonomyResolution:
+    ) -> TagResolution:
         del build_kind
         restriction_lookup = {
             normalize_tag_name(name): (name, bucket) for name, bucket in self.known_restrictions.items()
@@ -231,7 +231,7 @@ class FakeTaxonomyResolver:
                 )
             )
             next_id += 1
-        return TaxonomyResolution(
+        return TagResolution(
             assignments=tuple(assignments),
             unknown_restrictions=frozenset(unknown_restrictions),
             unknown_patterns=frozenset(unknown_patterns),
@@ -271,7 +271,7 @@ def build_service(
         locks or FakeBuildLocks(),
         FakeRestrictionRepository(),
         FakeVersions(),
-        FakeTaxonomyResolver(),
+        FakeTagResolver(),
         permissions=None if permissions is None else PermissionService(uow_factory=permission_uow_factory(permissions)),
         uow_factory=lambda: BuildScope(repository, permissions),
     )
@@ -471,7 +471,7 @@ async def test_save_commits_without_waiting_for_an_embedding() -> None:
         locks,
         FakeRestrictionRepository(),
         FakeVersions(),
-        FakeTaxonomyResolver(),
+        FakeTagResolver(),
         uow_factory=lambda: BuildScope(repository),
     )
     build = DoorBuild(id=42)
@@ -594,7 +594,7 @@ async def test_permission_revoked_during_preparation_prevents_commit(
 async def test_unresolved_names_are_kept_until_an_official_tag_matches_them() -> None:
     build = DoorBuild(component_restrictions=["No Slime"], patterns=["Spiral"])
 
-    await apply_build_taxonomy(build, FakeTaxonomyResolver())
+    await apply_build_tags(build, FakeTagResolver())
 
     assert build.component_restrictions == []
     assert build.patterns == []
@@ -604,12 +604,12 @@ async def test_unresolved_names_are_kept_until_an_official_tag_matches_them() ->
     }
 
     # An unrelated edit keeps the names, and does not add Regular in place of the unresolved pattern.
-    await apply_build_taxonomy(build, FakeTaxonomyResolver())
+    await apply_build_tags(build, FakeTagResolver())
     assert build.patterns == []
     assert build.extra_info.get("unknown_patterns") == ["Spiral"]
 
-    resolver = FakeTaxonomyResolver(known_restrictions={"No Slime": "component"}, known_patterns=("Spiral",))
-    await apply_build_taxonomy(build, resolver)
+    resolver = FakeTagResolver(known_restrictions={"No Slime": "component"}, known_patterns=("Spiral",))
+    await apply_build_tags(build, resolver)
 
     assert build.component_restrictions == ["No Slime"]
     assert build.patterns == ["Spiral"]

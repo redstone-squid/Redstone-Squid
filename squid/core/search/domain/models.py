@@ -161,7 +161,7 @@ class BuildSearchHit:
 
 @dataclass(frozen=True, slots=True)
 class MetadataSearchHit:
-    """A taxonomy or version search result."""
+    """A tag or version search result."""
 
     source_id: str
     title: str

@@ -93,7 +93,7 @@ async def search(
         bool, QueryParameter(description="Combine matching records and builds before pagination.")
     ] = False,
 ) -> Page[SearchResult]:
-    """Match builds, computed records, and taxonomy entries in one ranked page."""
+    """Match builds, computed records, and tag entries in one ranked page."""
     result = await search_service.search(
         SearchRequest(
             query=q,

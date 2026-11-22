@@ -54,7 +54,7 @@ class TagOperations(Protocol):
 
 
 class RestrictionOperations(Protocol):
-    """Restriction taxonomy mutation exposed by the workspace."""
+    """Restriction tag editing exposed by the workspace."""
 
     async def alias_revision(self, restriction: str) -> Revision: ...
 

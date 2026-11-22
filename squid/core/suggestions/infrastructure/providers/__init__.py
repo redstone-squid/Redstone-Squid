@@ -4,9 +4,9 @@ from squid.core.suggestions.infrastructure.providers.documents import DocumentPr
 from squid.core.suggestions.infrastructure.providers.search_fields import SearchFieldProvider, SearchSortProvider
 from squid.core.suggestions.infrastructure.providers.search_query import SearchQueryProvider
 from squid.core.suggestions.infrastructure.providers.static import CallableProvider, StaticProvider
-from squid.core.suggestions.infrastructure.providers.taxonomy import (
+from squid.core.suggestions.infrastructure.providers.tags import (
     PendingTagProvider,
-    TaxonomyProvider,
+    TagProvider,
 )
 from squid.core.suggestions.infrastructure.providers.versions import VersionIdProvider, VersionProvider
 
@@ -18,7 +18,7 @@ __all__ = [
     "SearchQueryProvider",
     "SearchSortProvider",
     "StaticProvider",
-    "TaxonomyProvider",
+    "TagProvider",
     "VersionIdProvider",
     "VersionProvider",
 ]

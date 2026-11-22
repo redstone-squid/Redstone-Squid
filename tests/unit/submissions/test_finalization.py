@@ -47,7 +47,11 @@ from squid.core.submissions.domain import (
     SubmissionOrigin,
 )
 from squid.core.submissions.errors import DraftAccessDeniedError
-from squid.core.submissions.infrastructure.finalization_payloads import decode_submission, encode_submission
+from squid.core.submissions.infrastructure.finalization_payloads import (
+    LEGACY_TAGS_FIELD,
+    decode_submission,
+    encode_submission,
+)
 from tests.support.draft_uow import DraftScope
 from tests.support.expansion import expansion_document
 from tests.support.unit_of_work import PublishingFakeUnitOfWork
@@ -369,7 +373,7 @@ async def test_web_can_omit_schematic_and_enqueues_typed_payload() -> None:
     assert jobs.enqueued.display_name == "Compact vault"
     assert jobs.enqueued.category is SubmissionCategory.OTHER
     assert isinstance(jobs.enqueued.details, GeneralSubmissionDetails)
-    assert jobs.enqueued.taxonomy.restriction_keys == ("locational",)
+    assert jobs.enqueued.tags.restriction_keys == ("locational",)
 
 
 @pytest.mark.asyncio
@@ -846,3 +850,11 @@ async def test_ingested_expansion_reaches_the_durable_finalization_payload() -> 
     assert isinstance(jobs.enqueued.details, DoorSubmissionDetails)
     assert jobs.enqueued.details.expansion == document
     assert encode_submission(jobs.enqueued)["payload_schema"] == 1
+
+
+async def test_finalization_payload_reads_original_tag_key() -> None:
+    payload = await _payload()
+    encoded = encode_submission(payload)
+    encoded[LEGACY_TAGS_FIELD] = encoded.pop("tags")
+
+    assert decode_submission(encoded) == payload

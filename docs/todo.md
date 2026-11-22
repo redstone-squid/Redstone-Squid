@@ -23,19 +23,19 @@
 - [x] Implement the fixed-size Door Rules title formatter.
   - Includes trapdoor rewrites, animated restrictions, named layouts, canonical aliases, and conflict diagnostics.
 - [ ] Add algebraic and minimal expandable-size title forms after expandable-volume records are modeled.
-- [x] Add an animated-restriction taxonomy type.
+- [x] Add an animated restriction tag kind.
 - [ ] Decide which general eligibility rules remain moderation responsibilities and which need structured evidence.
 
 ## Search
 
 - [ ] Connect a semantic candidate provider to the cross-resource search backend.
 - [ ] Process `search_embedding_queue` items and store embeddings for projected search documents.
-- [ ] Consider dynamic `facet.<name>` filters so new projected facets do not require a field-registry code change.
+- [ ] Consider dynamic `tag:<name>` search fields so new projected filters do not require a field-registry code change.
 - [ ] Add live PostgreSQL integration coverage for exact, full-text, trigram, and RRF behavior.
-  - Pagination and facet sorting are covered by `tests/integration/search/test_repository_pagination.py`.
-- [x] Add autocomplete for field names, taxonomy values, and canonical record base keys.
+  - Pagination and sorting by indexed field values are covered by `tests/integration/search/test_repository_pagination.py`.
+- [x] Add autocomplete for field names, tag values, and canonical record base keys.
   - See `docs/plans/autocomplete.md` for the source registry the three surfaces share.
-- [ ] Replace raw showcase qualifiers with parameterized taxonomy tags.
+- [ ] Replace raw showcase qualifiers with parameterized tags.
   - Store metric kind, value, unit, display order, and evidence.
   - Consider Pareto-frontier calculation for builds with multiple showcase metrics.
 

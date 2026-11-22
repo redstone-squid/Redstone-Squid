@@ -43,11 +43,15 @@ from squid.core.submissions.domain import (
     SubmissionDimensions,
     SubmissionOrigin,
     SubmissionSchematicVisibility,
-    SubmissionTaxonomy,
+    SubmissionTags,
     VerifiedSubmissionArtifacts,
 )
 from squid.core.submissions.errors import DraftArtifactsChangedError, DraftNotFoundError, DraftStateConflictError
-from squid.core.submissions.infrastructure.finalization_payloads import decode_submission, encode_submission
+from squid.core.submissions.infrastructure.finalization_payloads import (
+    LEGACY_TAGS_FIELD,
+    decode_submission,
+    encode_submission,
+)
 from squid.core.submissions.infrastructure.finalization_repository import (
     PostgresFinalizationJobRepository,
 )
@@ -142,7 +146,7 @@ def _payload(draft: StoredDraft, *media_upload_ids: UUID) -> NormalizedSubmissio
         capture_dimensions=SubmissionDimensions(3, 4, 5),
         source_version="26.1.2",
         version_compatibility=None,
-        taxonomy=SubmissionTaxonomy(restriction_keys=("locational",)),
+        tags=SubmissionTags(restriction_keys=("locational",)),
         schematic_policy=SchematicRightsPolicy(
             visibility=SubmissionSchematicVisibility.REVIEWER_ONLY,
             license=None,
@@ -671,14 +675,15 @@ async def test_schema_reset_rewrites_both_payloads_and_digests_atomically(
     repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
     normalized = _payload(stored_draft)
     current = encode_submission(normalized)
+    current[LEGACY_TAGS_FIELD] = current.pop("tags")
     legacy = copy.deepcopy(current)
     legacy.update(payload_schema=2, creators=["Builder"])
     legacy.pop("credits")
     legacy.pop("links")
     legacy["details"] = {"kind": "general"}
-    taxonomy = legacy["taxonomy"]
-    assert isinstance(taxonomy, dict)
-    taxonomy.pop("restriction_proposal_fields")
+    tags = legacy[LEGACY_TAGS_FIELD]
+    assert isinstance(tags, dict)
+    tags.pop("restriction_proposal_fields")
     job = await transact(
         repository,
         lambda uow: uow.finalization_jobs.enqueue(stored_draft, normalized, now=NOW, expires_at=NOW.add(hours=1)),

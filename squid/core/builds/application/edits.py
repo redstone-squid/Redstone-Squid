@@ -1,6 +1,6 @@
 """Versioned build edits with the existing build audit scope.
 
-Conditional edits resolve taxonomy before locking the build row.
+Conditional edits resolve tags before locking the build row.
 Unconditional edits hold the lock throughout preparation to use the latest state.
 The final revision and permission check, audit entry, and recoverable operation
 outcome share one transaction. The row lock provides exclusion with every build
@@ -16,9 +16,9 @@ from squid.core.builds.application.edit_schema import BuildPatch
 from squid.core.builds.application.editing import BuildEditPatch
 from squid.core.builds.application.ports import BuildUnitOfWork
 from squid.core.builds.application.services import BuildService
-from squid.core.builds.domain import BuildStatus, Info, ShowcaseTag, UnresolvedTaxonomy
+from squid.core.builds.domain import BuildStatus, Info, ShowcaseTag, UnresolvedTags
 from squid.core.builds.domain.expansion import DoorExpansion
-from squid.core.builds.domain.taxonomy import RESTRICTION_FIELDS
+from squid.core.builds.domain.tags import RESTRICTION_FIELDS
 from squid.core.builds.errors import BuildNotFoundError
 from squid.core.builds.models import Build, DoorBuild, ExtenderBuild
 from squid.core.edits.application import EditUnitOfWork
@@ -128,8 +128,8 @@ def build_values(build: Build) -> EditValues:
             )
         )
     unresolved: Info = {}
-    UnresolvedTaxonomy.read(build.extra_info).write(unresolved)
-    return EditValues(json.dumps(_patch_document(patch) | {"unresolved_taxonomy": unresolved}))
+    UnresolvedTags.read(build.extra_info).write(unresolved)
+    return EditValues(json.dumps(_patch_document(patch) | {"unresolved_tags": unresolved}))
 
 
 class BuildEditUnitOfWork(BuildUnitOfWork, EditUnitOfWork, PermissionUnitOfWork, Protocol):
@@ -153,7 +153,7 @@ class BuildFieldsEdit:
         expected = command.expected[0]
         build_id = int(expected.target.key)
         values = command.values.unpack()
-        unresolved = values.pop("unresolved_taxonomy", None)
+        unresolved = values.pop("unresolved_tags", values.pop("unresolved_taxonomy", None))
         patch = BuildPatch.from_patch(BuildEditPatch.from_attributes(values))
         if isinstance(expected, LatestRevision):
             # Latest-state edits must serialize preparation too, since their patch
@@ -172,16 +172,16 @@ class BuildFieldsEdit:
         current_values = before.unpack()
         showcase_only = all(
             current_values.get(name) == value for name, value in values.items() if name != "showcase_tags"
-        ) and (unresolved is None or unresolved == current_values["unresolved_taxonomy"])
+        ) and (unresolved is None or unresolved == current_values["unresolved_tags"])
         attributes = patch.edit_attributes()
         if unresolved is not None:
             if not isinstance(unresolved, dict) or unresolved.keys() - {"unknown_restrictions", "unknown_patterns"}:
                 raise ValidationError
             try:
-                retained = UnresolvedTaxonomy.read(cast(Info, unresolved))
+                retained = UnresolvedTags.read(cast(Info, unresolved))
             except DataIntegrityError as error:
                 raise ValidationError from error
-            # Explicit taxonomy patches replace their retained unknown names. Feed
+            # Explicit tag patches replace their retained unknown names. Feed
             # inverse proposals through the same resolver alongside known names.
             for name in RESTRICTION_FIELDS:
                 attributes[name] = [*cast(list[str], attributes.get(name, [])), *retained.restriction_names(name)]

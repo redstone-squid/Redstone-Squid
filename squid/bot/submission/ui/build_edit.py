@@ -31,7 +31,7 @@ from squid.bot.ui import tr
 from squid.core.actors import Actor
 from squid.core.builds.application import BuildEditPatch, BuildService
 from squid.core.builds.application.edits import BUILD_EDIT, build_target, patch_values
-from squid.core.builds.domain import UnresolvedTaxonomy
+from squid.core.builds.domain import UnresolvedTags
 from squid.core.builds.models import Build
 from squid.core.edits.application import EditRunner
 from squid.core.edits.domain import RevisionConflictError
@@ -68,7 +68,7 @@ class BuildEditWorkspace(sl.Reactive):
 
     staged: Mapping[str, JSONValue] = sl.state({})
     """Edited answers keyed by field ID; a field the build has no value for holds None or []."""
-    unresolved: UnresolvedTaxonomy = sl.state(UnresolvedTaxonomy())
+    unresolved: UnresolvedTags = sl.state(UnresolvedTags())
     """Names on the build that match no catalogue entry and that the user has not removed."""
     notice: sl.TextLike = sl.state("")
     option_sets: Mapping[str, tuple[ChoiceOption, ...]] = sl.state({})
@@ -95,7 +95,7 @@ class BuildEditWorkspace(sl.Reactive):
         self.category = build.category.value.lower()
         self._load_options = load_options
         self.option_sets = dict(option_sets)
-        self.saved = BuildAnswers({}, UnresolvedTaxonomy())
+        self.saved = BuildAnswers({}, UnresolvedTags())
         self.reset(build)
 
     def reset(self, build: Build) -> None:
@@ -193,7 +193,7 @@ class BuildEditWorkspace(sl.Reactive):
     def remove_unresolved(self, transaction: sl.runtime.Transaction, names: Collection[str]) -> None:
         """Remove names that match no catalogue entry, as one undoable step; must run inside a UI action."""
         current = self.unresolved
-        self.unresolved = UnresolvedTaxonomy(
+        self.unresolved = UnresolvedTags(
             restrictions=tuple(pair for pair in current.restrictions if pair[1] not in names),
             patterns=tuple(name for name in current.patterns if name not in names),
         )

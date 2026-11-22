@@ -33,7 +33,7 @@ DEFAULT_BUILD_LIST_SORT = BuildListSort()
 
 @dataclass(frozen=True, slots=True)
 class PublicBuildTag:
-    """One allowlisted taxonomy value on a public build summary."""
+    """One allowlisted tag value on a public build summary."""
 
     key: str
     name: str

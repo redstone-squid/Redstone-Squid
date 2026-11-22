@@ -25,9 +25,9 @@ from dataclasses import dataclass
 from typing import cast
 
 from squid.core.builds.application.editing import BuildEditPatch
-from squid.core.builds.domain import ShowcaseTag, UnresolvedTaxonomy, read_showcase_tags
+from squid.core.builds.domain import ShowcaseTag, UnresolvedTags, read_showcase_tags
 from squid.core.builds.domain.credits import read_credits
-from squid.core.builds.domain.taxonomy import RESTRICTION_FIELDS, RestrictionField
+from squid.core.builds.domain.tags import RESTRICTION_FIELDS, RestrictionField
 from squid.core.builds.models import Build, DoorBuild, ExtenderBuild
 from squid.core.errors import JSONValue
 from squid.core.submissions.domain import ChoiceOption, match_choice
@@ -47,7 +47,7 @@ class BuildAnswers:
     """A saved build as edit-form answers, plus the names no catalogue entry matches."""
 
     answers: dict[str, JSONValue]
-    unresolved: UnresolvedTaxonomy
+    unresolved: UnresolvedTags
 
 
 def answers_from_build(build: Build, options: CatalogueOptions) -> BuildAnswers:
@@ -77,7 +77,7 @@ def answers_from_build(build: Build, options: CatalogueOptions) -> BuildAnswers:
         "world_download_urls": list(build.world_download_urls),
         **{field_id: cast(str | None, server.get(key)) for field_id, key in _SERVER_KEYS.items()},
     }
-    unresolved = UnresolvedTaxonomy.read(build.extra_info)
+    unresolved = UnresolvedTags.read(build.extra_info)
     restriction_keys: list[JSONValue] = []
     for field_name in RESTRICTION_FIELDS:
         for name in getattr(build, field_name):
@@ -117,7 +117,7 @@ def answers_from_build(build: Build, options: CatalogueOptions) -> BuildAnswers:
 
 
 def patch_from_answers(
-    before: BuildAnswers, after: Mapping[str, JSONValue], unresolved: UnresolvedTaxonomy, options: CatalogueOptions
+    before: BuildAnswers, after: Mapping[str, JSONValue], unresolved: UnresolvedTags, options: CatalogueOptions
 ) -> BuildEditPatch:
     """Return a patch that changes only what differs between `before` and `after`.
 

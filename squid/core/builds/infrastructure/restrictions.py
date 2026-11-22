@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.core.builds.application import RestrictionDefinition
 from squid.core.builds.domain import RestrictionTypeLiteral
-from squid.core.builds.domain.taxonomy import normalize_tag_name
+from squid.core.builds.domain.tags import normalize_tag_name
 from squid.core.builds.errors import AliasAlreadyAddedError, AliasInUseError, RestrictionNotFoundError
 from squid.core.edits.domain import EditTarget, Revision
 from squid.core.tags.models import TagAlias, TagDefinition

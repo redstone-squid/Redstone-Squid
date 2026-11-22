@@ -25,7 +25,7 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/TRIGGER_FUNCTIONS/enqueue_build_source_preview_sync.sql
 \ir public/TRIGGER_FUNCTIONS/enqueue_computed_record_search_projection.sql
 \ir public/TRIGGER_FUNCTIONS/enqueue_metadata_search_projection.sql
-\ir public/TRIGGER_FUNCTIONS/enqueue_record_taxonomy_change.sql
+\ir public/TRIGGER_FUNCTIONS/enqueue_record_tag_change.sql
 \ir public/TRIGGER_FUNCTIONS/enqueue_registered_door_ranges.sql
 \ir public/TRIGGER_FUNCTIONS/enqueue_starboard_sync.sql
 \ir public/TRIGGER_FUNCTIONS/enqueue_submission_status.sql
@@ -152,8 +152,8 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/TABLES/schematic_render_queue.sql
 \ir public/TABLES/schematic_renders.sql
 \ir public/SEQUENCES/schematic_renders_id_seq.sql
-\ir public/TABLES/search_document_facets.sql
-\ir public/SEQUENCES/search_document_facets_id_seq.sql
+\ir public/TABLES/search_document_filters.sql
+\ir public/SEQUENCES/search_document_filters_id_seq.sql
 \ir public/TABLES/search_documents.sql
 \ir public/SEQUENCES/search_documents_id_seq.sql
 \ir public/TABLES/search_embedding_queue.sql
@@ -191,7 +191,7 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/TABLES/tag_relations.sql
 \ir public/TABLES/tag_slugs.sql
 \ir public/TABLES/tag_units.sql
-\ir public/TABLES/title_definition_facets.sql
+\ir public/TABLES/title_definition_tags.sql
 \ir public/TABLES/title_definitions.sql
 \ir public/SEQUENCES/title_definitions_id_seq.sql
 \ir public/TABLES/title_holder_history.sql

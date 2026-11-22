@@ -37,7 +37,7 @@ from squid.core.search.domain import (
 )
 from squid.core.search.infrastructure.compiler import compile_query
 from squid.core.search.infrastructure.hits import document_hit, public_identity
-from squid.core.search.models import SearchDocument, SearchDocumentFacet
+from squid.core.search.models import SearchDocument, SearchDocumentFilter
 
 type ResultOrder = Mapping[int, RankedCandidate] | FieldDefinition | None
 """How result units are ordered.
@@ -55,7 +55,7 @@ class ResultPager:
     total and the offsets refer to units rather than to matching documents. Ties
     in the requested order are broken by title and then by the unit's document ID.
 
-    When grouping, holder facets connect records to build documents. Visibility
+    When grouping, indexed holder IDs connect records to build documents. Visibility
     applies to each holder, including ties, and a record without a visible holder
     produces no result. Record details are loaded separately for the page's
     builds, so a bounded relevance pool does not truncate a build's records.
@@ -85,9 +85,9 @@ class ResultPager:
             statement = statement.add_columns(func.max(score).label("order_value"))
         elif isinstance(order, FieldDefinition):
             statement = statement.outerjoin(
-                SearchDocumentFacet,
-                (SearchDocumentFacet.document_id == units.c.document_id)
-                & (SearchDocumentFacet.field_name == (order.storage_name or order.name)),
+                SearchDocumentFilter,
+                (SearchDocumentFilter.document_id == units.c.document_id)
+                & (SearchDocumentFilter.field_name == (order.storage_name or order.name)),
             ).add_columns(self._sort_value(order).label("order_value"))
         paged = statement.cte("result_units")
         total = await self.session.scalar(select(func.count()).select_from(paged)) or 0
@@ -149,16 +149,16 @@ class ResultPager:
     def _sort_value(self, field: FieldDefinition) -> ColumnElement[Any]:
         """Aggregate a unit's values for the sort field into the one it is ordered by.
 
-        A unit can have several values, either as repeated facets of one document
+        A unit can have several values, either as repeated field values in one document
         or across the records of a build. Ascending order uses the smallest and
         descending order the largest. Aggregating also keeps a unit from appearing
         once per value, which would shift page offsets.
         """
         value = {
-            FieldType.TEXT: func.lower(SearchDocumentFacet.text_value),
-            FieldType.NUMBER: SearchDocumentFacet.numeric_value,
-            FieldType.TIMESTAMP: SearchDocumentFacet.timestamp_value,
-            FieldType.BOOLEAN: SearchDocumentFacet.boolean_value,
+            FieldType.TEXT: func.lower(SearchDocumentFilter.text_value),
+            FieldType.NUMBER: SearchDocumentFilter.numeric_value,
+            FieldType.TIMESTAMP: SearchDocumentFilter.timestamp_value,
+            FieldType.BOOLEAN: SearchDocumentFilter.boolean_value,
         }[field.value_type]
         if field.value_type is FieldType.BOOLEAN:
             # PostgreSQL has no min/max over boolean; these are the same aggregates on false < true.
@@ -222,7 +222,7 @@ class ResultPager:
         if not self.request.group_by_build:
             return own.cte("matches")
         build = aliased(SearchDocument)
-        holder = SearchDocumentFacet
+        holder = SearchDocumentFilter
         statuses = sorted(status.casefold() for status in self.statuses)
         # In record scope the result is headed by its best record, so it sorts by record title.
         record_title = (
@@ -259,7 +259,7 @@ class ResultPager:
         }
         if not build_keys:
             return {}
-        holder = SearchDocumentFacet
+        holder = SearchDocumentFilter
         statement = (
             select(SearchDocument, holder.text_value, predicate.label("matched"))
             .join(
@@ -292,7 +292,7 @@ class ResultPager:
             visible_holders[document_id].append(int(source_key))
         records: dict[str, list[RecordSearchHit]] = defaultdict(list)
         for document, build_key, matched in rows:
-            assert build_key is not None  # The query restricted this facet to the selected build keys.
+            assert build_key is not None  # The query restricted these rows to the selected builds.
             candidate = ranked.get(document.id)
             hit = document_hit(document, candidate.score if candidate is not None else None)
             assert isinstance(hit, RecordSearchHit)

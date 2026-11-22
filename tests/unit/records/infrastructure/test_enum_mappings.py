@@ -10,13 +10,13 @@ from squid.core.records.domain import BuildKind, RecordCriterion, ResolutionStat
 from squid.core.records.models import (
     ComputationRun,
     ComputationStatus,
-    DefinitionFacet,
-    FacetKind,
     MaterializationSource,
     Record,
     RecordDefinition,
+    RecordDefinitionTag,
     RecordRecomputeQueueItem,
     RecordResult,
+    RecordTagRole,
 )
 
 _MAPPINGS = (
@@ -24,7 +24,7 @@ _MAPPINGS = (
     (Record.__table__, "base_title", RecordCriterion),
     (Record.__table__, "build_kind", BuildKind),
     (Record.__table__, "version_scope", VersionScope),
-    (DefinitionFacet.__table__, "facet_kind", FacetKind),
+    (RecordDefinitionTag.__table__, "tag_role", RecordTagRole),
     (ComputationRun.__table__, "build_kind", BuildKind),
     (ComputationRun.__table__, "status", ComputationStatus),
     (RecordResult.__table__, "status", ResolutionStatus),
@@ -40,7 +40,7 @@ _CHECKS = (
     (Record.__table__, "record_titles_base_title_check", RecordCriterion),
     (Record.__table__, "record_titles_build_kind_check", BuildKind),
     (Record.__table__, "record_titles_version_scope_check", VersionScope),
-    # title_definition_facets_kind_check admits only restrictions; candidate facets use the other kinds.
+    # title_definition_tags_kind_check admits only restrictions; candidate tags use the other kinds.
     (ComputationRun.__table__, "record_computation_runs_build_kind_check", BuildKind),
     (ComputationRun.__table__, "record_computation_runs_status_check", ComputationStatus),
     (RecordResult.__table__, "title_results_status_check", ResolutionStatus),

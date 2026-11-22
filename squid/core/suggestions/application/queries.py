@@ -8,8 +8,8 @@ from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 
 @dataclass(frozen=True, slots=True)
-class TaxonomyEntry:
-    """One taxonomy value and every string that should match it."""
+class TagEntry:
+    """One tag value and every string that should match it."""
 
     id: int
     stable_key: str
@@ -37,9 +37,9 @@ class SuggestionRepository(Protocol):
     do not authorize the requester; the service checks visibility before calling.
     """
 
-    async def taxonomy(
+    async def tag_entries(
         self, semantic_kind: str, *, build_kind: str | None = None, authority: str | None = "official"
-    ) -> Sequence[TaxonomyEntry]: ...
+    ) -> Sequence[TagEntry]: ...
     async def documents(
         self, resource_kind: str, query: str, *, statuses: Collection[str] | None = None, limit: int
     ) -> Sequence[DocumentEntry]: ...
@@ -48,7 +48,7 @@ class SuggestionRepository(Protocol):
 
     async def version_ids(self) -> Sequence[tuple[int, str]]: ...
     async def creator_profiles(self, query: str, *, limit: int) -> Sequence[tuple[str, str]]: ...
-    async def facet_values(self, field_name: str, prefix: str, *, limit: int) -> Sequence[str]: ...
+    async def filter_values(self, field_name: str, prefix: str, *, limit: int) -> Sequence[str]: ...
     async def record_titles(self, query: str, *, limit: int) -> Sequence[tuple[str, str, str | None]]: ...
     async def creators(self, query: str, *, limit: int) -> Sequence[tuple[str, bool]]: ...
 
@@ -59,11 +59,11 @@ class SuggestionQueryService:
     def __init__(self, *, uow_factory: UnitOfWorkFactory[SuggestionUnitOfWork]) -> None:
         self._uow_factory = uow_factory
 
-    async def taxonomy(
+    async def tag_entries(
         self, semantic_kind: str, *, build_kind: str | None = None, authority: str | None = "official"
-    ) -> Sequence[TaxonomyEntry]:
+    ) -> Sequence[TagEntry]:
         async with self._uow_factory() as uow:
-            return await uow.suggestions.taxonomy(semantic_kind, build_kind=build_kind, authority=authority)
+            return await uow.suggestions.tag_entries(semantic_kind, build_kind=build_kind, authority=authority)
 
     async def documents(
         self, resource_kind: str, query: str, *, statuses: Collection[str] | None = None, limit: int
@@ -87,9 +87,9 @@ class SuggestionQueryService:
         async with self._uow_factory() as uow:
             return await uow.suggestions.creator_profiles(query, limit=limit)
 
-    async def facet_values(self, field_name: str, prefix: str, *, limit: int) -> Sequence[str]:
+    async def filter_values(self, field_name: str, prefix: str, *, limit: int) -> Sequence[str]:
         async with self._uow_factory() as uow:
-            return await uow.suggestions.facet_values(field_name, prefix, limit=limit)
+            return await uow.suggestions.filter_values(field_name, prefix, limit=limit)
 
     async def record_titles(self, query: str, *, limit: int) -> Sequence[tuple[str, str, str | None]]:
         async with self._uow_factory() as uow:

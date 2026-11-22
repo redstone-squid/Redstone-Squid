@@ -79,7 +79,7 @@ class FakeTextGenerator:
         return self.output  # type: ignore[return-value]
 
 
-class FakeTaxonomy:
+class FakeTags:
     async def inference_vocabulary(self) -> str:
         return '{"component": ["No Observers"]}'
 
@@ -120,15 +120,15 @@ def source(*, images: tuple[InlineImage, ...] = ()) -> BuildInferenceInput:
     )
 
 
-async def test_infer_maps_structured_build_and_validates_taxonomy() -> None:
+async def test_infer_maps_structured_build_and_validates_tags() -> None:
     generator = FakeTextGenerator(InferenceResult(builds=[inferred(source_message_ids=[11, 10])]))
-    service = BuildInferenceService(generator, FakeTaxonomy(), FakeVersions(), "system prompt")
+    service = BuildInferenceService(generator, FakeTags(), FakeVersions(), "system prompt")
 
     builds = await service.infer(source(), model="test-model", reasoning_effort="low")
 
     assert len(builds) == 1
     build = builds[0]
-    assert generator.calls[0][0] == 'system prompt\n\nAPPROVED TAXONOMY\n{"component": ["No Observers"]}'
+    assert generator.calls[0][0] == 'system prompt\n\nAPPROVED TAGS\n{"component": ["No Observers"]}'
     assert '<message id="10" author="Builder"' in generator.calls[0][1]
     assert generator.calls[0][2:] == (InferenceResult, "test-model", (), "low")
     # Both primary messages are retained in submission order, each keeping its own
@@ -159,14 +159,14 @@ async def test_infer_maps_structured_build_and_validates_taxonomy() -> None:
 async def test_infer_returns_multiple_or_no_builds() -> None:
     service = BuildInferenceService(
         FakeTextGenerator(InferenceResult(builds=[inferred(), inferred(source_message_ids=[11])])),
-        FakeTaxonomy(),
+        FakeTags(),
         FakeVersions(),
         "prompt",
     )
     assert len(await service.infer(source(), model="model")) == 2
 
     empty_service = BuildInferenceService(
-        FakeTextGenerator(InferenceResult(builds=[])), FakeTaxonomy(), FakeVersions(), "prompt"
+        FakeTextGenerator(InferenceResult(builds=[])), FakeTags(), FakeVersions(), "prompt"
     )
     assert await empty_service.infer(source(), model="model") == []
 
@@ -174,7 +174,7 @@ async def test_infer_returns_multiple_or_no_builds() -> None:
 async def test_infer_discards_context_and_bogus_source_ids() -> None:
     service = BuildInferenceService(
         FakeTextGenerator(InferenceResult(builds=[inferred(source_message_ids=[9, 999])])),
-        FakeTaxonomy(),
+        FakeTags(),
         FakeVersions(),
         "prompt",
     )
@@ -184,7 +184,7 @@ async def test_infer_discards_context_and_bogus_source_ids() -> None:
 async def test_infer_passes_images_to_generator() -> None:
     image = InlineImage(b"image", "image/png", 10, "attachment")
     generator = FakeTextGenerator(InferenceResult(builds=[]))
-    service = BuildInferenceService(generator, FakeTaxonomy(), FakeVersions(), "prompt")
+    service = BuildInferenceService(generator, FakeTags(), FakeVersions(), "prompt")
 
     await service.infer(source(images=(image,)), model="model")
 
@@ -196,7 +196,7 @@ async def test_missing_version_stays_unknown(version_spec: str | None) -> None:
     versions = FakeVersions()
     service = BuildInferenceService(
         FakeTextGenerator(InferenceResult(builds=[inferred(version_spec=version_spec)])),
-        FakeTaxonomy(),
+        FakeTags(),
         versions,
         "prompt",
     )
@@ -217,7 +217,7 @@ async def test_invalid_version_preserves_candidates_for_review(
     monkeypatch.setattr(versions, "resolve_spec", resolve)
     service = BuildInferenceService(
         FakeTextGenerator(InferenceResult(builds=[inferred(version_spec="Java unknown"), inferred()])),
-        FakeTaxonomy(),
+        FakeTags(),
         versions,
         "prompt",
     )
@@ -245,7 +245,7 @@ async def test_qualified_timings_and_volume_survive_submission_prefill() -> None
                 ]
             )
         ),
-        FakeTaxonomy(),
+        FakeTags(),
         FakeVersions(),
         "prompt",
     )
@@ -275,7 +275,7 @@ async def test_unparseable_timings_preserve_source_facts_without_model_review_co
                 ]
             )
         ),
-        FakeTaxonomy(),
+        FakeTags(),
         FakeVersions(),
         "prompt",
     )
@@ -313,7 +313,7 @@ async def test_source_links_survive_prefill_without_inventing_or_inheriting_urls
                 ]
             )
         ),
-        FakeTaxonomy(),
+        FakeTags(),
         FakeVersions(),
         "prompt",
     )
@@ -338,7 +338,7 @@ async def test_source_links_survive_prefill_without_inventing_or_inheriting_urls
 async def test_utility_does_not_acquire_a_door_orientation() -> None:
     service = BuildInferenceService(
         FakeTextGenerator(InferenceResult(builds=[inferred(build_category="Utility", door_orientation=None)])),
-        FakeTaxonomy(),
+        FakeTags(),
         FakeVersions(),
         "prompt",
     )
@@ -376,7 +376,7 @@ async def test_author_notes_reject_comparisons_inferred_from_an_outdated_post() 
                 ]
             )
         ),
-        FakeTaxonomy(),
+        FakeTags(),
         FakeVersions(),
         "prompt",
     )
@@ -422,7 +422,7 @@ async def test_author_notes_require_an_excerpt_from_this_builds_selected_sources
                 ]
             )
         ),
-        FakeTaxonomy(),
+        FakeTags(),
         FakeVersions(),
         "prompt",
     )
@@ -469,7 +469,7 @@ async def test_author_notes_recover_formatting_without_rewriting_source(
         FakeTextGenerator(
             InferenceResult(builds=[inferred(author_notes=[{"source_message_id": 10, "text": excerpt}])])
         ),
-        FakeTaxonomy(),
+        FakeTags(),
         FakeVersions(),
         "prompt",
     )
@@ -509,7 +509,7 @@ async def test_author_notes_preserve_explicit_changes_and_requirements_without_r
                 ]
             )
         ),
-        FakeTaxonomy(),
+        FakeTags(),
         FakeVersions(),
         "prompt",
     )
@@ -590,7 +590,7 @@ async def test_visible_and_true_timings_are_kept_separately_through_prefill() ->
         visible_closing_time={"value": "1.25s", "qualifier": None},
     )
     service = BuildInferenceService(
-        FakeTextGenerator(InferenceResult(builds=[value])), FakeTaxonomy(), FakeVersions(), "system"
+        FakeTextGenerator(InferenceResult(builds=[value])), FakeTags(), FakeVersions(), "system"
     )
     [build] = await service.infer(source(), model="test")
     assert isinstance(build.details, DoorDraftDetails)
@@ -606,7 +606,7 @@ async def test_visible_and_true_timings_are_kept_separately_through_prefill() ->
 async def test_approximate_minutes_keep_both_ticks_and_the_qualification() -> None:
     service = BuildInferenceService(
         FakeTextGenerator(InferenceResult(builds=[inferred(opening_time={"value": "~42 minutes", "qualifier": None})])),
-        FakeTaxonomy(),
+        FakeTags(),
         FakeVersions(),
         "system",
     )
@@ -629,7 +629,7 @@ async def test_measurement_qualifications_and_variant_ranges_remain_source_excer
         ]
     )
     service = BuildInferenceService(
-        FakeTextGenerator(InferenceResult(builds=[value])), FakeTaxonomy(), FakeVersions(), "system"
+        FakeTextGenerator(InferenceResult(builds=[value])), FakeTags(), FakeVersions(), "system"
     )
     [build] = await service.infer(BuildInferenceInput((message,), (), (), 30, 40), model="test")
     assert build.description == "(including floor)\nbreaks record at: n=5-14 wide"
@@ -668,7 +668,7 @@ async def test_expandable_source_facts_survive_inference_without_sample_dimensio
             ]
         )
     )
-    service = BuildInferenceService(generator, FakeTaxonomy(), FakeVersions(), "system prompt")
+    service = BuildInferenceService(generator, FakeTags(), FakeVersions(), "system prompt")
     builds = await service.infer(inputs, model="test-model")
     assert isinstance(builds[0].details, DoorDraftDetails)
     actual = builds[0].details.door_expansion
@@ -708,7 +708,7 @@ async def test_malformed_provider_fields_do_not_discard_a_build_or_its_other_cre
     )
     service = BuildInferenceService(
         FakeTextGenerator(InferenceResult(builds=[value, inferred(source_message_ids=[11])])),
-        FakeTaxonomy(),
+        FakeTags(),
         FakeVersions(),
         "system",
     )
@@ -767,7 +767,7 @@ async def test_timings_without_a_category_field_survive_retention_and_prefill(
         **{**timings, timing_field: {"value": duration, "qualifier": None}},
     )
     service = BuildInferenceService(
-        FakeTextGenerator(InferenceResult(builds=[value])), FakeTaxonomy(), FakeVersions(), "system"
+        FakeTextGenerator(InferenceResult(builds=[value])), FakeTags(), FakeVersions(), "system"
     )
     inputs = BuildInferenceInput.from_single_message(
         author_name="Builder", content=f"{label}: {duration}", message_id=10, author_id=20, channel_id=30, server_id=40
@@ -800,7 +800,7 @@ async def test_extender_stroke_and_timings_survive_retained_candidates_and_prefi
         retraction_time={"value": "0.25s", "qualifier": "6gt clockable"},
     )
     service = BuildInferenceService(
-        FakeTextGenerator(InferenceResult(builds=[value])), FakeTaxonomy(), FakeVersions(), "system"
+        FakeTextGenerator(InferenceResult(builds=[value])), FakeTags(), FakeVersions(), "system"
     )
     [build] = await service.infer(source(), model="test")
     retained = (
@@ -821,7 +821,7 @@ async def test_extender_stroke_and_timings_survive_retained_candidates_and_prefi
 async def test_seamless_and_reset_measurements_remain_separate_from_the_duration() -> None:
     value = inferred(opening_time={"value": "0.1s", "qualifier": "0.25s seamless, 0.05s reset"})
     service = BuildInferenceService(
-        FakeTextGenerator(InferenceResult(builds=[value])), FakeTaxonomy(), FakeVersions(), "system"
+        FakeTextGenerator(InferenceResult(builds=[value])), FakeTags(), FakeVersions(), "system"
     )
     [build] = await service.infer(source(), model="test")
     assert isinstance(build.details, DoorDraftDetails)
@@ -835,7 +835,7 @@ async def test_inference_keeps_valid_links_when_the_model_invents_an_empty_or_ma
     message = ContextMessage(10, "Builder", 20, "References: " + " ".join(urls), "", "primary")
     value = inferred(links=[{"url": url, "media_type": "video"} for url in urls])
     service = BuildInferenceService(
-        FakeTextGenerator(InferenceResult(builds=[value])), FakeTaxonomy(), FakeVersions(), "system"
+        FakeTextGenerator(InferenceResult(builds=[value])), FakeTags(), FakeVersions(), "system"
     )
     [build] = await service.infer(BuildInferenceInput((message,), (), (), 30, 40), model="test")
     assert [link.url for link in build.links] == [urls[-1]]
@@ -850,7 +850,7 @@ async def test_explicit_edition_survives_without_guessing_a_release(spec: str | 
     versions = FakeVersions()
     service = BuildInferenceService(
         FakeTextGenerator(InferenceResult(builds=[inferred(edition="Bedrock", version_spec=spec)])),
-        FakeTaxonomy(),
+        FakeTags(),
         versions,
         "system",
     )
@@ -896,7 +896,7 @@ async def test_unassigned_timing_pair_is_quoted_without_guessing_its_direction()
         extension_time={"value": "instant", "qualifier": None},
     )
     service = BuildInferenceService(
-        FakeTextGenerator(InferenceResult(builds=[value])), FakeTaxonomy(), FakeVersions(), "system"
+        FakeTextGenerator(InferenceResult(builds=[value])), FakeTags(), FakeVersions(), "system"
     )
     [build] = await service.infer(BuildInferenceInput((message,), (), (), 30, 40), model="test")
     assert isinstance(build.details, ExtenderDraftDetails)
@@ -909,7 +909,7 @@ async def test_timing_fallback_does_not_assign_shared_measurements_to_each_varia
     message = ContextMessage(10, "Builder", 20, "Two variants: opening .25/.4 and opening .5/.6", "", "primary")
     service = BuildInferenceService(
         FakeTextGenerator(InferenceResult(builds=[inferred(opening_time=None), inferred(opening_time=None)])),
-        FakeTaxonomy(),
+        FakeTags(),
         FakeVersions(),
         "system",
     )
@@ -930,7 +930,7 @@ async def test_timing_fallback_ignores_dates_and_durations_already_represented()
                 ]
             )
         ),
-        FakeTaxonomy(),
+        FakeTags(),
         FakeVersions(),
         "system",
     )
@@ -946,7 +946,7 @@ async def test_a_source_quote_already_covering_an_unparseable_timing_is_not_repe
         author_notes=[{"source_message_id": 10, "text": excerpt}],
     )
     service = BuildInferenceService(
-        FakeTextGenerator(InferenceResult(builds=[value])), FakeTaxonomy(), FakeVersions(), "system"
+        FakeTextGenerator(InferenceResult(builds=[value])), FakeTags(), FakeVersions(), "system"
     )
     [build] = await service.infer(BuildInferenceInput((message,), (), (), 30, 40), model="test")
     assert isinstance(build.details, DoorDraftDetails)
@@ -977,7 +977,7 @@ async def test_equal_qualified_opening_and_closing_times_keep_both_direction_lab
     timing = {"value": "0.45s", "qualifier": "0 gt input delay, 0 gt reset"}
     service = BuildInferenceService(
         FakeTextGenerator(InferenceResult(builds=[inferred(opening_time=timing, closing_time=timing)])),
-        FakeTaxonomy(),
+        FakeTags(),
         FakeVersions(),
         "system",
     )
@@ -1000,7 +1000,7 @@ async def test_equal_pair_values_are_not_both_covered_by_one_assigned_measuremen
                 ]
             )
         ),
-        FakeTaxonomy(),
+        FakeTags(),
         FakeVersions(),
         "system",
     )
@@ -1021,7 +1021,7 @@ async def test_incomplete_expansion_bounds_do_not_discard_a_message_group() -> N
     message = ContextMessage(10, "Builder", 20, "40+20x blocks, x=1-14 wide", "", "primary")
     service = BuildInferenceService(
         FakeTextGenerator(InferenceResult(builds=[value, inferred()])),
-        FakeTaxonomy(),
+        FakeTags(),
         FakeVersions(),
         "system",
     )
@@ -1038,7 +1038,7 @@ async def test_inference_keeps_explicit_version_exclusions() -> None:
     versions.resolve_spec = AsyncMock(return_value=["Java 1.8.0", "Java 1.15.2"])
     service = BuildInferenceService(
         FakeTextGenerator(InferenceResult(builds=[inferred(version_spec="1.8+, !1.16+")])),
-        FakeTaxonomy(),
+        FakeTags(),
         versions,
         "system prompt",
     )
@@ -1057,7 +1057,7 @@ async def test_inference_keeps_explicit_version_exclusions() -> None:
 async def test_numeric_edge_shorthand_is_seconds_without_combining_reset(value: str, expected: int | None) -> None:
     service = BuildInferenceService(
         FakeTextGenerator(InferenceResult(builds=[inferred(opening_time={"value": value, "qualifier": None})])),
-        FakeTaxonomy(),
+        FakeTags(),
         FakeVersions(),
         "system prompt",
     )
@@ -1073,7 +1073,7 @@ async def test_reset_only_qualification_does_not_become_a_movement_duration() ->
         FakeTextGenerator(
             InferenceResult(builds=[inferred(closing_time={"value": None, "qualifier": "10s reset on closing"})])
         ),
-        FakeTaxonomy(),
+        FakeTags(),
         FakeVersions(),
         "system prompt",
     )
@@ -1144,7 +1144,7 @@ def test_bare_numeric_credit_names_do_not_establish_discord_ids() -> None:
 async def test_leading_outdated_status_survives_omitted_model_notes(text: str, marker: str) -> None:
     message = ContextMessage(10, "Builder", 20, text, "", "primary")
     service = BuildInferenceService(
-        FakeTextGenerator(InferenceResult(builds=[inferred()])), FakeTaxonomy(), FakeVersions(), "system"
+        FakeTextGenerator(InferenceResult(builds=[inferred()])), FakeTags(), FakeVersions(), "system"
     )
 
     [build] = await service.infer(BuildInferenceInput((message,), (), (), 30, 40), model="test")
@@ -1160,7 +1160,7 @@ async def test_outdated_status_does_not_duplicate_the_models_title_or_quote(in_t
         author_notes=[] if in_title else [{"source_message_id": 10, "text": "[OUTDATED]"}],
     )
     service = BuildInferenceService(
-        FakeTextGenerator(InferenceResult(builds=[value])), FakeTaxonomy(), FakeVersions(), "system"
+        FakeTextGenerator(InferenceResult(builds=[value])), FakeTags(), FakeVersions(), "system"
     )
 
     [build] = await service.infer(BuildInferenceInput((message,), (), (), 30, 40), model="test")
@@ -1171,7 +1171,7 @@ async def test_outdated_status_does_not_duplicate_the_models_title_or_quote(in_t
 async def test_outdated_status_is_not_assigned_to_every_variant_in_a_shared_post() -> None:
     message = ContextMessage(10, "Builder", 20, "[OUTDATED] 3x3 door; also a newer 4x4", "", "primary")
     service = BuildInferenceService(
-        FakeTextGenerator(InferenceResult(builds=[inferred(), inferred()])), FakeTaxonomy(), FakeVersions(), "system"
+        FakeTextGenerator(InferenceResult(builds=[inferred(), inferred()])), FakeTags(), FakeVersions(), "system"
     )
 
     builds = await service.infer(BuildInferenceInput((message,), (), (), 30, 40), model="test")
@@ -1183,7 +1183,7 @@ async def test_outdated_reference_and_context_do_not_mark_the_current_build_outd
     message = ContextMessage(10, "Builder", 20, "Improved from the [OUTDATED] version", "", "primary")
     context = ContextMessage(9, "Builder", 20, "[OUTDATED] 3x3 door", "", "preceding")
     service = BuildInferenceService(
-        FakeTextGenerator(InferenceResult(builds=[inferred()])), FakeTaxonomy(), FakeVersions(), "system"
+        FakeTextGenerator(InferenceResult(builds=[inferred()])), FakeTags(), FakeVersions(), "system"
     )
 
     [build] = await service.infer(BuildInferenceInput((message,), (context,), (), 30, 40), model="test")
@@ -1204,7 +1204,7 @@ async def test_instant_edge_labels_keep_zero_durations_and_separate_reset_qualif
         closing_time={"value": closing, "qualifier": "6.5s reset"},
     )
     service = BuildInferenceService(
-        FakeTextGenerator(InferenceResult(builds=[value])), FakeTaxonomy(), FakeVersions(), "system"
+        FakeTextGenerator(InferenceResult(builds=[value])), FakeTags(), FakeVersions(), "system"
     )
 
     [build] = await service.infer(BuildInferenceInput((message,), (), (), 30, 40), model="test")
@@ -1220,7 +1220,7 @@ async def test_instant_edge_labels_keep_zero_durations_and_separate_reset_qualif
 async def test_instant_prose_does_not_establish_zero_opening_time(value: str) -> None:
     service = BuildInferenceService(
         FakeTextGenerator(InferenceResult(builds=[inferred(opening_time={"value": value, "qualifier": None})])),
-        FakeTaxonomy(),
+        FakeTags(),
         FakeVersions(),
         "system",
     )

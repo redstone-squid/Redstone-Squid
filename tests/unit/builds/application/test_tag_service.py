@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from squid.core.builds.application.taxonomy import TaxonomyResolution
-from squid.core.builds.application.taxonomy_service import BuildTaxonomyService
+from squid.core.builds.application.tag_service import BuildTagService
+from squid.core.builds.application.tags import TagResolution
 from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.core.tags.models import TagAlias, TagAssignment, TagDefinition
 
@@ -27,12 +27,12 @@ async def test_restriction_aliases_are_canonical_and_deduplicated() -> None:
     observerless = definition("No Observers", TagSemanticKind.RESTRICTION, "component", "Obsless", "Observerless")
     seamless = definition("Full Seamless", TagSemanticKind.RESTRICTION, "wiring-placement")
     repository = AsyncMock()
-    repository.resolve_official.return_value = TaxonomyResolution(
+    repository.resolve_official.return_value = TagResolution(
         (TagAssignment(observerless), TagAssignment(seamless)), frozenset({"sandless"}), frozenset()
     )
-    scope = AsyncMock(build_taxonomy=repository)
+    scope = AsyncMock(build_tags=repository)
     scope.__aenter__.return_value = scope
-    service = BuildTaxonomyService(uow_factory=lambda: scope)
+    service = BuildTagService(uow_factory=lambda: scope)
 
     recognized, unknown = await service.validate_restrictions(
         ["OBSLESS", " No   Observers ", "observerless", "Sandless", "Full Seamless"], "component"
@@ -46,12 +46,12 @@ async def test_ambiguous_alias_stays_unknown_even_when_a_canonical_name_also_mat
     slime = definition("No Slime Blocks", TagSemanticKind.RESTRICTION, "component", "Pistonless")
     repository = AsyncMock()
     # A canonical name selected this definition, but the shared alias is still ambiguous.
-    repository.resolve_official.return_value = TaxonomyResolution(
+    repository.resolve_official.return_value = TagResolution(
         (TagAssignment(slime),), frozenset({"pistonless"}), frozenset()
     )
-    scope = AsyncMock(build_taxonomy=repository)
+    scope = AsyncMock(build_tags=repository)
     scope.__aenter__.return_value = scope
-    service = BuildTaxonomyService(uow_factory=lambda: scope)
+    service = BuildTagService(uow_factory=lambda: scope)
 
     assert await service.validate_restrictions(["No Slime Blocks", "Pistonless"], "component") == (
         ["No Slime Blocks"],
@@ -62,12 +62,12 @@ async def test_ambiguous_alias_stays_unknown_even_when_a_canonical_name_also_mat
 async def test_pattern_aliases_use_the_door_catalogue() -> None:
     pattern = definition("Full Lamp", TagSemanticKind.PATTERN, None, "Lamp Door")
     repository = AsyncMock()
-    repository.resolve_official.return_value = TaxonomyResolution(
+    repository.resolve_official.return_value = TagResolution(
         (TagAssignment(pattern),), frozenset(), frozenset({"glass"})
     )
-    scope = AsyncMock(build_taxonomy=repository)
+    scope = AsyncMock(build_tags=repository)
     scope.__aenter__.return_value = scope
-    service = BuildTaxonomyService(uow_factory=lambda: scope)
+    service = BuildTagService(uow_factory=lambda: scope)
 
     assert await service.validate_door_types(["LAMP DOOR", "Glass"]) == (["Full Lamp"], ["Glass"])
     repository.resolve_official.assert_awaited_once_with(
@@ -80,12 +80,12 @@ async def test_combined_negative_placement_shorthand_keeps_both_constraints(phra
     nonloc = definition("Not Locational", TagSemanticKind.RESTRICTION, "miscellaneous")
     nondir = definition("Not Directional", TagSemanticKind.RESTRICTION, "miscellaneous")
     repository = AsyncMock()
-    repository.resolve_official.return_value = TaxonomyResolution(
+    repository.resolve_official.return_value = TagResolution(
         (TagAssignment(nonloc), TagAssignment(nondir)), frozenset(), frozenset()
     )
-    scope = AsyncMock(build_taxonomy=repository)
+    scope = AsyncMock(build_tags=repository)
     scope.__aenter__.return_value = scope
-    service = BuildTaxonomyService(uow_factory=lambda: scope)
+    service = BuildTagService(uow_factory=lambda: scope)
 
     assert await service.validate_restrictions([phrase], "miscellaneous") == (
         ["Not Locational", "Not Directional"],
@@ -99,10 +99,10 @@ async def test_combined_negative_placement_shorthand_keeps_both_constraints(phra
 async def test_placement_shorthand_keeps_qualifications_instead_of_claiming_reliability() -> None:
     phrase = "Non-Loc/Dir with fixes"
     repository = AsyncMock()
-    repository.resolve_official.return_value = TaxonomyResolution((), frozenset({phrase.casefold()}), frozenset())
-    scope = AsyncMock(build_taxonomy=repository)
+    repository.resolve_official.return_value = TagResolution((), frozenset({phrase.casefold()}), frozenset())
+    scope = AsyncMock(build_tags=repository)
     scope.__aenter__.return_value = scope
-    service = BuildTaxonomyService(uow_factory=lambda: scope)
+    service = BuildTagService(uow_factory=lambda: scope)
 
     assert await service.validate_restrictions([phrase], "miscellaneous") == ([], [phrase])
     repository.resolve_official.assert_awaited_once_with(build_kind=None, restrictions=[phrase], patterns=())

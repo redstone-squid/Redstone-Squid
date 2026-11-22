@@ -4,7 +4,7 @@ from decimal import Decimal
 
 import pytest
 
-from squid.core.builds.domain import BuildStatus, ShowcaseTag, UnresolvedTaxonomy
+from squid.core.builds.domain import BuildStatus, ShowcaseTag, UnresolvedTags
 from squid.core.builds.models import Build, DoorBuild, ExtenderBuild, UtilityBuild
 from squid.core.sentinel import UNSET
 from squid.core.submissions.application.build_answers import answers_from_build, patch_from_answers
@@ -126,7 +126,7 @@ def test_names_without_a_catalogue_entry_are_kept_aside_in_their_list() -> None:
 def test_removing_an_unmatched_name_is_a_change() -> None:
     before = answers_from_build(_door(), OPTIONS)
 
-    patch = patch_from_answers(before, before.answers, UnresolvedTaxonomy(), OPTIONS)
+    patch = patch_from_answers(before, before.answers, UnresolvedTags(), OPTIONS)
 
     assert patch.miscellaneous_restrictions == ["Seamless"]
     assert patch.door_type is UNSET

@@ -34,7 +34,7 @@ from squid.core.submissions.domain.finalization import (
     SubmissionDimensions,
     SubmissionSchematicLicense,
     SubmissionSchematicVisibility,
-    SubmissionTaxonomy,
+    SubmissionTags,
     VerifiedSubmissionArtifacts,
 )
 from squid.core.submissions.domain.forms import (
@@ -96,7 +96,7 @@ __all__ = [
     "SubmissionOrigin",
     "SubmissionSchematicLicense",
     "SubmissionSchematicVisibility",
-    "SubmissionTaxonomy",
+    "SubmissionTags",
     "ValueKind",
     "VerifiedSubmissionArtifacts",
     "VisibilityOperator",

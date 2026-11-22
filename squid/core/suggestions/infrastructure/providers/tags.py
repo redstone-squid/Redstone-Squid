@@ -1,4 +1,4 @@
-"""Suggestion providers over the unified tag taxonomy.
+"""Suggestion providers over the tag definitions.
 
 These serve the same approved definitions the submission form's option sources publish, so a
 restriction picked in Discord, on the web form, and in-game is spelled identically.
@@ -9,7 +9,7 @@ from typing import Protocol
 
 from squid.core.permissions.domain.catalogue import TAG_PROPOSAL_LIST
 from squid.core.suggestions.application import Candidate
-from squid.core.suggestions.application.queries import TaxonomyEntry
+from squid.core.suggestions.application.queries import TagEntry
 from squid.core.suggestions.application.registry import SuggestionSource
 from squid.core.suggestions.domain import SourceKind, SuggestionRequest, ValueType, Visibility
 from squid.core.suggestions.infrastructure.cache import TtlCache
@@ -17,16 +17,16 @@ from squid.core.tags.domain import TagSemanticKind
 from squid.core.tags.models import TagDefinition
 
 
-class TaxonomyReader(Protocol):
-    """Read approved taxonomy values shaped for matching."""
+class TagReader(Protocol):
+    """Read approved tag values shaped for matching."""
 
-    async def taxonomy(
+    async def tag_entries(
         self,
         semantic_kind: str,
         *,
         build_kind: str | None = None,
         authority: str | None = "official",
-    ) -> Sequence[TaxonomyEntry]: ...
+    ) -> Sequence[TagEntry]: ...
 
 
 class PendingTagDefinitions(Protocol):
@@ -35,12 +35,12 @@ class PendingTagDefinitions(Protocol):
     async def pending(self) -> Sequence[TagDefinition]: ...
 
 
-class TaxonomyProvider:
-    """Suggest approved taxonomy names, submitting stable keys or numeric IDs."""
+class TagProvider:
+    """Suggest approved tag names, submitting stable keys or numeric IDs."""
 
     def __init__(
         self,
-        reader: TaxonomyReader,
+        reader: TagReader,
         semantic_kind: str,
         *,
         build_kind: str | None = None,
@@ -60,7 +60,7 @@ class TaxonomyProvider:
 
     async def _load(self, _key: None) -> tuple[Candidate, ...]:
         entries = _ordered(
-            await self._reader.taxonomy(self._semantic_kind, build_kind=self._build_kind, authority=self._authority)
+            await self._reader.tag_entries(self._semantic_kind, build_kind=self._build_kind, authority=self._authority)
         )
         return tuple(
             Candidate.create(
@@ -98,7 +98,7 @@ class PendingTagProvider:
         )
 
 
-def _ordered(entries: Sequence[TaxonomyEntry]) -> list[TaxonomyEntry]:
+def _ordered(entries: Sequence[TagEntry]) -> list[TagEntry]:
     """Sort in Python rather than trusting the database collation.
 
     The order decides the content revision an enumerable source publishes, and a revision that
@@ -108,14 +108,14 @@ def _ordered(entries: Sequence[TaxonomyEntry]) -> list[TaxonomyEntry]:
     return sorted(entries, key=lambda entry: (entry.display_name.casefold(), entry.stable_key))
 
 
-def _alias_hint(entry: TaxonomyEntry) -> str | None:
+def _alias_hint(entry: TagEntry) -> str | None:
     """Show why an alias matched, so a hit on a name that is not the label is not confusing."""
     if not entry.aliases:
         return None
     return "also " + ", ".join(entry.aliases[:3])
 
 
-def taxonomy_sources(repository: TaxonomyReader, tags: PendingTagDefinitions) -> tuple[SuggestionSource, ...]:
+def tag_sources(repository: TagReader, tags: PendingTagDefinitions) -> tuple[SuggestionSource, ...]:
     return (
         SuggestionSource(
             id="tags_pending",
@@ -127,14 +127,14 @@ def taxonomy_sources(repository: TaxonomyReader, tags: PendingTagDefinitions) ->
         ),
         SuggestionSource(
             id="approved_restrictions",
-            provider=TaxonomyProvider(repository, TagSemanticKind.RESTRICTION.value),
+            provider=TagProvider(repository, TagSemanticKind.RESTRICTION.value),
             kind=SourceKind.ENUMERABLE,
             multi_value=",",
             kind_label="restriction",
         ),
         SuggestionSource(
             id="approved_patterns",
-            provider=TaxonomyProvider(repository, TagSemanticKind.PATTERN.value),
+            provider=TagProvider(repository, TagSemanticKind.PATTERN.value),
             kind=SourceKind.ENUMERABLE,
             multi_value=",",
             kind_label="pattern",
@@ -143,21 +143,21 @@ def taxonomy_sources(repository: TaxonomyReader, tags: PendingTagDefinitions) ->
             # Showcase tags are proposed by users, so unlike restrictions and patterns they are
             # never `official` and must not be filtered on authority.
             id="approved_showcase_tags",
-            provider=TaxonomyProvider(repository, TagSemanticKind.SHOWCASE.value, authority=None),
+            provider=TagProvider(repository, TagSemanticKind.SHOWCASE.value, authority=None),
             kind=SourceKind.ENUMERABLE,
             multi_value=",",
             kind_label="showcase",
         ),
         SuggestionSource(
             id="showcase_tag_ids",
-            provider=TaxonomyProvider(repository, TagSemanticKind.SHOWCASE.value, authority=None, by_id=True),
+            provider=TagProvider(repository, TagSemanticKind.SHOWCASE.value, authority=None, by_id=True),
             kind=SourceKind.ENUMERABLE,
             value_type=ValueType.INTEGER,
             kind_label="showcase",
         ),
         SuggestionSource(
             id="restriction_ids",
-            provider=TaxonomyProvider(repository, TagSemanticKind.RESTRICTION.value, by_id=True),
+            provider=TagProvider(repository, TagSemanticKind.RESTRICTION.value, by_id=True),
             kind=SourceKind.ENUMERABLE,
             value_type=ValueType.INTEGER,
             multi_value=",",
@@ -165,8 +165,8 @@ def taxonomy_sources(repository: TaxonomyReader, tags: PendingTagDefinitions) ->
         ),
         SuggestionSource(
             id="door_types",
-            # Door types are patterns declared applicable to doors, not a separate taxonomy.
-            provider=TaxonomyProvider(repository, TagSemanticKind.PATTERN.value, build_kind="Door"),
+            # Door types are patterns declared applicable to doors, not a separate kind.
+            provider=TagProvider(repository, TagSemanticKind.PATTERN.value, build_kind="Door"),
             kind=SourceKind.ENUMERABLE,
             kind_label="pattern",
         ),

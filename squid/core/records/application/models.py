@@ -21,12 +21,12 @@ from squid.core.records.domain import (
     VersionScope,
 )
 from squid.core.records.domain.door_evidence import DoorRecordEvidence
-from squid.core.records.domain.models import FacetKind, MaterializationSource
+from squid.core.records.domain.models import MaterializationSource, RecordTagRole
 
 
 @dataclass(frozen=True, slots=True)
-class CandidateFacet:
-    """A taxonomy value and the category threshold a candidate can satisfy.
+class CandidateTag:
+    """A tag value and the category threshold a candidate can satisfy.
 
     `assigned_value` is the build's actual value. `category_value` overrides it
     for category titles: a build three blocks wide can enter an at-most-four-wide
@@ -34,7 +34,7 @@ class CandidateFacet:
     """
 
     id: int
-    kind: FacetKind
+    kind: RecordTagRole
     name: str
     restriction_type: str | None = None
     stable_key: str | None = None
@@ -48,7 +48,7 @@ class CandidateFacet:
 
     @property
     def category_name(self) -> str:
-        """Render the category threshold represented by this facet."""
+        """Render the category threshold represented by this tag."""
         value = self.category_value if self.category_value is not None else self.assigned_value
         if value is None:
             return self.name
@@ -66,8 +66,8 @@ class CandidateBuild:
     kind: BuildKind
     candidate: Candidate
     version_ids: frozenset[int]
-    restrictions: tuple[CandidateFacet, ...]
-    types: tuple[CandidateFacet, ...]
+    restrictions: tuple[CandidateTag, ...]
+    types: tuple[CandidateTag, ...]
     door: DoorCategory | None = None
     extender: ExtenderCategory | None = None
     expansion: DoorExpansion | None = None
@@ -88,7 +88,7 @@ class CategoryIdentity:
 
     @property
     def key(self) -> str:
-        restriction_key = ",".join(str(facet_id) for facet_id in self.restriction_ids)
+        restriction_key = ",".join(str(tag_id) for tag_id in self.restriction_ids)
         value_key = ",".join(f"{tag_id}:{operator}:{value}" for tag_id, operator, value in self.restriction_values)
         return f"{self.kind.value}:{self.base_key}:r[{restriction_key}]:p[{value_key}]"
 
@@ -122,7 +122,7 @@ class CategoryCandidates:
     """Candidates and presentation facts for one category."""
 
     identity: CategoryIdentity
-    facets: tuple[CandidateFacet, ...]
+    tags: tuple[CandidateTag, ...]
     category_text: FormattedTitle
     candidates: tuple[Candidate, ...]
     source: MaterializationSource = MaterializationSource.EAGER
@@ -177,7 +177,7 @@ class RecordGap:
 
 @dataclass(frozen=True, slots=True)
 class RecordNameDiagnostic:
-    """A record name with unknown or contradictory taxonomy."""
+    """A record name with unknown or contradictory tags."""
 
     definition_id: int
     title: str

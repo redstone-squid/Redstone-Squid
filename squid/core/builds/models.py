@@ -44,7 +44,7 @@ from squid.core.builds.domain import (
 )
 from squid.core.builds.domain.credits import Credit, CreditAttribution, CreditKind, CreditRole, StagedCredits
 from squid.core.builds.domain.expansion import DoorExpansion
-from squid.core.builds.domain.models import StagedMedia, StagedTaxonomy, freeze_fields, frozen_field
+from squid.core.builds.domain.models import StagedMedia, StagedTags, freeze_fields, frozen_field
 from squid.core.builds.errors import InvalidBuildError
 from squid.core.builds.persistence_types import DoorExpansionJSON
 from squid.core.errors import InvalidStateError
@@ -57,7 +57,7 @@ from squid.core.tags.models import TagAssignment
 
 
 @freeze_fields
-class Build(Base, StagedMedia, StagedTaxonomy, StagedCredits, kw_only=True):
+class Build(Base, StagedMedia, StagedTags, StagedCredits, kw_only=True):
     """A build submitted by a user."""
 
     __tablename__ = "builds"

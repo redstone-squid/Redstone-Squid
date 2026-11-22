@@ -1,6 +1,6 @@
 """JSON-only messages between the API process and a range worker.
 
-Taxonomy filtering finishes in the parent transaction. Workers receive only
+Tag filtering finishes in the parent transaction. Workers receive only
 candidate arithmetic facts and cannot query the database or publish results.
 """
 

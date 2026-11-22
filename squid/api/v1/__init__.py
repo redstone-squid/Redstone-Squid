@@ -77,7 +77,7 @@ TAGS_METADATA = [
     {"name": "suggest", "description": "Typeahead completions for registered value sources."},
     {"name": "submissions", "description": "Revisioned submission forms and drafts."},
     {"name": "records", "description": "Active computed record results."},
-    {"name": "tags", "description": "Published build and record taxonomy."},
+    {"name": "tags", "description": "Published build and record tags."},
     {"name": "versions", "description": "Recognized Minecraft versions."},
     {"name": "creators", "description": "Public creator profiles and credits."},
     {"name": "schematics", "description": "Schematic analysis metadata and content."},

@@ -11558,7 +11558,7 @@
           "search"
         ],
         "summary": "Search",
-        "description": "Match builds, computed records, and taxonomy entries in one ranked page.",
+        "description": "Match builds, computed records, and tag entries in one ranked page.",
         "operationId": "search_execute",
         "parameters": [
           {
@@ -27153,7 +27153,7 @@
     },
     {
       "name": "tags",
-      "description": "Published build and record taxonomy."
+      "description": "Published build and record tags."
     },
     {
       "name": "versions",

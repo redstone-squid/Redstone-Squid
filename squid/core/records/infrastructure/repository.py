@@ -22,7 +22,7 @@ from squid.core.events.infrastructure.repository import publish_domain_event
 from squid.core.persistence.queue import ClaimedRowQueue, QueueSpec
 from squid.core.records.application.models import (
     CandidateBuild,
-    CandidateFacet,
+    CandidateTag,
     CategoryIdentity,
     ComputationBatch,
     ComputedRecordResult,
@@ -50,19 +50,19 @@ from squid.core.records.infrastructure.fingerprint import publication_fingerprin
 from squid.core.records.models import (
     ComputationRun,
     ComputationStatus,
-    DefinitionFacet,
     DoorTimingVariant,
     ExtenderTimingVariant,
-    FacetKind,
     MaterializationSource,
     Record,
     RecordDefinition,
+    RecordDefinitionTag,
     RecordHolder,
     RecordHolderHistory,
     RecordInputGeneration,
     RecordRecomputeQueueItem,
     RecordResult,
     RecordSettings,
+    RecordTagRole,
     RulesRevision,
 )
 from squid.core.tags.infrastructure.loading import assignment_units
@@ -90,13 +90,13 @@ RECORD_RECOMPUTE_QUEUE_SPEC = QueueSpec(
 
 @dataclass(frozen=True, slots=True)
 class _DefinitionWrite:
-    """A title definition's mutable presentation and canonical taxonomy membership."""
+    """A title definition's mutable presentation and canonical tag membership."""
 
     criterion: RecordCriterion
     category_key: str
     title: FormattedTitle
     source: MaterializationSource
-    facets: tuple[tuple[FacetKind, int], ...]
+    tags: tuple[tuple[RecordTagRole, int], ...]
 
     @property
     def key(self) -> tuple[RecordCriterion, str]:
@@ -699,7 +699,7 @@ class PostgresRecordRepository:
                     category.key,
                     title,
                     MaterializationSource.PUBLIC_LOOKUP,
-                    tuple((FacetKind.RESTRICTION, facet_id) for facet_id in category.restriction_ids),
+                    tuple((RecordTagRole.RESTRICTION, tag_id) for tag_id in category.restriction_ids),
                 )
                 for criterion, title in titles.items()
             ),
@@ -798,7 +798,7 @@ class PostgresRecordRepository:
                     computed.category.identity.key,
                     computed.title,
                     MaterializationSource(computed.category.source),
-                    tuple((FacetKind.RESTRICTION, facet_id) for facet_id in computed.category.identity.restriction_ids),
+                    tuple((RecordTagRole.RESTRICTION, tag_id) for tag_id in computed.category.identity.restriction_ids),
                 )
                 for computed in batch.records
             ),
@@ -872,22 +872,22 @@ class PostgresRecordRepository:
         )
         by_category = {row.record_id: row for row in definitions}
         by_key = {key: by_category[public_id] for key, public_id in public_ids.items() if public_id in by_category}
-        facets = {
-            (by_key[write.key].id, facet_kind, facet_id): order
+        tags = {
+            (by_key[write.key].id, tag_role, tag_id): order
             for write in ordered
-            for order, (facet_kind, facet_id) in enumerate(write.facets)
+            for order, (tag_role, tag_id) in enumerate(write.tags)
         }
-        if facets:
+        if tags:
             await session.execute(
-                insert(DefinitionFacet).on_conflict_do_nothing().returning(DefinitionFacet.definition_id),
+                insert(RecordDefinitionTag).on_conflict_do_nothing().returning(RecordDefinitionTag.definition_id),
                 [
                     {
                         "definition_id": definition_id,
-                        "facet_kind": facet_kind,
-                        "facet_id": facet_id,
+                        "tag_role": tag_role,
+                        "tag_id": tag_id,
                         "display_order": order,
                     }
-                    for (definition_id, facet_kind, facet_id), order in sorted(facets.items())
+                    for (definition_id, tag_role, tag_id), order in sorted(tags.items())
                 ],
             )
         return tuple(by_key[write.key] for write in writes)
@@ -958,9 +958,9 @@ def _door_candidate(door: DoorBuild, timing: tuple[TimingVariant, ...], *, size:
         )
     )
     depth = door.depth or 1
-    restrictions = _restriction_facets(door.tags)
-    patterns = _pattern_facets(door.tags)
-    is_expandable = any(facet.stable_key == "expandable" for facet in restrictions)
+    restrictions = _restriction_tags(door.tags)
+    patterns = _pattern_tags(door.tags)
+    is_expandable = any(tag.stable_key == "expandable" for tag in restrictions)
     return CandidateBuild(
         kind=BuildKind.DOOR,
         candidate=Candidate(
@@ -997,9 +997,9 @@ def _extender_candidate(
     # As for doors, measured variants take precedence over the submitted timing.
     fallback_timing = TimingVariant((extender.retraction_time, extender.extension_time, None, None))
     depth = extender.depth or 1
-    restrictions = _restriction_facets(extender.tags)
-    patterns = _pattern_facets(extender.tags)
-    is_expandable = any(facet.stable_key == "expandable" for facet in restrictions)
+    restrictions = _restriction_tags(extender.tags)
+    patterns = _pattern_tags(extender.tags)
+    is_expandable = any(tag.stable_key == "expandable" for tag in restrictions)
     type_names = tuple(pattern.category_name for pattern in patterns)
     if not type_names and extender.extender_type is not None:
         type_names = (extender.extender_type,)
@@ -1025,11 +1025,11 @@ def _extender_candidate(
     )
 
 
-def _restriction_facets(assignments: Sequence[TagAssignment]) -> tuple[CandidateFacet, ...]:
+def _restriction_tags(assignments: Sequence[TagAssignment]) -> tuple[CandidateTag, ...]:
     return tuple(
-        CandidateFacet(
+        CandidateTag(
             id=assignment.tag_id,
-            kind=FacetKind.RESTRICTION,
+            kind=RecordTagRole.RESTRICTION,
             name=assignment.definition.display_name,
             restriction_type=assignment.definition.restriction_type,
             stable_key=assignment.definition.stable_key,
@@ -1047,11 +1047,11 @@ def _restriction_facets(assignments: Sequence[TagAssignment]) -> tuple[Candidate
     )
 
 
-def _pattern_facets(assignments: Sequence[TagAssignment]) -> tuple[CandidateFacet, ...]:
+def _pattern_tags(assignments: Sequence[TagAssignment]) -> tuple[CandidateTag, ...]:
     return tuple(
-        CandidateFacet(
+        CandidateTag(
             id=assignment.tag_id,
-            kind=FacetKind.PATTERN,
+            kind=RecordTagRole.PATTERN,
             name=assignment.definition.display_name,
             stable_key=assignment.definition.stable_key,
             value_type=assignment.value_type,

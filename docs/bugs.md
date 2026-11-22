@@ -133,14 +133,14 @@ and `mode`. Autocomplete for `query` is wired with `@autocompletes(sort="search_
 
 `SearchQueryProvider` (`squid/core/suggestions/infrastructure/providers/search_query.py:42-105`) completes query
 tokens against `DEFAULT_FIELD_REGISTRY` (`squid/core/search/application/fields.py:97-132`) and queries `build`
-facet values. It receives no `scope` context from the Discord interaction options, nor does `SearchQueryProvider`
-or `FieldRegistry` filter fields and facet completions by `SearchScope`.
+filter values. It receives no `scope` context from the Discord interaction options, nor does `SearchQueryProvider`
+or `FieldRegistry` filter fields and value suggestions by `SearchScope`.
 
 When a user selects `scope: restrictions` or `scope: patterns` (which query `SearchScope.METADATA`), or
 `scope: records`, autocomplete still offers build-only fields (such as `width:`, `height:`, `volume:`,
-`closing_time:`) and build facet values instead of metadata-specific fields (`kind:`, `category:`, etc.).
+`closing_time:`) and build filter values instead of metadata-specific fields (`kind:`, `category:`, etc.).
 `suggests` in `squid/bot/utils/autocomplete.py` needs to extract `scope` from the interaction options, and
-`SearchQueryProvider` / `FieldRegistry` need to scope available fields and facet values to the target `SearchScope`.
+`SearchQueryProvider` / `FieldRegistry` need to scope available fields and filter values to the target `SearchScope`.
 
 ## Transient gateway DNS reconnect errors flood `error_reports` and dead-letter sync jobs
 

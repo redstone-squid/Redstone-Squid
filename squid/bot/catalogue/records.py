@@ -212,8 +212,8 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
                         (
                             sl.note(
                                 tr(
-                                    t"records-titles-purpose = These record titles contain terms the title rules "
-                                    t"do not know. Fix the taxonomy, then rebuild records."
+                                    t"records-titles-purpose = These record titles contain unrecognized tags. "
+                                    t"Correct the build tags, then recompute the records."
                                 )
                             ),
                             self._titles,

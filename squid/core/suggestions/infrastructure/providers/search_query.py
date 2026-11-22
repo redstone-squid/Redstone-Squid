@@ -35,10 +35,10 @@ from squid.core.suggestions.infrastructure.providers.search_fields import (
 )
 
 
-class FacetReader(Protocol):
-    """Read indexed values of one projected facet."""
+class FilterValueReader(Protocol):
+    """Read indexed values for search completions."""
 
-    async def facet_values(self, field_name: str, prefix: str, *, limit: int) -> Sequence[str]: ...
+    async def filter_values(self, field_name: str, prefix: str, *, limit: int) -> Sequence[str]: ...
 
 
 class SearchQueryProvider:
@@ -48,9 +48,9 @@ class SearchQueryProvider:
     suggested and what a chosen value replaces, neither of which a flat candidate list can carry.
     """
 
-    def __init__(self, search: SearchFields, facets: FacetReader) -> None:
+    def __init__(self, search: SearchFields, filters: FilterValueReader) -> None:
         self._search = search
-        self._facets = facets
+        self._filters = filters
 
     async def suggest(self, request: SuggestionRequest) -> SuggestionResult:
         scope = suggestion_search_scope(request)
@@ -77,7 +77,7 @@ class SearchQueryProvider:
             prefix = context.prefix.strip().casefold()
             values = sorted(value for value in choices if value.casefold().startswith(prefix))[:limit]
         else:
-            values = await self._facets.facet_values(context.field.name, context.prefix, limit=limit)
+            values = await self._filters.filter_values(context.field.name, context.prefix, limit=limit)
         # Preserve prefix matching and ordering when quoting the values.
         return tuple(
             Suggestion(

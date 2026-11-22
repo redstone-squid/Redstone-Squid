@@ -11,7 +11,7 @@ from squid.core.builds.domain import (
     DoorOrientationLiteral,
     Info,
     ShowcaseTag,
-    UnresolvedTaxonomy,
+    UnresolvedTags,
     read_showcase_tags,
 )
 from squid.core.builds.domain.credits import name_credits, read_credits
@@ -159,8 +159,8 @@ class SubmissionBuildPreparation:
             if definition.moderation_status is TagModerationStatus.APPROVED
         }
         requested: dict[str, tuple[tuple[str, ...], TagSemanticKind]] = {
-            "restrictions": (submission.taxonomy.restriction_keys, TagSemanticKind.RESTRICTION),
-            "showcase_tags": (tuple(tag.key for tag in submission.taxonomy.showcase_tags), TagSemanticKind.SHOWCASE),
+            "restrictions": (submission.tags.restriction_keys, TagSemanticKind.RESTRICTION),
+            "showcase_tags": (tuple(tag.key for tag in submission.tags.showcase_tags), TagSemanticKind.SHOWCASE),
         }
         requested["patterns"] = (submission.details.pattern_keys, TagSemanticKind.PATTERN)
 
@@ -182,7 +182,7 @@ class SubmissionBuildPreparation:
             if invalid:
                 issues.append(SubmissionAttentionIssue(field_id, SubmissionAttentionReason.UNKNOWN_OPTION))
         showcase: list[TagAssignment] = []
-        for tag in submission.taxonomy.showcase_tags:
+        for tag in submission.tags.showcase_tags:
             if (definition := selected.get(tag.key)) is None:
                 continue
             try:
@@ -214,7 +214,7 @@ def _restriction_values(keys: Sequence[str], definitions: Mapping[str, TagDefini
 def _to_build(
     submission: NormalizedSubmission, definitions: Mapping[str, TagDefinition], showcase: list[TagAssignment]
 ) -> Build:
-    restriction_values = _restriction_values(submission.taxonomy.restriction_keys, definitions)
+    restriction_values = _restriction_values(submission.tags.restriction_keys, definitions)
 
     pattern_names = [definitions[key].display_name for key in submission.details.pattern_keys]
     pattern_proposals = submission.details.pattern_proposals
@@ -222,10 +222,10 @@ def _to_build(
     extra_info: dict[str, JSONValue] = {
         "source_submission": _source_submission(submission),
     }
-    UnresolvedTaxonomy().add(
+    UnresolvedTags().add(
         restrictions=[
-            *submission.taxonomy.restriction_proposal_fields,
-            *(("miscellaneous_restrictions", name) for name in submission.taxonomy.restriction_proposals),
+            *submission.tags.restriction_proposal_fields,
+            *(("miscellaneous_restrictions", name) for name in submission.tags.restriction_proposals),
         ],
         patterns=pattern_proposals,
     ).write(cast(Info, extra_info))
@@ -395,7 +395,7 @@ def preview_build(
 
     pattern_names = [definitions[key].display_name for key in keys("patterns") if key in definitions]
     extra_info: dict[str, JSONValue] = {}
-    UnresolvedTaxonomy().add(
+    UnresolvedTags().add(
         restrictions=[("miscellaneous_restrictions", name) for name in keys("restriction_proposals")],
         patterns=keys("pattern_proposals"),
     ).write(cast(Info, extra_info))

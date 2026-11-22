@@ -20,7 +20,7 @@ from squid.core.search.domain import (
     SearchQuery,
     TextExpression,
 )
-from squid.core.search.models import SearchDocument, SearchDocumentFacet
+from squid.core.search.models import SearchDocument, SearchDocumentFilter
 
 _DIRECT_TEXT_FIELDS = frozenset({"status"})
 _TAG_NAME_FIELDS = frozenset({"tag", "restriction", "type", "pattern"})
@@ -33,7 +33,7 @@ _VECTOR_FIELDS = {
 def compile_query(query: SearchQuery) -> ColumnElement[bool]:
     """Compile a parsed query into a predicate on SearchDocument; an empty query matches every document.
 
-    User text only ever reaches the statement as bound values. Column and facet
+    User text only ever reaches the statement as bound values. Column and field
     names come from the field definitions the parser resolved.
     """
     if query.expression is None:
@@ -59,7 +59,7 @@ def _compile_expression(expression: QueryExpression) -> ColumnElement[bool]:
 
 
 def _compile_field(expression: FieldExpression) -> ColumnElement[bool]:
-    """Compare a field against the document column or the facet rows that store it."""
+    """Compare a document column or its indexed field values."""
     field = expression.field
     if field.name in _VECTOR_FIELDS:
         if expression.operator is not ComparisonOperator.EQUAL or isinstance(expression.value, RangeValue):
@@ -76,13 +76,13 @@ def _compile_field(expression: FieldExpression) -> ColumnElement[bool]:
     if field.name in _DIRECT_TEXT_FIELDS:
         return _compile_direct(expression)
     # Use a separate EXISTS for each clause: a document may satisfy two clauses
-    # through different facet rows, and matching rows must not duplicate results.
-    facet = SearchDocumentFacet
+    # through different indexed values. EXISTS keeps each matching document unique.
+    filter_value = SearchDocumentFilter
     value_column = {
-        FieldType.TEXT: facet.text_value,
-        FieldType.NUMBER: facet.numeric_value,
-        FieldType.TIMESTAMP: facet.timestamp_value,
-        FieldType.BOOLEAN: facet.boolean_value,
+        FieldType.TEXT: filter_value.text_value,
+        FieldType.NUMBER: filter_value.numeric_value,
+        FieldType.TIMESTAMP: filter_value.timestamp_value,
+        FieldType.BOOLEAN: filter_value.boolean_value,
     }[field.value_type]
     if field.name in _TAG_NAME_FIELDS:
         if expression.operator is not ComparisonOperator.EQUAL or isinstance(expression.value, RangeValue):
@@ -94,10 +94,10 @@ def _compile_field(expression: FieldExpression) -> ColumnElement[bool]:
     else:
         comparison = _comparison(cast(ColumnElement[object], value_column), expression, field.value_type)
     predicate = (
-        select(facet.document_id)
+        select(filter_value.document_id)
         .where(
-            facet.document_id == SearchDocument.id,
-            facet.field_name == (field.storage_name or field.name),
+            filter_value.document_id == SearchDocument.id,
+            filter_value.field_name == (field.storage_name or field.name),
             comparison,
         )
         .correlate(SearchDocument)

@@ -24,7 +24,7 @@ from squid.core.records.application.live import (
 )
 from squid.core.records.application.models import (
     CandidateBuild,
-    CandidateFacet,
+    CandidateTag,
     CategoryCandidates,
     CategoryIdentity,
     ComputationBatch,
@@ -294,7 +294,7 @@ class RecordComputationService:
         The limit bounds combinations generated here; explicitly requested exact
         categories are added separately so the limit does not hide those results.
         """
-        grouped: dict[str, list[tuple[CandidateBuild, tuple[CandidateFacet, ...]]]] = defaultdict(list)
+        grouped: dict[str, list[tuple[CandidateBuild, tuple[CandidateTag, ...]]]] = defaultdict(list)
         thresholds = _observed_thresholds(candidates)
         for source in candidates:
             choices = _restriction_choice_groups(source, thresholds)
@@ -306,7 +306,7 @@ class RecordComputationService:
     def door_range_candidates(
         self, request: DoorRangeQuery, sources: Sequence[CandidateBuild]
     ) -> tuple[CandidateBuild, ...]:
-        """Apply point-lookup taxonomy rules while retaining real opening domains."""
+        """Apply point-lookup tag rules while retaining real opening domains."""
         size = f"{request.minimum}x{request.height}" + (f"x{request.depth}" if request.depth != 1 else "")
         category_sources = tuple(
             replace(source, door=replace(source.door, size=size)) for source in sources if source.door is not None
@@ -329,7 +329,7 @@ class RecordComputationService:
         With competing_only, families proven absent from the category's opening do
         not qualify; see family_at_category.
         """
-        items: list[tuple[CandidateBuild, tuple[CandidateFacet, ...]]] = []
+        items: list[tuple[CandidateBuild, tuple[CandidateTag, ...]]] = []
         requested_ids = frozenset(identity.restriction_ids)
         requested_values = {tag_id: (operator, value) for tag_id, operator, value in identity.restriction_values}
         for source in candidates:
@@ -338,29 +338,29 @@ class RecordComputationService:
                 if projected is None:
                     continue
                 source = projected
-            restrictions_by_id = {facet.id: facet for facet in source.restrictions}
+            restrictions_by_id = {tag.id: tag for tag in source.restrictions}
             if _base_key(source) == identity.base_key and requested_ids <= restrictions_by_id.keys():
-                selected: list[CandidateFacet] = []
-                for facet_id in identity.restriction_ids:
-                    facet = restrictions_by_id[facet_id]
-                    requested = requested_values.get(facet_id)
+                selected: list[CandidateTag] = []
+                for tag_id in identity.restriction_ids:
+                    tag = restrictions_by_id[tag_id]
+                    requested = requested_values.get(tag_id)
                     if requested is None:
-                        if facet.assigned_value is not None:
+                        if tag.assigned_value is not None:
                             break
-                        selected.append(facet)
+                        selected.append(tag)
                         continue
                     operator, raw_value = requested
-                    threshold = _coerce_category_value(facet, raw_value)
-                    if threshold is None or facet.record_operator != operator or not _satisfies(facet, threshold):
+                    threshold = _coerce_category_value(tag, raw_value)
+                    if threshold is None or tag.record_operator != operator or not _satisfies(tag, threshold):
                         break
-                    selected.append(replace(facet, category_value=threshold))
+                    selected.append(replace(tag, category_value=threshold))
                 else:
                     items.append((source, tuple(selected)))
         return self._make_category(items, source=MaterializationSource.PUBLIC_LOOKUP) if items else None
 
     def _make_category(
         self,
-        items: Sequence[tuple[CandidateBuild, tuple[CandidateFacet, ...]]],
+        items: Sequence[tuple[CandidateBuild, tuple[CandidateTag, ...]]],
         *,
         source: str,
     ) -> CategoryCandidates:
@@ -372,10 +372,10 @@ class RecordComputationService:
             else self._formatter.format_extender(category)
         )
         identity = _category_identity(first.kind, _base_key(first), restrictions)
-        facets = tuple(sorted((*first.types, *restrictions), key=lambda facet: (facet.kind, facet.id)))
+        tags = tuple(sorted((*first.types, *restrictions), key=lambda tag: (tag.kind, tag.id)))
         return CategoryCandidates(
             identity=identity,
-            facets=facets,
+            tags=tags,
             category_text=category_text,
             candidates=tuple(item[0].candidate for item in items),
             source=MaterializationSource.PUBLIC_LOOKUP if source == "public_lookup" else MaterializationSource.EAGER,
@@ -417,7 +417,7 @@ class RecordService:
             return await uow.records.list_gaps(kind=kind)
 
     async def title_gaps(self, *, kind: BuildKind | None = None) -> Sequence[RecordNameDiagnostic]:
-        """Return active record names requiring taxonomy review."""
+        """Return active record names requiring tag review."""
         async with self._uow_factory() as uow:
             return await uow.records.list_title_gaps(kind=kind)
 
@@ -626,9 +626,9 @@ def _observed_thresholds(
 ) -> dict[int, tuple[Decimal | str | bool, ...]]:
     values: dict[int, set[Decimal | str | bool]] = defaultdict(set)
     for source in candidates:
-        for facet in source.restrictions:
-            if facet.assigned_value is not None and facet.record_operator is not None:
-                values[facet.id].add(facet.assigned_value)
+        for tag in source.restrictions:
+            if tag.assigned_value is not None and tag.record_operator is not None:
+                values[tag.id].add(tag.assigned_value)
     return {
         tag_id: tuple(sorted(tag_values, key=lambda value: (type(value).__name__, str(value))))
         for tag_id, tag_values in values.items()
@@ -638,18 +638,18 @@ def _observed_thresholds(
 def _restriction_choice_groups(
     source: CandidateBuild,
     thresholds: dict[int, tuple[Decimal | str | bool, ...]],
-) -> tuple[tuple[CandidateFacet, ...], ...]:
-    groups: list[tuple[CandidateFacet, ...]] = []
-    for facet in sorted(source.restrictions, key=lambda item: item.id):
-        if facet.assigned_value is None:
-            groups.append((facet,))
+) -> tuple[tuple[CandidateTag, ...], ...]:
+    groups: list[tuple[CandidateTag, ...]] = []
+    for tag in sorted(source.restrictions, key=lambda item: item.id):
+        if tag.assigned_value is None:
+            groups.append((tag,))
             continue
-        if facet.record_operator is None:
+        if tag.record_operator is None:
             continue
         eligible = tuple(
-            replace(facet, category_value=threshold)
-            for threshold in thresholds.get(facet.id, ())
-            if _satisfies(facet, threshold)
+            replace(tag, category_value=threshold)
+            for threshold in thresholds.get(tag.id, ())
+            if _satisfies(tag, threshold)
         )
         if eligible:
             groups.append(eligible)
@@ -657,10 +657,10 @@ def _restriction_choice_groups(
 
 
 def _restriction_combinations(
-    groups: tuple[tuple[CandidateFacet, ...], ...],
+    groups: tuple[tuple[CandidateTag, ...], ...],
     *,
     max_size: int,
-) -> Iterable[tuple[CandidateFacet, ...]]:
+) -> Iterable[tuple[CandidateTag, ...]]:
     """Choose at most one threshold per restriction, up to `max_size` restrictions."""
     yield ()
     for size in range(1, min(max_size, len(groups)) + 1):
@@ -668,17 +668,17 @@ def _restriction_combinations(
             yield from product(*selected_groups)
 
 
-def _satisfies(facet: CandidateFacet, threshold: Decimal | str | bool) -> bool:
-    assigned = facet.assigned_value
+def _satisfies(tag: CandidateTag, threshold: Decimal | str | bool) -> bool:
+    assigned = tag.assigned_value
     if assigned is None:
         return False
-    if facet.record_operator == "exact":
+    if tag.record_operator == "exact":
         return assigned == threshold
     if not isinstance(assigned, Decimal) or not isinstance(threshold, Decimal):
         return False
-    if facet.record_operator == "at_most":
+    if tag.record_operator == "at_most":
         return assigned <= threshold
-    if facet.record_operator == "at_least":
+    if tag.record_operator == "at_least":
         return assigned >= threshold
     return False
 
@@ -686,20 +686,20 @@ def _satisfies(facet: CandidateFacet, threshold: Decimal | str | bool) -> bool:
 def _category_identity(
     kind: BuildKind,
     base_key: str,
-    restrictions: Sequence[CandidateFacet],
+    restrictions: Sequence[CandidateTag],
 ) -> CategoryIdentity:
     values = tuple(
         sorted(
             (
-                facet.id,
-                facet.record_operator or "exact",
-                _serialize_category_value(facet.category_value),
+                tag.id,
+                tag.record_operator or "exact",
+                _serialize_category_value(tag.category_value),
             )
-            for facet in restrictions
-            if facet.category_value is not None
+            for tag in restrictions
+            if tag.category_value is not None
         )
     )
-    return CategoryIdentity(kind, base_key, tuple(sorted(facet.id for facet in restrictions)), values)
+    return CategoryIdentity(kind, base_key, tuple(sorted(tag.id for tag in restrictions)), values)
 
 
 def _serialize_category_value(value: Decimal | str | bool | None) -> str:
@@ -715,10 +715,10 @@ def _serialize_category_value(value: Decimal | str | bool | None) -> str:
     raise DataIntegrityError(msg)
 
 
-def _coerce_category_value(facet: CandidateFacet, value: str) -> Decimal | str | bool | None:
-    # An incompatible threshold type cannot match this facet. In particular,
+def _coerce_category_value(tag: CandidateTag, value: str) -> Decimal | str | bool | None:
+    # An incompatible threshold type cannot match this tag. In particular,
     # nonfinite decimals must never reach ordered comparisons.
-    if facet.value_type == "numeric":
+    if tag.value_type == "numeric":
         try:
             number = Decimal(value)
         except InvalidOperation:
@@ -726,13 +726,13 @@ def _coerce_category_value(facet: CandidateFacet, value: str) -> Decimal | str |
         # Bound rendered thresholds as well as input length: a short exponent
         # such as 1e999999 must not produce an enormous category title.
         return number if number.is_finite() and -128 <= number.adjusted() <= 128 else None
-    if facet.value_type == "boolean":
+    if tag.value_type == "boolean":
         return value == "true" if value in {"true", "false"} else None
     return value
 
 
 def _base_key(source: CandidateBuild) -> str:
-    type_key = ",".join(str(facet.id) for facet in sorted(source.types, key=lambda facet: facet.id))
+    type_key = ",".join(str(tag.id) for tag in sorted(source.types, key=lambda tag: tag.id))
     if source.door is not None:
         door = source.door
         return "|".join(("door", door.size, f"t[{type_key}]", door.orientation))
@@ -756,12 +756,12 @@ def _base_key(source: CandidateBuild) -> str:
 
 def _category_with_restrictions(
     source: CandidateBuild,
-    restrictions: Sequence[CandidateFacet],
+    restrictions: Sequence[CandidateTag],
 ) -> DoorCategory | ExtenderCategory:
-    wiring = tuple(facet.category_name for facet in restrictions if facet.restriction_type == "wiring-placement")
-    animated = tuple(facet.category_name for facet in restrictions if facet.restriction_type == "animated")
-    components = tuple(facet.category_name for facet in restrictions if facet.restriction_type == "component")
-    miscellaneous = tuple(facet.category_name for facet in restrictions if facet.restriction_type == "miscellaneous")
+    wiring = tuple(tag.category_name for tag in restrictions if tag.restriction_type == "wiring-placement")
+    animated = tuple(tag.category_name for tag in restrictions if tag.restriction_type == "animated")
+    components = tuple(tag.category_name for tag in restrictions if tag.restriction_type == "component")
+    miscellaneous = tuple(tag.category_name for tag in restrictions if tag.restriction_type == "miscellaneous")
     if source.door is not None:
         return replace(
             source.door,

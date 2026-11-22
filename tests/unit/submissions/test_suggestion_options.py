@@ -13,7 +13,7 @@ from squid.core.submissions.infrastructure.options import ApprovedSubmissionOpti
 from squid.core.submissions.infrastructure.suggestion_options import SuggestionFormOptionCatalog
 from squid.core.suggestions.application import SuggestionService
 from squid.core.suggestions.infrastructure.catalogue import build_registry
-from squid.core.suggestions.infrastructure.repository import TaxonomyEntry
+from squid.core.suggestions.infrastructure.repository import TagEntry
 from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.core.tags.models import TagDefinition
 from squid.core.versions.domain import MinecraftVersion
@@ -60,22 +60,22 @@ class FakeVersions:
 
 
 class FakeSuggestionRepository:
-    """Return matching taxonomy keys and labels in reverse fixture order.
+    """Return matching tag keys and labels in reverse fixture order.
 
     Providers must establish the order used for revision hashing. Numeric IDs are synthetic;
     authority and build-kind filters are not modeled here.
     """
 
-    async def taxonomy(
+    async def tags(
         self,
         semantic_kind: str,
         *,
         build_kind: str | None = None,
         authority: str | None = "official",
-    ) -> Sequence[TaxonomyEntry]:
+    ) -> Sequence[TagEntry]:
         del build_kind, authority
         return [
-            TaxonomyEntry(
+            TagEntry(
                 id=index,
                 stable_key=key,
                 display_name=name,
@@ -104,7 +104,7 @@ def catalogues() -> tuple[ApprovedSubmissionOptionCatalog, SuggestionFormOptionC
 
 
 @pytest.mark.parametrize("source", ["approved_patterns", "approved_restrictions", "approved_showcase_tags"])
-async def test_taxonomy_options_match_the_catalogue_they_replace(source: str) -> None:
+async def test_tag_options_match_the_catalogue_they_replace(source: str) -> None:
     existing, replacement = catalogues()
     before = await existing.options(source, "door", locale="en")
     after = await replacement.options(source, "door", locale="en")

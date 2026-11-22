@@ -154,8 +154,8 @@ class MaterializationSource(StrEnum):
     PUBLIC_LOOKUP = "public_lookup"
 
 
-class FacetKind(StrEnum):
-    """The taxonomy role of a facet persisted for one title definition."""
+class RecordTagRole(StrEnum):
+    """The role of a candidate tag."""
 
     RESTRICTION = "restriction"
     TYPE = "type"

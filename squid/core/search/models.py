@@ -81,23 +81,23 @@ class SearchDocument(Base, kw_only=True):
     )
 
 
-class SearchDocumentFacet(Base, kw_only=True):
+class SearchDocumentFilter(Base, kw_only=True):
     """A typed, indexed field value belonging to a search document."""
 
-    __tablename__ = "search_document_facets"
+    __tablename__ = "search_document_filters"
     __table_args__ = (
         CheckConstraint(
             "num_nonnulls(text_value, numeric_value, timestamp_value, boolean_value) = 1",
-            name="search_document_facets_one_value_check",
+            name="search_document_filters_one_value_check",
         ),
         UniqueConstraint(
             "document_id",
             "field_name",
             "ordinal",
-            name="search_document_facets_identity_key",
+            name="search_document_filters_identity_key",
         ),
         Index(
-            "search_document_facets_text_idx",
+            "search_document_filters_text_idx",
             "field_name",
             "text_value",
             postgresql_where=text("text_value IS NOT NULL"),
@@ -109,25 +109,25 @@ class SearchDocumentFacet(Base, kw_only=True):
             # Keep the operator class inside the SQL expression: postgresql_ops keys
             # do not identify this unlabeled expression. Alembic skips comparison of
             # this form, so changes must also be made explicitly in a migration.
-            "search_document_facets_text_prefix_idx",
+            "search_document_filters_text_prefix_idx",
             "field_name",
             text("lower(text_value) text_pattern_ops"),
             postgresql_where=text("text_value IS NOT NULL"),
         ),
         Index(
-            "search_document_facets_numeric_idx",
+            "search_document_filters_numeric_idx",
             "field_name",
             "numeric_value",
             postgresql_where=text("numeric_value IS NOT NULL"),
         ),
         Index(
-            "search_document_facets_timestamp_idx",
+            "search_document_filters_timestamp_idx",
             "field_name",
             "timestamp_value",
             postgresql_where=text("timestamp_value IS NOT NULL"),
         ),
         Index(
-            "search_document_facets_boolean_idx",
+            "search_document_filters_boolean_idx",
             "field_name",
             "boolean_value",
             postgresql_where=text("boolean_value IS NOT NULL"),
@@ -137,7 +137,7 @@ class SearchDocumentFacet(Base, kw_only=True):
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
     document_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey("search_documents.id", name="search_document_facets_document_id_fkey", ondelete="CASCADE"),
+        ForeignKey("search_documents.id", name="search_document_filters_document_id_fkey", ondelete="CASCADE"),
         nullable=False,
     )
     field_name: Mapped[str] = mapped_column(Text, nullable=False)

@@ -18,7 +18,7 @@ RANGE_ARITHMETIC_VERSION = "rational-polynomial-1"
 
 
 class RangeSource(BaseModel):
-    """Arithmetic facts after taxonomy filtering, independent of later build edits."""
+    """Arithmetic facts after tag filtering, independent of later build edits."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 

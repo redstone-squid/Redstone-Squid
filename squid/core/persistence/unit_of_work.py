@@ -15,7 +15,7 @@ from squid.core.builds.infrastructure.history import BuildHistoryQueries
 from squid.core.builds.infrastructure.locks import PostgresBuildLockRepository
 from squid.core.builds.infrastructure.repository import BuildRepository
 from squid.core.builds.infrastructure.restrictions import RestrictionRepository
-from squid.core.builds.infrastructure.taxonomy import PostgresBuildTaxonomy
+from squid.core.builds.infrastructure.tags import PostgresBuildTags
 from squid.core.cli_auth.repository import PostgresCliAuthorizationRepository
 from squid.core.diagnostics.infrastructure.repository import PostgresErrorReportRepository
 from squid.core.edits.domain import ConcurrentEditError
@@ -102,7 +102,7 @@ class SqlAlchemyUnitOfWork:
         self._inference_runs = PostgresInferenceRunRepository(self._active_session)
         self._media_jobs = PostgresMediaJobRepository(self._active_session)
         self._restrictions = RestrictionRepository(self._active_session)
-        self._build_taxonomy = PostgresBuildTaxonomy(self._active_session)
+        self._build_tags = PostgresBuildTags(self._active_session)
         self._build_vectors = PostgresBuildIndex(self._active_session)
         self._search = PostgresSearchBackend(self._active_session)
         self._search_fields = PostgresFieldRegistryProvider(self._active_session)
@@ -309,9 +309,9 @@ class SqlAlchemyUnitOfWork:
         return self._restrictions
 
     @property
-    def build_taxonomy(self) -> PostgresBuildTaxonomy:
+    def build_tags(self) -> PostgresBuildTags:
         self._active_session()
-        return self._build_taxonomy
+        return self._build_tags
 
     @property
     def build_vectors(self) -> PostgresBuildIndex:

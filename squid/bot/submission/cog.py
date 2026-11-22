@@ -76,7 +76,7 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
 
     @sd.command(
         name=SEARCH_COMMAND_NAME,
-        description=tr(t"command-search-help = Search builds, records, and taxonomy metadata"),
+        description=tr(t"command-search-help = Search builds, records, and tags"),
         options={
             "scope": sd.Option(
                 name=SEARCH_SCOPE_NAME,

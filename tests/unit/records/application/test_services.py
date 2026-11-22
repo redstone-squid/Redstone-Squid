@@ -17,7 +17,7 @@ from squid.core.records.application.expansion_regions import DoorRangeAnalysis, 
 from squid.core.records.application.live import DoorRecordLookup
 from squid.core.records.application.models import (
     CandidateBuild,
-    CandidateFacet,
+    CandidateTag,
     CategoryIdentity,
     ComputationBatch,
     PublishedRecordResult,
@@ -38,7 +38,7 @@ from squid.core.records.domain import (
     TimingVariant,
     VersionScope,
 )
-from squid.core.records.domain.models import FacetKind
+from squid.core.records.domain.models import RecordTagRole
 from squid.core.records.domain.regions import RegionAnalysisStatus
 from squid.core.records.errors import NoMatchingRecordCategoryError, RecordDefinitionNotFoundError
 from squid.core.records.infrastructure.range_analyzer import SubprocessRangeAnalyzer
@@ -266,7 +266,7 @@ def _door(
     *,
     volume: int,
     opening: int,
-    restrictions: tuple[CandidateFacet, ...],
+    restrictions: tuple[CandidateTag, ...],
     version_ids: frozenset[int] = frozenset({3}),
 ) -> CandidateBuild:
     return CandidateBuild(
@@ -279,7 +279,7 @@ def _door(
         ),
         version_ids=version_ids,
         restrictions=restrictions,
-        types=(CandidateFacet(id=20, kind=FacetKind.TYPE, name="Regular"),),
+        types=(CandidateTag(id=20, kind=RecordTagRole.TYPE, name="Regular"),),
         door_opening=(2, 2, 1),
         door=DoorCategory(
             wiring_restrictions=(),
@@ -293,8 +293,8 @@ def _door(
 
 @pytest.mark.asyncio
 async def test_rebuild_computes_eager_subsets_and_all_door_base_titles() -> None:
-    flush = CandidateFacet(id=1, kind=FacetKind.RESTRICTION, name="Flush", restriction_type="wiring-placement")
-    observerless = CandidateFacet(id=2, kind=FacetKind.RESTRICTION, name="Observerless", restriction_type="component")
+    flush = CandidateTag(id=1, kind=RecordTagRole.RESTRICTION, name="Flush", restriction_type="wiring-placement")
+    observerless = CandidateTag(id=2, kind=RecordTagRole.RESTRICTION, name="Observerless", restriction_type="component")
     candidates = FakeCandidates(
         (
             _door(1, volume=10, opening=5, restrictions=(flush, observerless)),
@@ -328,10 +328,10 @@ async def test_rebuild_computes_eager_subsets_and_all_door_base_titles() -> None
 
 @pytest.mark.asyncio
 async def test_parameterized_at_most_restriction_derives_weaker_thresholds() -> None:
-    def m_wide(value: int) -> CandidateFacet:
-        return CandidateFacet(
+    def m_wide(value: int) -> CandidateTag:
+        return CandidateTag(
             id=7,
-            kind=FacetKind.RESTRICTION,
+            kind=RecordTagRole.RESTRICTION,
             name="M Wide",
             restriction_type="miscellaneous",
             stable_key="m_wide",
@@ -429,9 +429,9 @@ async def test_current_version_run_filters_incompatible_candidates() -> None:
 @pytest.mark.asyncio
 async def test_eager_categories_never_exceed_eight_restrictions() -> None:
     restrictions = tuple(
-        CandidateFacet(
+        CandidateTag(
             id=index,
-            kind=FacetKind.RESTRICTION,
+            kind=RecordTagRole.RESTRICTION,
             name=f"Restriction {index}",
             restriction_type="component",
         )
@@ -453,9 +453,9 @@ async def test_eager_categories_never_exceed_eight_restrictions() -> None:
 @pytest.mark.asyncio
 async def test_lookup_materializes_large_exact_category_and_rebuilds_full_kind() -> None:
     restrictions = tuple(
-        CandidateFacet(
+        CandidateTag(
             id=index,
-            kind=FacetKind.RESTRICTION,
+            kind=RecordTagRole.RESTRICTION,
             name=f"Restriction {index}",
             restriction_type="component",
         )
@@ -489,7 +489,7 @@ async def test_lookup_materializes_large_exact_category_and_rebuilds_full_kind()
 
 @pytest.mark.asyncio
 async def test_materialize_definition_round_trips_the_stored_identity() -> None:
-    flush = CandidateFacet(id=1, kind=FacetKind.RESTRICTION, name="Flush", restriction_type="wiring-placement")
+    flush = CandidateTag(id=1, kind=RecordTagRole.RESTRICTION, name="Flush", restriction_type="wiring-placement")
     candidates = FakeCandidates((_door(1, volume=10, opening=5, restrictions=(flush,)),))
     runs = FakeRuns()
     identity = CategoryIdentity(BuildKind.DOOR, "door|2x2|t[20]|Door", (1,))
@@ -719,12 +719,12 @@ async def test_rebuild_rolls_back_all_scopes_when_later_activation_fails() -> No
     assert runs.batches == []
 
 
-async def test_live_door_lookup_applies_taxonomy_version_and_thresholds_without_writes() -> None:
+async def test_live_door_lookup_applies_tags_version_and_thresholds_without_writes() -> None:
 
-    flush = CandidateFacet(id=1, kind=FacetKind.RESTRICTION, name="Flush", restriction_type="wiring-placement")
-    width = CandidateFacet(
+    flush = CandidateTag(id=1, kind=RecordTagRole.RESTRICTION, name="Flush", restriction_type="wiring-placement")
+    width = CandidateTag(
         id=7,
-        kind=FacetKind.RESTRICTION,
+        kind=RecordTagRole.RESTRICTION,
         name="Width",
         value_type="numeric",
         assigned_value=Decimal(3),
@@ -768,9 +768,9 @@ async def test_live_door_lookup_applies_taxonomy_version_and_thresholds_without_
 @pytest.mark.parametrize("threshold", ["not a number", "NaN", "Infinity", "1e999999", "1e-999999", "2"])
 async def test_live_lookup_rejects_incompatible_threshold_without_crashing(threshold: str) -> None:
 
-    width = CandidateFacet(
+    width = CandidateTag(
         id=7,
-        kind=FacetKind.RESTRICTION,
+        kind=RecordTagRole.RESTRICTION,
         name="Width",
         value_type="numeric",
         assigned_value=Decimal(3),
@@ -791,7 +791,7 @@ async def test_live_lookup_rejects_incompatible_threshold_without_crashing(thres
     assert result.resolution.status is ResolutionStatus.NO_CANDIDATE
 
 
-async def test_width_lookup_filters_taxonomy_and_versions_without_writes() -> None:
+async def test_width_lookup_filters_tags_and_versions_without_writes() -> None:
     fixed = _door(1, volume=1, opening=10, restrictions=())
     family = replace(
         fixed,
@@ -986,7 +986,7 @@ async def test_family_population_respects_version_and_category_identity() -> Non
 
 
 async def test_family_absent_from_a_size_leaves_that_category_alone() -> None:
-    flush = CandidateFacet(id=1, kind=FacetKind.RESTRICTION, name="Flush", restriction_type="wiring-placement")
+    flush = CandidateTag(id=1, kind=RecordTagRole.RESTRICTION, name="Flush", restriction_type="wiring-placement")
     # Widths start at six, so this family cannot be a 2x2 door.
     family = replace(
         _door(2, volume=1, opening=0, restrictions=(flush,)),

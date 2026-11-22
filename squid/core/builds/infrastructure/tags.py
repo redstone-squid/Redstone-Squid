@@ -1,4 +1,4 @@
-"""Validation adapter for the unified build taxonomy."""
+"""Validation adapter for the unified build tags."""
 
 from collections.abc import Callable, Sequence
 
@@ -6,7 +6,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from squid.core.builds.application.taxonomy import TaxonomyResolution
+from squid.core.builds.application.tags import TagResolution
 from squid.core.builds.domain import normalize_tag_name
 from squid.core.builds.domain.models import RestrictionTypeLiteral
 from squid.core.builds.errors import AliasAlreadyAddedError, AliasInUseError, RestrictionNotFoundError
@@ -15,7 +15,7 @@ from squid.core.tags.domain import TagSemanticKind
 from squid.core.tags.models import TagAlias, TagApplicability, TagAssignment, TagDefinition
 
 
-class PostgresBuildTaxonomy:
+class PostgresBuildTags:
     """Validate inferred restriction and pattern names."""
 
     def __init__(self, session: Callable[[], AsyncSession]):
@@ -88,13 +88,13 @@ class PostgresBuildTaxonomy:
         build_kind: str | None,
         restrictions: Sequence[str],
         patterns: Sequence[str],
-    ) -> TaxonomyResolution:
+    ) -> TagResolution:
         rows, unknown_restrictions, unknown_patterns = await self._resolve_official_tag_rows(
             build_kind=build_kind,
             restrictions=restrictions,
             patterns=patterns,
         )
-        return TaxonomyResolution(
+        return TagResolution(
             assignments=tuple(
                 TagAssignment(
                     definition=row,

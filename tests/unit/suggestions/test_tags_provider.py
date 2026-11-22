@@ -1,39 +1,39 @@
-"""Taxonomy completions retain names and aliases when commands submit numeric IDs."""
+"""Tag completions retain names and aliases when commands submit numeric IDs."""
 
 from collections.abc import Sequence
 
 import pytest
 
 from squid.core.suggestions.application import SuggestionRegistry, SuggestionService, SuggestionSource, content_revision
-from squid.core.suggestions.application.queries import TaxonomyEntry
+from squid.core.suggestions.application.queries import TagEntry
 from squid.core.suggestions.domain import SourceKind, Suggestion, SuggestionRequest
-from squid.core.suggestions.infrastructure.providers import TaxonomyProvider
+from squid.core.suggestions.infrastructure.providers import TagProvider
 
 
-class TaxonomyReader:
+class TagReader:
     def __init__(self) -> None:
         self.calls: list[tuple[str, str | None, str | None]] = []
 
-    async def taxonomy(
+    async def tag_entries(
         self,
         semantic_kind: str,
         *,
         build_kind: str | None = None,
         authority: str | None = "official",
-    ) -> Sequence[TaxonomyEntry]:
+    ) -> Sequence[TagEntry]:
         self.calls.append((semantic_kind, build_kind, authority))
         return (
-            TaxonomyEntry(42, "seamless", "Seamless", "pattern", ("flush", "hidden", "smooth", "invisible")),
-            TaxonomyEntry(7, "compact", "Compact", "pattern"),
+            TagEntry(42, "seamless", "Seamless", "pattern", ("flush", "hidden", "smooth", "invisible")),
+            TagEntry(7, "compact", "Compact", "pattern"),
         )
 
 
 @pytest.mark.parametrize("by_id", [False, True], ids=["stable-keys", "numeric-ids"])
-async def test_taxonomy_completions_match_names_and_aliases_without_reloading(by_id: bool) -> None:
-    reader = TaxonomyReader()
+async def test_tags_completions_match_names_and_aliases_without_reloading(by_id: bool) -> None:
+    reader = TagReader()
     source = SuggestionSource(
         id="patterns",
-        provider=TaxonomyProvider(reader, "pattern", build_kind="Door", authority=None, by_id=by_id),
+        provider=TagProvider(reader, "pattern", build_kind="Door", authority=None, by_id=by_id),
         kind=SourceKind.ENUMERABLE,
     )
     service = SuggestionService(SuggestionRegistry.of((source,)))

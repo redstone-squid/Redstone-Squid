@@ -31,10 +31,10 @@ from squid.core.builds.domain.models import (
     sort_restrictions,
 )
 from squid.core.builds.domain.showcase import ShowcaseTag, read_showcase_tags
-from squid.core.builds.domain.taxonomy import (
+from squid.core.builds.domain.tags import (
     RESTRICTION_FIELDS,
     RestrictionField,
-    UnresolvedTaxonomy,
+    UnresolvedTags,
     normalize_tag_name,
 )
 
@@ -64,7 +64,7 @@ __all__ = [
     "RestrictionTypeLiteral",
     "ServerInfo",
     "ShowcaseTag",
-    "UnresolvedTaxonomy",
+    "UnresolvedTags",
     "creator_names",
     "name_credits",
     "normalize_tag_name",

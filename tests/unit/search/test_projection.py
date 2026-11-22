@@ -1,4 +1,4 @@
-"""Tests for search projection normalization and typed facets."""
+"""Tests for search projection normalization and typed filters."""
 
 from dataclasses import replace
 from decimal import Decimal
@@ -13,13 +13,13 @@ from whenever import Instant
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build, DoorBuild, OtherBuild
 from squid.core.search.infrastructure.projection import (
-    ProjectionFacet,
+    ProjectionFilter,
     RecordHolderProjectionSource,
     RecordProjectionSource,
     SearchProjection,
     SearchProjectionLoader,
     TagProjectionSource,
-    build_facet_models,
+    build_filter_models,
     build_record_projection,
     build_tag_projection,
     normalize_search_text,
@@ -65,7 +65,7 @@ def test_record_documents_carry_titles_not_category_keys() -> None:
         ),
     )
     assert held.description == "2x2 Seamless Door Alice\n2x2 Compact Door Bob"
-    assert ProjectionFacet("creator", "Bob") in held.facets
+    assert ProjectionFilter("creator", "Bob") in held.filters
     assert held.title == source.title
     assert held.subtitle == source.subtitle
     assert held.document_data["holder_build_ids"] == (42, 57)
@@ -86,16 +86,16 @@ def test_source_hash_changes_with_searchable_content() -> None:
     assert projection_source_hash(original) != projection_source_hash(replace(original, search_aliases=("Compact",)))
 
 
-def test_facet_models_assign_per_field_ordinals_and_typed_columns() -> None:
+def test_filter_models_assign_per_field_ordinals_and_typed_columns() -> None:
     completion = Instant.parse_iso("2026-07-30T12:00:00Z")
-    models = build_facet_models(
+    models = build_filter_models(
         42,
         (
-            ProjectionFacet("tag", "slimeless"),
-            ProjectionFacet("tag", "seamless"),
-            ProjectionFacet("volume", Decimal(27)),
-            ProjectionFacet("completion_at", completion),
-            ProjectionFacet("verified", value=True),
+            ProjectionFilter("tag", "slimeless"),
+            ProjectionFilter("tag", "seamless"),
+            ProjectionFilter("volume", Decimal(27)),
+            ProjectionFilter("completion_at", completion),
+            ProjectionFilter("verified", value=True),
         ),
     )
 
@@ -127,20 +127,22 @@ def _tag_source(*, semantic_kind: str = "pattern", moderation_status: str = "app
 
 @pytest.mark.parametrize("semantic_kind", ["restriction", "pattern", "showcase"])
 def test_a_tag_document_says_which_kind_of_tag_it_is(semantic_kind: str) -> None:
-    """Index the specific tag kind so taxonomy queries can distinguish patterns and restrictions."""
+    """Index the specific tag kind so tag queries can distinguish patterns and restrictions."""
     projection = build_tag_projection(_tag_source(semantic_kind=semantic_kind))
 
     assert projection is not None
     assert projection.document_data["metadata_kind"] == semantic_kind
-    assert (semantic_kind, "Full Lacing") in [(facet.field_name, facet.value) for facet in projection.facets]
+    assert (semantic_kind, "Full Lacing") in [
+        (filter_value.field_name, filter_value.value) for filter_value in projection.filters
+    ]
 
 
 def test_a_tag_document_still_answers_the_question_it_used_to() -> None:
-    """Retain the broad kind:tag facet alongside the specific kind."""
+    """Retain the broad kind:tag filter alongside the specific kind."""
     projection = build_tag_projection(_tag_source(semantic_kind="pattern"))
 
     assert projection is not None
-    kinds = {facet.value for facet in projection.facets if facet.field_name == "kind"}
+    kinds = {filter_value.value for filter_value in projection.filters if filter_value.field_name == "kind"}
     assert kinds == {"tag", "pattern"}
 
 
@@ -181,7 +183,7 @@ async def test_build_aliases_are_searchable_only_for_approved_assignments(
     if status is TagModerationStatus.APPROVED:
         assert projection.search_aliases == ("Observerless",)
         assert projection.tags == ("No Observers",)
-        names = {(facet.field_name, facet.value) for facet in projection.facets}
+        names = {(filter_value.field_name, filter_value.value) for filter_value in projection.filters}
         assert ("tag", "Observerless") in names
         assert ("tag", "No Observers") in names
         if semantic_kind is TagSemanticKind.RESTRICTION:
@@ -192,7 +194,7 @@ async def test_build_aliases_are_searchable_only_for_approved_assignments(
     else:
         assert projection.search_aliases == ()
         assert projection.tags == ()
-        assert not any(facet.value in {"No Observers", "Observerless"} for facet in projection.facets)
+        assert not any(filter_value.value in {"No Observers", "Observerless"} for filter_value in projection.filters)
 
 
 @pytest.mark.parametrize("door", [True, False])
@@ -206,14 +208,14 @@ async def test_build_projection_keeps_opening_dimensions_separate(door: bool) ->
     projection = await _project_build(build)
 
     assert projection is not None
-    facets = {facet.field_name: facet.value for facet in projection.facets}
-    assert facets["width"] == Decimal(10)
-    assert facets["height"] == Decimal(12)
-    assert facets["depth"] == Decimal(5)
-    assert "door_depth" not in facets
+    filters = {filter_value.field_name: filter_value.value for filter_value in projection.filters}
+    assert filters["width"] == Decimal(10)
+    assert filters["height"] == Decimal(12)
+    assert filters["depth"] == Decimal(5)
+    assert "door_depth" not in filters
     if door:
-        assert facets["door_width"] == Decimal(3)
-        assert facets["door_height"] == Decimal(4)
+        assert filters["door_width"] == Decimal(3)
+        assert filters["door_height"] == Decimal(4)
     else:
-        assert "door_width" not in facets
-        assert "door_height" not in facets
+        assert "door_width" not in filters
+        assert "door_height" not in filters

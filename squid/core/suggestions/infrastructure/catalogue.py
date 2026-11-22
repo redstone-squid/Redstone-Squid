@@ -12,7 +12,7 @@ from squid.core.suggestions.infrastructure.providers.permissions import permissi
 from squid.core.suggestions.infrastructure.providers.records import PendingAliasClaims, record_sources
 from squid.core.suggestions.infrastructure.providers.search_query import search_sources
 from squid.core.suggestions.infrastructure.providers.static import static_sources
-from squid.core.suggestions.infrastructure.providers.taxonomy import PendingTagDefinitions, taxonomy_sources
+from squid.core.suggestions.infrastructure.providers.tags import PendingTagDefinitions, tag_sources
 from squid.core.suggestions.infrastructure.providers.versions import CanonicalMinecraftVersions, version_sources
 
 
@@ -36,7 +36,7 @@ def build_registry(
     """
     return SuggestionRegistry.of(
         (
-            *taxonomy_sources(repository, tags),
+            *tag_sources(repository, tags),
             *search_sources(search, repository),
             *document_sources(repository),
             *static_sources(),

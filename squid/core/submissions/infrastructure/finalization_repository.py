@@ -37,7 +37,11 @@ from squid.core.submissions.domain.finalization import (
 )
 from squid.core.submissions.domain.schematics import DraftSchematicState
 from squid.core.submissions.errors import DraftAccessDeniedError, DraftArtifactsChangedError, DraftNotFoundError
-from squid.core.submissions.infrastructure.finalization_payloads import decode_submission, encode_submission
+from squid.core.submissions.infrastructure.finalization_payloads import (
+    LEGACY_TAGS_FIELD,
+    decode_submission,
+    encode_submission,
+)
 from squid.core.submissions.infrastructure.issues import decode_issues, encode_issues
 from squid.core.submissions.infrastructure.repository import _to_stored
 from squid.core.submissions.models.entities import SubmissionDraft
@@ -118,7 +122,10 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
         job = await self._locked_job(draft.snapshot.id)
         status = draft_model.status
         if status in {DraftStatus.PROCESSING, DraftStatus.SUBMITTED}:
-            if job is None or job.payload_sha256 != digest:
+            # Older attempts retain their original checksummed payloads.
+            legacy_encoded = encoded | {LEGACY_TAGS_FIELD: encoded["tags"]}
+            del legacy_encoded["tags"]
+            if job is None or job.payload_sha256 not in {digest, submission_payload_digest(legacy_encoded)}:
                 msg = f"{status.value} draft has no matching finalization job"
                 raise InvalidStateError(msg)
             expected_job_statuses = (

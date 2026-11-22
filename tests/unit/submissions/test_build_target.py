@@ -11,7 +11,7 @@ import pytest
 
 from squid.core.builds.domain import BuildCategory, BuildInput, BuildStatus, ShowcaseTag
 from squid.core.builds.domain.credits import Credit, CreditAttribution, CreditKind, CreditRole, name_credits
-from squid.core.builds.domain.taxonomy import RestrictionField
+from squid.core.builds.domain.tags import RestrictionField
 from squid.core.builds.domain.titles import format_build_display_title
 from squid.core.builds.errors import InvalidBuildError
 from squid.core.builds.models import Build, DoorBuild, ExtenderBuild
@@ -40,7 +40,7 @@ from squid.core.submissions.domain import (
     SubmissionDimensions,
     SubmissionOrigin,
     SubmissionSchematicVisibility,
-    SubmissionTaxonomy,
+    SubmissionTags,
     VerifiedSubmissionArtifacts,
 )
 from squid.core.submissions.domain.links import SubmissionLink
@@ -157,7 +157,7 @@ def _submission(category: SubmissionCategory) -> NormalizedSubmission:
         capture_dimensions=SubmissionDimensions(8, 9, 10),
         source_version="Java 26.1.2",
         version_compatibility=">=26.1",
-        taxonomy=SubmissionTaxonomy(),
+        tags=SubmissionTags(),
         schematic_policy=SchematicRightsPolicy(
             visibility=SubmissionSchematicVisibility.REVIEWER_ONLY,
             license=None,
@@ -268,13 +268,13 @@ def test_general_pattern_payload_cannot_be_attached_to_a_door() -> None:
         decode_submission(payload)
 
 
-async def test_adapter_preserves_taxonomy_timings_rights_and_opaque_artifact_origin() -> None:
+async def test_adapter_preserves_tags_timings_rights_and_opaque_artifact_origin() -> None:
     restriction = _definition("seamless", TagSemanticKind.RESTRICTION, restriction_type="wiring-placement")
     pattern = _definition("regular", TagSemanticKind.PATTERN)
     showcase = _definition("showcase_compact", TagSemanticKind.SHOWCASE)
     submission = replace(
         _submission(SubmissionCategory.DOOR),
-        taxonomy=SubmissionTaxonomy(
+        tags=SubmissionTags(
             restriction_keys=(restriction.stable_key,),
             restriction_proposals=("Novel restriction",),
             showcase_tags=(ShowcaseTag(showcase.stable_key),),
@@ -325,7 +325,7 @@ async def test_showcase_tags_become_assignments_with_their_parsed_values() -> No
     compact = _definition("compact", TagSemanticKind.SHOWCASE)
     submission = replace(
         _submission(SubmissionCategory.OTHER),
-        taxonomy=SubmissionTaxonomy(showcase_tags=(ShowcaseTag("compact"), ShowcaseTag("speed", "1.5"))),
+        tags=SubmissionTags(showcase_tags=(ShowcaseTag("compact"), ShowcaseTag("speed", "1.5"))),
     )
     builds = FakeBuilds()
 
@@ -344,7 +344,7 @@ async def test_showcase_tags_become_assignments_with_their_parsed_values() -> No
 async def test_a_showcase_value_its_tag_cannot_take_is_a_field_issue(tag: ShowcaseTag) -> None:
     speed = _definition("speed", TagSemanticKind.SHOWCASE, value_type=TagValueType.NUMERIC)
     compact = _definition("compact", TagSemanticKind.SHOWCASE)
-    submission = replace(_submission(SubmissionCategory.OTHER), taxonomy=SubmissionTaxonomy(showcase_tags=(tag,)))
+    submission = replace(_submission(SubmissionCategory.OTHER), tags=SubmissionTags(showcase_tags=(tag,)))
     builds = FakeBuilds()
 
     result = await SubmissionBuildPreparation(builds, FakeTags((speed, compact)), FakeVersions()).prepare(submission)
@@ -372,23 +372,23 @@ def test_normalization_reads_showcase_tags_of_either_form_revision(revision: int
     )
 
     expected = ShowcaseTag("speed", "2") if revision == 9 else ShowcaseTag("speed")
-    assert normalized.taxonomy.showcase_tags == (ShowcaseTag("compact"), expected)
+    assert normalized.tags.showcase_tags == (ShowcaseTag("compact"), expected)
 
 
 def test_a_payload_queued_with_bare_showcase_keys_still_loads() -> None:
     submission = replace(
         _submission(SubmissionCategory.OTHER),
-        taxonomy=SubmissionTaxonomy(showcase_tags=(ShowcaseTag("compact"), ShowcaseTag("speed", "2"))),
+        tags=SubmissionTags(showcase_tags=(ShowcaseTag("compact"), ShowcaseTag("speed", "2"))),
     )
     payload = encode_submission(submission)
-    taxonomy = cast(dict[str, object], payload["taxonomy"])
-    assert taxonomy["showcase_tags"] == [{"key": "compact", "value": None}, {"key": "speed", "value": "2"}]
-    assert "showcase_tag_keys" not in taxonomy
+    tags = cast(dict[str, object], payload["tags"])
+    assert tags["showcase_tags"] == [{"key": "compact", "value": None}, {"key": "speed", "value": "2"}]
+    assert "showcase_tag_keys" not in tags
 
-    del taxonomy["showcase_tags"]
-    taxonomy["showcase_tag_keys"] = ["compact"]
+    del tags["showcase_tags"]
+    tags["showcase_tag_keys"] = ["compact"]
 
-    assert decode_submission(payload).taxonomy.showcase_tags == (ShowcaseTag("compact"),)
+    assert decode_submission(payload).tags.showcase_tags == (ShowcaseTag("compact"),)
 
 
 async def test_adapter_persists_the_verified_public_sponsor_snapshot() -> None:
@@ -487,7 +487,7 @@ async def test_retries_delegate_the_source_draft_key_and_return_the_existing_bui
     assert [call[1]["source_submission_draft_id"] for call in builds.calls] == [DRAFT_ID]
 
 
-async def test_retry_returns_existing_build_after_a_taxonomy_option_is_retired() -> None:
+async def test_retry_returns_existing_build_after_a_tags_option_is_retired() -> None:
     pattern = _definition("regular", TagSemanticKind.PATTERN)
     submission = replace(
         _submission(SubmissionCategory.DOOR),
@@ -595,7 +595,7 @@ def test_submission_dimensions_reject_parts_below_one() -> None:
         SubmissionDimensions(2, 0, None)
 
 
-def test_preview_build_accepts_partial_answers_and_maps_known_taxonomy() -> None:
+def test_preview_build_accepts_partial_answers_and_maps_known_tags() -> None:
     restriction = _definition("seamless", TagSemanticKind.RESTRICTION, restriction_type="wiring-placement")
     pattern = _definition("regular", TagSemanticKind.PATTERN)
     speed = _definition("speed", TagSemanticKind.SHOWCASE, value_type=TagValueType.NUMERIC)
@@ -771,7 +771,7 @@ async def test_restriction_categories_survive_durable_payload_and_preparation() 
     )
     submission = replace(
         _submission(SubmissionCategory.DOOR),
-        taxonomy=SubmissionTaxonomy(restriction_proposals=("Unclassified",), restriction_proposal_fields=grouped),
+        tags=SubmissionTags(restriction_proposals=("Unclassified",), restriction_proposal_fields=grouped),
     )
     payload = encode_submission(submission)
     assert payload["payload_schema"] == 1

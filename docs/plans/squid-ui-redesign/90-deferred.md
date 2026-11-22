@@ -37,7 +37,7 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   not the singleton store" finding lands as 59's scope vocabulary and
   63, and neither reopens this. 59 keys a *lifetime owner* the host
   constructs and holds — there is still no global, no lookup by type, and no way to reach a
-  namespace you were not given; adopting `sessions.py`'s existing scope taxonomy as `ScopeT` makes
+  namespace you were not given; adopting `sessions.py`'s existing scope tags as `ScopeT` makes
   the keying typed, not ambient. 63 is a store, but a store of application values in a package
   *below* the UI library with no edge pointing up, which is this entry's own prescription ("add a
   host-side event bus, not a store in the package") applied to durable data instead of events. The
@@ -46,7 +46,7 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   is re-exported as `sl.runtime.SharedPool`, so a keyed lifetime owner *is* reachable from a
   `squid_ui` import and always was going to be — what stays unreachable is a store, a global,
   and any way to obtain a namespace nobody handed you. 59 also dropped the `sl.discord.scopes`
-  module this note's "scope vocabulary" referred to; the taxonomy it adopts is now reached through
+  module this note's "scope vocabulary" referred to; the tags it adopts is now reached through
   `screens.py`'s existing `Opener`/`Scope`, which strengthens rather than weakens the point, since
   no new surface was added at all.
 - **`compose(into=view)` / adopting existing discord.py views** *(still rejected — live-view adoption; the unsent-view case was accepted separately, see below)* — re-confirmed: renderer
@@ -160,7 +160,7 @@ today aren't buried under ones already settled elsewhere. Each bullet carries a
   Version-over-equality lineage came in with the strict default and is orthogonal — keep it; A→B→A
   must conflict. And on the web, where concurrent actions are ordinary rather than exotic, the
   default probably does invert; that is a porting note, not a reason to invert it here.
-- **A closed suffix taxonomy that encodes lifetime in nouns** *(still rejected)* — (plan 67, 2026-08-24) — designed
+- **A fixed set of suffixes that encodes lifetime in nouns** *(still rejected)* — (plan 67, 2026-08-24) — designed
   as a 17-row table (`Key`/`Address` never end, `Handle`/`Token` expire, `Registry`/`Pool`/
   `Runtime`/`Store` end explicitly, `Snapshot`/`Report`/`Result` end immediately, `Record`/
   `State` outlive the process) and rejected on measurement. The public surface across `sl`,

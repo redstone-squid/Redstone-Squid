@@ -213,7 +213,7 @@ async def test_a_sort_of_only_a_minus_sign_is_a_user_error() -> None:
         await _run(_cog(RecordingSearch()), query="doors", sort="-")
 
 
-async def test_a_taxonomy_target_narrows_the_query_for_you() -> None:
+async def test_a_tags_target_narrows_the_query_for_you() -> None:
     search = RecordingSearch()
 
     await _run(_cog(search), query="lacing", scope=SearchTarget.patterns)
@@ -223,7 +223,7 @@ async def test_a_taxonomy_target_narrows_the_query_for_you() -> None:
     assert request.query == "kind:pattern (lacing)"
 
 
-async def test_a_taxonomy_target_alone_lists_that_taxonomy() -> None:
+async def test_a_tags_target_alone_lists_that_tags() -> None:
     search = RecordingSearch()
 
     await _run(_cog(search), query="  ", scope=SearchTarget.restrictions)

@@ -167,7 +167,7 @@ async def test_source_edit_during_computation_survives_atomic_acknowledgement(
         assert volumes == {50, 100}
 
 
-async def test_taxonomy_changes_advance_both_input_generations(
+async def test_tag_changes_advance_both_input_generations(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     sessions = migrated_session_factory

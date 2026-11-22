@@ -1210,7 +1210,7 @@ export const searchTermsSuggest = <ThrowOnError extends boolean = false>(options
 /**
  * Search
  *
- * Match builds, computed records, and taxonomy entries in one ranked page.
+ * Match builds, computed records, and tag entries in one ranked page.
  */
 export const searchExecute = <ThrowOnError extends boolean = false>(options: Options<SearchExecuteData, ThrowOnError>): RequestResult<SearchExecuteResponses, SearchExecuteErrors, ThrowOnError> => (options.client ?? client).get<SearchExecuteResponses, SearchExecuteErrors, ThrowOnError>({ url: '/v1/search', ...options });
 

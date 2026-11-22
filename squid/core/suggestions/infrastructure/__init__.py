@@ -5,13 +5,13 @@ from squid.core.suggestions.infrastructure.catalogue import build_registry
 from squid.core.suggestions.infrastructure.repository import (
     DocumentEntry,
     PostgresSuggestionRepository,
-    TaxonomyEntry,
+    TagEntry,
 )
 
 __all__ = [
     "DocumentEntry",
     "PostgresSuggestionRepository",
-    "TaxonomyEntry",
+    "TagEntry",
     "TtlCache",
     "build_registry",
 ]

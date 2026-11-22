@@ -2547,7 +2547,7 @@ command-search-choice-scope-records = records
 command-search-choice-scope-restrictions = restrictions
 
 # squid/bot/submission/cog.py:79
-command-search-help = Search builds, records, and taxonomy metadata
+command-search-help = Search builds, records, and tags
 
 # squid/bot/submission/cog.py:100
 command-search-mode-name = mode
@@ -4887,7 +4887,7 @@ records-title-holder-required = A resolved record title must have at least one h
 records-title-holders-forbidden = Only a resolved record title can have official holders.
 
 # squid/bot/catalogue/records.py:214
-records-titles-purpose = These record titles contain terms the title rules do not know. Fix the taxonomy, then rebuild records.
+records-titles-purpose = These record titles contain unrecognized tags. Correct the build tags, then recompute the records.
 
 # squid/bot/recount_cog.py:124
 recount-already-running = That message is already being recounted.

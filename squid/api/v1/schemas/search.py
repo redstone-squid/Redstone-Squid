@@ -61,7 +61,7 @@ class RecordSearchEntry(BaseModel):
 
 
 class MetadataSearchEntry(BaseModel):
-    """A matched taxonomy or version entry."""
+    """A matched tag or version entry."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -107,7 +107,7 @@ class RecordSearchResult(BaseModel):
 
 
 class MetadataSearchResult(BaseModel):
-    """A taxonomy or version match."""
+    """A tag or version match."""
 
     model_config = ConfigDict(extra="forbid")
 

@@ -27,32 +27,32 @@ def test_compiler_preserves_full_boolean_semantics_with_bound_values() -> None:
     assert "slow door" not in sql
 
 
-def test_compiler_uses_typed_facet_exists_for_numeric_range() -> None:
+def test_compiler_uses_typed_filter_value_exists_for_numeric_range() -> None:
     sql, parameters = _compile("volume:[10 TO 20]")
 
     assert "EXISTS" in sql
-    assert "search_document_facets.numeric_value BETWEEN" in sql
-    assert "search_document_facets.field_name" in sql
+    assert "search_document_filters.numeric_value BETWEEN" in sql
+    assert "search_document_filters.field_name" in sql
     assert "volume" in parameters.values()
     assert "10" in {str(value) for value in parameters.values()}
     assert "20" in {str(value) for value in parameters.values()}
 
 
-def test_compiler_uses_typed_facet_exists_for_timestamp_comparison() -> None:
+def test_compiler_uses_typed_filter_value_exists_for_timestamp_comparison() -> None:
     sql, parameters = _compile("completion_at>=2026-07-30")
 
-    assert "search_document_facets.timestamp_value >=" in sql
+    assert "search_document_filters.timestamp_value >=" in sql
     assert "completion_at" in parameters.values()
 
 
-def test_compiler_maps_kind_and_restriction_to_facets_without_dynamic_identifiers() -> None:
+def test_compiler_maps_kind_and_restriction_to_filters_without_dynamic_identifiers() -> None:
     sql, parameters = _compile("kind:door restriction:slim")
     flattened = {
         item for value in parameters.values() for item in (value if isinstance(value, list | tuple) else (value,))
     }
 
     assert sql.count("EXISTS") == 2
-    assert "search_document_facets.text_value" in sql
+    assert "search_document_filters.text_value" in sql
     assert {"kind", "door", "restriction", "slim"}.issubset(flattened)
 
 
@@ -66,7 +66,7 @@ def test_compiler_allows_trigram_candidates_to_recover_typo_text() -> None:
     assert "dorr" in parameters.values()
 
 
-def test_tag_filter_accepts_name_facets_and_legacy_indexed_terms() -> None:
+def test_tag_filter_accepts_name_filters_and_legacy_indexed_terms() -> None:
     sql, parameters = _compile('tag:"  NO   OBSERVERS  "')
 
     assert "EXISTS" in sql
@@ -136,9 +136,9 @@ def unused_session() -> AsyncSession:
 
 @pytest.mark.parametrize("field", ["door_width", "door_height", "door_depth"])
 @pytest.mark.parametrize("predicate", [":3", ">=3", ":[3 TO 5]"])
-def test_door_dimensions_compile_to_numeric_facets(field: str, predicate: str) -> None:
+def test_door_dimensions_compile_to_numeric_filters(field: str, predicate: str) -> None:
     sql, parameters = _compile(f"{field}{predicate}")
 
-    assert "search_document_facets.numeric_value" in sql
+    assert "search_document_filters.numeric_value" in sql
     assert field in parameters.values()
     assert "3" in {str(value) for value in parameters.values()}

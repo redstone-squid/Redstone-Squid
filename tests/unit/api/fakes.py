@@ -532,7 +532,7 @@ class MockPublicRecords(PublicRecordQueryService):
 
 class MockSubmissionForms(SubmissionFormService):
     def __init__(self) -> None:
-        """Serve the built-in manifest without a taxonomy repository."""
+        """Serve the built-in manifest without a tag repository."""
 
     @override
     async def manifest(self, *, locale: str | None):

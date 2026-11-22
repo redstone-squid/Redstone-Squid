@@ -18,7 +18,7 @@ from squid.core.submissions.domain import (
     SubmissionDimensions,
     SubmissionOrigin,
     SubmissionSchematicVisibility,
-    SubmissionTaxonomy,
+    SubmissionTags,
     VerifiedSubmissionArtifacts,
 )
 from squid.core.versions.models import Version
@@ -85,7 +85,7 @@ def normalized_submission(account_id: int, draft_id: UUID, source_version: str) 
         capture_dimensions=SubmissionDimensions(3, 4, 5),
         source_version=source_version,
         version_compatibility=None,
-        taxonomy=SubmissionTaxonomy(),
+        tags=SubmissionTags(),
         schematic_policy=SchematicRightsPolicy(
             visibility=SubmissionSchematicVisibility.REVIEWER_ONLY,
             license=None,

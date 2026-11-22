@@ -12,12 +12,12 @@ from squid.core.builds.domain import (
     MediaTypeLiteral,
     ServerInfo,
     ShowcaseTag,
-    UnresolvedTaxonomy,
+    UnresolvedTags,
     read_showcase_tags,
 )
 from squid.core.builds.domain.credits import Credit
 from squid.core.builds.domain.expansion import DoorExpansion
-from squid.core.builds.domain.taxonomy import RESTRICTION_FIELDS
+from squid.core.builds.domain.tags import RESTRICTION_FIELDS
 from squid.core.builds.errors import InvalidBuildError
 from squid.core.builds.models import Build, DoorBuild, ExtenderBuild
 from squid.core.errors import JSONValue
@@ -196,13 +196,13 @@ class BuildEditPatch:
         if self.door_type is not UNSET:
             build.patterns = self.door_type
 
-        # Explicit taxonomy replacements also replace retained proposals for those fields.
+        # Explicit tag replacements also replace retained proposals for those fields.
         # Otherwise persistence would merge a removed proposal back into the edited build.
         replaced_restrictions = {name for name in RESTRICTION_FIELDS if getattr(self, name) is not UNSET}
         if replaced_restrictions or self.door_type is not UNSET:
-            unresolved = UnresolvedTaxonomy.read(build.extra_info)
+            unresolved = UnresolvedTags.read(build.extra_info)
             info = build.extra_info.copy()
-            UnresolvedTaxonomy(
+            UnresolvedTags(
                 restrictions=tuple(pair for pair in unresolved.restrictions if pair[0] not in replaced_restrictions),
                 patterns=unresolved.patterns if self.door_type is UNSET else (),
             ).write(info)

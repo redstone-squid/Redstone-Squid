@@ -2,7 +2,7 @@
 
 Check case-insensitive prefix matching through the service and index selection with a
 representative SQL query. Autocomplete runs on each keystroke, so selective prefixes should
-avoid scanning the entire facet table.
+avoid scanning the entire filter_value table.
 """
 
 from collections.abc import AsyncGenerator
@@ -15,14 +15,14 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from squid.core.persistence.base import Base
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldRegistry
-from squid.core.search.models import SearchDocument, SearchDocumentFacet
+from squid.core.search.models import SearchDocument, SearchDocumentFilter
 from squid.core.suggestions.application.queries import SuggestionQueryService
 from squid.core.suggestions.domain import SuggestionRequest
 from squid.core.suggestions.infrastructure.providers.search_query import SearchQueryProvider
 
 pytestmark = pytest.mark.asyncio
 
-_TABLES = [Base.metadata.tables["search_documents"], Base.metadata.tables["search_document_facets"]]
+_TABLES = [Base.metadata.tables["search_documents"], Base.metadata.tables["search_document_filters"]]
 
 RESTRICTIONS = ["Seamless", "Semi-Seamless", "Full Lamp", "Flush", "Skydoor"]
 
@@ -60,7 +60,7 @@ async def seed(session_factory: async_sessionmaker[AsyncSession], *, creator_cou
             session.add(document)
             await session.flush()
             session.add(
-                SearchDocumentFacet(document_id=document.id, field_name="restriction", ordinal=0, text_value=name)
+                SearchDocumentFilter(document_id=document.id, field_name="restriction", ordinal=0, text_value=name)
             )
         # The first two documents share a creator, so DISTINCT has observable work to do.
         for index in range(creator_count):
@@ -75,40 +75,40 @@ async def seed(session_factory: async_sessionmaker[AsyncSession], *, creator_cou
             session.add(filler)
             await session.flush()
             session.add(
-                SearchDocumentFacet(
+                SearchDocumentFilter(
                     document_id=filler.id, field_name="creator", ordinal=0, text_value=f"Builder {max(0, index - 1)}"
                 )
             )
 
 
 @pytest.mark.usefixtures("search_tables")
-async def test_facet_values_prefix_match_case_insensitively(
+async def test_filter_values_prefix_match_case_insensitively(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     await seed(async_session_factory)
     repository = SuggestionQueryService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory))
 
-    assert await repository.facet_values("restriction", "sea", limit=10) == ["Seamless"]
-    assert await repository.facet_values("restriction", "SEA", limit=10) == ["Seamless"]
-    assert await repository.facet_values("restriction", "f", limit=10) == ["Flush", "Full Lamp"]
+    assert await repository.filter_values("restriction", "sea", limit=10) == ["Seamless"]
+    assert await repository.filter_values("restriction", "SEA", limit=10) == ["Seamless"]
+    assert await repository.filter_values("restriction", "f", limit=10) == ["Flush", "Full Lamp"]
 
 
 @pytest.mark.usefixtures("search_tables")
-async def test_facet_values_are_scoped_to_one_field(
+async def test_filter_values_are_scoped_to_one_field(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     await seed(async_session_factory)
     repository = SuggestionQueryService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory))
-    assert await repository.facet_values("restriction", "Builder", limit=10) == []
+    assert await repository.filter_values("restriction", "Builder", limit=10) == []
 
 
 @pytest.mark.usefixtures("search_tables")
-async def test_facet_values_are_distinct_and_bounded(
+async def test_filter_values_are_distinct_and_bounded(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     await seed(async_session_factory)
     repository = SuggestionQueryService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory))
-    values = await repository.facet_values("creator", "builder", limit=5)
+    values = await repository.filter_values("creator", "builder", limit=5)
     assert values == [f"Builder {index}" for index in range(5)]
 
 
@@ -119,13 +119,13 @@ async def test_the_prefix_query_uses_the_prefix_index(
     """A selective prefix should use the index without disabling sequential scans."""
     await seed(async_session_factory, creator_count=2_000)
     async with async_session_factory() as session:
-        await session.execute(text("ANALYZE search_document_facets"))
+        await session.execute(text("ANALYZE search_document_filters"))
         plan = "\n".join(
             row
             for row in (
                 await session.scalars(
                     text(
-                        "EXPLAIN SELECT DISTINCT text_value FROM search_document_facets "
+                        "EXPLAIN SELECT DISTINCT text_value FROM search_document_filters "
                         "WHERE field_name = 'creator' AND text_value IS NOT NULL "
                         "AND lower(text_value) LIKE 'builder 1%' "
                         "ORDER BY text_value LIMIT 10"
@@ -133,7 +133,7 @@ async def test_the_prefix_query_uses_the_prefix_index(
                 )
             ).all()
         )
-    assert "search_document_facets_text_prefix_idx" in plan, plan
+    assert "search_document_filters_text_prefix_idx" in plan, plan
     assert "Seq Scan" not in plan, plan
 
 

@@ -89,7 +89,7 @@ def test_visible_timings_reject_non_door_builds() -> None:
         BuildEditPatch(visible_closing_time=3).apply(UtilityBuild())
 
 
-def test_taxonomy_replacements_remove_only_the_replaced_fields_proposals() -> None:
+def test_tags_replacements_remove_only_the_replaced_fields_proposals() -> None:
     build = DoorBuild(
         extra_info={
             "unknown_restrictions": {

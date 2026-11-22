@@ -271,7 +271,7 @@ def sort_restrictions(
     return buckets
 
 
-class StagedTaxonomy:
+class StagedTags:
     """Staged restriction helpers shared by the entity and the draft.
 
     Expects the concrete dataclass to declare the pattern and restriction lists.
@@ -356,7 +356,7 @@ class GeneralDraftDetails:
 
 
 @dataclass(kw_only=True)
-class BuildInput(StagedMedia, StagedTaxonomy, StagedCredits):
+class BuildInput(StagedMedia, StagedTags, StagedCredits):
     """Build details collected before the category and required fields are known.
 
     This is an in-memory staging object used by inference and build creation.

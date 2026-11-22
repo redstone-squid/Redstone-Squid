@@ -91,7 +91,7 @@ class SubmissionPreparation:
         """Return a submission, a wait for processing, or issues requiring correction.
 
         Only unfinished media or schematic processing qualifies for an automatic
-        retry. Mixed issues, including invalid taxonomy or unavailable sponsors,
+        retry. Mixed issues, including invalid tags or unavailable sponsors,
         require correction even if some files are still processing.
         """
         draft = validated.draft
@@ -101,7 +101,7 @@ class SubmissionPreparation:
         issues = _unique_issues(
             (
                 *_artifact_issues(draft.origin, assessment),
-                *_taxonomy_issues(answers, draft.snapshot.category),
+                *_tags_issues(answers, draft.snapshot.category),
                 *sponsor_issues,
             )
         )
@@ -159,7 +159,7 @@ def _artifact_issues(
     return _unique_issues(issues)
 
 
-def _taxonomy_issues(
+def _tags_issues(
     answers: Mapping[str, JSONValue],
     category: str,
 ) -> tuple[SubmissionAttentionIssue, ...]:

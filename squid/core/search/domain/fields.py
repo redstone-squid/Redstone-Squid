@@ -25,7 +25,7 @@ class FieldDefinition:
     supports_range: bool = False
     aliases: tuple[str, ...] = ()
     storage_name: str | None = None
-    """Facet key used in storage, such as `tag:42`; None uses the public name."""
+    """Storage key such as `tag:42`. Defaults to the public field name."""
     supports_sort: bool = False
     ranked: bool = False
     """Whether the value of a clause on this field also counts as text for relevance ranking."""

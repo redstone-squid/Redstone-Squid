@@ -300,7 +300,7 @@ def _build_form_manifest(revision: int) -> FormManifest:
             ),
         ),
         FormSection(
-            id="taxonomy",
+            id="tags",
             title=localize(tr(t"submissions-restrictions-tags = Restrictions and tags")),
             fields=(
                 FormField(

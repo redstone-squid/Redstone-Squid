@@ -55,7 +55,7 @@ CREATE INDEX tag_definitions_created_by_idx ON public.tag_definitions USING btre
 
 CREATE INDEX tag_definitions_lookup_idx ON public.tag_definitions USING btree (normalized_name, semantic_kind);
 
-CREATE TRIGGER tag_definitions_enqueue_records AFTER INSERT OR DELETE OR UPDATE ON public.tag_definitions FOR EACH STATEMENT EXECUTE FUNCTION public.enqueue_record_taxonomy_change();
+CREATE TRIGGER tag_definitions_enqueue_records AFTER INSERT OR DELETE OR UPDATE ON public.tag_definitions FOR EACH STATEMENT EXECUTE FUNCTION public.enqueue_record_tag_change();
 
 CREATE TRIGGER tag_definitions_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.tag_definitions FOR EACH ROW EXECUTE FUNCTION public.enqueue_metadata_search_projection();
 

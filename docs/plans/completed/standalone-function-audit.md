@@ -1,7 +1,7 @@
 # Standalone function ownership audit
 
 Reviewed 2026-11-16 at `a8d616f00`. The existing-class recommendations below
-have since been implemented, including the consent, taxonomy, and timing-loader
+have since been implemented, including the consent, tags, and timing-loader
 follow-ups. The proposed new `DiscordDraftIntake` adapter remains deferred.
 The findings retain the original function names and locations for reference.
 Three subagents reviewed Discord UI, domain/application code, and infrastructure;
@@ -80,8 +80,8 @@ In particular, the poll publisher test imports `_emoji_is_usable` directly.
 - `squid/bot/accounts/consent.py:140` `_consent_prompt` could become named
   `ConsentPrompt` constructors for account consent and identity linking. Keep
   continuation orchestration standalone; tests directly import the factory.
-- `squid/core/builds/infrastructure/taxonomy.py:124` `_resolve_official_tag_rows`
-  could become a private `PostgresBuildTaxonomy` method. Its only caller is
+- `squid/core/builds/infrastructure/tags.py:124` `_resolve_official_tag_rows`
+  could become a private `PostgresBuildTags` method. Its only caller is
   `resolve_official`; pure name-matching helpers should remain separate.
 - `squid/core/records/infrastructure/repository.py:782,806` `_door_timings` and
   `_extender_timings` could become private `PostgresRecordRepository` loaders.

@@ -1,6 +1,6 @@
-"""Build persistence and edit-time taxonomy resolution against migrated PostgreSQL.
+"""Build persistence and edit-time tag resolution against migrated PostgreSQL.
 
-Resolve taxonomy names before saving: known names become tag assignments, while unknown or
+Resolve tag names before saving: known names become tag assignments, while unknown or
 ambiguous names are retained in extra_info. Compare saved and reloaded category fields,
 including the relationships and enum types that ordinary scalar equality can miss.
 """
@@ -20,8 +20,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.core.accounts.models import Account, AccountIdentity, CreatorAlias
-from squid.core.builds.application.taxonomy import apply_build_taxonomy, replace_showcase_tags
-from squid.core.builds.application.taxonomy_service import BuildTaxonomyService
+from squid.core.builds.application.tag_service import BuildTagService
+from squid.core.builds.application.tags import apply_build_tags, replace_showcase_tags
 from squid.core.builds.domain import BuildCategory, BuildStatus, ShowcaseTag
 from squid.core.builds.domain.credits import name_credits
 from squid.core.builds.infrastructure.repository import BuildRepository
@@ -38,7 +38,7 @@ from squid.core.versions.models import Version
 from tests.support.build_edits import build_edit_session
 from tests.support.build_edits import transact_build_edit as transact
 
-# Canonical display names of the official taxonomy seeded below, one per
+# Canonical display names of the official tags seeded below, one per
 # restriction type plus two patterns. Tests that expect a clean round trip
 # must draw restriction/pattern names from these.
 KNOWN_RESTRICTIONS = {
@@ -77,7 +77,7 @@ def _official_tag(
 
 
 async def _seed_catalogue(session_factory: async_sessionmaker[AsyncSession]) -> int:
-    """Seed one account, one version, one server, and the official taxonomy."""
+    """Seed one account, one version, one server, and the official tags."""
     async with build_edit_session(session_factory) as session:
         account = Account()
         session.add(account)
@@ -152,7 +152,7 @@ async def _seed_catalogue(session_factory: async_sessionmaker[AsyncSession]) -> 
 
 
 def _make_build(category: BuildCategory, account_id: int) -> Build:
-    """A fully populated build whose taxonomy resolves without loss."""
+    """A fully populated build whose tag names all resolve."""
     common: dict[str, Any] = {
         "submission_status": BuildStatus.PENDING,
         "submitter_account_id": account_id,
@@ -251,8 +251,8 @@ async def _resolve_and_save(
     repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     build: Build,
 ) -> None:
-    """Persist the way the application service does: resolve taxonomy, then save."""
-    await apply_build_taxonomy(build, BuildTaxonomyService(uow_factory=partial(SqlAlchemyUnitOfWork, session_factory)))
+    """Persist the way the application service does: resolve tags, then save."""
+    await apply_build_tags(build, BuildTagService(uow_factory=partial(SqlAlchemyUnitOfWork, session_factory)))
     await transact(
         repository,
         lambda uow: uow.builds.save(build),
@@ -261,7 +261,7 @@ async def _resolve_and_save(
 
 
 @pytest.mark.parametrize("category", list(BuildCategory), ids=lambda category: category.value)
-async def test_round_trip_is_identity_for_known_taxonomy(
+async def test_round_trip_is_identity_for_known_tags(
     migrated_session_factory: async_sessionmaker[AsyncSession],
     category: BuildCategory,
 ) -> None:
@@ -413,7 +413,7 @@ async def test_alias_resolves_to_canonical_display_name(
     await _resolve_and_save(migrated_session_factory, repository, build)
     assert build.id is not None
 
-    # apply_build_taxonomy rewrote the field to the canonical display name.
+    # apply_build_tags rewrote the field to the canonical display name.
     assert build.component_restrictions == ["Observerless"]
     loaded = await transact(repository, lambda uow: uow.builds.get_by_id(build.id))
     assert loaded is not None
@@ -553,7 +553,7 @@ async def test_one_message_can_source_several_builds(
         assert [message.id for message in loaded.source_messages] == [8000]
 
 
-# --- Edit-time taxonomy handling ---------------------------------------------
+# --- Edit-time tags handling ---------------------------------------------
 
 
 async def test_unknown_restriction_is_recorded_at_edit_time_and_round_trips(
@@ -564,9 +564,7 @@ async def test_unknown_restriction_is_recorded_at_edit_time_and_round_trips(
 
     build = _make_build(BuildCategory.UTILITY, account_id)
     build.component_restrictions = ["Imaginary Component"]
-    await apply_build_taxonomy(
-        build, BuildTaxonomyService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
-    )
+    await apply_build_tags(build, BuildTagService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)))
 
     # Retain the unrecognized name in extra_info and remove it from the resolved
     # restriction list before saving, so reloading preserves both representations.
@@ -619,7 +617,7 @@ async def test_save_persists_tags_verbatim_without_mutating_input(
     )
 
     # Saving does not interpret the restriction names or add a default pattern;
-    # those changes belong to apply_build_taxonomy.
+    # those changes belong to apply_build_tags.
     assert build.patterns == []
     assert build.tags == []
 
@@ -630,7 +628,7 @@ async def test_save_persists_tags_verbatim_without_mutating_input(
     assert loaded.patterns == []
 
 
-async def test_apply_build_taxonomy_defaults_door_pattern(
+async def test_apply_build_tags_defaults_door_pattern(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     account_id = await _seed_catalogue(migrated_session_factory)
@@ -638,9 +636,7 @@ async def test_apply_build_taxonomy_defaults_door_pattern(
 
     build = _make_build(BuildCategory.DOOR, account_id)
     build.patterns = []
-    await apply_build_taxonomy(
-        build, BuildTaxonomyService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
-    )
+    await apply_build_tags(build, BuildTagService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)))
 
     # The default pattern is materialized visibly at edit time.
     assert build.patterns == ["Regular"]
@@ -769,7 +765,7 @@ async def test_round_trip_property(
     seeded_factory: tuple[async_sessionmaker[AsyncSession], int],
     values: tuple[BuildCategory, dict[str, object]],
 ) -> None:
-    """Compare each generated build after taxonomy resolution and save.
+    """Compare each generated build after tag resolution and save.
 
     Examples share the seeded catalogue and database, but each inserts and reads
     its own build row.
@@ -924,8 +920,8 @@ async def test_showcase_tags_are_replaced_by_key_beside_resolved_restrictions(
     assert loaded is not None
     restrictions = loaded.restrictions
 
-    taxonomy = BuildTaxonomyService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
-    await replace_showcase_tags(loaded, [ShowcaseTag("compact")], taxonomy)
+    tags = BuildTagService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
+    await replace_showcase_tags(loaded, [ShowcaseTag("compact")], tags)
     await _resolve_and_save(migrated_session_factory, repository, loaded)
 
     reloaded = await transact(repository, lambda uow: uow.builds.get_by_id(build.id))

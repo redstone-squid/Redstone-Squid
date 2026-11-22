@@ -150,7 +150,7 @@ class SubmissionDimensions:
 
 
 @dataclass(frozen=True, slots=True)
-class SubmissionTaxonomy:
+class SubmissionTags:
     """Approved stable keys, showcase tags with their raw values, and unapproved free-text proposals."""
 
     restriction_keys: tuple[str, ...] = ()
@@ -326,7 +326,7 @@ class NormalizedSubmission:
     source_version: str | None
     """The capture's Minecraft export version, when known."""
     version_compatibility: str | None
-    taxonomy: SubmissionTaxonomy
+    tags: SubmissionTags
     schematic_policy: SchematicRightsPolicy
     completion: str | None
     ai_generated: bool

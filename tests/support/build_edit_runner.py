@@ -37,7 +37,7 @@ class BuildEditRecorder:
         require_revision(expected, self.build.revision)
         before = build_values(self.build)
         values = command.values.unpack()
-        values.pop("unresolved_taxonomy", None)
+        values.pop("unresolved_tags", None)
         BuildEditPatch.from_attributes(values).apply(self.build)
         after = build_values(self.build)
         if before != after:

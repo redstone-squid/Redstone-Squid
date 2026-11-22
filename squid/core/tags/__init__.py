@@ -1,1 +1,1 @@
-"""Unified build taxonomy."""
+"""Unified build tags."""

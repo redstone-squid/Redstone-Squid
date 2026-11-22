@@ -2,24 +2,24 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from unittest.mock import Mock
 
-from squid.core.records.application.models import CandidateBuild, CandidateFacet
+from squid.core.records.application.models import CandidateBuild, CandidateTag
 from squid.core.records.application.services import RecordComputationService
 from squid.core.records.application.snapshots import RecordSnapshot
 from squid.core.records.domain import BuildKind, Candidate, DoorCategory
-from squid.core.records.domain.models import FacetKind
+from squid.core.records.domain.models import RecordTagRole
 
 
-def test_captured_inputs_preserve_facet_types_and_compute_deterministically() -> None:
-    numeric = CandidateFacet(
+def test_captured_inputs_preserve_tag_types_and_compute_deterministically() -> None:
+    numeric = CandidateTag(
         1,
-        FacetKind.RESTRICTION,
+        RecordTagRole.RESTRICTION,
         "Height",
         value_type="numeric",
         assigned_value=Decimal("1.25"),
         category_value=Decimal("2"),
         record_operator="at_most",
     )
-    text = CandidateFacet(2, FacetKind.RESTRICTION, "Material", value_type="text", assigned_value="1.25")
+    text = CandidateTag(2, RecordTagRole.RESTRICTION, "Material", value_type="text", assigned_value="1.25")
     snapshot = RecordSnapshot(
         rules_revision_id=1,
         kind=BuildKind.DOOR,

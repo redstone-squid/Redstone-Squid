@@ -47,7 +47,7 @@ QUEUE_CLAIM_CHECK_REVISION = "f3c6b9e4a1d7"
 pytestmark = pytest.mark.filterwarnings("ignore:Expression #.* detected to include an operator clause:UserWarning")
 """Autogenerate cannot compare an index expression carrying an operator class.
 
-`search_document_facets_text_prefix_idx` declares `text_pattern_ops` inline in
+`search_document_filters_text_prefix_idx` declares `text_pattern_ops` inline in
 `squid/core/search/models.py`. Suppress the comparison warning for that known limitation;
 these drift checks do not verify the skipped index expression.
 """
@@ -167,7 +167,7 @@ def test_migrations_create_schema_without_drift(
                     )
                 ).scalars()
             )
-            legacy_taxonomy_tables = {
+            legacy_tag_tables = {
                 table_name: connection.execute(text(f"SELECT to_regclass('public.{table_name}')")).scalar_one()
                 for table_name in (
                     "build_restrictions",
@@ -177,7 +177,7 @@ def test_migrations_create_schema_without_drift(
                     "types",
                 )
             }
-            legacy_taxonomy_routines = {
+            legacy_tag_routines = {
                 signature: connection.execute(text(f"SELECT to_regprocedure('public.{signature}')")).scalar_one()
                 for signature in ("find_restriction_ids(text[])", "sync_new_restriction()")
             }
@@ -246,8 +246,8 @@ def test_migrations_create_schema_without_drift(
     assert option_table == "vote_session_options"
     assert legacy_record_table is None
     assert legacy_record_routines == set()
-    assert set(legacy_taxonomy_tables.values()) == {None}
-    assert set(legacy_taxonomy_routines.values()) == {None}
+    assert set(legacy_tag_tables.values()) == {None}
+    assert set(legacy_tag_routines.values()) == {None}
     assert retirement_rebuild_queued is True
     assert set(queue_health_before) == {
         "discord_sync",
@@ -1335,11 +1335,11 @@ def test_idempotency_encryption_migration_purges_plaintext_replay_rows(
     assert {"response_body_ciphertext", "response_body_key_id", "response_body_nonce"} <= columns
 
 
-def test_taxonomy_cutover_refuses_unimported_legacy_rows(
+def test_legacy_tag_cutover_refuses_unimported_legacy_rows(
     migration_database_url: str,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The destructive taxonomy migration fails before dropping unmatched legacy data."""
+    """The legacy tag migration fails before dropping unmatched legacy data."""
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
     config = Config(toml_file="pyproject.toml")
     command.upgrade(config, "b8c9d0e1f2a3")
@@ -2535,7 +2535,7 @@ def test_payload_schema_reset_preserves_input_immutability(
         engine.dispose()
 
 
-def test_build_review_status_migration_updates_indexed_documents_and_facets(
+def test_build_review_status_migration_updates_indexed_documents_and_filters(
     migration_database_url: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
@@ -2610,5 +2610,49 @@ def test_tag_slug_backfill_prefers_query_names(migration_database_url: str, monk
         command.downgrade(config, "5fa81c27d6b4")
         with engine.connect() as connection:
             assert connection.scalar(text("SELECT to_regclass('public.tag_slugs')")) is None
+    finally:
+        engine.dispose()
+
+
+def test_tag_and_filter_storage_rename_preserves_rows_and_trigger(
+    migration_database_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config(toml_file="pyproject.toml")
+    parent = "b9e5d016c4a2"
+    command.upgrade(config, parent)
+    engine = create_engine(migration_database_url)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text("""
+                WITH document AS (
+                    INSERT INTO search_documents
+                        (resource_kind, source_key, title, normalized_title, fuzzy_text, source_hash)
+                    VALUES ('build', '1', 'Door', 'door', 'door', 'test')
+                    RETURNING id
+                )
+                INSERT INTO search_document_facets (document_id, field_name, numeric_value)
+                SELECT id, 'width', 3 FROM document
+            """)
+            )
+            connection.execute(text("DELETE FROM record_recompute_queue"))
+            connection.execute(text("UPDATE tag_definitions SET id = id WHERE false"))
+
+        command.upgrade(config, "f4b7c28a610d")
+        with engine.begin() as connection:
+            assert connection.execute(text("SELECT numeric_value FROM search_document_filters")).scalar_one() == 3
+            assert connection.execute(
+                text("SELECT reasons FROM record_recompute_queue WHERE scope_key = 'door'")
+            ).scalar_one() == ["tag_change"]
+            connection.execute(text("DELETE FROM record_recompute_queue"))
+            connection.execute(text("UPDATE tag_units SET key = key WHERE false"))
+            assert connection.execute(
+                text("SELECT reasons FROM record_recompute_queue WHERE scope_key = 'door'")
+            ).scalar_one() == ["tag_change"]
+
+        command.downgrade(config, parent)
+        with engine.connect() as connection:
+            assert connection.execute(text("SELECT numeric_value FROM search_document_facets")).scalar_one() == 3
     finally:
         engine.dispose()

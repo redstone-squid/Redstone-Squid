@@ -15,8 +15,8 @@ from squid.core.accounts.domain import fold_creator_name
 from squid.core.accounts.models import Account, CreatorAlias
 from squid.core.records.domain import VersionScope
 from squid.core.records.models import Record, RecordDefinition
-from squid.core.search.models import SearchDocument, SearchDocumentFacet
-from squid.core.suggestions.application.queries import DocumentEntry, TaxonomyEntry
+from squid.core.search.models import SearchDocument, SearchDocumentFilter
+from squid.core.suggestions.application.queries import DocumentEntry, TagEntry
 from squid.core.tags.domain import TagValueType
 from squid.core.tags.models import TagApplicability, TagDefinition
 from squid.core.versions.models import Version
@@ -26,18 +26,18 @@ TRIGRAM_FLOOR = 0.1
 
 
 class PostgresSuggestionRepository:
-    """Read taxonomy, search projections, versions, and creators in the caller's session."""
+    """Read tags, search projections, versions, and creators in the caller's session."""
 
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
 
-    async def taxonomy(
+    async def tag_entries(
         self,
         semantic_kind: str,
         *,
         build_kind: str | None = None,
         authority: str | None = "official",
-    ) -> Sequence[TaxonomyEntry]:
+    ) -> Sequence[TagEntry]:
         """Return approved definitions of one semantic kind, with their aliases.
 
         `build_kind` limits results to definitions declared applicable to that kind
@@ -61,7 +61,7 @@ class PostgresSuggestionRepository:
         session = self._session()
         definitions = (await session.scalars(statement)).unique().all()
         return [
-            TaxonomyEntry(
+            TagEntry(
                 id=row.id,
                 stable_key=row.stable_key,
                 display_name=row.display_name,
@@ -182,20 +182,20 @@ class PostgresSuggestionRepository:
         rows = (await session.execute(statement)).all()
         return [(str(row.public_creator_id), row.name) for row in rows]
 
-    async def facet_values(self, field_name: str, prefix: str, *, limit: int) -> Sequence[str]:
-        """Return distinct non-null facet values in database text order.
+    async def filter_values(self, field_name: str, prefix: str, *, limit: int) -> Sequence[str]:
+        """Return distinct indexed text values for a field, ordered by the database.
 
         Prefix matching uses `lower(text_value)` to match the expression in the
         functional index. The query is stripped and casefolded before matching.
         """
-        statement = select(SearchDocumentFacet.text_value).where(
-            SearchDocumentFacet.field_name == field_name,
-            SearchDocumentFacet.text_value.is_not(None),
+        statement = select(SearchDocumentFilter.text_value).where(
+            SearchDocumentFilter.field_name == field_name,
+            SearchDocumentFilter.text_value.is_not(None),
         )
         normalized = prefix.strip().casefold()
         if normalized:
-            statement = statement.where(func.lower(SearchDocumentFacet.text_value).startswith(normalized))
-        statement = statement.distinct().order_by(SearchDocumentFacet.text_value).limit(limit)
+            statement = statement.where(func.lower(SearchDocumentFilter.text_value).startswith(normalized))
+        statement = statement.distinct().order_by(SearchDocumentFilter.text_value).limit(limit)
         session = self._session()
         return [value for value in (await session.scalars(statement)).all() if value is not None]
 

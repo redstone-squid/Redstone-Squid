@@ -14,7 +14,7 @@ from squid.core.builds.domain import (
     BuildInput,
     DoorDraftDetails,
     ExtenderDraftDetails,
-    UnresolvedTaxonomy,
+    UnresolvedTags,
 )
 from squid.core.errors import JSONValue
 from squid.core.submissions.application.forms import SubmissionFormService
@@ -122,13 +122,13 @@ def project_submission(
     )
     if exact_version is not None:
         answers["source_version"] = exact_version
-    # Names the taxonomy could not resolve still go through the catalog match below, so they become
+    # Names the resolver could not match still go through the catalog match below, so they become
     # proposals and reach the finalized build as unresolved names instead of disappearing.
-    unresolved_taxonomy = UnresolvedTaxonomy.read(source.extra_info)
-    restrictions = UnresolvedTaxonomy().add(
+    unresolved_tags = UnresolvedTags.read(source.extra_info)
+    restrictions = UnresolvedTags().add(
         restrictions=[
             *((field, name) for field in RESTRICTION_FIELDS for name in getattr(source, field)),
-            *unresolved_taxonomy.restrictions,
+            *unresolved_tags.restrictions,
         ]
     )
     proposal_fields = {value: key for key, value in RESTRICTION_PROPOSAL_FIELDS.items()}
@@ -145,7 +145,7 @@ def project_submission(
         assert isinstance(current, list)
         if (value := key if key is not None else name) not in current:
             current.append(value)
-    patterns = [*source.patterns, *unresolved_taxonomy.patterns]
+    patterns = [*source.patterns, *unresolved_tags.patterns]
     unresolved: list[str] = []
     for field_id, proposed_id, names, catalog in (("patterns", "pattern_proposals", patterns, "approved_patterns"),):
         if not names:

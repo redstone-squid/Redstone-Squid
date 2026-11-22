@@ -10,39 +10,39 @@ from squid.core.i18n import tr
 
 @dataclass(frozen=True, slots=True)
 class CategorySemantics:
-    """Implications and incompatibilities between canonical facet IDs."""
+    """Implications and incompatibilities between canonical tag IDs."""
 
     implications: Mapping[str, frozenset[str]]
     incompatibilities: Mapping[str, frozenset[str]]
 
-    def closure(self, facets: Iterable[str]) -> frozenset[str]:
-        """Return the transitive implication closure for a facet collection."""
-        result = set(facets)
+    def closure(self, tags: Iterable[str]) -> frozenset[str]:
+        """Return the transitive implication closure for a tag collection."""
+        result = set(tags)
         pending = list(result)
         while pending:
-            facet = pending.pop()
-            for implied in self.implications.get(facet, ()):
+            tag = pending.pop()
+            for implied in self.implications.get(tag, ()):
                 if implied not in result:
                     result.add(implied)
                     pending.append(implied)
         return frozenset(result)
 
-    def is_valid(self, facets: Iterable[str]) -> bool:
-        """Return whether the facets and their implications contain no incompatible pair."""
-        closed = self.closure(facets)
-        return all(not (self.incompatibilities.get(facet, frozenset()) & closed) for facet in closed)
+    def is_valid(self, tags: Iterable[str]) -> bool:
+        """Return whether the tags and their implications contain no incompatible pair."""
+        closed = self.closure(tags)
+        return all(not (self.incompatibilities.get(tag, frozenset()) & closed) for tag in closed)
 
 
 def generate_category_subsets(
-    facets: Iterable[str],
+    tags: Iterable[str],
     semantics: CategorySemantics,
     *,
     max_size: int = 8,
 ) -> Iterator[frozenset[str]]:
-    """Yield valid subsets of the input facets and their implications, including the empty set.
+    """Yield valid subsets of the input tags and their implications, including the empty set.
 
-    Subsets are ordered by size, then sorted facet IDs. Each contains at most
-    `max_size` facets; implied facets participate in validation but need not appear
+    Subsets are ordered by size, then sorted tag IDs. Each contains at most
+    `max_size` tags; implied tags participate in validation but need not appear
     in the yielded subset. For example, if A implies B, {A} and {B} are separate
     categories. A negative size limit raises `ValidationError` when iteration starts.
     """
@@ -50,10 +50,10 @@ def generate_category_subsets(
         msg = tr(t"records-maximum-category-size = Maximum category size cannot be negative.")
         raise ValidationError(msg)
 
-    canonical_facets = tuple(sorted(semantics.closure(facets)))
-    upper_bound = min(max_size, len(canonical_facets))
+    canonical_tags = tuple(sorted(semantics.closure(tags)))
+    upper_bound = min(max_size, len(canonical_tags))
     for size in range(upper_bound + 1):
-        for subset in combinations(canonical_facets, size):
+        for subset in combinations(canonical_tags, size):
             category = frozenset(subset)
             if semantics.is_valid(category):
                 yield category

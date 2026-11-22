@@ -21,7 +21,7 @@ from squid.core.builds.domain import (
     ExtenderDraftDetails,
     RestrictionField,
     RestrictionTypeLiteral,
-    UnresolvedTaxonomy,
+    UnresolvedTags,
     parse_time_string,
 )
 from squid.core.builds.domain.credits import Credit, CreditAttribution, CreditKind, CreditRole
@@ -240,7 +240,7 @@ class InferredBuild(BaseModel):
         default_factory=list,
         description=(
             "Only concrete conflicts or ambiguities affecting build facts or attribution. "
-            "No comments about wording, hype, missing optional facts, or taxonomy membership. Empty when none."
+            "No comments about wording, hype, missing optional facts, or whether a tag is approved. Empty when none."
         ),
     )
 
@@ -339,7 +339,7 @@ class StructuredGenerator(Protocol):
     ) -> T | None: ...
 
 
-class BuildTaxonomy(Protocol):
+class BuildTagVocabulary(Protocol):
     """Validate inferred names against recognized build metadata."""
 
     async def validate_restrictions(
@@ -360,17 +360,17 @@ class VersionResolver(Protocol):
 
 
 class BuildInferenceService:
-    """Turn structured model output into build drafts with recognized taxonomy names."""
+    """Turn structured model output into build drafts with recognized tag names."""
 
     def __init__(
         self,
         generator: StructuredGenerator,
-        taxonomy: BuildTaxonomy,
+        tags: BuildTagVocabulary,
         versions: VersionResolver,
         system_prompt: str,
     ) -> None:
         self._generator = generator
-        self._taxonomy = taxonomy
+        self._tags = tags
         self._versions = versions
         self._system_prompt = system_prompt
 
@@ -384,13 +384,13 @@ class BuildInferenceService:
         """Infer drafts from the primary messages and their supporting context.
 
         Discard inferred builds that reference no primary message. Keep recognized
-        source messages in submission order, and preserve unknown taxonomy names
+        source messages in submission order, and preserve unknown tag names
         for review. A missing model result returns an empty list; provider and
         validation errors propagate to the caller.
         """
-        vocabulary = await self._taxonomy.inference_vocabulary()
+        vocabulary = await self._tags.inference_vocabulary()
         result = await self._generator.generate(
-            f"{self._system_prompt}\n\nAPPROVED TAXONOMY\n{vocabulary}",
+            f"{self._system_prompt}\n\nAPPROVED TAGS\n{vocabulary}",
             self._render_user_message(source),
             InferenceResult,
             model=model,
@@ -430,7 +430,7 @@ class BuildInferenceService:
                 ),
                 ai_generated=True,
             )
-            await self._apply_taxonomy(build, inferred)
+            await self._apply_tags(build, inferred)
             await self._apply_fields(
                 build,
                 inferred,
@@ -544,7 +544,7 @@ class BuildInferenceService:
         context = "\n".join(render(message) for message in source.context)
         return f"<messages>\n <primary>\n{primary}\n </primary>\n <context>\n{context}\n </context>\n</messages>"
 
-    async def _apply_taxonomy(self, build: BuildInput, inferred: InferredBuild) -> None:
+    async def _apply_tags(self, build: BuildInput, inferred: InferredBuild) -> None:
         validations: list[Awaitable[tuple[list[str], list[str]]]] = []
         destinations: list[str] = []
         restriction_fields: tuple[tuple[list[str], RestrictionTypeLiteral, str], ...] = (
@@ -556,15 +556,15 @@ class BuildInferenceService:
         for values, restriction_type, destination in restriction_fields:
             if values:
                 destinations.append(destination)
-                validations.append(self._taxonomy.validate_restrictions(values, restriction_type))
+                validations.append(self._tags.validate_restrictions(values, restriction_type))
 
         if inferred.door_type:
             destinations.append("door_types")
-            validations.append(self._taxonomy.validate_door_types(inferred.door_type))
+            validations.append(self._tags.validate_door_types(inferred.door_type))
 
         # Finish or cancel all validation calls before leaving this inference step.
         results = await run_all_awaitables(validations)
-        # Keep what the taxonomy rejected: an automatic pipeline may submit this draft unreviewed.
+        # Keep unrecognized names: an automatic pipeline may submit this draft unreviewed.
         unresolved_restrictions: list[tuple[RestrictionField, str]] = []
         unresolved_patterns: list[str] = []
         for destination, (recognized, unrecognized) in zip(destinations, results, strict=True):
@@ -583,7 +583,7 @@ class BuildInferenceService:
             else:
                 build.patterns = recognized
                 unresolved_patterns.extend(unrecognized)
-        UnresolvedTaxonomy.read(build.extra_info).add(
+        UnresolvedTags.read(build.extra_info).add(
             restrictions=unresolved_restrictions, patterns=unresolved_patterns
         ).write(build.extra_info)
 

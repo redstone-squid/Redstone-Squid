@@ -14,7 +14,7 @@ from squid.core.catalogue.domain import (
 )
 
 from .models import BuildStatus
-from .taxonomy import UnresolvedTaxonomy
+from .tags import UnresolvedTags
 
 _SHOWCASE_QUALIFIER = re.compile(r"(?:\d+\.\d+\s*s|\d+\s*[Bb]locks)")
 
@@ -22,7 +22,7 @@ _SHOWCASE_QUALIFIER = re.compile(r"(?:\d+\.\d+\s*s|\d+\s*[Bb]locks)")
 def format_build_category(build: Build) -> FormattedTitle:
     """Format the canonical category title without individual-build decoration."""
     formatter = RulesTitleFormatter()
-    unresolved = UnresolvedTaxonomy.read(build.extra_info)
+    unresolved = UnresolvedTags.read(build.extra_info)
     match build:
         case DoorBuild():
             return formatter.format_door(
@@ -130,7 +130,7 @@ def _door_size(build: DoorBuild) -> str:
 
 
 def _showcase_qualifiers(build: Build) -> Iterable[str]:
-    unresolved = UnresolvedTaxonomy.read(build.extra_info)
+    unresolved = UnresolvedTags.read(build.extra_info)
     return (
         value
         for value in unresolved.restriction_names("miscellaneous_restrictions")
@@ -139,7 +139,7 @@ def _showcase_qualifiers(build: Build) -> Iterable[str]:
 
 
 def _unknown_components(build: Build, *, markdown: bool) -> Iterable[str]:
-    unresolved = UnresolvedTaxonomy.read(build.extra_info)
+    unresolved = UnresolvedTags.read(build.extra_info)
     return (_italic(value) if markdown else value for value in unresolved.restriction_names("component_restrictions"))
 
 

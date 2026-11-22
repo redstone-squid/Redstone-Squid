@@ -1,6 +1,6 @@
 """Cache suggestion lists within one process and refresh them on demand.
 
-A short TTL lets processes pick up taxonomy and version changes without sharing
+A short TTL lets processes pick up tags and version changes without sharing
 cache invalidation messages.
 """
 

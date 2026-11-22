@@ -13,7 +13,7 @@ from squid.core.builds.domain import BuildCategory
 from squid.core.events.models import DomainEvent
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.records.application.models import (
-    CandidateFacet,
+    CandidateTag,
     CategoryCandidates,
     CategoryIdentity,
     ComputationBatch,
@@ -29,12 +29,12 @@ from squid.core.records.domain import (
     ResolutionStatus,
     VersionScope,
 )
-from squid.core.records.domain.models import FacetKind
+from squid.core.records.domain.models import RecordTagRole
 from squid.core.records.models import (
     ComputationRun,
-    DefinitionFacet,
     MaterializationSource,
     RecordDefinition,
+    RecordDefinitionTag,
     RecordHolderHistory,
     RulesRevision,
 )
@@ -59,7 +59,7 @@ def _batch(rules_revision_id: int, build_ids: list[int]) -> ComputationBatch:
     )
     record_title = CategoryCandidates(
         identity=CategoryIdentity(BuildKind.DOOR, "door|2x3|t[20]|Door", ()),
-        facets=(),
+        tags=(),
         category_text=FormattedTitle("2x3 Door"),
         candidates=candidates,
     )
@@ -172,7 +172,7 @@ async def test_bulk_definitions_keep_public_requests_and_stable_title_ids(
 ) -> None:
     sessions = migrated_session_factory
     owner = await seed_account_and_version(sessions)
-    # Stored facets reference real restriction tags; the batch below uses ids 1 and 2.
+    # Stored tags reference real restriction tags; the batch below uses ids 1 and 2.
     async with build_edit_session(sessions) as session:
         for tag_id, name in ((1, "Flush"), (2, "Seamless")):
             session.add(
@@ -210,11 +210,11 @@ async def test_bulk_definitions_keep_public_requests_and_stable_title_ids(
                 category=replace(
                     template.category,
                     identity=CategoryIdentity(BuildKind.DOOR, f"door|{size}x3|t[20]|Door", (1,)),
-                    facets=(
-                        CandidateFacet(id=2, kind=FacetKind.PATTERN, name="Spiral"),
-                        CandidateFacet(id=2, kind=FacetKind.TYPE, name="Door"),
-                        CandidateFacet(id=2, kind=FacetKind.CATEGORY, name="Utility"),
-                        CandidateFacet(id=1, kind=FacetKind.RESTRICTION, name="Flush"),
+                    tags=(
+                        CandidateTag(id=2, kind=RecordTagRole.PATTERN, name="Spiral"),
+                        CandidateTag(id=2, kind=RecordTagRole.TYPE, name="Door"),
+                        CandidateTag(id=2, kind=RecordTagRole.CATEGORY, name="Utility"),
+                        CandidateTag(id=1, kind=RecordTagRole.RESTRICTION, name="Flush"),
                     ),
                 ),
                 history=(),
@@ -261,11 +261,11 @@ async def test_bulk_definitions_keep_public_requests_and_stable_title_ids(
         definitions = (
             await session.scalars(select(RecordDefinition).options(selectinload(RecordDefinition.record)))
         ).all()
-        facets = (await session.scalars(select(DefinitionFacet))).all()
+        tags = (await session.scalars(select(RecordDefinitionTag))).all()
     assert len(definitions) == 1105
-    assert len(facets) == 1110
-    assert all(facet.facet_kind is FacetKind.RESTRICTION for facet in facets)
-    assert all(facet.display_order == 0 for facet in facets if facet.facet_id == 1)
+    assert len(tags) == 1110
+    assert all(tag.tag_role is RecordTagRole.RESTRICTION for tag in tags)
+    assert all(tag.display_order == 0 for tag in tags if tag.tag_id == 1)
     for definition in definitions:
         key = (definition.criterion, definition.category_key)
         if key in original:

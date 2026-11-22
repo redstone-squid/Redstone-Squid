@@ -3,7 +3,7 @@
 import json
 from typing import Protocol
 
-from squid.core.builds.domain import UnresolvedTaxonomy
+from squid.core.builds.domain import UnresolvedTags
 from squid.core.builds.models import Build, DoorBuild, ExtenderBuild
 from squid.core.errors import InvalidStateError
 from squid.core.events import DomainEvent, UnsupportedEventVersionError
@@ -71,7 +71,7 @@ class BuildEmbeddingService:
 
 def _embedding_text(build: Build) -> str:
     """Describe staged build facts without traversing ORM relationships or private metadata."""
-    unresolved = UnresolvedTaxonomy.read(build.extra_info)
+    unresolved = UnresolvedTags.read(build.extra_info)
     values: dict[str, object] = {
         "category": build.category.value,
         "name": build.display_name,

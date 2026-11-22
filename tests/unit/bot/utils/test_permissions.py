@@ -185,7 +185,7 @@ class TestRequires:
         assert await requires("build.submission.approve", "vote.log_delete.cast", mode="any").predicate(context)
 
     async def test_the_declared_nodes_are_introspectable(self) -> None:
-        """The taxonomy test reads this rather than a predicate's name."""
+        """The command permissions test reads this rather than a predicate's name."""
         decorated = requires("settings.server.edit", mode="all")
 
         assert decorated.predicate.__squid_nodes__ == ("settings.server.edit",)  # pyrefly: ignore[missing-attribute]  # pyright: ignore[reportFunctionMemberAccess]

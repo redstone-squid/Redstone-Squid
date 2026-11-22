@@ -1,4 +1,4 @@
-"""Inference prefill cannot fabricate required facts or promote unknown taxonomy."""
+"""Inference prefill cannot fabricate required facts or promote unknown tags."""
 
 from uuid import uuid4
 
@@ -163,11 +163,11 @@ def test_unknown_restrictions_retain_their_categories_through_normalization() ->
     normalized = normalize_submission(
         snapshot, answers, SubmissionArtifactReadiness(), None, origin=SubmissionOrigin.DISCORD
     )
-    assert normalized.taxonomy.restriction_proposal_fields == (
+    assert normalized.tags.restriction_proposal_fields == (
         ("wiring_placement_restrictions", "Seamless"),
         ("animated_restrictions", "Full Sync"),
         ("component_restrictions", "Contained"),
     )
-    assert normalized.taxonomy.restriction_proposals == ("Other",)
+    assert normalized.tags.restriction_proposals == ("Other",)
     old = project_submission(source, build_submission_manifest(revision=6), {}, origin=SubmissionOrigin.DISCORD)
     assert old.answers["restriction_proposals"] == ["Seamless", "Full Sync", "Contained", "Other"]

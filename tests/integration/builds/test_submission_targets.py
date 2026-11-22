@@ -19,7 +19,7 @@ from squid.core.accounts.models import AccountIdentity as AccountIdentityValue
 from squid.core.builds.application import BuildService
 from squid.core.builds.application.locks import BuildLockService
 from squid.core.builds.application.restrictions import RestrictionService
-from squid.core.builds.application.taxonomy_service import BuildTaxonomyService
+from squid.core.builds.application.tag_service import BuildTagService
 from squid.core.builds.domain import BuildCategory, BuildStatus
 from squid.core.builds.errors import InvalidBuildError
 from squid.core.builds.infrastructure.repository import BuildRepository
@@ -65,7 +65,7 @@ from squid.core.submissions.domain import (
     SubmissionCategory,
     SubmissionDimensions,
     SubmissionOrigin,
-    SubmissionTaxonomy,
+    SubmissionTags,
 )
 from squid.core.submissions.domain.links import SubmissionLink
 from squid.core.submissions.infrastructure.finalization_repository import (
@@ -295,7 +295,7 @@ async def test_submission_target_persists_only_the_exact_canonical_source_versio
         BuildLockService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)),
         RestrictionService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)),
         versions,
-        BuildTaxonomyService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)),
+        BuildTagService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)),
         uow_factory=repository,
     )
     target = SubmissionBuildPreparation(builds, NoApprovedTags(), versions)
@@ -347,7 +347,7 @@ async def test_concurrent_source_draft_writes_publish_and_materialize_one_submis
             BuildLockService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)),
             RestrictionService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)),
             versions,
-            BuildTaxonomyService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)),
+            BuildTagService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)),
             uow_factory=repository,
         ),
         NoApprovedTags(),
@@ -1103,7 +1103,7 @@ async def test_imported_door_with_unknown_facts_commits_and_reloads(
         BuildLockService(uow_factory=factory),
         RestrictionService(uow_factory=factory),
         versions,
-        BuildTaxonomyService(uow_factory=factory),
+        BuildTagService(uow_factory=factory),
         uow_factory=factory,
     )
     payload = replace(
@@ -1139,7 +1139,7 @@ async def test_external_links_and_separate_timings_survive_durable_finalization(
         BuildLockService(uow_factory=factory),
         RestrictionService(uow_factory=factory),
         versions,
-        BuildTaxonomyService(uow_factory=factory),
+        BuildTagService(uow_factory=factory),
         uow_factory=factory,
     )
     payload = replace(
@@ -1185,7 +1185,7 @@ async def test_ingested_versions_and_restriction_categories_survive_durable_fina
         BuildLockService(uow_factory=factory),
         RestrictionService(uow_factory=factory),
         versions,
-        BuildTaxonomyService(uow_factory=factory),
+        BuildTagService(uow_factory=factory),
         uow_factory=factory,
     )
     payload = replace(
@@ -1195,7 +1195,7 @@ async def test_ingested_versions_and_restriction_categories_survive_durable_fina
         schema_revision=7,
         source_version=None,
         version_compatibility="Java 1.21+",
-        taxonomy=SubmissionTaxonomy(
+        tags=SubmissionTags(
             restriction_proposal_fields=(
                 ("wiring_placement_restrictions", "Unlisted wiring"),
                 ("animated_restrictions", "Unlisted animation"),

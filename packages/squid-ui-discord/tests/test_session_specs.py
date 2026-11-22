@@ -74,7 +74,7 @@ def test_a_guild_scope_requires_an_open_context_with_a_guild(build: Callable[[Op
 
 
 def test_a_session_key_carries_the_scope_a_pool_would_key_on() -> None:
-    """The point of one taxonomy: a panel holding its key needs no conversion to reach a pool."""
+    """The point of one tag: a panel holding its key needs no conversion to reach a pool."""
     key = SessionSpec("panel", scope=ScopeKind.USER_GUILD).key(OpenContext(7, 42))
 
     assert key.scope == OpenContext(7, 42).user_guild()

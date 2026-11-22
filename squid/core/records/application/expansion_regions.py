@@ -131,7 +131,7 @@ def analyze_door_widths(
     maximum: int | None = None,
     limits: RegionLimits = DEFAULT_REGION_LIMITS,
 ) -> DoorRangeAnalysis:
-    """Analyze candidates already filtered by orientation, taxonomy and version.
+    """Analyze candidates already filtered by orientation, tags and version.
 
     Families may vary along multiple axes; this query varies opening width only.
     Fixed candidates require typed door_opening dimensions. Failure returns no

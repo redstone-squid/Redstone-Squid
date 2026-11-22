@@ -148,7 +148,7 @@ also retain the latest attempt and its diagnostics independently of the active r
 Focused tests cover immutable range snapshots, captured input types, out-of-order
 concrete completion, edits during arithmetic, independent failures, unchanged
 publication IDs, source-evidence changes, current-pin races, unset pins, queue token
-replacement, and taxonomy invalidation. PostgreSQL tests exercise the real migration
+replacement, and invalidation when tags change. PostgreSQL tests exercise the real migration
 chain and transaction boundaries. API schemas and generated clients include freshness
 and resolved-version metadata.
 

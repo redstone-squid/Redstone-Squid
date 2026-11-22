@@ -18,25 +18,25 @@ class StaticFields:
         return self.registry
 
 
-class FakeFacets:
+class FakeFilterValues:
     def __init__(self, values: dict[str, list[str]] | None = None) -> None:
         self.values = values or {}
         self.calls: list[tuple[str, str, int]] = []
 
-    async def facet_values(self, field_name: str, prefix: str, *, limit: int) -> Sequence[str]:
+    async def filter_values(self, field_name: str, prefix: str, *, limit: int) -> Sequence[str]:
         self.calls.append((field_name, prefix, limit))
         return [value for value in self.values.get(field_name, []) if value.casefold().startswith(prefix.casefold())]
 
 
-def provider(values: dict[str, list[str]] | None = None) -> tuple[SearchQueryProvider, FakeFacets]:
-    facets = FakeFacets(values)
-    return SearchQueryProvider(StaticFields(), facets), facets
+def provider(values: dict[str, list[str]] | None = None) -> tuple[SearchQueryProvider, FakeFilterValues]:
+    filters = FakeFilterValues(values)
+    return SearchQueryProvider(StaticFields(), filters), filters
 
 
 async def suggest(query: str, cursor: int | None = None, **values: list[str]):
-    instance, facets = provider(values)
+    instance, filters = provider(values)
     result = await instance.suggest(SuggestionRequest(source="search_query", query=query, cursor=cursor, limit=10))
-    return result, facets
+    return result, filters
 
 
 async def test_a_bare_word_suggests_field_names_ready_for_a_value() -> None:
@@ -57,9 +57,9 @@ async def test_boolean_keywords_are_offered_only_once_there_is_something_to_comb
 
 
 async def test_a_field_value_is_read_from_the_index() -> None:
-    result, facets = await suggest("restriction:seam", restriction=["Seamless", "Sealed"])
+    result, filters = await suggest("restriction:seam", restriction=["Seamless", "Sealed"])
     assert [item.label for item in result.items] == ["Seamless"]
-    assert facets.calls == [("restriction", "seam", 10)]
+    assert filters.calls == [("restriction", "seam", 10)]
 
 
 @pytest.mark.parametrize(
@@ -72,10 +72,10 @@ async def test_a_field_value_is_read_from_the_index() -> None:
     ],
 )
 async def test_record_criteria_are_suggested_without_indexed_records(query: str, expected: list[str]) -> None:
-    result, facets = await suggest(query)
+    result, filters = await suggest(query)
 
     assert [item.value for item in result.items] == expected
-    assert facets.calls == []
+    assert filters.calls == []
     assert result.replacement is not None
     assert (result.replacement.start, result.replacement.end) == (len("criterion:"), len(query))
 
@@ -88,10 +88,10 @@ async def test_record_criterion_suggestions_respect_the_limit() -> None:
 
 
 async def test_version_scopes_are_suggested_without_indexed_records() -> None:
-    result, facets = await suggest("version_scope:")
+    result, filters = await suggest("version_scope:")
 
     assert [item.value for item in result.items] == ["all_time", "up_to_date"]
-    assert facets.calls == []
+    assert filters.calls == []
 
 
 async def test_catalogue_completions_use_the_scoped_registry() -> None:
@@ -114,13 +114,13 @@ async def test_catalogue_completions_use_the_scoped_registry() -> None:
 @pytest.mark.parametrize("values", [("Full Lamp", "Flush", "Seamless"), ()])
 async def test_any_field_can_declare_fixed_suggestions(values: tuple[str, ...]) -> None:
     registry = FieldRegistry((FieldDefinition("custom", FieldType.TEXT, suggested_values=values),))
-    facets = FakeFacets({"custom": ["From index"]})
-    instance = SearchQueryProvider(StaticFields(registry), facets)
+    filters = FakeFilterValues({"custom": ["From index"]})
+    instance = SearchQueryProvider(StaticFields(registry), filters)
 
     result = await instance.suggest(SuggestionRequest(source="search_query", query="custom:F", limit=10))
 
     assert [item.value for item in result.items] == (["Flush", '"Full Lamp"'] if values else [])
-    assert facets.calls == []
+    assert filters.calls == []
 
 
 async def test_the_replacement_span_covers_only_the_value() -> None:
@@ -130,22 +130,22 @@ async def test_the_replacement_span_covers_only_the_value() -> None:
 
 
 async def test_a_numeric_field_offers_no_values_to_scroll_through() -> None:
-    result, facets = await suggest("width:5")
+    result, filters = await suggest("width:5")
     assert result.items == ()
-    assert facets.calls == []
+    assert filters.calls == []
     # The empty result still identifies the token under the caret.
     assert result.replacement is not None
 
 
 async def test_inside_a_range_nothing_is_suggested() -> None:
-    result, facets = await suggest("width:[1 TO ")
+    result, filters = await suggest("width:[1 TO ")
     assert result.items == ()
-    assert facets.calls == []
+    assert filters.calls == []
 
 
 async def test_an_unknown_field_falls_back_to_completing_field_names() -> None:
-    result, facets = await suggest("restrictoin:sea")
-    assert facets.calls == []
+    result, filters = await suggest("restrictoin:sea")
+    assert filters.calls == []
     assert any(item.value.endswith(":") for item in result.items)
 
 
@@ -166,7 +166,7 @@ async def test_database_order_is_preserved_rather_than_re_ranked() -> None:
 
 
 async def test_an_explicit_cursor_completes_mid_query() -> None:
-    result, facets = await suggest("restriction:sea AND width:3", cursor=15, restriction=["Seamless"])
-    assert facets.calls == [("restriction", "sea", 10)]
+    result, filters = await suggest("restriction:sea AND width:3", cursor=15, restriction=["Seamless"])
+    assert filters.calls == [("restriction", "sea", 10)]
     assert result.replacement is not None
     assert (result.replacement.start, result.replacement.end) == (12, 15)

@@ -1,10 +1,10 @@
-"""Edit-time resolution of build taxonomy names and showcase tags into tag assignments."""
+"""Resolve build tag names and values when saving edits."""
 
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
-from squid.core.builds.domain import BuildCategory, ShowcaseTag, UnresolvedTaxonomy
+from squid.core.builds.domain import BuildCategory, ShowcaseTag, UnresolvedTags
 from squid.core.builds.errors import InvalidBuildError
 from squid.core.builds.models import Build
 from squid.core.errors import ValidationError
@@ -13,8 +13,8 @@ from squid.core.tags.models import TagAssignment, TagDefinition
 
 
 @dataclass(frozen=True, slots=True)
-class TaxonomyResolution:
-    """The outcome of resolving requested taxonomy names against official tags.
+class TagResolution:
+    """The outcome of resolving requested tag names against official tags.
 
     Unknown names are reported normalized (see :func:`normalize_tag_name`); a
     name is unknown when it matches no approved official definition, or when it
@@ -26,8 +26,8 @@ class TaxonomyResolution:
     unknown_patterns: frozenset[str]
 
 
-class BuildTaxonomyResolver(Protocol):
-    """Resolve restriction and pattern names against the official taxonomy."""
+class BuildTagResolver(Protocol):
+    """Resolve restriction and pattern names against the official tags."""
 
     async def resolve_official(
         self,
@@ -35,14 +35,14 @@ class BuildTaxonomyResolver(Protocol):
         build_kind: str | None,
         restrictions: Sequence[str],
         patterns: Sequence[str],
-    ) -> TaxonomyResolution: ...
+    ) -> TagResolution: ...
 
     async def showcase_definitions(self, keys: Sequence[str]) -> Sequence[TagDefinition]:
         """Return the approved showcase tags with these stable keys; unknown keys are left out."""
         ...
 
 
-async def apply_build_taxonomy(build: Build, resolver: BuildTaxonomyResolver) -> None:
+async def apply_build_tags(build: Build, resolver: BuildTagResolver) -> None:
     """Resolve editable restriction and pattern names into tag assignments.
 
     The repository persists build.tags; BuildLoader derives the editable name
@@ -51,13 +51,13 @@ async def apply_build_taxonomy(build: Build, resolver: BuildTaxonomyResolver) ->
     so the prepared build agrees with what a later reload will show.
 
     Replace official restriction and pattern tags while retaining other tags. Names that resolve
-    to no single official tag become the build's unresolved names (see UnresolvedTaxonomy). The
+    to no single official tag become the build's unresolved names (see UnresolvedTags). The
     build's earlier unresolved names are resolved again, so one that now matches an official tag
     becomes an assignment. Doors and extenders with no requested or unresolved pattern use Regular.
     """
     # Collect every name to resolve, deduplicated the way unresolved names are, so that the ones the
     # resolver reports as unknown can be kept with their spelling and restriction field.
-    requested = UnresolvedTaxonomy.read(build.extra_info).add(
+    requested = UnresolvedTags.read(build.extra_info).add(
         restrictions=[
             (field_name, value) for field_name, values in build.restrictions.items() for value in values or ()
         ],
@@ -109,7 +109,7 @@ async def apply_build_taxonomy(build: Build, resolver: BuildTaxonomyResolver) ->
     ]
 
 
-async def replace_showcase_tags(build: Build, tags: Sequence[ShowcaseTag], resolver: BuildTaxonomyResolver) -> None:
+async def replace_showcase_tags(build: Build, tags: Sequence[ShowcaseTag], resolver: BuildTagResolver) -> None:
     """Make `tags` the build's showcase tags, in that order.
 
     A key the build does not have yet must name an approved showcase tag. Each value must suit its

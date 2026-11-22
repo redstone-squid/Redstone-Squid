@@ -34,7 +34,7 @@ def test_generate_category_subsets_excludes_incompatible_combinations() -> None:
     assert frozenset({"flush", "observerless"}) in subsets
 
 
-def test_generate_category_subsets_includes_implied_facets() -> None:
+def test_generate_category_subsets_includes_implied_tags() -> None:
     semantics = CategorySemantics(
         implications={
             "super_seamless": frozenset({"full_seamless"}),
@@ -50,11 +50,11 @@ def test_generate_category_subsets_includes_implied_facets() -> None:
     assert frozenset({"super_seamless"}) in subsets
 
 
-def test_generate_category_subsets_is_lazy_for_large_facet_sets() -> None:
+def test_generate_category_subsets_is_lazy_for_large_tag_sets() -> None:
     semantics = CategorySemantics(implications={}, incompatibilities={})
-    generator = generate_category_subsets((f"facet-{index}" for index in range(100)), semantics)
+    generator = generate_category_subsets((f"tag-{index}" for index in range(100)), semantics)
 
-    assert list(islice(generator, 2)) == [frozenset(), frozenset({"facet-0"})]
+    assert list(islice(generator, 2)) == [frozenset(), frozenset({"tag-0"})]
 
 
 def test_generate_category_subsets_rejects_negative_limit() -> None:

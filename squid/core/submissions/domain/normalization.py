@@ -26,7 +26,7 @@ from squid.core.submissions.domain.finalization import (
     SubmissionDimensions,
     SubmissionSchematicLicense,
     SubmissionSchematicVisibility,
-    SubmissionTaxonomy,
+    SubmissionTags,
 )
 from squid.core.submissions.domain.links import LINK_FIELDS, SubmissionLink
 from squid_i18n import md_tr
@@ -114,7 +114,7 @@ def normalize_submission(
         # Older form revisions require these; from revision 4 they may be absent.
         source_version=_optional_str(answers, "source_version"),
         version_compatibility=_optional_str(answers, "version_compatibility"),
-        taxonomy=SubmissionTaxonomy(
+        tags=SubmissionTags(
             restriction_keys=_string_tuple(answers, "restrictions"),
             restriction_proposals=_string_tuple(answers, "restriction_proposals"),
             showcase_tags=_showcase_tags(answers),

@@ -25,13 +25,13 @@ from squid.core.search.domain import (
     SearchSort,
     SortDirection,
 )
-from squid.core.search.models import SearchDocument, SearchDocumentFacet
+from squid.core.search.models import SearchDocument, SearchDocumentFilter
 from squid.core.unit_of_work import UnitOfWorkFactory
 from tests.support.unit_of_work import transact
 
 pytestmark = pytest.mark.asyncio
 
-_TABLES = [Base.metadata.tables["search_documents"], Base.metadata.tables["search_document_facets"]]
+_TABLES = [Base.metadata.tables["search_documents"], Base.metadata.tables["search_document_filters"]]
 
 
 @pytest.fixture
@@ -53,7 +53,7 @@ async def seed_builds(
     *,
     widths: dict[str, list[int]] | None = None,
 ) -> None:
-    """Index one build document per title, with optional `width` facet values."""
+    """Index one build document per title, with optional `width` filter values."""
     async with session_factory.begin() as session:
         for index, title in enumerate(titles):
             document = SearchDocument(
@@ -69,7 +69,7 @@ async def seed_builds(
             await session.flush()
             for ordinal, width in enumerate((widths or {}).get(title, [])):
                 session.add(
-                    SearchDocumentFacet(
+                    SearchDocumentFilter(
                         document_id=document.id,
                         field_name="width",
                         ordinal=ordinal,
@@ -107,12 +107,12 @@ async def seed_grouped_records(session_factory: async_sessionmaker[AsyncSession]
             session.add(document)
             await session.flush()
             session.add(
-                SearchDocumentFacet(
+                SearchDocumentFilter(
                     document_id=document.id, field_name="width", ordinal=0, numeric_value=Decimal(width)
                 )
             )
             session.add(
-                SearchDocumentFacet(
+                SearchDocumentFilter(
                     document_id=document.id,
                     field_name="base_title",
                     ordinal=0,
@@ -121,7 +121,7 @@ async def seed_grouped_records(session_factory: async_sessionmaker[AsyncSession]
             )
             for ordinal, holder in enumerate(holders):
                 session.add(
-                    SearchDocumentFacet(
+                    SearchDocumentFilter(
                         document_id=document.id,
                         field_name="holder",
                         ordinal=ordinal,
@@ -325,7 +325,7 @@ async def test_a_document_with_several_sort_values_is_paged_once(
     search_tables: None,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """Aggregate repeated width facets before paging to avoid shifting later offsets."""
+    """Aggregate repeated width filters before paging to avoid shifting later offsets."""
     await seed_builds(
         async_session_factory,
         ["Alpha door", "Bravo door", "Charlie door"],

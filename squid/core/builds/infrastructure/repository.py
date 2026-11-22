@@ -25,7 +25,7 @@ from squid.core.builds.application.queries import (
     PublicBuildSummary,
     PublicBuildTag,
 )
-from squid.core.builds.domain import BuildCategory, BuildStatus, Credit, CreditAttribution, Info, UnresolvedTaxonomy
+from squid.core.builds.domain import BuildCategory, BuildStatus, Credit, CreditAttribution, Info, UnresolvedTags
 from squid.core.builds.domain.events import BuildEdited
 from squid.core.builds.errors import BuildRevisionMismatchError, InvalidBuildError
 from squid.core.builds.history import BuildEditActor, BuildEditContext, HistoryOperation
@@ -102,7 +102,7 @@ def _public_summary_from_selected_row(
     versions: Sequence[str],
     links: Sequence[BuildLink],
     tags: Sequence[PublicBuildTag],
-    taxonomy: Mapping[str, Sequence[str]],
+    title_tags: Mapping[str, Sequence[str]],
 ) -> PublicBuildSummary:
     """Map only the columns selected by the public-summary read model."""
     try:
@@ -112,12 +112,12 @@ def _public_summary_from_selected_row(
         msg = "A public build has invalid category or status metadata."
         raise DataIntegrityError(msg, context={"build_id": row.get("id")}) from exc
 
-    # The listing selects only the unresolved taxonomy keys from extra_info; titles need nothing else.
+    # The listing selects only the unresolved tag keys from extra_info; titles need nothing else.
     stored = {key: row[key] for key in ("unknown_restrictions", "unknown_patterns") if row[key] is not None}
     try:
-        unresolved = UnresolvedTaxonomy.read(cast(Info, stored))
+        unresolved = UnresolvedTags.read(cast(Info, stored))
     except DataIntegrityError as exc:
-        msg = "A public build has malformed unresolved taxonomy metadata."
+        msg = "A public build has malformed unresolved tags."
         raise DataIntegrityError(msg, context={"build_id": row["id"]}) from exc
     extra_info: Info = {}
     unresolved.write(extra_info)
@@ -131,11 +131,11 @@ def _public_summary_from_selected_row(
         "width": row["width"],
         "height": row["height"],
         "depth": row["depth"],
-        "patterns": list(taxonomy["patterns"]),
-        "wiring_placement_restrictions": list(taxonomy["wiring-placement"]),
-        "animated_restrictions": list(taxonomy["animated"]),
-        "component_restrictions": list(taxonomy["component"]),
-        "miscellaneous_restrictions": list(taxonomy["miscellaneous"]),
+        "patterns": list(title_tags["patterns"]),
+        "wiring_placement_restrictions": list(title_tags["wiring-placement"]),
+        "animated_restrictions": list(title_tags["animated"]),
+        "component_restrictions": list(title_tags["component"]),
+        "miscellaneous_restrictions": list(title_tags["miscellaneous"]),
         "extra_info": extra_info,
         "credits": list(credits),
         "links": list(links),
@@ -304,7 +304,7 @@ class BuildRepository:
                 links[build_id].append(BuildLink(url=url, media_type=media_type))
 
         public_tags: dict[int, list[PublicBuildTag]] = defaultdict(list)
-        title_taxonomy: dict[int, dict[str, list[str]]] = defaultdict(
+        title_tags: dict[int, dict[str, list[str]]] = defaultdict(
             lambda: {
                 "patterns": [],
                 "wiring-placement": [],
@@ -338,9 +338,9 @@ class BuildRepository:
             if tag_row.authority != TagAuthority.OFFICIAL:
                 continue
             if tag_row.semantic_kind == TagSemanticKind.PATTERN:
-                title_taxonomy[assignment.build_id]["patterns"].append(tag_row.display_name)
+                title_tags[assignment.build_id]["patterns"].append(tag_row.display_name)
             elif tag_row.semantic_kind == TagSemanticKind.RESTRICTION and tag_row.restriction_type is not None:
-                title_taxonomy[assignment.build_id][tag_row.restriction_type].append(tag_row.display_name)
+                title_tags[assignment.build_id][tag_row.restriction_type].append(tag_row.display_name)
 
         by_id = {
             row["id"]: _public_summary_from_selected_row(
@@ -349,7 +349,7 @@ class BuildRepository:
                 versions=versions[row["id"]],
                 links=links[row["id"]],
                 tags=public_tags[row["id"]],
-                taxonomy=title_taxonomy[row["id"]],
+                title_tags=title_tags[row["id"]],
             )
             for row in rows
         }
@@ -665,7 +665,7 @@ class BuildRepository:
     ) -> None:
         """Rebuild assignments against current tag definitions.
 
-        Taxonomy names must already be resolved by apply_build_taxonomy. Reject
+        Tag names must already be resolved by apply_build_tags. Reject
         missing definitions and definitions whose value type changed during editing.
         """
         assignments = list(build.tags)

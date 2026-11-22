@@ -86,6 +86,6 @@ A `Record` combines a criterion, build kind, version scope, and record category.
 Fastest, Smallest, Fastest Smallest, and Smallest Fastest. Its UUID, `record_id`, survives recomputation and rules
 changes. All-time records include every qualifying version. Up-to-date records are scoped to a Minecraft version.
 
-A `RecordDefinition` stores the record name and taxonomy under a `RulesRevision`. A `ComputationRun` produces
+A `RecordDefinition` stores the record name and tags under a `RulesRevision`. A `ComputationRun` produces
 `RecordResult` rows, with zero or more `RecordHolder` rows and a separate holder history. The public detail URL
 takes the stable `record_id` and reads the active result. Pagination uses the calculation's `result_id`.

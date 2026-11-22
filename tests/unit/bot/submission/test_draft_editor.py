@@ -662,14 +662,14 @@ async def test_opening_another_editor_closes_the_first() -> None:
     async with sd.testing.stage(editor, owner=object()) as ui:
         await ui.press("edit_patterns")
         (first,) = ui.root._lifetime.roots()
-        await ui.press("edit_taxonomy")
+        await ui.press("edit_tags")
 
         with anyio.fail_after(2):
             await first.wait()
         (second_root,) = ui.root._lifetime.roots()
         second = second_root.component
         assert isinstance(second, SectionEditorScreen)
-        assert second.section_id == "taxonomy"
+        assert second.section_id == "tags"
         assert isinstance(first.component, SectionEditorScreen)
         assert rendered_text(first.component) == "Done. You can dismiss this message."
 
@@ -823,7 +823,7 @@ async def test_catalogue_search_keeps_selections_outside_the_results() -> None:
     ws = editor.workspace
     with transaction() as tx:
         await ws.save_values(tx, {"restrictions": ["funnel"]})
-    child = SectionEditorScreen(ws, "taxonomy")
+    child = SectionEditorScreen(ws, "tags")
     with transaction() as tx:
         await child._search_options("restrictions", Mock(spec=sl.SubmitEvent, values={"query": "lamp"}))
         await child._select_value(
@@ -929,7 +929,7 @@ async def test_catalogue_picker_keeps_selection_across_menus() -> None:
     assert field.option_source is not None
     options = tuple(ChoiceOption(f"restriction-{i}", f"Restriction {i}") for i in range(31))
     ws.option_sets = {**ws.option_sets, field.option_source: options}
-    child = SectionEditorScreen(ws, "taxonomy")
+    child = SectionEditorScreen(ws, "tags")
     async with stage(child, owner=object()) as ui:
         await ui.select("pick_restrictions_0", ["restriction-0"])
         await ui.select("pick_restrictions_25", ["restriction-30"])

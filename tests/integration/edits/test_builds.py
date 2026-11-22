@@ -24,8 +24,8 @@ from squid.core.builds.application.edits import (
 )
 from squid.core.builds.application.locks import BuildLockService
 from squid.core.builds.application.restrictions import RestrictionService
-from squid.core.builds.application.taxonomy_service import BuildTaxonomyService
-from squid.core.builds.domain import BuildStatus, ShowcaseTag, UnresolvedTaxonomy
+from squid.core.builds.application.tag_service import BuildTagService
+from squid.core.builds.domain import BuildStatus, ShowcaseTag, UnresolvedTags
 from squid.core.builds.domain.credits import Credit, CreditKind, CreditRole
 from squid.core.builds.history_models import BuildHistoryEntry
 from squid.core.builds.models import Build, OtherBuild
@@ -49,7 +49,7 @@ async def setup(
         BuildLockService(uow_factory=factory),
         RestrictionService(uow_factory=factory),
         VersionService(uow_factory=factory),
-        BuildTaxonomyService(uow_factory=factory),
+        BuildTagService(uow_factory=factory),
         uow_factory=factory,
         permissions=PermissionService(uow_factory=factory),
     )
@@ -71,7 +71,7 @@ async def setup(
 
 
 @pytest.mark.parametrize("latest", [False, True])
-async def test_build_receipts_restore_children_and_unresolved_taxonomy_in_one_audit_entry(
+async def test_build_receipts_restore_children_and_unresolved_tags_in_one_audit_entry(
     latest: bool,
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
@@ -97,7 +97,7 @@ async def test_build_receipts_restore_children_and_unresolved_taxonomy_in_one_au
     current = await service.get(build.id)
     assert current is not None
     assert current.revision == result.outcome.revisions[0].value
-    assert UnresolvedTaxonomy.read(current.extra_info).restriction_names() == ("Previously unknown restriction",)
+    assert UnresolvedTags.read(current.extra_info).restriction_names() == ("Previously unknown restriction",)
     undone = await executor.execute(result.receipt.undo(result.outcome.revisions), actor)
     assert undone.receipt is not None
     restored = await service.get(build.id)

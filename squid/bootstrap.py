@@ -46,7 +46,7 @@ from squid.core.builds.application import (
 )
 from squid.core.builds.application.edits import BUILD_EDIT, BUILD_STATUS_EDIT, BuildFieldsEdit, BuildStatusEdit
 from squid.core.builds.application.locks import BuildLockService
-from squid.core.builds.application.taxonomy_service import BuildTaxonomyService
+from squid.core.builds.application.tag_service import BuildTagService
 from squid.core.builds.infrastructure.embeddings import OpenAIEmbeddingModel
 from squid.core.builds.infrastructure.schematic_summary import SchematicServiceSummaryProvider
 from squid.core.builds.infrastructure.text_generation import OpenAITextGenerator
@@ -194,8 +194,8 @@ class _ServiceGraph:
         return RestrictionService(uow_factory=self.uow_factory)
 
     @cached_property
-    def build_taxonomy(self) -> BuildTaxonomyService:
-        return BuildTaxonomyService(uow_factory=self.uow_factory)
+    def build_tags(self) -> BuildTagService:
+        return BuildTagService(uow_factory=self.uow_factory)
 
     @cached_property
     def permission_cache(self) -> SubjectRuleCache:
@@ -247,7 +247,7 @@ class _ServiceGraph:
             self.build_locks,
             self.restrictions,
             self.version_service,
-            self.build_taxonomy,
+            self.build_tags,
             permissions=self.permissions,
             uow_factory=self.uow_factory,
         )
@@ -267,7 +267,7 @@ class _ServiceGraph:
         prompt = resources.files("squid.core.builds.infrastructure").joinpath("prompt.txt").read_text(encoding="utf-8")
         return BuildInferenceService(
             self.text_generator,
-            self.build_taxonomy,
+            self.build_tags,
             self.version_service,
             prompt,
         )

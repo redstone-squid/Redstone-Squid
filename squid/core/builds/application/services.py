@@ -13,7 +13,7 @@ from squid.core.builds.application.ports import (
     DefaultVersionResolver,
 )
 from squid.core.builds.application.restrictions import RestrictionReader
-from squid.core.builds.application.taxonomy import BuildTaxonomyResolver, apply_build_taxonomy, replace_showcase_tags
+from squid.core.builds.application.tags import BuildTagResolver, apply_build_tags, replace_showcase_tags
 from squid.core.builds.domain import BuildInput, BuildStatus, EditAccess, RestrictionTypeLiteral, sort_restrictions
 from squid.core.builds.errors import BuildNotFoundError, BuildRevisionMismatchError
 from squid.core.builds.history import BuildEditActor, BuildEditContext, HistoryOperation
@@ -28,7 +28,7 @@ from squid.core.unit_of_work import UnitOfWorkFactory
 class BuildService:
     """Save new builds and apply edits to existing builds.
 
-    Preparation resolves taxonomy before locking. Saving rechecks the revision
+    Preparation resolves tags before locking. Saving rechecks the revision
     and permission in the write transaction.
     """
 
@@ -37,7 +37,7 @@ class BuildService:
         locks: BuildLockManager,
         restrictions: RestrictionReader,
         versions: DefaultVersionResolver,
-        taxonomy: BuildTaxonomyResolver,
+        tags: BuildTagResolver,
         *,
         uow_factory: UnitOfWorkFactory[BuildUnitOfWork],
         permissions: PermissionService | None = None,
@@ -46,7 +46,7 @@ class BuildService:
         self._locks = locks
         self._restrictions = restrictions
         self._versions = versions
-        self._taxonomy = taxonomy
+        self._tags = tags
         self._permissions = permissions
 
     async def get(self, build_id: int) -> Build | None:
@@ -333,12 +333,12 @@ class BuildService:
         """Apply a patch, including the showcase tags it cannot resolve itself, and prepare derived values."""
         patch.apply(build)
         if patch.showcase_tags is not UNSET:
-            await replace_showcase_tags(build, patch.showcase_tags, self._taxonomy)
+            await replace_showcase_tags(build, patch.showcase_tags, self._tags)
         await self._prepare_for_persistence(build)
 
     async def _prepare_for_persistence(self, build: Build) -> None:
         """Resolve application-owned defaults and derived values before a relational write."""
-        # Resolve the editable taxonomy strings into tag assignments here, at the
+        # Resolve the editable tag names into tag assignments here, at the
         # last application-owned step, so the repository persists build.tags
         # verbatim and unresolvable names are recorded before anything is saved.
-        await apply_build_taxonomy(build, self._taxonomy)
+        await apply_build_tags(build, self._tags)

@@ -1,8 +1,8 @@
 """Refresh search documents from queued changes to builds, records, and metadata.
 
-The loader assembles a SearchProjection: display text, result data, and typed
-filter values called facets. The store replaces the document and its facets
-together. A document can have several values for one field, such as its creators.
+The loader assembles the display text, result data, and typed values used by
+structured filters. The store replaces the document and its indexed field values
+in one transaction. A field can have multiple values, such as the creators of a build.
 
 The worker processes each queued resource in a savepoint, so one failed refresh
 can be retried without losing the other refreshes in the batch. refresh_search_index
@@ -48,7 +48,7 @@ from squid.core.records.models import (
 )
 from squid.core.search.models import (
     SearchDocument,
-    SearchDocumentFacet,
+    SearchDocumentFilter,
     SearchEmbeddingQueueItem,
     SearchProjectionQueueItem,
 )
@@ -76,7 +76,7 @@ SEARCH_PROJECTION_QUEUE_SPEC = QueueSpec(
 
 
 @dataclass(frozen=True, slots=True)
-class ProjectionFacet:
+class ProjectionFilter:
     """One typed filter value emitted by a search projection."""
 
     field_name: str
@@ -96,7 +96,7 @@ class SearchProjection:
     tags: tuple[str, ...] = ()
     search_aliases: tuple[str, ...] = ()
     document_data: dict[str, object] = field(default_factory=dict)
-    facets: tuple[ProjectionFacet, ...] = ()
+    filters: tuple[ProjectionFilter, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,7 +114,7 @@ class RecordProjectionSource:
     category_key: str
     title: str
     subtitle: str | None
-    category_facets: tuple[ProjectionFacet, ...] = ()
+    category_filters: tuple[ProjectionFilter, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
@@ -195,7 +195,7 @@ class SearchProjectionRepository:
         return self._queue.token_of(item)
 
     async def delete_document(self, resource_kind: str, source_key: str) -> None:
-        """Delete the document; database cascades remove its facets and embedding job."""
+        """Deleting the document also removes its indexed field values and embedding job."""
         await self._session.execute(
             delete(SearchDocument).where(
                 SearchDocument.resource_kind == resource_kind,
@@ -204,7 +204,7 @@ class SearchProjectionRepository:
         )
 
     async def replace(self, projection: SearchProjection) -> int:
-        """Insert or update a document and replace its facets; return its database ID.
+        """Save a document and its indexed field values, then return its database ID.
 
         A changed source hash clears the old embedding. Builds and records also
         enqueue embedding work. An existing queue item with the same hash is left
@@ -289,8 +289,8 @@ class SearchProjectionRepository:
             },
         ).returning(SearchDocument.id)
         document_id = (await self._session.execute(statement)).scalar_one()
-        await self._session.execute(delete(SearchDocumentFacet).where(SearchDocumentFacet.document_id == document_id))
-        self._session.add_all(build_facet_models(document_id, projection.facets))
+        await self._session.execute(delete(SearchDocumentFilter).where(SearchDocumentFilter.document_id == document_id))
+        self._session.add_all(build_filter_models(document_id, projection.filters))
         if projection.resource_kind in {"build", "record"}:
             embedding_statement = insert(SearchEmbeddingQueueItem).values(
                 document_id=document_id,
@@ -416,23 +416,23 @@ class SearchProjectionLoader:
         }
         assert build.submission_status is not None
         assert build.submission_time is not None and build.edited_time is not None
-        # Facets preserve typed values; the text tags above support lexical matching instead.
-        facets = [
-            *build_tag_name_facets(approved_assignments),
-            *(ProjectionFacet("creator", name) for name in creator_names),
-            *(ProjectionFacet("version", name) for name in version_names),
-            ProjectionFacet("status", build.submission_status.name.lower()),
-            ProjectionFacet("kind", build.category or "unknown"),
-            *(ProjectionFacet(name, Decimal(value)) for name, value in dimensions.items()),
+        # Index typed values for structured filters. The text tags above support lexical matching.
+        filters = [
+            *build_tag_name_filters(approved_assignments),
+            *(ProjectionFilter("creator", name) for name in creator_names),
+            *(ProjectionFilter("version", name) for name in version_names),
+            ProjectionFilter("status", build.submission_status.name.lower()),
+            ProjectionFilter("kind", build.category or "unknown"),
+            *(ProjectionFilter(name, Decimal(value)) for name, value in dimensions.items()),
             *(
-                ProjectionFacet(f"tag:{assignment.tag_id}", value)
+                ProjectionFilter(f"tag:{assignment.tag_id}", value)
                 for assignment in approved_assignments
                 if (value := _assignment_value(assignment)) is not None
             ),
         ]
         if isinstance(build, DoorBuild):
-            facets.extend(
-                ProjectionFacet(name, Decimal(value))
+            filters.extend(
+                ProjectionFilter(name, Decimal(value))
                 for name, value in (
                     ("door_width", build.door_width),
                     ("door_height", build.door_height),
@@ -448,11 +448,11 @@ class SearchProjectionLoader:
         ):
             value = getattr(build, name, None)
             if value is not None:
-                facets.append(ProjectionFacet(name.removeprefix("normal_"), Decimal(value)))
+                filters.append(ProjectionFilter(name.removeprefix("normal_"), Decimal(value)))
         if build.completion_at is not None:
-            facets.append(ProjectionFacet("completion_at", build.completion_at))
-        facets.append(ProjectionFacet("created_at", build.submission_time))
-        facets.append(ProjectionFacet("updated_at", build.edited_time))
+            filters.append(ProjectionFilter("completion_at", build.completion_at))
+        filters.append(ProjectionFilter("created_at", build.submission_time))
+        filters.append(ProjectionFilter("updated_at", build.edited_time))
         return SearchProjection(
             resource_kind="build",
             source_key=str(build.id),
@@ -475,7 +475,7 @@ class SearchProjectionLoader:
                 "tags": assigned_tag_names,
                 "versions": version_names,
             },
-            facets=tuple(facets),
+            filters=tuple(filters),
         )
 
     async def _computed_record(self, result_id: int) -> SearchProjection | None:
@@ -516,7 +516,7 @@ class SearchProjectionLoader:
                 category_key=definition.category_key,
                 title=definition.title,
                 subtitle=definition.subtitle,
-                category_facets=await self._record_category_facets(definition.category_key),
+                category_filters=await self._record_category_filters(definition.category_key),
             ),
             tuple(
                 RecordHolderProjectionSource(
@@ -529,35 +529,35 @@ class SearchProjectionLoader:
             ),
         )
 
-    async def _record_category_facets(self, key: str) -> tuple[ProjectionFacet, ...]:
+    async def _record_category_filters(self, key: str) -> tuple[ProjectionFilter, ...]:
         identity = CategoryIdentity.from_key(key)
         if identity is None:
             return ()
 
-        facets: list[ProjectionFacet] = []
+        filters: list[ProjectionFilter] = []
         pattern_ids: frozenset[int] = frozenset()
         if identity.kind is BuildKind.DOOR and (door := door_category_lookup(identity)) is not None:
             width, height, depth = door.opening
-            facets.extend(
+            filters.extend(
                 (
-                    ProjectionFacet("door_width", Decimal(width)),
-                    ProjectionFacet("door_height", Decimal(height)),
-                    ProjectionFacet("door_depth", Decimal(depth)),
-                    ProjectionFacet("orientation", door.orientation),
+                    ProjectionFilter("door_width", Decimal(width)),
+                    ProjectionFilter("door_height", Decimal(height)),
+                    ProjectionFilter("door_depth", Decimal(depth)),
+                    ProjectionFilter("orientation", door.orientation),
                 )
             )
             pattern_ids = door.type_ids
             if not pattern_ids:
-                facets.append(ProjectionFacet("type", "Regular"))
+                filters.append(ProjectionFilter("type", "Regular"))
         elif identity.kind is BuildKind.EXTENDER:
             parts = identity.base_key.split("|", maxsplit=3)
             if len(parts) == 4 and parts[0] == "extender":
                 _, orientation, length, types = parts
                 if length.isdecimal():
-                    facets.extend(
+                    filters.extend(
                         (
-                            ProjectionFacet("extender_length", Decimal(length)),
-                            ProjectionFacet("orientation", orientation),
+                            ProjectionFilter("extender_length", Decimal(length)),
+                            ProjectionFilter("orientation", orientation),
                         )
                     )
                 if types.startswith("t[") and types.endswith("]"):
@@ -566,12 +566,12 @@ class SearchProjectionLoader:
                         pattern_ids = frozenset(int(part) for part in type_key.split(","))
                     elif type_key:
                         # Extender categories without pattern tags use the stored type name.
-                        facets.append(ProjectionFacet("type", type_key))
+                        filters.append(ProjectionFilter("type", type_key))
 
         restriction_ids = frozenset(identity.restriction_ids)
         tag_ids = pattern_ids | restriction_ids
         if tag_ids:
-            facets.extend(ProjectionFacet("category_tag_id", Decimal(tag_id)) for tag_id in sorted(tag_ids))
+            filters.extend(ProjectionFilter("category_tag_id", Decimal(tag_id)) for tag_id in sorted(tag_ids))
             definitions = await self._session.scalars(
                 select(TagDefinition)
                 .options(selectinload(TagDefinition.aliases))
@@ -590,8 +590,8 @@ class SearchProjectionLoader:
                 else:
                     continue
                 names = {definition.display_name, *(alias.alias for alias in definition.aliases)}
-                facets.extend(ProjectionFacet(field_name, name) for name in sorted(names))
-        return tuple(facets)
+                filters.extend(ProjectionFilter(field_name, name) for name in sorted(names))
+        return tuple(filters)
 
     async def _metadata(self, subtype: str, source_id: int) -> SearchProjection | None:
         if subtype == "tag":
@@ -696,12 +696,12 @@ class SearchProjectionWorker:
                                 select(
                                     func.upsert_search_projection_request("record", SearchDocument.source_key, "upsert")
                                 )
-                                .select_from(SearchDocumentFacet)
-                                .join(SearchDocument, SearchDocument.id == SearchDocumentFacet.document_id)
+                                .select_from(SearchDocumentFilter)
+                                .join(SearchDocument, SearchDocument.id == SearchDocumentFilter.document_id)
                                 .where(
                                     SearchDocument.resource_kind == "record",
-                                    SearchDocumentFacet.field_name == "category_tag_id",
-                                    SearchDocumentFacet.numeric_value == Decimal(tag_id),
+                                    SearchDocumentFilter.field_name == "category_tag_id",
+                                    SearchDocumentFilter.numeric_value == Decimal(tag_id),
                                 )
                                 .order_by(SearchDocument.source_key)
                             )
@@ -786,17 +786,17 @@ def build_record_projection(
             "history_complete": source.history_complete,
             "gap_reasons": source.gap_reasons,
         },
-        facets=(
-            ProjectionFacet("base_title", source.criterion),
-            ProjectionFacet("record_state", "current"),
-            ProjectionFacet("kind", source.build_kind),
-            ProjectionFacet("version_scope", source.version_scope),
-            *source.category_facets,
+        filters=(
+            ProjectionFilter("base_title", source.criterion),
+            ProjectionFilter("record_state", "current"),
+            ProjectionFilter("kind", source.build_kind),
+            ProjectionFilter("version_scope", source.version_scope),
+            *source.category_filters,
             *(
-                ProjectionFacet("creator", name)
+                ProjectionFilter("creator", name)
                 for name in dict.fromkeys(n for holder in holders for n in holder.creators)
             ),
-            *(ProjectionFacet("holder", str(build_id)) for build_id in holder_ids),
+            *(ProjectionFilter("holder", str(build_id)) for build_id in holder_ids),
         ),
     )
 
@@ -806,16 +806,16 @@ def build_tag_projection(source: TagProjectionSource) -> SearchProjection | None
     if source.moderation_status != "approved":
         return None
     # The semantic kind makes `kind:pattern` and `kind:restriction` answerable;
-    # `kind:tag` remains alongside for clients that used the original taxonomy query.
+    # `kind:tag` remains alongside for clients that used the original tag query.
     return _metadata_projection(
         source_key=f"tag:{source.tag_id}",
         title=source.display_name,
         subtype=source.semantic_kind,
         tags=source.aliases,
-        extra_facets=(
-            ProjectionFacet("kind", "tag"),
-            *(ProjectionFacet(source.semantic_kind, alias) for alias in source.aliases),
-            *(ProjectionFacet("tag", name) for name in (source.display_name, *source.aliases)),
+        extra_filters=(
+            ProjectionFilter("kind", "tag"),
+            *(ProjectionFilter(source.semantic_kind, alias) for alias in source.aliases),
+            *(ProjectionFilter("tag", name) for name in (source.display_name, *source.aliases)),
         ),
         data={
             "tag_id": source.tag_id,
@@ -834,7 +834,7 @@ def _metadata_projection(
     title: str,
     subtype: str,
     tags: Sequence[str] = (),
-    extra_facets: Sequence[ProjectionFacet] = (),
+    extra_filters: Sequence[ProjectionFilter] = (),
     data: dict[str, object],
 ) -> SearchProjection:
     return SearchProjection(
@@ -843,33 +843,33 @@ def _metadata_projection(
         title=title,
         tags=tuple(tags),
         document_data={"metadata_kind": subtype, **data},
-        facets=(ProjectionFacet("kind", subtype), ProjectionFacet(subtype, title), *extra_facets),
+        filters=(ProjectionFilter("kind", subtype), ProjectionFilter(subtype, title), *extra_filters),
     )
 
 
-def build_facet_models(document_id: int, facets: Sequence[ProjectionFacet]) -> list[SearchDocumentFacet]:
-    """Create typed facet rows, numbering repeated values separately for each field."""
-    models: list[SearchDocumentFacet] = []
+def build_filter_models(document_id: int, filters: Sequence[ProjectionFilter]) -> list[SearchDocumentFilter]:
+    """Number indexed values separately for each field."""
+    models: list[SearchDocumentFilter] = []
     ordinals: dict[str, int] = {}
-    for facet in facets:
-        ordinal = ordinals.get(facet.field_name, 0)
-        ordinals[facet.field_name] = ordinal + 1
+    for filter_value in filters:
+        ordinal = ordinals.get(filter_value.field_name, 0)
+        ordinals[filter_value.field_name] = ordinal + 1
         text_value: str | None = None
         numeric_value: Decimal | None = None
         timestamp_value: Instant | None = None
         boolean_value: bool | None = None
-        if isinstance(facet.value, bool):
-            boolean_value = facet.value
-        elif isinstance(facet.value, Decimal):
-            numeric_value = facet.value
-        elif isinstance(facet.value, Instant):
-            timestamp_value = facet.value
+        if isinstance(filter_value.value, bool):
+            boolean_value = filter_value.value
+        elif isinstance(filter_value.value, Decimal):
+            numeric_value = filter_value.value
+        elif isinstance(filter_value.value, Instant):
+            timestamp_value = filter_value.value
         else:
-            text_value = facet.value
+            text_value = filter_value.value
         models.append(
-            SearchDocumentFacet(
+            SearchDocumentFilter(
                 document_id=document_id,
-                field_name=facet.field_name,
+                field_name=filter_value.field_name,
                 ordinal=ordinal,
                 text_value=text_value,
                 numeric_value=numeric_value,
@@ -885,24 +885,24 @@ def normalize_search_text(value: str) -> str:
     return " ".join(value.casefold().split())
 
 
-def build_tag_name_facets(assignments: Sequence[TagAssignment]) -> tuple[ProjectionFacet, ...]:
+def build_tag_name_filters(assignments: Sequence[TagAssignment]) -> tuple[ProjectionFilter, ...]:
     """Index assigned names and aliases without changing the displayed tags."""
-    facets: list[ProjectionFacet] = []
+    filters: list[ProjectionFilter] = []
     for assignment in assignments:
         definition = assignment.definition
         names = tuple(dict.fromkeys((definition.display_name, *(alias.alias for alias in definition.aliases))))
         tag_names = tuple(dict.fromkeys((assignment.rendered, *names)))
-        facets.extend(ProjectionFacet("tag", name) for name in tag_names)
+        filters.extend(ProjectionFilter("tag", name) for name in tag_names)
         if definition.authority == "official":
             fields = {"restriction": ("restriction",), "pattern": ("type", "pattern")}.get(definition.semantic_kind, ())
-            facets.extend(ProjectionFacet(field, name) for field in fields for name in names)
-    return tuple(facets)
+            filters.extend(ProjectionFilter(field, name) for field in fields for name in names)
+    return tuple(filters)
 
 
 def projection_source_hash(projection: SearchProjection) -> str:
     """Hash document content to detect changes that invalidate an embedding.
 
-    Dictionary keys are sorted, but tag and facet order remains significant.
+    Dictionary keys are sorted, but tag and indexed field value order remains significant.
     Resource identity is excluded because the hash tracks content within a document.
     """
     serialized = json.dumps(
@@ -914,7 +914,7 @@ def projection_source_hash(projection: SearchProjection) -> str:
             "tags": projection.tags,
             "search_aliases": projection.search_aliases,
             "document_data": projection.document_data,
-            "facets": tuple((facet.field_name, facet.value) for facet in projection.facets),
+            "filters": tuple((filter_value.field_name, filter_value.value) for filter_value in projection.filters),
         },
         sort_keys=True,
         separators=(",", ":"),

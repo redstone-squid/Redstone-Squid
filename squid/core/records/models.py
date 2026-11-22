@@ -4,7 +4,7 @@ A RecordCriterion is first, fastest, smallest, fastest smallest, or smallest fas
 Record combines a criterion, build kind, version scope, and record category
 into a stable public identity. RecordDefinition stores its wording under one
 RulesRevision, identified by the rules document hash and calculator/formatter
-versions. DefinitionFacet stores a definition's taxonomy facets.
+versions. RecordDefinitionTag stores the tags a definition requires.
 
 ComputationRun groups outcomes for one build kind and version. RecordResult is a
 definition's outcome in that run; RecordHolder stores each holder.
@@ -38,7 +38,7 @@ from squid.core.persistence.queue_models import QueueColumns
 from squid.core.persistence.types import InstantUTC, StrEnumText
 from squid.core.records.domain import BuildKind, RecordCriterion, ResolutionStatus, VersionScope
 from squid.core.records.domain.door_evidence import DoorRecordEvidence
-from squid.core.records.domain.models import FacetKind, MaterializationSource
+from squid.core.records.domain.models import MaterializationSource, RecordTagRole
 from squid.core.records.persistence_types import DoorRecordEvidenceJSON
 
 
@@ -90,7 +90,7 @@ class RulesRevision(Base, kw_only=True):
 
 
 class RecordDefinition(Base, kw_only=True):
-    """The name and taxonomy of a record under a rules revision."""
+    """The name and tags of a record under a rules revision."""
 
     __tablename__ = "title_definitions"
     __table_args__ = (
@@ -195,29 +195,29 @@ class Record(Base, kw_only=True):
     )
 
 
-class DefinitionFacet(Base, kw_only=True):
-    """A canonical taxonomy facet belonging to a record definition."""
+class RecordDefinitionTag(Base, kw_only=True):
+    """A tag required by a record definition."""
 
-    __tablename__ = "title_definition_facets"
+    __tablename__ = "title_definition_tags"
     __table_args__ = (
-        # Only restrictions identify a record category; patterns and types appear in candidate facets only.
-        CheckConstraint("facet_kind = 'restriction'", name="title_definition_facets_kind_check"),
-        Index("title_definition_facets_lookup_idx", "facet_kind", "facet_id"),
+        # Only restrictions identify a record category; patterns and types appear in candidate tags only.
+        CheckConstraint("tag_role = 'restriction'", name="title_definition_tags_kind_check"),
+        Index("title_definition_tags_lookup_idx", "tag_role", "tag_id"),
     )
 
     definition_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey(
             "title_definitions.id",
-            name="title_definition_facets_definition_id_fkey",
+            name="title_definition_tags_definition_id_fkey",
             ondelete="CASCADE",
         ),
         primary_key=True,
     )
-    facet_kind: Mapped[FacetKind] = mapped_column(StrEnumText(FacetKind), primary_key=True)
-    facet_id: Mapped[int] = mapped_column(
+    tag_role: Mapped[RecordTagRole] = mapped_column(StrEnumText(RecordTagRole), primary_key=True)
+    tag_id: Mapped[int] = mapped_column(
         BigInteger,
-        ForeignKey("tag_definitions.id", name="title_definition_facets_facet_id_fkey", ondelete="CASCADE"),
+        ForeignKey("tag_definitions.id", name="title_definition_tags_tag_id_fkey", ondelete="CASCADE"),
         primary_key=True,
     )
     display_order: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("0"))

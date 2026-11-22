@@ -1,6 +1,6 @@
 """Load all cogs together to check reaction registration and command-name collisions.
 
-Per-cog taxonomy inspection cannot detect names claimed by two different cogs.
+Per-cog tags inspection cannot detect names claimed by two different cogs.
 """
 
 import sys

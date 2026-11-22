@@ -61,7 +61,7 @@ def suggests(
     """Build an autocomplete callback answering from a registered suggestion source.
 
     `multi` completes one entry of a separator-joined list, keeping everything already typed. It is
-    opt-in per parameter rather than implied by the source, because the same taxonomy backs both
+    opt-in per parameter rather than implied by the source, because the same tags backs both
     single-valued parameters and list-valued ones.
     """
 

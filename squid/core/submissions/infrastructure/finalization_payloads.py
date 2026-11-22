@@ -3,7 +3,7 @@
 from typing import Annotated, Literal, cast
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic import ValidationError as PydanticValidationError
 
 from squid.core.builds.domain import RestrictionField, ShowcaseTag
@@ -27,10 +27,12 @@ from squid.core.submissions.domain.finalization import (
     SubmissionDimensions,
     SubmissionSchematicLicense,
     SubmissionSchematicVisibility,
-    SubmissionTaxonomy,
+    SubmissionTags,
     VerifiedSubmissionArtifacts,
 )
 from squid.core.submissions.domain.links import SubmissionLink, SubmissionLinkType
+
+LEGACY_TAGS_FIELD = "taxonomy"
 
 
 class _StrictPayloadModel(BaseModel):
@@ -57,7 +59,7 @@ class _ShowcaseTagPayload(_StrictPayloadModel):
     value: str | None = None
 
 
-class _TaxonomyPayload(_StrictPayloadModel):
+class _TagsPayload(_StrictPayloadModel):
     restriction_keys: list[str]
     restriction_proposals: list[str]
     showcase_tags: list[_ShowcaseTagPayload] = []
@@ -65,8 +67,8 @@ class _TaxonomyPayload(_StrictPayloadModel):
     showcase_tag_keys: list[str] = Field(default=[], exclude=True)
     restriction_proposal_fields: list[_RestrictionProposalPayload]
 
-    def to_domain(self) -> SubmissionTaxonomy:
-        return SubmissionTaxonomy(
+    def to_domain(self) -> SubmissionTags:
+        return SubmissionTags(
             restriction_keys=tuple(self.restriction_keys),
             restriction_proposals=tuple(self.restriction_proposals),
             showcase_tags=(
@@ -224,7 +226,7 @@ class FinalizationPayload(_StrictPayloadModel):
     capture_dimensions: _DimensionsPayload
     source_version: str | None
     version_compatibility: str | None
-    taxonomy: _TaxonomyPayload
+    tags: _TagsPayload = Field(validation_alias=AliasChoices("tags", LEGACY_TAGS_FIELD))
     schematic_policy: _SchematicPolicyPayload
     completion: str | None
     ai_generated: bool
@@ -262,7 +264,7 @@ class FinalizationPayload(_StrictPayloadModel):
             capture_dimensions=self.capture_dimensions.to_domain(),
             source_version=self.source_version,
             version_compatibility=self.version_compatibility,
-            taxonomy=self.taxonomy.to_domain(),
+            tags=self.tags.to_domain(),
             schematic_policy=self.schematic_policy.to_domain(),
             completion=self.completion,
             ai_generated=self.ai_generated,
@@ -347,12 +349,12 @@ def _submission_document(submission: NormalizedSubmission) -> dict[str, object]:
         "capture_dimensions": _dimensions_document(submission.capture_dimensions),
         "source_version": submission.source_version,
         "version_compatibility": submission.version_compatibility,
-        "taxonomy": {
-            "restriction_keys": list(submission.taxonomy.restriction_keys),
-            "restriction_proposals": list(submission.taxonomy.restriction_proposals),
-            "showcase_tags": [tag.to_json() for tag in submission.taxonomy.showcase_tags],
+        "tags": {
+            "restriction_keys": list(submission.tags.restriction_keys),
+            "restriction_proposals": list(submission.tags.restriction_proposals),
+            "showcase_tags": [tag.to_json() for tag in submission.tags.showcase_tags],
             "restriction_proposal_fields": [
-                {"field": field, "name": name} for field, name in submission.taxonomy.restriction_proposal_fields
+                {"field": field, "name": name} for field, name in submission.tags.restriction_proposal_fields
             ],
         },
         "schematic_policy": {

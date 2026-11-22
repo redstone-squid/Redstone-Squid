@@ -63,7 +63,10 @@ async def test_public_values_and_incompatible_assignment_units(
     assert projection is not None
     assert projection.tags == ("Delay: 1 test_second",)
     assert projection.document_data["restrictions"] == ("Delay",)
-    assert any(facet.field_name == f"tag:{definition.id}" and facet.value == Decimal(20) for facet in projection.facets)
+    assert any(
+        filter_value.field_name == f"tag:{definition.id}" and filter_value.value == Decimal(20)
+        for filter_value in projection.filters
+    )
 
     loaded = await transact(factory, lambda uow: uow.builds.get_by_id(build.id))
     assert loaded is not None

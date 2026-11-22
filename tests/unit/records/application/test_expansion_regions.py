@@ -235,7 +235,7 @@ def test_nonintegral_modulo_operand_remains_unknown_without_a_short_circuit() ->
         {"height": 3, "restriction_values": [[7, "exact", "3"]]},
     ],
 )
-def test_width_request_validates_dimensions_bounds_and_taxonomy(data: dict[str, object]) -> None:
+def test_width_request_validates_dimensions_bounds_and_tags(data: dict[str, object]) -> None:
     with pytest.raises(ValidationError):
         DoorRangeQuery.model_validate(data)
 

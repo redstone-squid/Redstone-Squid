@@ -65,7 +65,7 @@ _BUILD_CREDITS = table(
 
 Deliberately not `squid.core.builds.models.BuildCredit`: importing that mapper pulls the
 whole `Build` relationship graph into the accounts context, which both couples the two contexts and
-makes importing this module depend on the builds taxonomy being imported first. All that is wanted
+makes importing this module depend on the builds tags being imported first. All that is wanted
 here is a count.
 """
 

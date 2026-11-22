@@ -1,4 +1,4 @@
-"""Regression tests for the public Discord command taxonomy."""
+"""Regression tests for the public Discord command permissions."""
 
 from collections.abc import Iterable
 from typing import Any, cast

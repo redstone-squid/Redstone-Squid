@@ -18,7 +18,7 @@ from squid.bot.submission.ui.build_edit import BuildEditScreen
 from squid.bot.submission.ui.sections import SectionEditorScreen
 from squid.bot.utils.autocomplete import BotInteraction
 from squid.core.builds.application import BuildService
-from squid.core.builds.domain import BuildStatus, ShowcaseTag, UnresolvedTaxonomy
+from squid.core.builds.domain import BuildStatus, ShowcaseTag, UnresolvedTags
 from squid.core.builds.domain.credits import name_credits
 from squid.core.builds.models import Build, DoorBuild, ExtenderBuild, OtherBuild
 from squid.core.sentinel import UNSET
@@ -288,7 +288,7 @@ async def test_names_outside_the_catalogue_are_listed_and_can_only_be_removed() 
     with sl.runtime.transaction() as tx:
         workspace.remove_unresolved(tx, {"Hand-wired"})
 
-    assert workspace.unresolved == UnresolvedTaxonomy()
+    assert workspace.unresolved == UnresolvedTags()
     assert workspace.patch().miscellaneous_restrictions == ["Observerless"]
     screen.confirming = True
     assert "Removed: Hand-wired" in rendered(screen)

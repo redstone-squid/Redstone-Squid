@@ -1,7 +1,7 @@
 """Restriction and pattern names that matched no approved official tag.
 
 Submitters, editors, and inference name restrictions and patterns in free text. Saving a build
-resolves those names into tag assignments (`squid.core.builds.application.taxonomy`). A name that
+resolves those names into tag assignments (`squid.core.builds.application.tags`). A name that
 matches no approved official tag, or matches more than one, cannot become an assignment. The
 build keeps it as an unresolved name instead of dropping it, so a bad inference or an unknown
 term stays visible to reviewers and in titles.
@@ -10,7 +10,7 @@ Each save retries the build's unresolved names, so a name stops being unresolved
 tag for it exists. Nothing else removes them.
 
 Unresolved names are stored in the build's `extra_info` JSON under `unknown_restrictions` (names
-grouped by restriction field) and `unknown_patterns`. `UnresolvedTaxonomy` is the only code that
+grouped by restriction field) and `unknown_patterns`. `UnresolvedTags` is the only code that
 reads or writes those keys.
 """
 
@@ -34,12 +34,12 @@ RESTRICTION_FIELDS: tuple[RestrictionField, ...] = get_args(RestrictionField.__v
 
 
 def normalize_tag_name(value: str) -> str:
-    """Collapse case and internal whitespace the way taxonomy resolution matches names."""
+    """Collapse case and internal whitespace the way tag resolution matches names."""
     return " ".join(value.casefold().split())
 
 
 @dataclass(frozen=True, slots=True)
-class UnresolvedTaxonomy:
+class UnresolvedTags:
     """A build's unresolved restriction and pattern names, in the order they were first seen.
 
     Names are unique by `normalize_tag_name`: adding "Hidden  Wiring" to a set holding "hidden
@@ -111,7 +111,7 @@ class UnresolvedTaxonomy:
 
 def _strings(value: object, key: str) -> list[str]:
     if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
-        msg = "Unresolved taxonomy names must be a list of strings."
+        msg = "Unresolved tag names must be a list of strings."
         raise DataIntegrityError(msg, context={"key": key, "stored_type": type(value).__name__})
     return cast(list[str], value)
 

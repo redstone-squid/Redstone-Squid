@@ -58,7 +58,7 @@ Commands already declare `autocomplete=suggests("source")` beside their paramete
 which makes the binding readable where the parameter is defined. The unused
 `autocompletes` decorator was removed.
 
-Keep Python taxonomy ordering to make revisions independent of database collation.
+Keep Python tag ordering to make revisions independent of database collation.
 A deterministic 2,000-row benchmark took 0.517 ms unsorted and 0.276 ms after
 emulating database lexical ordering. Saving 0.241 ms on an occasional cached load
 does not justify an additional database sort that still cannot replace casefold
@@ -118,7 +118,7 @@ Original path: `squid/bot/utils/autocomplete.py`, line 87.
 ### 7. Comment 4447080538 (P2)
 
 [Original comment](https://github.com/redstone-squid/Redstone-Squid/pull/186#discussion_r4447080538).
-Original path: `squid/core/suggestions/infrastructure/providers/taxonomy.py`, line 138.
+Original path: `squid/core/suggestions/infrastructure/providers/tags.py`, line 138.
 
 > I wonder if we should sort once in the db then once in python, to speed up the sorting on the python side
 
