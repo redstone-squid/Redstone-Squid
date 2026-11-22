@@ -14,9 +14,9 @@ from squid.core.builds.models import Build, DoorBuild, ExtenderBuild, UtilityBui
 from squid.core.records.application.models import PublicRecordDetail, PublishedRecordResult
 from squid.core.records.application.services import PublicRecordQueryService
 from squid.core.records.domain import BuildKind, RecordCriterion, ResolutionStatus, VersionScope
+from squid.core.sponsors import PublicSponsor
 from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.core.tags.models import TagAssignment, TagDefinition
-from squid.sponsors import PublicSponsor
 
 
 def catalogue_build(build_id: int, **changes: Any) -> Build:

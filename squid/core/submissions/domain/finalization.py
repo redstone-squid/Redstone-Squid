@@ -10,9 +10,9 @@ from squid.core.builds.domain.credits import Credit, creator_names
 from squid.core.builds.domain.expansion import DoorExpansion
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
+from squid.core.sponsors import PublicSponsor
 from squid.core.submissions.domain.forms import SubmissionOrigin
 from squid.core.submissions.domain.links import SubmissionLink
-from squid.sponsors import PublicSponsor
 from squid_i18n import md_tr
 
 _STABLE_KEY = re.compile(r"^[a-z][a-z0-9_]{0,63}$")

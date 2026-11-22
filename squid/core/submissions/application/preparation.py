@@ -8,6 +8,7 @@ from uuid import UUID
 
 from squid.core.errors import InvalidStateError, JSONValue
 from squid.core.i18n import tr
+from squid.core.sponsors import PublicSponsor
 from squid.core.submissions.application.drafts import (
     StoredDraft,
     ValidatedDraft,
@@ -22,7 +23,6 @@ from squid.core.submissions.domain.finalization import (
     SubmissionCategory,
 )
 from squid.core.submissions.domain.normalization import normalize_submission
-from squid.sponsors import PublicSponsor
 
 _STABLE_KEY = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 

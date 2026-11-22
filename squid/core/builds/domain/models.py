@@ -24,8 +24,8 @@ from squid.core.builds.domain.expansion import DoorExpansion
 from squid.core.builds.errors import InvalidBuildError
 from squid.core.errors import DataIntegrityError, InvalidStateError
 from squid.core.messages.domain import MessageSnapshot
+from squid.core.sponsors import PublicSponsor
 from squid.core.tags.models import TagAssignment
-from squid.sponsors import PublicSponsor
 from squid_i18n import md_tr
 
 RecordCategoryLiteral = Literal["Smallest", "Fastest", "First"]

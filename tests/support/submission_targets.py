@@ -9,6 +9,7 @@ from squid.core.accounts.models import Account
 from squid.core.builds.domain import BuildCategory, BuildStatus
 from squid.core.builds.domain.credits import name_credits
 from squid.core.builds.models import BUILD_CLASS_BY_CATEGORY, Build, DoorBuild, ExtenderBuild
+from squid.core.sponsors import PublicSponsor
 from squid.core.submissions.domain import (
     GeneralSubmissionDetails,
     NormalizedSubmission,
@@ -21,7 +22,6 @@ from squid.core.submissions.domain import (
     VerifiedSubmissionArtifacts,
 )
 from squid.core.versions.models import Version
-from squid.sponsors import PublicSponsor
 
 
 async def seed_account_and_version(session_factory: async_sessionmaker[AsyncSession]) -> int:

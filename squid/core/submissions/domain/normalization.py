@@ -8,6 +8,7 @@ from squid.core.builds.domain import ShowcaseTag, read_showcase_tags
 from squid.core.builds.domain.credits import name_credits, read_credits
 from squid.core.builds.domain.expansion import DoorExpansion
 from squid.core.errors import InvalidStateError, JSONValue
+from squid.core.sponsors import PublicSponsor
 from squid.core.submissions.domain import DraftSnapshot, SubmissionOrigin
 from squid.core.submissions.domain.finalization import (
     RESTRICTION_PROPOSAL_FIELDS,
@@ -28,7 +29,6 @@ from squid.core.submissions.domain.finalization import (
     SubmissionTaxonomy,
 )
 from squid.core.submissions.domain.links import LINK_FIELDS, SubmissionLink
-from squid.sponsors import PublicSponsor
 from squid_i18n import md_tr
 
 

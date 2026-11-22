@@ -11,6 +11,7 @@ from squid.core.builds.domain.credits import Credit
 from squid.core.builds.domain.expansion import DoorExpansion
 from squid.core.errors import DataIntegrityError, JSONValue
 from squid.core.errors import ValidationError as DomainValidationError
+from squid.core.sponsors import PublicSponsor
 from squid.core.submissions.domain import SubmissionOrigin
 from squid.core.submissions.domain.finalization import (
     DoorOrientation,
@@ -30,7 +31,6 @@ from squid.core.submissions.domain.finalization import (
     VerifiedSubmissionArtifacts,
 )
 from squid.core.submissions.domain.links import SubmissionLink, SubmissionLinkType
-from squid.sponsors import PublicSponsor
 
 
 class _StrictPayloadModel(BaseModel):

@@ -11,6 +11,7 @@ from whenever import Instant
 from squid.core.actors import Actor
 from squid.core.errors import DataIntegrityError, JSONValue
 from squid.core.permissions.application.ports import PermissionRepository
+from squid.core.sponsors import PublicSponsor
 from squid.core.submissions.application import (
     AppliedDraftChange,
     AppliedDraftUpgrade,
@@ -47,7 +48,6 @@ from squid.core.submissions.domain import (
 )
 from squid.core.submissions.errors import DraftAccessDeniedError
 from squid.core.submissions.infrastructure.finalization_payloads import decode_submission, encode_submission
-from squid.sponsors import PublicSponsor
 from tests.support.draft_uow import DraftScope
 from tests.support.expansion import expansion_document
 from tests.support.unit_of_work import PublishingFakeUnitOfWork

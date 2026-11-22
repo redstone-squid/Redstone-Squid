@@ -43,6 +43,7 @@ from squid.core.permissions.models import (
 )
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.schematics.models import BuildSchematic, SchematicFile
+from squid.core.sponsors import PublicSponsor
 from squid.core.submissions.application import ClaimedFinalizationJob, StoredDraft
 from squid.core.submissions.application.build_target import SubmissionBuildPreparation
 from squid.core.submissions.application.commit import BuildSubmissionExecutor
@@ -75,7 +76,6 @@ from squid.core.submissions.models.finalization import SubmissionFinalizationInp
 from squid.core.submissions.payload_integrity import submission_payload_digest
 from squid.core.tags.models import TagDefinition
 from squid.core.versions.application import VersionService
-from squid.sponsors import PublicSponsor
 from tests.support.build_edits import build_edit_session
 from tests.support.build_edits import transact_build_edit as transact
 from tests.support.expansion import expansion_document

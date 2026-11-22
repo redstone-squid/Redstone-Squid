@@ -52,8 +52,8 @@ from squid.core.i18n import tr
 from squid.core.messages.domain import MessageRef
 from squid.core.persistence.base import Base
 from squid.core.persistence.types import InstantUTC, IntEnumSmallInt, StrEnumText
+from squid.core.sponsors import PublicSponsor
 from squid.core.tags.models import TagAssignment
-from squid.sponsors import PublicSponsor
 
 
 @freeze_fields

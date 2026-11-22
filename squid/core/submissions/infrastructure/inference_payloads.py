@@ -21,6 +21,7 @@ from squid.core.builds.domain.credits import Credit, name_credits
 from squid.core.builds.domain.expansion import DoorExpansion
 from squid.core.builds.models import BuildLink
 from squid.core.messages.domain import MessageSnapshot
+from squid.core.sponsors import PublicSponsor
 from squid.core.tags.domain import (
     RecordOperator,
     TagAuthority,
@@ -30,7 +31,6 @@ from squid.core.tags.domain import (
     TagValueType,
 )
 from squid.core.tags.models import TagAssignment, TagDefinition
-from squid.sponsors import PublicSponsor
 
 
 @dataclass(frozen=True)

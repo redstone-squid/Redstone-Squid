@@ -4,7 +4,7 @@ from uuid import UUID
 
 import pytest
 
-from squid.sponsors import PublicSponsor
+from squid.core.sponsors import PublicSponsor
 
 INSTALLATION_ID = UUID("00000000-0000-4000-8000-000000000801")
 

@@ -19,9 +19,9 @@ from squid.core.builds.models import (
 from squid.core.errors import DataIntegrityError
 from squid.core.messages.domain import MessageRef
 from squid.core.messages.models import Message
+from squid.core.sponsors import PublicSponsor
 from squid.core.tags.domain import TagAuthority, TagSemanticKind
 from squid.core.versions.models import Version
-from squid.sponsors import PublicSponsor
 
 
 @dataclass(frozen=True, slots=True)

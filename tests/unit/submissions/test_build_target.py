@@ -16,6 +16,7 @@ from squid.core.builds.domain.titles import format_build_display_title
 from squid.core.builds.errors import InvalidBuildError
 from squid.core.builds.models import Build, DoorBuild, ExtenderBuild
 from squid.core.errors import DataIntegrityError, JSONValue, ValidationError
+from squid.core.sponsors import PublicSponsor
 from squid.core.submissions.application.build_target import SubmissionBuildPreparation, preview_build
 from squid.core.submissions.application.forms import build_submission_manifest
 from squid.core.submissions.application.prefill import project_submission
@@ -49,7 +50,6 @@ from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanti
 from squid.core.tags.models import TagDefinition
 from squid.core.versions.domain import MinecraftVersion
 from squid.core.versions.errors import InvalidVersionError
-from squid.sponsors import PublicSponsor
 from tests.support.expansion import expansion_document
 
 DRAFT_ID = UUID("00000000-0000-4000-8000-000000000501")

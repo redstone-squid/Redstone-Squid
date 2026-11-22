@@ -3,7 +3,7 @@
 from uuid import UUID
 
 from squid.core.minecraft_auth.application import InstallationCredentialService
-from squid.sponsors import PublicSponsor
+from squid.core.sponsors import PublicSponsor
 
 
 class PaperSponsorResolver:
