@@ -15,7 +15,6 @@ from squid.bot.voting.cog import VoteCog
 from squid.bot.voting.poll_wizard import PollDraft, PollScreen, parse_option_lines
 from squid.bot.voting.publisher import DiscordPollPublisher
 from squid.core.voting.domain import PollScope, VoteVisibility
-from squid.core.voting.errors import InvalidVoteConfigurationError
 from tests.support.voting import GENERIC_OPTIONS
 
 
@@ -41,23 +40,6 @@ def poll_context() -> tuple[Any, Any]:
 async def invoke(cog: Any, request: Any, **kwargs: object) -> sd.CommandResult:
     # Exercise the application handler; transport deferral belongs to sd.command.
     return await inspect.unwrap(cog.poll.callback)(cog, request, **kwargs)
-
-
-async def test_question_only_publishes_yes_no_with_default_settings(poll_context: tuple[Any, Any]) -> None:
-    cog, request = poll_context
-    result = await invoke(cog, request, question="Ready?")
-
-    assert isinstance(result, sd.Response)
-    cog.publisher.resolve_options.assert_awaited_once_with(10, ("👍 | Yes", "👎 | No"))
-    cog.publisher.create_and_publish.assert_awaited_once_with(
-        author_account_id=7,
-        channel=request.channel,
-        question="Ready?",
-        visibility=VoteVisibility.ANONYMOUS_LIVE,
-        duration_seconds=86400,
-        options=GENERIC_OPTIONS,
-        scope=PollScope.GUILD,
-    )
 
 
 async def test_preview_and_direct_publication_have_identical_settings(poll_context: tuple[Any, Any]) -> None:
@@ -104,38 +86,6 @@ async def test_no_question_opens_editor_and_preserves_other_arguments(poll_conte
         ).default
         == "Red, Blue"
     )
-    cog.publisher.create_and_publish.assert_not_awaited()
-
-
-@pytest.mark.parametrize(
-    "arguments",
-    [
-        {"question": " "},
-        {"question": "x" * 301},
-        {"question": "Ready?", "duration": "31d"},
-        {"question": "Ready?", "choices": "Red,,Blue"},
-        {"question": "Ready?", "choices": "x" * 1001},
-    ],
-)
-async def test_invalid_inputs_never_publish(poll_context: tuple[Any, Any], arguments: dict[str, str]) -> None:
-    cog, request = poll_context
-    assert isinstance(await invoke(cog, request, **arguments), sd.Response)
-    cog.publisher.create_and_publish.assert_not_awaited()
-
-
-async def test_option_resolution_errors_are_private(poll_context: tuple[Any, Any]) -> None:
-    cog, request = poll_context
-    cog.publisher.resolve_options.side_effect = InvalidVoteConfigurationError("duplicate emoji")
-    result = await invoke(cog, request, question="Ready?")
-    assert isinstance(result, sd.Response)
-    cog.publisher.create_and_publish.assert_not_awaited()
-
-
-async def test_network_scope_requires_permission_before_preview(poll_context: tuple[Any, Any]) -> None:
-    cog, request = poll_context
-    cog.publisher.may_create_network.return_value = False
-    result = await invoke(cog, request, question="Ready?", scope="network", preview=True)
-    assert isinstance(result, sd.Response)
     cog.publisher.create_and_publish.assert_not_awaited()
 
 

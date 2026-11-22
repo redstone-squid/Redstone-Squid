@@ -23,7 +23,7 @@ from squid.core.permissions.domain.catalogue import (
     VOTE_POLL_RECOUNT,
 )
 from squid.core.starboard.models import StarboardConfig
-from squid.core.voting.domain import VoteStatus
+from squid.core.voting.domain import PollScope, VoteStatus, VoteVisibility
 from squid_ui.ext.discord.testing import http_error
 from tests.e2e.discord.community_services import (
     Boards,
@@ -314,6 +314,73 @@ async def test_review_lists_only_the_invoking_guilds_pending_polls() -> None:
         assert reply.response is not None
         assert reply.response.ephemeral
         assert "Polls awaiting review: 24, 31" in displayed_text(reply.response.message)
+
+
+async def test_question_only_publishes_a_poll_with_default_settings() -> None:
+    accounts, votes, messages = WorkspaceAccounts(), CommunityVotes(), ObservedMessages()
+    services = bot_services(
+        accounts=accounts,
+        permissions=staff_permissions(),
+        votes=votes,
+        domain_events=EmptyDomainEvents(),
+        messages=messages,
+        posts=VotePosts(),
+    )
+    async with command_environment(events_extension, vote_extension, services=services) as (_, env):
+        channel = env.guild.create_text_channel("voting")
+        moderator = community_moderator(env, accounts)
+
+        result = await moderator.slash(channel, "poll", question="Ready?")
+
+        assert result.response is not None
+        assert result.response.ephemeral
+        assert any("Poll published:" in line for line in displayed_text(result.response.message))
+        (created,) = votes.poll_creations.records
+        values = created.kwargs
+        assert values["author_account_id"] == 17
+        assert values["guild_id"] == env.guild.id
+        assert values["question"] == "Ready?"
+        assert values["duration_seconds"] == 86400
+        assert values["visibility"] is VoteVisibility.ANONYMOUS_LIVE
+        assert values["scope"] is PollScope.GUILD
+        assert [(option.emoji, option.label) for option in values["options"]] == [("👍", "Yes"), ("👎", "No")]
+        (published,) = channel.history()
+        votes.poll_attachments.assert_awaited_once_with(42, published.id)
+
+
+@pytest.mark.parametrize(
+    ("options", "notice"),
+    [
+        ({"question": " "}, "Enter a question between 1 and 300 characters."),
+        ({"question": "x" * 301}, "Enter a question between 1 and 300 characters."),
+        ({"question": "Ready?", "duration": "31d"}, "Poll duration must be between 1 minute and 30 days."),
+        ({"question": "Ready?", "choices": "Red,,Blue"}, "Choices cannot be empty."),
+        ({"question": "Ready?", "choices": "x" * 1001}, "Keep the choices within 1000 characters."),
+        ({"question": "Ready?", "choices": "👍 | Red, 👍 | Blue"}, "Poll option emojis must be unique."),
+        (
+            {"question": "Ready?", "scope": "network", "preview": True},
+            "You do not have permission to publish to every server.",
+        ),
+    ],
+)
+async def test_poll_rejects_bad_arguments_and_unauthorized_network_previews(
+    options: dict[str, str | bool], notice: str
+) -> None:
+    accounts, votes = WorkspaceAccounts(), CommunityVotes()
+    services = bot_services(
+        accounts=accounts, permissions=staff_permissions(), votes=votes, domain_events=EmptyDomainEvents()
+    )
+    async with command_environment(events_extension, vote_extension, services=services) as (_, env):
+        channel = env.guild.create_text_channel("voting")
+        moderator = community_moderator(env, accounts)
+
+        result = await moderator.slash(channel, "poll", **options)
+
+        assert result.response is not None
+        assert result.response.ephemeral
+        assert any(notice in line for line in displayed_text(result.response.message))
+        votes.poll_creations.assert_not_awaited()
+        assert not channel.history()
 
 
 async def test_poll_preview_shows_question_and_options_without_posting_a_card() -> None:

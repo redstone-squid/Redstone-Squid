@@ -138,7 +138,9 @@ async def test_errors_checks_access_before_loading_reports(allowed: bool) -> Non
             (session,) = bot.sessions.active()
             (root,) = session.message_roots
             assert isinstance(root.component, ErrorReportScreen)
-            assert root.component.opening.owner is bot.get_cog("Diagnostics")
+            opening = root.component.opening
+            assert opening is not None
+            assert opening.owner is bot.get_cog("Diagnostics")
             await bot.remove_cog("Diagnostics")
             assert root.finished
         else:

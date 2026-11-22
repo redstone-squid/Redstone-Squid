@@ -60,11 +60,13 @@ async def test_feedback_falls_back_to_dm_and_reports_delivery_failure(source: st
 
         with wrapture.timeline(send_dm):
             if source != "dm":
-                overwrites = None
                 if source == "hidden":
                     owner_member = guild.add_member(owner)
-                    overwrites = {owner_member: discord.PermissionOverwrite(view_channel=False)}
-                channel = guild.create_text_channel("feedback", overwrites=overwrites)
+                    channel = guild.create_text_channel(
+                        "feedback", overwrites={owner_member: discord.PermissionOverwrite(view_channel=False)}
+                    )
+                else:
+                    channel = guild.create_text_channel("feedback")
                 result = await guild.add_member(reporter).slash(channel, "bug", message="Something broke")
             else:
                 channel = reporter.dm_channel

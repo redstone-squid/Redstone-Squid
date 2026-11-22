@@ -3,6 +3,8 @@
 from collections.abc import Mapping, Sequence
 from typing import override
 
+from whenever import Instant
+
 from squid.core.diagnostics.application import ErrorReportService
 from squid.core.errors import JSONValue
 from squid.core.events.application import DomainEventDelivery, DomainEventService
@@ -21,10 +23,13 @@ from squid.core.voting.application.ports import VoteActorResolver
 from squid.core.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
     EmojiPreset,
+    PollScope,
     VoteKind,
     VoteOption,
     VoteSessionSnapshot,
+    VoteVisibility,
 )
+from squid_ui.ext.discord.testing import AsyncCallRecorder
 from tests.support.settings import RuntimeSettingsStub
 
 
@@ -48,6 +53,35 @@ class CommunityVotes(VoteService):
         self.reviews: dict[int, tuple[int, ...]] = {}
         self.cards: dict[int, VoteSessionSnapshot] = {}
         self.deletion_targets: list[tuple[int, int, int, int]] = []
+        self.poll_creations = AsyncCallRecorder(result=42)
+        self.poll_attachments = AsyncCallRecorder()
+
+    @override
+    async def create_generic_poll(
+        self,
+        *,
+        author_account_id: int,
+        question: str,
+        visibility: VoteVisibility,
+        duration_seconds: int,
+        options: Sequence[VoteOption],
+        guild_id: int | None = None,
+        scope: PollScope = PollScope.GUILD,
+        now: Instant | None = None,
+    ) -> int:
+        return await self.poll_creations(
+            author_account_id=author_account_id,
+            question=question,
+            visibility=visibility,
+            duration_seconds=duration_seconds,
+            options=options,
+            guild_id=guild_id,
+            scope=scope,
+        )
+
+    @override
+    async def attach_message(self, vote_session_id: int, message_id: int) -> None:
+        await self.poll_attachments(vote_session_id, message_id)
 
     @override
     def set_actor_resolver(self, resolver: VoteActorResolver) -> None:
