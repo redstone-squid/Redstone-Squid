@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import {
   API_PORT,
@@ -10,10 +10,27 @@ import {
 } from "@tests/support/servers";
 
 const pages = [
-  ["home", `${APP_URL}/`],
-  ["chinese-home", `${APP_URL}/zh-cn`],
+  { name: "home", route: "/", profile: "desktop" },
+  { name: "chinese-home", route: "/zh-cn", profile: "desktop" },
+  { name: "mobile-tag", route: "/zh-cn/tags/zero-tick", profile: "mobile" },
+  { name: "mobile-draft", route: "/design-system-trial", profile: "mobile" },
 ] as const;
 const thresholds = { performance: 0.9, "best-practices": 0.95, seo: 0.95 } as const;
+const metricAudits = {
+  lcpMs: "largest-contentful-paint",
+  cls: "cumulative-layout-shift",
+  tbtMs: "total-blocking-time",
+  fcpMs: "first-contentful-paint",
+  ttfbMs: "server-response-time",
+  transferBytes: "total-byte-weight",
+} as const;
+type Metric = keyof typeof metricAudits;
+type Metrics = Record<Metric, number>;
+type Report = {
+  categories: Record<string, { score: number | null }>;
+  audits: Record<string, { numericValue?: number }>;
+  runtimeError?: { message: string };
+};
 const servers: ChildProcess[] = [];
 
 function stopServers(): void {
@@ -30,13 +47,37 @@ function waitForExit(child: ChildProcess): Promise<void> {
   });
 }
 
+function readMetrics(report: Report, name: string): Metrics {
+  const metrics = {} as Metrics;
+  for (const metric of Object.keys(metricAudits) as Metric[]) {
+    const value = report.audits[metricAudits[metric]]?.numericValue;
+    if (value === undefined || !Number.isFinite(value)) {
+      throw new Error(`${name} is missing Lighthouse metric ${metricAudits[metric]}.`);
+    }
+    metrics[metric] = value;
+  }
+  return metrics;
+}
+
+/** Use the middle of three independent mobile runs to reduce sensitivity to runner load. */
+function medianMetrics(samples: Metrics[]): Metrics {
+  const metrics = {} as Metrics;
+  for (const metric of Object.keys(metricAudits) as Metric[]) {
+    const values = samples.map((sample) => sample[metric]).sort((a, b) => a - b);
+    const middle = values[Math.floor(values.length / 2)];
+    if (middle === undefined) throw new Error("No Lighthouse samples.");
+    metrics[metric] = middle;
+  }
+  return metrics;
+}
+
 try {
   servers.push(
     spawn(FIXTURE_API_COMMAND[0], [FIXTURE_API_COMMAND[1]], {
       stdio: "inherit",
       env: { ...process.env, ...fixtureApiEnvironment },
     }),
-    spawn("node", ["dist/server/entry.mjs"], {
+    spawn("bun", ["dist/server/entry.mjs"], {
       stdio: "inherit",
       env: { ...process.env, ...appEnvironment },
     }),
@@ -58,34 +99,55 @@ try {
 
   const reportDirectory = path.resolve(".lighthouseci/reports");
   await mkdir(reportDirectory, { recursive: true });
-  for (const [name, url] of pages) {
-    const reportPath = path.join(reportDirectory, `${name}.json`);
-    const lighthouse = spawn(
-      "bunx",
-      [
-        "lighthouse",
-        url,
-        "--quiet",
-        "--preset=desktop",
-        "--only-categories=performance,best-practices,seo",
-        "--output=json",
-        `--output-path=${reportPath}`,
-        "--chrome-flags=--headless --no-sandbox --disable-dev-shm-usage",
-      ],
-      { stdio: "inherit", env: process.env },
-    );
-    await waitForExit(lighthouse);
-    const report = JSON.parse(await readFile(reportPath, "utf8")) as {
-      categories: Record<string, { score: number | null }>;
-    };
-    for (const [category, threshold] of Object.entries(thresholds)) {
-      const score = report.categories[category]?.score;
-      if (score === null || score === undefined || score < threshold) {
-        throw new Error(`${name} ${category} score ${score ?? "missing"} is below ${threshold}.`);
+  const summary: Record<string, { route: string; profile: string; median: Metrics }> = {};
+  const failures: string[] = [];
+  for (const { name, route, profile } of pages) {
+    const samples: Metrics[] = [];
+    const desktop = profile === "desktop";
+    for (let run = 1; run <= (desktop ? 1 : 3); run += 1) {
+      const reportPath = path.join(
+        reportDirectory,
+        desktop ? `${name}.json` : `${name}-${run}.json`,
+      );
+      const lighthouse = spawn(
+        "bunx",
+        [
+          "lighthouse",
+          `${APP_URL}${route}`,
+          "--quiet",
+          ...(desktop
+            ? ["--preset=desktop", "--only-categories=performance,best-practices,seo"]
+            : ["--only-categories=performance"]),
+          "--output=json",
+          `--output-path=${reportPath}`,
+          "--chrome-flags=--headless --no-sandbox --disable-dev-shm-usage",
+        ],
+        { stdio: "inherit", env: process.env },
+      );
+      await waitForExit(lighthouse);
+      const report = JSON.parse(await readFile(reportPath, "utf8")) as Report;
+      if (report.runtimeError !== undefined) {
+        throw new Error(`${name}: ${report.runtimeError.message}`);
       }
-      console.info(`${name} ${category}: ${Math.round(score * 100)}`);
+      samples.push(readMetrics(report, name));
+      if (desktop) {
+        for (const [category, threshold] of Object.entries(thresholds)) {
+          const score = report.categories[category]?.score;
+          if (score === null || score === undefined || score < threshold) {
+            failures.push(`${name} ${category} score ${score ?? "missing"} is below ${threshold}.`);
+          }
+          console.info(
+            `${name} ${category}: ${score == null ? "missing" : Math.round(score * 100)}`,
+          );
+        }
+      }
     }
+    const median = medianMetrics(samples);
+    summary[name] = { route, profile, median };
+    console.info(`${name}:`, median);
   }
+  await writeFile(path.join(reportDirectory, "summary.json"), JSON.stringify(summary, null, 2));
+  if (failures.length > 0) throw new Error(failures.join("\n"));
 } finally {
   stopServers();
 }
