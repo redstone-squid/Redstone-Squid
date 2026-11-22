@@ -106,7 +106,7 @@
       active = -1;
       return;
     }
-    if (!visible.length) return;
+    if (visible.length === 0) return;
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
       active =
@@ -116,7 +116,7 @@
             ? visible.length - 1
             : active - 1;
       await tick();
-      document.getElementById(`${listId}-${active}`)?.scrollIntoView?.({ block: "nearest" });
+      document.getElementById(`${listId}-${active}`)?.scrollIntoView({ block: "nearest" });
     } else if (event.key === "Enter" && active >= 0) {
       event.preventDefault();
       await choose(active);
@@ -129,7 +129,7 @@
     role: "combobox" as const,
     autocomplete: "off" as const,
     "aria-autocomplete": "list" as const,
-    "aria-controls": visible.length ? listId : undefined,
+    "aria-controls": visible.length > 0 ? listId : undefined,
     "aria-expanded": visible.length > 0,
     "aria-activedescendant": active >= 0 && visible[active] ? `${listId}-${active}` : undefined,
     oninput: changed,
