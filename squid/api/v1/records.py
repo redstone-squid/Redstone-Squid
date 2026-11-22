@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from typing import Annotated
+from uuid import UUID
 
 from litestar import Router, get, post
 from litestar.di import Provide
@@ -68,15 +69,15 @@ _SORT_FIELDS = frozenset({"id"})
 
 
 @get(
-    "/{record_id:int}",
+    "/{record_id:uuid}",
     responses=responses(404, 422, 500, 503),
     operation_id="records_get",
     dependencies={"records": Provide(get_public_records, sync_to_thread=False)},
     security=[ANONYMOUS],
     opt=contract(cli=transport_only()),
 )
-async def get_record(record_id: FromPath[int], records: PublicRecords) -> PublicRecordDetail:
-    """Return one result only while its computation run is active."""
+async def get_record(record_id: FromPath[UUID], records: PublicRecords) -> PublicRecordDetail:
+    """Return the latest published result for a record."""
     detail = await records.get(record_id)
     if detail is None:
         raise RecordNotFoundError(record_id)

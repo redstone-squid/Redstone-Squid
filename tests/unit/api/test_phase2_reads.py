@@ -400,10 +400,11 @@ class TestTypedNotFound:
         assert problem["context"] == {"creator_id": str(CREATOR_PUBLIC_ID)}
 
     def test_a_missing_record_names_its_identifier(self, client: TestClient) -> None:
-        response = client.get("/v1/records/77")
+        record_id = "00000000-0000-0000-0000-000000000077"
+        response = client.get(f"/v1/records/{record_id}")
 
         assert response.status_code == 404
         problem = response.json()
         assert problem["code"] == "RECORD_NOT_FOUND"
         assert problem["resource"] == "record"
-        assert problem["context"] == {"record_id": 77}
+        assert problem["context"] == {"record_id": record_id}

@@ -526,7 +526,7 @@ class MockPublicRecords(PublicRecordQueryService):
         """Publish no records."""
 
     @override
-    async def get(self, result_id: int) -> PublicRecordDetail | None:
+    async def get(self, record_id: UUID) -> PublicRecordDetail | None:
         return None
 
 

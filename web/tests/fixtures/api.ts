@@ -283,8 +283,8 @@ async function routeRequest(request: Request): Promise<Response> {
     return problem(request, 404, "not_found");
 
   if (url.pathname === "/v1/records") return json(recordPage(url) satisfies RecordsListResponse);
-  if (url.pathname === "/v1/records/11") return json(recordDetail satisfies PublicRecordDetail);
-  if (url.pathname === "/v1/records/13") return json(expandableRecord);
+  if (url.pathname === `/v1/records/${recordDetail.title_id}`) return json(recordDetail satisfies PublicRecordDetail);
+  if (url.pathname === `/v1/records/${expandableRecord.title_id}`) return json(expandableRecord);
   if (/^\/v1\/records\/\d+$/.test(url.pathname)) return problem(request, 404, "not_found");
 
   if (url.pathname === "/v1/search/suggest") {

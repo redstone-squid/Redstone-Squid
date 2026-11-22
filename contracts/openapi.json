@@ -9179,14 +9179,15 @@
           "records"
         ],
         "summary": "GetRecord",
-        "description": "Return one result only while its computation run is active.",
+        "description": "Return the latest published result for a record.",
         "operationId": "records_get",
         "parameters": [
           {
             "name": "record_id",
             "in": "path",
             "schema": {
-              "type": "integer"
+              "type": "string",
+              "format": "uuid"
             },
             "required": true,
             "deprecated": false

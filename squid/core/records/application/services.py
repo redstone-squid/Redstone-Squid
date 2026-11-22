@@ -6,6 +6,7 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from itertools import combinations, product
+from uuid import UUID
 
 import anyio
 
@@ -587,14 +588,14 @@ class PublicRecordQueryService:
         self._uow_factory = uow_factory
         self._builds = builds
 
-    async def get(self, result_id: int) -> PublicRecordDetail | None:
-        """Return an active result with holders in result order, or `None` if absent.
+    async def get(self, record_id: UUID) -> PublicRecordDetail | None:
+        """Return the latest published result with its holders in result order.
 
         Raise `DataIntegrityError` when holder rows contradict the result status
         or any referenced build is unavailable in the public catalogue.
         """
         async with self._uow_factory() as uow:
-            result = await uow.records.get_published_record(result_id)
+            result = await uow.records.get_latest_record(record_id)
         if result is None:
             return None
         holders_match_status = bool(result.holder_build_ids) is (result.status is ResolutionStatus.RESOLVED)
@@ -603,7 +604,7 @@ class PublicRecordQueryService:
             raise DataIntegrityError(
                 msg,
                 context={
-                    "record_id": result.id,
+                    "record_id": str(record_id),
                     "status": result.status.value,
                     "holder_build_ids": list(result.holder_build_ids),
                 },
@@ -615,7 +616,7 @@ class PublicRecordQueryService:
             msg = "A published record references holder builds that are unavailable to the public catalogue."
             raise DataIntegrityError(
                 msg,
-                context={"record_id": result.id, "unavailable_holder_build_ids": unavailable_ids},
+                context={"record_id": str(record_id), "unavailable_holder_build_ids": unavailable_ids},
             )
         return PublicRecordDetail.with_holders(result, [by_id[build_id] for build_id in result.holder_build_ids])
 

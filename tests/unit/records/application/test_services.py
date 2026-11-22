@@ -146,6 +146,9 @@ class FakeRuns:
     async def get_published_record(self, result_id: int) -> PublishedTitle | None:
         return self.published_records.get(result_id)
 
+    async def get_latest_record(self, record_id: uuid.UUID) -> PublishedTitle | None:
+        return next((result for result in self.published_records.values() if result.title_id == record_id), None)
+
     async def list_published_records(
         self,
         *,
@@ -577,7 +580,7 @@ async def test_public_record_query_preserves_holder_order() -> None:
     builds = FakePublicBuilds((_public_build(42), _public_build(41)))
     service = PublicRecordQueryService(builds, uow_factory=lambda: RecordQueryScope(runs))
 
-    detail = await service.get(7)
+    detail = await service.get(runs.published_records[7].title_id)
 
     assert detail is not None
     assert [build.id for build in detail.holder_builds] == [41, 42]
@@ -593,9 +596,12 @@ async def test_public_record_query_rejects_unavailable_holder() -> None:
     )
 
     with pytest.raises(DataIntegrityError) as exc_info:
-        await service.get(7)
+        await service.get(runs.published_records[7].title_id)
 
-    assert exc_info.value.context == {"record_id": 7, "unavailable_holder_build_ids": [42]}
+    assert exc_info.value.context == {
+        "record_id": str(runs.published_records[7].title_id),
+        "unavailable_holder_build_ids": [42],
+    }
 
 
 @pytest.mark.asyncio
@@ -609,7 +615,7 @@ async def test_public_record_query_accepts_empty_nonresolved_result() -> None:
     builds = FakePublicBuilds(())
     service = PublicRecordQueryService(builds, uow_factory=lambda: RecordQueryScope(runs))
 
-    detail = await service.get(7)
+    detail = await service.get(runs.published_records[7].title_id)
 
     assert detail is not None
     assert detail.holder_builds == ()
@@ -632,20 +638,20 @@ async def test_public_record_query_rejects_status_holder_corruption(result: Publ
     )
 
     with pytest.raises(DataIntegrityError, match="status contradicts") as exc_info:
-        await service.get(7)
+        await service.get(runs.published_records[7].title_id)
 
     assert exc_info.value.context == {
-        "record_id": 7,
+        "record_id": str(runs.published_records[7].title_id),
         "status": result.status.value,
         "holder_build_ids": list(result.holder_build_ids),
     }
 
 
 @pytest.mark.asyncio
-async def test_public_record_query_returns_none_for_unknown_result() -> None:
+async def test_public_record_query_returns_none_for_unknown_record() -> None:
     service = PublicRecordQueryService(FakePublicBuilds(()), uow_factory=lambda: RecordQueryScope(FakeRuns()))
 
-    assert await service.get(999) is None
+    assert await service.get(uuid.UUID(int=999)) is None
 
 
 @pytest.mark.asyncio

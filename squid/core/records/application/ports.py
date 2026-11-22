@@ -106,6 +106,8 @@ class RecordRunRepository(Protocol):
 
     async def get_published_record(self, result_id: int) -> PublishedTitle | None: ...
 
+    async def get_latest_record(self, record_id: uuid.UUID) -> PublishedTitle | None: ...
+
     async def list_published_records(
         self,
         *,

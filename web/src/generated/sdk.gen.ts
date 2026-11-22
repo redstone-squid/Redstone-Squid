@@ -965,7 +965,7 @@ export const notificationInboxMarkUnread = <ThrowOnError extends boolean = false
 /**
  * GetRecord
  *
- * Return one result only while its computation run is active.
+ * Return the latest published result for a record.
  */
 export const recordsGet = <ThrowOnError extends boolean = false>(options: Options<RecordsGetData, ThrowOnError>): RequestResult<RecordsGetResponses, RecordsGetErrors, ThrowOnError> => (options.client ?? client).get<RecordsGetResponses, RecordsGetErrors, ThrowOnError>({ url: '/v1/records/{record_id}', ...options });
 

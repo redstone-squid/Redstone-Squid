@@ -156,14 +156,14 @@ async def test_record_detail_serializes_the_application_read_model(expanded: boo
     )
     records.get.return_value = PublicRecordDetail.with_holders(replace(_RECORD, door_evidence=evidence), [holder])
     handler = get(
-        "/records/{record_id:int}",
+        "/records/{record_id:uuid}",
         dependencies={"records": Provide(lambda: records, sync_to_thread=False)},
     )(get_record.fn)
     app = Litestar([handler])
 
     transport = httpx.ASGITransport(app=app)  # type: ignore[bad-argument-type]
     async with httpx.AsyncClient(transport=transport, base_url="https://test") as client:
-        response = await client.get("/records/7")
+        response = await client.get(f"/records/{_RECORD.title_id}")
 
     assert response.status_code == 200
     assert response.json() == {

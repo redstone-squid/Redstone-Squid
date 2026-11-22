@@ -1,24 +1,22 @@
 """Record context errors."""
 
+from uuid import UUID
+
 from squid.core.errors import ErrorCode, NotFoundError
 from squid.core.i18n import tr
 
 
 class RecordNotFoundError(NotFoundError):
-    """No published result exists for the requested identifier.
-
-    A result whose computation run is no longer the published one is not found
-    either: records are addressed by result id, and a superseded run's results
-    are not part of the catalogue.
-    """
+    """No published record or record range exists for the requested identifier."""
 
     default_message = tr(t"records-errors-record-not-found = Record not found.")
     default_title = tr(t"records-record-not-found-title = Record not found")
     default_code = ErrorCode.RECORD_NOT_FOUND
     default_resource = "record"
 
-    def __init__(self, record_id: int) -> None:
-        super().__init__(context={"record_id": record_id}, public_context={"record_id": record_id})
+    def __init__(self, record_id: UUID | int) -> None:
+        identifier = str(record_id) if isinstance(record_id, UUID) else record_id
+        super().__init__(context={"record_id": identifier}, public_context={"record_id": identifier})
         self.record_id = record_id
 
 

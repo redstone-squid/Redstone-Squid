@@ -7,6 +7,7 @@ from datetime import datetime
 from decimal import Decimal
 from itertools import pairwise
 from typing import cast
+from uuid import UUID
 
 from sqlalchemy import and_, case, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert
@@ -498,6 +499,11 @@ class PostgresRecordRepository:
         records = await self._active_records(result_id=result_id, limit=1)
         return records[0] if records else None
 
+    async def get_latest_record(self, record_id: UUID) -> PublishedTitle | None:
+        """Return the active result for the stable record identifier."""
+        records = await self._active_records(record_id=record_id, limit=1)
+        return records[0] if records else None
+
     async def list_published_records(
         self,
         *,
@@ -515,7 +521,6 @@ class PostgresRecordRepository:
         order and restored in memory, leaving its overfetched row at the front for the caller.
         """
         return await self._active_records(
-            result_id=None,
             offset=offset,
             after_id=after_id,
             before_id=before_id,
@@ -549,7 +554,8 @@ class PostgresRecordRepository:
     async def _active_records(
         self,
         *,
-        result_id: int | None,
+        result_id: int | None = None,
+        record_id: UUID | None = None,
         offset: int = 0,
         after_id: int | None = None,
         before_id: int | None = None,
@@ -572,7 +578,8 @@ class PostgresRecordRepository:
             .outerjoin(RecordInputGeneration, RecordInputGeneration.build_kind == ComputationRun.build_kind)
             .where(ComputationRun.is_active.is_(True))
         )
-        if result_id is None:
+        include_evidence = result_id is not None or record_id is not None
+        if not include_evidence:
             statement = statement.options(defer(TitleResult.door_evidence))
         if resolved_only:
             statement = statement.where(TitleResult.status == ResolutionStatus.RESOLVED)
@@ -580,6 +587,8 @@ class PostgresRecordRepository:
             statement = statement.join(TitleDefinition.record_title).where(RecordTitle.version_scope == version_scope)
         if result_id is not None:
             statement = statement.where(TitleResult.id == result_id)
+        if record_id is not None:
+            statement = statement.where(TitleDefinition.title_id == record_id)
         reverse = before_id is not None
         if before_id is not None:
             # Walk away from the anchor in reversed display order; the page is flipped back below.
@@ -624,7 +633,7 @@ class PostgresRecordRepository:
                 last_checked_at=None if checked_at is None else checked_at.to_stdlib(),
                 refresh_pending=pending,
                 version_id=definition.version_id,
-                door_evidence=result.door_evidence if result_id is not None else None,
+                door_evidence=result.door_evidence if include_evidence else None,
             )
             for result, definition, checked_at, pending in rows
         )

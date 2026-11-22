@@ -5369,7 +5369,7 @@ export type NotificationInboxMarkUnreadResponse = NotificationInboxMarkUnreadRes
 export type RecordsGetData = {
     body?: never;
     path: {
-        record_id: number;
+        record_id: string;
     };
     query?: never;
     url: '/v1/records/{record_id}';

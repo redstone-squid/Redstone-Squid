@@ -69,12 +69,12 @@ class PublicRecordFake(PublicRecordQueryService):
     def __init__(self, record: PublishedTitle, builds: list[Build]) -> None:
         self.record = record
         self.builds = tuple(PublicBuildSummary.from_build(build) for build in builds)
-        self.requests: list[int] = []
+        self.requests: list[UUID] = []
 
     @override
-    async def get(self, result_id: int) -> PublicRecordDetail | None:
-        self.requests.append(result_id)
-        if result_id != self.record.id:
+    async def get(self, record_id: UUID) -> PublicRecordDetail | None:
+        self.requests.append(record_id)
+        if record_id != self.record.title_id:
             return None
         return PublicRecordDetail.with_holders(self.record, self.builds)
 
@@ -172,11 +172,11 @@ async def test_record_detail_hydrates_holders_in_record_order() -> None:
     record = published_record(41, 42)
     records = PublicRecordFake(record, [catalogue_build(41), catalogue_build(42)])
 
-    detail = await get_record.fn(7, records)
+    detail = await get_record.fn(record.title_id, records)
 
     assert detail.holder_build_ids == (41, 42)
     assert [build.id for build in detail.holder_builds] == [41, 42]
-    assert records.requests == [7]
+    assert records.requests == [record.title_id]
 
 
 def test_detail_details_are_keyed_by_the_build_category() -> None:

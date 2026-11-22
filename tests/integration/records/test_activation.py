@@ -105,6 +105,10 @@ async def test_activation_batches_history_and_replaces_the_previous_run(
     batch = _batch(await transact(records, lambda uow: uow.records.active_rules_revision_id(), commit=True), build_ids)
 
     first_run = await transact(records, lambda uow: uow.records.activate(batch), commit=True)
+    async with records() as uow:
+        (original,) = await uow.records.list_published_records(
+            offset=0, after_id=None, before_id=None, descending=False, limit=10
+        )
     # A changed title should publish even when the holder set is unchanged.
     batch = replace(batch, records=(replace(batch.records[0], title=FormattedTitle("Updated smallest door")),))
     with record_queries(sessions) as statements:
@@ -152,6 +156,11 @@ async def test_activation_batches_history_and_replaces_the_previous_run(
         ),
     )
     assert len(published) == 1
+    async with records() as uow:
+        latest = await uow.records.get_latest_record(original.title_id)
+    assert latest is not None
+    assert latest.id == published[0].id
+    assert latest.id != original.id
     assert published[0].title == "Updated smallest door"
     assert published[0].holder_build_ids == (build_ids[-1],)
     assert isinstance(published[0].computed_at, datetime)
