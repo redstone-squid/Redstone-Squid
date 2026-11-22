@@ -9,14 +9,14 @@ const budgets: EntryBudget[] = [
   {
     entries: ["src/workbench/Controls.svelte"],
     label: "Design workbench (Svelte)",
-    initialKiB: 65,
-    completeKiB: 90,
+    initialKiB: 47,
+    completeKiB: 60,
   },
   {
     entries: ["src/workbench/DraftTrial.svelte"],
     label: "Svelte draft trial",
-    initialKiB: 50,
-    completeKiB: 80,
+    initialKiB: 30,
+    completeKiB: 45,
   },
 ];
 const clientDirectory = path.resolve("dist/client");

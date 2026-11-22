@@ -1,5 +1,5 @@
 import { defineMiddleware } from "astro:middleware";
-import { localeFromPath, localizePath } from "./lib/i18n";
+import { localeFromPath, localizePath } from "./locales/locale";
 import { createApiClient } from "./server/api";
 import { getRuntimeConfig } from "./server/config";
 

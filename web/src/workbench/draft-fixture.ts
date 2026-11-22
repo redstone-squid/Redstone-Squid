@@ -1,3 +1,5 @@
+import * as m from "../locales/messages";
+
 export const versionOptions = ["Java 1.21.4", "Java 1.20.6", "Bedrock 1.21.50"] as const;
 export type DraftInput = {
   title: string;
@@ -5,23 +7,27 @@ export type DraftInput = {
   width: string;
   version: string;
 };
-export type DraftErrors = Partial<
-  Record<"title" | "width" | "version", "required" | "positive" | "reserved">
->;
+type DraftError = "required" | "positive" | "reserved";
+export type DraftErrors = Partial<Record<"title" | "width" | "version", DraftError>>;
+export const draftErrorMessages = {
+  required: m.trialRequired,
+  positive: m.trialPositive,
+  reserved: m.trialReserved,
+} as const satisfies Record<DraftError, unknown>;
 export type DraftScenario = "retry" | "upload-retry";
 export type DraftPhase = "idle" | "saving" | "saved" | "uploading" | "error";
 
 const phaseMessages = {
-  idle: { tone: "info", message: "trial.ready" },
-  saving: { tone: "info", message: "trial.saving" },
-  saved: { tone: "success", message: "trial.saved" },
-  uploading: { tone: "info", message: "trial.uploading" },
-  error: { tone: "warning", message: "trial.failed" },
+  idle: { tone: "info", message: m.trialReady },
+  saving: { tone: "info", message: m.trialSaving },
+  saved: { tone: "success", message: m.trialSaved },
+  uploading: { tone: "info", message: m.trialUploading },
+  error: { tone: "warning", message: m.trialFailed },
 } as const;
 
 export function draftFeedback(phase: DraftPhase, errors: DraftErrors) {
   if (phase === "idle" && Object.keys(errors).length > 0) {
-    return { tone: "warning", message: "trial.fix-errors" } as const;
+    return { tone: "warning", message: m.trialFixErrors } as const;
   }
   return phaseMessages[phase];
 }

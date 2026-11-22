@@ -2,7 +2,8 @@
 import type { ComponentProps } from "astro/types";
 import LanguageSelector from "./LanguageSelector.astro";
 import DocumentHead from "./DocumentHead.astro";
-import { localizePath, translate, type StaticMessageKey } from "../lib/i18n";
+import { localizePath } from "../locales/locale";
+import * as m from "../locales/messages";
 import "@fontsource-variable/inter";
 import "@fontsource-variable/jetbrains-mono";
 import "@fontsource/noto-sans-sc/400.css";
@@ -11,13 +12,12 @@ import "../ui/base.css";
 import "./catalogue-layout.css";
 type Props = ComponentProps<typeof DocumentHead>;
 const { locale, config } = Astro.locals;
-const t = (key: StaticMessageKey) => translate(locale, key);
 const activePath = localizePath(Astro.url.pathname, "en");
 const nav = [
-  ["nav.builds", "/builds"],
-  ["nav.records", "/records"],
-  ["nav.search", "/search"],
-  ["nav.about", "/about"],
+  [m.navBuilds, "/builds"],
+  [m.navRecords, "/records"],
+  [m.navSearch, "/search"],
+  [m.navAbout, "/about"],
 ] as const;
 ---
 
@@ -28,32 +28,32 @@ const nav = [
   </head>
   <body>
     <a class="catalogue-skip" href="#main-content">
-      {t("nav.skip")}
+      {m.navSkip(locale)}
     </a>
     <header class="catalogue-header">
       <div class="catalogue-container catalogue-nav">
-        <a class="catalogue-brand" href={localizePath("/", locale)} aria-label={t("nav.home")}>
+        <a class="catalogue-brand" href={localizePath("/", locale)} aria-label={m.navHome(locale)}>
           <span class="catalogue-mark" aria-hidden="true">
             R
           </span>
-          <span>{t("site.name")}</span>
+          <span>{m.siteName(locale)}</span>
         </a>
-        <nav aria-label={t("nav.primary")}>
-          {nav.map(([key, href]) => (
+        <nav aria-label={m.navPrimary(locale)}>
+          {nav.map(([label, href]) => (
             <a
               href={localizePath(href, locale)}
               aria-current={
                 activePath === href || activePath.startsWith(`${href}/`) ? "page" : undefined
               }
             >
-              {t(key)}
+              {label(locale)}
             </a>
           ))}
         </nav>
         <div class="catalogue-actions">
           <LanguageSelector {locale} align="start" />
           <a class="sq-button sq-button--primary" href={localizePath("/submit", locale)}>
-            {t("nav.submit")} <span aria-hidden="true">↗</span>
+            {m.navSubmit(locale)} <span aria-hidden="true">↗</span>
           </a>
         </div>
       </div>
@@ -67,16 +67,16 @@ const nav = [
           <span class="catalogue-mark" aria-hidden="true">
             R
           </span>
-          {t("site.name")}
+          {m.siteName(locale)}
         </a>
-        <p class="sq-muted">{t("footer.note")}</p>
+        <p class="sq-muted">{m.footerNote(locale)}</p>
       </div>
-      <nav aria-label={t("nav.community")}>
+      <nav aria-label={m.navCommunity(locale)}>
         <a href={config.discordCommunityUrl} rel="noreferrer">
-          {t("footer.discord")}
+          {m.footerDiscord(locale)}
         </a>
         <a href={config.botInviteUrl} rel="noreferrer">
-          {t("footer.invite")}
+          {m.footerInvite(locale)}
         </a>
       </nav>
     </footer>

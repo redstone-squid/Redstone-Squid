@@ -12,11 +12,12 @@ export default defineConfig({
       provider: "v8",
       include: [
         "src/lib/**/*.ts",
+        "src/locales/**/*.ts",
         "src/ui/**/*.{ts,svelte}",
         "src/features/**/*.{ts,svelte}",
         "src/workbench/**/*.{ts,svelte}",
       ],
-      exclude: ["src/generated/**"],
+      exclude: ["src/generated/**", "src/locales/messages.ts"],
       reporter: ["text", "json-summary"],
       thresholds: {
         lines: 90,

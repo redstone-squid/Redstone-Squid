@@ -1,5 +1,5 @@
 ---
-import { translate, type StaticMessageKey } from "../lib/i18n";
+import * as m from "../locales/messages";
 import BuildPreview from "../features/builds/BuildPreview.astro";
 import "../workbench/workbench.css";
 import WorkbenchLayout from "../workbench/WorkbenchLayout.astro";
@@ -15,31 +15,34 @@ import Panel from "../ui/astro/Panel.astro";
 import LinkButton from "../ui/astro/LinkButton.astro";
 import SvelteControls from "../workbench/Controls.svelte";
 import { buildFixtures } from "../workbench/fixtures";
+import { selectedOption } from "../workbench/story-option";
 const chinese = Astro.url.searchParams.get("lang") === "zh-CN";
 const theme = Astro.url.searchParams.get("theme") === "dark" ? "dark" : "light";
 const locale = chinese ? "zh-CN" : "en";
-const fieldStates = ["normal", "invalid", "disabled"] as const;
-const fieldState =
-  fieldStates.find((value) => value === Astro.url.searchParams.get("fieldState")) ?? "normal";
+const fieldStates = {
+  normal: m.workbenchNormal,
+  invalid: m.workbenchInvalid,
+  disabled: m.workbenchDisabled,
+} as const;
+const fieldState = selectedOption(fieldStates, Astro.url.searchParams, "fieldState", "normal");
 const preferences = (key: string, value: string) => {
   const params = new URLSearchParams(Astro.url.searchParams);
   params.set(key, value);
   return `?${params}`;
 };
-const t = (key: StaticMessageKey): string => translate(locale, key);
 ---
 
-<WorkbenchLayout title={t("workbench.page-title")} locale={locale} theme={theme}>
+<WorkbenchLayout title={m.workbenchPageTitle(locale)} locale={locale} theme={theme}>
   <header class="sq-library-cover">
     <div>
-      <h1>{t("workbench.page-title")}</h1>
-      <p class="sq-lede">{t("workbench.library-description")}</p>
+      <h1>{m.workbenchPageTitle(locale)}</h1>
+      <p class="sq-lede">{m.workbenchLibraryDescription(locale)}</p>
       <div class="sq-row">
         <LinkButton href={preferences("lang", chinese ? "en" : "zh-CN")}>
-          {t("workbench.switch-language")}
+          {m.workbenchSwitchLanguage(locale)}
         </LinkButton>
         <LinkButton href={preferences("theme", theme === "light" ? "dark" : "light")}>
-          {theme === "light" ? t("workbench.dark-theme") : t("workbench.light-theme")}
+          {theme === "light" ? m.workbenchDarkTheme(locale) : m.workbenchLightTheme(locale)}
         </LinkButton>
       </div>
     </div>
@@ -49,8 +52,8 @@ const t = (key: StaticMessageKey): string => translate(locale, key);
   </header>
   <Panel
     id="foundations"
-    title={t("workbench.foundations")}
-    description={t("workbench.foundations-description")}
+    title={m.workbenchFoundations(locale)}
+    description={m.workbenchFoundationsDescription(locale)}
   >
     <div class="sq-swatches">
       {["canvas", "surface", "accent", "success", "warning", "text"].map((token) => (
@@ -61,7 +64,7 @@ const t = (key: StaticMessageKey): string => translate(locale, key);
       ))}
     </div>
     <div class="sq-token-footer">
-      <h3>{t("workbench.spacing")}</h3>
+      <h3>{m.workbenchSpacing(locale)}</h3>
       <div class="sq-ruler">
         {[1, 2, 3, 4, 5, 6, 7, 8].map((step) => (
           <div>
@@ -72,11 +75,11 @@ const t = (key: StaticMessageKey): string => translate(locale, key);
       </div>
     </div>
     <details class="sq-type-specimens">
-      <summary>{t("workbench.typography")}</summary>
+      <summary>{m.workbenchTypography(locale)}</summary>
       <div>
         <div>
           <code>--font-sans</code>
-          <p>{t("workbench.piston-door")}</p>
+          <p>{m.workbenchPistonDoor(locale)}</p>
         </div>
         <div>
           <code>--font-mono</code>
@@ -87,20 +90,21 @@ const t = (key: StaticMessageKey): string => translate(locale, key);
   </Panel>
   <Panel
     id="components"
-    title={t("workbench.components")}
-    description={t("workbench.components-description")}
+    title={m.workbenchComponents(locale)}
+    description={m.workbenchComponentsDescription(locale)}
   >
     <ButtonStory {locale} {theme} />
     <SvelteControls client:load locale={locale} />
   </Panel>
-  <Panel id="fields" title={t("workbench.form-controls")}>
+  <Panel id="fields" title={m.workbenchFormControls(locale)}>
     <Layout pattern="stack">
       <StoryOptions
-        label={t("workbench.field-state")}
+        label={m.workbenchFieldState(locale)}
         parameter="fieldState"
         selected={fieldState}
         section="fields"
-        options={fieldStates.map((value) => ({ value, label: t(`workbench.${value}`) }))}
+        {locale}
+        options={fieldStates}
       />
       <FormSpecimen {locale} state={fieldState} />
     </Layout>
@@ -109,29 +113,27 @@ const t = (key: StaticMessageKey): string => translate(locale, key);
   <section id="patterns" class="sq-stack" aria-labelledby="patterns-title">
     <div class="sq-section-heading">
       <div>
-        <h2 id="patterns-title">{t("workbench.page-patterns")}</h2>
+        <h2 id="patterns-title">{m.workbenchPagePatterns(locale)}</h2>
       </div>
-      <span class="sq-muted">
-        {translate(locale, "workbench.build-count", { count: buildFixtures.length })}
-      </span>
+      <span class="sq-muted">{m.workbenchBuildCount(locale, { count: buildFixtures.length })}</span>
     </div>
     <div class="sq-build-grid">
       {buildFixtures.map((build) => (
         <BuildPreview
           build={{
             ...build,
-            category: translate(locale, build.category),
+            category: build.category(locale),
             image: build.image
               ? {
                   src: build.image,
-                  alt: translate(locale, "workbench.fixture-alt", { title: build.title }),
+                  alt: m.workbenchFixtureAlt(locale, { title: build.title }),
                 }
               : null,
           }}
           labels={{
-            noPreview: t("workbench.no-preview-available"),
-            dimensions: t("workbench.dimensions"),
-            opening: t("workbench.opening"),
+            noPreview: m.workbenchNoPreviewAvailable(locale),
+            dimensions: m.workbenchDimensions(locale),
+            opening: m.workbenchOpening(locale),
           }}
         />
       ))}
@@ -140,39 +142,39 @@ const t = (key: StaticMessageKey): string => translate(locale, key);
   <BrowsingStories {locale} />
   <Panel
     id="states"
-    title={t("workbench.feedback-states")}
-    description={t("workbench.states-description")}
+    title={m.workbenchFeedbackStates(locale)}
+    description={m.workbenchStatesDescription(locale)}
   >
     <Layout pattern="grid">
-      <Notice tone="success" title={t("workbench.ready-to-explore")}>
-        {t("workbench.approved-description")}
+      <Notice tone="success" title={m.workbenchReadyToExplore(locale)}>
+        {m.workbenchApprovedDescription(locale)}
       </Notice>
-      <Notice tone="info" title={t("workbench.no-matching-builds")}>
-        {t("workbench.empty-description")}
+      <Notice tone="info" title={m.workbenchNoMatchingBuilds(locale)}>
+        {m.workbenchEmptyDescription(locale)}
       </Notice>
-      <Notice tone="warning" title={t("workbench.couldn-t-load-builds")}>
-        {t("workbench.unavailable-description")}
+      <Notice tone="warning" title={m.workbenchCouldnTLoadBuilds(locale)}>
+        {m.workbenchUnavailableDescription(locale)}
       </Notice>
-      <Notice tone="danger" title={t("workbench.check-the-highlighted-field")}>
-        {t("workbench.enter-a-title-for-your-build")}
+      <Notice tone="danger" title={m.workbenchCheckTheHighlightedField(locale)}>
+        {m.workbenchEnterATitleForYourBuild(locale)}
       </Notice>
     </Layout>
     <div class="sq-badge-preview">
-      <h3>{t("workbench.status-badges")}</h3>
+      <h3>{m.workbenchStatusBadges(locale)}</h3>
       <Layout pattern="row" gap="compact">
-        <Badge>{t("workbench.empty")}</Badge>
-        <Badge tone="success">{t("workbench.approved")}</Badge>
-        <Badge tone="warning">{t("workbench.unavailable")}</Badge>
+        <Badge>{m.workbenchEmpty(locale)}</Badge>
+        <Badge tone="success">{m.workbenchApproved(locale)}</Badge>
+        <Badge tone="warning">{m.workbenchUnavailable(locale)}</Badge>
       </Layout>
     </div>
     <div class="sq-loading-preview">
-      <p>{t("workbench.fetching-builds")}</p>
+      <p>{m.workbenchFetchingBuilds(locale)}</p>
       <div class="sq-skeleton"></div>
       <div class="sq-skeleton sq-skeleton--short"></div>
     </div>
   </Panel>
   <footer class="sq-workbench-footer">
-    {t("workbench.redstone-squid-design-foundations")}
-    <span>{t("workbench.fixture-disclaimer")}</span>
+    {m.workbenchRedstoneSquidDesignFoundations(locale)}
+    <span>{m.workbenchFixtureDisclaimer(locale)}</span>
   </footer>
 </WorkbenchLayout>

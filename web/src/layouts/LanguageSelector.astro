@@ -1,5 +1,6 @@
 ---
-import { LOCALES, SUPPORTED_LOCALES, localizePath, translate, type Locale } from "../lib/i18n";
+import { LOCALES, SUPPORTED_LOCALES, localizePath, type Locale } from "../locales/locale";
+import * as m from "../locales/messages";
 type Props = {
   locale: Locale;
   align?: "start" | "end";
@@ -10,11 +11,11 @@ const { locale, align = "end", hrefForLocale = (lang) => localizePath(path, lang
 ---
 
 <details class="language-selector" data-align={align}>
-  <summary aria-label={`${LOCALES[locale].label} · ${translate(locale, "nav.language")}`}>
+  <summary aria-label={`${LOCALES[locale].label} · ${m.navLanguage(locale)}`}>
     <span lang={locale}>{LOCALES[locale].label}</span>
     <span aria-hidden="true">⌄</span>
   </summary>
-  <ul aria-label={translate(locale, "nav.language")}>
+  <ul aria-label={m.navLanguage(locale)}>
     {SUPPORTED_LOCALES.map((language) => (
       <li>
         <a

@@ -1,24 +1,25 @@
 ---
+import type { Locale } from "../locales/locale";
+import type { StoryOptionLabels } from "./story-option";
+
 type Props = {
+  locale: Locale;
   label: string;
   parameter: string;
   selected: string;
   section: string;
-  options: { value: string; label: string }[];
+  options: StoryOptionLabels<string>;
 };
-const { label, parameter, selected, section, options } = Astro.props;
+const { locale, label, parameter, selected, section, options } = Astro.props;
 ---
 
 <nav class="sq-story-options" aria-label={label}>
-  {options.map((option) => {
+  {Object.entries(options).map(([value, optionLabel]) => {
     const params = new URLSearchParams(Astro.url.searchParams);
-    params.set(parameter, option.value);
+    params.set(parameter, value);
     return (
-      <a
-        href={`?${params}#${section}`}
-        aria-current={option.value === selected ? "true" : undefined}
-      >
-        {option.label}
+      <a href={`?${params}#${section}`} aria-current={value === selected ? "true" : undefined}>
+        {optionLabel(locale)}
       </a>
     );
   })}

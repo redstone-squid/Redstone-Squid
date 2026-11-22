@@ -2,7 +2,8 @@ import { render, screen, cleanup, waitFor } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import Controls from "../../src/workbench/Controls.svelte";
-import { translate, type Locale } from "../../src/lib/i18n";
+import type { Locale } from "../../src/locales/locale";
+import * as m from "../../src/locales/messages";
 
 afterEach(cleanup);
 for (const locale of ["en", "zh-CN"] satisfies Locale[]) {
@@ -11,30 +12,24 @@ for (const locale of ["en", "zh-CN"] satisfies Locale[]) {
       const user = userEvent.setup();
       render(Controls, { locale });
       const trigger = screen.getByRole("button", {
-        name: translate(locale, "workbench.new-draft"),
+        name: m.workbenchNewDraft(locale),
       });
       await user.click(trigger);
       const save = await screen.findByRole("button", {
-        name: translate(locale, "workbench.save-draft"),
+        name: m.workbenchSaveDraft(locale),
       });
       await user.click(save);
       const title = screen.getByRole("textbox", {
-        name: translate(locale, "workbench.build-title"),
+        name: m.workbenchBuildTitle(locale),
       });
       expect(title).toHaveAttribute("aria-invalid", "true");
-      expect(title).toHaveAccessibleDescription(
-        translate(locale, "workbench.enter-a-title-for-your-build"),
-      );
+      expect(title).toHaveAccessibleDescription(m.workbenchEnterATitleForYourBuild(locale));
       await user.type(title, "Copper Bolt");
       await user.click(save);
-      expect(screen.getByRole("status")).toHaveTextContent(
-        translate(locale, "workbench.example-draft-saved"),
-      );
+      expect(screen.getByRole("status")).toHaveTextContent(m.workbenchExampleDraftSaved(locale));
       await user.type(title, " revised");
       expect(screen.getByRole("status").textContent).toBe("");
-      await user.click(
-        screen.getByRole("button", { name: translate(locale, "workbench.close-dialog") }),
-      );
+      await user.click(screen.getByRole("button", { name: m.workbenchCloseDialog(locale) }));
       await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
     });
     it("scrolls to the example catalogue", async () => {
@@ -46,9 +41,7 @@ for (const locale of ["en", "zh-CN"] satisfies Locale[]) {
       try {
         const user = userEvent.setup();
         render(Controls, { locale });
-        await user.click(
-          screen.getByRole("button", { name: translate(locale, "workbench.browse-examples") }),
-        );
+        await user.click(screen.getByRole("button", { name: m.workbenchBrowseExamples(locale) }));
         expect(scroll).toHaveBeenCalledWith({ behavior: "smooth" });
       } finally {
         target.remove();

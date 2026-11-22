@@ -13,7 +13,8 @@ interaction. The site reads the Python API through an SDK generated from
 | `src/features/x` | Components and browser logic for one area, such as `builds` or `records` | its own directory, `lib`, `ui`, `locales`, `generated` |
 | `src/workbench`  | The `/design-system` playground, its stories, and fixtures               | everything except `server` and `pages`                 |
 | `src/server`     | Runtime config and the API client. Server only                           | `lib`, `locales`, `generated`                          |
-| `src/lib`        | Code that runs on both sides: i18n, pagination, problem details          | `locales`, `generated`                                 |
+| `src/lib`        | Code that runs on both sides: pagination, problem details                | `locales`, `generated`                                 |
+| `src/locales`    | Locales, URL prefixes, catalogs, and the compiled message functions      | `locales` only                                         |
 | `src/ui`         | The design system. Knows nothing about the application                   | `ui` only                                              |
 | `src/generated`  | The OpenAPI SDK. Run `bun run sdk:generate` after the contract changes   |                                                        |
 
@@ -60,11 +61,29 @@ An error thrown inside a component after rendering starts truncates a 200 respon
 1. Add `src/pages/<route>.astro`. Load data there and wrap the content in `CatalogueLayout`.
 2. Put the components under `src/features/<area>/`. Compose them from `src/ui` first;
    see `src/ui/README.md`.
-3. Add messages to both `src/locales/en.ftl` and `src/locales/zh-CN.ftl`, then run
-   `bun run i18n:generate`. Use `translate(locale, key)`; lint rejects letters written
-   directly in markup.
+3. Add its text to the catalogs; see [Text](#text).
 4. Cover pure logic with a Vitest test in `tests/unit` and the route with a Playwright
    test in `tests/e2e`. Check both locales.
+
+## Text
+
+Every visible string lives in the Fluent catalogs in `src/locales`, one per locale with
+the same IDs. `bun run i18n:generate` compiles them into `src/locales/messages.ts`, one
+typed function per message, so an island ships only the messages it calls:
+
+```ts
+import * as m from "../../locales/messages";
+
+m.recordHolderCount(locale, { count: holders.length });
+```
+
+- IDs are kebab-case and start with their area (`record-holder-count`).
+- Arguments are typed by how the catalogs use them: a plural selector or `NUMBER()` takes a
+  number, `DATETIME()` a date. Format numbers and dates inside the message, not in code.
+- To pick a message by value, write a map checked against the union type, such as
+  `{ fastest: m.criterionFastest, ... } satisfies Record<RecordCriterion, unknown>`.
+  Never build a message name from a string.
+- The build fails when a message is not called from `src/`, so delete text with its feature.
 
 ## Tests
 

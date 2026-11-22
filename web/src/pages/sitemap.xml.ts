@@ -1,6 +1,6 @@
 import type { APIRoute } from "astro";
 
-import { SUPPORTED_LOCALES, localizePath } from "../lib/i18n";
+import { SUPPORTED_LOCALES, localizePath } from "../locales/locale";
 
 export const GET: APIRoute = ({ locals }) => {
   const { siteUrl } = locals.config;

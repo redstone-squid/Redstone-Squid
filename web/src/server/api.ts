@@ -1,5 +1,5 @@
 import { createClient, type Client } from "../generated/client";
-import type { Locale } from "../lib/i18n";
+import type { Locale } from "../locales/locale";
 import { decodeProblemDetail, type ApiProblemDetail } from "../lib/problem-details";
 import type { RuntimeConfig } from "./config";
 

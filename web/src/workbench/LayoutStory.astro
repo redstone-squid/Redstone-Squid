@@ -1,42 +1,49 @@
 ---
-import { translate, type Locale, type StaticMessageKey } from "../lib/i18n";
+import { type Locale } from "../locales/locale";
+import * as m from "../locales/messages";
 import Layout from "../ui/astro/Layout.astro";
 import Panel from "../ui/astro/Panel.astro";
 import StoryOptions from "./StoryOptions.astro";
+import { selectedOption } from "./story-option";
 import { buildFixtures } from "./fixtures";
 type Props = { locale: Locale };
 const { locale } = Astro.props;
-const t = (key: StaticMessageKey) => translate(locale, key);
-const patterns = ["stack", "row", "grid"] as const;
-const pattern = patterns.find((value) => value === Astro.url.searchParams.get("layout")) ?? "grid";
-const gaps = ["compact", "normal", "section"] as const;
-const gap = gaps.find((value) => value === Astro.url.searchParams.get("gap")) ?? "normal";
+const patterns = { stack: m.workbenchStack, row: m.workbenchRow, grid: m.workbenchGrid } as const;
+const gaps = {
+  compact: m.workbenchCompact,
+  normal: m.workbenchNormal,
+  section: m.workbenchSection,
+} as const;
+const pattern = selectedOption(patterns, Astro.url.searchParams, "layout", "grid");
+const gap = selectedOption(gaps, Astro.url.searchParams, "gap", "normal");
 const { creator, dimensions, timing } = buildFixtures[0];
 ---
 
-<Panel id="layouts" title={t("workbench.layouts")}>
+<Panel id="layouts" title={m.workbenchLayouts(locale)}>
   <div class="sq-specimen-tools">
     <StoryOptions
-      label={t("workbench.layouts")}
+      label={m.workbenchLayouts(locale)}
       parameter="layout"
       selected={pattern}
       section="layouts"
-      options={patterns.map((value) => ({ value, label: t(`workbench.${value}`) }))}
+      {locale}
+      options={patterns}
     />
     <StoryOptions
-      label={t("workbench.spacing")}
+      label={m.workbenchSpacing(locale)}
       parameter="gap"
       selected={gap}
       section="layouts"
-      options={gaps.map((value) => ({ value, label: t(`workbench.${value}`) }))}
+      {locale}
+      options={gaps}
     />
   </div>
   <div class="sq-layout-preview">
     <Layout {pattern} {gap}>
       {[
-        [t("workbench.creator"), creator],
-        [t("workbench.dimensions"), dimensions],
-        [t("workbench.opening"), timing],
+        [m.workbenchCreator(locale), creator],
+        [m.workbenchDimensions(locale), dimensions],
+        [m.workbenchOpening(locale), timing],
       ].map(([term, value]) => (
         <dl>
           <dt>{term}</dt>

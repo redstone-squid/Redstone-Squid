@@ -1,3 +1,5 @@
+import * as m from "../locales/messages";
+
 export const buildFixtures = [
   {
     id: "copper",
@@ -5,7 +7,7 @@ export const buildFixtures = [
     creator: "CircuitSage · 红石猫",
     dimensions: "9 × 7 × 4",
     image: "/fixtures/copper-door.svg",
-    category: "workbench.piston-door",
+    category: m.workbenchPistonDoor,
     timing: "8 gt",
   },
   {
@@ -14,7 +16,7 @@ export const buildFixtures = [
     creator: "Space Builder",
     dimensions: "12 × 12 × 5",
     image: "/fixtures/iris-door.svg",
-    category: "workbench.seamless-door",
+    category: m.workbenchSeamlessDoor,
     timing: "12 gt",
   },
   {
@@ -23,7 +25,7 @@ export const buildFixtures = [
     creator: "CircuitSage",
     dimensions: "3 × 5 × 8",
     image: null,
-    category: "workbench.extender",
+    category: m.workbenchExtender,
     timing: "—",
   },
 ] as const;

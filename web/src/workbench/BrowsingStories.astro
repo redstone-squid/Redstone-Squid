@@ -2,7 +2,8 @@
 import LanguageSelector from "../layouts/LanguageSelector.astro";
 import Pagination from "../features/catalogue/Pagination.astro";
 import type { PublishedRecordResult } from "../generated/types.gen";
-import { translate, type Locale } from "../lib/i18n";
+import { type Locale } from "../locales/locale";
+import * as m from "../locales/messages";
 import { readOffset } from "../lib/pagination";
 import LinkButton from "../ui/astro/LinkButton.astro";
 import Layout from "../ui/astro/Layout.astro";
@@ -20,8 +21,8 @@ const record: PublishedRecordResult = {
   result_id: second ? 2 : 1,
   definition_id: 1,
   record_id: build.id,
-  title: `${translate(locale, build.category)} · ${build.dimensions}`,
-  subtitle: translate(locale, build.category),
+  title: `${build.category(locale)} · ${build.dimensions}`,
+  subtitle: build.category(locale),
   criterion: second ? "smallest" : "fastest",
   build_kind: "door",
   version_scope: "all_time",
@@ -32,7 +33,7 @@ const record: PublishedRecordResult = {
 };
 ---
 
-<Panel id="browsing" title={translate(locale, "workbench.browsing")}>
+<Panel id="browsing" title={m.workbenchBrowsing(locale)}>
   <Layout pattern="grid">
     <Layout pattern="stack" gap="normal">
       <RecordSummary {record} {locale} linked={false} />
@@ -44,7 +45,7 @@ const record: PublishedRecordResult = {
       />
     </Layout>
     <Layout class="browsing-controls" gap="compact">
-      <h3>{translate(locale, "nav.language")}</h3>
+      <h3>{m.navLanguage(locale)}</h3>
       <LanguageSelector
         {locale}
         align="start"
@@ -54,9 +55,9 @@ const record: PublishedRecordResult = {
           return `${target.pathname}${target.search}${target.hash}`;
         }}
       />
-      <h3>{translate(locale, "build.media")}</h3>
+      <h3>{m.buildMedia(locale)}</h3>
       <LinkButton href={`/design-system/media${url.search}`}>
-        {translate(locale, "workbench.media-story")}
+        {m.workbenchMediaStory(locale)}
       </LinkButton>
     </Layout>
   </Layout>

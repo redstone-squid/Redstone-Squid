@@ -1,5 +1,5 @@
 ---
-import { translate, type StaticMessageKey } from "../lib/i18n";
+import * as m from "../locales/messages";
 import "@fontsource-variable/inter";
 import "@fontsource-variable/jetbrains-mono";
 import "@fontsource/noto-sans-sc/400.css";
@@ -15,7 +15,6 @@ const { title, locale, theme } = Astro.props;
 const query = new URLSearchParams({ lang: locale, theme });
 const library =
   Astro.url.pathname.replace(/\/$/, "") === "/design-system" ? "" : `/design-system?${query}`;
-const t = (key: StaticMessageKey): string => translate(locale, key);
 ---
 
 <!doctype html>
@@ -29,27 +28,27 @@ const t = (key: StaticMessageKey): string => translate(locale, key);
   </head>
   <body>
     <a class="sq-skip" href="#main">
-      {t("workbench.skip-to-content")}
+      {m.workbenchSkipToContent(locale)}
     </a>
     <header class="sq-topbar">
       <a class="sq-brand" href="/">
         <img src="/favicon.svg" width="32" height="32" alt="" />
         Redstone Squid
       </a>
-      <span class="sq-muted">{t("workbench.workbench")}</span>
+      <span class="sq-muted">{m.workbenchWorkbench(locale)}</span>
     </header>
     <div class="sq-shell">
       <aside class="sq-sidebar">
-        <p class="sq-kicker">{t("workbench.workbench")}</p>
-        <nav aria-label={t("workbench.workbench")}>
-          <a href={`${library}#foundations`}>{t("workbench.foundations")}</a>
-          <a href={`${library}#components`}>{t("workbench.components")}</a>
-          <a href={`${library}#fields`}>{t("workbench.form-controls")}</a>
-          <a href={`${library}#layouts`}>{t("workbench.layouts")}</a>
-          <a href={`${library}#patterns`}>{t("workbench.page-patterns")}</a>
-          <a href={`${library}#browsing`}>{t("workbench.browsing")}</a>
-          <a href={`${library}#states`}>{t("workbench.feedback-states")}</a>
-          <a href={`/design-system-trial?${query}`}>{t("trial.title")}</a>
+        <p class="sq-kicker">{m.workbenchWorkbench(locale)}</p>
+        <nav aria-label={m.workbenchWorkbench(locale)}>
+          <a href={`${library}#foundations`}>{m.workbenchFoundations(locale)}</a>
+          <a href={`${library}#components`}>{m.workbenchComponents(locale)}</a>
+          <a href={`${library}#fields`}>{m.workbenchFormControls(locale)}</a>
+          <a href={`${library}#layouts`}>{m.workbenchLayouts(locale)}</a>
+          <a href={`${library}#patterns`}>{m.workbenchPagePatterns(locale)}</a>
+          <a href={`${library}#browsing`}>{m.workbenchBrowsing(locale)}</a>
+          <a href={`${library}#states`}>{m.workbenchFeedbackStates(locale)}</a>
+          <a href={`/design-system-trial?${query}`}>{m.trialTitle(locale)}</a>
         </nav>
         <p class="sq-sidebar-note">
           Astro + Svelte

@@ -1,32 +1,28 @@
 ---
 import CatalogueLayout from "./CatalogueLayout.astro";
-import { localizePath, translate, type StaticMessageKey } from "../lib/i18n";
+import { localizePath, type Locale } from "../locales/locale";
+import * as m from "../locales/messages";
 import Layout from "../ui/astro/Layout.astro";
 import LinkButton from "../ui/astro/LinkButton.astro";
 
 /** Error pages pass `status` for the matching copy; the route itself sets the response status. */
-type Props = { titleKey: StaticMessageKey; home?: true } | { status: 404 | 503 };
+type Props = { title: (locale: Locale) => string; home?: true } | { status: 404 | 503 };
 
 const props = Astro.props;
 const { locale } = Astro.locals;
 const status = "status" in props ? props.status : undefined;
 const home = "home" in props && props.home;
-const title = translate(
-  locale,
-  "titleKey" in props
-    ? props.titleKey
-    : status === 404
-      ? "error.notFoundTitle"
-      : "error.serviceTitle",
-);
-const description = translate(
-  locale,
+const copy =
   status === 404
-    ? "error.notFoundBody"
+    ? { title: m.errorNotFoundTitle, description: m.errorNotFoundBody }
     : status === 503
-      ? "error.serviceBody"
-      : "placeholder.rebuilding",
-);
+      ? { title: m.errorServiceTitle, description: m.errorServiceBody }
+      : {
+          title: "title" in props ? props.title : m.homeTitle,
+          description: m.placeholderRebuilding,
+        };
+const title = copy.title(locale);
+const description = copy.description(locale);
 ---
 
 <CatalogueLayout {title} {description} noindex={!home}>
@@ -35,10 +31,10 @@ const description = translate(
     <p>{description}</p>
     <div>
       {status ? (
-        <LinkButton href={localizePath("/", locale)}>{translate(locale, "common.home")}</LinkButton>
+        <LinkButton href={localizePath("/", locale)}>{m.commonHome(locale)}</LinkButton>
       ) : (
         <LinkButton href={`/design-system?lang=${locale}`}>
-          {translate(locale, "workbench.page-title")}
+          {m.workbenchPageTitle(locale)}
         </LinkButton>
       )}
     </div>

@@ -2,7 +2,8 @@
 import { buttonStyles } from "../../ui/variants";
 import { PAGE_PARAMS } from "../../lib/pagination";
 import type { PageAnchor } from "../../generated/types.gen";
-import { translate, type Locale } from "../../lib/i18n";
+import { type Locale } from "../../locales/locale";
+import * as m from "../../locales/messages";
 
 type Props = {
   locale: Locale;
@@ -29,15 +30,15 @@ const nextHref = link(next);
 ---
 
 {(previousHref || nextHref) && (
-  <nav class="catalogue-pagination" aria-label={translate(locale, "nav.pagination")}>
+  <nav class="catalogue-pagination" aria-label={m.navPagination(locale)}>
     {previousHref && (
       <a class={linkClass} href={previousHref} rel="prev">
-        {translate(locale, "common.previous")}
+        {m.commonPrevious(locale)}
       </a>
     )}
     {nextHref && (
       <a class={linkClass} href={nextHref} rel="next">
-        {translate(locale, "common.loadMore")}
+        {m.commonLoadMore(locale)}
       </a>
     )}
   </nav>

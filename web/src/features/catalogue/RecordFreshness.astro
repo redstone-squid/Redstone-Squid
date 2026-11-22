@@ -1,6 +1,7 @@
 ---
 import type { PublishedRecordResult } from "../../generated/types.gen";
-import { formatDate, translate, type Locale } from "../../lib/i18n";
+import type { Locale } from "../../locales/locale";
+import * as m from "../../locales/messages";
 
 type Props = { record: PublishedRecordResult; locale: Locale };
 const { record, locale } = Astro.props;
@@ -8,9 +9,7 @@ const { record, locale } = Astro.props;
 
 <span>
   {record.last_checked_at
-    ? translate(locale, "record.lastChecked", {
-        date: formatDate(locale, record.last_checked_at),
-      })
-    : formatDate(locale, record.computed_at)}
-  {record.refresh_pending && <> · {translate(locale, "record.refreshPending")}</>}
+    ? m.recordLastChecked(locale, { date: record.last_checked_at })
+    : m.recordComputed(locale, { date: record.computed_at })}
+  {record.refresh_pending && <> · {m.recordRefreshPending(locale)}</>}
 </span>

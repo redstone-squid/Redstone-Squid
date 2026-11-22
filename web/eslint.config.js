@@ -29,6 +29,7 @@ export default tseslint.config(
       "eslint.config.js",
       "coverage/**",
       "src/generated/**",
+      "src/locales/messages.ts",
       "playwright-report/**",
       "test-results/**",
       "review-gallery/**",
@@ -51,6 +52,11 @@ export default tseslint.config(
         {
           selector: "AssignmentExpression[left.property.name=/^(innerHTML|outerHTML)$/]",
           message: "Render markup through Svelte or Astro so it is escaped.",
+        },
+        {
+          selector:
+            "ImportDeclaration[source.value=/locales\\/messages$/] > :matches(ImportSpecifier, ImportDefaultSpecifier, ImportNamespaceSpecifier[local.name!='m'])",
+          message: 'Import messages as `import * as m from ".../locales/messages"`.',
         },
       ],
     },

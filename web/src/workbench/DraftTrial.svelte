@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, untrack } from "svelte";
-  import { translate, type Locale, type StaticMessageKey } from "../lib/i18n";
+  import type { Locale } from "../locales/locale";
+  import * as m from "../locales/messages";
   import Button from "../ui/svelte/Button.svelte";
   import SelectField from "../ui/svelte/SelectField.svelte";
   import FilePicker from "../ui/svelte/FilePicker.svelte";
@@ -10,6 +11,7 @@
   import Field from "../ui/svelte/Field.svelte";
   import {
     createDraftFixture,
+    draftErrorMessages,
     draftFeedback,
     type DraftPhase,
     type DraftScenario,
@@ -19,7 +21,6 @@
     type DraftInput,
   } from "./draft-fixture";
   let { locale, scenario }: { locale: Locale; scenario?: DraftScenario } = $props();
-  const t = (key: StaticMessageKey): string => translate(locale, key);
   const input = $state<DraftInput>({ title: "", category: "door", width: "", version: "" });
   let search = $state("");
   let errors = $state<DraftErrors>({});
@@ -91,30 +92,30 @@
     void save();
   }}
 >
-  <p class="sq-muted">{t("trial.disclaimer")}</p>
+  <p class="sq-muted">{m.trialDisclaimer(locale)}</p>
   <fieldset class="sq-stack sq-trial-fields" disabled={busy}>
-    <legend class="sq-kicker">{t("trial.details")}</legend>
+    <legend class="sq-kicker">{m.trialDetails(locale)}</legend>
     <Field
-      label={t("workbench.build-title")}
+      label={m.workbenchBuildTitle(locale)}
       bind:value={input.title}
       required
       oninput={edited}
-      error={errors.title !== undefined ? t(`trial.${errors.title}`) : undefined}
+      error={errors.title !== undefined ? draftErrorMessages[errors.title](locale) : undefined}
     />
-    <SelectField label={t("trial.category")} bind:value={input.category} onchange={edited}>
-      <option value="door">{t("trial.door")}</option>
-      <option value="utility">{t("trial.utility")}</option>
+    <SelectField label={m.trialCategory(locale)} bind:value={input.category} onchange={edited}>
+      <option value="door">{m.trialDoor(locale)}</option>
+      <option value="utility">{m.trialUtility(locale)}</option>
     </SelectField>
     {#if input.category === "door"}<Field
-        label={t("trial.width")}
+        label={m.trialWidth(locale)}
         inputmode="numeric"
         bind:value={input.width}
         required
         oninput={edited}
-        error={errors.width !== undefined ? t(`trial.${errors.width}`) : undefined}
+        error={errors.width !== undefined ? draftErrorMessages[errors.width](locale) : undefined}
       />{/if}
     <Field
-      label={t("trial.find-version")}
+      label={m.trialFindVersion(locale)}
       type="search"
       bind:value={search}
       oninput={() => {
@@ -123,42 +124,40 @@
       }}
     />
     <SelectField
-      label={t("workbench.minecraft-version")}
+      label={m.workbenchMinecraftVersion(locale)}
       bind:value={input.version}
       required
-      error={errors.version !== undefined ? t(`trial.${errors.version}`) : undefined}
+      error={errors.version !== undefined ? draftErrorMessages[errors.version](locale) : undefined}
       onchange={edited}
     >
-      <option value="">{t("trial.choose-version")}</option>
+      <option value="">{m.trialChooseVersion(locale)}</option>
       {#each versions as version (version)}<option value={version}>{version}</option>{/each}
     </SelectField>
-    <FilePicker label={t("trial.upload")} onFiles={([file]) => void upload(file)} />
+    <FilePicker label={m.trialUpload(locale)} onFiles={([file]) => void upload(file)} />
   </fieldset>
-  {#if phase === "uploading"}<Progress label={t("trial.uploading")} value={progress} />{/if}
+  {#if phase === "uploading"}<Progress label={m.trialUploading(locale)} value={progress} />{/if}
   {#if retryFile}
-    <Notice role="alert" tone="warning">{t("trial.uploadFailure")}</Notice>
+    <Notice role="alert" tone="warning">{m.trialUploadFailure(locale)}</Notice>
     <div class={layoutStyles({ pattern: "actions" })}>
       <Button disabled={busy} onclick={() => void upload(retryFile)}
-        >{t("trial.retryUpload")}</Button
+        >{m.trialRetryUpload(locale)}</Button
       >
     </div>
   {/if}
-  {#if attachment}<p>{translate(locale, "trial.attachment", { filename: attachment })}</p>{/if}
+  {#if attachment}<p>{m.trialAttachment(locale, { filename: attachment })}</p>{/if}
   <div class={layoutStyles({ pattern: "actions" })}>
     <Button type="submit" variant="primary" disabled={busy}
-      >{t(
-        phase === "saving"
-          ? "trial.saving"
-          : phase === "error"
-            ? "trial.retry"
-            : "workbench.save-draft",
-      )}</Button
+      >{(phase === "saving"
+        ? m.trialSaving
+        : phase === "error"
+          ? m.trialRetry
+          : m.workbenchSaveDraft)(locale)}</Button
     >{#if busy}<Button
         onclick={() => {
           operation?.abort();
           phase = "idle";
-        }}>{t("trial.cancel")}</Button
+        }}>{m.trialCancel(locale)}</Button
       >{/if}
   </div>
-  <Notice role="status" tone={feedback.tone}>{t(feedback.message)}</Notice>
+  <Notice role="status" tone={feedback.tone}>{feedback.message(locale)}</Notice>
 </form>

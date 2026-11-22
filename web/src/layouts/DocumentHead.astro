@@ -1,5 +1,6 @@
 ---
-import { LOCALES, SUPPORTED_LOCALES, localizePath, translate } from "../lib/i18n";
+import { LOCALES, SUPPORTED_LOCALES, localizePath } from "../locales/locale";
+import * as m from "../locales/messages";
 type Props = {
   title: string;
   themeColor?: string;
@@ -12,8 +13,8 @@ type Props = {
 };
 
 const { locale, config } = Astro.locals;
-const title = `${Astro.props.title} · ${translate(locale, "site.name")}`;
-const description = Astro.props.description ?? translate(locale, "meta.defaultDescription");
+const title = `${Astro.props.title} · ${m.siteName(locale)}`;
+const description = Astro.props.description ?? m.metaDefaultDescription(locale);
 const canonicalPath = Astro.props.canonicalPath ?? Astro.url.pathname;
 const canonical = new URL(localizePath(canonicalPath, locale), config.siteUrl).toString();
 const englishUrl = new URL(localizePath(canonicalPath, "en"), config.siteUrl).toString();
@@ -39,7 +40,7 @@ const jsonLd = Astro.props.structuredData
 <link rel="alternate" hreflang="x-default" href={englishUrl} />
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 <meta property="og:type" content="website" />
-<meta property="og:site_name" content={translate(locale, "site.name")} />
+<meta property="og:site_name" content={m.siteName(locale)} />
 <meta property="og:locale" content={LOCALES[locale].openGraph} />
 <meta property="og:title" content={title} />
 <meta property="og:description" content={description} />

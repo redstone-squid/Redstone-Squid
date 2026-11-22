@@ -1,5 +1,6 @@
 <script lang="ts">
-  import { translate, type Locale, type StaticMessageKey } from "../lib/i18n";
+  import type { Locale } from "../locales/locale";
+  import * as m from "../locales/messages";
   import ArrowRight from "@lucide/svelte/icons/arrow-right";
   import Check from "@lucide/svelte/icons/check";
   import Plus from "@lucide/svelte/icons/plus";
@@ -9,7 +10,6 @@
   import Field from "../ui/svelte/Field.svelte";
   import Dialog from "../ui/svelte/Dialog.svelte";
   let { locale }: { locale: Locale } = $props();
-  const t = (key: StaticMessageKey): string => translate(locale, key);
   let title = $state("");
   let submitted = $state(false);
   let saved = $state(false);
@@ -19,11 +19,13 @@
 <div class="sq-stack">
   <div class="sq-row">
     <Dialog
-      title={t("workbench.create-a-draft")}
-      description={t("workbench.draft-description")}
-      closeLabel={t("workbench.close-dialog")}
+      title={m.workbenchCreateADraft(locale)}
+      description={m.workbenchDraftDescription(locale)}
+      closeLabel={m.workbenchCloseDialog(locale)}
     >
-      {#snippet trigger()}<Plus size={16} aria-hidden="true" />{t("workbench.new-draft")}{/snippet}
+      {#snippet trigger()}<Plus size={16} aria-hidden="true" />{m.workbenchNewDraft(
+          locale,
+        )}{/snippet}
       <form
         class="sq-stack"
         novalidate
@@ -34,43 +36,43 @@
         }}
       >
         <Field
-          label={t("workbench.build-title")}
+          label={m.workbenchBuildTitle(locale)}
           bind:value={title}
           required
           oninput={() => {
             saved = false;
           }}
-          error={invalid ? t("workbench.enter-a-title-for-your-build") : undefined}
+          error={invalid ? m.workbenchEnterATitleForYourBuild(locale) : undefined}
         />
         <Button type="submit" variant="primary"
-          >{t("workbench.save-draft")}<ArrowRight size={16} aria-hidden="true" /></Button
+          >{m.workbenchSaveDraft(locale)}<ArrowRight size={16} aria-hidden="true" /></Button
         >
         <p role="status">
           {saved
-            ? t("workbench.example-draft-saved")
+            ? m.workbenchExampleDraftSaved(locale)
             : invalid
-              ? t("workbench.check-the-highlighted-field")
+              ? m.workbenchCheckTheHighlightedField(locale)
               : ""}
         </p>
       </form>
     </Dialog>
     <Button
       onclick={() => document.getElementById("patterns")?.scrollIntoView({ behavior: "smooth" })}
-      >{t("workbench.browse-examples")}</Button
+      >{m.workbenchBrowseExamples(locale)}</Button
     >
-    <Button disabled>{t("workbench.unavailable")}</Button>
+    <Button disabled>{m.workbenchUnavailable(locale)}</Button>
   </div>
   <div class="sq-grid">
     <Field
-      label={t("workbench.creator")}
-      hint={t("workbench.public-name-shown-on-the-build")}
+      label={m.workbenchCreator(locale)}
+      hint={m.workbenchPublicNameShownOnTheBuild(locale)}
       placeholder="CircuitSage"
     />
     <Autocomplete
       name="specimen-version"
-      label={t("workbench.minecraft-version")}
-      suggestionsLabel={t("search.suggestions")}
-      errorLabel={t("search.suggestionError")}
+      label={m.workbenchMinecraftVersion(locale)}
+      suggestionsLabel={m.searchSuggestions(locale)}
+      errorLabel={m.searchSuggestionError(locale)}
       minLength={0}
       load={(query) =>
         Promise.resolve({
@@ -81,6 +83,6 @@
     />
   </div>
   <p class="sq-inline-note">
-    <Check size={16} aria-hidden="true" />{t("workbench.controls-description")}
+    <Check size={16} aria-hidden="true" />{m.workbenchControlsDescription(locale)}
   </p>
 </div>

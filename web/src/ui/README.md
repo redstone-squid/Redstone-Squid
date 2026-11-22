@@ -39,8 +39,8 @@ monospace for technical values.
 
 Astro owns server-rendered routes. Use Svelte for new interactive islands.
 
-Use the Fluent catalogues in `src/locales` for both languages. After updating
-message IDs, run `bun run i18n:generate`. Catalogue URLs use locale prefixes;
+Shared UI takes text through props; callers pass messages from `src/locales/messages`
+(see `web/AGENTS.md`). Catalogue URLs use locale prefixes;
 the workbench uses a language query parameter. The language selector preserves the URL query.
 
 ## Review
