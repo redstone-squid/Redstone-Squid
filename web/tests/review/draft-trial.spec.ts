@@ -1,6 +1,6 @@
 import { localizePath } from "@/locales/locale";
 import { test, expect } from "../support/test";
-import { APP_URL } from "../support/servers";
+import { attachReviewScreenshot } from "../support/review-screenshot";
 
 test.use({ video: "on" });
 for (const locale of ["en", "zh-CN"] as const) {
@@ -67,12 +67,7 @@ for (const locale of ["en", "zh-CN"] as const) {
     }
     await page.evaluate(() => document.fonts.ready);
     await page.getByLabel(labels.title, { exact: true }).focus();
-    const screenshot = testInfo.outputPath("draft.png");
-    await page.screenshot({ path: screenshot, fullPage: true });
-    await testInfo.attach(`svelte-${locale}`, {
-      path: screenshot,
-      contentType: "image/png",
-    });
+    await attachReviewScreenshot(page, testInfo, `svelte-${locale}`, "allow");
     await expect(page).toHaveScreenshot(`trial-svelte-${locale}.png`, { fullPage: true });
     await page.getByLabel(labels.category).selectOption("utility");
     await expect(page.getByLabel(labels.width)).toHaveCount(0);
@@ -102,16 +97,14 @@ for (const locale of ["en", "zh-CN"] as const) {
     await expect(trigger).toBeFocused();
   });
 
-  test(`${locale} / server-rendered form`, async ({ browser }) => {
-    const context = await browser.newContext({ javaScriptEnabled: false });
-    try {
-      const page = await context.newPage();
-      await page.goto(`${APP_URL}${localizePath("/design-system-trial", locale)}`);
+  test.describe(`${locale} with JavaScript disabled`, () => {
+    test.use({ javaScriptEnabled: false });
+
+    test("renders the form on the server", async ({ page }) => {
+      await page.goto(localizePath("/design-system-trial", locale));
       await expect(page.getByLabel(labels.title, { exact: true })).toBeVisible();
       await expect(page.getByLabel(labels.width)).toBeVisible();
       await expect(page.getByLabel(labels.version, { exact: true })).toBeVisible();
-    } finally {
-      await context.close();
-    }
+    });
   });
 }

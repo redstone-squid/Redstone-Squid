@@ -1,4 +1,3 @@
-import { APP_URL } from "../support/servers";
 import { expect, test } from "../support/test";
 
 test("serves an installable web app manifest", async ({ request }) => {
@@ -10,23 +9,21 @@ test("serves an installable web app manifest", async ({ request }) => {
   expect(manifest.icons.some((icon) => icon.purpose === "maskable")).toBe(true);
 });
 
-test("shows the offline page in the visitor's locale when a navigation fails", async ({
-  browser,
-}) => {
-  // The default project blocks service workers; this test needs one.
-  const context = await browser.newContext({ serviceWorkers: "allow" });
-  try {
-    const page = await context.newPage();
-    await page.goto(`${APP_URL}/zh-cn/records`);
+test.describe("with a service worker", () => {
+  test.use({ serviceWorkers: "allow" });
+
+  test("shows the offline page in the visitor's locale when a navigation fails", async ({
+    context,
+    page,
+  }) => {
+    await page.goto("/zh-cn/records");
     await page.evaluate(async () => {
       await navigator.serviceWorker.ready;
     });
     // The worker controls pages loaded after it activates.
     await page.reload();
     await context.setOffline(true);
-    await page.goto(`${APP_URL}/zh-cn/builds`);
+    await page.goto("/zh-cn/builds");
     await expect(page.getByRole("heading", { level: 1 })).toHaveText("你已离线");
-  } finally {
-    await context.close();
-  }
+  });
 });

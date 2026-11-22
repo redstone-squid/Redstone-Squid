@@ -1,7 +1,7 @@
 import { localizePath } from "@/locales/locale";
 import { buttonStyles } from "@/ui/variants";
 import { expect, test } from "../support/test";
-import { APP_URL } from "../support/servers";
+import { attachReviewScreenshot } from "../support/review-screenshot";
 
 for (const locale of ["en", "zh-CN"] as const) {
   for (const theme of ["light", "dark"]) {
@@ -24,19 +24,17 @@ for (const locale of ["en", "zh-CN"] as const) {
       ).toBe(true);
       await expect(page).toPassAxe();
       const name = `${locale}-${theme}`;
-      const screenshot = testInfo.outputPath(`${name}.png`);
-      await page.screenshot({ path: screenshot, fullPage: true, animations: "disabled" });
-      await testInfo.attach(name, { path: screenshot, contentType: "image/png" });
+      await attachReviewScreenshot(page, testInfo, name, "disabled");
       await expect(page).toHaveScreenshot(`${name}.png`, { fullPage: true });
     });
   }
 }
 
-test("public workbench content renders without JavaScript", async ({ browser }) => {
-  const context = await browser.newContext({ javaScriptEnabled: false });
-  try {
-    const page = await context.newPage();
-    await page.goto(`${APP_URL}/design-system`);
+test.describe("with JavaScript disabled", () => {
+  test.use({ javaScriptEnabled: false });
+
+  test("public workbench content renders without JavaScript", async ({ page }) => {
+    await page.goto("/design-system");
     await expect(page.getByRole("heading", { name: "Design system" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Copper Bolt 5×5" })).toBeVisible();
     await page.getByRole("combobox", { name: "Variant", exact: true }).selectOption("quiet");
@@ -54,9 +52,7 @@ test("public workbench content renders without JavaScript", async ({ browser }) 
     await page.getByLabel("English · Language").first().click();
     await page.getByRole("link", { name: "简体中文", exact: true }).first().click();
     await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
-  } finally {
-    await context.close();
-  }
+  });
 });
 
 test("reflows at 320px and retains controls in forced colours", async ({ page }) => {
