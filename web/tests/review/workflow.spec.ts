@@ -1,5 +1,5 @@
 import * as m from "@/locales/messages.gen";
-import { expect, test } from "../support/test";
+import { expect, test } from "@tests/support/test";
 test.use({ video: "on", reducedMotion: "no-preference" });
 
 test.describe("workflow recording", () => {

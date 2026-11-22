@@ -1,5 +1,5 @@
 import * as m from "@/locales/messages.gen";
-import { expect, test } from "../support/test";
+import { expect, test } from "@tests/support/test";
 
 test("serves an installable web app manifest", async ({ request }) => {
   const manifest = (await (await request.get("/manifest.webmanifest")).json()) as {

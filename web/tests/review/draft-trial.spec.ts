@@ -1,7 +1,7 @@
 import { localizePath } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
-import { test, expect } from "../support/test";
-import { attachReviewScreenshot } from "../support/review-screenshot";
+import { test, expect } from "@tests/support/test";
+import { attachReviewScreenshot } from "@tests/support/review-screenshot";
 
 test.use({ video: "on" });
 for (const locale of ["en", "zh-CN"] as const) {

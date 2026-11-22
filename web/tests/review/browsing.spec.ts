@@ -1,6 +1,6 @@
 import { LOCALES } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
-import { expect, test } from "../support/test";
+import { expect, test } from "@tests/support/test";
 
 test("browse sample records, change language, and open the media placeholder", async ({ page }) => {
   await page.goto("/design-system?theme=dark#browsing");

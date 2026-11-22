@@ -1,4 +1,4 @@
-import { expect, test } from "../support/test";
+import { expect, test } from "@tests/support/test";
 
 // Pseudo text is about 40% longer than English, so fixed widths and clipped labels show up here
 // before a real translation runs into them.

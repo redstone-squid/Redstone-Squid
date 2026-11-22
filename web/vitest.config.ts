@@ -4,7 +4,13 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   plugins: [svelte({ configFile: false })],
-  resolve: { alias: { "@": path.resolve(import.meta.dirname, "src") }, conditions: ["browser"] },
+  resolve: {
+    alias: {
+      "@": path.resolve(import.meta.dirname, "src"),
+      "@tests": path.resolve(import.meta.dirname, "tests"),
+    },
+    conditions: ["browser"],
+  },
   test: {
     environment: "jsdom",
     include: ["tests/unit/**/*.test.ts"],

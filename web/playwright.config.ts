@@ -5,7 +5,7 @@ import {
   FIXTURE_API_COMMAND,
   appEnvironment,
   fixtureApiEnvironment,
-} from "./tests/support/servers";
+} from "@tests/support/servers";
 
 const CI = Boolean(process.env.CI);
 

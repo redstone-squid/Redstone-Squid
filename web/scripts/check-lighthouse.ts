@@ -7,7 +7,7 @@ import {
   FIXTURE_API_COMMAND,
   appEnvironment,
   fixtureApiEnvironment,
-} from "../tests/support/servers";
+} from "@tests/support/servers";
 
 const pages = [
   ["home", `${APP_URL}/`],

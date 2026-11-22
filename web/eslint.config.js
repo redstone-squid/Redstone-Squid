@@ -283,7 +283,7 @@ export default tseslint.config(
             {
               name: "@playwright/test",
               importNames: ["test", "expect"],
-              message: "Import test and expect from tests/support/test.",
+              message: "Import test and expect from @tests/support/test.",
             },
           ],
         },

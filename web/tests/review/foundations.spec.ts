@@ -2,8 +2,8 @@ import { LOCALES } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
 import { localizePath } from "@/locales/locale";
 import { buttonStyles } from "@/ui/variants";
-import { expect, test } from "../support/test";
-import { attachReviewScreenshot } from "../support/review-screenshot";
+import { expect, test } from "@tests/support/test";
+import { attachReviewScreenshot } from "@tests/support/review-screenshot";
 
 for (const locale of ["en", "zh-CN"] as const) {
   for (const theme of ["light", "dark"]) {

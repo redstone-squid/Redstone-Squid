@@ -1,6 +1,6 @@
 import { LOCALES } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
-import { expect, test } from "../support/test";
+import { expect, test } from "@tests/support/test";
 
 test("the language selector preserves a detail URL and its query", async ({ page }) => {
   await page.goto("/tags/zero-tick?view=compact");

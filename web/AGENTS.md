@@ -152,9 +152,10 @@ declaration and explain surprising decisions beside the code that depends on the
   Follow [tag pages](tests/e2e/tag-slugs.spec.ts) for visible page content and HTTP contracts.
   Remove a route from the placeholder matrix when its page ships.
 - `tests/review`: screenshots, axe, and recorded workflows of the design-system workbench.
-- Browser specs import `test` and `expect` from `tests/support/test`. A test fails on any
-  console error, and `await expect(page).toPassAxe()` runs axe. Server ports and environment
-  live in `tests/support/servers.ts`.
+- Use `@tests/` for imports of shared test support. Browser specs import `test` and
+  `expect` from `@tests/support/test`. A test fails on any console error, and
+  `await expect(page).toPassAxe()` runs axe. Server ports and environment live in
+  `tests/support/servers.ts`.
 
 Name tests for the behavior they protect. Keep the action and outcome visible in each test.
 Use generated catalogue messages for accessible names in interaction tests. Assert errors on

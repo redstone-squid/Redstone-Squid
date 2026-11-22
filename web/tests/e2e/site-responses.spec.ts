@@ -1,4 +1,4 @@
-import { expect, test } from "../support/test";
+import { expect, test } from "@tests/support/test";
 
 for (const [route, status] of [
   ["/unknown", 404],
