@@ -1,13 +1,13 @@
 <script lang="ts">
-  import { translate, type Locale, type StaticMessageKey } from "../../lib/i18n";
+  import { translate, type Locale, type StaticMessageKey } from "../lib/i18n";
   import ArrowRight from "@lucide/svelte/icons/arrow-right";
   import Check from "@lucide/svelte/icons/check";
   import Plus from "@lucide/svelte/icons/plus";
-  import Button from "../../ui/svelte/Button.svelte";
+  import Button from "../ui/svelte/Button.svelte";
   import { versionOptions } from "./draft-fixture";
-  import Autocomplete from "../../ui/svelte/Autocomplete.svelte";
-  import Field from "../../ui/svelte/Field.svelte";
-  import Dialog from "../../ui/svelte/Dialog.svelte";
+  import Autocomplete from "../ui/svelte/Autocomplete.svelte";
+  import Field from "../ui/svelte/Field.svelte";
+  import Dialog from "../ui/svelte/Dialog.svelte";
   let { locale }: { locale: Locale } = $props();
   const t = (key: StaticMessageKey): string => translate(locale, key);
   let title = $state("");

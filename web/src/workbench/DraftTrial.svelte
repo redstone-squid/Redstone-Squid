@@ -1,13 +1,13 @@
 <script lang="ts">
   import { onDestroy, untrack } from "svelte";
-  import { translate, type Locale, type StaticMessageKey } from "../../lib/i18n";
-  import Button from "../../ui/svelte/Button.svelte";
-  import SelectField from "../../ui/svelte/SelectField.svelte";
-  import FilePicker from "../../ui/svelte/FilePicker.svelte";
-  import Progress from "../../ui/svelte/Progress.svelte";
-  import Notice from "../../ui/svelte/Notice.svelte";
-  import { layoutStyles } from "../../ui/variants";
-  import Field from "../../ui/svelte/Field.svelte";
+  import { translate, type Locale, type StaticMessageKey } from "../lib/i18n";
+  import Button from "../ui/svelte/Button.svelte";
+  import SelectField from "../ui/svelte/SelectField.svelte";
+  import FilePicker from "../ui/svelte/FilePicker.svelte";
+  import Progress from "../ui/svelte/Progress.svelte";
+  import Notice from "../ui/svelte/Notice.svelte";
+  import { layoutStyles } from "../ui/variants";
+  import Field from "../ui/svelte/Field.svelte";
   import {
     createDraftFixture,
     draftFeedback,

@@ -1,7 +1,7 @@
 ---
-import { translate, type Locale, type StaticMessageKey } from "../../lib/i18n";
-import LinkButton from "../../ui/astro/LinkButton.astro";
-import { buttonStyles } from "../../ui/variants";
+import { translate, type Locale, type StaticMessageKey } from "../lib/i18n";
+import LinkButton from "../ui/astro/LinkButton.astro";
+import { buttonStyles } from "../ui/variants";
 
 type Props = { locale: Locale; theme: "light" | "dark" };
 const { locale, theme } = Astro.props;

@@ -1,7 +1,7 @@
 import { render, screen, cleanup, waitFor } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import Controls from "../../src/features/workbench/Controls.svelte";
+import Controls from "../../src/workbench/Controls.svelte";
 import { translate, type Locale } from "../../src/lib/i18n";
 
 afterEach(cleanup);

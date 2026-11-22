@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { translate, type Locale, type StaticMessageKey } from "../../lib/i18n";
-  import CheckField from "../../ui/svelte/CheckField.svelte";
-  import Field from "../../ui/svelte/Field.svelte";
-  import FieldGroup from "../../ui/svelte/FieldGroup.svelte";
-  import SelectField from "../../ui/svelte/SelectField.svelte";
-  import TextareaField from "../../ui/svelte/TextareaField.svelte";
+  import { translate, type Locale, type StaticMessageKey } from "../lib/i18n";
+  import CheckField from "../ui/svelte/CheckField.svelte";
+  import Field from "../ui/svelte/Field.svelte";
+  import FieldGroup from "../ui/svelte/FieldGroup.svelte";
+  import SelectField from "../ui/svelte/SelectField.svelte";
+  import TextareaField from "../ui/svelte/TextareaField.svelte";
 
   let { locale, state }: { locale: Locale; state: "normal" | "invalid" | "disabled" } = $props();
   const t = (key: StaticMessageKey) => translate(locale, key);

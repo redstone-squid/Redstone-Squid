@@ -7,13 +7,13 @@ import { evaluateBudgets, type BundleManifest, type EntryBudget } from "./bundle
 // inventory in sync with page composition; locale routes share the same code.
 const budgets: EntryBudget[] = [
   {
-    entries: ["src/features/workbench/Controls.svelte"],
+    entries: ["src/workbench/Controls.svelte"],
     label: "Design workbench (Svelte)",
     initialKiB: 65,
     completeKiB: 90,
   },
   {
-    entries: ["src/features/workbench/DraftTrial.svelte"],
+    entries: ["src/workbench/DraftTrial.svelte"],
     label: "Svelte draft trial",
     initialKiB: 50,
     completeKiB: 80,

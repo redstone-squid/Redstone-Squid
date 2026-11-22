@@ -10,7 +10,12 @@ export default defineConfig({
     setupFiles: ["./tests/setup.ts"],
     coverage: {
       provider: "v8",
-      include: ["src/lib/**/*.ts", "src/ui/**/*.{ts,svelte}", "src/features/**/*.{ts,svelte}"],
+      include: [
+        "src/lib/**/*.ts",
+        "src/ui/**/*.{ts,svelte}",
+        "src/features/**/*.{ts,svelte}",
+        "src/workbench/**/*.{ts,svelte}",
+      ],
       exclude: ["src/generated/**"],
       reporter: ["text", "json-summary"],
       thresholds: {

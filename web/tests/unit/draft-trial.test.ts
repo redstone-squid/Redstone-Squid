@@ -1,7 +1,7 @@
 import { render, screen, cleanup } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import DraftTrial from "../../src/features/workbench/DraftTrial.svelte";
+import DraftTrial from "../../src/workbench/DraftTrial.svelte";
 
 afterEach(cleanup);
 
