@@ -5,6 +5,7 @@ from collections.abc import Sequence
 import pytest
 
 from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldDefinition, FieldRegistry, FieldType
+from squid.core.suggestions.application.queries import TagEntry
 from squid.core.suggestions.domain import SuggestionRequest
 from squid.core.suggestions.infrastructure.providers.search_fields import SearchFieldProvider
 from squid.core.suggestions.infrastructure.providers.search_query import SearchQueryProvider
@@ -23,6 +24,17 @@ class FakeFilterValues:
         self.values = values or {}
         self.calls: list[tuple[str, str, int]] = []
 
+    async def tag_entries(
+        self, semantic_kind: str, *, build_kind: str | None = None, authority: str | None = "official"
+    ) -> Sequence[TagEntry]:
+        if semantic_kind != "pattern":
+            return []
+        assert authority is None
+        return [
+            TagEntry(1, "a", "Alpha", "pattern", aliases=("woven",), authority="user"),
+            TagEntry(2, "z", "Zig Zag", "pattern", aliases=("woven",)),
+        ]
+
     async def filter_values(self, field_name: str, prefix: str, *, limit: int) -> Sequence[str]:
         self.calls.append((field_name, prefix, limit))
         return [value for value in self.values.get(field_name, []) if value.casefold().startswith(prefix.casefold())]
@@ -37,6 +49,13 @@ async def suggest(query: str, cursor: int | None = None, **values: list[str]):
     instance, filters = provider(values)
     result = await instance.suggest(SuggestionRequest(source="search_query", query=query, cursor=cursor, limit=10))
     return result, filters
+
+
+async def test_freeform_alias_prefers_official_patterns_and_replaces_one_term() -> None:
+    result, _ = await suggest("width:3 wove")
+    assert [item.value for item in result.items[:2]] == ['pattern:"Zig Zag"', 'pattern:"Alpha"']
+    assert result.replacement is not None
+    assert (result.replacement.start, result.replacement.end) == (8, 12)
 
 
 async def test_a_bare_word_suggests_field_names_ready_for_a_value() -> None:

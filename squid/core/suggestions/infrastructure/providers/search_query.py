@@ -28,14 +28,17 @@ from squid.core.suggestions.domain import (
     SuggestionRequest,
     SuggestionResult,
 )
+from squid.core.suggestions.infrastructure.cache import TtlCache
 from squid.core.suggestions.infrastructure.providers.search_fields import (
     SearchFieldProvider,
     SearchSortProvider,
     suggestion_search_scope,
 )
+from squid.core.suggestions.infrastructure.providers.tags import TagReader
+from squid.core.tags.domain import TagSemanticKind
 
 
-class FilterValueReader(Protocol):
+class FilterValueReader(TagReader, Protocol):
     """Read indexed values for search completions."""
 
     async def filter_values(self, field_name: str, prefix: str, *, limit: int) -> Sequence[str]: ...
@@ -51,6 +54,24 @@ class SearchQueryProvider:
     def __init__(self, search: SearchFields, filters: FilterValueReader) -> None:
         self._search = search
         self._filters = filters
+        self._tags = TtlCache(self._load_tags)
+
+    async def _load_tags(self, _key: None) -> tuple[Candidate, ...]:
+        candidates = []
+        for kind in TagSemanticKind:
+            field = "tag" if kind is TagSemanticKind.SHOWCASE else kind.value
+            entries = await self._filters.tag_entries(kind, authority=None)
+            candidates.extend(
+                Candidate.create(
+                    f"{field}:{render_value(entry.display_name, quoted=True)}",
+                    label=entry.display_name,
+                    kind=field,
+                    terms=(entry.display_name, entry.stable_key, *entry.aliases),
+                    priority=-1 if entry.authority == "user" else 0,
+                )
+                for entry in entries
+            )
+        return tuple(candidates)
 
     async def suggest(self, request: SuggestionRequest) -> SuggestionResult:
         scope = suggestion_search_scope(request)
@@ -66,7 +87,8 @@ class SearchQueryProvider:
             case CompletionKind.FIELD_VALUE:
                 return SuggestionResult(items=await self._values(context, limit, scope), replacement=span)
             case CompletionKind.TERM:
-                return SuggestionResult(items=_terms(context, registry, limit), replacement=span)
+                tags = await self._tags.get(None) if context.prefix and scope != SearchScope.METADATA else ()
+                return SuggestionResult(items=_terms(context, registry, limit, tags), replacement=span)
 
     async def _values(self, context: CompletionContext, limit: int, scope: SearchScope) -> tuple[Suggestion, ...]:
         assert context.field is not None
@@ -89,7 +111,9 @@ class SearchQueryProvider:
         )
 
 
-def _terms(context: CompletionContext, registry: FieldRegistry, limit: int) -> tuple[Suggestion, ...]:
+def _terms(
+    context: CompletionContext, registry: FieldRegistry, limit: int, tags: Sequence[Candidate]
+) -> tuple[Suggestion, ...]:
     """Offer field names, and boolean keywords once there is something to combine."""
     candidates: list[Candidate] = [
         # The colon is part of the value: picking a field should leave the caret ready to type a
@@ -107,6 +131,7 @@ def _terms(context: CompletionContext, registry: FieldRegistry, limit: int) -> t
         candidates.extend(
             Candidate.create(keyword, description="combine terms", kind="operator") for keyword in BOOLEAN_KEYWORDS
         )
+    candidates.extend(tags)
     return rank(context.prefix, candidates, limit=limit)
 
 

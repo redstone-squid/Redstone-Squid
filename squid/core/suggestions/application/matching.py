@@ -36,6 +36,7 @@ class Candidate:
 
     suggestion: Suggestion
     terms: tuple[str, ...] = field(default=())
+    priority: int = 0
 
     @classmethod
     def create(
@@ -46,13 +47,14 @@ class Candidate:
         description: str | None = None,
         kind: str = "",
         terms: tuple[str, ...] = (),
+        priority: int = 0,
         value_type: str | None = None,
     ) -> Candidate:
         """Build a candidate, matched on `terms` when given and on its label and value otherwise."""
         suggestion = Suggestion(
             value=value, label=label or value, description=description, kind=kind, value_type=value_type
         )
-        return cls(suggestion, terms)
+        return cls(suggestion, terms, priority)
 
     def match_terms(self) -> tuple[str, ...]:
         """Return the strings to match, defaulting to the label and value."""
@@ -79,7 +81,7 @@ def rank(query: str, candidates: Iterable[Candidate], *, limit: int) -> tuple[Su
     if not normalized:
         return tuple(item.suggestion for item in islice(candidates, limit))
 
-    scored: list[tuple[int, float, str, Suggestion]] = []
+    scored: list[tuple[int, float, int, str, Suggestion]] = []
     for item in candidates:
         best = _best_match(normalized, item.match_terms())
         if best is None:
@@ -87,9 +89,9 @@ def rank(query: str, candidates: Iterable[Candidate], *, limit: int) -> tuple[Su
         tier, score = best
         # Negated so a plain ascending sort puts the strongest match first, while the label
         # tie-break stays ascending and keeps equal-scoring results in a stable, readable order.
-        scored.append((-tier, -score, item.suggestion.label.casefold(), item.suggestion))
-    scored.sort(key=lambda entry: entry[:3])
-    return tuple(entry[3] for entry in scored[:limit])
+        scored.append((-tier, -score, -item.priority, item.suggestion.label.casefold(), item.suggestion))
+    scored.sort(key=lambda entry: entry[:4])
+    return tuple(entry[4] for entry in scored[:limit])
 
 
 def _best_match(query: str, terms: Sequence[str]) -> tuple[MatchTier, float] | None:

@@ -66,6 +66,7 @@ class PostgresSuggestionRepository:
                 stable_key=row.stable_key,
                 display_name=row.display_name,
                 semantic_kind=semantic_kind,
+                authority=row.authority,
                 aliases=tuple(alias.alias for alias in row.aliases),
                 value_type=None if row.value_type is TagValueType.NONE else row.value_type.value,
             )

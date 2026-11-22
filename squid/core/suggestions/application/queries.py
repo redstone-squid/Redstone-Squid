@@ -18,6 +18,7 @@ class TagEntry:
     aliases: tuple[str, ...] = ()
     value_type: str | None = None
     """The value a showcase tag takes, such as "numeric"; None when it takes none."""
+    authority: str = "official"
 
 
 @dataclass(frozen=True, slots=True)
