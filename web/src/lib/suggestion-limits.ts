@@ -1,1 +1,0 @@
-export const MAX_SUGGESTION_QUERY_LENGTH = 200;
