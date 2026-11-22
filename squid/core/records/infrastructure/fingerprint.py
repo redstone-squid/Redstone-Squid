@@ -27,7 +27,7 @@ def publication_fingerprint(batch: ComputationBatch) -> str:
             document["door_evidence"]["sources"].sort(key=lambda source: source["build_id"])
         records.append(document)
     value = {
-        "fingerprint_version": 2,
+        "fingerprint_version": 3,
         "rules_revision_id": batch.rules_revision_id,
         "kind": batch.kind.value,
         "version_id": batch.version_id,

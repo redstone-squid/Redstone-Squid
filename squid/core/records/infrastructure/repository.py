@@ -1132,16 +1132,9 @@ def _metric_snapshot(computed: ComputedRecordResult, candidate: Candidate) -> di
 
 
 def _fixed_metric_snapshot(criterion: RecordCriterion, candidate: Candidate) -> dict[str, object]:
-    snapshot: dict[str, object] = {}
-    if criterion in (
-        RecordCriterion.FASTEST_SMALLEST,
-        RecordCriterion.SMALLEST,
-        RecordCriterion.SMALLEST_FASTEST,
-    ):
-        snapshot["volume"] = candidate.fixed_volume
+    snapshot: dict[str, object] = {"volume": candidate.fixed_volume}
     if criterion is RecordCriterion.FIRST:
         snapshot["completion_at"] = candidate.completion_at.isoformat() if candidate.completion_at is not None else None
-        return snapshot
     reduction = reduce_timing_variants(candidate.timing_variants)
     snapshot["timing"] = list(reduction.timing.values) if reduction.timing is not None else None
     return snapshot
