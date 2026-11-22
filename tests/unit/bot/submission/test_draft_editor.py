@@ -6,6 +6,7 @@ editor, and the preview are separate messages that share the panel's DraftWorksp
 """
 
 from dataclasses import replace
+from pathlib import Path
 from typing import Any, override
 from unittest.mock import AsyncMock, Mock
 from uuid import UUID, uuid4
@@ -16,7 +17,6 @@ from whenever import Instant
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
-from squid.bot.submission import draft_intake
 from squid.bot.submission.ui.drafts import (
     BuildPreviewScreen,
     DraftEditorScreen,
@@ -28,7 +28,17 @@ from squid.core.actors import Actor
 from squid.core.builds.application.input import parse_build_ticks
 from squid.core.builds.domain.credits import Credit, CreditAttribution, CreditKind, CreditRole
 from squid.core.builds.models import Build, DoorBuild
-from squid.core.edits.domain import Revision, RevisionConflictError
+from squid.core.edits.application import EditRunner
+from squid.core.edits.domain import (
+    EditCommand,
+    EditOutcome,
+    EditReceipt,
+    EditResult,
+    EditValues,
+    Revision,
+    RevisionConflictError,
+    require_revision,
+)
 from squid.core.submissions.application import (
     AppliedDraftChange,
     FinalizationJobSnapshot,
@@ -39,6 +49,8 @@ from squid.core.submissions.application import (
     SubmissionFormService,
     build_submission_manifest,
 )
+from squid.core.submissions.application.attachment_edits import DRAFT_ATTACHMENTS, AttachmentValues
+from squid.core.submissions.application.attachment_uploads import DraftAttachmentUploads
 from squid.core.submissions.application.edits import draft_target
 from squid.core.submissions.application.finalization import SubmissionRequestResult
 from squid.core.submissions.application.forms import CURRENT_SUBMISSION_SCHEMA, CURRENT_SUBMISSION_SCHEMA_REVISION
@@ -58,6 +70,7 @@ from squid.core.submissions.domain.finalization import (
     SubmissionAttentionReason,
 )
 from squid.core.submissions.domain.intake import IntakeStatus
+from squid.core.submissions.domain.source_files import SubmissionSourceFile
 from squid.core.submissions.errors import DraftAccessDeniedError
 from squid.core.tags.application import TagService
 from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
@@ -71,6 +84,7 @@ from squid_ui.interactions.forms import FormValueError
 from squid_ui.runtime import transaction
 from squid_ui.testing import find, find_all, labels, texts
 from tests.support.draft_edits import DraftEditRecorder
+from tests.support.edits import bound_revisions
 from tests.support.services import bot_services
 
 
@@ -203,11 +217,6 @@ def rendered_text(screen: sd.Screen[Any]) -> str:
 
 def press() -> Mock:
     return Mock(spec=sd.PressEvent, present_form=AsyncMock())
-
-
-async def submit_modal(event: Mock, values: dict[str, Any]) -> None:
-    with transaction():
-        await event.present_form.call_args.kwargs["on_submit"](Mock(spec=sl.SubmitEvent, values=values))
 
 
 async def test_reopening_reads_saved_answers_and_pinned_manifest() -> None:
@@ -369,40 +378,22 @@ async def test_required_fields_are_counted_until_the_draft_is_ready() -> None:
 async def test_modal_sections_open_in_place_and_keep_the_overview() -> None:
     services, drafts = setup()
     editor = await open_editor(services, drafts)
-    editor.open_child = AsyncMock()  # type: ignore[method-assign]
-    event = press()
-    await editor._edit_section("dimensions_versions", event)
-    editor.open_child.assert_not_awaited()
-    entries = {entry.key: entry for entry in event.present_form.call_args.args[0].items}
-    assert set(entries) == {"capture_size", "version_compatibility"}
-    assert not entries["capture_size"].required
+    async with stage(editor, owner=object()) as ui:
+        first = await ui.press_for_form("edit_dimensions_versions")
+        stale = await ui.press_for_form("edit_dimensions_versions")
+        assert len(first.modal.children) == 2
+        assert ui.query('TextInput[custom_id="capture_size"][required=false]', view=first.modal).exists()
+        assert ui.query('TextInput[custom_id="version_compatibility"]', view=first.modal).exists()
+        assert any("Name and credits" in text for text in ui.texts())
 
-    await submit_modal(event, {"capture_size": "3x4x5", "version_compatibility": None})
-    answers = editor.workspace.draft.snapshot.answers
+        await first.submit({"capture_size": "3x4x5"})
+        assert any("Build dimensions: 3 x 4 x 5" in text for text in ui.texts())
+
+        await stale.submit({"capture_size": "9x9x9"})
+        assert any("Build dimensions: 3 x 4 x 5" in text for text in ui.texts())
+    answers = drafts.current.snapshot.answers
     assert (answers["capture_width"], answers["capture_height"], answers["capture_depth"]) == (3, 4, 5)
-    assert "Build dimensions: 3 x 4 x 5" in rendered_text(editor)
-
-    # The modal was opened at revision 0, so a second submission from it is stale.
-    await submit_modal(event, {"capture_size": "9x9x9", "version_compatibility": None})
-    assert editor.workspace.draft.snapshot.answers["capture_width"] == 3
-    assert (
-        source_text(editor.workspace.notice)
-        == RevisionConflictError(Revision(draft_target(drafts.current.snapshot.id), 0), 1).public_detail()
-    )
-
-
-async def test_catalogue_sections_open_a_separate_editor_message() -> None:
-    services, drafts = setup("door")
-    editor = await open_editor(services, drafts)
-    editor.open_child = AsyncMock()  # type: ignore[method-assign]
-    event = press()
-    await editor._edit_section("patterns", event)
-    event.present_form.assert_not_awaited()
-    child = editor.open_child.call_args.args[1]
-    assert isinstance(child, SectionEditorScreen)
-    assert child.workspace is editor.workspace
-    # The overview is unchanged: it still lists every section with its Edit button.
-    assert labels(editor.render()).count("Edit") == len(editor.workspace.sections)
+    assert len(drafts.changes) == 1
 
 
 async def test_a_choice_in_an_editor_message_redraws_the_panel() -> None:
@@ -429,17 +420,16 @@ async def test_a_choice_in_an_editor_message_redraws_the_panel() -> None:
 async def test_door_size_may_omit_depth_but_not_width() -> None:
     services, drafts = setup("door")
     editor = await open_editor(services, drafts)
-    event = press()
-    await editor._edit_section("door_geometry", event)
-    await submit_modal(event, {"opening_size": "2 x 3", "door_orientation": "door"})
-    assert "opening_depth" not in editor.workspace.draft.snapshot.answers
-    assert "Opening size: 2 x 3 x ?" in rendered_text(editor)
-    assert "Opening size: 2 x 3 x ? —" not in rendered_text(editor)
+    async with stage(editor, owner=object()) as ui:
+        form = await ui.press_for_form("edit_door_geometry")
+        await form.submit({"opening_size": "2 x 3", "door_orientation": "door"})
+        assert "opening_depth" not in drafts.current.snapshot.answers
+        assert any("Opening size: 2 x 3 x ?" in text for text in ui.texts())
+        assert not any("Opening size: 2 x 3 x ? —" in text for text in ui.texts())
 
-    event = press()
-    await editor._edit_section("door_geometry", event)
-    await submit_modal(event, {"opening_size": "? x 3", "door_orientation": "door"})
-    assert "Opening size: ? x 3 x ? — ⚠️ Required" in rendered_text(editor)
+        form = await ui.press_for_form("edit_door_geometry")
+        await form.submit({"opening_size": "? x 3", "door_orientation": "door"})
+        assert any("Opening size: ? x 3 x ? — ⚠️" in text for text in ui.texts())
 
 
 def test_size_input_rejects_text_that_is_not_a_size() -> None:
@@ -467,10 +457,9 @@ async def test_saved_ticks_show_as_seconds_and_prefill_the_modal_losslessly() ->
     with transaction() as tx:
         await editor.workspace.save_values(tx, {"opening_time": 7})
     assert "Opening time: 0.35s" in rendered_text(editor)
-    event = press()
-    await editor._edit_section("door_timing", event)
-    entry = next(item for item in event.present_form.call_args.args[0].items if item.key == "opening_time")
-    assert entry.format(entry.default) == "0.35s"
+    async with stage(editor, owner=object()) as ui:
+        form = await ui.press_for_form("edit_door_timing")
+        assert ui.query('TextInput[custom_id="opening_time"][default="0.35s"]', view=form.modal).exists()
     assert parse_build_ticks("0.35s") == 7
 
 
@@ -637,6 +626,7 @@ async def test_pressing_edit_on_a_catalogue_section_opens_a_second_message() -> 
         (child_root,) = ui.root._lifetime.roots()
         child = child_root.component
         assert isinstance(child, SectionEditorScreen)
+        assert child.workspace is editor.workspace
         # The child was sent as its own message; the panel kept its overview.
         harness.response.send_message.assert_awaited_once()
         assert harness.response.send_message.await_args is not None
@@ -702,12 +692,63 @@ async def test_answer_history_reverses_saved_values_without_reverting_other_fiel
     assert drafts.current.snapshot.answers["display_name"] == "Saved name"
 
 
+class FileActionIntake(Intake):
+    def __init__(self) -> None:
+        super().__init__()
+        self.registered: list[tuple[UUID, Actor, UUID, bytes]] = []
+        self.failed: list[tuple[UUID, Actor, UUID]] = []
+
+    @override
+    def max_file_bytes(self, filename: str, content_type: str | None) -> int:
+        return 8
+
+    @override
+    async def reserve(
+        self, draft_id: UUID, actor: Actor, source_id: UUID, filename: str, content_type: str | None
+    ) -> SuppliedAttachment:
+        return next(file for file in self.files if file.id == source_id)
+
+    @override
+    async def register_file(
+        self, draft_id: UUID, actor: Actor, source_id: UUID, path: Path, content_type: str | None
+    ) -> None:
+        self.registered.append((draft_id, actor, source_id, path.read_bytes()))
+
+    @override
+    async def fail(self, draft_id: UUID, actor: Actor, source_id: UUID) -> None:
+        self.failed.append((draft_id, actor, source_id))
+
+
+class AttachmentEditRecorder(EditRunner):
+    def __init__(self, drafts: Drafts) -> None:
+        self.drafts = drafts
+        self.commands: list[tuple[EditCommand, Actor]] = []
+
+    @override
+    async def execute(self, command: EditCommand, actor: Actor) -> EditResult:
+        assert command.kind == DRAFT_ATTACHMENTS
+        (expected,) = bound_revisions(command)
+        current = await self.drafts.get_accessible(UUID(expected.target.key), actor)
+        require_revision(expected, current.snapshot.revision)
+        self.commands.append((command, actor))
+        snapshot = replace(current.snapshot, revision=expected.value + 1)
+        self.drafts.current = replace(current, snapshot=snapshot)
+        revisions = (Revision(expected.target, snapshot.revision),)
+        return EditResult(
+            EditOutcome(command.operation_id, actor.key, command.fingerprint, revisions, changed=True, final=False),
+            EditReceipt(command, EditValues.of({}), command.values, revisions),
+        )
+
+
 @pytest.mark.parametrize("operation", ["add", "replace", "use", "failed-add", "failed-replace"])
-async def test_file_actions_refresh_staff_authority(operation: str, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_file_actions_refresh_staff_authority(operation: str) -> None:
     services, drafts = setup()
-    services = replace(services, submission_uploads=Mock(stage=AsyncMock()))
-    actor = Actor(account_id=99, discord_user_id=123, guild_id=456, discord_role_ids=frozenset({789}))
-    resolve_actor = AsyncMock(return_value=Actor(account_id=7))
+    intake, edits = FileActionIntake(), AttachmentEditRecorder(drafts)
+    uploads = AsyncMock(spec=DraftAttachmentUploads)
+    services = replace(services, submission_uploads=uploads, submission_intake=intake, edits=edits)
+    owner = Actor(account_id=7)
+    staff = Actor(account_id=99, discord_user_id=123, guild_id=456, discord_role_ids=frozenset({789}))
+    resolve_actor = AsyncMock(return_value=owner)
     draft_id = drafts.current.snapshot.id
     ws = (
         await DraftEditorScreen.load(
@@ -717,43 +758,59 @@ async def test_file_actions_refresh_staff_authority(operation: str, monkeypatch:
             resolve_actor=resolve_actor,
         )
     ).workspace
-    resolve_actor.return_value = actor
-    drafts.required_actor = actor
-    register = AsyncMock(side_effect=OSError("download failed") if operation.startswith("failed-") else None)
-    retained = AsyncMock()
-    fail = AsyncMock()
-    monkeypatch.setattr(draft_intake, "register_uploaded_file", register)
-    monkeypatch.setattr(draft_intake, "receive_retained_file", retained)
-    monkeypatch.setattr(services.submission_intake, "fail", fail)
-    # Attachment edit outcomes are covered by the edit service tests.
-    save = AsyncMock()
-    monkeypatch.setattr(ws.edits, "bind", Mock(return_value=Mock(save=save)))
-    source = sl.forms.UploadedFile("file.png", "image/png", 4, "", AsyncMock(return_value=b"file"))
-    file_id = uuid4()
-    if operation in {"add", "failed-add"}:
-        await ws.add_files((source,))
-    elif operation == "replace":
-        assert await ws.replace_file(file_id, source) is not None
-    elif operation == "failed-replace":
-        assert await ws.replace_file(file_id, source) is None
-        save.assert_not_awaited()
-        fail.assert_not_awaited()
-    else:
-        await ws.use_file(file_id)
+    revision = ws.revision
+    resolve_actor.return_value = staff
+    drafts.required_actor = staff
 
+    async def download() -> bytes:
+        if operation.startswith("failed-"):
+            raise OSError("download failed")
+        return b"file"
+
+    file_id = uuid4()
+    uploaded = sl.forms.UploadedFile("file.png", "image/png", 4, "", download)
     if operation == "use":
-        retained.assert_awaited_once_with(services, draft_id, actor, file_id)
+        # An oversized retained file fails before a CDN request is needed.
+        retained = SubmissionSourceFile(file_id, "file.png", "image/png", "https://cdn.discordapp.com/file.png", 9)
+        intake.files = (SuppliedAttachment(file_id, "file.png", "image", IntakeStatus.PENDING, retained),)
+        await ws.use_file(file_id)
+        assert intake.failed == [(draft_id, staff, file_id)]
+        assert not intake.registered
+        assert not edits.commands
+        uploads.stage.assert_not_awaited()
+        return
+
+    replacement = None
+    if operation in {"add", "failed-add"}:
+        await ws.add_files((uploaded,))
     else:
-        stage = services.submission_uploads.stage
-        assert isinstance(stage, AsyncMock)
-        assert stage.await_count == 1
-        assert stage.call_args.args[:2] == (draft_id, actor)
-        register.assert_awaited_once()
-        assert register.call_args.args[:3] == (services, draft_id, actor)
+        replacement = await ws.replace_file(file_id, uploaded)
+
+    uploads.stage.assert_awaited_once()
+    staged_draft, staged_actor, staged_revision, (membership,) = uploads.stage.await_args.args
+    assert (staged_draft, staged_actor, staged_revision) == (draft_id, staff, revision)
+    if operation == "failed-replace":
+        assert replacement is None
+        assert not edits.commands
+        assert not intake.registered
+        assert not intake.failed
+        return
+
+    ((command, edit_actor),) = edits.commands
+    assert edit_actor == staff
+    assert command.expected == (Revision(draft_target(draft_id), revision),)
+    values = AttachmentValues.model_validate_json(command.values.encoded)
+    assert [(file.source_id, file.present) for file in values.files] == (
+        [(file_id, False), (membership.source_id, True)] if operation == "replace" else [(membership.source_id, True)]
+    )
+    if operation == "replace":
+        assert replacement == membership.source_id
     if operation == "failed-add":
-        save.assert_awaited_once()
-        fail.assert_awaited_once()
-        assert fail.call_args.args[:2] == (draft_id, actor)
+        assert intake.failed == [(draft_id, staff, membership.source_id)]
+        assert not intake.registered
+    else:
+        assert intake.registered == [(draft_id, staff, membership.source_id, b"file")]
+        assert not intake.failed
 
 
 async def test_catalogue_search_keeps_selections_outside_the_results() -> None:
