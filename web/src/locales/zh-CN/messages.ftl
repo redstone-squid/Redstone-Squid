@@ -119,7 +119,6 @@ workbench-secondary = 次要
 workbench-quiet = 低调
 workbench-normal = 默认
 workbench-small = 紧凑
-workbench-apply = 应用
 workbench-library-description = 查看构建目录使用的设计变量，试用界面控件。
 workbench-spacing = 间距
 workbench-typography = 字体

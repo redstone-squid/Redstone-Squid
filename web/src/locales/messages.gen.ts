@@ -1499,18 +1499,6 @@ export function workbenchSmall(locale: Locale = getLocale()): string {
   }
 }
 
-/** Apply */
-export function workbenchApply(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Apply";
-    case "zh-CN":
-      return "应用";
-    case "en-XA":
-      return "[" + "Åþþļý" + "··]";
-  }
-}
-
 /** Inspect the tokens and try the controls used across the build catalogue. */
 export function workbenchLibraryDescription(locale: Locale = getLocale()): string {
   switch (locale) {

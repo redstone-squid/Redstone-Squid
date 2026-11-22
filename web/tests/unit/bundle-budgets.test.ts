@@ -6,12 +6,12 @@ import {
   type EntryBudget,
 } from "../../scripts/bundle-budgets";
 
-const manifest: BundleManifest = {
+const manifest = {
   island: { file: "island.js", isEntry: true, imports: ["shared"], dynamicImports: ["lazy"] },
   renderer: { file: "renderer.js", isEntry: true, imports: ["shared"] },
   shared: { file: "shared.js", imports: ["island"] },
   lazy: { file: "lazy.js", imports: ["shared"] },
-};
+} satisfies BundleManifest;
 const sizes = new Map([
   ["island.js", 10],
   ["renderer.js", 20],
@@ -38,6 +38,17 @@ describe("workflow bundle budgets", () => {
         "renderer",
       ),
     ).toThrow("Unbudgeted client entry");
+  });
+  it("counts visibility-triggered entries only in the complete workflow", () => {
+    const deferred = { ...budgets[0], deferredEntries: ["lazy"] };
+    const withDeferredEntry = {
+      ...manifest,
+      island: { ...manifest.island, dynamicImports: [] },
+      lazy: { ...manifest.lazy, isEntry: true },
+    };
+    expect(evaluateBudgets(withDeferredEntry, sizes, [deferred], "renderer")).toEqual([
+      { ...deferred, initialBytes: 60, completeBytes: 100 },
+    ]);
   });
   it("rejects stale manifests, missing imports, and unaccounted emitted chunks", () => {
     expect(() => dependencyFiles(manifest, ["missing"], true)).toThrow(

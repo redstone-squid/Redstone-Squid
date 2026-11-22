@@ -36,30 +36,46 @@ test.describe("with JavaScript disabled", () => {
   test.use({ javaScriptEnabled: false });
 
   test("public workbench content renders without JavaScript", async ({ page }) => {
-    await page.goto("/design-system");
+    await page.goto("/design-system?theme=dark&variant=quiet&size=small");
     await expect(page.getByRole("heading", { name: m.workbenchPageTitle("en") })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Copper Bolt 5×5" })).toBeVisible();
-    await page
-      .getByRole("combobox", { name: m.workbenchVariant("en"), exact: true })
-      .selectOption("quiet");
-    await page
-      .getByRole("combobox", { name: m.workbenchSize("en"), exact: true })
-      .selectOption("small");
-    await page.getByRole("button", { name: m.workbenchApply("en"), exact: true }).click();
     const preview = page.locator("#button-story").getByRole("link");
-    const quietSmall = buttonStyles({ variant: "quiet", size: "small" });
-    await expect(preview).toContainClass(quietSmall);
-    await page.getByRole("link", { name: m.workbenchDarkTheme("en"), exact: true }).click();
-    await expect(preview).toContainClass(quietSmall);
-    await preview.click();
+    await expect(preview).toContainClass(buttonStyles({ variant: "quiet", size: "small" }));
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
-    await page.getByRole("link", { name: m.workbenchFoundations("en"), exact: true }).click();
-    await expect(page).toHaveURL(/design-system\?.*#foundations$/);
-    const header = page.getByRole("banner");
-    await header.getByLabel(`${LOCALES.en.label} · ${m.navLanguage("en")}`).click();
-    await header.getByRole("link", { name: LOCALES["zh-CN"].label, exact: true }).click();
-    await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
   });
+});
+
+test("updates button previews and theme without navigating", async ({ page }) => {
+  await page.goto("/design-system#button-story");
+  const navigations: string[] = [];
+  page.on("request", (request) => {
+    if (request.isNavigationRequest()) navigations.push(request.url());
+  });
+  const variant = page.getByRole("combobox", { name: m.workbenchVariant("en") });
+  const size = page.getByRole("combobox", { name: m.workbenchSize("en") });
+  const preview = page.locator("#button-story").getByRole("link");
+  await variant.selectOption("quiet");
+  await size.selectOption("small");
+  await expect(preview).toContainClass(buttonStyles({ variant: "quiet", size: "small" }));
+  await expect(page).toHaveURL(/\?variant=quiet&size=small#button-story$/);
+
+  const darkTheme = page.getByRole("button", { name: m.workbenchDarkTheme("en") });
+  await darkTheme.focus();
+  await darkTheme.press("Enter");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.getByRole("button", { name: m.workbenchLightTheme("en") })).toBeFocused();
+  await expect(preview).toHaveAttribute("href", "/design-system-trial?theme=dark");
+  await expect(
+    page.getByRole("complementary").getByRole("link", { name: m.trialTitle("en") }),
+  ).toHaveAttribute("href", /\/design-system-trial\?theme=dark$/);
+  expect(navigations).toEqual([]);
+
+  const header = page.getByRole("banner");
+  await header.getByLabel(`${LOCALES.en.label} · ${m.navLanguage("en")}`).click();
+  await header.getByRole("link", { name: LOCALES["zh-CN"].label, exact: true }).click();
+  await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(preview).toContainClass(buttonStyles({ variant: "quiet", size: "small" }));
 });
 
 test("reflows at 320px and retains controls in forced colours", async ({ page }) => {
@@ -79,26 +95,37 @@ test("reflows at 320px and retains controls in forced colours", async ({ page })
   await expect(page.getByRole("dialog")).toBeVisible();
 });
 
-test("shares the selected field state and layout", async ({ page }) => {
+test("changes field state and layout in place and restores them from the URL", async ({ page }) => {
   await page.goto("/design-system?theme=dark&layout=row#fields");
+  const navigations: string[] = [];
+  page.on("request", (request) => {
+    if (request.isNavigationRequest()) navigations.push(request.url());
+  });
   const fields = page.getByRole("region", { name: m.workbenchFormControls("en") });
-  await fields.getByRole("link", { name: m.workbenchInvalid("en") }).click();
+  const invalid = fields.getByRole("button", { name: m.workbenchInvalid("en") });
+  await invalid.focus();
+  const scroll = await page.evaluate(() => window.scrollY);
+  await invalid.press("Enter");
   const category = fields.getByRole("combobox", { name: m.trialCategory("en") });
   await expect(category).toHaveAttribute("aria-invalid", "true");
   await expect(category).toHaveAccessibleDescription(m.trialRequired("en"));
-  await fields.getByRole("link", { name: m.workbenchDisabled("en") }).click();
+  await expect(invalid).toBeFocused();
+  expect(await page.evaluate(() => window.scrollY)).toBe(scroll);
+  await fields.getByRole("button", { name: m.workbenchDisabled("en") }).click();
   await expect(category).toBeDisabled();
   await expect(fields.getByRole("radio", { name: "Java", exact: true })).toBeDisabled();
 
   const layouts = page.getByRole("region", { name: m.workbenchLayouts("en"), exact: true });
   await expect(
-    layouts.getByRole("link", { name: m.workbenchRow("en"), exact: true }),
-  ).toHaveAttribute("aria-current", "true");
-  await layouts.getByRole("link", { name: m.workbenchStack("en"), exact: true }).click();
-  await layouts.getByRole("link", { name: m.workbenchCompact("en"), exact: true }).click();
+    layouts.getByRole("button", { name: m.workbenchRow("en"), exact: true }),
+  ).toHaveAttribute("aria-pressed", "true");
+  await layouts.getByRole("button", { name: m.workbenchStack("en"), exact: true }).click();
+  await layouts.getByRole("button", { name: m.workbenchCompact("en"), exact: true }).click();
   await expect(layouts.locator("code")).toContainText('<Layout pattern="stack" gap="compact">');
+  expect(navigations).toEqual([]);
   await page.reload();
   await expect(category).toBeDisabled();
+  await expect(layouts.locator("code")).toContainText('<Layout pattern="stack" gap="compact">');
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 });
 

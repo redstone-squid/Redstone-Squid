@@ -54,6 +54,8 @@ for (const locale of ["en", "zh-CN"] as const) {
   test(`${locale} / dialog keyboard behavior`, async ({ page }) => {
     await page.goto(localizePath("/design-system", locale));
     const trigger = page.getByRole("button", { name: m.workbenchNewDraft(locale), exact: true });
+    await trigger.scrollIntoViewIfNeeded();
+    await expect(trigger).toBeEnabled();
     await trigger.focus();
     await page.keyboard.press("Enter");
     const dialog = page.getByRole("dialog");

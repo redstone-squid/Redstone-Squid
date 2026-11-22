@@ -4,12 +4,19 @@ import { expect, test } from "@tests/support/test";
 
 test("browse sample records, change language, and open the media placeholder", async ({ page }) => {
   await page.goto("/design-system?theme=dark#browsing");
+  const navigations: string[] = [];
+  page.on("request", (request) => {
+    if (request.isNavigationRequest()) navigations.push(request.url());
+  });
   const story = page.getByRole("region", { name: m.workbenchBrowsing("en"), exact: true });
-  await story.getByRole("link", { name: m.commonLoadMore("en") }).click();
+  await story.getByRole("button", { name: m.commonLoadMore("en") }).click();
   await expect(story.getByRole("heading", { name: m.workbenchSeamlessDoor("en") })).toBeVisible();
   await expect(story.getByText(m.recordRefreshPending("en"))).toBeVisible();
-  await story.getByRole("link", { name: m.commonPrevious("en") }).click();
+  const previous = story.getByRole("button", { name: m.commonPrevious("en") });
+  await expect(previous).toBeFocused();
+  await previous.click();
   await expect(story.getByRole("heading", { name: m.workbenchPistonDoor("en") })).toBeVisible();
+  expect(navigations).toEqual([]);
   await story.getByLabel(`${LOCALES.en.label} · ${m.navLanguage("en")}`).click();
   await story.getByRole("link", { name: LOCALES["zh-CN"].label }).click();
   await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");

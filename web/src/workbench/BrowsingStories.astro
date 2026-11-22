@@ -1,47 +1,48 @@
 ---
 import LanguageSelector from "@/layouts/LanguageSelector.astro";
-import Pagination from "@/features/catalogue/Pagination.astro";
 import type { PublishedRecordResult } from "@/generated/types.gen";
 import { localizePath } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
-import { readOffset } from "@/features/catalogue/pagination";
 import LinkButton from "@/ui/astro/LinkButton.astro";
 import Layout from "@/ui/astro/Layout.astro";
 import Panel from "@/ui/astro/Panel.astro";
 import { buildFixtures } from "./fixtures";
 import RecordSummary from "@/features/catalogue/RecordSummary.astro";
+import BrowsingPreview from "./BrowsingPreview.svelte";
 
-const url = new URL(Astro.url);
-url.hash = "browsing";
-const second = readOffset(url.searchParams) === 1;
-const build = buildFixtures[second ? 1 : 0];
-const record: PublishedRecordResult = {
-  result_id: second ? 2 : 1,
-  definition_id: 1,
-  record_id: build.id,
-  title: `${build.category()} · ${build.dimensions}`,
-  subtitle: build.category(),
-  criterion: second ? "smallest" : "fastest",
-  build_kind: "door",
-  version_scope: "all_time",
-  status: "resolved",
-  holder_build_ids: [1],
-  computed_at: "2026-01-12T00:00:00Z",
-  refresh_pending: second,
-};
+const { search } = Astro.url;
+function fixtureRecord(index: 0 | 1): PublishedRecordResult {
+  const build = buildFixtures[index];
+  return {
+    result_id: index + 1,
+    definition_id: 1,
+    record_id: build.id,
+    title: `${build.category()} · ${build.dimensions}`,
+    subtitle: build.category(),
+    criterion: index === 1 ? "smallest" : "fastest",
+    build_kind: "door",
+    version_scope: "all_time",
+    status: "resolved",
+    holder_build_ids: [1],
+    computed_at: "2026-01-12T00:00:00Z",
+    refresh_pending: index === 1,
+  };
+}
 ---
 
 <Panel id="browsing" title={m.workbenchBrowsing()}>
   <Layout pattern="grid">
-    <Layout pattern="stack" gap="normal">
-      <RecordSummary {record} linked={false} />
-      <Pagination {url} prev={second ? { offset: 0 } : null} next={second ? null : { offset: 1 }} />
-    </Layout>
+    <BrowsingPreview client:load {search}>
+      <RecordSummary slot="first" record={fixtureRecord(0)} linked={false} />
+      <RecordSummary slot="next" record={fixtureRecord(1)} linked={false} />
+    </BrowsingPreview>
     <Layout class="justify-items-start" gap="compact">
       <h3>{m.navLanguage()}</h3>
-      <LanguageSelector align="start" />
+      <div data-workbench-language>
+        <LanguageSelector align="start" />
+      </div>
       <h3 class="mt-3">{m.buildMedia()}</h3>
-      <LinkButton href={localizePath(`/design-system/media${url.search}`)}>
+      <LinkButton href={localizePath(`/design-system/media${search}`)} data-workbench-media>
         {m.workbenchMediaStory()}
       </LinkButton>
     </Layout>

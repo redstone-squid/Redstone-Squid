@@ -19,3 +19,16 @@ it("clears the saved status when the draft title changes", async () => {
   await user.type(title, " revised");
   expect(status).toHaveTextContent(/^$/);
 });
+
+it("filters fixture suggestions without regard to case or surrounding space", async () => {
+  const user = userEvent.setup();
+  render(Controls);
+
+  await user.type(
+    screen.getByRole("combobox", { name: m.workbenchMinecraftVersion() }),
+    "  BEDROCK ",
+  );
+  const suggestion = await screen.findByRole("option", { name: "Bedrock 1.21.50" });
+  expect(suggestion).toBeVisible();
+  expect(screen.getAllByRole("option")).toHaveLength(1);
+});

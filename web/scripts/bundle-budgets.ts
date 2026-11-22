@@ -7,6 +7,8 @@ type BundleChunk = {
 export type BundleManifest = Record<string, BundleChunk>;
 export type EntryBudget = {
   entries: string[];
+  /** Islands that hydrate on visibility and count toward the complete workflow. */
+  deferredEntries?: string[];
   label: string;
   initialKiB: number;
   completeKiB: number;
@@ -43,7 +45,10 @@ export function evaluateBudgets(
   budgets: EntryBudget[],
   renderer: string,
 ): BudgetResult[] {
-  const declared = new Set([renderer, ...budgets.flatMap(({ entries }) => entries)]);
+  const declared = new Set([
+    renderer,
+    ...budgets.flatMap(({ entries, deferredEntries = [] }) => [...entries, ...deferredEntries]),
+  ]);
   for (const [key, chunk] of Object.entries(manifest)) {
     if (chunk.isEntry && chunk.file.endsWith(".js") && !declared.has(key)) {
       throw new Error(
@@ -73,7 +78,11 @@ export function evaluateBudgets(
     // Astro loads its Svelte renderer independently of each island's imports.
     const entries = budget.renderer === false ? budget.entries : [...budget.entries, renderer];
     const initial = dependencyFiles(manifest, entries, false);
-    const complete = dependencyFiles(manifest, entries, true);
+    const complete = dependencyFiles(
+      manifest,
+      [...entries, ...(budget.deferredEntries ?? [])],
+      true,
+    );
     for (const file of complete) covered.add(file);
     return { ...budget, initialBytes: bytes(initial), completeBytes: bytes(complete) };
   });

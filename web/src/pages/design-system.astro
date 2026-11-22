@@ -1,28 +1,20 @@
 ---
 import * as m from "@/locales/messages.gen";
-import Layout from "@/ui/astro/Layout.astro";
 import Panel from "@/ui/astro/Panel.astro";
 import { parseTheme } from "@/ui/themes";
 import BrowsingStories from "@/workbench/BrowsingStories.astro";
-import ButtonStory from "@/workbench/ButtonStory.astro";
+import ButtonStory from "@/workbench/ButtonStory.svelte";
 import SvelteControls from "@/workbench/Controls.svelte";
 import Cover from "@/workbench/Cover.astro";
-import FormSpecimen from "@/workbench/FormSpecimen.svelte";
+import FieldStory from "@/workbench/FieldStory.svelte";
 import FoundationsStory from "@/workbench/FoundationsStory.astro";
-import LayoutStory from "@/workbench/LayoutStory.astro";
+import LayoutStory from "@/workbench/LayoutStory.svelte";
 import PatternsStory from "@/workbench/PatternsStory.astro";
 import StatesStory from "@/workbench/StatesStory.astro";
-import StoryOptions from "@/workbench/StoryOptions.astro";
 import WorkbenchLayout from "@/workbench/WorkbenchLayout.astro";
-import { selectedOption } from "@/workbench/story-option";
 
 const theme = parseTheme(Astro.url.searchParams.get("theme"));
-const fieldStates = {
-  normal: m.workbenchNormal,
-  invalid: m.workbenchInvalid,
-  disabled: m.workbenchDisabled,
-} as const;
-const fieldState = selectedOption(fieldStates, Astro.url.searchParams, "fieldState", "normal");
+const { search } = Astro.url;
 ---
 
 <WorkbenchLayout title={m.workbenchPageTitle()} {theme}>
@@ -33,22 +25,15 @@ const fieldState = selectedOption(fieldStates, Astro.url.searchParams, "fieldSta
     title={m.workbenchComponents()}
     description={m.workbenchComponentsDescription()}
   >
-    <ButtonStory {theme} />
-    <SvelteControls client:load />
+    <ButtonStory client:load {search} />
+    <SvelteControls client:visible />
   </Panel>
   <Panel id="fields" title={m.workbenchFormControls()}>
-    <Layout pattern="stack">
-      <StoryOptions
-        label={m.workbenchFieldState()}
-        parameter="fieldState"
-        selected={fieldState}
-        section="fields"
-        options={fieldStates}
-      />
-      <FormSpecimen state={fieldState} />
-    </Layout>
+    <FieldStory client:load {search} />
   </Panel>
-  <LayoutStory />
+  <Panel id="layouts" title={m.workbenchLayouts()}>
+    <LayoutStory client:load {search} />
+  </Panel>
   <PatternsStory />
   <BrowsingStories />
   <StatesStory />

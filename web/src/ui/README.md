@@ -1,8 +1,8 @@
 # Catalogue design system
 
-Open `/design-system` to exercise the components used by the catalogue. Stories
-accept `lang=en|zh-CN` and `theme=light|dark`. Their URLs preserve the selected
-specimen so two people can review the same state. They use local fixtures.
+Open `/design-system` to exercise the components used by the catalogue. Astro renders
+the initial preview from the URL. Svelte controls update the fixtures and query in
+place so the current preview is shareable. Use `/zh-cn/design-system` for Simplified Chinese.
 
 ## Composing a screen
 

@@ -1,19 +1,11 @@
 ---
 import * as m from "@/locales/messages.gen";
-import LinkButton from "@/ui/astro/LinkButton.astro";
-import { THEMES, type Theme } from "@/ui/themes";
+import type { Theme } from "@/ui/themes";
 import { layoutStyles } from "@/ui/variants";
+import ThemeToggle from "./ThemeToggle.svelte";
 
 type Props = { theme: Theme };
 const { theme } = Astro.props;
-// The toggle offers the next theme in THEMES, labelled with its name.
-const next = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length] ?? theme;
-const labels = { light: m.workbenchLightTheme, dark: m.workbenchDarkTheme } satisfies Record<
-  Theme,
-  unknown
->;
-const params = new URLSearchParams(Astro.url.searchParams);
-params.set("theme", next);
 ---
 
 <header class="grid grid-cols-[1.15fr_1fr] overflow-hidden rounded-lg bg-cover text-cover-fg max-md:grid-cols-1">
@@ -23,7 +15,7 @@ params.set("theme", next);
       {m.workbenchLibraryDescription()}
     </p>
     <div class={layoutStyles({ pattern: "row" })}>
-      <LinkButton href={`?${params}`}>{labels[next]()}</LinkButton>
+      <ThemeToggle client:load {theme} />
     </div>
   </div>
   <div aria-hidden="true" class="grid place-items-center overflow-hidden bg-cover-art max-md:h-36">

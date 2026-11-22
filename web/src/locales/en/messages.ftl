@@ -125,7 +125,6 @@ workbench-secondary = Secondary
 workbench-quiet = Quiet
 workbench-normal = Default
 workbench-small = Compact
-workbench-apply = Apply
 workbench-library-description = Inspect the tokens and try the controls used across the build catalogue.
 workbench-spacing = Spacing
 workbench-typography = Typography

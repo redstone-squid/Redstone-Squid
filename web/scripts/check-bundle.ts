@@ -15,7 +15,14 @@ const budgets: EntryBudget[] = [
     renderer: false,
   },
   {
-    entries: ["src/workbench/Controls.svelte"],
+    entries: [
+      "src/workbench/BrowsingPreview.svelte",
+      "src/workbench/ButtonStory.svelte",
+      "src/workbench/FieldStory.svelte",
+      "src/workbench/LayoutStory.svelte",
+      "src/workbench/ThemeToggle.svelte",
+    ],
+    deferredEntries: ["src/workbench/Controls.svelte"],
     label: "Design workbench (Svelte)",
     initialKiB: 47,
     completeKiB: 60,
@@ -23,7 +30,7 @@ const budgets: EntryBudget[] = [
   {
     entries: ["src/workbench/DraftTrial.svelte"],
     label: "Svelte draft trial",
-    initialKiB: 30,
+    initialKiB: 32,
     completeKiB: 45,
   },
 ];

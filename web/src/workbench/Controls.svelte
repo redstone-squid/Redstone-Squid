@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onMount } from "svelte";
   import * as m from "@/locales/messages.gen";
   import ArrowRight from "@lucide/svelte/icons/arrow-right";
   import Check from "@lucide/svelte/icons/check";
@@ -8,7 +9,11 @@
   import Autocomplete from "@/ui/svelte/Autocomplete.svelte";
   import Field from "@/ui/svelte/Field.svelte";
   import Dialog from "@/ui/svelte/Dialog.svelte";
-  import { layoutStyles } from "@/ui/variants";
+  import { buttonStyles, layoutStyles } from "@/ui/variants";
+  let ready = $state(false);
+  onMount(() => {
+    ready = true;
+  });
   let title = $state("");
   let submitted = $state(false);
   let saved = $state(false);
@@ -21,6 +26,7 @@
       title={m.workbenchCreateADraft()}
       description={m.workbenchDraftDescription()}
       closeLabel={m.workbenchCloseDialog()}
+      triggerProps={{ disabled: !ready }}
     >
       {#snippet trigger()}<Plus size={16} aria-hidden="true" />{m.workbenchNewDraft()}{/snippet}
       <form
@@ -53,10 +59,7 @@
         </p>
       </form>
     </Dialog>
-    <Button
-      onclick={() => document.getElementById("patterns")?.scrollIntoView({ behavior: "smooth" })}
-      >{m.workbenchBrowseExamples()}</Button
-    >
+    <a class={buttonStyles()} href="#patterns">{m.workbenchBrowseExamples()}</a>
     <Button disabled>{m.workbenchUnavailable()}</Button>
   </div>
   <div class={layoutStyles({ pattern: "grid" })}>
