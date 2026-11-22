@@ -1,7 +1,11 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  // Built by the PWA integration and loaded by a <script src>, which knip cannot follow.
-  "entry": ["src/sw.ts", "src/layouts/register-service-worker.ts"],
+  // The PWA build and Astro script src attributes are entry points knip cannot follow.
+  "entry": [
+    "src/sw.ts",
+    "src/layouts/register-service-worker.ts",
+    "src/layouts/browser-telemetry.ts",
+  ],
   "ignore": ["src/generated/**", "**/*.gen.ts"],
   // Approved libraries installed before their first use, so agents reach for them instead of
   // writing their own. Remove an entry once code imports it. See "Libraries" in AGENTS.md.
