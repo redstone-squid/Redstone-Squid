@@ -112,22 +112,24 @@ async def test_build_card_renders_composable_v2_card(display_build: Build) -> No
     assert "Submission ID: 7" in str(payload)
 
 
-@pytest.mark.parametrize("build_id", [None, 7])
-def test_build_card_only_quotes_source_snapshots_in_drafts(build_id: int | None) -> None:
-    source = MessageSnapshot(id=3, guild_id=1, channel_id=2, content="Original **source** " + "x" * 400)
-    build = (
-        DoorBuild(source_messages=(source,)) if build_id is None else DoorBuild(id=build_id, source_messages=(source,))
-    )
+@pytest.mark.parametrize("draft", [False, True])
+def test_build_card_quotes_source_messages(draft: bool) -> None:
+    content = "Original **source** " + "x" * 400
+    if draft:
+        build = DoorBuild(source_messages=(MessageSnapshot(id=3, guild_id=1, channel_id=2, content=content),))
+    else:
+        build = DoorBuild(
+            id=7,
+            source_messages=(MessageRef(id=3, guild_id=1, channel_id=2),),
+            source_message_content=content,
+        )
 
     payload = str(render_payload([build_card_module.build_card(build)]).layout.to_components())
 
     assert "https://discord.com/channels/1/2/3" in payload
-    if build_id is None:
-        assert r"Original \\*\\*source\\*\\*" in payload
-        assert "…" in payload
-        assert "x" * 300 not in payload
-    else:
-        assert "source" not in payload
+    assert r"Original \\*\\*source\\*\\*" in payload
+    assert "…" in payload
+    assert "x" * 300 not in payload
 
 
 @pytest.mark.parametrize(

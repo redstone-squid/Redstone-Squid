@@ -215,11 +215,9 @@ class Build(Base, StagedMedia, StagedTaxonomy, StagedCredits, kw_only=True):
     """Public sponsor details captured at submission time."""
     submitter_discord_id: int | None = None
     source_messages: Final[tuple[MessageRef, ...]] = frozen_field(default=())
-    """Source messages in submission order. This origin is fixed after submission.
-
-    A loaded build holds plain references; read message content from the `messages` table.
-    A new build may hold snapshots instead, which the repository records when it first saves the build.
-    """
+    """Source messages in submission order. New builds may carry snapshots from their drafts."""
+    source_message_content: str | None = field(default=None, compare=False)
+    """Latest stored text of the first linkable source message."""
 
     def __post_init__(self) -> None:
         if type(self) is Build:
@@ -330,6 +328,8 @@ class Build(Base, StagedMedia, StagedTaxonomy, StagedCredits, kw_only=True):
             copied.display_unit_definition = original.display_unit_definition
         if source_messages is not None:
             values["source_messages"] = source_messages
+        else:
+            values["source_message_content"] = self.source_message_content
         return type(self)(**values)
 
     def diff[T: Any](self, other: Build, *, allow_different_id: bool = False) -> list[tuple[str, T, T]]:

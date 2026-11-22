@@ -455,6 +455,7 @@ async def test_source_messages_round_trip(
         MessageRef(6000, channel_id=5000, guild_id=4000),
         MessageRef(6001, channel_id=5000, guild_id=4000),
     )
+    assert loaded.source_message_content == "the original submission text"
     # The submission link points at the request, not at a trailing image.
     assert loaded.original_link == "https://discord.com/channels/4000/5000/6000"
     stored = await transact(repository, lambda uow: uow.messages.get_by_id(6000))
@@ -501,6 +502,7 @@ async def test_saving_a_build_keeps_newer_source_message_content(
     reloaded = await transact(repository, lambda uow: uow.builds.get_by_id(build.id))
     assert reloaded is not None
     assert reloaded.description == "changed"
+    assert reloaded.source_message_content == "edited"
     assert reloaded.source_messages == (MessageRef(6100, channel_id=5000, guild_id=4000),)
 
 

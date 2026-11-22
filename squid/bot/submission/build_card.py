@@ -243,14 +243,9 @@ def _build_source(build: Build) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Re
         ),
         None,
     )
-    excerpt = None
-    if (
-        build.id is None  # pyright: ignore[reportUnnecessaryComparison]
-        and isinstance(source, MessageSnapshot)
-        and source.content
-        and (content := _compact_plain(source.content))
-    ):
-        excerpt = sl.plain(truncate_display_text(content, 300))
+    content = source.content if isinstance(source, MessageSnapshot) else build.source_message_content
+    content = _compact_plain(content) if content else ""
+    excerpt = sl.plain(truncate_display_text(content, 300)) if content else None
     preview = message_preview(content=excerpt, jump_url=source.link if source else None)
     return (sl.note(sl.plain(footer)), *preview)
 

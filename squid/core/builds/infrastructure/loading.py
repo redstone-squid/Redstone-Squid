@@ -3,7 +3,7 @@
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from sqlalchemy import select
+from sqlalchemy import case, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.core.accounts.domain import IdentityProvider
@@ -32,6 +32,7 @@ class _CrossContextValues:
     submitter_discord_ids: Mapping[int, int]
     versions: Mapping[int, list[str]]
     source_messages: Mapping[int, list[MessageRef]]
+    source_message_contents: Mapping[int, str | None]
 
 
 class BuildLoader:
@@ -92,15 +93,25 @@ class BuildLoader:
 
         # Join source links to messages so the whole page needs one origin query.
         source_messages: dict[int, list[MessageRef]] = {build_id: [] for build_id in build_ids}
-        for build_id, message_id, channel_id, guild_id in await session.execute(
-            select(BuildSourceMessage.build_id, Message.id, Message.channel_id, Message.guild_id)
+        source_message_contents: dict[int, str | None] = {}
+        for build_id, message_id, channel_id, guild_id, content in await session.execute(
+            select(
+                BuildSourceMessage.build_id,
+                Message.id,
+                Message.channel_id,
+                Message.guild_id,
+                case((Message.deleted_at.is_(None), Message.content)),
+            )
             .join(Message, BuildSourceMessage.message_id == Message.id)
             .where(BuildSourceMessage.build_id.in_(build_ids))
             .order_by(BuildSourceMessage.build_id, BuildSourceMessage.position)
         ):
             source_messages[build_id].append(MessageRef(message_id, channel_id=channel_id, guild_id=guild_id))
 
-        return _CrossContextValues(credits, submitter_discord_ids, versions, source_messages)
+            if channel_id is not None and guild_id is not None:
+                source_message_contents.setdefault(build_id, content)
+
+        return _CrossContextValues(credits, submitter_discord_ids, versions, source_messages, source_message_contents)
 
     @staticmethod
     def _populate(sql_build: Build, values: _CrossContextValues) -> Build:
@@ -148,6 +159,7 @@ class BuildLoader:
         sql_build.submitter_discord_id = submitter_discord_id
         # These facts are immutable to callers; loading supplies their initial values.
         object.__setattr__(sql_build, "__frozen_source_messages", source_messages)
+        sql_build.source_message_content = values.source_message_contents.get(sql_build.id)
         object.__setattr__(sql_build, "__frozen_sponsor", _sponsor(sql_build))
         return sql_build
 
