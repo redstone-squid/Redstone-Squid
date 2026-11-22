@@ -28,32 +28,41 @@ reachable when hidden, because hidden pages still show credits today.
 
 The page keeps its card and Follow button and adds one row of controls:
 
-- **Builds**: opens the catalogue filtered to everything credited to this account.
+- **Builds**: opens the catalogue at `creator:<public_id>`.
 - **Credited as…** (select, shown only when the account has more than one name): opens the
   catalogue filtered to one name (`creator:"Name"`). This is the per-alias view.
 
 The account workspace's Credits tab gets the same **Builds** button for the owner's account.
 
-### 2. Account filter in search: `by:<public_id>`
+### 2. `creator:` matches names and creator IDs
 
 The catalogue should show an account's builds, not a name-based approximation:
 `creator:"A" or creator:"B"` matches strangers who share a name, misses credits whose snapshot
 spelling differs, and cannot exclude private identities.
 
-Add a `by` search field that is compiled when the query runs, not projected. It is an EXISTS
-over `build_credits` joined to claimed aliases and public identities of the account with that
-public ID, using the redirect table for merged accounts. Because it is evaluated at query time, a
-new claim, unlink, visibility change, or merge applies to the next search without reindexing.
+The projection indexes each build's credits twice: the credited names, as now, and the public
+creator ID of every account a credit resolves to. A credit resolves through a claimed alias or a
+public identity. A record document indexes its holders' IDs the same way. `creator:` stays the only
+field users see. A UUID value matches the ID storage field (`creator_id`). Any other value matches
+names. Keeping the two storage fields separate means nobody can credit a build to the literal
+text of someone's UUID and have it appear on that person's page. A credit named exactly like a
+UUID can still be found by plain text search.
 
-Extract the `public_references` subquery from `get_creator_profile_record` into one function that
-both the counts and the search compiler call. The counts on the creator page and the filtered list
-then cannot disagree, and a private identity cannot leak through one of them. Calling it from
-search makes search depend on account tables; that is the price of keeping the visibility rule in
-one place.
+The index has to follow ownership changes. Extend the existing `creator_aliases_enqueue_search`
+trigger, and add triggers on `account_identities` and the merge path. They enqueue every build
+credited to the affected alias or subject: on claim and unclaim, link and unlink, an `is_public`
+change, and a merge, which changes the surviving public ID. A retired public ID in a query is
+rewritten to the canonical one before searching, using the redirect table, so old links keep
+working.
 
-Because it is an ordinary field, `by:` composes with sorting, other filters, records scope, and
-saved preferences. The search summary should show the creator's display name instead of the
-UUID; completion can offer `by:` from the existing `creator_profiles` suggestions.
+The resolution rule (claimed alias, or public identity) already exists as the `public_references`
+subquery in `get_creator_profile_record`. Extract it so the profile counts and the projection use
+the same function. Otherwise the page count and the list it opens can disagree, or one of them can
+expose a private identity.
+
+The query box shows `creator:<uuid>`. The search summary should show the creator's display name.
+Completion already suggests names. It should also offer creator profiles, whose suggestions
+insert the ID.
 
 ### 3. Build to creators
 
@@ -85,12 +94,13 @@ replacement with Back is a separate change.
 
 - A Creators button on published build-log posts (`ui:/builds/{id}/creators`). It is easy once
   the route exists but adds a row to every post.
-- A Web/API counterpart. `/api/v1/creators` can expose `by` once it exists in search.
+- A Web/API counterpart. The API search gets `creator:<id>` for free.
 
 ## Order of work
 
 1. `CreatorPage` route; `/account` opens it.
-2. Shared public-credit subquery, `by:` field, and the Builds controls on the creator page and
+2. Shared credit-resolution subquery, creator IDs in the index with their enqueue triggers, and
+   the Builds controls on the creator page and
    Credits tab.
 3. `credit_owners` and the Creators select on build detail.
 
