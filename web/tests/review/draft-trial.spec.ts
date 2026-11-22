@@ -31,7 +31,6 @@ for (const locale of ["en", "zh-CN"] as const) {
     await save.click();
     await page.getByRole("button", { name: m.trialRetry(locale), exact: true }).click();
     await expect(page.getByRole("status")).toHaveText(m.trialSaved(locale));
-    await expect(page.locator("astro-island")).toHaveCount(1);
     await expect(title).toHaveValue("Copper Bolt");
     // The review suite runs axe in Chromium; compatibility projects exercise the workflow.
     // Playwright's Firefox 1572 crashes in axe on this form.

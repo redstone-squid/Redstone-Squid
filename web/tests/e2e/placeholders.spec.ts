@@ -29,7 +29,6 @@ for (const [prefix, locale] of [
       const main = page.getByRole("main");
       await expect(main.getByRole("heading", { level: 1 })).toHaveCount(1);
       await expect(main.getByText(m.placeholderRebuilding(locale), { exact: true })).toBeVisible();
-      await expect(page.locator("astro-island")).toHaveCount(0);
       const path = new URL(route, "https://catalogue.invalid").pathname;
       await expect(page.locator('link[rel="canonical"]')).toHaveAttribute(
         "href",

@@ -10,29 +10,20 @@ describe("draft trial fixture", () => {
       });
     }
   });
-  it("clears pending transport timers when an operation aborts", async () => {
+  it("stops upload progress and clears its pending timer on abort", async () => {
     vi.useFakeTimers();
     try {
       const api = createDraftFixture();
       const controller = new AbortController();
-      const upload = api.upload(new File(["fixture"], "door.schem"), controller.signal, vi.fn());
-      const rejected = upload.catch((error: unknown) => error);
-      expect(vi.getTimerCount()).toBe(1);
+      const progress = vi.fn();
+      const upload = api.upload(new File(["fixture"], "door.schem"), controller.signal, progress);
+      const rejected = expect(upload).rejects.toMatchObject({ name: "AbortError" });
       controller.abort();
-      expect(await rejected).toMatchObject({ name: "AbortError" });
+      await rejected;
+      expect(progress).not.toHaveBeenCalled();
       expect(vi.getTimerCount()).toBe(0);
     } finally {
       vi.useRealTimers();
     }
-  });
-  it("does not progress or save after cancellation", async () => {
-    const api = createDraftFixture();
-    const controller = new AbortController();
-    controller.abort();
-    const progress = vi.fn();
-    await expect(
-      api.upload(new File([""], "door.schem"), controller.signal, progress),
-    ).rejects.toMatchObject({ name: "AbortError" });
-    expect(progress).not.toHaveBeenCalled();
   });
 });

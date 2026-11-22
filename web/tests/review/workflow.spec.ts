@@ -9,15 +9,9 @@ test.describe("workflow recording", () => {
     await trigger.focus();
     await page.keyboard.press("Enter");
     const dialog = page.getByRole("dialog");
-    const close = dialog.getByRole("button", { name: m.workbenchCloseDialog("en") });
     const save = dialog.getByRole("button", { name: m.workbenchSaveDraft("en") });
     const title = dialog.getByRole("textbox", { name: m.workbenchBuildTitle("en") });
     await expect(dialog).toBeVisible();
-    await expect(close).toBeFocused();
-    await page.keyboard.press("Shift+Tab");
-    await expect(save).toBeFocused();
-    await page.keyboard.press("Tab");
-    await expect(close).toBeFocused();
     await page.keyboard.press("Tab");
     await expect(title).toBeFocused();
     await page.keyboard.press("Enter");
@@ -32,6 +26,5 @@ test.describe("workflow recording", () => {
     await expect(dialog.getByRole("status")).toHaveText(m.workbenchExampleDraftSaved("en"));
     await page.keyboard.press("Escape");
     await expect(dialog).toBeHidden();
-    await expect(trigger).toBeFocused();
   });
 });

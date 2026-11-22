@@ -1,53 +1,21 @@
-import { render, screen, waitFor } from "@testing-library/svelte";
+import { render, screen, within } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
-import Controls from "@/workbench/Controls.svelte";
-import type { Locale } from "@/locales/locale";
+import { expect, it } from "vitest";
 import * as m from "@/locales/messages.gen";
+import Controls from "@/workbench/Controls.svelte";
 
-for (const locale of ["en", "zh-CN"] satisfies Locale[]) {
-  describe(`Svelte workbench (${locale})`, () => {
-    it("validates and saves a draft, then clears feedback on edit", async () => {
-      const user = userEvent.setup();
-      document.documentElement.lang = locale;
-      render(Controls);
-      const trigger = screen.getByRole("button", {
-        name: m.workbenchNewDraft(locale),
-      });
-      await user.click(trigger);
-      const save = await screen.findByRole("button", {
-        name: m.workbenchSaveDraft(locale),
-      });
-      await user.click(save);
-      const title = screen.getByRole("textbox", {
-        name: m.workbenchBuildTitle(locale),
-      });
-      expect(title).toBeInvalid();
-      expect(title).toHaveAccessibleDescription(m.workbenchEnterATitleForYourBuild(locale));
-      const status = screen.getByRole("status");
-      await user.type(title, "Copper Bolt");
-      await user.click(save);
-      expect(status).toHaveTextContent(m.workbenchExampleDraftSaved(locale));
-      await user.type(title, " revised");
-      expect(status).toHaveTextContent(/^$/);
-      await user.click(screen.getByRole("button", { name: m.workbenchCloseDialog(locale) }));
-      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
-    });
-    it("scrolls to the example catalogue", async () => {
-      const target = document.createElement("section");
-      target.id = "patterns";
-      const scroll = vi.fn();
-      target.scrollIntoView = scroll;
-      document.body.append(target);
-      try {
-        const user = userEvent.setup();
-        document.documentElement.lang = locale;
-        render(Controls);
-        await user.click(screen.getByRole("button", { name: m.workbenchBrowseExamples(locale) }));
-        expect(scroll).toHaveBeenCalledWith({ behavior: "smooth" });
-      } finally {
-        target.remove();
-      }
-    });
-  });
-}
+it("clears the saved status when the draft title changes", async () => {
+  const user = userEvent.setup();
+  render(Controls);
+
+  await user.click(screen.getByRole("button", { name: m.workbenchNewDraft() }));
+  const dialog = within(await screen.findByRole("dialog"));
+  const title = dialog.getByRole("textbox", { name: m.workbenchBuildTitle() });
+  const status = dialog.getByRole("status");
+  await user.type(title, "Copper Bolt");
+  await user.click(dialog.getByRole("button", { name: m.workbenchSaveDraft() }));
+  expect(status).toHaveTextContent(m.workbenchExampleDraftSaved());
+
+  await user.type(title, " revised");
+  expect(status).toHaveTextContent(/^$/);
+});

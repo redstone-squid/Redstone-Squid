@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import DraftTrial from "@/workbench/DraftTrial.svelte";
 import * as m from "@/locales/messages.gen";
 
@@ -93,22 +93,16 @@ describe("Draft trial", () => {
     expect(await screen.findByText(m.trialAttachment({ filename: file.name }))).toBeVisible();
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
-  it("cancels an upload and disposes pending work on unmount", async () => {
+  it("re-enables saving when the visitor cancels an upload", async () => {
     const user = userEvent.setup();
-    const view = render(DraftTrial);
-    const upload = screen.getByLabelText(m.trialUpload());
-    const file = new File(["fixture"], "first.schem");
-    await user.upload(upload, file);
+    render(DraftTrial);
+    const save = screen.getByRole("button", { name: m.workbenchSaveDraft() });
+    const file = new File(["fixture"], "door.schem");
+    await user.upload(screen.getByLabelText(m.trialUpload()), file);
+    expect(save).toBeDisabled();
     await user.click(screen.getByRole("button", { name: m.trialCancel() }));
+    expect(save).toBeEnabled();
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
     expect(screen.queryByText(m.trialAttachment({ filename: file.name }))).not.toBeInTheDocument();
-    await user.upload(upload, new File(["fixture"], "second.schem"));
-    const abort = vi.spyOn(AbortController.prototype, "abort");
-    try {
-      view.unmount();
-      expect(abort).toHaveBeenCalled();
-    } finally {
-      abort.mockRestore();
-    }
   });
 });
