@@ -9,6 +9,7 @@ from squid.core.builds.models import ExtenderBuild
 from squid.core.records.application.models import CategoryIdentity
 from squid.core.records.domain import (
     BuildKind,
+    Candidate,
     RecordCriterion,
     ResolutionStatus,
     TimingVariant,
@@ -19,6 +20,7 @@ from squid.core.records.infrastructure.repository import (
     FORMATTER_VERSION,
     PostgresRecordRepository,
     _extender_candidate,
+    _fixed_metric_snapshot,
     _gap_from_row,
 )
 from squid.core.records.models import (
@@ -29,6 +31,12 @@ from squid.core.records.models import (
     RecordResult,
 )
 from tests.support.schema import model_table
+
+
+def test_fastest_holder_snapshot_includes_volume_and_timing() -> None:
+    holder = Candidate(build_id=1, fixed_volume=80, timing_variants=(TimingVariant((10, None)),))
+
+    assert _fixed_metric_snapshot(RecordCriterion.FASTEST, holder) == {"volume": 80, "timing": [10, None]}
 
 
 def test_requested_category_key_round_trips() -> None:

@@ -131,6 +131,7 @@ class RecordSearchHit:
     metrics: dict[str, str | int | float | bool] = field(default_factory=dict)
     holder_build_ids: tuple[int, ...] = ()
     holders: tuple[RecordSearchHolder, ...] = ()
+    matched_holder_id: int | None = None
     matched: bool = True
     title_match: SearchText | None = None
     resource_kind: Literal["record"] = field(default="record", init=False)

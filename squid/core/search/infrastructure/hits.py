@@ -6,6 +6,7 @@ from pydantic import TypeAdapter
 
 from squid.core.search.domain import BuildSearchHit, MetadataSearchHit, RecordSearchHit, SearchHit
 from squid.core.search.domain.models import RecordSearchHolder
+from squid.core.search.infrastructure.holder_metrics import timing_values
 from squid.core.search.models import SearchDocument
 
 _HOLDERS = TypeAdapter(tuple[RecordSearchHolder, ...])
@@ -24,7 +25,7 @@ def public_identity(document: SearchDocument) -> tuple[Literal["build", "record"
     return "metadata", f"{document.resource_kind}:{document.source_key}"
 
 
-def document_hit(document: SearchDocument, score: float | None) -> SearchHit:
+def document_hit(document: SearchDocument, score: float | None, *, holder_id: int | None = None) -> SearchHit:
     data = document.document_data
     tags = tuple(document.tags)
     if document.resource_kind == "record":
@@ -37,19 +38,31 @@ def document_hit(document: SearchDocument, score: float | None) -> SearchHit:
         build_id = 0
         if isinstance(holder_ids, list | tuple) and holder_ids and type(holder_ids[0]) is int:
             build_id = holder_ids[0]
+        holders = _HOLDERS.validate_python(data.get("holders", ()))
+        build_title = _string(data, "build_title", document.title)
+        if holder_id is not None:
+            build_id = holder_id
+            if (holder := next((h for h in holders if h.build_id == holder_id), None)) is not None:
+                build_title = holder.title
+            holder_metrics = data.get("holder_metrics")
+            if isinstance(holder_metrics, dict) and isinstance(selected := holder_metrics.get(str(build_id)), dict):
+                metrics = selected
+        public_metrics = {name: value for name, value in metrics.items() if isinstance(value, str | int | float | bool)}
+        public_metrics.update(timing_values(_string(data, "build_kind", ""), metrics.get("timing")))
         return RecordSearchHit(
             source_id=document.source_key,
             title=document.title,
             subtitle=document.subtitle,
             build_id=build_id,
-            build_title=_string(data, "build_title", document.title),
+            build_title=build_title,
             criterion=_string(data, "base_title", "unknown"),
             version_scope=_string(data, "version_scope", "all-time"),
             holder_build_ids=tuple(holder_ids) if isinstance(holder_ids, list | tuple) else (),
-            holders=_HOLDERS.validate_python(data.get("holders", ())),
+            holders=holders,
             score=score,
             tags=tags,
-            metrics=cast(dict[str, str | int | float | bool], metrics),
+            metrics=public_metrics,
+            matched_holder_id=holder_id,
         )
     if document.resource_kind == "build":
         return BuildSearchHit(

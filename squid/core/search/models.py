@@ -97,6 +97,14 @@ class SearchDocumentFilter(Base, kw_only=True):
             name="search_document_filters_identity_key",
         ),
         Index(
+            "search_document_filters_holder_idx",
+            "document_id",
+            "holder_build_id",
+            "field_name",
+            unique=True,
+            postgresql_where=text("holder_build_id IS NOT NULL"),
+        ),
+        Index(
             "search_document_filters_text_idx",
             "field_name",
             "text_value",
@@ -142,6 +150,7 @@ class SearchDocumentFilter(Base, kw_only=True):
     )
     field_name: Mapped[str] = mapped_column(Text, nullable=False)
     ordinal: Mapped[int] = mapped_column(SmallInteger, nullable=False, server_default=text("0"))
+    holder_build_id: Mapped[int | None] = mapped_column(BigInteger, default=None)
     text_value: Mapped[str | None] = mapped_column(Text, default=None)
     numeric_value: Mapped[Decimal | None] = mapped_column(Numeric, default=None)
     timestamp_value: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)

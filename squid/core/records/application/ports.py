@@ -31,6 +31,7 @@ class RecomputeLease:
 
     kinds: tuple[BuildKind, ...]
     claim_tokens: tuple[uuid.UUID, ...]
+    refresh_active_versions: bool = False
 
     def __bool__(self) -> bool:
         return bool(self.kinds)
@@ -91,6 +92,8 @@ class RecordRunRepository(Protocol):
     async def active_rules_revision_id(self) -> int: ...
 
     async def active_current_version_id(self) -> int | None: ...
+
+    async def active_publication_versions(self, kind: BuildKind) -> Sequence[int]: ...
 
     async def set_current_version(self, version_id: int | None) -> None: ...
 

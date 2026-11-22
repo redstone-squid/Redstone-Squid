@@ -123,8 +123,12 @@ class RecordComputationService:
                 generation = await uow.records.input_generation(kind)
                 source = tuple(await uow.record_candidates.list_confirmed(kind))
                 requested = tuple(await uow.records.list_requested_categories(kind))
-                versions = (None,) if current_version_id is None else (None, current_version_id)
-                for version_id in versions:
+                published = (
+                    await uow.records.active_publication_versions(kind)
+                    if lease is not None and lease.refresh_active_versions
+                    else ()
+                )
+                for version_id in dict.fromkeys((None, current_version_id, *published)):
                     snapshot = RecordSnapshot(
                         rules_revision_id=revision,
                         kind=kind,

@@ -143,6 +143,9 @@ class FieldRegistry:
         return tuple(dict.fromkeys(self._fields.values()))
 
 
+_GAME_TICK_UNITS = (("gt", Decimal(1)), ("s", Decimal(20)))
+
+
 DEFAULT_FIELD_REGISTRY = FieldRegistry(
     (
         FieldDefinition("title", FieldType.TEXT, ranked=True, scopes=CATALOGUE_SCOPES),
@@ -195,7 +198,7 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
             value_enum=VersionScope,
         ),
         FieldDefinition("record_state", FieldType.TEXT, scopes=frozenset({SearchScope.RECORDS})),
-        FieldDefinition("volume", FieldType.NUMBER, supports_range=True),
+        FieldDefinition("volume", FieldType.NUMBER, supports_range=True, scopes=CATALOGUE_SCOPES, holder_scoped=True),
         FieldDefinition("width", FieldType.NUMBER, supports_range=True, supports_sort=True),
         FieldDefinition("height", FieldType.NUMBER, supports_range=True, supports_sort=True),
         FieldDefinition("depth", FieldType.NUMBER, supports_range=True, supports_sort=True),
@@ -213,16 +216,28 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
         FieldDefinition("completion_at", FieldType.TIMESTAMP, supports_range=True, aliases=("completion_date",)),
         FieldDefinition("created_at", FieldType.TIMESTAMP, supports_range=True, supports_sort=True),
         FieldDefinition("updated_at", FieldType.TIMESTAMP, supports_range=True, supports_sort=True),
-        FieldDefinition("opening_time", FieldType.NUMBER, supports_range=True),
-        FieldDefinition("visible_opening_time", FieldType.NUMBER, supports_range=True),
-        FieldDefinition("closing_time", FieldType.NUMBER, supports_range=True),
-        FieldDefinition("visible_closing_time", FieldType.NUMBER, supports_range=True),
-        FieldDefinition("opening_reset_time", FieldType.NUMBER, supports_range=True),
-        FieldDefinition("closing_reset_time", FieldType.NUMBER, supports_range=True),
-        FieldDefinition("extension_time", FieldType.NUMBER, supports_range=True),
-        FieldDefinition("retraction_time", FieldType.NUMBER, supports_range=True),
-        FieldDefinition("extension_reset_time", FieldType.NUMBER, supports_range=True),
-        FieldDefinition("retraction_reset_time", FieldType.NUMBER, supports_range=True),
+        *(
+            FieldDefinition(
+                name,
+                FieldType.NUMBER,
+                supports_range=True,
+                scopes=CATALOGUE_SCOPES,
+                holder_scoped=True,
+                unit_scales=_GAME_TICK_UNITS,
+            )
+            for name in (
+                "opening_time",
+                "visible_opening_time",
+                "closing_time",
+                "visible_closing_time",
+                "opening_reset_time",
+                "closing_reset_time",
+                "extension_time",
+                "retraction_time",
+                "extension_reset_time",
+                "retraction_reset_time",
+            )
+        ),
     )
 )
 

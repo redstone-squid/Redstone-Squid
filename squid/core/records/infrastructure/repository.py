@@ -5,7 +5,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime
 from decimal import Decimal
-from itertools import pairwise
+from itertools import pairwise, zip_longest
 from typing import cast
 from uuid import UUID
 
@@ -270,6 +270,14 @@ class PostgresRecordRepository:
                     },
                 )
             )
+
+    async def active_publication_versions(self, kind: BuildKind) -> Sequence[int]:
+        versions = await self._session().scalars(
+            select(ComputationRun.version_id)
+            .where(ComputationRun.build_kind == kind, ComputationRun.is_active.is_(True))
+            .order_by(ComputationRun.version_id)
+        )
+        return tuple(version for version in versions if version is not None)
 
     async def input_generation(self, kind: BuildKind) -> int:
         return (
@@ -729,6 +737,7 @@ class PostgresRecordRepository:
         return RecomputeLease(
             kinds=tuple(dict.fromkeys(row.build_kind for row in rows)),
             claim_tokens=tuple(self._recompute_queue.token_of(row) for row in rows),
+            refresh_active_versions=any("holder_measurements" in row.reasons for row in rows),
         )
 
     async def complete_recompute(self, lease: RecomputeLease) -> None:
@@ -1121,12 +1130,19 @@ def _metric_snapshot(computed: ComputedRecordResult, candidate: Candidate) -> di
             "opening": list(computed.door_evidence.evaluation.opening),
             "configuration_ids": [c.id for c in configurations],
         }
-        # Ambiguous alternatives remain separate. Only expose a scalar metric
-        # when every possible winning configuration agrees on it.
-        for key in ("volume", "timing", "completion_at"):
+        # A measurement is known only when every possible winning configuration agrees.
+        for key in ("volume", "completion_at"):
             values = [metric[key] for metric in metrics if key in metric]
             if values:
-                snapshot[key] = values[0] if all(v == values[0] for v in values) else None
+                snapshot[key] = values[0] if all(value == values[0] for value in values) else None
+        timings = [metric["timing"] for metric in metrics]
+        if timings:
+            snapshot["timing"] = None
+            if all(isinstance(timing, list) for timing in timings):
+                vectors = cast(list[list[int | None]], timings)
+                snapshot["timing"] = [
+                    first if all(value == first for value in rest) else None for first, *rest in zip_longest(*vectors)
+                ]
         return snapshot
     return _fixed_metric_snapshot(computed.criterion, candidate)
 

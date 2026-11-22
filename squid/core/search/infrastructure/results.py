@@ -9,7 +9,7 @@ several matching records, or matches in its own right as well, appears once.
 from collections import defaultdict
 from collections.abc import Mapping
 from dataclasses import replace
-from typing import Any, cast
+from typing import Any
 
 from sqlalchemy import case, func, literal, select, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,7 +35,12 @@ from squid.core.search.domain import (
     SearchText,
     SortDirection,
 )
-from squid.core.search.infrastructure.compiler import compile_query
+from squid.core.search.infrastructure.compiler import (
+    compile_holder_query,
+    compile_query,
+    has_holder_filters,
+    matching_holder,
+)
 from squid.core.search.infrastructure.hits import document_hit, public_identity
 from squid.core.search.models import SearchDocument, SearchDocumentFilter
 
@@ -65,6 +70,7 @@ class ResultPager:
         self.session = session
         self.request = request
         self.query = query
+        self.holder_filters = has_holder_filters(query)
         self.statuses = request.visible_statuses if request.visible_statuses is not None else frozenset({"approved"})
 
     async def page(
@@ -131,9 +137,17 @@ class ResultPager:
         }
         scores = {row.unit_id: float(row.order_value) if ranked is not None else None for row in rows}
         if not self.request.group_by_build:
+            preferred_holders: dict[int, int | None] = {}
+            if self.holder_filters:
+                rows = await self.session.execute(
+                    select(SearchDocument.id, matching_holder(self.query)).where(
+                        SearchDocument.id.in_(unit_ids), SearchDocument.resource_kind == "record"
+                    )
+                )
+                preferred_holders = {document_id: holder_id for document_id, holder_id in rows}
             hits: list[SearchHit] = []
             for unit_id in unit_ids:
-                hit = document_hit(documents[unit_id], scores[unit_id])
+                hit = document_hit(documents[unit_id], scores[unit_id], holder_id=preferred_holders.get(unit_id))
                 if isinstance(hit, RecordSearchHit):
                     hit = replace(hit, title_match=highlight_title(hit.title, self.query))
                 hits.append(hit)
@@ -245,6 +259,8 @@ class ResultPager:
             )
             .where(predicate, document.resource_kind == "record", func.lower(build.status).in_(statuses))
         )
+        if self.holder_filters:
+            held = held.where(compile_holder_query(self.query, holder.holder_build_id))
         return union_all(own.where(document.resource_kind != "record"), held).cte("matches")
 
     async def _records(
@@ -260,6 +276,8 @@ class ResultPager:
         if not build_keys:
             return {}
         holder = SearchDocumentFilter
+        if self.holder_filters:
+            predicate = compile_holder_query(self.query, holder.holder_build_id)
         statement = (
             select(SearchDocument, holder.text_value, predicate.label("matched"))
             .join(
@@ -294,10 +312,8 @@ class ResultPager:
         for document, build_key, matched in rows:
             assert build_key is not None  # The query restricted these rows to the selected builds.
             candidate = ranked.get(document.id)
-            hit = document_hit(document, candidate.score if candidate is not None else None)
+            hit = document_hit(document, candidate.score if candidate is not None else None, holder_id=int(build_key))
             assert isinstance(hit, RecordSearchHit)
-            metrics = document.document_data.get("holder_metrics", {})
-            holder_metrics = metrics.get(build_key, hit.metrics) if isinstance(metrics, dict) else hit.metrics
             records[build_key].append(
                 replace(
                     hit,
@@ -305,7 +321,6 @@ class ResultPager:
                     build_title=build_titles[build_key],
                     holder_build_ids=tuple(visible_holders[document.id]),
                     holders=tuple(holder for holder in hit.holders if holder.build_id in visible_holders[document.id]),
-                    metrics=cast(dict[str, str | int | float | bool], holder_metrics),
                     matched=bool(matched) and self.request.scope is not SearchScope.BUILDS,
                     title_match=highlight_title(hit.title, self.query) if matched else SearchText(hit.title),
                 )

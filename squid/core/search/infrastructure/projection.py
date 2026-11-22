@@ -46,6 +46,7 @@ from squid.core.records.models import (
     RecordHolder,
     RecordResult,
 )
+from squid.core.search.infrastructure.holder_metrics import timing_values
 from squid.core.search.models import (
     SearchDocument,
     SearchDocumentFilter,
@@ -81,6 +82,7 @@ class ProjectionFilter:
 
     field_name: str
     value: str | Decimal | Instant | bool
+    holder_build_id: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -125,6 +127,17 @@ class RecordHolderProjectionSource:
     title: str
     metric: dict[str, object]
     creators: tuple[str, ...] = ()
+
+    def filters(self, build_kind: str) -> tuple[ProjectionFilter, ...]:
+        filters = [ProjectionFilter("holder", str(self.build_id), self.build_id)]
+        volume = self.metric.get("volume")
+        if type(volume) is int:
+            filters.append(ProjectionFilter("volume", Decimal(volume), self.build_id))
+        filters.extend(
+            ProjectionFilter(name, Decimal(value), self.build_id)
+            for name, value in timing_values(build_kind, self.metric.get("timing"))
+        )
+        return tuple(filters)
 
 
 @dataclass(frozen=True, slots=True)
@@ -796,7 +809,7 @@ def build_record_projection(
                 ProjectionFilter("creator", name)
                 for name in dict.fromkeys(n for holder in holders for n in holder.creators)
             ),
-            *(ProjectionFilter("holder", str(build_id)) for build_id in holder_ids),
+            *(value for holder in holders for value in holder.filters(source.build_kind)),
         ),
     )
 
@@ -871,6 +884,7 @@ def build_filter_models(document_id: int, filters: Sequence[ProjectionFilter]) -
                 document_id=document_id,
                 field_name=filter_value.field_name,
                 ordinal=ordinal,
+                holder_build_id=filter_value.holder_build_id,
                 text_value=text_value,
                 numeric_value=numeric_value,
                 timestamp_value=timestamp_value,
@@ -914,7 +928,12 @@ def projection_source_hash(projection: SearchProjection) -> str:
             "tags": projection.tags,
             "search_aliases": projection.search_aliases,
             "document_data": projection.document_data,
-            "filters": tuple((filter_value.field_name, filter_value.value) for filter_value in projection.filters),
+            "filters": tuple(
+                (value.field_name, value.value)
+                if value.holder_build_id is None
+                else (value.field_name, value.value, value.holder_build_id)
+                for value in projection.filters
+            ),
         },
         sort_keys=True,
         separators=(",", ":"),

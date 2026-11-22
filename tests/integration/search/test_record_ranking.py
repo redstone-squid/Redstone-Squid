@@ -7,10 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.search.application import SearchService
-from squid.core.search.domain import RecordSearchHit, SearchRequest, SearchScope
+from squid.core.search.domain import BuildSearchHit, RecordSearchHit, SearchRequest, SearchScope
 from squid.core.search.infrastructure.projection import (
     RecordHolderProjectionSource,
     RecordProjectionSource,
+    SearchProjection,
     SearchProjectionRepository,
     build_record_projection,
 )
@@ -52,3 +53,57 @@ async def test_record_heading_and_holder_matches(migrated_session_factory: async
     general = next(hit for hit in page.hits if hit.source_id == "result:1")
     assert isinstance(general, RecordSearchHit)
     assert [(holder.build_id, holder.creators) for holder in general.holders] == [(42, ("Alice",)), (57, ("Bob",))]
+
+
+async def test_record_measurements_match_one_known_holder(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    source = RecordProjectionSource(
+        result_id=1,
+        definition_id=1,
+        status="resolved",
+        history_complete=True,
+        gap_reasons={},
+        criterion="fastest",
+        build_kind="door",
+        version_scope="all_time",
+        category_key="door",
+        title="Fastest",
+        subtitle=None,
+    )
+    large = RecordHolderProjectionSource(42, "Large", {"volume": 120, "timing": [10, 8]})
+    compact = RecordHolderProjectionSource(57, "Compact", {"volume": 80, "timing": [10, 15]})
+    unknown = RecordHolderProjectionSource(60, "Unknown", {"volume": None, "timing": [10, None]})
+    async with migrated_session_factory.begin() as session:
+        store = SearchProjectionRepository(session)
+        for holder in (large, compact, unknown):
+            await store.replace(SearchProjection("build", str(holder.build_id), holder.title, status="approved"))
+        await store.replace(build_record_projection(source, (large, compact, unknown)))
+        await store.replace(build_record_projection(replace(source, result_id=2, status="no_candidate")))
+
+    service = SearchService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
+    for scope in (SearchScope.RECORDS, SearchScope.ALL):
+        query = "criterion:fastest volume<=100 opening_time<=0.5s"
+        (hit,) = (await service.search(SearchRequest(query, scope=scope))).hits
+        assert isinstance(hit, RecordSearchHit)
+        assert hit.build_id == compact.build_id
+        assert hit.metrics == {"volume": 80, "opening_time": 10, "visible_opening_time": 15}
+        assert hit.matched_holder_id == compact.build_id
+        assert hit.holder_build_ids == (42, 57, 60)
+
+        (grouped,) = (await service.search(SearchRequest(query, scope=scope, group_by_build=True))).hits
+        assert isinstance(grouped, BuildSearchHit)
+        assert grouped.source_id == str(compact.build_id)
+        assert grouped.records[0].matched
+        assert grouped.records[0].metrics == hit.metrics
+
+        for impossible in (
+            "volume<=100 visible_opening_time<=10gt",
+            "volume<=100 AND NOT visible_opening_time>=10gt",
+        ):
+            assert (await service.search(SearchRequest(impossible, scope=scope))).total == 0
+
+    outside = await service.search(SearchRequest("status:no_candidate OR NOT volume<=100", scope=SearchScope.RECORDS))
+    assert {result.source_id for result in outside.hits} == {"result:1", "result:2"}
+    only = await service.search(SearchRequest("NOT volume:[1 TO 200]", scope=SearchScope.RECORDS))
+    assert only.total == 0

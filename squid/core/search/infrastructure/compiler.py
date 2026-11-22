@@ -4,13 +4,16 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from typing import cast
 
-from sqlalchemy import and_, false, func, not_, or_, select, true
-from sqlalchemy.sql.elements import ColumnElement
+from sqlalchemy import and_, false, func, not_, null, or_, select, true
+from sqlalchemy.orm import aliased
+from sqlalchemy.sql.elements import ColumnElement, SQLColumnExpression
+from sqlalchemy.sql.selectable import ScalarSelect
 from whenever import Instant
 
 from squid.core.search.domain import (
     BooleanExpression,
     BooleanOperator,
+    BuildQuery,
     ComparisonOperator,
     FieldExpression,
     FieldType,
@@ -38,10 +41,71 @@ def compile_query(query: SearchQuery) -> ColumnElement[bool]:
     """
     if query.expression is None:
         return true()
-    return _compile_expression(query.expression)
+    expression = query.expression
+    ordinary = _compile_expression(expression)
+    if not has_holder_filters(query):
+        return ordinary
+    is_record = SearchDocument.resource_kind == "record"
+    return or_(
+        and_(not_(is_record), ordinary),
+        and_(
+            is_record,
+            or_(
+                matching_holder(query).is_not(None),
+                _compile_expression(expression, on_record=True),
+            ),
+        ),
+    )
 
 
-def _compile_expression(expression: QueryExpression) -> ColumnElement[bool]:
+def has_holder_filters(query: SearchQuery) -> bool:
+    """Tell whether record matches need to be correlated to a holder."""
+
+    def contains(expression: QueryExpression | None) -> bool:
+        match expression:
+            case BooleanExpression(operands=operands):
+                return any(contains(operand) for operand in operands)
+            case NotExpression(operand=operand):
+                return contains(operand)
+            case FieldExpression(field=field):
+                return field.holder_scoped
+            case _:
+                return False
+
+    return not isinstance(query, BuildQuery) and contains(query.expression)
+
+
+def matching_holder(query: SearchQuery) -> ScalarSelect[int | None]:
+    """Select the first published holder that satisfies the record query."""
+    holder = aliased(SearchDocumentFilter)
+    return (
+        select(holder.holder_build_id)
+        .where(
+            holder.document_id == SearchDocument.id,
+            holder.field_name == "holder",
+            holder.holder_build_id.is_not(None),
+            compile_holder_query(query, holder.holder_build_id),
+        )
+        .order_by(holder.ordinal)
+        .limit(1)
+        .correlate(SearchDocument)
+        .scalar_subquery()
+    )
+
+
+def compile_holder_query(query: SearchQuery, holder_id: SQLColumnExpression[int | None]) -> ColumnElement[bool]:
+    """Match a record query for the given holder, keeping category clauses on the record."""
+    if query.expression is None:
+        return true()
+    return _compile_expression(query.expression, on_record=True, holder_id=holder_id)
+
+
+def _compile_expression(
+    expression: QueryExpression,
+    *,
+    on_record: bool = False,
+    holder_id: SQLColumnExpression[int | None] | None = None,
+) -> ColumnElement[bool]:
     if isinstance(expression, TextExpression):
         return _fuzzy_text_predicate(
             cast(ColumnElement[object], SearchDocument.combined_vector),
@@ -51,10 +115,28 @@ def _compile_expression(expression: QueryExpression) -> ColumnElement[bool]:
             exact_column=cast(ColumnElement[object], SearchDocument.normalized_title),
         )
     if isinstance(expression, NotExpression):
-        return not_(_compile_expression(expression.operand))
+        return not_(_compile_expression(expression.operand, on_record=on_record, holder_id=holder_id))
     if isinstance(expression, BooleanExpression):
-        operands = tuple(_compile_expression(operand) for operand in expression.operands)
+        operands = tuple(
+            _compile_expression(operand, on_record=on_record, holder_id=holder_id) for operand in expression.operands
+        )
         return and_(*operands) if expression.operator is BooleanOperator.AND else or_(*operands)
+    if on_record and expression.field.holder_scoped:
+        if holder_id is None:
+            return cast(ColumnElement[bool], null())
+        measurement = aliased(SearchDocumentFilter)
+        # A scalar subquery preserves SQL unknown for absent measurements, even under NOT.
+        value = (
+            select(measurement.numeric_value)
+            .where(
+                measurement.document_id == SearchDocument.id,
+                measurement.holder_build_id == holder_id,
+                measurement.field_name == (expression.field.storage_name or expression.field.name),
+            )
+            .correlate_except(measurement)
+            .scalar_subquery()
+        )
+        return _comparison(cast(ColumnElement[object], value), expression, expression.field.value_type)
     return _compile_field(expression)
 
 
@@ -97,6 +179,7 @@ def _compile_field(expression: FieldExpression) -> ColumnElement[bool]:
         select(filter_value.document_id)
         .where(
             filter_value.document_id == SearchDocument.id,
+            filter_value.holder_build_id.is_(None),
             filter_value.field_name == (field.storage_name or field.name),
             comparison,
         )

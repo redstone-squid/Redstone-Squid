@@ -116,6 +116,8 @@ class FakeRuns:
         self.completed: tuple[BuildKind, ...] = ()
         self.failed: tuple[tuple[BuildKind, ...], str] | None = None
         self.current_version_id: int | None = None
+        self.published_versions: tuple[int, ...] = ()
+        self.refresh_active_versions = False
         self.published_records: dict[int, PublishedRecordResult] = {}
 
     async def active_rules_revision_id(self) -> int:
@@ -123,6 +125,9 @@ class FakeRuns:
 
     async def active_current_version_id(self) -> int | None:
         return self.current_version_id
+
+    async def active_publication_versions(self, kind: BuildKind) -> Sequence[int]:
+        return self.published_versions
 
     async def set_current_version(self, version_id: int | None) -> None:
         self.current_version_id = version_id
@@ -203,7 +208,11 @@ class FakeRuns:
 
     async def claim_recompute_kinds(self, *, limit: int) -> RecomputeLease:
         kinds = self.queued[:limit]
-        return RecomputeLease(kinds=kinds, claim_tokens=tuple(uuid.uuid4() for _ in kinds))
+        return RecomputeLease(
+            kinds=kinds,
+            claim_tokens=tuple(uuid.uuid4() for _ in kinds),
+            refresh_active_versions=self.refresh_active_versions,
+        )
 
     async def complete_recompute(self, lease: RecomputeLease) -> None:
         self.completed += lease.kinds
@@ -699,6 +708,20 @@ async def test_process_queue_preserves_the_pinned_current_version() -> None:
     assert result.rebuild is not None
     assert result.rebuild.run_ids == (1, 2)
     assert [batch.version_id for batch in runs.batches] == [None, 3]
+
+
+async def test_holder_measurement_backfill_refreshes_already_published_versions() -> None:
+    runs = FakeRuns()
+    runs.queued = (BuildKind.DOOR,)
+    runs.current_version_id = 3
+    runs.published_versions = (2, 3)
+    runs.refresh_active_versions = True
+    computation = RecordComputationService(uow_factory=lambda: RecordScope(FakeCandidates(()), runs))
+
+    await computation.process_queue()
+
+    assert [batch.version_id for batch in runs.batches] == [None, 3, 2]
+    assert runs.completed == (BuildKind.DOOR,)
 
 
 async def test_rebuild_rolls_back_all_scopes_when_later_activation_fails() -> None:
