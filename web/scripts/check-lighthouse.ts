@@ -10,11 +10,35 @@ import {
 } from "@tests/support/servers";
 
 const pages = [
-  { name: "home", route: "/", profile: "desktop" },
-  { name: "chinese-home", route: "/zh-cn", profile: "desktop" },
-  { name: "mobile-tag", route: "/zh-cn/tags/zero-tick", profile: "mobile" },
-  { name: "mobile-draft", route: "/design-system-trial", profile: "mobile" },
-] as const;
+  { name: "home", route: "/", profile: "desktop", budgets: [] },
+  { name: "chinese-home", route: "/zh-cn", profile: "desktop", budgets: [] },
+  {
+    name: "mobile-tag",
+    route: "/zh-cn/tags/zero-tick",
+    profile: "mobile",
+    // A text-only catalogue page should leave room for media on other routes.
+    budgets: [
+      ["lcpMs", 1_500],
+      ["cls", 0.05],
+      ["transferBytes", 80 * 1024],
+    ],
+  },
+  {
+    name: "mobile-draft",
+    route: "/design-system-trial",
+    profile: "mobile",
+    budgets: [
+      ["lcpMs", 4_500],
+      ["cls", 0.1],
+      ["tbtMs", 200],
+    ],
+  },
+] satisfies {
+  name: string;
+  route: string;
+  profile: "desktop" | "mobile";
+  budgets: [Metric, number][];
+}[];
 const thresholds = { performance: 0.9, "best-practices": 0.95, seo: 0.95 } as const;
 const metricAudits = {
   lcpMs: "largest-contentful-paint",
@@ -99,9 +123,12 @@ try {
 
   const reportDirectory = path.resolve(".lighthouseci/reports");
   await mkdir(reportDirectory, { recursive: true });
-  const summary: Record<string, { route: string; profile: string; median: Metrics }> = {};
+  const summary: Record<
+    string,
+    { route: string; profile: string; median: Metrics; budgets: Partial<Metrics> }
+  > = {};
   const failures: string[] = [];
-  for (const { name, route, profile } of pages) {
+  for (const { name, route, profile, budgets } of pages) {
     const samples: Metrics[] = [];
     const desktop = profile === "desktop";
     for (let run = 1; run <= (desktop ? 1 : 3); run += 1) {
@@ -143,7 +170,12 @@ try {
       }
     }
     const median = medianMetrics(samples);
-    summary[name] = { route, profile, median };
+    for (const [metric, limit] of budgets) {
+      if (median[metric] > limit) {
+        failures.push(`${name} median ${metric} ${median[metric].toFixed(3)} exceeds ${limit}.`);
+      }
+    }
+    summary[name] = { route, profile, median, budgets: Object.fromEntries(budgets) };
     console.info(`${name}:`, median);
   }
   await writeFile(path.join(reportDirectory, "summary.json"), JSON.stringify(summary, null, 2));

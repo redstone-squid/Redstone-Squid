@@ -86,6 +86,17 @@ middleware redirects it in every locale, and tests check the table against `src/
 The site installs as an app: `src/sw.ts` shows `/offline` when a navigation fails and never
 caches pages. Regenerate icons from `public/favicon.svg` with `bun run pwa:icons`.
 
+## Performance
+
+Public pages use device fonts, including CJK fallbacks. The workbench loads its specimen
+fonts for repeatable previews. Keep those font imports in the workbench.
+
+Run `bun run check:bundle` and `bun run test:lighthouse` after a production build for changes
+that affect page weight or rendering. Lighthouse reports the median of three mobile runs
+for the API-backed tag page and the Svelte draft trial. It checks LCP and CLS on both,
+transfer size on the tag page, and blocking time on the draft. CI uploads the raw runs
+and `summary.json` in its catalogue quality artifact.
+
 ## Libraries
 
 Use these before writing your own. Ask before adding a library that overlaps one of them.
