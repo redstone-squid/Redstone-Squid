@@ -7,10 +7,9 @@ from typing import Any, override
 import discord
 import pytest
 from discord.ext import commands
-from pytest_mock import MockerFixture
 
 from squid.bot.log_cog import LoggingCog
-from squid_ui.ext.discord.testing import AsyncCallRecorder, ContextHarness
+from squid_ui.ext.discord.testing import ContextHarness
 from tests.support.discord import make_layout_bot
 
 
@@ -38,8 +37,9 @@ class ErrorCog(commands.Cog):
         pass
 
 
-def context() -> Any:
-    source = ContextHarness().source
+def context(bot: Any = None) -> Any:
+    source = ContextHarness(bot=bot).source
+    source.channel = source.message.channel
     source.command = Command()
     source.cog = commands.Cog()
     return source
@@ -95,34 +95,30 @@ async def test_ready_log_reports_bot_identity_and_guild_count(caplog: pytest.Log
     assert _squid_fields(record) == {"squid.discord.bot_id": 111, "squid.discord.guild_count": 2}
 
 
-async def test_command_errors_reach_the_shared_handler_only_when_unowned(mocker: MockerFixture) -> None:
-    """A local handler wins, and an unknown command is not an error worth presenting.
+async def test_command_errors_reach_the_shared_handler_only_when_unowned() -> None:
+    """Local handlers own their replies and an unknown command needs no notice."""
+    bot = make_layout_bot()
+    cog = LoggingCog(bot)
 
-    Presenting twice is the failure this guards: the shared handler renders a user-facing
-    message, so running it alongside a command's own handler double-replies.
-    """
-    handle = mocker.patch("squid.bot.log_cog.handle_context_error", new=AsyncCallRecorder())
-    cog = LoggingCog(make_layout_bot())
-
-    command_owned = context()
+    command_owned = context(bot)
     command_owned.command.owns_errors = True
     await cog.log_command_error(command_owned, commands.CommandError("boom"))
 
-    cog_owned = context()
-    cog_owned.command.owns_errors = False
+    cog_owned = context(bot)
     cog_owned.cog = ErrorCog()
     await cog.log_command_error(cog_owned, commands.CommandError("boom"))
 
-    unknown = context()
+    unknown = context(bot)
     unknown.command = None
     unknown.cog = None
     await cog.log_command_error(unknown, commands.CommandNotFound("nope"))
 
-    handle.assert_not_awaited()
+    for source in (command_owned, cog_owned, unknown):
+        assert not source.sends
+        assert not source.replies
 
-    unowned = context()
-    unowned.command.owns_errors = False
-    error = commands.CommandError("boom")
-    await cog.log_command_error(unowned, error)
+    unowned = context(bot)
+    await cog.log_command_error(unowned, commands.CommandError("boom"))
 
-    handle.assert_awaited_once_with(unowned, error)
+    (reply,) = (*unowned.sends, *unowned.replies)
+    assert "Something went wrong" in str(reply.kwargs["view"].to_components())
