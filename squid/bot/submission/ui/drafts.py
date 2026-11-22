@@ -820,7 +820,7 @@ class BuildPreviewScreen(sd.Screen[None]):
         build = preview_build(ws.category, answers, definitions)
         if build is None or ws.render_card is None:
             return None
-        return await ws.render_card(build)
+        return await ws.render_card(build.copy_for_edit(source_messages=ws.draft.source_messages))
 
     @override
     def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:

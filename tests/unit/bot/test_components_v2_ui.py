@@ -23,7 +23,7 @@ from squid.core.builds.domain import BuildStatus
 from squid.core.builds.domain.credits import name_credits
 from squid.core.builds.models import Build, BuildLink, DoorBuild
 from squid.core.edits.domain import Revision, RevisionConflictError
-from squid.core.messages.domain import MessageRef
+from squid.core.messages.domain import MessageRef, MessageSnapshot
 from squid.core.search.application import SearchService
 from squid.core.search.domain import BuildSearchHit, RecordSearchHit, SearchPage, SearchRequest
 from squid.core.sponsors import PublicSponsor
@@ -110,6 +110,24 @@ async def test_build_card_renders_composable_v2_card(display_build: Build) -> No
     assert "https://discord.com/channels/1/2/3" in str(payload)
     assert "Original Discord message" in str(payload)
     assert "Submission ID: 7" in str(payload)
+
+
+@pytest.mark.parametrize("build_id", [None, 7])
+def test_build_card_only_quotes_source_snapshots_in_drafts(build_id: int | None) -> None:
+    source = MessageSnapshot(id=3, guild_id=1, channel_id=2, content="Original **source** " + "x" * 400)
+    build = (
+        DoorBuild(source_messages=(source,)) if build_id is None else DoorBuild(id=build_id, source_messages=(source,))
+    )
+
+    payload = str(render_payload([build_card_module.build_card(build)]).layout.to_components())
+
+    assert "https://discord.com/channels/1/2/3" in payload
+    if build_id is None:
+        assert r"Original \\*\\*source\\*\\*" in payload
+        assert "…" in payload
+        assert "x" * 300 not in payload
+    else:
+        assert "source" not in payload
 
 
 @pytest.mark.parametrize(

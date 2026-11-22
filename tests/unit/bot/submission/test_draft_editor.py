@@ -39,6 +39,7 @@ from squid.core.edits.domain import (
     RevisionConflictError,
     require_revision,
 )
+from squid.core.messages.domain import MessageSnapshot
 from squid.core.submissions.application import (
     AppliedDraftChange,
     FinalizationJobSnapshot,
@@ -530,6 +531,8 @@ async def test_editor_messages_lock_once_the_draft_is_submitted() -> None:
 
 async def test_preview_draws_partial_facts_and_updates_as_they_are_filled() -> None:
     services, drafts = setup("door")
+    source = MessageSnapshot(id=3, guild_id=1, channel_id=2, content="How the door works")
+    drafts.current = replace(drafts.current, source_messages=(source,))
     drawn: list[Build] = []
 
     async def render_card(build: Build) -> Any:
@@ -542,6 +545,7 @@ async def test_preview_draws_partial_facts_and_updates_as_they_are_filled() -> N
     assert "card" in rendered_text(preview)
     assert isinstance(drawn[-1], DoorBuild)
     assert drawn[-1].orientation is None
+    assert drawn[-1].source_messages == (source,)
 
     with transaction() as tx:
         await editor.workspace.save_values(

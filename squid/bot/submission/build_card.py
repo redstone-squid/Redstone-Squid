@@ -12,6 +12,7 @@ from urllib.parse import urlsplit
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.catalogue.schematics.presentation import schematic_caption
+from squid.bot.message_preview import message_preview
 from squid.bot.submission.attachment_display import attachment_issue_line
 from squid.bot.submission.ui.attachment_review import review_attachments
 from squid.bot.ui import (
@@ -23,6 +24,7 @@ from squid.core.builds.domain import BuildStatus
 from squid.core.builds.domain.models import AttachmentFailureInfo, SchematicDuplicateInfo
 from squid.core.builds.domain.titles import format_build_display_title
 from squid.core.builds.models import Build, DoorBuild, ExtenderBuild
+from squid.core.messages.domain import MessageSnapshot
 from squid.core.observability import add_counter
 from squid.core.tags.domain import TagModerationStatus, TagSemanticKind
 from squid_i18n import Text
@@ -233,16 +235,24 @@ def _build_source(build: Build) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Re
     )
     if build.edited_time is not None:
         footer += f" • Updated <t:{build.edited_time.timestamp()}:R>"
-    note = sl.note(sl.plain(footer))
-    if build.original_link is None:
-        return (note,)
-    return (
-        note,
-        sl.action_controls(
-            sl.link("Original Discord message", build.original_link, key="original-submission"),
-            key="submission-links",
+    source = next(
+        (
+            message
+            for message in build.source_messages
+            if message.channel_id is not None and message.guild_id is not None
         ),
+        None,
     )
+    excerpt = None
+    if (
+        build.id is None  # pyright: ignore[reportUnnecessaryComparison]
+        and isinstance(source, MessageSnapshot)
+        and source.content
+        and (content := _compact_plain(source.content))
+    ):
+        excerpt = sl.plain(truncate_display_text(content, 300))
+    preview = message_preview(content=excerpt, jump_url=source.link if source else None)
+    return (sl.note(sl.plain(footer)), *preview)
 
 
 def _field_ladders(build: Build) -> dict[str, tuple[str, ...]]:
