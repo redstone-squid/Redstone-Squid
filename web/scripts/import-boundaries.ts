@@ -1,22 +1,77 @@
 import path from "node:path";
 import type { Rule } from "eslint";
 
-/** Keep shared UI independent and server dependencies out of browser components. */
+/**
+ * Which top-level directories under `src/` each directory may import from.
+ *
+ * Files directly in `src/` (middleware) may import anything. A feature may import its own
+ * directory but not another feature.
+ */
+export const LAYERS = {
+  pages: [
+    "pages",
+    "layouts",
+    "features",
+    "workbench",
+    "server",
+    "lib",
+    "ui",
+    "locales",
+    "generated",
+  ],
+  layouts: ["layouts", "lib", "ui", "locales", "generated"],
+  features: ["lib", "ui", "locales", "generated"],
+  workbench: ["workbench", "layouts", "features", "lib", "ui", "locales", "generated"],
+  server: ["server", "lib", "locales", "generated"],
+  lib: ["lib", "locales", "generated"],
+  locales: ["locales"],
+  ui: ["ui"],
+} as const satisfies Record<string, readonly string[]>;
+type Layer = keyof typeof LAYERS;
+
+const LAYER_MESSAGES = {
+  layer: "See web/CLAUDE.md for the layer map.",
+  serverLayer:
+    "Only pages and middleware call the API. Load data in the page and pass it as props.",
+  featureLayer: "Features stay independent. Move shared code to src/lib or src/ui.",
+  workbenchLayer: "The workbench is development tooling; production code cannot depend on it.",
+  uiLayer: "Shared UI cannot depend on application code. Pass data and labels through props.",
+};
+
+function isLayer(name: string | undefined): name is Layer {
+  return name !== undefined && Object.hasOwn(LAYERS, name);
+}
+
+/** Return the `src/` directory and the path segments below it, or undefined outside `src/`. */
+function locate(file: string): { src: string; segments: string[] } | undefined {
+  const index = file.lastIndexOf("/src/");
+  if (index === -1) return undefined;
+  return { src: file.slice(0, index + 5), segments: file.slice(index + 5).split("/") };
+}
+
+/** Enforce the `LAYERS` table, keep bits-ui inside src/ui, and keep server code out of the browser. */
 export const importBoundaries: Rule.RuleModule = {
   meta: {
     type: "problem",
     schema: [],
     messages: {
-      ui: "Shared UI cannot import application code. Pass data and labels through component props.",
+      ...Object.fromEntries(
+        Object.entries(LAYER_MESSAGES).map(([id, reason]) => [
+          id,
+          `src/{{from}} cannot import src/{{to}}. ${reason}`,
+        ]),
+      ),
       primitives:
         "Import the shared UI wrapper instead. Interaction primitives belong inside src/ui.",
-      server: "Browser components cannot import server modules. Use a browser API adapter.",
+      server: "Browser code cannot import server modules or Node built-ins.",
     },
   },
   create(context) {
     const filename = context.filename.replaceAll("\\", "/");
-    const isUi = filename.includes("/src/ui/");
+    const self = locate(filename);
+    const from = self && self.segments.length > 1 ? self.segments[0] : undefined;
     const isBrowser = filename.endsWith(".svelte") || /\.astro\/[^/]+\.[jt]s$/.test(filename);
+
     function check(node: Rule.Node, source: unknown): void {
       if (
         typeof source !== "object" ||
@@ -26,26 +81,38 @@ export const importBoundaries: Rule.RuleModule = {
       )
         return;
       const imported = source.value;
-      const resolved = imported.startsWith(".")
-        ? path.resolve(path.dirname(filename), imported).replaceAll("\\", "/")
-        : imported;
-      if (
-        isUi &&
-        /(?:^|\/)(?:features|lib|generated|platform|pages|views)(?:\/|$)/.test(resolved)
-      ) {
-        context.report({ node, messageId: "ui" });
-      }
-      if (!isUi && /^bits-ui(?:\/|$)/.test(imported)) {
+      if (from !== "ui" && /^bits-ui(?:\/|$)/.test(imported)) {
         context.report({ node, messageId: "primitives" });
       }
-      if (
-        isBrowser &&
-        (/(?:^|\/)server(?:[./]|$)|\.server(?:[./]|$)/.test(resolved) ||
-          imported.startsWith("node:"))
-      ) {
+      if (isBrowser && imported.startsWith("node:")) {
         context.report({ node, messageId: "server" });
       }
+      if (!self || !imported.startsWith(".")) return;
+      const target = locate(path.resolve(path.dirname(filename), imported).replaceAll("\\", "/"));
+      if (target?.src !== self.src) return;
+      const to = target.segments[0];
+      if (isBrowser && to === "server") {
+        context.report({ node, messageId: "server" });
+        return;
+      }
+      if (!isLayer(from) || to === undefined) return;
+      const allowed: readonly string[] = LAYERS[from];
+      const ownFeature =
+        from === "features" && to === "features" && self.segments[1] === target.segments[1];
+      if (allowed.includes(to) || ownFeature) return;
+      const messageId: keyof typeof LAYER_MESSAGES =
+        from === "ui"
+          ? "uiLayer"
+          : to === "server"
+            ? "serverLayer"
+            : to === "features"
+              ? "featureLayer"
+              : to === "workbench"
+                ? "workbenchLayer"
+                : "layer";
+      context.report({ node, messageId, data: { from, to } });
     }
+
     return {
       ImportDeclaration(node) {
         check(node, node.source);
