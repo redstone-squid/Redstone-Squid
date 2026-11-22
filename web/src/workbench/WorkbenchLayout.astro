@@ -3,6 +3,7 @@ import LanguageSelector from "@/layouts/LanguageSelector.astro";
 import { localizePath, unprefixedPath } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
 import "@fontsource-variable/inter";
+import interLatin from "@fontsource-variable/inter/files/inter-latin-wght-normal.woff2?url";
 import "@fontsource-variable/jetbrains-mono";
 import "@fontsource/noto-sans-sc/400.css";
 import "@fontsource/noto-sans-sc/600.css";
@@ -26,6 +27,7 @@ const library = onLibrary ? "" : localizePath(`/design-system?${query}`);
     <meta name="robots" content="noindex,nofollow" />
     <title>{title} · Redstone Squid</title>
     <link rel="icon" href="/favicon.svg" />
+    <link rel="preload" href={interLatin} as="font" type="font/woff2" crossorigin="anonymous" />
   </head>
   <body>
     <a
@@ -36,7 +38,7 @@ const library = onLibrary ? "" : localizePath(`/design-system?${query}`);
     </a>
     <header class="flex items-center justify-between gap-4 border-b border-line bg-surface px-8 py-4 max-md:p-4">
       <a class="flex items-center gap-3 font-[750] no-underline" href="/">
-        <img src="/favicon.svg" width="32" height="32" alt="" />
+        <img class="size-8 shrink-0" src="/favicon.svg" width="32" height="32" alt="" />
         Redstone Squid
       </a>
       <div class="flex flex-wrap items-center gap-3">
