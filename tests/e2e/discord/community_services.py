@@ -5,6 +5,7 @@ from typing import override
 
 from squid.core.diagnostics.application import ErrorReportService
 from squid.core.errors import JSONValue
+from squid.core.events.application import DomainEventDelivery, DomainEventService
 from squid.core.messages.application import MessageService
 from squid.core.messages.domain import MessageSnapshot
 from squid.core.posts.application import PostService
@@ -31,6 +32,15 @@ class CommunitySettings(RuntimeSettingsStub):
     @override
     async def get_locale(self, server_id: int) -> str | None:
         return None
+
+
+class EmptyDomainEvents(DomainEventService):
+    def __init__(self) -> None:
+        pass
+
+    @override
+    async def claim(self, consumer: str, limit: int = 20) -> Sequence[DomainEventDelivery]:
+        return ()
 
 
 class CommunityVotes(VoteService):

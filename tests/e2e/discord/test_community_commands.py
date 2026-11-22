@@ -9,6 +9,7 @@ import simcord
 import wrapture
 from discord.ext import commands
 
+from squid.bot.events.spec import extension as events_extension
 from squid.bot.recount.spec import extension as recount_extension
 from squid.bot.starboard.spec import extension as starboard_extension
 from squid.bot.voting.spec import extension as vote_extension
@@ -28,6 +29,7 @@ from tests.e2e.discord.community_services import (
     Boards,
     CommunitySettings,
     CommunityVotes,
+    EmptyDomainEvents,
     ObservedMessages,
     OwnerReports,
     PublishedTags,
@@ -298,8 +300,13 @@ async def test_starboard_shows_the_selected_guilds_board() -> None:
 async def test_review_lists_only_the_invoking_guilds_pending_polls() -> None:
     accounts = WorkspaceAccounts()
     votes = CommunityVotes()
-    services = bot_services(accounts=accounts, permissions=staff_permissions(VOTE_POLL_RECOUNT), votes=votes)
-    async with command_environment(vote_extension, services=services) as (_, env):
+    services = bot_services(
+        accounts=accounts,
+        permissions=staff_permissions(VOTE_POLL_RECOUNT),
+        votes=votes,
+        domain_events=EmptyDomainEvents(),
+    )
+    async with command_environment(events_extension, vote_extension, services=services) as (_, env):
         channel = env.guild.create_text_channel("staff")
         moderator = community_moderator(env, accounts)
         votes.reviews[env.guild.id] = (24, 31)
@@ -311,8 +318,10 @@ async def test_review_lists_only_the_invoking_guilds_pending_polls() -> None:
 
 async def test_poll_preview_shows_question_and_options_without_posting_a_card() -> None:
     accounts = WorkspaceAccounts()
-    services = bot_services(accounts=accounts, permissions=staff_permissions(), votes=CommunityVotes())
-    async with command_environment(vote_extension, services=services) as (_, env):
+    services = bot_services(
+        accounts=accounts, permissions=staff_permissions(), votes=CommunityVotes(), domain_events=EmptyDomainEvents()
+    )
+    async with command_environment(events_extension, vote_extension, services=services) as (_, env):
         channel = env.guild.create_text_channel("voting")
         moderator = community_moderator(env, accounts)
         result = await moderator.slash(channel, "poll", question="Which door?", choices="Hip, Vault", preview=True)
@@ -330,9 +339,14 @@ async def test_message_deletion_vote_posts_a_public_card_for_the_selected_messag
     posts = VotePosts()
     messages = ObservedMessages()
     services = bot_services(
-        accounts=accounts, votes=votes, posts=posts, messages=messages, settings=CommunitySettings()
+        accounts=accounts,
+        votes=votes,
+        domain_events=EmptyDomainEvents(),
+        posts=posts,
+        messages=messages,
+        settings=CommunitySettings(),
     )
-    async with command_environment(vote_extension, services=services) as (_, env):
+    async with command_environment(events_extension, vote_extension, services=services) as (_, env):
         channel = env.guild.create_text_channel("builds")
         voter = community_moderator(env, accounts)
         builder = env.guild.add_member(env.create_user("builder"))
@@ -352,8 +366,10 @@ async def test_message_deletion_vote_posts_a_public_card_for_the_selected_messag
 @pytest.mark.parametrize("entry", ["link", "menu"])
 async def test_recount_recognizes_the_selected_closed_vote(entry: str) -> None:
     votes = CommunityVotes()
-    services = bot_services(votes=votes)
-    async with command_environment(vote_extension, starboard_extension, recount_extension, services=services) as (
+    services = bot_services(votes=votes, domain_events=EmptyDomainEvents())
+    async with command_environment(
+        events_extension, vote_extension, starboard_extension, recount_extension, services=services
+    ) as (
         _,
         env,
     ):
