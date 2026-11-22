@@ -1,5 +1,8 @@
+import { createHash } from "node:crypto";
 import {
+  FluentSerializer,
   parse,
+  Resource,
   Visitor,
   type MessageReference,
   type TermReference,
@@ -94,4 +97,38 @@ export function compareCatalogs(
   }
   if (errors.length > 0)
     throw new Error(`Catalog IDs and variables must match English:\n${errors.join("\n")}`);
+}
+
+/**
+ * Fingerprint each English message so a translation can record the source it was reviewed
+ * against. Like squid-i18n, this hashes the canonical Fluent serialization, so whitespace-only
+ * edits do not ask for review.
+ */
+export function sourceFingerprints(source: string): Record<string, string> {
+  const serializer = new FluentSerializer();
+  return Object.fromEntries(
+    parse(source, {}).body.flatMap((entry) =>
+      entry.type === "Message" || entry.type === "Term"
+        ? [
+            [
+              `${entry.type === "Term" ? "-" : ""}${entry.id.name}`,
+              createHash("sha256")
+                .update(serializer.serialize(new Resource([entry])))
+                .digest("hex"),
+            ],
+          ]
+        : [],
+    ),
+  );
+}
+
+/** Messages whose English changed since review, and reviewed messages that no longer exist. */
+export function reviewStatus(
+  fingerprints: Record<string, string>,
+  reviewed: Record<string, string>,
+): { changed: string[]; obsolete: string[] } {
+  return {
+    changed: Object.keys(fingerprints).filter((id) => reviewed[id] !== fingerprints[id]),
+    obsolete: Object.keys(reviewed).filter((id) => !Object.hasOwn(fingerprints, id)),
+  };
 }

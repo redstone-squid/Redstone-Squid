@@ -67,9 +67,9 @@ An error thrown inside a component after rendering starts truncates a 200 respon
 
 ## Text
 
-Every visible string lives in the Fluent catalogs in `src/locales`, one per locale with
-the same IDs. `bun run i18n:generate` compiles them into `src/locales/messages.ts`, one
-typed function per message, so an island ships only the messages it calls:
+Every visible string lives in the Fluent catalogs `src/locales/<locale>/messages.ftl`, with the
+same IDs in every locale. `bun run i18n:generate` compiles them into `src/locales/messages.ts`,
+one typed function per message, so an island ships only the messages it calls:
 
 ```ts
 import * as m from "../../locales/messages";
@@ -88,6 +88,9 @@ m.recordHolderCount(locale, { count: holders.length });
   `{ required: m.trialRequired, ... } satisfies Record<DraftError, unknown>`. Never build a
   message name from a string.
 - The build fails when a message is not called from `src/`, so delete text with its feature.
+- Each translation's `source-revisions.json` records the English it was reviewed against.
+  When you change English wording, update every translation and run `bun run i18n:review`;
+  the build fails until you do.
 
 ## Tests
 

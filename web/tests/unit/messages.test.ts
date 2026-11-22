@@ -2,7 +2,12 @@ import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 import { describe, expect, it } from "vitest";
-import { catalogContract, compareCatalogs } from "../../scripts/i18n/catalogs";
+import {
+  catalogContract,
+  compareCatalogs,
+  reviewStatus,
+  sourceFingerprints,
+} from "../../scripts/i18n/catalogs";
 import { compileCatalogs } from "../../scripts/i18n/compile";
 import { compileVocabulary } from "../../scripts/i18n/vocabulary";
 
@@ -112,6 +117,22 @@ describe("catalog contract", () => {
       "user",
     ]);
     expect(catalogContract("-brand = Squid\nhello = { -brand }")).toEqual({ hello: [] });
+  });
+});
+
+describe("translation review", () => {
+  it("asks for review when English wording changes, not when only whitespace does", () => {
+    const reviewed = sourceFingerprints("nav-skip = Skip to content\n-brand = Squid");
+    expect(
+      reviewStatus(sourceFingerprints("nav-skip   =   Skip to content\n-brand = Squid"), reviewed),
+    ).toEqual({
+      changed: [],
+      obsolete: [],
+    });
+    expect(reviewStatus(sourceFingerprints("nav-skip = Skip to main content"), reviewed)).toEqual({
+      changed: ["nav-skip"],
+      obsolete: ["-brand"],
+    });
   });
 });
 
