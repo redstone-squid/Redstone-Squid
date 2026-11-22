@@ -15,7 +15,7 @@ from squid.core.errors import InvalidStateError
 from squid.core.i18n import tr
 from squid.core.permissions.application.cache import SubjectRuleCache
 from squid.core.permissions.application.ports import PermissionUnitOfWork
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 
 logger = logging.getLogger(__name__)
 

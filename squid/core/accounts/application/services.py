@@ -48,7 +48,7 @@ from squid.core.accounts.models import (
     MergeTicket,
 )
 from squid.core.errors import ConflictError, InvalidStateError
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 
 logger = logging.getLogger(__name__)
 

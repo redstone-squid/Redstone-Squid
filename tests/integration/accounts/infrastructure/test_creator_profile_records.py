@@ -22,7 +22,7 @@ from squid.core.builds import models as _build_models  # noqa: F401 — register
 from squid.core.builds.infrastructure import taxonomy as _taxonomy  # noqa: F401 — and its relationship targets
 from squid.core.persistence.base import Base
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 from tests.support.build_edits import build_edit_session
 from tests.support.build_edits import transact_build_edit as transact
 

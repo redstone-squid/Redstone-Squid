@@ -15,7 +15,7 @@ from squid.core.schematics.domain.models import (
     SimulationResult,
 )
 from squid.core.schematics.models import SchematicFile
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 
 
 class SchematicMetadataRepository(Protocol):

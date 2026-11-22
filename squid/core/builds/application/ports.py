@@ -12,7 +12,7 @@ from squid.core.builds.domain import BuildStatus
 from squid.core.builds.history import BuildEditActor, HistoryOperation
 from squid.core.builds.models import Build
 from squid.core.permissions.application.ports import PermissionUnitOfWork
-from squid.unit_of_work import UnitOfWork
+from squid.core.unit_of_work import UnitOfWork
 
 
 @dataclass(frozen=True, slots=True)

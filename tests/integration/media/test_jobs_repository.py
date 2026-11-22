@@ -43,7 +43,7 @@ from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.submissions.domain import DraftStatus, SubmissionOrigin
 from squid.core.submissions.models.entities import SubmissionDraft
 from squid.core.submissions.models.intake import SubmissionSuppliedAttachment
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 from tests.support.schema import model_tables
 from tests.support.unit_of_work import transact
 

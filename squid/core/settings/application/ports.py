@@ -5,8 +5,8 @@ from typing import Protocol
 
 from squid.core.settings.domain.runtime import RuntimeSettings
 from squid.core.settings.models import RuntimeSetting, ServerSetting
+from squid.core.unit_of_work import UnitOfWork
 from squid.core.voting.application.ports import VoteRepository
-from squid.unit_of_work import UnitOfWork
 
 
 class SettingsRepository(Protocol):

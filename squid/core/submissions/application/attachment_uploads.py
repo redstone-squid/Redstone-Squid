@@ -7,7 +7,7 @@ from squid.core.edits.domain import Revision, RevisionConflictError
 from squid.core.submissions.application.attachment_edits import AttachmentEditUnitOfWork, FileMembership
 from squid.core.submissions.application.drafts import SubmissionDraftService
 from squid.core.submissions.application.edits import draft_target
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 
 
 class DraftAttachmentUploads:

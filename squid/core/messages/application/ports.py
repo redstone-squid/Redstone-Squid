@@ -6,7 +6,7 @@ from whenever import Instant
 
 from squid.core.messages.domain import MessageSnapshot
 from squid.core.messages.models import Message
-from squid.unit_of_work import UnitOfWork
+from squid.core.unit_of_work import UnitOfWork
 
 
 class MessageRepository(Protocol):

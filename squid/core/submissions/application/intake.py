@@ -21,7 +21,7 @@ from squid.core.submissions.application.schematics import DraftSchematicService
 from squid.core.submissions.domain import SubmissionAttentionIssue
 from squid.core.submissions.domain.intake import IntakeStatus
 from squid.core.submissions.domain.source_files import SubmissionSourceFile
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 
 
 @dataclass(frozen=True, slots=True)

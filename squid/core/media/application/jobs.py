@@ -57,7 +57,7 @@ from squid.core.media.errors import (
     MediaProcessingError,
     MediaUploadConflictError,
 )
-from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from squid_i18n import md_tr
 
 logger = logging.getLogger(__name__)

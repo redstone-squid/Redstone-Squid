@@ -21,7 +21,7 @@ from squid.core.submissions.domain import (
     SubmissionAttentionReason,
 )
 from squid.core.submissions.errors import DraftAccessDeniedError
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 
 
 class SubmissionBuildPreparer(Protocol):

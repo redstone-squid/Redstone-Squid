@@ -16,7 +16,7 @@ from squid.core.starboard.application.ports import (
 from squid.core.starboard.application.snapshots import StarboardSnapshot
 from squid.core.starboard.domain import evaluate_vote
 from squid.core.starboard.models import OriginMessage, StarboardConfig
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 
 
 @dataclass(frozen=True, slots=True)

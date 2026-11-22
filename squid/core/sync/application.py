@@ -16,7 +16,7 @@ from typing import Protocol
 from squid.core.errors import InvalidStateError
 from squid.core.i18n import tr
 from squid.core.posts.domain import ResourceKind as PostResourceKind
-from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 
 class ReconciliationResource(StrEnum):

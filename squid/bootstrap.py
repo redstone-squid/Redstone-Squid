@@ -172,6 +172,7 @@ from squid.core.tags.application.edits import (
     TagModerationEdit,
     TagProposalEdit,
 )
+from squid.core.unit_of_work import UnitOfWorkFactory
 from squid.core.versions.application.services import VersionService
 from squid.core.voting.application import VoteService
 from squid.core.voting.application.accounts import AccountConsentedVoterLookup, AccountVoterDiscordIdLookup
@@ -180,7 +181,6 @@ from squid.core.voting.infrastructure.discord_cards import DiscordVoteCards
 from squid.core.voting.infrastructure.discord_rest import DiscordRestActorResolver
 from squid.discord_rest import RestOnlyClient, rest_client
 from squid.runtime import ApiServices, ApplicationRuntime, BotServices, WorkerServices
-from squid.unit_of_work import UnitOfWorkFactory
 from squid.worker.queue_health import PostgresQueueHealthMonitor
 
 logger = logging.getLogger(__name__)

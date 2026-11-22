@@ -12,7 +12,7 @@ from squid.core.permissions.application.services import PermissionService
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.settings.application import SettingsService
 from squid.core.settings.application.edits import RUNTIME_EDIT, RUNTIME_TARGET, RuntimeSettingsEdit
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 
 
 async def edit_runtime(service: SettingsService, changes: Mapping[str, object], *, actor_account_id: int) -> None:

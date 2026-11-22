@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from squid.core.posts.application.ports import PostUnitOfWork
 from squid.core.posts.domain import PostReference, ResourceKind, Surface
 from squid.core.posts.models import DiscordPost
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 
 
 class PostService:

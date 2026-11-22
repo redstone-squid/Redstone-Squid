@@ -46,7 +46,7 @@ from squid.core.permissions.domain.catalogue import PERM_NODE_VIEW, ROLE_DEFINIT
 from squid.core.permissions.domain.models import AccountGrantSubject
 from squid.core.permissions.models import PermissionAuditEntry
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 
 
 async def setup(

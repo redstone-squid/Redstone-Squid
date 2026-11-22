@@ -11,7 +11,7 @@ from squid.core.builds.application.taxonomy import TaxonomyResolution
 from squid.core.builds.domain import RestrictionTypeLiteral, normalize_tag_name
 from squid.core.concurrency import run_all_awaitables
 from squid.core.tags.models import TagDefinition
-from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 
 class _InferenceVocabularyJson(BaseModel):

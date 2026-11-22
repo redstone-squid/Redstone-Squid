@@ -2,10 +2,10 @@
 
 import re
 
+from squid.core.unit_of_work import UnitOfWorkFactory
 from squid.core.versions.application.ports import VersionUnitOfWork
 from squid.core.versions.domain import Edition, MinecraftVersion, parse_version_string
 from squid.core.versions.errors import InvalidVersionError, VersionCatalogUnavailableError
-from squid.unit_of_work import UnitOfWorkFactory
 
 
 class VersionService:

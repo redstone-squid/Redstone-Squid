@@ -8,7 +8,7 @@ and queue acknowledgements together so a rollback leaves the work available.
 
 from typing import Protocol
 
-from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 
 class SearchProjectionRepository(Protocol):

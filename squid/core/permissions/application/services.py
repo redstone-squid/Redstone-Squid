@@ -29,7 +29,7 @@ from squid.core.permissions.domain import (
     resolve,
 )
 from squid.core.permissions.errors import require_check
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 
 
 class PermissionService:

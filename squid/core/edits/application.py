@@ -28,7 +28,7 @@ from squid.core.edits.domain import (
 )
 from squid.core.errors import ConflictError, InvalidStateError, ValidationError
 from squid.core.replay import REPLAY_RETENTION_HOURS
-from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 logger = logging.getLogger(__name__)
 

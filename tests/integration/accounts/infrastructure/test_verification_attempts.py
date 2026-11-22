@@ -11,7 +11,7 @@ from whenever import Instant, patch_current_time
 from squid.core.accounts.domain import IdentityProvider
 from squid.core.persistence.base import Base
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 from tests.support.unit_of_work import transact
 
 _TABLES = [Base.metadata.tables["verification_attempts"]]

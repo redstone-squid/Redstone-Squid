@@ -62,7 +62,7 @@ from squid.core.records.domain.door_evidence import DoorExpansionSource, DoorRec
 from squid.core.records.domain.models import DOOR_TIMING_METHODS, EXTENDER_TIMING_METHODS, MaterializationSource
 from squid.core.records.domain.resolution import resolve_record
 from squid.core.records.errors import NoMatchingRecordCategoryError, RecordDefinitionNotFoundError
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 from squid_i18n import md_tr
 
 

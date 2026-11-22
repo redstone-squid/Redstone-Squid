@@ -6,7 +6,7 @@ from uuid import UUID
 from whenever import Instant
 
 from squid.core.cli_auth.models import CliDevice, CliDeviceEnrollment, CliSession, CliSessionChallenge
-from squid.unit_of_work import UnitOfWork
+from squid.core.unit_of_work import UnitOfWork
 
 
 class AccountConsentReader(Protocol):

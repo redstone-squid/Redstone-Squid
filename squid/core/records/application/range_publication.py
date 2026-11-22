@@ -15,7 +15,7 @@ from squid.core.records.application.range_ports import RangePublicationUnitOfWor
 from squid.core.records.application.range_snapshots import RangePublication, RangeSnapshotDocument, RangeSource
 from squid.core.records.application.services import RecordComputationService
 from squid.core.records.domain.regions import DEFAULT_REGION_LIMITS, RegionAnalysisStatus
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 
 logger = logging.getLogger(__name__)
 

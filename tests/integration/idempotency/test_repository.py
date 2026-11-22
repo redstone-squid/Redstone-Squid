@@ -14,7 +14,7 @@ from squid.core.idempotency.infrastructure.crypto import IdempotencyCiphertextEr
 from squid.core.idempotency.models import IdempotencyRequest
 from squid.core.persistence.base import Base
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 from tests.support.unit_of_work import transact
 
 _TABLE = Base.metadata.tables["idempotency_requests"]

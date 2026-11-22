@@ -12,7 +12,7 @@ from squid.core.diagnostics.domain import MAX_REFERENCE_LENGTH, ErrorReportNotFo
 from squid.core.diagnostics.models import ErrorReport
 from squid.core.errors import InvalidStateError, JSONValue, SquidError
 from squid.core.i18n import tr
-from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 logger = logging.getLogger(__name__)
 

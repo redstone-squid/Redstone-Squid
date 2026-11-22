@@ -20,7 +20,7 @@ from squid.core.notifications.domain import (
 from squid.core.notifications.models import InboxNotification, NotificationSubscription
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
 from squid.core.settings.domain.runtime import RuntimeSettings
-from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 
 @dataclass(frozen=True, slots=True)

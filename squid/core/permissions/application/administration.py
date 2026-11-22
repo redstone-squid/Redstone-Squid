@@ -56,7 +56,7 @@ from squid.core.permissions.models import (
     PermissionRole,
     PermissionRoleAssignment,
 )
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 
 MAX_ROLE_RANK = 999
 """Below `owner`, so no created role can ever be unmanageable by the owner."""

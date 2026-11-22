@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from squid.core.accounts.domain import fold_creator_name
 from squid.core.accounts.models import CreatorAlias
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 from tests.support.schema import model_table
 from tests.support.unit_of_work import transact
 

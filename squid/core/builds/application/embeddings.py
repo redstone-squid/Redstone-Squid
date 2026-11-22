@@ -7,7 +7,7 @@ from squid.core.builds.domain import UnresolvedTaxonomy
 from squid.core.builds.models import Build, DoorBuild, ExtenderBuild
 from squid.core.errors import InvalidStateError
 from squid.core.events import DomainEvent, UnsupportedEventVersionError
-from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 
 class EmbeddingModel(Protocol):

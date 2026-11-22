@@ -6,6 +6,7 @@ from typing import Protocol
 from whenever import Instant
 
 from squid.core.actors import Actor
+from squid.core.unit_of_work import UnitOfWork
 from squid.core.voting.domain import (
     EmojiPreset,
     PollScope,
@@ -18,7 +19,6 @@ from squid.core.voting.domain import (
     VoteStatus,
     VoteVisibility,
 )
-from squid.unit_of_work import UnitOfWork
 
 
 class VoteWeightPolicy(Protocol):

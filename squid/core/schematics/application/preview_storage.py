@@ -13,7 +13,7 @@ from squid.core.builds.application.ports import BuildEditingUnitOfWork
 from squid.core.errors import DataIntegrityError, InvalidStateError
 from squid.core.schematics.application.previews import PreviewObjectReservation, StoredRender
 from squid.core.schematics.models import SchematicPreviewObject
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 
 
 @dataclass(frozen=True, slots=True)

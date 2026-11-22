@@ -17,7 +17,7 @@ from squid.core.records.application.models import (
 )
 from squid.core.records.application.snapshots import RecordSnapshot
 from squid.core.records.domain import BuildKind, FormattedTitle, RecordCriterion, VersionScope
-from squid.unit_of_work import UnitOfWork
+from squid.core.unit_of_work import UnitOfWork
 
 
 @dataclass(frozen=True, slots=True)

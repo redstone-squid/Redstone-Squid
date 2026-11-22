@@ -5,7 +5,7 @@ from whenever import Instant
 from squid.core.messages.application.ports import MessageUnitOfWork
 from squid.core.messages.domain import MessageSnapshot
 from squid.core.messages.models import Message
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 
 
 class MessageService:

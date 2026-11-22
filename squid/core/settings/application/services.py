@@ -8,7 +8,7 @@ from squid.core.settings.application.ports import GuildSettingsUnitOfWork
 from squid.core.settings.domain import Setting, SettingOptions
 from squid.core.settings.domain.guild import CHANNEL_FIELDS, GuildSettings
 from squid.core.settings.domain.runtime import RuntimeSettings
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 
 
 class SettingsService:

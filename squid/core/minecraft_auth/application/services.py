@@ -55,7 +55,7 @@ from squid.core.minecraft_auth.errors import (
     InvalidPlayerTokenError,
 )
 from squid.core.minecraft_auth.models import PaperInstallation, PlayerAuthorizationChallenge, PlayerGrant
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 
 CHALLENGE_LIFETIME_SECONDS = 10 * 60
 PLAYER_GRANT_LIFETIME_SECONDS = 5 * 60

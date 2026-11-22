@@ -33,7 +33,7 @@ from squid.core.submissions.errors import (
     DraftStateConflictError,
     DraftValidationError,
 )
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 from squid_i18n import md_tr
 
 DEFAULT_DRAFT_RETENTION_DAYS = 7

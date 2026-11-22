@@ -55,9 +55,9 @@ from squid.core.submissions.infrastructure.schematics import PostgresDraftSchema
 from squid.core.suggestions.infrastructure.repository import PostgresSuggestionRepository
 from squid.core.sync.infrastructure.repository import PostgresDiscordSyncQueue
 from squid.core.tags.infrastructure.repository import PostgresTagDefinitionRepository
+from squid.core.unit_of_work import EventFact
 from squid.core.versions.infrastructure.repository import VersionRepository
 from squid.core.voting.infrastructure.repository import VoteRepository
-from squid.unit_of_work import EventFact
 
 
 class SqlAlchemyUnitOfWork:

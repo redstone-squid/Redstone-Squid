@@ -21,6 +21,7 @@ from squid.core.persistence.base import Base
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.posts.models import DiscordPost
 from squid.core.settings.models import ServerSetting
+from squid.core.unit_of_work import UnitOfWorkFactory
 from squid.core.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
     DeleteLogVoteTarget,
@@ -40,7 +41,6 @@ from squid.core.voting.models import (
     VoteSession,
     VoteSessionOption,
 )
-from squid.unit_of_work import UnitOfWorkFactory
 from tests.support.schema import model_tables, with_foreign_key_targets
 from tests.support.unit_of_work import transact
 from tests.support.voting import (

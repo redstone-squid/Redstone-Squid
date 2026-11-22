@@ -22,7 +22,7 @@ from squid.core.errors import AccountRequiredError, InvalidStateError
 from squid.core.permissions.application.services import PermissionService
 from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 from squid.core.sentinel import UNSET
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 
 
 class BuildService:

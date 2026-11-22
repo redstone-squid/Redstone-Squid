@@ -8,7 +8,7 @@ from async_lru import alru_cache
 
 from squid.core.builds.domain import RestrictionTypeLiteral
 from squid.core.edits.domain import Revision
-from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 
 @dataclass(frozen=True, slots=True)

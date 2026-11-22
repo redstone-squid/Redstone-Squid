@@ -26,7 +26,7 @@ from squid.core.accounts.models import AccountIdentity, AliasClaim, CreatorAlias
 from squid.core.accounts.models import AccountIdentity as AccountIdentityValue
 from squid.core.persistence.base import Base
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 from tests.support.unit_of_work import transact
 
 CONSENT = AccountConsent(CURRENT_CONSENT_VERSION, Instant.from_utc(2026, 8, 4))

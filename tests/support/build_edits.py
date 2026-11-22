@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from squid.core.builds.application.ports import BuildEditingUnitOfWork
 from squid.core.builds.history import BuildEditContext
 from squid.core.builds.infrastructure.edit_scope import build_edit_scope
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 
 
 @asynccontextmanager

@@ -15,7 +15,7 @@ from squid.core.starboard.application.edits import (
 from squid.core.starboard.application.services import StarboardService
 from squid.core.starboard.application.snapshots import StarboardSnapshot
 from squid.core.starboard.models import StarboardConfig, StarboardEmoji
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 
 
 async def create_starboard(

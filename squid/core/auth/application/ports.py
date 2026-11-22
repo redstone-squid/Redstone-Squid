@@ -11,7 +11,7 @@ from squid.core.auth.models.entities import ApiKey
 from squid.core.auth.models.sessions import OAuthState
 from squid.core.permissions.application.ports import PermissionUnitOfWork
 from squid.core.permissions.domain import Pattern
-from squid.unit_of_work import UnitOfWork
+from squid.core.unit_of_work import UnitOfWork
 
 
 class WebSessionRepository(Protocol):

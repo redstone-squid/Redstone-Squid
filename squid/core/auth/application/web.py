@@ -24,7 +24,7 @@ from squid.core.auth.application.ports import WebSessionUnitOfWork
 from squid.core.auth.application.providers import OAuthProvider
 from squid.core.auth.models.sessions import OAuthState
 from squid.core.errors import AuthenticationError, NotFoundError, ValidationError
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 
 
 def hash_web_session_token(pepper: bytes, token: str) -> bytes:

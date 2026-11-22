@@ -12,7 +12,7 @@ from typing import Protocol
 
 from squid.core.errors import InvalidStateError
 from squid.core.i18n import tr
-from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 
 @dataclass(frozen=True, slots=True)

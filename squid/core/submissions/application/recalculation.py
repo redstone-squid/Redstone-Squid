@@ -28,7 +28,7 @@ from squid.core.submissions.application.recalculation_values import (
     RecalculationProposal,
     recalculation_values,
 )
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 
 
 class RecalculationProposalRepository(Protocol):

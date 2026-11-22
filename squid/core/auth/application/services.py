@@ -16,7 +16,7 @@ from squid.core.errors import AuthorizationError, InvalidStateError
 from squid.core.i18n import tr
 from squid.core.permissions.application.services import PermissionService
 from squid.core.permissions.domain import CATALOGUE, Pattern
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 
 API_KEY_PREFIX = "sq"
 API_KEY_ID_BYTES = 12

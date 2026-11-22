@@ -20,7 +20,7 @@ from squid.core.accounts.infrastructure.repository import AccountRepository
 from squid.core.accounts.models import AccountIdentity as AccountIdentityValue
 from squid.core.accounts.models import MergeTicket as AccountMergeTicketModel
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 from tests.support.build_edits import build_edit_session
 from tests.support.build_edits import transact_build_edit as transact
 

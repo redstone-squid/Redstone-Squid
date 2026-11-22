@@ -30,7 +30,7 @@ from squid.core.submissions.application.schematic_inference import (
     SchematicSubmissionSuggestions,
 )
 from squid.core.submissions.domain.schematics import DraftSchematic, DraftSchematicState
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 
 logger = logging.getLogger(__name__)
 

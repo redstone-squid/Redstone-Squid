@@ -8,6 +8,7 @@ import anyio
 from whenever import Instant
 
 from squid.core.actors import Actor
+from squid.core.unit_of_work import UnitOfWorkFactory
 from squid.core.voting.application.policies import RoleVoteWeightPolicy
 from squid.core.voting.application.ports import VoteActorResolver, VoteUnitOfWork, VoteWeightPolicy
 from squid.core.voting.domain import (
@@ -34,7 +35,6 @@ from squid.core.voting.domain import (
 )
 from squid.core.voting.domain.models import VoteConfiguration
 from squid.core.voting.errors import InvalidVoteConfigurationError
-from squid.unit_of_work import UnitOfWorkFactory
 
 logger = logging.getLogger(__name__)
 

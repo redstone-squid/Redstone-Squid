@@ -32,8 +32,8 @@ from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.settings.models import ServerSetting
 from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.core.tags.models import TagAlias, TagApplicability, TagDefinition
+from squid.core.unit_of_work import UnitOfWorkFactory
 from squid.core.versions.models import Version
-from squid.unit_of_work import UnitOfWorkFactory
 from tests.support.build_edits import build_edit_session
 from tests.support.build_edits import transact_build_edit as transact
 

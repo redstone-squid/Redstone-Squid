@@ -9,7 +9,7 @@ from squid.core.errors import ValidationError
 from squid.core.i18n import tr
 from squid.core.tags.domain import TagModerationStatus, TagValueType
 from squid.core.tags.models import TagDefinition
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 
 _QUERY_NAME = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 

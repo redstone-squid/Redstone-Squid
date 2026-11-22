@@ -2,8 +2,8 @@
 
 from typing import Protocol
 
+from squid.core.unit_of_work import UnitOfWork
 from squid.core.versions.domain import Edition, MinecraftVersion
-from squid.unit_of_work import UnitOfWork
 
 
 class VersionRepository(Protocol):

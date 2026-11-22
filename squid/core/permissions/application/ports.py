@@ -14,7 +14,7 @@ from squid.core.permissions.models import (
     PermissionRole,
     PermissionRoleAssignment,
 )
-from squid.unit_of_work import UnitOfWork
+from squid.core.unit_of_work import UnitOfWork
 
 
 @dataclass(frozen=True, slots=True)

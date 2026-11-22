@@ -7,7 +7,7 @@ from typing import Protocol
 from squid.core.edits.domain import Revision
 from squid.core.starboard.domain import StarboardDirection
 from squid.core.starboard.models import OriginMessage, StarboardConfig, StarboardEmoji, StarboardEntry
-from squid.unit_of_work import UnitOfWork
+from squid.core.unit_of_work import UnitOfWork
 
 
 @dataclass(frozen=True, slots=True)

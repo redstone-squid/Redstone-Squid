@@ -39,7 +39,7 @@ from squid.core.permissions.models import (
 )
 from squid.core.persistence.base import Base
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 from tests.support.database import record_queries
 from tests.support.unit_of_work import transact
 

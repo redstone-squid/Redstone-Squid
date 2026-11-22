@@ -14,7 +14,7 @@ from squid.core.minecraft_auth.domain import (
     PublishedPaperServer,
 )
 from squid.core.minecraft_auth.models import PaperInstallation, PlayerAuthorizationChallenge, PlayerGrant
-from squid.unit_of_work import UnitOfWork
+from squid.core.unit_of_work import UnitOfWork
 
 
 class MinecraftAuthorizationRepository(Protocol):

@@ -11,7 +11,7 @@ from squid.core.search.application.parser import SearchQueryParser
 from squid.core.search.application.ports import QueryEmbedding, SearchBackend
 from squid.core.search.application.query_analysis import is_filter_only
 from squid.core.search.domain import SearchMode, SearchPage, SearchQuery, SearchRequest
-from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from squid_i18n import md_tr
 
 logger = logging.getLogger(__name__)

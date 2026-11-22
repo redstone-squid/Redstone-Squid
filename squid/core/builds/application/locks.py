@@ -19,7 +19,7 @@ from whenever import Instant
 
 from squid.core.builds.errors import BuildBusyError
 from squid.core.errors import InvalidStateError
-from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 
 @dataclass(slots=True)

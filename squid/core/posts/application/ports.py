@@ -5,7 +5,7 @@ from typing import Protocol
 
 from squid.core.posts.domain import PostReference, ResourceKind, Surface
 from squid.core.posts.models import DiscordPost
-from squid.unit_of_work import UnitOfWork
+from squid.core.unit_of_work import UnitOfWork
 
 
 class PostRepository(Protocol):

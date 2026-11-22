@@ -29,7 +29,7 @@ from squid.core.cli_auth.models import CliDevice, CliDeviceEnrollment, CliSessio
 from squid.core.cli_auth.ports import CliAuthorizationUnitOfWork
 from squid.core.errors import DataIntegrityError, InvalidStateError, ValidationError
 from squid.core.i18n import tr
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 
 CLI_SESSION_TOKEN_PREFIX = "squid_cli_v1"
 ENROLLMENT_LIFETIME_SECONDS = 10 * 60

@@ -4,7 +4,7 @@ from functools import partial
 from typing import override
 
 from squid.core.permissions.application.ports import PermissionRepository, PermissionUnitOfWork
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 from tests.support.unit_of_work import CommittedState, FakeUnitOfWork
 
 

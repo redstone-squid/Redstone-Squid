@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from squid.core.events.application import DomainEventDelivery
 from squid.core.events.models import DomainEvent, DomainEventConsumer, DomainEventDeliveryRecord
 from squid.core.persistence.queue import ClaimedRowQueue, QueueHealthShape, QueueSpec
-from squid.unit_of_work import EventFact
+from squid.core.unit_of_work import EventFact
 
 
 async def publish_domain_event(session: AsyncSession, event: EventFact) -> None:

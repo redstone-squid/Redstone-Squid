@@ -26,7 +26,7 @@ from squid.core.search.domain import (
     SortDirection,
 )
 from squid.core.search.models import SearchDocument, SearchDocumentFacet
-from squid.unit_of_work import UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWorkFactory
 from tests.support.unit_of_work import transact
 
 pytestmark = pytest.mark.asyncio

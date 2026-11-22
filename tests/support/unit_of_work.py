@@ -8,7 +8,7 @@ from types import TracebackType
 from typing import Self, override
 
 from squid.core.builds.history import BuildEditActor, HistoryOperation
-from squid.unit_of_work import EventFact, UnitOfWork, UnitOfWorkFactory
+from squid.core.unit_of_work import EventFact, UnitOfWork, UnitOfWorkFactory
 
 
 @dataclass

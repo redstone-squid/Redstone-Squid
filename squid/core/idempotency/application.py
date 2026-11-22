@@ -17,7 +17,7 @@ from squid.core.idempotency.domain import (
     UnsafeHttpMethod,
 )
 from squid.core.replay import REPLAY_RETENTION_HOURS
-from squid.unit_of_work import UnitOfWork, UnitOfWorkFactory
+from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 
 class IdempotencyRepository(Protocol):
