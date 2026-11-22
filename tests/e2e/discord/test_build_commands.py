@@ -1,9 +1,13 @@
 """Submit and reopen drafts, search the catalogue, and review build messages through Discord."""
 
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import override
 from uuid import UUID
 
+import discord
 import pytest
+import simcord
 
 from squid.core.accounts.domain import AccountConsent
 from squid.core.accounts.models import Account
@@ -41,7 +45,8 @@ class EmptyInference(SubmissionInferenceRuns):
         return ()
 
 
-async def test_submit_a_named_door_and_find_it_in_private_drafts() -> None:
+@asynccontextmanager
+async def submission() -> AsyncIterator[tuple[simcord.Env, simcord.MemberActor, Drafts, WorkspaceAccounts]]:
     drafts = Drafts()
     accounts = WorkspaceAccounts()
     services = bot_services(
@@ -54,15 +59,26 @@ async def test_submit_a_named_door_and_find_it_in_private_drafts() -> None:
         submission_inference=EmptyInference(),
     )
     async with command_environment(EXTENSION, services=services) as (_, env):
-        channel = env.guild.create_text_channel("submissions")
         author = env.guild.add_member(env.create_user("author"))
-        other = env.guild.add_member(env.create_user("other"))
         accounts.discord_accounts[str(author.id)] = Account(id=7, consent=AccountConsent.grant_current())
+        yield env, author, drafts, accounts
+
+
+async def test_submit_a_named_door_and_find_it_in_private_drafts() -> None:
+    async with submission() as (env, author, drafts, accounts):
+        channel = env.guild.create_text_channel("submissions")
+        other = env.guild.add_member(env.create_user("other"))
+        # The other member has a consented account but owns no drafts.
         accounts.discord_accounts[str(other.id)] = Account(id=9, consent=AccountConsent.grant_current())
 
         submitted = await author.slash(channel, "build submit", name="Aurora", opening_size="2x2")
         assert submitted.response is not None
         assert submitted.response.ephemeral
+        assert not submitted.followups
+        (callback,) = (call for call in env.http_requests if call.method == "POST" and call.path.endswith("/callback"))
+        assert callback.json is not None
+        assert callback.json["type"] == discord.InteractionResponseType.deferred_channel_message.value
+        assert any(call.method == "PATCH" and call.path.endswith("/messages/@original") for call in env.http_requests)
         assert any("Build draft" in line for line in displayed_text(submitted.response.message))
         assert drafts.current is not None
         assert drafts.current.snapshot.owner_account_id == 7
@@ -83,6 +99,68 @@ async def test_submit_a_named_door_and_find_it_in_private_drafts() -> None:
         assert other_drafts.response is not None
         assert other_drafts.response.ephemeral
         assert any("You have no drafts in progress" in line for line in displayed_text(other_drafts.response.message))
+
+
+@pytest.mark.parametrize("category", ["Door", "Extender", "Utility", "Entrance", "Other"])
+async def test_submit_prefills_shared_fields_for_each_category(category: str) -> None:
+    async with submission() as (env, author, drafts, _):
+        channel = env.guild.create_text_channel("submissions")
+        result = await author.slash(
+            channel, "build submit", kind=category, name="My build", description="Details", build_dimensions="5x7x4"
+        )
+
+        assert result.response is not None
+        assert result.response.ephemeral
+        assert drafts.current is not None
+        snapshot = drafts.current.snapshot
+        assert snapshot.category == category.lower()
+        assert snapshot.answers["display_name"] == "My build"
+        assert snapshot.answers["description"] == "Details"
+        assert (
+            snapshot.answers["capture_width"],
+            snapshot.answers["capture_height"],
+            snapshot.answers["capture_depth"],
+        ) == (5, 7, 4)
+        assert "opening_width" not in snapshot.answers
+
+
+async def test_submit_names_values_the_form_cannot_use() -> None:
+    async with submission() as (env, author, drafts, _):
+        channel = env.guild.create_text_channel("submissions")
+        result = await author.slash(channel, "build submit", opening_size="5 wide", build_dimensions="5x7x4")
+
+        assert result.response is not None
+        assert result.response.ephemeral
+        assert any(
+            "Some values from the command could not be used: Opening size." in line
+            for line in displayed_text(result.response.message)
+        )
+        assert drafts.current is not None
+        assert drafts.current.snapshot.answers["opening_width"] == 5
+        assert "opening_height" not in drafts.current.snapshot.answers
+
+
+@pytest.mark.parametrize(
+    ("options", "detail"),
+    [
+        ({"opening_size": "two by two"}, "Check the opening size"),
+        ({"kind": "Extender", "opening_size": "2x2"}, "Opening size and orientation can only be supplied for doors."),
+        ({"kind": "Utility", "patterns": "Regular"}, "Patterns can only be supplied for doors and extenders."),
+    ],
+)
+async def test_submit_rejects_invalid_prefills_before_creating_a_draft(
+    options: dict[str, str],
+    detail: str,
+) -> None:
+    async with submission() as (env, author, drafts, _):
+        channel = env.guild.create_text_channel("submissions")
+        result = await author.slash(channel, "build submit", **options)
+
+        assert result.response is not None
+        assert result.response.ephemeral
+        assert not result.followups
+        assert any(detail in line for line in displayed_text(result.response.message))
+        assert drafts.current is None
 
 
 class EmptyAttachmentQueue(BuildService):
