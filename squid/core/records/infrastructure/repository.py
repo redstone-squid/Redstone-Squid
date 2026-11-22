@@ -70,7 +70,7 @@ from squid.core.tags.models import TagAssignment, TagDefinition, display_convers
 from squid_i18n import md_tr
 
 RULES_REVISION_DOCUMENT_HASH = "312af53ee50a0cb0cee37673a763a6072321039777451997acc23cb26a6ba9ac"
-CALCULATOR_VERSION = "7"
+CALCULATOR_VERSION = "8"
 FORMATTER_VERSION = "2"
 
 RECORD_RECOMPUTE_QUEUE_SPEC = QueueSpec(
@@ -158,6 +158,7 @@ class PostgresRecordRepository:
             select(DoorBuild)
             .where(
                 DoorBuild.submission_status == BuildStatus.APPROVED,
+                DoorBuild.extra_info["unknown_patterns"][0].is_(None),
                 DoorBuild.orientation == orientation,
                 or_(DoorBuild.expansion.is_not(None), fixed_domain),
             )
@@ -757,6 +758,7 @@ class PostgresRecordRepository:
             select(DoorBuild)
             .where(
                 DoorBuild.submission_status == BuildStatus.APPROVED,
+                DoorBuild.extra_info["unknown_patterns"][0].is_(None),
                 or_(
                     DoorBuild.expansion.is_not(None),
                     and_(DoorBuild.door_width.is_not(None), DoorBuild.door_height.is_not(None)),
@@ -780,7 +782,10 @@ class PostgresRecordRepository:
     async def _list_extenders(self, session: AsyncSession) -> Sequence[CandidateBuild]:
         statement = (
             select(ExtenderBuild)
-            .where(ExtenderBuild.submission_status == BuildStatus.APPROVED)
+            .where(
+                ExtenderBuild.submission_status == BuildStatus.APPROVED,
+                ExtenderBuild.extra_info["unknown_patterns"][0].is_(None),
+            )
             .options(
                 selectinload(ExtenderBuild.tags).options(*assignment_units()),
                 selectinload(ExtenderBuild.build_versions),

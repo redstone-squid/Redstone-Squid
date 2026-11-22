@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from squid.core.accounts.models import Account
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.domain.expansion import DoorExpansion, ExpansionBranch, ExpansionParameter, ExpansionTiming
-from squid.core.builds.models import BuildVersion, DoorBuild
+from squid.core.builds.models import BuildVersion, DoorBuild, ExtenderBuild
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.records.application.expansion_regions import DoorRangeQuery
 from squid.core.records.application.live import DoorRecordLookup
@@ -52,6 +52,50 @@ def document() -> DoorExpansion:
             ),
         ),
     )
+
+
+async def test_unknown_patterns_exclude_builds_from_record_candidates(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    sessions = migrated_session_factory
+    async with build_edit_session(sessions) as session:
+        account = Account()
+        session.add(account)
+        await session.flush()
+        door = DoorBuild(
+            submitter_account_id=account.id,
+            submission_status=BuildStatus.APPROVED,
+            orientation="Door",
+            door_width=6,
+            door_height=3,
+            extra_info={"unknown_patterns": []},
+        )
+        family = DoorBuild(
+            submitter_account_id=account.id,
+            submission_status=BuildStatus.APPROVED,
+            orientation="Door",
+            expansion=document(),
+            extra_info={"unknown_patterns": ["Spiral"]},
+        )
+        extender = ExtenderBuild(
+            submitter_account_id=account.id,
+            submission_status=BuildStatus.APPROVED,
+            orientation="Horizontal",
+            extension_length=2,
+            extender_type="Regular",
+            extra_info={"unknown_patterns": ["Spiral"]},
+        )
+        session.add_all([door, family, extender])
+
+    async with sessions() as session:
+        repository = PostgresRecordRepository(lambda: session)
+        assert [row.candidate.build_id for row in await repository.list_confirmed(BuildKind.DOOR)] == [door.id]
+        assert not await repository.list_confirmed(BuildKind.EXTENDER)
+
+    async with sessions() as session:
+        repository = PostgresRecordRepository(lambda: session)
+        candidates = await repository.list_for_door_lookup((6, 3, 1), "Door", version_id=None)
+        assert [row.candidate.build_id for row in candidates] == [door.id]
 
 
 async def test_live_lookup_does_not_materialize_large_sizes(

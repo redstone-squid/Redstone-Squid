@@ -108,7 +108,7 @@ def test_active_run_identity_is_global_across_rules_revisions() -> None:
 
     assert tuple(column.name for column in active_index.columns) == ("build_kind", "version_id")
     assert FORMATTER_VERSION == "2"
-    assert CALCULATOR_VERSION == "7"
+    assert CALCULATOR_VERSION == "8"
 
 
 async def test_standings_filter_is_applied_to_both_rows_and_count() -> None:
