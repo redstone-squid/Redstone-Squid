@@ -14,6 +14,8 @@ from bs4 import BeautifulSoup
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
+from squid.bot.showcase.catalogue import CataloguePreview
+from squid.bot.showcase.review import Reviewer, ReviewerPanel, ReviewRoom
 from squid_ui.ext.discord import scene
 from squid_ui.ext.discord.preview import PREVIEW_CSS, DiscordPreviewRenderer
 from squid_ui.ext.discord.testing import StagedUI, stage
@@ -33,6 +35,20 @@ class Counter(sd.Screen):
 
     async def add(self, _event: sl.PressEvent) -> None:
         self.count += 1
+
+
+def reviewer_panel() -> ReviewerPanel:
+    room = ReviewRoom()
+    alice = Reviewer(1, "Alice")
+    room.seats = (alice, Reviewer(2, "Bob"))
+    return ReviewerPanel(room, alice, simulated=True)
+
+
+SCREENS: dict[str, Callable[[], sd.Screen]] = {
+    "counter": Counter,
+    "catalogue": CataloguePreview,
+    "review": reviewer_panel,
+}
 
 
 class PreviewSession:
@@ -68,12 +84,17 @@ class PreviewSession:
 
 
 @asynccontextmanager
-async def preview_app(factory: Callable[[], sd.Screen], *, idle_seconds: float = 600) -> AsyncIterator[web.Application]:
+async def preview_app(
+    factory: Callable[[], sd.Screen] | None = None, *, idle_seconds: float = 600
+) -> AsyncIterator[web.Application]:
+    screens = SCREENS if factory is None else {"custom": factory}
     sessions: dict[str, PreviewSession] = {}
     closing = anyio.Event()
     script = Path(__file__).with_suffix(".js").read_text()
 
-    async def own_session(token: str, *, task_status: TaskStatus[PreviewSession]) -> None:
+    async def own_session(
+        token: str, factory: Callable[[], sd.Screen], *, task_status: TaskStatus[PreviewSession]
+    ) -> None:
         async with stage(factory(), owner=object()) as ui:
             session = sessions[token] = PreviewSession(ui)
             try:
@@ -91,12 +112,19 @@ async def preview_app(factory: Callable[[], sd.Screen], *, idle_seconds: float =
     async with anyio.create_task_group() as group:
 
         async def index(request: web.Request) -> web.Response:
+            screen = request.query.get("screen", next(iter(screens)))
+            if screen not in screens:
+                raise web.HTTPNotFound(text="Unknown preview screen.")
+            links = " · ".join(
+                f'<a href="/?screen={name}">{name.title()}</a>' if name != screen else name.title() for name in screens
+            )
             token = secrets.token_urlsafe(24)
-            session = await group.start(own_session, token)
+            session = await group.start(own_session, token, screens[screen])
             fragment, _ = session.display()
             page = (
                 '<!doctype html><meta charset="utf-8"><title>Discord preview</title>'
-                f'<style>{PREVIEW_CSS}</style><main data-session="{token}" '
+                f"<style>{PREVIEW_CSS} nav {{font: 1rem system-ui; padding: .75rem 0}}</style>"
+                f'<nav aria-label="Preview screens">{links}</nav><main data-session="{token}" '
                 f'data-generation="{session.ui.root.generation}">{fragment}</main>'
                 '<p role="status"></p><script src="/preview.js"></script>'
             )
@@ -147,7 +175,7 @@ async def preview_app(factory: Callable[[], sd.Screen], *, idle_seconds: float =
 
 
 async def main() -> None:
-    async with preview_app(Counter) as app:
+    async with preview_app() as app:
         runner = web.AppRunner(app)
         await runner.setup()
         try:

@@ -1,13 +1,14 @@
 """Exercise the live preview through its browser-facing HTTP endpoints."""
 
+import pytest
 from aiohttp.test_utils import TestClient, TestServer
 from bs4 import BeautifulSoup
 
-from scripts.ui_preview import Counter, preview_app
+from scripts.ui_preview import preview_app
 
 
 async def test_counter_sessions_and_stale_clicks() -> None:
-    async with preview_app(Counter) as app, TestClient(TestServer(app)) as client:
+    async with preview_app() as app, TestClient(TestServer(app)) as client:
         page = BeautifulSoup(await (await client.get("/")).text(), "html.parser")
         root = page.select_one("main")
         button = page.select_one("button")
@@ -39,3 +40,24 @@ async def test_counter_sessions_and_stale_clicks() -> None:
         assert other_root
         assert other_root["data-session"] != root["data-session"]
         assert other_root.find(string="0")
+
+
+@pytest.mark.parametrize(
+    ("screen", "button_label", "expected"),
+    [
+        ("catalogue", "Build card", "Submission ID: 42"),
+        ("review", "Approve", "1 approved"),
+    ],
+)
+async def test_showcase_actions(screen: str, button_label: str, expected: str) -> None:
+    async with preview_app() as app, TestClient(TestServer(app)) as client:
+        page = BeautifulSoup(await (await client.get(f"/?screen={screen}")).text(), "html.parser")
+        root = page.select_one("main")
+        assert root
+        button = next(button for button in root.select("button:enabled") if button.get_text(strip=True) == button_label)
+        response = await client.post(
+            f"/preview/{root['data-session']}/actions",
+            json={"generation": int(str(root["data-generation"])), "action": button["data-squid-action"]},
+        )
+        assert response.status == 200
+        assert expected in BeautifulSoup(await response.text(), "html.parser").get_text()

@@ -124,10 +124,11 @@ their directories. Only those two archive entries are mounted, both read-only.
 
 ### Live Discord preview
 
-Run `just ui-preview` and open <http://127.0.0.1:8000>. Click **Add** to run
-the Counter screen's Python handler. Each page load starts a fresh screen.
-Idle previews expire after ten minutes. Ctrl-C stops the server.
+Run `just ui-preview` and open <http://127.0.0.1:8000>. Use the navigation
+to switch between the counter, catalogue, and review screens. In **Catalogue**,
+switch from published standings to the build card. In **Review**, approve the
+sample as Alice, undo the decision, or inspect the panel's state.
 
-To try another single-message Components V2 screen, pass its factory to
-`preview_app` in `scripts/ui_preview.py`. The preview supports callback buttons
-and links. Use `just ui-gallery` for static snapshots.
+Each page load starts a fresh screen with disposable data. The preview supports
+callback buttons and links. Idle previews expire after ten minutes. Ctrl-C stops
+the server. Use `just ui-gallery` for static snapshots.
