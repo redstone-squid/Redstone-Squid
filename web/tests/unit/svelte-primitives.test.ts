@@ -32,7 +32,7 @@ describe("Svelte primitive contracts", () => {
     }
   });
   it("exposes invalid and disabled states in the workbench form", async () => {
-    const { rerender } = render(FormSpecimen, { locale: "en", state: "invalid" });
+    const { rerender } = render(FormSpecimen, { state: "invalid" });
     const category = screen.getByRole("combobox", { name: "Category" });
     expect(category).toHaveValue("");
     expect(category).toHaveAccessibleDescription("This field is required.");

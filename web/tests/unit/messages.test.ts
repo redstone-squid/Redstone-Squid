@@ -11,16 +11,18 @@ import {
 import { compileCatalogs } from "../../scripts/i18n/compile";
 import { compileVocabulary } from "../../scripts/i18n/vocabulary";
 
-type Message = (locale: string, args?: Record<string, unknown>) => string;
+type Message = (...args: unknown[]) => string;
 
 /** Compile catalogs and import the result, so tests exercise the generated code itself. */
 async function load(catalogs: Record<string, string>): Promise<Record<string, Message>> {
   const format = path.resolve("src/locales/format.ts");
+  const locale = path.resolve("src/locales/locale.ts");
   const javascript = ts
     .transpileModule(compileCatalogs(catalogs), {
       compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 },
     })
-    .outputText.replace('"./format"', JSON.stringify(format));
+    .outputText.replace('"./format"', JSON.stringify(format))
+    .replace('"./locale"', JSON.stringify(locale));
   // Vite only imports modules inside the project, so the output goes to the ignored cache.
   const cache = path.resolve("node_modules/.cache");
   mkdirSync(cache, { recursive: true });
@@ -39,13 +41,22 @@ describe("message compiler", () => {
     expect(messages.navSkip?.("zh-CN")).toBe("跳至内容");
   });
 
+  it("defaults to the page locale from <html lang>", async () => {
+    const messages = await load({
+      en: "nav-skip = Skip to content",
+      "zh-CN": "nav-skip = 跳至内容",
+    });
+    document.documentElement.lang = "zh-CN";
+    expect(messages.navSkip?.()).toBe("跳至内容");
+  });
+
   it("selects plural variants by category, after exact numeric matches", async () => {
     const { buildCount } = await load({
       en: "build-count = { $count ->\n  [0] No builds\n  [one] { $count } build\n *[other] { $count } builds\n}",
     });
-    expect(buildCount?.("en", { count: 0 })).toBe("No builds");
-    expect(buildCount?.("en", { count: 1 })).toBe("1 build");
-    expect(buildCount?.("en", { count: 1200 })).toBe("1,200 builds");
+    expect(buildCount?.({ count: 0 }, "en")).toBe("No builds");
+    expect(buildCount?.({ count: 1 }, "en")).toBe("1 build");
+    expect(buildCount?.({ count: 1200 }, "en")).toBe("1,200 builds");
   });
 
   it("formats numbers and dates with the options the message names", async () => {
@@ -60,21 +71,21 @@ describe("message compiler", () => {
       ].join("\n"),
     });
     // Dates render in UTC, so the evening in UTC-2 is the next day.
-    expect(checked?.("en", { date: "2026-08-10T23:30:00-02:00" })).toBe("Checked Aug 11, 2026");
-    expect(checked?.("zh-CN", { date: "2026-08-10T23:30:00-02:00" })).toBe("检查于 2026年8月11日");
-    expect(share?.("en", { ratio: 0.25 })).toBe("25%");
+    expect(checked?.({ date: "2026-08-10T23:30:00-02:00" }, "en")).toBe("Checked Aug 11, 2026");
+    expect(checked?.({ date: "2026-08-10T23:30:00-02:00" }, "zh-CN")).toBe("检查于 2026年8月11日");
+    expect(share?.({ ratio: 0.25 }, "en")).toBe("25%");
   });
 
   it("inlines terms and calls referenced messages", async () => {
     const { greeting } = await load({
       en: "-brand = Squid\nname = { $user }\ngreeting = { -brand } welcomes { name }",
     });
-    expect(greeting?.("en", { user: "Alex" })).toBe("Squid welcomes Alex");
+    expect(greeting?.({ user: "Alex" }, "en")).toBe("Squid welcomes Alex");
   });
 
   it("keeps user text that looks like Fluent or markup literal", async () => {
     const { byCreator } = await load({ en: "by-creator = Builds by { $name }" });
-    expect(byCreator?.("en", { name: "{ $name } <b>builder</b>" })).toBe(
+    expect(byCreator?.({ name: "{ $name } <b>builder</b>" }, "en")).toBe(
       "Builds by { $name } <b>builder</b>",
     );
   });
@@ -85,7 +96,7 @@ describe("message compiler", () => {
       "zh-CN": "count = { $count ->\n  *[other] { $count } 位\n}",
     });
     expect(source).toContain(
-      "export function count(locale: Locale, args: { count: number }): string",
+      "export function count(args: { count: number }, locale: Locale = getLocale()): string",
     );
   });
 
@@ -148,7 +159,7 @@ describe("vocabulary compiler", () => {
       ["en", "zh-CN"],
     );
     expect(source).toContain(
-      "export function recordCriterionLabel(locale: Locale, value: RecordCriterion): string",
+      "export function recordCriterionLabel(value: RecordCriterion, locale: Locale = getLocale()): string",
     );
     expect(source).toContain("satisfies Record<Locale, Record<RecordCriterion, string>>");
   });

@@ -5,8 +5,7 @@ import DraftTrial from "@/workbench/DraftTrial.svelte";
 
 afterEach(cleanup);
 
-const mount = (scenario?: "retry" | "upload-retry") =>
-  render(DraftTrial, { locale: "en", scenario });
+const mount = (scenario?: "retry" | "upload-retry") => render(DraftTrial, { scenario });
 
 describe("Draft trial", () => {
   it("validates conditional fields, filters versions, uploads and recovers from server validation", async () => {

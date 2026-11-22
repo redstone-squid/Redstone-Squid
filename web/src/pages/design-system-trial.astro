@@ -5,20 +5,15 @@ import Panel from "@/ui/astro/Panel.astro";
 import * as m from "@/locales/messages.gen";
 import SvelteDraftTrial from "@/workbench/DraftTrial.svelte";
 import "@/workbench/workbench.css";
-const locale = Astro.url.searchParams.get("lang") === "zh-CN" ? "zh-CN" : "en";
 const theme = Astro.url.searchParams.get("theme") === "dark" ? "dark" : "light";
 const selected = Astro.url.searchParams.get("scenario");
 const scenario = selected === "retry" || selected === "upload-retry" ? selected : undefined;
-const uploadScenario = new URLSearchParams({
-  lang: locale,
-  theme,
-  scenario: "upload-retry",
-});
+const uploadScenario = new URLSearchParams({ theme, scenario: "upload-retry" });
 ---
 
-<WorkbenchLayout title={m.trialTitle(locale)} locale={locale} {theme}>
+<WorkbenchLayout title={m.trialTitle()} {theme}>
   <header class="sq-page-heading">
-    <h1>{m.trialTitle(locale)}</h1>
+    <h1>{m.trialTitle()}</h1>
     <div class="sq-between">
       <p>Svelte 5</p>
       <LinkButton
@@ -26,11 +21,11 @@ const uploadScenario = new URLSearchParams({
         size="small"
         aria-current={scenario === "upload-retry" ? "page" : undefined}
       >
-        {m.trialUploadScenario(locale)}
+        {m.trialUploadScenario()}
       </LinkButton>
     </div>
   </header>
-  <Panel id="trial" title={m.trialDetails(locale)}>
-    <SvelteDraftTrial client:load {locale} {scenario} />
+  <Panel id="trial" title={m.trialDetails()}>
+    <SvelteDraftTrial client:load {scenario} />
   </Panel>
 </WorkbenchLayout>

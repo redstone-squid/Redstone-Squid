@@ -1,13 +1,10 @@
 ---
-import { type Locale } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
 import Layout from "@/ui/astro/Layout.astro";
 import Panel from "@/ui/astro/Panel.astro";
 import StoryOptions from "./StoryOptions.astro";
 import { selectedOption } from "./story-option";
 import { buildFixtures } from "./fixtures";
-type Props = { locale: Locale };
-const { locale } = Astro.props;
 const patterns = { stack: m.workbenchStack, row: m.workbenchRow, grid: m.workbenchGrid } as const;
 const gaps = {
   compact: m.workbenchCompact,
@@ -19,31 +16,29 @@ const gap = selectedOption(gaps, Astro.url.searchParams, "gap", "normal");
 const { creator, dimensions, timing } = buildFixtures[0];
 ---
 
-<Panel id="layouts" title={m.workbenchLayouts(locale)}>
+<Panel id="layouts" title={m.workbenchLayouts()}>
   <div class="sq-specimen-tools">
     <StoryOptions
-      label={m.workbenchLayouts(locale)}
+      label={m.workbenchLayouts()}
       parameter="layout"
       selected={pattern}
       section="layouts"
-      {locale}
       options={patterns}
     />
     <StoryOptions
-      label={m.workbenchSpacing(locale)}
+      label={m.workbenchSpacing()}
       parameter="gap"
       selected={gap}
       section="layouts"
-      {locale}
       options={gaps}
     />
   </div>
   <div class="sq-layout-preview">
     <Layout {pattern} {gap}>
       {[
-        [m.workbenchCreator(locale), creator],
-        [m.workbenchDimensions(locale), dimensions],
-        [m.workbenchOpening(locale), timing],
+        [m.workbenchCreator(), creator],
+        [m.workbenchDimensions(), dimensions],
+        [m.workbenchOpening(), timing],
       ].map(([term, value]) => (
         <dl>
           <dt>{term}</dt>

@@ -1,4 +1,5 @@
 ---
+import { localizePath } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
 import "@fontsource-variable/inter";
 import "@fontsource-variable/jetbrains-mono";
@@ -6,15 +7,12 @@ import "@fontsource/noto-sans-sc/400.css";
 import "@fontsource/noto-sans-sc/600.css";
 import "@/ui/base.css";
 import "./workbench-layout.css";
-type Props = {
-  title: string;
-  locale: "en" | "zh-CN";
-  theme: "light" | "dark";
-};
-const { title, locale, theme } = Astro.props;
-const query = new URLSearchParams({ lang: locale, theme });
-const library =
-  Astro.url.pathname.replace(/\/$/, "") === "/design-system" ? "" : `/design-system?${query}`;
+type Props = { title: string; theme: "light" | "dark" };
+const { title, theme } = Astro.props;
+const { locale } = Astro.locals;
+const query = new URLSearchParams({ theme });
+const onLibrary = localizePath(Astro.url.pathname, "en").replace(/\/$/, "") === "/design-system";
+const library = onLibrary ? "" : localizePath(`/design-system?${query}`);
 ---
 
 <!doctype html>
@@ -28,27 +26,27 @@ const library =
   </head>
   <body>
     <a class="sq-skip" href="#main">
-      {m.workbenchSkipToContent(locale)}
+      {m.workbenchSkipToContent()}
     </a>
     <header class="sq-topbar">
       <a class="sq-brand" href="/">
         <img src="/favicon.svg" width="32" height="32" alt="" />
         Redstone Squid
       </a>
-      <span class="sq-muted">{m.workbenchWorkbench(locale)}</span>
+      <span class="sq-muted">{m.workbenchWorkbench()}</span>
     </header>
     <div class="sq-shell">
       <aside class="sq-sidebar">
-        <p class="sq-kicker">{m.workbenchWorkbench(locale)}</p>
-        <nav aria-label={m.workbenchWorkbench(locale)}>
-          <a href={`${library}#foundations`}>{m.workbenchFoundations(locale)}</a>
-          <a href={`${library}#components`}>{m.workbenchComponents(locale)}</a>
-          <a href={`${library}#fields`}>{m.workbenchFormControls(locale)}</a>
-          <a href={`${library}#layouts`}>{m.workbenchLayouts(locale)}</a>
-          <a href={`${library}#patterns`}>{m.workbenchPagePatterns(locale)}</a>
-          <a href={`${library}#browsing`}>{m.workbenchBrowsing(locale)}</a>
-          <a href={`${library}#states`}>{m.workbenchFeedbackStates(locale)}</a>
-          <a href={`/design-system-trial?${query}`}>{m.trialTitle(locale)}</a>
+        <p class="sq-kicker">{m.workbenchWorkbench()}</p>
+        <nav aria-label={m.workbenchWorkbench()}>
+          <a href={`${library}#foundations`}>{m.workbenchFoundations()}</a>
+          <a href={`${library}#components`}>{m.workbenchComponents()}</a>
+          <a href={`${library}#fields`}>{m.workbenchFormControls()}</a>
+          <a href={`${library}#layouts`}>{m.workbenchLayouts()}</a>
+          <a href={`${library}#patterns`}>{m.workbenchPagePatterns()}</a>
+          <a href={`${library}#browsing`}>{m.workbenchBrowsing()}</a>
+          <a href={`${library}#states`}>{m.workbenchFeedbackStates()}</a>
+          <a href={localizePath(`/design-system-trial?${query}`)}>{m.trialTitle()}</a>
         </nav>
         <p class="sq-sidebar-note">
           Astro + Svelte

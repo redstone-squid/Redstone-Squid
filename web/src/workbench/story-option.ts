@@ -1,7 +1,5 @@
-import type { Locale } from "@/locales/locale";
-
 /** Story options keyed by their query-parameter value, each with its label message. */
-export type StoryOptionLabels<T extends string> = Record<T, (locale: Locale) => string>;
+export type StoryOptionLabels<T extends string> = Record<T, () => string>;
 
 /** Return the option a query parameter selects, or `fallback` when it names none of them. */
 export function selectedOption<T extends string>(

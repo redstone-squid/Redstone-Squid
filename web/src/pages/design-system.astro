@@ -1,4 +1,5 @@
 ---
+import { localizePath } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
 import BuildPreview from "@/features/builds/BuildPreview.astro";
 import "@/workbench/workbench.css";
@@ -16,9 +17,8 @@ import LinkButton from "@/ui/astro/LinkButton.astro";
 import SvelteControls from "@/workbench/Controls.svelte";
 import { buildFixtures } from "@/workbench/fixtures";
 import { selectedOption } from "@/workbench/story-option";
-const chinese = Astro.url.searchParams.get("lang") === "zh-CN";
 const theme = Astro.url.searchParams.get("theme") === "dark" ? "dark" : "light";
-const locale = chinese ? "zh-CN" : "en";
+const otherLocale = Astro.locals.locale === "en" ? "zh-CN" : "en";
 const fieldStates = {
   normal: m.workbenchNormal,
   invalid: m.workbenchInvalid,
@@ -32,17 +32,17 @@ const preferences = (key: string, value: string) => {
 };
 ---
 
-<WorkbenchLayout title={m.workbenchPageTitle(locale)} locale={locale} theme={theme}>
+<WorkbenchLayout title={m.workbenchPageTitle()} {theme}>
   <header class="sq-library-cover">
     <div>
-      <h1>{m.workbenchPageTitle(locale)}</h1>
-      <p class="sq-lede">{m.workbenchLibraryDescription(locale)}</p>
+      <h1>{m.workbenchPageTitle()}</h1>
+      <p class="sq-lede">{m.workbenchLibraryDescription()}</p>
       <div class="sq-row">
-        <LinkButton href={preferences("lang", chinese ? "en" : "zh-CN")}>
-          {m.workbenchSwitchLanguage(locale)}
+        <LinkButton href={localizePath(`${Astro.url.pathname}${Astro.url.search}`, otherLocale)}>
+          {m.workbenchSwitchLanguage()}
         </LinkButton>
         <LinkButton href={preferences("theme", theme === "light" ? "dark" : "light")}>
-          {theme === "light" ? m.workbenchDarkTheme(locale) : m.workbenchLightTheme(locale)}
+          {theme === "light" ? m.workbenchDarkTheme() : m.workbenchLightTheme()}
         </LinkButton>
       </div>
     </div>
@@ -52,8 +52,8 @@ const preferences = (key: string, value: string) => {
   </header>
   <Panel
     id="foundations"
-    title={m.workbenchFoundations(locale)}
-    description={m.workbenchFoundationsDescription(locale)}
+    title={m.workbenchFoundations()}
+    description={m.workbenchFoundationsDescription()}
   >
     <div class="sq-swatches">
       {["canvas", "surface", "accent", "success", "warning", "text"].map((token) => (
@@ -64,7 +64,7 @@ const preferences = (key: string, value: string) => {
       ))}
     </div>
     <div class="sq-token-footer">
-      <h3>{m.workbenchSpacing(locale)}</h3>
+      <h3>{m.workbenchSpacing()}</h3>
       <div class="sq-ruler">
         {[1, 2, 3, 4, 5, 6, 7, 8].map((step) => (
           <div>
@@ -75,11 +75,11 @@ const preferences = (key: string, value: string) => {
       </div>
     </div>
     <details class="sq-type-specimens">
-      <summary>{m.workbenchTypography(locale)}</summary>
+      <summary>{m.workbenchTypography()}</summary>
       <div>
         <div>
           <code>--font-sans</code>
-          <p>{m.workbenchPistonDoor(locale)}</p>
+          <p>{m.workbenchPistonDoor()}</p>
         </div>
         <div>
           <code>--font-mono</code>
@@ -90,91 +90,90 @@ const preferences = (key: string, value: string) => {
   </Panel>
   <Panel
     id="components"
-    title={m.workbenchComponents(locale)}
-    description={m.workbenchComponentsDescription(locale)}
+    title={m.workbenchComponents()}
+    description={m.workbenchComponentsDescription()}
   >
-    <ButtonStory {locale} {theme} />
-    <SvelteControls client:load locale={locale} />
+    <ButtonStory {theme} />
+    <SvelteControls client:load />
   </Panel>
-  <Panel id="fields" title={m.workbenchFormControls(locale)}>
+  <Panel id="fields" title={m.workbenchFormControls()}>
     <Layout pattern="stack">
       <StoryOptions
-        label={m.workbenchFieldState(locale)}
+        label={m.workbenchFieldState()}
         parameter="fieldState"
         selected={fieldState}
         section="fields"
-        {locale}
         options={fieldStates}
       />
-      <FormSpecimen {locale} state={fieldState} />
+      <FormSpecimen state={fieldState} />
     </Layout>
   </Panel>
-  <LayoutStory {locale} />
+  <LayoutStory />
   <section id="patterns" class="sq-stack" aria-labelledby="patterns-title">
     <div class="sq-section-heading">
       <div>
-        <h2 id="patterns-title">{m.workbenchPagePatterns(locale)}</h2>
+        <h2 id="patterns-title">{m.workbenchPagePatterns()}</h2>
       </div>
-      <span class="sq-muted">{m.workbenchBuildCount(locale, { count: buildFixtures.length })}</span>
+      <span class="sq-muted">{m.workbenchBuildCount({ count: buildFixtures.length })}</span>
     </div>
     <div class="sq-build-grid">
       {buildFixtures.map((build) => (
         <BuildPreview
           build={{
             ...build,
-            category: build.category(locale),
+            category: build.category(),
             image: build.image
               ? {
                   src: build.image,
-                  alt: m.workbenchFixtureAlt(locale, { title: build.title }),
+                  alt: m.workbenchFixtureAlt({ title: build.title }),
                 }
               : null,
           }}
           labels={{
-            noPreview: m.workbenchNoPreviewAvailable(locale),
-            dimensions: m.workbenchDimensions(locale),
-            opening: m.workbenchOpening(locale),
+            noPreview: m.workbenchNoPreviewAvailable(),
+            dimensions: m.workbenchDimensions(),
+            opening: m.workbenchOpening(),
           }}
         />
       ))}
     </div>
   </section>
-  <BrowsingStories {locale} />
+  <BrowsingStories />
   <Panel
     id="states"
-    title={m.workbenchFeedbackStates(locale)}
-    description={m.workbenchStatesDescription(locale)}
+    title={m.workbenchFeedbackStates()}
+    description={m.workbenchStatesDescription()}
   >
     <Layout pattern="grid">
-      <Notice tone="success" title={m.workbenchReadyToExplore(locale)}>
-        {m.workbenchApprovedDescription(locale)}
+      <Notice tone="success" title={m.workbenchReadyToExplore()}>
+        {m.workbenchApprovedDescription()}
       </Notice>
-      <Notice tone="info" title={m.workbenchNoMatchingBuilds(locale)}>
-        {m.workbenchEmptyDescription(locale)}
+      <Notice tone="info" title={m.workbenchNoMatchingBuilds()}>
+        {m.workbenchEmptyDescription()}
       </Notice>
-      <Notice tone="warning" title={m.workbenchCouldnTLoadBuilds(locale)}>
-        {m.workbenchUnavailableDescription(locale)}
+      <Notice tone="warning" title={m.workbenchCouldnTLoadBuilds()}>
+        {m.workbenchUnavailableDescription()}
       </Notice>
-      <Notice tone="danger" title={m.workbenchCheckTheHighlightedField(locale)}>
-        {m.workbenchEnterATitleForYourBuild(locale)}
+      <Notice tone="danger" title={m.workbenchCheckTheHighlightedField()}>
+        {m.workbenchEnterATitleForYourBuild()}
       </Notice>
     </Layout>
     <div class="sq-badge-preview">
-      <h3>{m.workbenchStatusBadges(locale)}</h3>
+      <h3>{m.workbenchStatusBadges()}</h3>
       <Layout pattern="row" gap="compact">
-        <Badge>{m.workbenchEmpty(locale)}</Badge>
-        <Badge tone="success">{m.workbenchApproved(locale)}</Badge>
-        <Badge tone="warning">{m.workbenchUnavailable(locale)}</Badge>
+        <Badge>{m.workbenchEmpty()}</Badge>
+        <Badge tone="success">{m.workbenchApproved()}</Badge>
+        <Badge tone="warning">{m.workbenchUnavailable()}</Badge>
       </Layout>
     </div>
     <div class="sq-loading-preview">
-      <p>{m.workbenchFetchingBuilds(locale)}</p>
+      <p>{m.workbenchFetchingBuilds()}</p>
       <div class="sq-skeleton"></div>
       <div class="sq-skeleton sq-skeleton--short"></div>
     </div>
   </Panel>
   <footer class="sq-workbench-footer">
-    {m.workbenchRedstoneSquidDesignFoundations(locale)}
-    <span>{m.workbenchFixtureDisclaimer(locale)}</span>
+    {m.workbenchRedstoneSquidDesignFoundations()}
+    <span>{m.workbenchFixtureDisclaimer()}</span>
   </footer>
 </WorkbenchLayout>

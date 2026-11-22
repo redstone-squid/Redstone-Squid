@@ -28,32 +28,32 @@ const nav = [
   </head>
   <body>
     <a class="catalogue-skip" href="#main-content">
-      {m.navSkip(locale)}
+      {m.navSkip()}
     </a>
     <header class="catalogue-header">
       <div class="catalogue-container catalogue-nav">
-        <a class="catalogue-brand" href={localizePath("/", locale)} aria-label={m.navHome(locale)}>
+        <a class="catalogue-brand" href={localizePath("/")} aria-label={m.navHome()}>
           <span class="catalogue-mark" aria-hidden="true">
             R
           </span>
-          <span>{m.siteName(locale)}</span>
+          <span>{m.siteName()}</span>
         </a>
-        <nav aria-label={m.navPrimary(locale)}>
+        <nav aria-label={m.navPrimary()}>
           {nav.map(([label, href]) => (
             <a
-              href={localizePath(href, locale)}
+              href={localizePath(href)}
               aria-current={
                 activePath === href || activePath.startsWith(`${href}/`) ? "page" : undefined
               }
             >
-              {label(locale)}
+              {label()}
             </a>
           ))}
         </nav>
         <div class="catalogue-actions">
-          <LanguageSelector {locale} align="start" />
-          <a class="sq-button sq-button--primary" href={localizePath("/submit", locale)}>
-            {m.navSubmit(locale)} <span aria-hidden="true">↗</span>
+          <LanguageSelector align="start" />
+          <a class="sq-button sq-button--primary" href={localizePath("/submit")}>
+            {m.navSubmit()} <span aria-hidden="true">↗</span>
           </a>
         </div>
       </div>
@@ -63,20 +63,20 @@ const nav = [
     </main>
     <footer class="catalogue-footer catalogue-container">
       <div>
-        <a class="catalogue-brand" href={localizePath("/", locale)}>
+        <a class="catalogue-brand" href={localizePath("/")}>
           <span class="catalogue-mark" aria-hidden="true">
             R
           </span>
-          {m.siteName(locale)}
+          {m.siteName()}
         </a>
-        <p class="sq-muted">{m.footerNote(locale)}</p>
+        <p class="sq-muted">{m.footerNote()}</p>
       </div>
-      <nav aria-label={m.navCommunity(locale)}>
+      <nav aria-label={m.navCommunity()}>
         <a href={config.discordCommunityUrl} rel="noreferrer">
-          {m.footerDiscord(locale)}
+          {m.footerDiscord()}
         </a>
         <a href={config.botInviteUrl} rel="noreferrer">
-          {m.footerInvite(locale)}
+          {m.footerInvite()}
         </a>
       </nav>
     </footer>

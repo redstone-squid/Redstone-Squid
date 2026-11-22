@@ -2,6 +2,7 @@ import { defineMiddleware } from "astro:middleware";
 import { localeFromPath, localizePath } from "@/locales/locale";
 import { createApiClient } from "@/server/api";
 import { getRuntimeConfig } from "@/server/config";
+import { withRequestLocale } from "@/server/request-locale";
 
 /**
  * Set up request locals and log each request.
@@ -31,9 +32,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
   try {
     context.locals.config = getRuntimeConfig();
     context.locals.api = createApiClient(locale, context.locals.config);
-    const response = await (prefixed === "en"
-      ? next()
-      : next(localizePath(pathname, "en") + search));
+    const response = await withRequestLocale(locale, () =>
+      prefixed === "en" ? next() : next(localizePath(pathname, "en") + search),
+    );
     console.info(log("http_request", { status: response.status }));
     return response;
   } catch (error) {

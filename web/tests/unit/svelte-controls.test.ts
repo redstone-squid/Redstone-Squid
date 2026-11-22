@@ -10,7 +10,8 @@ for (const locale of ["en", "zh-CN"] satisfies Locale[]) {
   describe(`Svelte workbench (${locale})`, () => {
     it("validates and saves a draft, then clears feedback on edit", async () => {
       const user = userEvent.setup();
-      render(Controls, { locale });
+      document.documentElement.lang = locale;
+      render(Controls);
       const trigger = screen.getByRole("button", {
         name: m.workbenchNewDraft(locale),
       });
@@ -40,7 +41,8 @@ for (const locale of ["en", "zh-CN"] satisfies Locale[]) {
       document.body.append(target);
       try {
         const user = userEvent.setup();
-        render(Controls, { locale });
+        document.documentElement.lang = locale;
+        render(Controls);
         await user.click(screen.getByRole("button", { name: m.workbenchBrowseExamples(locale) }));
         expect(scroll).toHaveBeenCalledWith({ behavior: "smooth" });
       } finally {

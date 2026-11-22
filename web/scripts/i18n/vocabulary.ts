@@ -41,7 +41,7 @@ export function compileVocabulary(vocabulary: Vocabulary, locales: readonly stri
     );
     return [
       `const ${name}Labels = ${JSON.stringify(labels)} as const satisfies Record<Locale, Record<${type}, string>>;`,
-      `export function ${name}Label(locale: Locale, value: ${type}): string {`,
+      `export function ${name}Label(value: ${type}, locale: Locale = getLocale()): string {`,
       `  return ${name}Labels[locale][value];`,
       "}",
     ].join("\n");
@@ -53,7 +53,7 @@ export function compileVocabulary(vocabulary: Vocabulary, locales: readonly stri
       .map(([, type]) => type)
       .sort()
       .join(", ")} } from "../generated/types.gen";`,
-    'import type { Locale } from "./locale";',
+    'import { getLocale, type Locale } from "./locale";',
     "",
     definitions.join("\n\n"),
     "",

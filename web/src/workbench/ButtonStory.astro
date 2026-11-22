@@ -1,12 +1,12 @@
 ---
-import { type Locale } from "@/locales/locale";
+import { localizePath } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
 import LinkButton from "@/ui/astro/LinkButton.astro";
 import { buttonStyles } from "@/ui/variants";
 import { selectedOption } from "./story-option";
 
-type Props = { locale: Locale; theme: "light" | "dark" };
-const { locale, theme } = Astro.props;
+type Props = { theme: "light" | "dark" };
+const { theme } = Astro.props;
 const params = Astro.url.searchParams;
 const variants = {
   primary: m.workbenchPrimary,
@@ -16,17 +16,17 @@ const variants = {
 const sizes = { normal: m.workbenchNormal, small: m.workbenchSmall } as const;
 const variant = selectedOption(variants, params, "variant", "primary");
 const size = selectedOption(sizes, params, "size", "normal");
-const trial = new URLSearchParams({ lang: locale, theme });
+const trial = new URLSearchParams({ theme });
 ---
 
 <div class="sq-story" id="button-story">
   <div class="sq-story-preview">
-    <LinkButton {variant} {size} href={`/design-system-trial?${trial}`}>
-      {m.trialTitle(locale)} <span aria-hidden="true">→</span>
+    <LinkButton {variant} {size} href={localizePath(`/design-system-trial?${trial}`)}>
+      {m.trialTitle()} <span aria-hidden="true">→</span>
     </LinkButton>
   </div>
   <div class="sq-story-settings">
-    <h3>{m.workbenchLinkButton(locale)}</h3>
+    <h3>{m.workbenchLinkButton()}</h3>
     <form action="#button-story" method="get" class="sq-row">
       {[...params]
         .filter(([key]) => key !== "variant" && key !== "size")
@@ -34,27 +34,27 @@ const trial = new URLSearchParams({ lang: locale, theme });
           <input type="hidden" name={key} {value} />
         ))}
       <label class="sq-field">
-        {m.workbenchVariant(locale)}
+        {m.workbenchVariant()}
         <select class="sq-input" name="variant">
           {Object.entries(variants).map(([value, label]) => (
             <option value={value} selected={value === variant}>
-              {label(locale)}
+              {label()}
             </option>
           ))}
         </select>
       </label>
       <label class="sq-field">
-        {m.workbenchSize(locale)}
+        {m.workbenchSize()}
         <select class="sq-input" name="size">
           {Object.entries(sizes).map(([value, label]) => (
             <option value={value} selected={value === size}>
-              {label(locale)}
+              {label()}
             </option>
           ))}
         </select>
       </label>
       <button class={buttonStyles({ size: "small" })} type="submit">
-        {m.workbenchApply(locale)}
+        {m.workbenchApply()}
       </button>
     </form>
     <code>{buttonStyles({ variant, size })}</code>

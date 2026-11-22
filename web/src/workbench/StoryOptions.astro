@@ -1,16 +1,14 @@
 ---
-import type { Locale } from "@/locales/locale";
 import type { StoryOptionLabels } from "./story-option";
 
 type Props = {
-  locale: Locale;
   label: string;
   parameter: string;
   selected: string;
   section: string;
   options: StoryOptionLabels<string>;
 };
-const { locale, label, parameter, selected, section, options } = Astro.props;
+const { label, parameter, selected, section, options } = Astro.props;
 ---
 
 <nav class="sq-story-options" aria-label={label}>
@@ -19,7 +17,7 @@ const { locale, label, parameter, selected, section, options } = Astro.props;
     params.set(parameter, value);
     return (
       <a href={`?${params}#${section}`} aria-current={value === selected ? "true" : undefined}>
-        {optionLabel(locale)}
+        {optionLabel()}
       </a>
     );
   })}

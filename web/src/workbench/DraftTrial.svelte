@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onDestroy, untrack } from "svelte";
-  import type { Locale } from "@/locales/locale";
   import * as m from "@/locales/messages.gen";
   import Button from "@/ui/svelte/Button.svelte";
   import SelectField from "@/ui/svelte/SelectField.svelte";
@@ -20,7 +19,7 @@
     type DraftErrors,
     type DraftInput,
   } from "./draft-fixture";
-  let { locale, scenario }: { locale: Locale; scenario?: DraftScenario } = $props();
+  let { scenario }: { scenario?: DraftScenario } = $props();
   const input = $state<DraftInput>({ title: "", category: "door", width: "", version: "" });
   let search = $state("");
   let errors = $state<DraftErrors>({});
@@ -92,30 +91,30 @@
     void save();
   }}
 >
-  <p class="sq-muted">{m.trialDisclaimer(locale)}</p>
+  <p class="sq-muted">{m.trialDisclaimer()}</p>
   <fieldset class="sq-stack sq-trial-fields" disabled={busy}>
-    <legend class="sq-kicker">{m.trialDetails(locale)}</legend>
+    <legend class="sq-kicker">{m.trialDetails()}</legend>
     <Field
-      label={m.workbenchBuildTitle(locale)}
+      label={m.workbenchBuildTitle()}
       bind:value={input.title}
       required
       oninput={edited}
-      error={errors.title !== undefined ? draftErrorMessages[errors.title](locale) : undefined}
+      error={errors.title !== undefined ? draftErrorMessages[errors.title]() : undefined}
     />
-    <SelectField label={m.trialCategory(locale)} bind:value={input.category} onchange={edited}>
-      <option value="door">{m.trialDoor(locale)}</option>
-      <option value="utility">{m.trialUtility(locale)}</option>
+    <SelectField label={m.trialCategory()} bind:value={input.category} onchange={edited}>
+      <option value="door">{m.trialDoor()}</option>
+      <option value="utility">{m.trialUtility()}</option>
     </SelectField>
     {#if input.category === "door"}<Field
-        label={m.trialWidth(locale)}
+        label={m.trialWidth()}
         inputmode="numeric"
         bind:value={input.width}
         required
         oninput={edited}
-        error={errors.width !== undefined ? draftErrorMessages[errors.width](locale) : undefined}
+        error={errors.width !== undefined ? draftErrorMessages[errors.width]() : undefined}
       />{/if}
     <Field
-      label={m.trialFindVersion(locale)}
+      label={m.trialFindVersion()}
       type="search"
       bind:value={search}
       oninput={() => {
@@ -124,40 +123,38 @@
       }}
     />
     <SelectField
-      label={m.workbenchMinecraftVersion(locale)}
+      label={m.workbenchMinecraftVersion()}
       bind:value={input.version}
       required
-      error={errors.version !== undefined ? draftErrorMessages[errors.version](locale) : undefined}
+      error={errors.version !== undefined ? draftErrorMessages[errors.version]() : undefined}
       onchange={edited}
     >
-      <option value="">{m.trialChooseVersion(locale)}</option>
+      <option value="">{m.trialChooseVersion()}</option>
       {#each versions as version (version)}<option value={version}>{version}</option>{/each}
     </SelectField>
-    <FilePicker label={m.trialUpload(locale)} onFiles={([file]) => void upload(file)} />
+    <FilePicker label={m.trialUpload()} onFiles={([file]) => void upload(file)} />
   </fieldset>
-  {#if phase === "uploading"}<Progress label={m.trialUploading(locale)} value={progress} />{/if}
+  {#if phase === "uploading"}<Progress label={m.trialUploading()} value={progress} />{/if}
   {#if retryFile}
-    <Notice role="alert" tone="warning">{m.trialUploadFailure(locale)}</Notice>
+    <Notice role="alert" tone="warning">{m.trialUploadFailure()}</Notice>
     <div class={layoutStyles({ pattern: "actions" })}>
-      <Button disabled={busy} onclick={() => void upload(retryFile)}
-        >{m.trialRetryUpload(locale)}</Button
-      >
+      <Button disabled={busy} onclick={() => void upload(retryFile)}>{m.trialRetryUpload()}</Button>
     </div>
   {/if}
-  {#if attachment}<p>{m.trialAttachment(locale, { filename: attachment })}</p>{/if}
+  {#if attachment}<p>{m.trialAttachment({ filename: attachment })}</p>{/if}
   <div class={layoutStyles({ pattern: "actions" })}>
     <Button type="submit" variant="primary" disabled={busy}
       >{(phase === "saving"
         ? m.trialSaving
         : phase === "error"
           ? m.trialRetry
-          : m.workbenchSaveDraft)(locale)}</Button
+          : m.workbenchSaveDraft)()}</Button
     >{#if busy}<Button
         onclick={() => {
           operation?.abort();
           phase = "idle";
-        }}>{m.trialCancel(locale)}</Button
+        }}>{m.trialCancel()}</Button
       >{/if}
   </div>
-  <Notice role="status" tone={feedback.tone}>{feedback.message(locale)}</Notice>
+  <Notice role="status" tone={feedback.tone}>{feedback.message()}</Notice>
 </form>

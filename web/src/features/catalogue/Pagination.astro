@@ -2,16 +2,14 @@
 import { buttonStyles } from "@/ui/variants";
 import { PAGE_PARAMS } from "@/lib/pagination";
 import type { PageAnchor } from "@/generated/types.gen";
-import { type Locale } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
 
 type Props = {
-  locale: Locale;
   next: PageAnchor | null;
   prev: PageAnchor | null;
   url: URL;
 };
-const { locale, next, prev, url } = Astro.props;
+const { next, prev, url } = Astro.props;
 const linkClass = buttonStyles();
 
 /** Address one adjacent page, replacing whichever parameter addressed the current one. */
@@ -30,15 +28,15 @@ const nextHref = link(next);
 ---
 
 {(previousHref || nextHref) && (
-  <nav class="catalogue-pagination" aria-label={m.navPagination(locale)}>
+  <nav class="catalogue-pagination" aria-label={m.navPagination()}>
     {previousHref && (
       <a class={linkClass} href={previousHref} rel="prev">
-        {m.commonPrevious(locale)}
+        {m.commonPrevious()}
       </a>
     )}
     {nextHref && (
       <a class={linkClass} href={nextHref} rel="next">
-        {m.commonLoadMore(locale)}
+        {m.commonLoadMore()}
       </a>
     )}
   </nav>

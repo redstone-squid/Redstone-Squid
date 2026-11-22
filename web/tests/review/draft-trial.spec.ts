@@ -1,8 +1,9 @@
+import { localizePath } from "@/locales/locale";
 import { test, expect } from "../support/test";
 import { APP_URL } from "../support/servers";
 
 test.use({ video: "on" });
-for (const locale of ["en", "zh-CN"]) {
+for (const locale of ["en", "zh-CN"] as const) {
   const labels =
     locale === "en"
       ? {
@@ -33,7 +34,7 @@ for (const locale of ["en", "zh-CN"]) {
         };
 
   test(`${locale} / draft workflow`, async ({ page, browserName }, testInfo) => {
-    await page.goto(`/design-system-trial?lang=${locale}&scenario=retry`);
+    await page.goto(localizePath("/design-system-trial?scenario=retry", locale));
     await page.getByRole("button", { name: labels.save, exact: true }).click();
     await expect(page.getByLabel(labels.title, { exact: true })).toHaveAttribute(
       "aria-invalid",
@@ -84,7 +85,7 @@ for (const locale of ["en", "zh-CN"]) {
   });
 
   test(`${locale} / dialog keyboard behavior`, async ({ page }) => {
-    await page.goto(`/design-system?lang=${locale}`);
+    await page.goto(localizePath("/design-system", locale));
     const trigger = page.getByRole("button", { name: labels.dialog, exact: true });
     await trigger.focus();
     await page.keyboard.press("Enter");
@@ -105,7 +106,7 @@ for (const locale of ["en", "zh-CN"]) {
     const context = await browser.newContext({ javaScriptEnabled: false });
     try {
       const page = await context.newPage();
-      await page.goto(`${APP_URL}/design-system-trial?lang=${locale}`);
+      await page.goto(`${APP_URL}${localizePath("/design-system-trial", locale)}`);
       await expect(page.getByLabel(labels.title, { exact: true })).toBeVisible();
       await expect(page.getByLabel(labels.width)).toBeVisible();
       await expect(page.getByLabel(labels.version, { exact: true })).toBeVisible();

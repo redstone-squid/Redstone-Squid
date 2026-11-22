@@ -7,7 +7,7 @@ import type {
   ResolutionStatus,
   VersionScope,
 } from "../generated/types.gen";
-import type { Locale } from "./locale";
+import { getLocale, type Locale } from "./locale";
 
 const recordCriterionLabels = {
   en: {
@@ -25,7 +25,7 @@ const recordCriterionLabels = {
     smallest_fastest: "先最小，再最快",
   },
 } as const satisfies Record<Locale, Record<RecordCriterion, string>>;
-export function recordCriterionLabel(locale: Locale, value: RecordCriterion): string {
+export function recordCriterionLabel(value: RecordCriterion, locale: Locale = getLocale()): string {
   return recordCriterionLabels[locale][value];
 }
 
@@ -33,7 +33,7 @@ const buildKindLabels = {
   en: { door: "Door", entrance: "Entrance", extender: "Piston extender", utility: "Utility" },
   "zh-CN": { door: "门", entrance: "入口", extender: "活塞伸缩器", utility: "实用装置" },
 } as const satisfies Record<Locale, Record<BuildKind, string>>;
-export function buildKindLabel(locale: Locale, value: BuildKind): string {
+export function buildKindLabel(value: BuildKind, locale: Locale = getLocale()): string {
   return buildKindLabels[locale][value];
 }
 
@@ -41,7 +41,7 @@ const versionScopeLabels = {
   en: { all_time: "All time", up_to_date: "Current version" },
   "zh-CN": { all_time: "所有版本", up_to_date: "当前版本" },
 } as const satisfies Record<Locale, Record<VersionScope, string>>;
-export function versionScopeLabel(locale: Locale, value: VersionScope): string {
+export function versionScopeLabel(value: VersionScope, locale: Locale = getLocale()): string {
   return versionScopeLabels[locale][value];
 }
 
@@ -49,7 +49,10 @@ const resolutionStatusLabels = {
   en: { resolved: "Resolved", unresolved: "Awaiting evidence", no_candidate: "No eligible builds" },
   "zh-CN": { resolved: "已确定", unresolved: "等待证据", no_candidate: "没有符合条件的作品" },
 } as const satisfies Record<Locale, Record<ResolutionStatus, string>>;
-export function resolutionStatusLabel(locale: Locale, value: ResolutionStatus): string {
+export function resolutionStatusLabel(
+  value: ResolutionStatus,
+  locale: Locale = getLocale(),
+): string {
   return resolutionStatusLabels[locale][value];
 }
 
@@ -57,6 +60,6 @@ const buildStatusLabels = {
   en: { pending: "Pending", approved: "Approved", rejected: "Rejected" },
   "zh-CN": { pending: "待审核", approved: "已通过", rejected: "未通过" },
 } as const satisfies Record<Locale, Record<BuildStatusFilter, string>>;
-export function buildStatusLabel(locale: Locale, value: BuildStatusFilter): string {
+export function buildStatusLabel(value: BuildStatusFilter, locale: Locale = getLocale()): string {
   return buildStatusLabels[locale][value];
 }

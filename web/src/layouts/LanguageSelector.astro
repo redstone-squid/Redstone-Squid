@@ -1,25 +1,22 @@
 ---
-import { LOCALES, SUPPORTED_LOCALES, localizePath, type Locale } from "@/locales/locale";
+import { LOCALES, SUPPORTED_LOCALES, localizePath } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
-type Props = {
-  locale: Locale;
-  align?: "start" | "end";
-  hrefForLocale?: (locale: Locale) => string;
-};
+type Props = { align?: "start" | "end" };
+const { align = "end" } = Astro.props;
+const { locale } = Astro.locals;
 const path = `${Astro.url.pathname}${Astro.url.search}`;
-const { locale, align = "end", hrefForLocale = (lang) => localizePath(path, lang) } = Astro.props;
 ---
 
 <details class="language-selector" data-align={align}>
-  <summary aria-label={`${LOCALES[locale].label} · ${m.navLanguage(locale)}`}>
+  <summary aria-label={`${LOCALES[locale].label} · ${m.navLanguage()}`}>
     <span lang={locale}>{LOCALES[locale].label}</span>
     <span aria-hidden="true">⌄</span>
   </summary>
-  <ul aria-label={m.navLanguage(locale)}>
+  <ul aria-label={m.navLanguage()}>
     {SUPPORTED_LOCALES.map((language) => (
       <li>
         <a
-          href={hrefForLocale(language)}
+          href={localizePath(path, language)}
           lang={language}
           hreflang={language}
           aria-current={language === locale ? "true" : undefined}

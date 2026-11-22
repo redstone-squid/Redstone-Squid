@@ -28,8 +28,10 @@ move the code to the right layer rather than working around the rule.
 Middleware (`src/middleware.ts`) runs first and sets three request locals:
 
 - `Astro.locals.locale`: `en` or `zh-CN`. Every route exists once, without a locale prefix.
-  Middleware rewrites `/zh-cn/records` to `/records`, so never add a `zh-cn` directory
-  or read the locale from the URL. Build links with `localizePath(path, locale)`.
+  Middleware rewrites `/zh-cn/records` to `/records`, so never add a `zh-cn` directory or read
+  the locale from the URL. Messages, labels, and `localizePath(path)` default to the current
+  page's locale (the request on the server, `<html lang>` in the browser), so code passes a
+  locale only to render another one, such as language links or tests.
 - `Astro.locals.config`: validated runtime URLs.
 - `Astro.locals.api`: a generated SDK client that sends the request locale.
 
@@ -76,7 +78,7 @@ one typed function per message, so an island ships only the messages it calls:
 ```ts
 import * as m from "@/locales/messages.gen";
 
-m.recordHolderCount(locale, { count: holders.length });
+m.recordHolderCount({ count: holders.length });
 ```
 
 - IDs are kebab-case and start with their area (`record-holder-count`).
@@ -85,7 +87,7 @@ m.recordHolderCount(locale, { count: holders.length });
 - Domain values such as record criteria, build kinds, and statuses have one label each, in
   `squid/core/vocabulary.py`, shared with the bot. `just export-vocabulary` writes them to
   `contracts/vocabulary.json`, which compiles into `src/locales/vocabulary.gen.ts`:
-  `recordCriterionLabel(locale, record.criterion)`.
+  `recordCriterionLabel(record.criterion)`.
 - To pick a message by any other value, write a map checked against the union type, such as
   `{ required: m.trialRequired, ... } satisfies Record<DraftError, unknown>`. Never build a
   message name from a string.

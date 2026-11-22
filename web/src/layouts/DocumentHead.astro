@@ -13,10 +13,10 @@ type Props = {
 };
 
 const { locale, config } = Astro.locals;
-const title = `${Astro.props.title} · ${m.siteName(locale)}`;
-const description = Astro.props.description ?? m.metaDefaultDescription(locale);
+const title = `${Astro.props.title} · ${m.siteName()}`;
+const description = Astro.props.description ?? m.metaDefaultDescription();
 const canonicalPath = Astro.props.canonicalPath ?? Astro.url.pathname;
-const canonical = new URL(localizePath(canonicalPath, locale), config.siteUrl).toString();
+const canonical = new URL(localizePath(canonicalPath), config.siteUrl).toString();
 const englishUrl = new URL(localizePath(canonicalPath, "en"), config.siteUrl).toString();
 // Escape HTML script delimiters without changing the parsed JSON-LD value.
 const jsonLd = Astro.props.structuredData
@@ -40,7 +40,7 @@ const jsonLd = Astro.props.structuredData
 <link rel="alternate" hreflang="x-default" href={englishUrl} />
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 <meta property="og:type" content="website" />
-<meta property="og:site_name" content={m.siteName(locale)} />
+<meta property="og:site_name" content={m.siteName()} />
 <meta property="og:locale" content={LOCALES[locale].openGraph} />
 <meta property="og:title" content={title} />
 <meta property="og:description" content={description} />

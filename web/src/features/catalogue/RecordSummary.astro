@@ -3,29 +3,28 @@ import SummaryCard from "./SummaryCard.astro";
 import Badge from "@/ui/astro/Badge.astro";
 import RecordFreshness from "./RecordFreshness.astro";
 import type { PublishedRecordResult } from "@/generated/types.gen";
-import { localizePath, type Locale } from "@/locales/locale";
+import { localizePath } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
 import { buildKindLabel, recordCriterionLabel, versionScopeLabel } from "@/locales/vocabulary.gen";
-type Props = { record: PublishedRecordResult; locale: Locale; linked?: boolean };
-const { record, locale, linked = true } = Astro.props;
+type Props = { record: PublishedRecordResult; linked?: boolean };
+const { record, linked = true } = Astro.props;
 ---
 
 <SummaryCard>
-  <span class="sq-kicker">{recordCriterionLabel(locale, record.criterion)}</span>
+  <span class="sq-kicker">{recordCriterionLabel(record.criterion)}</span>
   <h3>
     {linked ? (
-      <a href={localizePath(`/records/${record.record_id}`, locale)}>{record.title}</a>
+      <a href={localizePath(`/records/${record.record_id}`)}>{record.title}</a>
     ) : (
       record.title
     )}
   </h3>
   {record.subtitle && <p class="sq-muted">{record.subtitle}</p>}
   <div class="sq-row">
-    <Badge>{buildKindLabel(locale, record.build_kind)}</Badge>
-    <Badge>{versionScopeLabel(locale, record.version_scope)}</Badge>
+    <Badge>{buildKindLabel(record.build_kind)}</Badge>
+    <Badge>{versionScopeLabel(record.version_scope)}</Badge>
   </div>
   <p class="sq-muted">
-    {m.recordHolderCount(locale, { count: record.holder_build_ids.length })} ·{" "}
-    <RecordFreshness {record} {locale} />
+    {m.recordHolderCount({ count: record.holder_build_ids.length })} · <RecordFreshness {record} />
   </p>
 </SummaryCard>

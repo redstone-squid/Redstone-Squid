@@ -1,10 +1,11 @@
+import { localizePath } from "@/locales/locale";
 import { expect, test } from "../support/test";
 import { APP_URL } from "../support/servers";
 
-for (const locale of ["en", "zh-CN"]) {
+for (const locale of ["en", "zh-CN"] as const) {
   for (const theme of ["light", "dark"]) {
     test(`${locale} / ${theme} / foundations`, async ({ page }, testInfo) => {
-      await page.goto(`/design-system?lang=${locale}&theme=${theme}`);
+      await page.goto(localizePath(`/design-system?theme=${theme}`, locale));
       await page.evaluate(async () => {
         await document.fonts.ready;
         await Promise.all(Array.from(document.images, (image) => image.decode()));
@@ -57,7 +58,7 @@ test("public workbench content renders without JavaScript", async ({ browser }) 
 test("reflows at 320px and retains controls in forced colours", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 800 });
   await page.emulateMedia({ forcedColors: "active" });
-  await page.goto("/design-system?lang=zh-CN");
+  await page.goto("/zh-cn/design-system");
   await page.keyboard.press("Tab");
   const skipLink = page.getByRole("link", { name: "跳至内容" });
   await expect(skipLink).toBeFocused();
