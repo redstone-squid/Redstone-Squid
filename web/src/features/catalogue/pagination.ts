@@ -1,38 +1,11 @@
-/** The API query parameters that address one page. The API rejects more than one at a time. */
-export type PageAddress = { after_id?: number; before_id?: number; offset?: number };
-
-/** Every query parameter that addresses a page, and so never belongs on a canonical URL. */
+/** Clear these parameters before giving a pagination link its new address. */
 export const PAGE_PARAMS = ["offset", "after_id", "before_id"] as const;
 
-function positiveInteger(value: string | null): number | undefined {
+/** Read a positive, safely representable offset. An absent or invalid offset selects the first page. */
+export function readOffset(params: URLSearchParams): number | undefined {
+  const value = params.get("offset");
   if (value === null) return undefined;
   const parsed = Number(value.trim());
   if (!Number.isSafeInteger(parsed) || parsed < 1) return undefined;
   return parsed;
-}
-
-/**
- * Select one positive integer page address, preferring after_id, then before_id, then offset.
- *
- * Values use JavaScript numeric parsing. Unsafe, invalid, or nonpositive values are skipped; if none
- * remain, return the first page so a hand-edited link can still render.
- */
-export function readPageParams(params: URLSearchParams): PageAddress {
-  const afterId = positiveInteger(params.get("after_id"));
-  if (afterId !== undefined) return { after_id: afterId };
-  const beforeId = positiveInteger(params.get("before_id"));
-  if (beforeId !== undefined) return { before_id: beforeId };
-  // Offset 0 is the first page, which is addressed by naming no parameter at all.
-  const offset = positiveInteger(params.get("offset"));
-  return offset === undefined ? {} : { offset };
-}
-
-/** Read the offset of an offset-only collection, such as ranked search. */
-export function readOffset(params: URLSearchParams): number | undefined {
-  return positiveInteger(params.get("offset"));
-}
-
-/** Whether a request asked for anything other than the first page, which should not be indexed. */
-export function isPaged(page: PageAddress): boolean {
-  return page.after_id !== undefined || page.before_id !== undefined || Boolean(page.offset);
 }
