@@ -17,7 +17,6 @@ from squid.config import WorkerConfig, WorkerProcessConfig, load_or_exit, load_w
 from squid.core.events.dispatcher import DomainEventRunner
 from squid.core.media.application.jobs import MediaProcessingJobRunner
 from squid.core.observability import TraceSurface, record_histogram, trace_span
-from squid.core.persistence.topic_bridge import open_topic_bridge
 from squid.core.schematics.infrastructure.capability import NullSchematicAnalyzer, engine_installed
 from squid.core.schematics.infrastructure.durable import SchematicJobRunner
 from squid.core.schematics.infrastructure.worker import SchematicWorkerPool
@@ -395,7 +394,8 @@ async def _run_worker(config: WorkerProcessConfig, *, stop_event: asyncio.Event 
         )
         # The worker subscribes to nothing, so its bus stays empty and the bridge is
         # purely an outbound path: a finished render tells the bot's panels to repaint.
-        topic_bridge = await open_topic_bridge(config.runtime.database, LocalTopicBus())
+        open_topic_bridge = runtime.services.open_topic_bridge
+        topic_bridge = await open_topic_bridge(LocalTopicBus()) if open_topic_bridge is not None else None
         schematic_renders = SchematicPreviewWorker(
             runtime.services.schematic_renders,
             runtime.services.schematics.previews,

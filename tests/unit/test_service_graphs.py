@@ -20,10 +20,11 @@ def test_empty_graphs_leave_services_unconfigured_and_optional_collaborators_abs
 
     assert isinstance(bot, BotServices)
     assert bot.schematic_summaries is None
+    assert bot.open_topic_bridge is None
     assert not any(
         is_configured(getattr(bot, field))
         for field in BotServices.__dataclass_fields__
-        if field != "schematic_summaries"
+        if field not in {"schematic_summaries", "open_topic_bridge"}
     )
     assert isinstance(worker, WorkerServices)
     assert worker.media_runner is None

@@ -78,8 +78,12 @@ from squid.core.versions.application.services import VersionService
 from squid.core.voting.application import VoteService
 from squid.core.voting.application.ports import InteractiveVoteActorResolver
 from squid.core.voting.application.recount import BallotRecounter, VoteCardReactions
+from squid_reactivity import TopicBus
+from squid_storage import PostgresTopicBridge
 
 logger = logging.getLogger(__name__)
+
+type TopicBridgeFactory = Callable[[TopicBus], Awaitable[PostgresTopicBridge | None]]
 
 
 class RuntimeJob(StrEnum):
@@ -178,6 +182,7 @@ class BotServices:
     notifications: NotificationService
     welcome_relay: WelcomeRelayService
     schematic_summaries: BuildSchematicSummaryProvider | None = None
+    open_topic_bridge: TopicBridgeFactory | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -210,6 +215,7 @@ class WorkerServices:
     process_submission_schematics: Callable[[], Awaitable[None]]
     cleanup_submission_schematics: Callable[[], Awaitable[None]]
     cleanup_submission_inference: Callable[[], Awaitable[None]]
+    open_topic_bridge: TopicBridgeFactory | None = None
 
 
 @dataclass(frozen=True, slots=True)

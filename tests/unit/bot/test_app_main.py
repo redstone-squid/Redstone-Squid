@@ -18,7 +18,7 @@ from squid.bot.extensions import ExtensionDependencyError, ExtensionManager
 from squid.bot.reactions import ReactionRouter
 from squid.config import BotProcessConfig, DatabaseConfig, DiagnosticsConfig, DiscordConfig, VerificationConfig
 from squid.runtime import ApplicationRuntime, BackgroundTaskSupervisor
-from squid_reactivity import EventLedger, transaction
+from squid_reactivity import EventLedger, LocalTopicBus, transaction
 from squid_ui.content.text import Localization, current_localization
 from squid_ui.ext.discord.devtools import DevTools
 from squid_ui.ext.discord.testing import AsyncCallRecorder, ContextHarness, MessageHarness
@@ -206,12 +206,12 @@ async def _localization(locale: str) -> Localization:
     return Localization(locale=locale)
 
 
-async def test_setup_hook_supervises_the_layout_runtime_as_one_job(mocker: MockerFixture) -> None:
+@pytest.mark.parametrize("bridge_enabled", [False, True])
+async def test_setup_hook_supervises_layout_jobs(mocker: MockerFixture, bridge_enabled: bool) -> None:
     bot = bot_app.RedstoneSquid.__new__(bot_app.RedstoneSquid)
     bot.background_tasks = SchedulingRecorder()
-    bot.__dict__["services"] = bot_services()
     bot.__dict__["_BotBase__tree"] = TreeRecorder()
-    bot.database_config = None
+    bot.topic_bus = LocalTopicBus()
     bot.topic_bridge = None
     bot.development_mode = False
     bot.__dict__["layout_profiler"] = object()
@@ -219,6 +219,11 @@ async def test_setup_hook_supervises_the_layout_runtime_as_one_job(mocker: Mocke
     run = AsyncCallRecorder()
     layout_job = run()
     metrics_job = run()
+    bridge_job = run() if bridge_enabled else None
+    bridge = mocker.Mock()
+    bridge.run.return_value = bridge_job
+    open_bridge = mocker.AsyncMock(return_value=bridge) if bridge_enabled else None
+    bot.__dict__["services"] = bot_services(open_topic_bridge=open_bridge)
     bot.interaction_metrics = cast(Any, UIRuntimeRecorder(metrics_job))
     bot.__dict__["ui"] = UIRuntimeRecorder(layout_job)
     mocker.patch.object(bot_app, "start_permission_epoch_watch")
@@ -226,13 +231,20 @@ async def test_setup_hook_supervises_the_layout_runtime_as_one_job(mocker: Mocke
     try:
         await bot_app.RedstoneSquid.setup_hook(bot)
 
-        assert bot.background_tasks.starts == [
+        expected = [
             (layout_job, "layout-runtime"),
             (metrics_job, "interaction-metrics"),
         ]
+        if open_bridge is not None:
+            open_bridge.assert_awaited_once_with(bot.topic_bus)
+            assert bot.topic_publisher is bridge
+            expected.append((bridge_job, "layout-topic-bridge"))
+        assert bot.background_tasks.starts == expected
     finally:
         layout_job.close()
         metrics_job.close()
+        if bridge_job is not None:
+            bridge_job.close()
 
 
 async def test_ui_cleanup_failure_still_closes_application_resources(mocker: MockerFixture) -> None:

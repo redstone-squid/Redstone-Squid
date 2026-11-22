@@ -103,6 +103,7 @@ from squid.core.permissions.infrastructure.repository import (
     EPOCH_CHANNEL,
 )
 from squid.core.persistence.engine import DatabaseEngine
+from squid.core.persistence.topic_bridge import open_topic_bridge
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.persistence.wake_listener import PostgresWakeListener
 from squid.core.posts.application import PostService
@@ -713,6 +714,7 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         discord_reconciliation=DiscordReconciliationService(uow_factory=graph.uow_factory),
         domain_events=DomainEventService(uow_factory=graph.uow_factory),
         notifications=graph.notifications,
+        open_topic_bridge=partial(open_topic_bridge, config.database),
         welcome_relay=WelcomeRelayService(
             WelcomeRelayPolicy(
                 welcome_channel_id=RuntimeSettings().welcome_channel_id,
@@ -764,6 +766,7 @@ def create_worker_services(
         cleanup_submission_schematics=graph.submissions.draft_schematics.cleanup,
         process_submission_schematics=graph.submissions.draft_schematics.process_pending,
         cleanup_submission_inference=graph.submissions.inference.cleanup,
+        open_topic_bridge=partial(open_topic_bridge, config.database),
     )
 
 

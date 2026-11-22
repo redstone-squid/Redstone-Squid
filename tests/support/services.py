@@ -132,7 +132,7 @@ def bot_services(**overrides: object) -> BotServices:
     Each double must be an instance of its field's declared type: a subclass of the service or
     an autospec of it.
     """
-    return _build(BotServices, {"schematic_summaries": None}, overrides)
+    return _build(BotServices, {"schematic_summaries": None, "open_topic_bridge": None}, overrides)
 
 
 async def _unconfigured_job() -> NoReturn:
@@ -148,6 +148,7 @@ def worker_services(**overrides: object) -> WorkerServices:
     defaults: dict[str, Any] = {
         "event_wake_listener": None,
         "media_runner": None,
+        "open_topic_bridge": None,
         "refresh_search_index": _unconfigured_job,
         "record_queue_health": _unconfigured_job,
         "purge_idempotency": _unconfigured_job,

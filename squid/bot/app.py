@@ -42,14 +42,12 @@ from squid.config import (
     BotProcessConfig,
     BuildConfig,
     CatboxConfig,
-    DatabaseConfig,
     NotificationConfig,
     load_bot_process_config,
     load_or_exit,
 )
 from squid.core.errors import RateLimitedError
 from squid.core.observability import TraceSurface, correlation_scope, trace_span
-from squid.core.persistence.topic_bridge import open_topic_bridge
 from squid.core.posts.domain import ResourceKind
 from squid.core.posts.topics import TopicPublisher, resource_topic
 from squid.health import ProcessHealthServer
@@ -134,14 +132,12 @@ class RedstoneSquid(Bot):
         catbox_config: CatboxConfig = DEFAULT_CATBOX_CONFIG,
         build_config: BuildConfig = DEFAULT_BUILD_CONFIG,
         notification_config: NotificationConfig = DEFAULT_NOTIFICATION_CONFIG,
-        database_config: DatabaseConfig | None = None,
         inference_model: str = "gpt-5.6-luna",
         inference_reasoning_effort: str = "low",
         development_mode: bool = False,
     ):
         self.services = services
         self.build_config = build_config
-        self.database_config = database_config
         self.notification_site_url = (
             None
             if notification_config.public_site_url is None
@@ -390,8 +386,8 @@ class RedstoneSquid(Bot):
         start_permission_epoch_watch(self.background_tasks, self.services.permission_epoch)
         self.background_tasks.start(self.ui.run(), name=RuntimeJob.LAYOUT)
         self.background_tasks.start(self.interaction_metrics.run(), name=RuntimeJob.INTERACTION_METRICS)
-        if self.database_config is not None:
-            self.topic_bridge = await open_topic_bridge(self.database_config, self.topic_bus)
+        if self.services.open_topic_bridge is not None:
+            self.topic_bridge = await self.services.open_topic_bridge(self.topic_bus)
         if self.topic_bridge is not None:
             self.topic_publisher = self.topic_bridge
             self.background_tasks.start(self.topic_bridge.run(), name=RuntimeJob.TOPIC_BRIDGE)
@@ -499,7 +495,6 @@ async def _run_bot(
             catbox_config=config.catbox,
             build_config=config.build,
             notification_config=config.notification,
-            database_config=config.runtime.database,
             inference_model=config.openai.chat_model,
             inference_reasoning_effort=config.openai.reasoning_effort,
             development_mode=config.development_mode,
