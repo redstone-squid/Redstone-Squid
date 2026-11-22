@@ -21,10 +21,13 @@ BUILD_EXAMPLES = (
     (tr(t"search-example-dates = Completion date range"), "completion_at:[2025-01-01 TO 2026-01-01]"),
 )
 RECORD_EXAMPLES = (
-    (tr(t"search-example-fastest = All-time fastest doors"), "kind:door criterion:fastest version_scope:all_time"),
     (
-        tr(t"search-example-extenders = Current smallest extenders"),
-        "kind:extender criterion:smallest version_scope:up_to_date",
+        tr(t"search-example-fastest-tall-doors = All-time fastest doors at least 3 blocks tall"),
+        "kind:door criterion:fastest version_scope:all_time door_height>=3",
+    ),
+    (
+        tr(t"search-example-long-extenders = Current smallest extenders reaching at least 4 blocks"),
+        "kind:extender criterion:smallest version_scope:up_to_date extender_length>=4",
     ),
     (
         tr(t"search-example-combined = Combined record titles"),
@@ -44,12 +47,6 @@ def search_help(
         kinds = ", ".join(kind.value for kind in BuildKind)
         scopes = ", ".join(scope.value for scope in VersionScope)
         fields = (
-            sl.paragraph(
-                tr(
-                    t"search-reference-record-scope = Record filters describe the record. To filter by build dimensions "
-                    t"or creator, search Builds instead."
-                )
-            ),
             _entry(
                 tr(t"search-reference-label-record-type = Record criterion"),
                 md_tr(t"search-reference-record-type = `criterion:` {criteria}"),
@@ -57,6 +54,20 @@ def search_help(
             _entry(
                 tr(t"search-reference-label-kind = Kind"),
                 md_tr(t"search-reference-kind = `kind:` {kinds}"),
+            ),
+            _entry(
+                tr(t"search-reference-label-category-size = Category dimensions"),
+                md_tr(
+                    t"search-reference-category-size = `door_width`, `door_height>=3`, and `door_depth` measure the "
+                    t"opening in blocks. Use `extender_length>=4` for an extender's reach."
+                ),
+            ),
+            _entry(
+                tr(t"search-reference-label-category-features = Category features"),
+                md_tr(
+                    t'search-reference-category-features = `orientation:trapdoor`, `type:"full seamless"`, '
+                    t"`restriction:observerless`. Quote names with spaces."
+                ),
             ),
             _entry(
                 tr(t"search-reference-label-version-scope = Version scope"),

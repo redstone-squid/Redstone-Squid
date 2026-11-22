@@ -2084,7 +2084,7 @@ builds-revision-conflict-action = Fetch the latest build, merge the changes, and
 # squid/core/catalogue/domain/titles.py:147
 catalogue-piston-extender-length = Piston extender length must be positive.
 
-# squid/bot/catalogue/browse.py:779, squid/bot/catalogue/search/help.py:185
+# squid/bot/catalogue/browse.py:779, squid/bot/catalogue/search/help.py:196
 catalogue-search-help = Search help
 
 # squid/bot/catalogue/browse.py:602
@@ -5130,7 +5130,7 @@ schematics-upload-litematic-schem = Upload a .litematic, .schem, .schematic, .nb
 # squid/core/schematics/application/commands.py:64
 schematics-zoom-positive = Render zoom must be positive.
 
-# squid/core/search/application/fields.py:229
+# squid/core/search/application/fields.py:249
 search-align-increments = { $field_name } must align to increments of { $step }
 
 # squid/core/search/domain/query.py:95
@@ -5151,7 +5151,7 @@ search-embeddings-embedding-claim = Embedding claim limit must be between 1 and 
 # squid/core/search/application/embeddings.py:65
 search-embeddings-embedding-max = Embedding max_attempts must be positive.
 
-# squid/bot/catalogue/search/help.py:30
+# squid/bot/catalogue/search/help.py:33
 search-example-combined = Combined record titles
 
 # squid/bot/catalogue/search/help.py:19
@@ -5163,19 +5163,19 @@ search-example-dates = Completion date range
 # squid/bot/catalogue/search/help.py:20
 search-example-exclude = Exclude a restriction
 
-# squid/bot/catalogue/search/help.py:26
-search-example-extenders = Current smallest extenders
+# squid/bot/catalogue/search/help.py:25
+search-example-fastest-tall-doors = All-time fastest doors at least 3 blocks tall
 
-# squid/bot/catalogue/search/help.py:24
-search-example-fastest = All-time fastest doors
+# squid/bot/catalogue/search/help.py:29
+search-example-long-extenders = Current smallest extenders reaching at least 4 blocks
 
-# squid/core/search/application/fields.py:131
+# squid/core/search/application/fields.py:133
 search-expects-boolean = { $field_name } expects a boolean
 
-# squid/core/search/application/fields.py:121
+# squid/core/search/application/fields.py:123
 search-expects-iso-date = { $field_name } expects an ISO-8601 date or timestamp
 
-# squid/core/search/application/fields.py:113
+# squid/core/search/application/fields.py:115
 search-expects-number = { $field_name } expects a number
 
 # squid/bot/catalogue/search/labels.py:61
@@ -5196,7 +5196,7 @@ search-field-depth = Depth
 # squid/bot/catalogue/search/labels.py:43
 search-field-description = Description
 
-# squid/core/search/application/fields.py:104
+# squid/core/search/application/fields.py:106
 search-field-expects-choice = { $field_name } expects one of { $choices }.
 
 # squid/bot/catalogue/search/labels.py:67
@@ -5283,100 +5283,109 @@ search-k-positive = k must be positive
 # squid/core/search/domain/query.py:120
 search-query-incompatible-scope = This query contains filters that cannot be used in { $scope }.
 
-# squid/bot/catalogue/search/help.py:160
+# squid/bot/catalogue/search/help.py:171
 search-reference-and = - Everything you type must match: `door width<=5`.
 
-# squid/bot/catalogue/search/help.py:87
+# squid/bot/catalogue/search/help.py:98
 search-reference-build-kind = `kind:door` · { $categories }
 
-# squid/bot/catalogue/search/help.py:98
-search-reference-credit = `creator:Steve`, `version:"Java 1.20"`
+# squid/bot/catalogue/search/help.py:67
+search-reference-category-features = `orientation:trapdoor`, `type:"full seamless"`, `restriction:observerless`. Quote names with spaces.
+
+# squid/bot/catalogue/search/help.py:60
+search-reference-category-size = `door_width`, `door_height>=3`, and `door_depth` measure the opening in blocks. Use `extender_length>=4` for an extender's reach.
 
 # squid/bot/catalogue/search/help.py:109
-search-reference-dates = `completion_at>=2025-01-01`. Also `created_at` (submitted) and `updated_at`.
-
-# squid/bot/catalogue/search/help.py:174
-search-reference-empty = - No results? Remove filters one at a time. Filters never reveal hidden builds.
+search-reference-credit = `creator:Steve`, `version:"Java 1.20"`
 
 # squid/bot/catalogue/search/help.py:120
+search-reference-dates = `completion_at>=2025-01-01`. Also `created_at` (submitted) and `updated_at`.
+
+# squid/bot/catalogue/search/help.py:185
+search-reference-empty = - No results? Remove filters one at a time. Filters never reveal hidden builds.
+
+# squid/bot/catalogue/search/help.py:131
 search-reference-example-description = **{ $title }** — `{ $query }`
 
-# squid/bot/catalogue/search/help.py:143
+# squid/bot/catalogue/search/help.py:154
 search-reference-example-reset = Running an example replaces your current query, type buttons and sort.
 
-# squid/bot/catalogue/search/help.py:140
+# squid/bot/catalogue/search/help.py:151
 search-reference-examples = Examples
 
-# squid/bot/catalogue/search/help.py:135, squid/bot/catalogue/search/help.py:136
+# squid/bot/catalogue/search/help.py:146, squid/bot/catalogue/search/help.py:147
 search-reference-fields = What you can search
 
-# squid/bot/catalogue/search/help.py:80
+# squid/bot/catalogue/search/help.py:91
 search-reference-intro = Type words to match titles and descriptions. Add filter lists every field and its known values, or type filters yourself, like `width<=5`.
 
-# squid/bot/catalogue/search/help.py:59
+# squid/bot/catalogue/search/help.py:56
 search-reference-kind = `kind:` { $kinds }
 
-# squid/bot/catalogue/search/help.py:97
-search-reference-label-credit = Creator and version
+# squid/bot/catalogue/search/help.py:66
+search-reference-label-category-features = Category features
+
+# squid/bot/catalogue/search/help.py:59
+search-reference-label-category-size = Category dimensions
 
 # squid/bot/catalogue/search/help.py:108
+search-reference-label-credit = Creator and version
+
+# squid/bot/catalogue/search/help.py:119
 search-reference-label-dates = Dates
 
-# squid/bot/catalogue/search/help.py:58, squid/bot/catalogue/search/help.py:86
+# squid/bot/catalogue/search/help.py:55, squid/bot/catalogue/search/help.py:97
 search-reference-label-kind = Kind
 
-# squid/bot/catalogue/search/help.py:54
+# squid/bot/catalogue/search/help.py:51
 search-reference-label-record-type = Record criterion
 
-# squid/bot/catalogue/search/help.py:90
+# squid/bot/catalogue/search/help.py:101
 search-reference-label-size = Size
 
-# squid/bot/catalogue/search/help.py:101
+# squid/bot/catalogue/search/help.py:112
 search-reference-label-tags = Restrictions, patterns and tags
 
-# squid/bot/catalogue/search/help.py:66
+# squid/bot/catalogue/search/help.py:77
 search-reference-label-title = Title words
 
-# squid/bot/catalogue/search/help.py:62
+# squid/bot/catalogue/search/help.py:73
 search-reference-label-version-scope = Version scope
 
-# squid/bot/catalogue/search/help.py:165
+# squid/bot/catalogue/search/help.py:176
 search-reference-not = - `NOT` leaves matches out: `door NOT restriction:observerless`.
 
-# squid/bot/catalogue/search/help.py:169
+# squid/bot/catalogue/search/help.py:180
 search-reference-operators = - Quote phrases: `title:"vault door"`. Compare numbers and dates with `<`, `<=`, `>`, `>=` or a range like `[3 TO 5]`.
 
-# squid/bot/catalogue/search/help.py:161
+# squid/bot/catalogue/search/help.py:172
 search-reference-or = - `OR` matches either side. Group with brackets: `(door OR extender) width<=5`.
 
-# squid/bot/catalogue/search/help.py:48
-search-reference-record-scope = Record filters describe the record. To filter by build dimensions or creator, search Builds instead.
-
-# squid/bot/catalogue/search/help.py:67
+# squid/bot/catalogue/search/help.py:78
 search-reference-record-title = `title:door`
 
-# squid/bot/catalogue/search/help.py:55
+# squid/bot/catalogue/search/help.py:52
 search-reference-record-type = `criterion:` { $criteria }
 
-# squid/bot/catalogue/search/help.py:70
+# squid/bot/catalogue/search/help.py:81
 search-reference-record-types = The Smallest, Fastest and First buttons match records of any selected type, together with your query.
 
-# squid/bot/catalogue/search/help.py:91
+# squid/bot/catalogue/search/help.py:102
 search-reference-size = `width<=5`, `height:[3 TO 5]`, `depth`, `volume`. The whole build in blocks, not the door opening.
 
-# squid/bot/catalogue/search/help.py:173
+# squid/bot/catalogue/search/help.py:184
 search-reference-sort = - Order results with Sort, not in the query.
 
-# squid/bot/catalogue/search/help.py:153, squid/bot/catalogue/search/help.py:155
+# squid/bot/catalogue/search/help.py:164, squid/bot/catalogue/search/help.py:166
 search-reference-syntax = Combining filters
 
-# squid/bot/catalogue/search/help.py:102
+# squid/bot/catalogue/search/help.py:113
 search-reference-tags = `restriction:observerless`, `pattern:"full seamless"`, `tag:`. Quote names with spaces.
 
-# squid/bot/catalogue/search/help.py:63
+# squid/bot/catalogue/search/help.py:74
 search-reference-version-scope = `version_scope:` { $scopes }
 
-# squid/core/search/application/fields.py:224
+# squid/core/search/application/fields.py:244
 search-search-numbers-finite = Search numbers must be finite
 
 # squid/core/search/application/services.py:71

@@ -4,6 +4,7 @@ import pytest
 
 from squid.bot.catalogue.search.help import BUILD_EXAMPLES, RECORD_EXAMPLES, _entry, _reference
 from squid.core.search.application import SearchQueryParser
+from squid.core.search.domain import SearchScope
 from squid_ui.errors import UnsolvableLayoutError
 from squid_ui.ext.discord import DISCORD_V2_DPY27
 from squid_ui.ext.discord.rendering import render_static
@@ -12,9 +13,13 @@ from squid_ui.planning import plan
 from squid_ui.planning.resources import Axis, ResourceCost
 
 
-@pytest.mark.parametrize("query", [query for _label, query in (*BUILD_EXAMPLES, *RECORD_EXAMPLES)])
-def test_help_examples_are_valid_queries(query: str) -> None:
-    assert SearchQueryParser().parse(query).expression is not None
+@pytest.mark.parametrize(
+    ("scope", "query"),
+    [(SearchScope.BUILDS, query) for _, query in BUILD_EXAMPLES]
+    + [(SearchScope.RECORDS, query) for _, query in RECORD_EXAMPLES],
+)
+def test_help_examples_are_valid_queries(scope: SearchScope, query: str) -> None:
+    assert SearchQueryParser(scope=scope).parse(query).expression is not None
 
 
 def test_reference_entry_compacts_without_losing_its_label_or_description() -> None:
