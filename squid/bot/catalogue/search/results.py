@@ -13,6 +13,7 @@ from squid.bot.catalogue.rows import build_row
 from squid.bot.ui import tr, truncate_display_text
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build
+from squid.core.records.domain.models import RecordCriterion, VersionScope
 from squid.core.search.domain import (
     BuildSearchHit,
     RecordSearchHit,
@@ -23,6 +24,7 @@ from squid.core.search.domain import (
     SearchScope,
     SearchText,
 )
+from squid.core.vocabulary import RECORD_CRITERIA, VERSION_SCOPES
 from squid_i18n import Text, md_tr, strong
 from squid_reactivity import untracked
 from squid_ui.ext.discord.target_types import ComponentsV2Target
@@ -309,8 +311,8 @@ class _GroupedBuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, Redst
         return record_standings(
             _highlighted(record.title_match or SearchText(record.title)),
             record.subtitle,
-            record.criterion,
-            record.version_scope,
+            RecordCriterion(record.criterion),
+            VersionScope(record.version_scope),
             record.holder_build_ids,
             self._open_holder,
             current_holder=int(self.hit.source_id),
@@ -457,8 +459,8 @@ class SearchScreen(sd.Screen[None, Any, RedstoneSquid]):
             return record_standings(
                 _highlighted(hit.title_match or SearchText(hit.title)),
                 hit.subtitle,
-                hit.criterion,
-                hit.version_scope,
+                RecordCriterion(hit.criterion),
+                VersionScope(hit.version_scope),
                 hit.holder_build_ids,
                 self._open_holder,
                 details=tuple(sl.paragraph(line) for line in _holder_lines(hit)),
@@ -629,8 +631,8 @@ def _detail_text(hit: SearchHit) -> sl.TextLike:
         tags = ", ".join(tag for tag in hit.tags)
         build_title = hit.build_title
         build_id = hit.build_id
-        criterion = hit.criterion
-        version_scope = hit.version_scope
+        criterion = RECORD_CRITERIA[RecordCriterion(hit.criterion)]
+        version_scope = VERSION_SCOPES[VersionScope(hit.version_scope)]
         fields = md_tr(
             t"""
             bot-submission-search-view-build-base-title =

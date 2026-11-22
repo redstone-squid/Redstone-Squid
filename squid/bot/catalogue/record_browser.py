@@ -84,7 +84,7 @@ def record_browser(
             record.version_scope,
             record.holder_build_ids,
             open_build,
-            build_kind=record.build_kind.value,
+            build_kind=record.build_kind,
             details=(
                 *details,
                 sl.action_controls(follow_control(SubscriptionKind.RECORD, record.record_id), key="record-follow"),

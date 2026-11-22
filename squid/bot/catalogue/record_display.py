@@ -6,7 +6,8 @@ from functools import partial
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.ui import tr
-from squid.core.records.domain.models import RecordCriterion
+from squid.core.records.domain.models import BuildKind, RecordCriterion, VersionScope
+from squid.core.vocabulary import BUILD_KINDS, VERSION_SCOPES
 from squid_i18n import Text
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 
@@ -19,22 +20,22 @@ def record_row(title: sl.TextLike, subtitle: str | None) -> Text:
 def record_standings(
     title: sl.TextLike,
     subtitle: str | None,
-    criterion: str,
-    version_scope: str,
+    criterion: RecordCriterion,
+    version_scope: VersionScope,
     holders: Sequence[int],
     open_build: Callable[[int, sl.PressEvent], Awaitable[None]],
     *,
-    build_kind: str | None = None,
+    build_kind: BuildKind | None = None,
     current_holder: int | None = None,
     details: Sequence[sl.LayoutNode[ComponentsV2Target, sd.Request]] = (),
 ) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
     """Show the record and its holders, with room for publication or search details."""
-    scope = version_scope.replace("_", " ")
+    scope = VERSION_SCOPES[version_scope]
     others = tuple(build_id for build_id in holders if build_id != current_holder)
     return sl.section(
         sl.heading(title),
         sl.paragraph(subtitle) if subtitle else None,
-        sl.note(f"{build_kind} · {scope}" if build_kind else scope),
+        sl.note(Text(t"{BUILD_KINDS[build_kind]} · {scope}") if build_kind else scope),
         sl.paragraph(rule) if (rule := _comparison_rule(criterion)) else None,
         *details,
         sl.note(tr(t"search-grouped-tied-holders = Tied holders")) if len(holders) > 1 else None,
@@ -55,7 +56,7 @@ def record_standings(
     )
 
 
-def _comparison_rule(criterion: str) -> sl.TextLike | None:
+def _comparison_rule(criterion: RecordCriterion) -> sl.TextLike | None:
     match criterion:
         case RecordCriterion.FIRST:
             return tr(t"record-rule-first = Earliest known completion date.")

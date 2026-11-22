@@ -28,6 +28,7 @@ schema/schema_dump.sql linguist-generated=true
 schema/structure/** linguist-generated=true
 squid/core/persistence/migrations/sql/20260728_portable_schema.sql linguist-generated=true
 contracts/openapi.json linguist-generated=true
+contracts/vocabulary.json linguist-generated=true
 web/openapi.json linguist-generated=true
 web/src/generated/** linguist-generated=true
 web/screenshots/** linguist-generated=true

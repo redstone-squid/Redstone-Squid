@@ -72,6 +72,10 @@ dependency-report output="dependency-report.json":
 export-openapi:
     uv run --locked python -m scripts.export_openapi
 
+# Refresh the domain value labels the public catalogue compiles into its messages.
+export-vocabulary:
+    uv run --locked python -m scripts.export_vocabulary
+
 gha-analysis:
     uvx zizmor --gh-token $(gh auth token) --persona=pedantic .
 

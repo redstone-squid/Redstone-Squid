@@ -58,6 +58,7 @@ from squid.core.search.domain.query import (
     NotExpression,
     QueryExpression,
 )
+from squid.core.vocabulary import RECORD_CRITERIA, VERSION_SCOPES
 from squid_i18n import Text, inline_code
 from squid_reactivity import Topic, TopicBus
 from squid_ui.ext.discord import primitives
@@ -733,9 +734,12 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
                                 available=titles is not None,
                             )
                             for category, label in (
-                                (RecordCriterion.SMALLEST, tr(t"record-browser-smallest = Smallest")),
-                                (RecordCriterion.FASTEST, tr(t"record-browser-fastest = Fastest")),
-                                (RecordCriterion.FIRST, tr(t"record-browser-first = First")),
+                                (criterion, RECORD_CRITERIA[criterion])
+                                for criterion in (
+                                    RecordCriterion.SMALLEST,
+                                    RecordCriterion.FASTEST,
+                                    RecordCriterion.FIRST,
+                                )
                             )
                         ),
                         sl.action_control(
@@ -761,10 +765,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
                             tone=sl.Tone.SUCCESS if versions and version in versions else sl.Tone.NEUTRAL,
                             available=versions is not None,
                         )
-                        for version, label in (
-                            (VersionScope.ALL_TIME, tr(t"record-browser-all-time = All time")),
-                            (VersionScope.UP_TO_DATE, tr(t"record-browser-current-version = Current version")),
-                        )
+                        for version, label in VERSION_SCOPES.items()
                     ),
                     key="record-versions",
                     display=sl.semantic.ControlDisplay.INDIVIDUAL,
