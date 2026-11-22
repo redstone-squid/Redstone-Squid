@@ -38,7 +38,10 @@
     "astro": "^7.4.12",
     "bits-ui": "^2.21.0",
     "class-variance-authority": "^0.7.1",
-    "svelte": "^5.57.3"
+    "es-toolkit": "^1.53.2",
+    "runed": "^0.38.0",
+    "svelte": "^5.57.3",
+    "zod": "^4.6.7"
   },
   "overrides": {
     "js-yaml": "4.3.2",
@@ -69,6 +72,7 @@
     "jsdom": "^31.0.1",
     "knip": "^6.47.0",
     "lighthouse": "^13.6.0",
+    "msw": "^3.0.7",
     "postcss-html": "^2.0.1",
     "prettier": "^3.10.1",
     "prettier-plugin-astro": "^1.1.2",

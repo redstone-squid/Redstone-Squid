@@ -13,7 +13,7 @@ interaction. The site reads the Python API through an SDK generated from
 | `src/features/x` | Components and browser logic for one area, such as `builds` or `records` | its own directory, `lib`, `ui`, `locales`, `generated` |
 | `src/workbench`  | The `/design-system` playground, its stories, and fixtures               | everything except `server` and `pages`                 |
 | `src/server`     | Runtime config and the API client. Server only                           | `lib`, `locales`, `generated`                          |
-| `src/lib`        | Code that runs on both sides: pagination, problem details                | `locales`, `generated`                                 |
+| `src/lib`        | Code that runs on both sides, such as page addresses                     | `locales`, `generated`                                 |
 | `src/locales`    | Locales, URL prefixes, catalogs, and the compiled message functions      | `locales`, `generated`                                 |
 | `src/ui`         | The design system. Knows nothing about the application                   | `ui` only                                              |
 | `src/generated`  | The OpenAPI SDK. Run `bun run sdk:generate` after the contract changes   |                                                        |
@@ -68,6 +68,27 @@ An error thrown inside a component after rendering starts truncates a 200 respon
 3. Add its text to the catalogs; see [Text](#text).
 4. Cover pure logic with a Vitest test in `tests/unit` and the route with a Playwright
    test in `tests/e2e`. Check both locales.
+
+## Libraries
+
+Use these before writing your own. Ask before adding a library that overlaps one of them.
+
+| Need                                                     | Use                                                    |
+| -------------------------------------------------------- | ------------------------------------------------------ |
+| Accessible interactive primitives (dialogs, menus)       | `bits-ui`, wrapped in `src/ui`                         |
+| Validating untrusted data: API errors, URLs, JSON input  | `zod`                                                  |
+| Utilities such as debounce, groupBy, pick, or retry      | `es-toolkit`                                           |
+| Svelte state helpers: debounced values, watch, listeners | `runed`                                                |
+| Icons                                                    | `@lucide/svelte`                                       |
+| Class variants                                           | `class-variance-authority`, as in `src/ui/variants.ts` |
+| Mocking the API in unit tests                            | `msw`, as in `tests/unit/server-api.test.ts`           |
+
+`knip.jsonc` lists libraries installed ahead of their first use; remove an entry once code
+imports it.
+
+Cookies go through `src/server/cookies.ts`, which owns every cookie's name and flags; lint
+rejects `Astro.cookies` and `document.cookie` elsewhere. The API sets its own session cookie,
+so create that module only when the site itself needs a cookie.
 
 ## Text
 

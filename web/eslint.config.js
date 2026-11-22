@@ -162,9 +162,11 @@ export default tseslint.config(
     },
   },
   {
-    // Messages format numbers and dates with NUMBER() and DATETIME(), so translators own them.
+    // Formatting and cookies each have one owner. Messages format numbers and dates with
+    // NUMBER() and DATETIME(), so translators control them; src/server/cookies.ts owns every
+    // cookie's name and flags. The two owners are exempt.
     files: ["src/**/*.{ts,astro,svelte}"],
-    ignores: ["src/locales/format.ts"],
+    ignores: ["src/locales/format.ts", "src/server/cookies.ts"],
     rules: {
       "no-restricted-globals": [
         "error",
@@ -175,6 +177,15 @@ export default tseslint.config(
         ...["toLocaleString", "toLocaleDateString", "toLocaleTimeString"].map((property) => ({
           property,
           message: "Format inside a message with NUMBER() or DATETIME().",
+        })),
+        ...[
+          ["Astro", "cookies"],
+          ["context", "cookies"],
+          ["document", "cookie"],
+        ].map(([object, property]) => ({
+          object,
+          property,
+          message: "Read and write cookies through src/server/cookies.ts.",
         })),
       ],
     },

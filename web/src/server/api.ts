@@ -1,9 +1,23 @@
 import { createClient, type Client } from "@/generated/client";
 import type { Locale } from "@/locales/locale";
-import { decodeProblemDetail, type ApiProblemDetail } from "@/lib/problem-details";
+import { z } from "zod";
 import type { RuntimeConfig } from "./config";
 
 const API_TIMEOUT_MS = 5_000;
+
+// An RFC 9457 error body. Validated rather than taken from the generated types because error
+// responses are untrusted, and `code` stays a string so a newer API can add codes.
+const problemDetail = z.object({
+  title: z.string(),
+  status: z.int().min(100).max(599),
+  type: z.string().optional(),
+  detail: z.string().nullish(),
+  instance: z.string().nullish(),
+  code: z.string().nullish(),
+  resource: z.string().nullish(),
+  context: z.record(z.string(), z.unknown()).nullish(),
+});
+export type ApiProblemDetail = z.infer<typeof problemDetail>;
 
 /** A failed API call. Unexpected failures such as timeouts become a 503 without a problem body. */
 export class ApiError extends Error {
@@ -39,7 +53,7 @@ export function unwrap<T>(result: {
   response?: Response;
 }): T {
   if (result.data !== undefined) return result.data;
-  const problem = decodeProblemDetail(result.error);
+  const problem = problemDetail.safeParse(result.error).data;
   throw new ApiError(result.response?.status ?? problem?.status ?? 503, problem, {
     requestId: result.response?.headers.get("Request-Id") ?? null,
   });
