@@ -30,6 +30,7 @@ from squid.core.errors import InvalidStateError
 from squid.core.messages.domain import MessageRef, MessageSnapshot
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.settings.models import ServerSetting
+from squid.core.sync.models import DiscordSyncQueueItem
 from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.core.tags.models import TagAlias, TagApplicability, TagDefinition
 from squid.core.unit_of_work import UnitOfWorkFactory
@@ -504,6 +505,19 @@ async def test_saving_a_build_keeps_newer_source_message_content(
     assert reloaded.description == "changed"
     assert reloaded.source_message_content == "edited"
     assert reloaded.source_messages == (MessageRef(6100, channel_id=5000, guild_id=4000),)
+
+    generation = select(DiscordSyncQueueItem.generation).where(
+        DiscordSyncQueueItem.resource_kind == "build", DiscordSyncQueueItem.source_key == str(build.id)
+    )
+    async with migrated_session_factory() as session:
+        before_delete = (await session.execute(generation)).scalar_one()
+    await transact(repository, lambda uow: uow.messages.mark_deleted(6100, Instant.now()), commit=True)
+    async with migrated_session_factory() as session:
+        assert (await session.execute(generation)).scalar_one() > before_delete
+    reloaded = await transact(repository, lambda uow: uow.builds.get_by_id(build.id))
+    assert reloaded is not None
+    assert reloaded.source_message_content is None
+    assert reloaded.original_link == "https://discord.com/channels/4000/5000/6100"
 
 
 async def test_one_message_can_source_several_builds(

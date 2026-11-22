@@ -569,6 +569,8 @@ class BuildSourceMessage(Base):
     """
 
     __tablename__ = "build_source_messages"
+    __table_args__ = (Index("build_source_messages_message_id_idx", "message_id"),)
+
     build_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey("builds.id", name="build_source_messages_build_id_fkey", ondelete="CASCADE"),
