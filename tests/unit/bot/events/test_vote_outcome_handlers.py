@@ -58,8 +58,8 @@ class VotesRecorder(VoteService):
 
 class BuildsRecorder(BuildService):
     def __init__(self) -> None:
-        self.confirm = AsyncCallRecorder()
-        self.deny = AsyncCallRecorder()
+        self.approve = AsyncCallRecorder()
+        self.reject = AsyncCallRecorder()
 
 
 def _bot(snapshot: VoteSessionSnapshot | None) -> Any:
@@ -68,7 +68,7 @@ def _bot(snapshot: VoteSessionSnapshot | None) -> Any:
 
 @pytest.mark.parametrize(
     ("result", "expected"),
-    [(VoteSessionResult.APPROVED, "confirm"), (VoteSessionResult.DENIED, "deny")],
+    [(VoteSessionResult.APPROVED, "approve"), (VoteSessionResult.DENIED, "reject")],
 )
 async def test_a_decided_build_vote_applies_its_outcome(result: VoteSessionResult, expected: str) -> None:
     bot = _bot(_snapshot(kind=VoteKind.BUILD, result=result, target=BuildVoteTarget(42)))
