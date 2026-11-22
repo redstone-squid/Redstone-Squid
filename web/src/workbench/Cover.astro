@@ -1,0 +1,38 @@
+---
+import * as m from "@/locales/messages.gen";
+import LinkButton from "@/ui/astro/LinkButton.astro";
+import { THEMES, type Theme } from "@/ui/themes";
+import { layoutStyles } from "@/ui/variants";
+
+type Props = { theme: Theme };
+const { theme } = Astro.props;
+// The toggle offers the next theme in THEMES, labelled with its name.
+const next = THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length] ?? theme;
+const labels = { light: m.workbenchLightTheme, dark: m.workbenchDarkTheme } satisfies Record<
+  Theme,
+  unknown
+>;
+const params = new URLSearchParams(Astro.url.searchParams);
+params.set("theme", next);
+---
+
+<header class="grid grid-cols-[1.15fr_1fr] overflow-hidden rounded-lg bg-cover text-cover-fg max-md:grid-cols-1">
+  <div class="self-center p-[clamp(1.5rem,4vw,3.5rem)]">
+    <h1 class="text-[clamp(2.25rem,4vw,4rem)]">{m.workbenchPageTitle()}</h1>
+    <p class="mt-4 mb-6 max-w-[42rem] text-[1.0625rem] text-cover-fg-muted">
+      {m.workbenchLibraryDescription()}
+    </p>
+    <div class={layoutStyles({ pattern: "row" })}>
+      <LinkButton href={`?${params}`}>{labels[next]()}</LinkButton>
+    </div>
+  </div>
+  <div aria-hidden="true" class="grid place-items-center overflow-hidden bg-cover-art max-md:h-36">
+    <img
+      class="size-full object-cover max-md:h-36 max-md:object-contain"
+      src="/fixtures/copper-door.svg"
+      alt=""
+      width="640"
+      height="400"
+    />
+  </div>
+</header>

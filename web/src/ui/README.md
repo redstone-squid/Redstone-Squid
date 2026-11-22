@@ -30,11 +30,12 @@ promote it to a component and add a story using the production implementation.
 
 ## Styles and rendering
 
-`tokens.css` defines the palette, type, spacing, focus, and motion values.
-`components.css`, `forms.css`, and `patterns.css` own the reusable styles.
-Shared styles declare the order of the tokens, base, and components layers so
-Astro can split route bundles without changing the cascade. The layouts serve
-the fonts locally. Use sentence case for headings, labels, and badges. Reserve
+Components style themselves with Tailwind utilities from `app.css`, which exposes
+only the theme colors defined per theme in `themes.css` and `themes.ts`. Merge a
+caller's `class` with `cn`. For native markup without a component, use
+`buttonStyles`, `layoutStyles`, `noticeStyles`, and the class constants in
+`variants.ts` (`inputClass`, `fieldClass`, `panelClass`, `kickerClass`,
+`mutedClass`). The layouts serve the fonts locally. Use sentence case for headings, labels, and badges. Reserve
 monospace for technical values.
 
 Astro owns server-rendered routes. Use Svelte for new interactive islands.

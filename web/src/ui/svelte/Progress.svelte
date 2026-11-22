@@ -3,7 +3,7 @@
   let { label, value, max = 100 }: ProgressProps = $props();
 </script>
 
-<label class="sq-progress">
+<label class="grid min-w-0 gap-2 text-sm font-semibold">
   <span>{label}</span>
-  <progress {value} {max}></progress>
+  <progress class="w-full accent-accent" {value} {max}></progress>
 </label>

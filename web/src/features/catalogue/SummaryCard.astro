@@ -1,23 +1,13 @@
-<article class="sq-panel catalogue-record">
+---
+import { cn } from "@/ui/cn";
+import { panelClass } from "@/ui/variants";
+---
+
+<article
+  class={cn(
+    panelClass,
+    "grid content-start gap-3 [&_a]:no-underline [&_a:hover]:underline [&_h3]:text-lg",
+  )}
+>
   <slot />
 </article>
-
-<style>
-  @layer tokens, base, components;
-  @layer components {
-    .catalogue-record {
-      display: grid;
-      align-content: start;
-      gap: var(--space-3);
-    }
-    .catalogue-record :global(h3) {
-      font-size: 1.125rem;
-    }
-    .catalogue-record :global(a) {
-      text-decoration: none;
-    }
-    .catalogue-record :global(a):hover {
-      text-decoration: underline;
-    }
-  }
-</style>

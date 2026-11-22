@@ -1,12 +1,13 @@
 ---
+import { mutedClass, panelClass } from "@/ui/variants";
 type Props = { title: string; description?: string; id: string };
 const { title, description, id } = Astro.props;
 ---
 
-<section class="sq-panel" aria-labelledby={id}>
-  <header class="sq-panel-heading">
+<section class={panelClass} aria-labelledby={id}>
+  <header class="mb-6">
     <h2 id={id}>{title}</h2>
-    {description && <p class="sq-muted">{description}</p>}
+    {description && <p class:list={["mt-1 text-sm", mutedClass]}>{description}</p>}
   </header>
   <slot />
 </section>

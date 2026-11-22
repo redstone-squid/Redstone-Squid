@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
+  import { cn } from "@/ui/cn";
+  import { fieldClass, inputClass, mutedClass } from "@/ui/variants";
   export type Suggestion = { value: string; label: string; description?: string | null };
   export type Suggestions = {
     items: Suggestion[];
@@ -153,16 +155,31 @@
   });
 </script>
 
-<div class="sq-field sq-autocomplete">
+<div class={cn(fieldClass, "relative")}>
   <label for={id}>{label}</label>
-  {#if multiline}<textarea class="sq-input" {...attributes} bind:value bind:this={input} rows="3"
-    ></textarea>{:else}<input class="sq-input" {...attributes} bind:value bind:this={input} />{/if}
+  {#if multiline}<textarea
+      class={cn(inputClass, "resize-y")}
+      {...attributes}
+      bind:value
+      bind:this={input}
+      rows="3"></textarea>{:else}<input
+      class={inputClass}
+      {...attributes}
+      bind:value
+      bind:this={input}
+    />{/if}
   {#if visible.length}
-    <ul class="sq-suggestions" id={listId} role="listbox" aria-label={suggestionsLabel}>
+    <ul
+      class="absolute inset-x-0 top-full z-10 mt-1 max-h-64 list-none overflow-y-auto rounded-sm border border-line bg-surface p-1 shadow-card"
+      id={listId}
+      role="listbox"
+      aria-label={suggestionsLabel}
+    >
       {#each visible as item, index (index)}
         <li role="presentation">
           <button
             type="button"
+            class="grid w-full cursor-pointer rounded-sm border-0 bg-surface p-3 text-left wrap-anywhere text-fg hover:bg-surface-muted aria-selected:bg-surface-muted"
             role="option"
             aria-label={item.label}
             tabindex="-1"
@@ -170,11 +187,15 @@
             aria-selected={active === index}
             onpointerdown={(event) => event.preventDefault()}
             onclick={() => choose(index)}
-            >{item.label}{#if item.description}<span>{item.description}</span>{/if}</button
+            >{item.label}{#if item.description}<span class="text-xs text-fg-muted"
+                >{item.description}</span
+              >{/if}</button
           >
         </li>
       {/each}
     </ul>
   {/if}
-  {#if failed && focused && !dismissed}<p class="sq-muted" role="status">{errorLabel}</p>{/if}
+  {#if failed && focused && !dismissed}<p class={cn(mutedClass, "text-[0.8125rem]")} role="status">
+      {errorLabel}
+    </p>{/if}
 </div>

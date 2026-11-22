@@ -1,5 +1,6 @@
 ---
 import SummaryCard from "./SummaryCard.astro";
+import { kickerClass, layoutStyles, mutedClass } from "@/ui/variants";
 import Badge from "@/ui/astro/Badge.astro";
 import RecordFreshness from "./RecordFreshness.astro";
 import type { PublishedRecordResult } from "@/generated/types.gen";
@@ -11,7 +12,7 @@ const { record, linked = true } = Astro.props;
 ---
 
 <SummaryCard>
-  <span class="sq-kicker">{recordCriterionLabel(record.criterion)}</span>
+  <span class={kickerClass}>{recordCriterionLabel(record.criterion)}</span>
   <h3>
     {linked ? (
       <a href={localizePath(`/records/${record.record_id}`)}>{record.title}</a>
@@ -19,12 +20,12 @@ const { record, linked = true } = Astro.props;
       record.title
     )}
   </h3>
-  {record.subtitle && <p class="sq-muted">{record.subtitle}</p>}
-  <div class="sq-row">
+  {record.subtitle && <p class={mutedClass}>{record.subtitle}</p>}
+  <div class={layoutStyles({ pattern: "row" })}>
     <Badge>{buildKindLabel(record.build_kind)}</Badge>
     <Badge>{versionScopeLabel(record.version_scope)}</Badge>
   </div>
-  <p class="sq-muted">
+  <p class={mutedClass}>
     {m.recordHolderCount({ count: record.holder_build_ids.length })} · <RecordFreshness {record} />
   </p>
 </SummaryCard>

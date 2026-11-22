@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import FormSpecimen from "@/workbench/FormSpecimen.svelte";
 import Field from "@/ui/svelte/Field.svelte";
 import Harness from "./fixtures/SvelteDialogHarness.svelte";
+import { buttonStyles, inputClass } from "@/ui/variants";
 
 afterEach(cleanup);
 describe("Svelte primitive contracts", () => {
@@ -23,7 +24,7 @@ describe("Svelte primitive contracts", () => {
       render(Field, { label: "Second", hint: "Another name" });
       const first = screen.getByRole("textbox", { name: "First" });
       const second = screen.getByRole("textbox", { name: "Second" });
-      expect(first).toHaveClass("sq-input", "wide");
+      expect(first).toHaveClass(...inputClass.split(" "), "wide");
       expect(first).toHaveAccessibleDescription("External explanation Check spelling");
       expect(first).toHaveAttribute("aria-invalid", "grammar");
       expect(first.id).not.toBe(second.id);
@@ -48,7 +49,7 @@ describe("Svelte primitive contracts", () => {
     const user = userEvent.setup();
     render(Harness);
     const trigger = screen.getByRole("button", { name: "Edit draft" });
-    expect(trigger).toHaveClass("sq-button--secondary");
+    expect(trigger).toHaveClass(...buttonStyles({ variant: "secondary" }).split(" "));
     await user.click(trigger);
     expect(await screen.findByRole("dialog")).toHaveClass("wide-dialog");
     await user.click(screen.getByRole("button", { name: "Finish" }));

@@ -1,30 +1,28 @@
 ---
 import WorkbenchLayout from "@/workbench/WorkbenchLayout.astro";
 import LinkButton from "@/ui/astro/LinkButton.astro";
+import PageHeading from "@/ui/astro/PageHeading.astro";
 import Panel from "@/ui/astro/Panel.astro";
 import * as m from "@/locales/messages.gen";
 import SvelteDraftTrial from "@/workbench/DraftTrial.svelte";
-import "@/workbench/workbench.css";
-const theme = Astro.url.searchParams.get("theme") === "dark" ? "dark" : "light";
+import { parseTheme } from "@/ui/themes";
+const theme = parseTheme(Astro.url.searchParams.get("theme"));
 const selected = Astro.url.searchParams.get("scenario");
 const scenario = selected === "retry" || selected === "upload-retry" ? selected : undefined;
 const uploadScenario = new URLSearchParams({ theme, scenario: "upload-retry" });
 ---
 
 <WorkbenchLayout title={m.trialTitle()} {theme}>
-  <header class="sq-page-heading">
-    <h1>{m.trialTitle()}</h1>
-    <div class="sq-between">
-      <p>Svelte 5</p>
-      <LinkButton
-        href={`?${uploadScenario}`}
-        size="small"
-        aria-current={scenario === "upload-retry" ? "page" : undefined}
-      >
-        {m.trialUploadScenario()}
-      </LinkButton>
-    </div>
-  </header>
+  <PageHeading title={m.trialTitle()}>
+    <p>Svelte 5</p>
+    <LinkButton
+      href={`?${uploadScenario}`}
+      size="small"
+      aria-current={scenario === "upload-retry" ? "page" : undefined}
+    >
+      {m.trialUploadScenario()}
+    </LinkButton>
+  </PageHeading>
   <Panel id="trial" title={m.trialDetails()}>
     <SvelteDraftTrial client:load {scenario} />
   </Panel>

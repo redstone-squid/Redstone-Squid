@@ -1,12 +1,30 @@
 import eslint from "@eslint/js";
 import vitest from "@vitest/eslint-plugin";
 import astro from "eslint-plugin-astro";
+import betterTailwind from "eslint-plugin-better-tailwindcss";
 import playwright from "eslint-plugin-playwright";
 import svelte from "eslint-plugin-svelte";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 import { importBoundaries } from "./scripts/lint/import-boundaries.ts";
 import { noRawText } from "./scripts/lint/no-raw-text.ts";
+
+// Shared so blocks that add restrictions keep these.
+const restrictedSyntax = [
+  {
+    selector: "TSAsExpression > TSAsExpression",
+    message: "A double assertion hides a type error. Fix the types or decode the value.",
+  },
+  {
+    selector: "AssignmentExpression[left.property.name=/^(innerHTML|outerHTML)$/]",
+    message: "Render markup through Svelte or Astro so it is escaped.",
+  },
+  {
+    selector:
+      "ImportDeclaration[source.value=/locales\\/messages\\.gen$/] > :matches(ImportSpecifier, ImportDefaultSpecifier, ImportNamespaceSpecifier[local.name!='m'])",
+    message: 'Import messages as `import * as m from "@/locales/messages.gen"`.',
+  },
+];
 
 const typedFiles = ["**/*.ts", "**/*.svelte"];
 // The typed presets also set the TypeScript parser, which would replace Svelte's parser,
@@ -43,22 +61,7 @@ export default tseslint.config(
       "no-param-reassign": "error",
       "object-shorthand": "error",
       "prefer-template": "error",
-      "no-restricted-syntax": [
-        "error",
-        {
-          selector: "TSAsExpression > TSAsExpression",
-          message: "A double assertion hides a type error. Fix the types or decode the value.",
-        },
-        {
-          selector: "AssignmentExpression[left.property.name=/^(innerHTML|outerHTML)$/]",
-          message: "Render markup through Svelte or Astro so it is escaped.",
-        },
-        {
-          selector:
-            "ImportDeclaration[source.value=/locales\\/messages\\.gen$/] > :matches(ImportSpecifier, ImportDefaultSpecifier, ImportNamespaceSpecifier[local.name!='m'])",
-          message: 'Import messages as `import * as m from "@/locales/messages.gen"`.',
-        },
-      ],
+      "no-restricted-syntax": ["error", ...restrictedSyntax],
     },
   },
   ...tseslint.configs.strictTypeChecked.map((config) => ({ ...config, files: ["**/*.ts"] })),
@@ -136,6 +139,43 @@ export default tseslint.config(
     },
   },
   {
+    // Class names must exist in the theme, and colors come from tokens rather than arbitrary
+    // values. Prettier sorts classes, so ordering and wrapping rules stay off.
+    files: ["src/**/*.{ts,astro,svelte}"],
+    plugins: { "better-tailwindcss": betterTailwind },
+    settings: {
+      "better-tailwindcss": {
+        entryPoint: "src/ui/app.css",
+        callees: ["cva", "cn", "cx"],
+      },
+    },
+    rules: {
+      "better-tailwindcss/no-unknown-classes": "error",
+      "better-tailwindcss/no-conflicting-classes": "error",
+      "better-tailwindcss/no-duplicate-classes": "error",
+      "better-tailwindcss/no-deprecated-classes": "error",
+      "better-tailwindcss/no-unnecessary-whitespace": "error",
+      "better-tailwindcss/no-restricted-classes": [
+        "error",
+        {
+          restrict: [
+            {
+              pattern:
+                "^(?:.*:)?(?:bg|text|border|outline|ring|fill|stroke|accent|caret|decoration|shadow|from|via|to)-\\[(?:#|rgb|hsl|oklch|color)",
+              message: "Use a theme color from src/ui/themes.css instead of an arbitrary color.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    // prettier-plugin-tailwindcss sorts classes in Svelte and TypeScript but not in Astro files
+    // with prettier-plugin-astro 1.x, so ESLint sorts them there (fixable with --fix).
+    files: ["src/**/*.astro"],
+    rules: { "better-tailwindcss/enforce-consistent-class-order": "error" },
+  },
+  {
     files: ["src/features/builds/BuildPreview.astro"],
     rules: {
       // The Astro adapter flags img's onerror despite the recommended img lifecycle exception.
@@ -187,6 +227,21 @@ export default tseslint.config(
           property,
           message: "Read and write cookies through src/server/cookies.ts.",
         })),
+      ],
+    },
+  },
+  {
+    // Pages compose components; styling lives in src/ui, layouts, features, and the workbench.
+    files: ["src/pages/**/*.astro"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...restrictedSyntax,
+        {
+          selector:
+            "JSXAttribute[name.name='class'], JSXAttribute > JSXNamespacedName[namespace.name='class']",
+          message: "Pages compose components. Move styled markup into a component.",
+        },
       ],
     },
   },

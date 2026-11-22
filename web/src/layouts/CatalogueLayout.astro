@@ -8,8 +8,9 @@ import "@fontsource-variable/inter";
 import "@fontsource-variable/jetbrains-mono";
 import "@fontsource/noto-sans-sc/400.css";
 import "@fontsource/noto-sans-sc/600.css";
-import "@/ui/base.css";
-import "./catalogue-layout.css";
+import "@/ui/app.css";
+import { cn } from "@/ui/cn";
+import { buttonStyles, mutedClass } from "@/ui/variants";
 type Props = ComponentProps<typeof DocumentHead>;
 const { locale, config } = Astro.locals;
 const activePath = unprefixedPath(Astro.url.pathname);
@@ -27,20 +28,34 @@ const nav = [
     <DocumentHead {...Astro.props} themeColor="#f5f5f4" />
   </head>
   <body>
-    <a class="catalogue-skip" href="#main-content">
+    <a
+      class="fixed top-4 left-4 z-100 bg-surface p-4 [clip-path:inset(50%)] focus:[clip-path:none]"
+      href="#main-content"
+    >
       {m.navSkip()}
     </a>
-    <header class="catalogue-header">
-      <div class="catalogue-container catalogue-nav">
-        <a class="catalogue-brand" href={localizePath("/")} aria-label={m.navHome()}>
-          <span class="catalogue-mark" aria-hidden="true">
+    <header class="border-b border-line bg-surface">
+      <div class="mx-auto flex min-h-22 w-[calc(100%-4rem)] max-w-content flex-wrap items-center gap-8 py-4 max-[65rem]:gap-4 max-sm:w-[calc(100%-2rem)] max-sm:gap-3">
+        <a
+          class="inline-flex items-center gap-3 font-[750] whitespace-nowrap no-underline"
+          href={localizePath("/")}
+          aria-label={m.navHome()}
+        >
+          <span
+            class="grid size-8 place-items-center rounded-sm bg-accent text-on-accent"
+            aria-hidden="true"
+          >
             R
           </span>
           <span>{m.siteName()}</span>
         </a>
-        <nav aria-label={m.navPrimary()}>
+        <nav
+          aria-label={m.navPrimary()}
+          class="flex items-center gap-6 max-[65rem]:order-3 max-[65rem]:w-full max-sm:justify-between max-sm:gap-2 max-sm:text-sm"
+        >
           {nav.map(([label, href]) => (
             <a
+              class="py-2 text-fg-muted no-underline aria-[current=page]:text-accent aria-[current=page]:shadow-[0_2px_currentColor]"
               href={localizePath(href)}
               aria-current={
                 activePath === href || activePath.startsWith(`${href}/`) ? "page" : undefined
@@ -50,9 +65,9 @@ const nav = [
             </a>
           ))}
         </nav>
-        <div class="catalogue-actions">
+        <div class="ml-auto flex items-center gap-2 max-sm:m-0 max-sm:w-full max-sm:justify-between">
           <LanguageSelector align="start" />
-          <a class="sq-button sq-button--primary" href={localizePath("/submit")}>
+          <a class={buttonStyles({ variant: "primary" })} href={localizePath("/submit")}>
             {m.navSubmit()} <span aria-hidden="true">↗</span>
           </a>
         </div>
@@ -61,17 +76,23 @@ const nav = [
     <main id="main-content">
       <slot />
     </main>
-    <footer class="catalogue-footer catalogue-container">
+    <footer class="mx-auto flex w-[calc(100%-4rem)] max-w-content justify-between gap-8 border-t border-line py-12 max-sm:w-[calc(100%-2rem)] max-sm:flex-col">
       <div>
-        <a class="catalogue-brand" href={localizePath("/")}>
-          <span class="catalogue-mark" aria-hidden="true">
+        <a
+          class="inline-flex items-center gap-3 font-[750] whitespace-nowrap no-underline"
+          href={localizePath("/")}
+        >
+          <span
+            class="grid size-8 place-items-center rounded-sm bg-accent text-on-accent"
+            aria-hidden="true"
+          >
             R
           </span>
           {m.siteName()}
         </a>
-        <p class="sq-muted">{m.footerNote()}</p>
+        <p class={cn(mutedClass, "mt-4 max-w-[34rem] text-sm")}>{m.footerNote()}</p>
       </div>
-      <nav aria-label={m.navCommunity()}>
+      <nav aria-label={m.navCommunity()} class="flex flex-wrap items-start gap-6">
         <a href={config.discordCommunityUrl} rel="noreferrer">
           {m.footerDiscord()}
         </a>

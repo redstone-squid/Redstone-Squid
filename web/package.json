@@ -26,7 +26,8 @@
     "test:review:update": "bun run test:review --update-snapshots=all",
     "i18n:check": "bun scripts/i18n/build.ts",
     "i18n:generate": "bun scripts/i18n/build.ts --write",
-    "i18n:review": "bun scripts/i18n/build.ts --review --write"
+    "i18n:review": "bun scripts/i18n/build.ts --review --write",
+    "pwa:icons": "pwa-assets-generator --config pwa-assets.config.ts"
   },
   "dependencies": {
     "@astrojs/node": "^11.1.13",
@@ -35,12 +36,14 @@
     "@fontsource-variable/jetbrains-mono": "^5.3.0",
     "@fontsource/noto-sans-sc": "^5.3.1",
     "@lucide/svelte": "^1.73.0",
+    "@tailwindcss/vite": "^4.3.5",
     "astro": "^7.4.12",
     "bits-ui": "^2.21.0",
     "class-variance-authority": "^0.7.1",
     "es-toolkit": "^1.53.2",
     "runed": "^0.38.0",
     "svelte": "^5.57.3",
+    "tailwindcss": "^4.3.5",
     "zod": "^4.6.7"
   },
   "overrides": {
@@ -60,11 +63,14 @@
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/svelte": "^5.4.2",
     "@testing-library/user-event": "^14.6.10",
+    "@vite-pwa/assets-generator": "^2.0.0",
+    "@vite-pwa/astro": "^2.0.4",
     "@vitest/coverage-v8": "^5.1.0",
     "@vitest/eslint-plugin": "^1.6.28",
     "astro-eslint-parser": "^3.2.0",
     "eslint": "10.15.0",
     "eslint-plugin-astro": "^3.2.1",
+    "eslint-plugin-better-tailwindcss": "^4.11.0",
     "eslint-plugin-jsx-a11y": "^6.10.2",
     "eslint-plugin-playwright": "^2.12.2",
     "eslint-plugin-svelte": "^3.24.1",
@@ -77,12 +83,16 @@
     "prettier": "^3.10.1",
     "prettier-plugin-astro": "^1.1.2",
     "prettier-plugin-svelte": "^4.1.1",
+    "prettier-plugin-tailwindcss": "^0.8.1",
     "stylelint": "^18.1.0",
     "stylelint-declaration-strict-value": "^1.13.0",
     "svelte-check": "^4.7.8",
     "svelte-eslint-parser": "^1.10.1",
     "typescript": "6.0.3",
     "typescript-eslint": "^8.72.2",
-    "vitest": "^5.1.0"
+    "vitest": "^5.1.0",
+    "workbox-precaching": "^7.4.1",
+    "workbox-routing": "^7.4.1",
+    "workbox-strategies": "^7.4.1"
   }
 }

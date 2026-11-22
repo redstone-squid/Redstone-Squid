@@ -9,6 +9,6 @@ type Props = HTMLAttributes<"div"> &
 const { as: Tag = "div", pattern, gap, class: className, ...rest } = Astro.props;
 ---
 
-<Tag class={layoutStyles({ pattern, gap, className })} {...rest}>
+<Tag class={layoutStyles({ pattern, gap, className: className ?? undefined })} {...rest}>
   <slot />
 </Tag>

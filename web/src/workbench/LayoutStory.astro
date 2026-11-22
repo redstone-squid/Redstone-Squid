@@ -17,7 +17,7 @@ const { creator, dimensions, timing } = buildFixtures[0];
 ---
 
 <Panel id="layouts" title={m.workbenchLayouts()}>
-  <div class="sq-specimen-tools">
+  <div class="flex flex-wrap items-center justify-between gap-3">
     <StoryOptions
       label={m.workbenchLayouts()}
       parameter="layout"
@@ -33,19 +33,19 @@ const { creator, dimensions, timing } = buildFixtures[0];
       options={gaps}
     />
   </div>
-  <div class="sq-layout-preview">
+  <div class="mt-4 mb-2 rounded-md border border-line bg-canvas p-4">
     <Layout {pattern} {gap}>
       {[
         [m.workbenchCreator(), creator],
         [m.workbenchDimensions(), dimensions],
         [m.workbenchOpening(), timing],
       ].map(([term, value]) => (
-        <dl>
-          <dt>{term}</dt>
-          <dd>{value}</dd>
+        <dl class="rounded-sm border border-line bg-surface p-3">
+          <dt class="text-xs text-fg-muted">{term}</dt>
+          <dd class="mt-1">{value}</dd>
         </dl>
       ))}
     </Layout>
   </div>
-  <code class="sq-specimen-code">{`<Layout pattern="${pattern}" gap="${gap}">`}</code>
+  <code class="text-xs text-fg-muted">{`<Layout pattern="${pattern}" gap="${gap}">`}</code>
 </Panel>

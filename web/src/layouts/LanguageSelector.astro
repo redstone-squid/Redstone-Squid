@@ -7,15 +7,22 @@ const { locale } = Astro.locals;
 const path = `${Astro.url.pathname}${Astro.url.search}`;
 ---
 
-<details class="language-selector" data-align={align}>
-  <summary aria-label={`${LOCALES[locale].label} · ${m.navLanguage()}`}>
+<details class="group relative text-sm text-fg" data-align={align}>
+  <summary
+    class="flex min-h-11 cursor-pointer list-none items-center gap-3 rounded-sm border border-line px-3 py-2 [&::-webkit-details-marker]:hidden"
+    aria-label={`${LOCALES[locale].label} · ${m.navLanguage()}`}
+  >
     <span lang={locale}>{LOCALES[locale].label}</span>
     <span aria-hidden="true">⌄</span>
   </summary>
-  <ul aria-label={m.navLanguage()}>
+  <ul
+    class="absolute top-full right-0 z-20 mt-1.5 max-h-[60vh] max-w-[calc(100vw-2rem)] min-w-44 overflow-auto rounded-sm border border-line bg-surface p-1 shadow-card group-data-[align=start]:right-auto group-data-[align=start]:left-0"
+    aria-label={m.navLanguage()}
+  >
     {PUBLIC_LOCALES.map((language) => (
       <li>
         <a
+          class="flex justify-between gap-4 rounded-[0.25rem] px-3 py-2.5 no-underline hover:bg-surface-muted aria-[current=true]:bg-surface-muted"
           href={localizePath(path, language)}
           lang={language}
           hreflang={language}
@@ -28,59 +35,3 @@ const path = `${Astro.url.pathname}${Astro.url.search}`;
     ))}
   </ul>
 </details>
-<style>
-  .language-selector {
-    position: relative;
-    color: var(--text);
-    font-size: 0.875rem;
-  }
-  summary {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    min-height: 2.75rem;
-    padding: 0.5rem 0.75rem;
-    border: 1px solid var(--border);
-    border-radius: 0.375rem;
-    cursor: pointer;
-    list-style: none;
-    font-family: inherit;
-  }
-  summary::-webkit-details-marker {
-    display: none;
-  }
-  ul {
-    position: absolute;
-    right: 0;
-    top: 100%;
-    z-index: 20;
-    min-width: 11rem;
-    max-width: calc(100vw - 2rem);
-    max-height: 60vh;
-    overflow: auto;
-    margin: 0.375rem 0 0;
-    padding: 0.25rem;
-    list-style: none;
-    border: 1px solid var(--border);
-    border-radius: 0.375rem;
-    background: var(--surface);
-    box-shadow: var(--shadow);
-  }
-  .language-selector[data-align="start"] ul {
-    left: 0;
-    right: auto;
-  }
-  .language-selector ul a {
-    display: flex;
-    justify-content: space-between;
-    gap: 1rem;
-    padding: 0.625rem 0.75rem;
-    text-decoration: none;
-    color: inherit;
-    border-radius: 0.25rem;
-  }
-  .language-selector a:hover,
-  .language-selector a[aria-current] {
-    background: var(--surface-muted);
-  }
-</style>

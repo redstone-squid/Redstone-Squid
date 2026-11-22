@@ -8,22 +8,11 @@ import type { Rule } from "eslint";
  * directory but not another feature.
  */
 const LAYERS = {
-  pages: [
-    "pages",
-    "layouts",
-    "features",
-    "workbench",
-    "server",
-    "lib",
-    "ui",
-    "locales",
-    "generated",
-  ],
-  layouts: ["layouts", "lib", "ui", "locales", "generated"],
-  features: ["lib", "ui", "locales", "generated"],
-  workbench: ["workbench", "layouts", "features", "lib", "ui", "locales", "generated"],
-  server: ["server", "lib", "locales", "generated"],
-  lib: ["lib", "locales", "generated"],
+  pages: ["pages", "layouts", "features", "workbench", "server", "ui", "locales", "generated"],
+  layouts: ["layouts", "ui", "locales", "generated"],
+  features: ["ui", "locales", "generated"],
+  workbench: ["workbench", "layouts", "features", "ui", "locales", "generated"],
+  server: ["server", "locales", "generated"],
   locales: ["locales", "generated"],
   ui: ["ui"],
 } as const satisfies Record<string, readonly string[]>;
@@ -33,7 +22,8 @@ const LAYER_MESSAGES = {
   layer: "See web/CLAUDE.md for the layer map.",
   serverLayer:
     "Only pages and middleware call the API. Load data in the page and pass it as props.",
-  featureLayer: "Features stay independent. Move shared code to src/lib or src/ui.",
+  featureLayer:
+    "Features stay independent. Move shared presentation to src/ui, or combine features in a page.",
   workbenchLayer: "The workbench is development tooling; production code cannot depend on it.",
   uiLayer: "Shared UI cannot depend on application code. Pass data and labels through props.",
 };

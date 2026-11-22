@@ -6,17 +6,16 @@ interaction. The site reads the Python API through an SDK generated from
 
 ## Layout
 
-| Directory        | Owns                                                                     | May import                                             |
-| ---------------- | ------------------------------------------------------------------------ | ------------------------------------------------------ |
-| `src/pages`      | Routes: read the request, load data, set the status, choose what to show | anything                                               |
-| `src/layouts`    | Document shells (`CatalogueLayout`, `DocumentHead`, `PlaceholderPage`)   | `lib`, `ui`, `locales`, `generated`                    |
-| `src/features/x` | Components and browser logic for one area, such as `builds` or `records` | its own directory, `lib`, `ui`, `locales`, `generated` |
-| `src/workbench`  | The `/design-system` playground, its stories, and fixtures               | everything except `server` and `pages`                 |
-| `src/server`     | Runtime config and the API client. Server only                           | `lib`, `locales`, `generated`                          |
-| `src/lib`        | Code that runs on both sides, such as page addresses                     | `locales`, `generated`                                 |
-| `src/locales`    | Locales, URL prefixes, catalogs, and the compiled message functions      | `locales`, `generated`                                 |
-| `src/ui`         | The design system. Knows nothing about the application                   | `ui` only                                              |
-| `src/generated`  | The OpenAPI SDK. Run `bun run sdk:generate` after the contract changes   |                                                        |
+| Directory        | Owns                                                                     | May import                                      |
+| ---------------- | ------------------------------------------------------------------------ | ----------------------------------------------- |
+| `src/pages`      | Routes: read the request, load data, set the status, choose what to show | anything                                        |
+| `src/layouts`    | Document shells (`CatalogueLayout`, `DocumentHead`, `PlaceholderPage`)   | `ui`, `locales`, `generated`                    |
+| `src/features/x` | Components and browser logic for one area, such as `builds` or `records` | its own directory, `ui`, `locales`, `generated` |
+| `src/workbench`  | The `/design-system` playground, its stories, and fixtures               | everything except `server` and `pages`          |
+| `src/server`     | Runtime config and the API client. Server only                           | `locales`, `generated`                          |
+| `src/locales`    | Locales, URL prefixes, catalogs, and the compiled message functions      | `locales`, `generated`                          |
+| `src/ui`         | The design system. Knows nothing about the application                   | `ui` only                                       |
+| `src/generated`  | The OpenAPI SDK. Run `bun run sdk:generate` after the contract changes   |                                                 |
 
 Import across directories with `@/` (`@/server/api`); only same-directory imports stay
 relative. Generated files end in `.gen.ts`, are rebuilt by a script, and are never edited by
@@ -122,7 +121,7 @@ m.recordHolderCount({ count: holders.length });
 ## Tests
 
 - `tests/unit`: Vitest in jsdom. Render Svelte components with Testing Library and query
-  by role and accessible name. Coverage thresholds apply to `src/lib`, `src/ui`,
+  by role and accessible name. Coverage thresholds apply to `src/locales`, `src/ui`,
   `src/features`, and `src/workbench`.
 - `tests/e2e`: Playwright against the built site and the fixture API in `tests/fixtures/api.ts`.
 - `tests/review`: screenshots, axe, and recorded workflows of the design-system workbench.

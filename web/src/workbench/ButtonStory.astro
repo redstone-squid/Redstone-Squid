@@ -2,10 +2,12 @@
 import { localizePath } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
 import LinkButton from "@/ui/astro/LinkButton.astro";
-import { buttonStyles } from "@/ui/variants";
+import type { Theme } from "@/ui/themes";
+import { cn } from "@/ui/cn";
+import { buttonStyles, fieldClass, inputClass, layoutStyles } from "@/ui/variants";
 import { selectedOption } from "./story-option";
 
-type Props = { theme: "light" | "dark" };
+type Props = { theme: Theme };
 const { theme } = Astro.props;
 const params = Astro.url.searchParams;
 const variants = {
@@ -19,23 +21,26 @@ const size = selectedOption(sizes, params, "size", "normal");
 const trial = new URLSearchParams({ theme });
 ---
 
-<div class="sq-story" id="button-story">
-  <div class="sq-story-preview">
+<div
+  class="mb-8 grid grid-cols-[minmax(10rem,0.8fr)_minmax(0,1.2fr)] overflow-hidden rounded-md border border-line max-md:grid-cols-1"
+  id="button-story"
+>
+  <div class="grid min-h-36 place-items-center bg-canvas bg-radial-[circle] from-line from-[1px] to-transparent to-[1px] bg-size-[12px_12px] p-4">
     <LinkButton {variant} {size} href={localizePath(`/design-system-trial?${trial}`)}>
       {m.trialTitle()} <span aria-hidden="true">→</span>
     </LinkButton>
   </div>
-  <div class="sq-story-settings">
+  <div class="grid gap-3 p-4">
     <h3>{m.workbenchLinkButton()}</h3>
-    <form action="#button-story" method="get" class="sq-row">
+    <form action="#button-story" method="get" class={layoutStyles({ pattern: "actions" })}>
       {[...params]
         .filter(([key]) => key !== "variant" && key !== "size")
         .map(([key, value]) => (
           <input type="hidden" name={key} {value} />
         ))}
-      <label class="sq-field">
+      <label class={cn(fieldClass, "font-semibold")}>
         {m.workbenchVariant()}
-        <select class="sq-input" name="variant">
+        <select class={inputClass} name="variant">
           {Object.entries(variants).map(([value, label]) => (
             <option value={value} selected={value === variant}>
               {label()}
@@ -43,9 +48,9 @@ const trial = new URLSearchParams({ theme });
           ))}
         </select>
       </label>
-      <label class="sq-field">
+      <label class={cn(fieldClass, "font-semibold")}>
         {m.workbenchSize()}
-        <select class="sq-input" name="size">
+        <select class={inputClass} name="size">
           {Object.entries(sizes).map(([value, label]) => (
             <option value={value} selected={value === size}>
               {label()}
@@ -57,6 +62,8 @@ const trial = new URLSearchParams({ theme });
         {m.workbenchApply()}
       </button>
     </form>
-    <code>{buttonStyles({ variant, size })}</code>
+    <code class="font-mono text-xs/[1.6] wrap-anywhere text-fg-muted">
+      {`buttonStyles({ variant: "${variant}", size: "${size}" })`}
+    </code>
   </div>
 </div>

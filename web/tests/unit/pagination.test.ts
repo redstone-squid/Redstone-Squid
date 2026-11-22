@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isPaged, PAGE_PARAMS, readOffset, readPageParams } from "@/lib/pagination";
+import { isPaged, PAGE_PARAMS, readOffset, readPageParams } from "@/features/catalogue/pagination";
 
 function params(search: string): URLSearchParams {
   return new URLSearchParams(search);

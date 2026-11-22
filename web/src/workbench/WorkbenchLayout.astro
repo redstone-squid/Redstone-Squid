@@ -6,9 +6,11 @@ import "@fontsource-variable/inter";
 import "@fontsource-variable/jetbrains-mono";
 import "@fontsource/noto-sans-sc/400.css";
 import "@fontsource/noto-sans-sc/600.css";
-import "@/ui/base.css";
-import "./workbench-layout.css";
-type Props = { title: string; theme: "light" | "dark" };
+import "@/ui/app.css";
+import type { Theme } from "@/ui/themes";
+import { cn } from "@/ui/cn";
+import { kickerClass, mutedClass } from "@/ui/variants";
+type Props = { title: string; theme: Theme };
 const { title, theme } = Astro.props;
 const { locale } = Astro.locals;
 const query = new URLSearchParams({ theme });
@@ -26,23 +28,29 @@ const library = onLibrary ? "" : localizePath(`/design-system?${query}`);
     <link rel="icon" href="/favicon.svg" />
   </head>
   <body>
-    <a class="sq-skip" href="#main">
+    <a
+      class="fixed -top-40 left-4 z-100 bg-surface p-4 [clip-path:inset(50%)] focus:top-4 focus:[clip-path:none]"
+      href="#main"
+    >
       {m.workbenchSkipToContent()}
     </a>
-    <header class="sq-topbar">
-      <a class="sq-brand" href="/">
+    <header class="flex items-center justify-between gap-4 border-b border-line bg-surface px-8 py-4 max-md:p-4">
+      <a class="flex items-center gap-3 font-[750] no-underline" href="/">
         <img src="/favicon.svg" width="32" height="32" alt="" />
         Redstone Squid
       </a>
-      <div class="sq-row">
-        <span class="sq-muted">{m.workbenchWorkbench()}</span>
+      <div class="flex flex-wrap items-center gap-3">
+        <span class={mutedClass}>{m.workbenchWorkbench()}</span>
         <LanguageSelector />
       </div>
     </header>
-    <div class="sq-shell">
-      <aside class="sq-sidebar">
-        <p class="sq-kicker">{m.workbenchWorkbench()}</p>
-        <nav aria-label={m.workbenchWorkbench()}>
+    <div class="m-auto grid max-w-[100rem] grid-cols-[13rem_minmax(0,1fr)] max-[70rem]:grid-cols-[10rem_minmax(0,1fr)] max-md:block">
+      <aside class="sticky top-0 self-start rounded-br-md border border-t-0 border-line bg-surface px-6 py-12 max-md:static max-md:rounded-none max-md:border-0 max-md:border-b max-md:px-4 max-md:py-3">
+        <p class={cn(kickerClass, "max-md:hidden")}>{m.workbenchWorkbench()}</p>
+        <nav
+          aria-label={m.workbenchWorkbench()}
+          class="grid gap-2 *:rounded-sm *:p-2 *:text-sm *:no-underline *:hover:bg-surface-muted max-md:flex max-md:flex-wrap max-md:gap-1"
+        >
           <a href={`${library}#foundations`}>{m.workbenchFoundations()}</a>
           <a href={`${library}#components`}>{m.workbenchComponents()}</a>
           <a href={`${library}#fields`}>{m.workbenchFormControls()}</a>
@@ -52,13 +60,16 @@ const library = onLibrary ? "" : localizePath(`/design-system?${query}`);
           <a href={`${library}#states`}>{m.workbenchFeedbackStates()}</a>
           <a href={localizePath(`/design-system-trial?${query}`)}>{m.trialTitle()}</a>
         </nav>
-        <p class="sq-sidebar-note">
+        <p class="mt-16 font-sans text-xs/[1.8] text-fg-muted max-md:hidden">
           Astro + Svelte
           <br />
           Bits UI
         </p>
       </aside>
-      <main id="main" class="sq-main">
+      <main
+        id="main"
+        class="grid w-full max-w-content min-w-0 gap-12 p-12 max-[70rem]:p-6 max-md:gap-8 max-md:px-4 max-md:py-8"
+      >
         <slot />
       </main>
     </div>

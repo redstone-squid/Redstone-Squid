@@ -12,7 +12,6 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       include: [
-        "src/lib/**/*.ts",
         "src/locales/**/*.ts",
         "src/ui/**/*.{ts,svelte}",
         "src/features/**/*.{ts,svelte}",

@@ -1,0 +1,59 @@
+/*
+ * One block of color tokens per theme, selected by <html data-theme>. Add a theme by adding a
+ * block that defines every token below and listing it in themes.ts; app.css maps the tokens to
+ * Tailwind utilities, so components never change.
+ */
+:root,
+:root[data-theme="light"] {
+  color-scheme: light;
+  --canvas: oklch(96.99% 0.0013 106.42);
+  --surface: oklch(100% 0 0);
+  --surface-muted: oklch(95.08% 0.0029 128.49);
+  --fg: oklch(26.15% 0.0102 164.07);
+  --fg-muted: oklch(48.91% 0.0156 159.48);
+  --line: oklch(87.69% 0.0087 145.5);
+  --accent: oklch(52.01% 0.1741 28.21);
+  --accent-hover: oklch(44.53% 0.1461 28.64);
+  --accent-soft: oklch(94.81% 0.0215 31.78);
+  --on-accent: oklch(100% 0 0);
+  --success: oklch(44.77% 0.0899 155.04);
+  --success-soft: oklch(95.09% 0.0199 154.9);
+  --warning: oklch(47.51% 0.0983 67.9);
+  --warning-soft: oklch(96.59% 0.0412 88.79);
+  --danger: oklch(50.26% 0.1716 27.84);
+  --focus: oklch(49.52% 0.1691 261.27);
+  --overlay: oklch(23.03% 0.0195 166.98 / 0.702);
+  --pressed: oklch(19.79% 0.0198 144.78 / 0.2);
+  --shadow-color: oklch(23.03% 0.0195 166.98 / 0.039);
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --canvas: oklch(21.48% 0.0107 163.76);
+  --surface: oklch(26.43% 0.0124 160.4);
+  --surface-muted: oklch(31.05% 0.0163 156.15);
+  --fg: oklch(96.05% 0.0073 132.42);
+  --fg-muted: oklch(78.4% 0.0175 151.03);
+  --line: oklch(42.88% 0.0211 153.01);
+  --accent: oklch(72.18% 0.14 28.42);
+  --accent-hover: oklch(79.11% 0.1208 28.12);
+  --accent-soft: oklch(32.1% 0.0416 30.98);
+  --on-accent: oklch(21.09% 0.0395 31.01);
+  --success: oklch(81.4% 0.0917 153.76);
+  --success-soft: oklch(33.84% 0.0424 152.88);
+  --warning: oklch(83.77% 0.1065 83.62);
+  --warning-soft: oklch(34.48% 0.0403 87.66);
+  --danger: oklch(81.84% 0.102 26.88);
+  --focus: oklch(79.81% 0.1014 263.22);
+  --overlay: oklch(23.03% 0.0195 166.98 / 0.702);
+  --pressed: oklch(19.79% 0.0198 144.78 / 0.2);
+  --shadow-color: oklch(0% 0 0 / 0.133);
+}
+
+/* Theme-independent: the workbench cover keeps the same dark palette in every theme. */
+:root {
+  --cover: oklch(24.94% 0.0224 166.15);
+  --cover-fg: oklch(97.65% 0.0057 128.53);
+  --cover-fg-muted: oklch(87.98% 0.0178 153.53);
+  --cover-art: oklch(93.4% 0.0119 133.38);
+}

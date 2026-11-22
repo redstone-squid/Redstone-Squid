@@ -1,9 +1,9 @@
 <script lang="ts">
   import { Dialog as Primitive } from "bits-ui";
   import X from "@lucide/svelte/icons/x";
-  import { cx } from "class-variance-authority";
   import type { ComponentProps, Snippet } from "svelte";
-  import { buttonStyles, type ButtonVariants } from "@/ui/variants";
+  import { cn } from "@/ui/cn";
+  import { buttonStyles, mutedClass, type ButtonVariants } from "@/ui/variants";
   type Props = Omit<ComponentProps<typeof Primitive.Root>, "children"> & {
     title: string;
     description: string;
@@ -40,9 +40,15 @@
     >{@render trigger()}</Primitive.Trigger
   >
   <Primitive.Portal>
-    <Primitive.Overlay class="sq-dialog-overlay" />
-    <Primitive.Content {...contentProps} class={cx("sq-dialog", contentProps?.class)}>
-      <div class="sq-row sq-between">
+    <Primitive.Overlay class="fixed inset-0 z-50 bg-overlay" />
+    <Primitive.Content
+      {...contentProps}
+      class={cn(
+        "fixed top-1/2 left-1/2 z-50 grid max-h-[calc(100dvh-2rem)] w-[min(30rem,calc(100%-2rem))] -translate-1/2 gap-6 overflow-auto rounded-lg border border-line bg-surface p-6 text-fg shadow-card",
+        contentProps?.class,
+      )}
+    >
+      <div class="flex flex-wrap items-center justify-between gap-4">
         <Primitive.Title>
           {#snippet child({ props })}<h2 {...props}>{title}</h2>{/snippet}
         </Primitive.Title>
@@ -50,7 +56,7 @@
           ><X size={18} aria-hidden="true" /></Primitive.Close
         >
       </div>
-      <Primitive.Description class="sq-muted">{description}</Primitive.Description>
+      <Primitive.Description class={mutedClass}>{description}</Primitive.Description>
       {@render children()}
     </Primitive.Content>
   </Primitive.Portal>

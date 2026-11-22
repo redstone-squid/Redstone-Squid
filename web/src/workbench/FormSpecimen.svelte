@@ -5,13 +5,14 @@
   import FieldGroup from "@/ui/svelte/FieldGroup.svelte";
   import SelectField from "@/ui/svelte/SelectField.svelte";
   import TextareaField from "@/ui/svelte/TextareaField.svelte";
+  import { layoutStyles } from "@/ui/variants";
 
   let { state }: { state: "normal" | "invalid" | "disabled" } = $props();
   const disabled = $derived(state === "disabled");
   const invalid = $derived(state === "invalid");
 </script>
 
-<div class="sq-grid">
+<div class={layoutStyles({ pattern: "grid" })}>
   <SelectField
     label={m.trialCategory()}
     required

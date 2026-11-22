@@ -8,14 +8,15 @@
   import Autocomplete from "@/ui/svelte/Autocomplete.svelte";
   import Field from "@/ui/svelte/Field.svelte";
   import Dialog from "@/ui/svelte/Dialog.svelte";
+  import { layoutStyles } from "@/ui/variants";
   let title = $state("");
   let submitted = $state(false);
   let saved = $state(false);
   const invalid = $derived(submitted && title.trim() === "");
 </script>
 
-<div class="sq-stack">
-  <div class="sq-row">
+<div class={layoutStyles({ pattern: "stack" })}>
+  <div class={layoutStyles({ pattern: "row" })}>
     <Dialog
       title={m.workbenchCreateADraft()}
       description={m.workbenchDraftDescription()}
@@ -23,7 +24,7 @@
     >
       {#snippet trigger()}<Plus size={16} aria-hidden="true" />{m.workbenchNewDraft()}{/snippet}
       <form
-        class="sq-stack"
+        class={layoutStyles({ pattern: "stack" })}
         novalidate
         onsubmit={(event) => {
           event.preventDefault();
@@ -58,7 +59,7 @@
     >
     <Button disabled>{m.workbenchUnavailable()}</Button>
   </div>
-  <div class="sq-grid">
+  <div class={layoutStyles({ pattern: "grid" })}>
     <Field
       label={m.workbenchCreator()}
       hint={m.workbenchPublicNameShownOnTheBuild()}
@@ -78,7 +79,7 @@
         })}
     />
   </div>
-  <p class="sq-inline-note">
-    <Check size={16} aria-hidden="true" />{m.workbenchControlsDescription()}
+  <p class="flex items-center gap-2 text-xs text-fg-muted">
+    <Check class="shrink-0" size={16} aria-hidden="true" />{m.workbenchControlsDescription()}
   </p>
 </div>

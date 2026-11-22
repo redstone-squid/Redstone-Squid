@@ -43,7 +43,7 @@ for (const [prefix, locale, message] of [
 
 test("the language selector preserves a detail URL and its query", async ({ page }) => {
   await page.goto("/builds/1?view=compact");
-  await page.locator(".language-selector summary").click();
+  await page.getByLabel("English · Language").click();
   await page.getByRole("link", { name: "简体中文" }).click();
   await expect(page).toHaveURL("/zh-cn/builds/1?view=compact");
 });
@@ -75,6 +75,9 @@ test("the pseudo-locale renders bracketed text and stays out of search and menus
   await expect(page.getByRole("heading", { level: 1 })).toHaveText(/^\[.*\]$/);
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute("content", "noindex,follow");
   await expect(page.locator('link[hreflang="en-XA"]')).toHaveCount(0);
-  await page.locator(".language-selector summary").click();
-  await expect(page.locator(".language-selector a")).toHaveText(["English", "简体中文"]);
+  await page.getByLabel("[Ƥšéûđö] · [Ļåñĝûåĝé····]").click();
+  await expect(page.getByRole("list", { name: "[Ļåñĝûåĝé····]" }).getByRole("link")).toHaveText([
+    "English",
+    "简体中文",
+  ]);
 });

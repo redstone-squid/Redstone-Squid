@@ -70,9 +70,9 @@ tester.run("frontend import boundaries", importBoundaries, {
       errors: [{ messageId: "serverLayer", data: { from: "layouts", to: "server" } }],
     },
     {
-      filename: `${src}/lib/format.ts`,
+      filename: `${src}/server/format.ts`,
       code: 'import { buttonStyles } from "../ui/variants";',
-      errors: [{ messageId: "layer", data: { from: "lib", to: "ui" } }],
+      errors: [{ messageId: "layer", data: { from: "server", to: "ui" } }],
     },
     {
       filename: ui,
@@ -81,8 +81,8 @@ tester.run("frontend import boundaries", importBoundaries, {
     },
     {
       filename: ui,
-      code: 'export * from "../../lib/i18n";',
-      errors: [{ messageId: "uiLayer", data: { from: "ui", to: "lib" } }],
+      code: 'export * from "../../locales/locale";',
+      errors: [{ messageId: "uiLayer", data: { from: "ui", to: "locales" } }],
     },
     {
       filename: ui,

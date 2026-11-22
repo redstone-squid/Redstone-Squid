@@ -5,8 +5,14 @@ import * as m from "@/locales/messages.gen";
 import Layout from "@/ui/astro/Layout.astro";
 import LinkButton from "@/ui/astro/LinkButton.astro";
 
-/** Error pages pass `status` for the matching copy; the route itself sets the response status. */
-type Props = { title: () => string; home?: true } | { status: 404 | 503 };
+/**
+ * A page that is only a message. Error pages pass `status` for the matching copy; the route
+ * itself sets the response status. Other pages default to the "being rebuilt" description and a
+ * link to the workbench.
+ */
+type Props =
+  | { title: () => string; description?: () => string; home?: true; link?: "home" | "workbench" }
+  | { status: 404 | 503 };
 
 const props = Astro.props;
 const status = "status" in props ? props.status : undefined;
@@ -18,18 +24,23 @@ const copy =
       ? { title: m.errorServiceTitle, description: m.errorServiceBody }
       : {
           title: "title" in props ? props.title : m.homeTitle,
-          description: m.placeholderRebuilding,
+          description: ("description" in props && props.description) || m.placeholderRebuilding,
         };
+const linkHome = status !== undefined || ("link" in props && props.link === "home");
 const title = copy.title();
 const description = copy.description();
 ---
 
 <CatalogueLayout {title} {description} noindex={!home}>
-  <Layout pattern="stack" gap="normal" class="catalogue-container placeholder">
+  <Layout
+    pattern="stack"
+    gap="normal"
+    class="mx-auto w-[calc(100%-4rem)] max-w-content py-16 max-sm:w-[calc(100%-2rem)]"
+  >
     <h1>{title}</h1>
     <p>{description}</p>
     <div>
-      {status ? (
+      {linkHome ? (
         <LinkButton href={localizePath("/")}>{m.commonHome()}</LinkButton>
       ) : (
         <LinkButton href={localizePath("/design-system")}>{m.workbenchPageTitle()}</LinkButton>
@@ -37,9 +48,3 @@ const description = copy.description();
     </div>
   </Layout>
 </CatalogueLayout>
-
-<style>
-  .placeholder {
-    padding-block: var(--space-8);
-  }
-</style>

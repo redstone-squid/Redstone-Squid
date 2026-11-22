@@ -1,6 +1,7 @@
 /**
- * CSS rules for src/. Colors and shadows come from the tokens in src/ui/tokens.css, so a theme
- * change happens in one place and dark mode cannot miss a hard-coded value.
+ * CSS rules for src/. Colors are defined once per theme in src/ui/themes.css, in OKLCH so
+ * lightness and chroma can be adjusted perceptually; everything else uses the Tailwind
+ * utilities that read those tokens.
  */
 export default {
   plugins: ["stylelint-declaration-strict-value"],
@@ -8,14 +9,18 @@ export default {
   overrides: [
     { files: ["**/*.svelte", "**/*.astro"], customSyntax: "postcss-html" },
     {
-      files: ["src/ui/tokens.css"],
-      rules: { "color-no-hex": null, "scale-unlimited/declaration-strict-value": null },
+      files: ["src/ui/themes.css"],
+      rules: { "scale-unlimited/declaration-strict-value": null },
     },
   ],
   rules: {
     "block-no-empty": true,
     "color-named": "never",
     "color-no-hex": true,
+    "function-disallowed-list": [
+      ["rgb", "rgba", "hsl", "hsla", "hwb", "lab", "lch", "color"],
+      { message: "Write colors in oklch()." },
+    ],
     "color-no-invalid-hex": true,
     "declaration-block-no-duplicate-properties": true,
     "declaration-no-important": true,

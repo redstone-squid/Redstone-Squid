@@ -6,7 +6,8 @@
   import FilePicker from "@/ui/svelte/FilePicker.svelte";
   import Progress from "@/ui/svelte/Progress.svelte";
   import Notice from "@/ui/svelte/Notice.svelte";
-  import { layoutStyles } from "@/ui/variants";
+  import { cn } from "@/ui/cn";
+  import { kickerClass, layoutStyles, mutedClass } from "@/ui/variants";
   import Field from "@/ui/svelte/Field.svelte";
   import {
     createDraftFixture,
@@ -91,9 +92,9 @@
     void save();
   }}
 >
-  <p class="sq-muted">{m.trialDisclaimer()}</p>
-  <fieldset class="sq-stack sq-trial-fields" disabled={busy}>
-    <legend class="sq-kicker">{m.trialDetails()}</legend>
+  <p class={mutedClass}>{m.trialDisclaimer()}</p>
+  <fieldset class={cn(layoutStyles({ pattern: "stack" }), "min-w-0")} disabled={busy}>
+    <legend class={kickerClass}>{m.trialDetails()}</legend>
     <Field
       label={m.workbenchBuildTitle()}
       bind:value={input.title}

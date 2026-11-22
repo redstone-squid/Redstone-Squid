@@ -1,7 +1,8 @@
 <script lang="ts">
   import type { HTMLTextareaAttributes } from "svelte/elements";
-  import { cx } from "class-variance-authority";
+  import { cn } from "@/ui/cn";
   import type { FieldMessages } from "@/ui/field";
+  import { inputClass } from "@/ui/variants";
   import FieldFrame from "./FieldFrame.svelte";
   type Props = HTMLTextareaAttributes & FieldMessages;
   let {
@@ -31,5 +32,5 @@
       {...props}
       {...attributes}
       bind:value
-      class={cx("sq-input sq-textarea", className)}></textarea>{/snippet}
+      class={cn(inputClass, "min-h-24 resize-y", className)}></textarea>{/snippet}
 </FieldFrame>

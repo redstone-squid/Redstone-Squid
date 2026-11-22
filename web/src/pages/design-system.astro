@@ -1,88 +1,33 @@
 ---
 import * as m from "@/locales/messages.gen";
-import BuildPreview from "@/features/builds/BuildPreview.astro";
-import "@/workbench/workbench.css";
-import WorkbenchLayout from "@/workbench/WorkbenchLayout.astro";
-import ButtonStory from "@/workbench/ButtonStory.astro";
-import Badge from "@/ui/astro/Badge.astro";
 import Layout from "@/ui/astro/Layout.astro";
-import Notice from "@/ui/astro/Notice.astro";
-import BrowsingStories from "@/workbench/BrowsingStories.astro";
-import FormSpecimen from "@/workbench/FormSpecimen.svelte";
-import StoryOptions from "@/workbench/StoryOptions.astro";
-import LayoutStory from "@/workbench/LayoutStory.astro";
 import Panel from "@/ui/astro/Panel.astro";
-import LinkButton from "@/ui/astro/LinkButton.astro";
+import { parseTheme } from "@/ui/themes";
+import BrowsingStories from "@/workbench/BrowsingStories.astro";
+import ButtonStory from "@/workbench/ButtonStory.astro";
 import SvelteControls from "@/workbench/Controls.svelte";
-import { buildFixtures } from "@/workbench/fixtures";
+import Cover from "@/workbench/Cover.astro";
+import FormSpecimen from "@/workbench/FormSpecimen.svelte";
+import FoundationsStory from "@/workbench/FoundationsStory.astro";
+import LayoutStory from "@/workbench/LayoutStory.astro";
+import PatternsStory from "@/workbench/PatternsStory.astro";
+import StatesStory from "@/workbench/StatesStory.astro";
+import StoryOptions from "@/workbench/StoryOptions.astro";
+import WorkbenchLayout from "@/workbench/WorkbenchLayout.astro";
 import { selectedOption } from "@/workbench/story-option";
-const theme = Astro.url.searchParams.get("theme") === "dark" ? "dark" : "light";
+
+const theme = parseTheme(Astro.url.searchParams.get("theme"));
 const fieldStates = {
   normal: m.workbenchNormal,
   invalid: m.workbenchInvalid,
   disabled: m.workbenchDisabled,
 } as const;
 const fieldState = selectedOption(fieldStates, Astro.url.searchParams, "fieldState", "normal");
-const preferences = (key: string, value: string) => {
-  const params = new URLSearchParams(Astro.url.searchParams);
-  params.set(key, value);
-  return `?${params}`;
-};
 ---
 
 <WorkbenchLayout title={m.workbenchPageTitle()} {theme}>
-  <header class="sq-library-cover">
-    <div>
-      <h1>{m.workbenchPageTitle()}</h1>
-      <p class="sq-lede">{m.workbenchLibraryDescription()}</p>
-      <div class="sq-row">
-        <LinkButton href={preferences("theme", theme === "light" ? "dark" : "light")}>
-          {theme === "light" ? m.workbenchDarkTheme() : m.workbenchLightTheme()}
-        </LinkButton>
-      </div>
-    </div>
-    <div aria-hidden="true" class="sq-cover-art">
-      <img src="/fixtures/copper-door.svg" alt="" width="640" height="400" />
-    </div>
-  </header>
-  <Panel
-    id="foundations"
-    title={m.workbenchFoundations()}
-    description={m.workbenchFoundationsDescription()}
-  >
-    <div class="sq-swatches">
-      {["canvas", "surface", "accent", "success", "warning", "text"].map((token) => (
-        <div>
-          <div class={`sq-swatch sq-swatch--${token}`}></div>
-          <code>--{token}</code>
-        </div>
-      ))}
-    </div>
-    <div class="sq-token-footer">
-      <h3>{m.workbenchSpacing()}</h3>
-      <div class="sq-ruler">
-        {[1, 2, 3, 4, 5, 6, 7, 8].map((step) => (
-          <div>
-            <i style={`width:var(--space-${step})`}></i>
-            <code>--space-{step}</code>
-          </div>
-        ))}
-      </div>
-    </div>
-    <details class="sq-type-specimens">
-      <summary>{m.workbenchTypography()}</summary>
-      <div>
-        <div>
-          <code>--font-sans</code>
-          <p>{m.workbenchPistonDoor()}</p>
-        </div>
-        <div>
-          <code>--font-mono</code>
-          <p>5 × 5 × 3</p>
-        </div>
-      </div>
-    </details>
-  </Panel>
+  <Cover {theme} />
+  <FoundationsStory />
   <Panel
     id="components"
     title={m.workbenchComponents()}
@@ -104,71 +49,7 @@ const preferences = (key: string, value: string) => {
     </Layout>
   </Panel>
   <LayoutStory />
-  <section id="patterns" class="sq-stack" aria-labelledby="patterns-title">
-    <div class="sq-section-heading">
-      <div>
-        <h2 id="patterns-title">{m.workbenchPagePatterns()}</h2>
-      </div>
-      <span class="sq-muted">{m.workbenchBuildCount({ count: buildFixtures.length })}</span>
-    </div>
-    <div class="sq-build-grid">
-      {buildFixtures.map((build) => (
-        <BuildPreview
-          build={{
-            ...build,
-            category: build.category(),
-            image: build.image
-              ? {
-                  src: build.image,
-                  alt: m.workbenchFixtureAlt({ title: build.title }),
-                }
-              : null,
-          }}
-          labels={{
-            noPreview: m.workbenchNoPreviewAvailable(),
-            dimensions: m.workbenchDimensions(),
-            opening: m.workbenchOpening(),
-          }}
-        />
-      ))}
-    </div>
-  </section>
+  <PatternsStory />
   <BrowsingStories />
-  <Panel
-    id="states"
-    title={m.workbenchFeedbackStates()}
-    description={m.workbenchStatesDescription()}
-  >
-    <Layout pattern="grid">
-      <Notice tone="success" title={m.workbenchReadyToExplore()}>
-        {m.workbenchApprovedDescription()}
-      </Notice>
-      <Notice tone="info" title={m.workbenchNoMatchingBuilds()}>
-        {m.workbenchEmptyDescription()}
-      </Notice>
-      <Notice tone="warning" title={m.workbenchCouldnTLoadBuilds()}>
-        {m.workbenchUnavailableDescription()}
-      </Notice>
-      <Notice tone="danger" title={m.workbenchCheckTheHighlightedField()}>
-        {m.workbenchEnterATitleForYourBuild()}
-      </Notice>
-    </Layout>
-    <div class="sq-badge-preview">
-      <h3>{m.workbenchStatusBadges()}</h3>
-      <Layout pattern="row" gap="compact">
-        <Badge>{m.workbenchEmpty()}</Badge>
-        <Badge tone="success">{m.workbenchApproved()}</Badge>
-        <Badge tone="warning">{m.workbenchUnavailable()}</Badge>
-      </Layout>
-    </div>
-    <div class="sq-loading-preview">
-      <p>{m.workbenchFetchingBuilds()}</p>
-      <div class="sq-skeleton"></div>
-      <div class="sq-skeleton sq-skeleton--short"></div>
-    </div>
-  </Panel>
-  <footer class="sq-workbench-footer">
-    {m.workbenchRedstoneSquidDesignFoundations()}
-    <span>{m.workbenchFixtureDisclaimer()}</span>
-  </footer>
+  <StatesStory />
 </WorkbenchLayout>

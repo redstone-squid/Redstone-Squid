@@ -1,5 +1,6 @@
 ---
-import "./build-preview.css";
+import { cn } from "@/ui/cn";
+import { mutedClass } from "@/ui/variants";
 import Badge from "@/ui/astro/Badge.astro";
 
 type Props = {
@@ -19,11 +20,11 @@ type Props = {
 const { build, labels, href, version, eager = false } = Astro.props;
 ---
 
-<article class="sq-build-card">
-  <div class="sq-build-image">
+<article class="overflow-hidden rounded-md border border-line bg-surface">
+  <div class="group relative aspect-8/5 bg-surface-muted">
     {build.image ? (
       <>
-        <div class="sq-image-placeholder sq-image-error">
+        <div class="invisible grid h-full content-center justify-items-center text-xs text-fg-muted group-has-[>img[hidden]]:visible">
           {labels.imageUnavailable ?? labels.noPreview}
         </div>
         <img
@@ -33,30 +34,41 @@ const { build, labels, href, version, eager = false } = Astro.props;
           alt={build.image.alt}
           loading={eager ? "eager" : "lazy"}
           decoding="async"
+          class="absolute inset-0 size-full object-cover"
           referrerpolicy="no-referrer"
           onerror="this.hidden=true"
         />
       </>
     ) : (
-      <div class="sq-image-placeholder">
-        <span aria-hidden="true">◇</span>
+      <div class="grid h-full content-center justify-items-center text-xs text-fg-muted">
+        <span class="text-[3rem]" aria-hidden="true">
+          ◇
+        </span>
         {labels.noPreview}
       </div>
     )}
   </div>
-  <div class="sq-build-body">
+  <div class="grid gap-2 p-4 wrap-anywhere">
     <Badge>{build.category}</Badge>
-    <h3>{href ? <a href={href}>{build.title}</a> : build.title}</h3>
-    <p class="sq-muted">{build.creator}</p>
-    {version && <p class="sq-muted sq-build-version">{version}</p>}
-    <dl class="sq-metrics">
+    <h3>
+      {href ? (
+        <a class="no-underline hover:underline" href={href}>
+          {build.title}
+        </a>
+      ) : (
+        build.title
+      )}
+    </h3>
+    <p class={cn(mutedClass, "text-xs")}>{build.creator}</p>
+    {version && <p class={cn(mutedClass, "font-mono text-[0.6875rem]")}>{version}</p>}
+    <dl class="mt-2 flex gap-6 border-t border-line pt-3 text-xs">
       <div>
-        <dt>{labels.dimensions}</dt>
-        <dd>{build.dimensions}</dd>
+        <dt class="text-fg-muted">{labels.dimensions}</dt>
+        <dd class="mt-1 font-mono">{build.dimensions}</dd>
       </div>
       <div>
-        <dt>{labels.opening}</dt>
-        <dd>{build.timing}</dd>
+        <dt class="text-fg-muted">{labels.opening}</dt>
+        <dd class="mt-1 font-mono">{build.timing}</dd>
       </div>
     </dl>
   </div>

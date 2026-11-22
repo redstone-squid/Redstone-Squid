@@ -1,6 +1,6 @@
 ---
 import { buttonStyles } from "@/ui/variants";
-import { PAGE_PARAMS } from "@/lib/pagination";
+import { PAGE_PARAMS } from "@/features/catalogue/pagination";
 import type { PageAnchor } from "@/generated/types.gen";
 import * as m from "@/locales/messages.gen";
 
@@ -28,7 +28,7 @@ const nextHref = link(next);
 ---
 
 {(previousHref || nextHref) && (
-  <nav class="catalogue-pagination" aria-label={m.navPagination()}>
+  <nav class="flex justify-between gap-4" aria-label={m.navPagination()}>
     {previousHref && (
       <a class={linkClass} href={previousHref} rel="prev">
         {m.commonPrevious()}
@@ -41,14 +41,3 @@ const nextHref = link(next);
     )}
   </nav>
 )}
-
-<style>
-  @layer tokens, base, components;
-  @layer components {
-    .catalogue-pagination {
-      display: flex;
-      gap: var(--space-4);
-      justify-content: space-between;
-    }
-  }
-</style>

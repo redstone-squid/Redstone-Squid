@@ -2,21 +2,19 @@
 import WorkbenchLayout from "@/workbench/WorkbenchLayout.astro";
 import * as m from "@/locales/messages.gen";
 import LinkButton from "@/ui/astro/LinkButton.astro";
+import PageHeading from "@/ui/astro/PageHeading.astro";
 import { localizePath } from "@/locales/locale";
+import { parseTheme } from "@/ui/themes";
 
 const params = Astro.url.searchParams;
-const theme = params.get("theme") === "dark" ? "dark" : "light";
+const theme = parseTheme(params.get("theme"));
 const title = m.buildMedia();
 ---
 
 <WorkbenchLayout {theme} {title}>
-  <header class="sq-page-heading">
-    <h1>{title}</h1>
-    <p>{m.placeholderRebuilding()}</p>
-  </header>
-  <div>
+  <PageHeading {title} description={m.placeholderRebuilding()}>
     <LinkButton href={localizePath(`/design-system?${params}#browsing`)}>
       {m.workbenchBrowsing()}
     </LinkButton>
-  </div>
+  </PageHeading>
 </WorkbenchLayout>

@@ -1,4 +1,5 @@
 import { localizePath } from "@/locales/locale";
+import { buttonStyles } from "@/ui/variants";
 import { expect, test } from "../support/test";
 import { APP_URL } from "../support/servers";
 
@@ -8,6 +9,8 @@ for (const locale of ["en", "zh-CN"] as const) {
       await page.goto(localizePath(`/design-system?theme=${theme}`, locale));
       await page.evaluate(async () => {
         await document.fonts.ready;
+        // Lazy images below the fold never load in a full-page capture unless asked to.
+        for (const image of document.images) image.loading = "eager";
         await Promise.all(Array.from(document.images, (image) => image.decode()));
       });
       await expect(page.locator("html")).toHaveAttribute("lang", locale);
@@ -40,15 +43,15 @@ test("public workbench content renders without JavaScript", async ({ browser }) 
     await page.getByRole("combobox", { name: "Size", exact: true }).selectOption("small");
     await page.getByRole("button", { name: "Apply", exact: true }).click();
     const preview = page.locator("#button-story").getByRole("link");
-    await expect(preview).toHaveClass(/sq-button--quiet/);
-    await expect(preview).toHaveClass(/sq-button--small/);
+    const quietSmall = buttonStyles({ variant: "quiet", size: "small" });
+    await expect(preview).toContainClass(quietSmall);
     await page.getByRole("link", { name: "Dark theme", exact: true }).click();
-    await expect(preview).toHaveClass(/sq-button--quiet/);
+    await expect(preview).toContainClass(quietSmall);
     await preview.click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
     await page.getByRole("link", { name: "Foundations", exact: true }).click();
     await expect(page).toHaveURL(/design-system\?.*#foundations$/);
-    await page.locator(".language-selector summary").first().click();
+    await page.getByLabel("English · Language").first().click();
     await page.getByRole("link", { name: "简体中文", exact: true }).first().click();
     await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
   } finally {

@@ -1,0 +1,36 @@
+---
+import BuildPreview from "@/features/builds/BuildPreview.astro";
+import * as m from "@/locales/messages.gen";
+import { layoutStyles, mutedClass } from "@/ui/variants";
+import { buildFixtures } from "./fixtures";
+---
+
+<section id="patterns" class={layoutStyles({ pattern: "stack" })} aria-labelledby="patterns-title">
+  <div class="flex flex-wrap items-center justify-between gap-4">
+    <div>
+      <h2 id="patterns-title">{m.workbenchPagePatterns()}</h2>
+    </div>
+    <span class={mutedClass}>{m.workbenchBuildCount({ count: buildFixtures.length })}</span>
+  </div>
+  <div class="grid grid-cols-3 gap-4 max-[70rem]:grid-cols-2 max-md:grid-cols-1">
+    {buildFixtures.map((build) => (
+      <BuildPreview
+        build={{
+          ...build,
+          category: build.category(),
+          image: build.image
+            ? {
+                src: build.image,
+                alt: m.workbenchFixtureAlt({ title: build.title }),
+              }
+            : null,
+        }}
+        labels={{
+          noPreview: m.workbenchNoPreviewAvailable(),
+          dimensions: m.workbenchDimensions(),
+          opening: m.workbenchOpening(),
+        }}
+      />
+    ))}
+  </div>
+</section>

@@ -1,7 +1,8 @@
 <script lang="ts">
   import type { HTMLInputAttributes } from "svelte/elements";
-  import { cx } from "class-variance-authority";
+  import { cn } from "@/ui/cn";
   import type { FieldMessages } from "@/ui/field";
+  import { inputClass } from "@/ui/variants";
   import FieldFrame from "./FieldFrame.svelte";
   type Props = HTMLInputAttributes & FieldMessages;
   let {
@@ -31,6 +32,6 @@
       {...props}
       {...attributes}
       bind:value
-      class={cx("sq-input", className)}
+      class={cn(inputClass, className)}
     />{/snippet}
 </FieldFrame>

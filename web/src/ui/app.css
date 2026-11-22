@@ -1,0 +1,91 @@
+@import "tailwindcss";
+@import "./themes.css";
+
+/*
+ * Utilities read the theme tokens at runtime (`inline`), so switching <html data-theme> restyles
+ * everything. The default palette is cleared: colors come only from themes.css.
+ */
+@theme inline {
+  --color-*: initial;
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-surface-muted: var(--surface-muted);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-soft: var(--accent-soft);
+  --color-on-accent: var(--on-accent);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger: var(--danger);
+  --color-focus: var(--focus);
+  --color-overlay: var(--overlay);
+  --color-cover: var(--cover);
+  --color-cover-fg: var(--cover-fg);
+  --color-cover-fg-muted: var(--cover-fg-muted);
+  --color-cover-art: var(--cover-art);
+  --shadow-card: 0 8px 28px var(--shadow-color);
+  --shadow-pressed: inset 0 2px 4px var(--pressed);
+}
+
+@theme {
+  --font-sans: "Inter Variable", "Noto Sans SC", sans-serif;
+  --font-mono: "JetBrains Mono Variable", "Noto Sans SC", monospace;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1.25rem;
+  --container-content: 76rem;
+  /* Small text keeps the body's line height, as the design did before Tailwind. */
+  --text-sm--line-height: 1.55;
+  --text-xs--line-height: 1.55;
+}
+
+@layer base {
+  html {
+    background: var(--color-canvas);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+  }
+  body {
+    line-height: 1.55;
+  }
+  h1 {
+    font-size: clamp(2rem, 5vw, 3.5rem);
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.045em;
+  }
+  h2 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+  }
+  h3 {
+    font-size: 1rem;
+    font-weight: 700;
+  }
+  /* Preflight removes link underlines; prose links keep them, controls opt out. */
+  a {
+    text-decoration-line: underline;
+    text-underline-offset: 0.2em;
+  }
+  :focus-visible {
+    outline: 3px solid var(--color-focus);
+    outline-offset: 3px;
+  }
+  /* stylelint-disable declaration-no-important -- Reduced motion must beat component styles. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation: none !important;
+      transition: none !important;
+      scroll-behavior: auto !important;
+    }
+  }
+  /* stylelint-enable declaration-no-important */
+}
