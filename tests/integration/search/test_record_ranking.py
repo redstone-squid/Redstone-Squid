@@ -1,6 +1,7 @@
 """Record searches rank category headings and return each title's current holders."""
 
 from dataclasses import replace
+from decimal import Decimal
 from functools import partial
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -9,6 +10,7 @@ from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.search.application import SearchService
 from squid.core.search.domain import BuildSearchHit, RecordSearchHit, SearchRequest, SearchScope
 from squid.core.search.infrastructure.projection import (
+    ProjectionFilter,
     RecordHolderProjectionSource,
     RecordProjectionSource,
     SearchProjection,
@@ -73,7 +75,7 @@ async def test_record_measurements_match_one_known_holder(
     )
     large = RecordHolderProjectionSource(42, "Large", {"volume": 120, "timing": [10, 8]})
     compact = RecordHolderProjectionSource(57, "Compact", {"volume": 80, "timing": [10, 15]})
-    unknown = RecordHolderProjectionSource(60, "Unknown", {"volume": None, "timing": [10, None]})
+    unknown = RecordHolderProjectionSource(60, "Unknown", {"volume": None, "timing": [10, 0]})
     async with migrated_session_factory.begin() as session:
         store = SearchProjectionRepository(session)
         for holder in (large, compact, unknown):
@@ -100,6 +102,7 @@ async def test_record_measurements_match_one_known_holder(
         for impossible in (
             "volume<=100 visible_opening_time<=10gt",
             "volume<=100 AND NOT visible_opening_time>=10gt",
+            "volume IS NOT SET visible_opening_time>0",
         ):
             assert (await service.search(SearchRequest(impossible, scope=scope))).total == 0
 
@@ -107,3 +110,44 @@ async def test_record_measurements_match_one_known_holder(
     assert {result.source_id for result in outside.hits} == {"result:1", "result:2"}
     only = await service.search(SearchRequest("NOT volume:[1 TO 200]", scope=SearchScope.RECORDS))
     assert only.total == 0
+
+    for query, holder_id in (
+        ("volume IS SET", large.build_id),
+        ("volume IS NOT SET visible_opening_time:0", unknown.build_id),
+        ("NOT (volume IS SET) visible_opening_time IS SET", unknown.build_id),
+    ):
+        (hit,) = (await service.search(SearchRequest(query, scope=SearchScope.RECORDS))).hits
+        assert isinstance(hit, RecordSearchHit)
+        assert hit.build_id == holder_id
+
+    no_holder = await service.search(
+        SearchRequest("status:no_candidate AND volume IS NOT SET", scope=SearchScope.RECORDS)
+    )
+    assert no_holder.total == 0
+
+
+async def test_build_presence_matches_indexed_values_and_document_text(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with migrated_session_factory.begin() as session:
+        store = SearchProjectionRepository(session)
+        await store.replace(
+            SearchProjection(
+                "build",
+                "1",
+                "Full",
+                description="A description",
+                status="approved",
+                filters=(ProjectionFilter("volume", Decimal(100)), ProjectionFilter("opening_time", Decimal(0))),
+            )
+        )
+        await store.replace(SearchProjection("build", "2", "Partial", description=" \n", status="approved"))
+
+    service = SearchService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
+    for query, expected in (
+        ("volume IS SET opening_time IS SET", "1"),
+        ("volume IS NOT SET description IS NOT SET", "2"),
+        ("title IS SET description IS SET", "1"),
+    ):
+        (hit,) = (await service.search(SearchRequest(query, scope=SearchScope.BUILDS))).hits
+        assert hit.source_id == expected

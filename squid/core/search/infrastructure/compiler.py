@@ -18,6 +18,7 @@ from squid.core.search.domain import (
     FieldExpression,
     FieldType,
     NotExpression,
+    PresenceExpression,
     QueryExpression,
     RangeValue,
     SearchQuery,
@@ -67,7 +68,7 @@ def has_holder_filters(query: SearchQuery) -> bool:
                 return any(contains(operand) for operand in operands)
             case NotExpression(operand=operand):
                 return contains(operand)
-            case FieldExpression(field=field):
+            case FieldExpression(field=field) | PresenceExpression(field=field):
                 return field.holder_scoped
             case _:
                 return False
@@ -136,8 +137,38 @@ def _compile_expression(
             .correlate_except(measurement)
             .scalar_subquery()
         )
+        if isinstance(expression, PresenceExpression):
+            return value.is_not(None) if expression.is_set else value.is_(None)
         return _comparison(cast(ColumnElement[object], value), expression, expression.field.value_type)
+    if isinstance(expression, PresenceExpression):
+        return _compile_presence(expression)
     return _compile_field(expression)
+
+
+def _compile_presence(expression: PresenceExpression) -> ColumnElement[bool]:
+    field = expression.field
+    column = {
+        "title": SearchDocument.title,
+        "description": SearchDocument.description,
+        "status": SearchDocument.status,
+    }.get(field.name)
+    if column is not None:
+        present = func.nullif(func.btrim(column, " \t\r\n"), "").is_not(None)
+    else:
+        values = SearchDocumentFilter
+        present = (
+            select(values.document_id)
+            .where(
+                values.document_id == SearchDocument.id,
+                values.holder_build_id.is_(None),
+                values.field_name == (field.storage_name or field.name),
+            )
+            .correlate(SearchDocument)
+            .exists()
+        )
+        if field.name == "tag":
+            present = or_(present, func.cardinality(SearchDocument.tags) > 0)
+    return present if expression.is_set else not_(present)
 
 
 def _compile_field(expression: FieldExpression) -> ColumnElement[bool]:

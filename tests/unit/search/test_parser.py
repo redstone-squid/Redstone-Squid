@@ -21,6 +21,7 @@ from squid.core.search.domain import (
     ComparisonOperator,
     FieldExpression,
     NotExpression,
+    PresenceExpression,
     RangeValue,
     RecordQuery,
     SearchScope,
@@ -226,3 +227,38 @@ def test_catalogue_scopes_use_distinct_queries_and_enum_values() -> None:
 def test_catalogue_parser_rejects_wrong_scope_fields_and_values(scope: SearchScope, query: str, error: str) -> None:
     with pytest.raises(QuerySyntaxError, match=error):
         SearchQueryParser(scope=scope).parse(query)
+
+
+@pytest.mark.parametrize("scope", [SearchScope.BUILDS, SearchScope.RECORDS])
+def test_presence_normalizes_and_round_trips(scope: SearchScope) -> None:
+    parser = SearchQueryParser(scope=scope)
+    field = parser.registry.resolve("volume")
+    assert field is not None
+    parsed = parser.parse("VOLUME is not SET OR NOT volume Is Set")
+    assert parsed.normalized == "volume IS NOT SET OR NOT volume IS SET"
+    assert parsed.expression == BooleanExpression(
+        BooleanOperator.OR,
+        (PresenceExpression(field, is_set=False), NotExpression(PresenceExpression(field, is_set=True))),
+    )
+    assert parser.parse(parsed.normalized) == parsed
+
+
+def test_presence_keywords_keep_working_as_ordinary_search_terms() -> None:
+    parser = SearchQueryParser()
+    assert parser.parse("height is important").normalized == "height AND is AND important"
+    assert parser.parse("door is not seamless").normalized == "door AND is AND NOT seamless"
+    assert parser.parse('title:"is set"').normalized == 'title:"is set"'
+    assert parser.parse("fastest criterion IS SET").normalized == "fastest AND criterion IS SET"
+
+
+@pytest.mark.parametrize(
+    ("text", "message"),
+    [
+        ("volume IS NOT", "expected 'SET'"),
+        ("volum IS SET", "unknown search field"),
+        ("height IS SET", "cannot be used"),
+    ],
+)
+def test_invalid_presence_checks_follow_field_scope_and_syntax(text: str, message: str) -> None:
+    with pytest.raises(QuerySyntaxError, match=message):
+        SearchQueryParser(scope=SearchScope.RECORDS).parse(text)

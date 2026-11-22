@@ -41,5 +41,7 @@ def _collect_positive_text(
             _collect_positive_text(operand, output, negated=negated)
     elif negated:
         return
-    elif isinstance(expression, TextExpression) or expression.field.ranked:
+    elif isinstance(expression, TextExpression) or (
+        isinstance(expression, FieldExpression) and expression.field.ranked
+    ):
         output.append(expression)

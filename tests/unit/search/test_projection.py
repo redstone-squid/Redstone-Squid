@@ -198,11 +198,12 @@ async def test_build_aliases_are_searchable_only_for_approved_assignments(
 
 
 @pytest.mark.parametrize("door", [True, False])
-async def test_build_projection_keeps_opening_dimensions_separate(door: bool) -> None:
+@pytest.mark.parametrize("depth", [5, None])
+async def test_build_projection_keeps_opening_dimensions_separate(door: bool, depth: int | None) -> None:
     now = Instant.parse_iso("2026-11-16T12:00:00Z")
     build = DoorBuild(door_width=3, door_height=4) if door else OtherBuild()
     build.id = 42
-    build.width, build.height, build.depth = 10, 12, 5
+    build.width, build.height, build.depth = 10, 12, depth
     build.submission_status = BuildStatus.APPROVED
     build.submission_time = build.edited_time = now
     projection = await _project_build(build)
@@ -211,8 +212,12 @@ async def test_build_projection_keeps_opening_dimensions_separate(door: bool) ->
     filters = {filter_value.field_name: filter_value.value for filter_value in projection.filters}
     assert filters["width"] == Decimal(10)
     assert filters["height"] == Decimal(12)
-    assert filters["depth"] == Decimal(5)
-    assert filters["volume"] == Decimal(600)
+    if depth is None:
+        assert "depth" not in filters
+        assert "volume" not in filters
+    else:
+        assert filters["depth"] == Decimal(5)
+        assert filters["volume"] == Decimal(600)
     assert "door_depth" not in filters
     if door:
         assert filters["door_width"] == Decimal(3)

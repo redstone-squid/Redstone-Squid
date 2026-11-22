@@ -77,6 +77,17 @@ class FieldExpression:
 
 
 @dataclass(frozen=True, slots=True)
+class PresenceExpression:
+    """Check whether a field has a value."""
+
+    field: FieldDefinition
+    is_set: bool
+
+    def applies_to(self, scope: SearchScope) -> bool:
+        return self.field.applies_to(scope)
+
+
+@dataclass(frozen=True, slots=True)
 class NotExpression:
     """Negation of an expression."""
 
@@ -96,7 +107,7 @@ class BooleanExpression:
             raise ValidationError(msg)
 
 
-type QueryExpression = TextExpression | FieldExpression | NotExpression | BooleanExpression
+type QueryExpression = TextExpression | FieldExpression | PresenceExpression | NotExpression | BooleanExpression
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,5 +154,5 @@ def expression_applies_to(expression: QueryExpression, scope: SearchScope) -> bo
             return expression_applies_to(operand, scope)
         case TextExpression():
             return True
-        case FieldExpression():
+        case FieldExpression() | PresenceExpression():
             return expression.applies_to(scope)

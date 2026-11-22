@@ -14,6 +14,7 @@ from squid.core.search.domain.query import (
     ComparisonOperator,
     FieldExpression,
     NotExpression,
+    PresenceExpression,
     QueryExpression,
     RangeValue,
     RecordQuery,
@@ -157,7 +158,7 @@ class SearchQueryParser:
         pending = [expression]
         while pending:
             clause = pending.pop()
-            if isinstance(clause, FieldExpression) and clause.field == field:
+            if isinstance(clause, FieldExpression | PresenceExpression) and clause.field == field:
                 return rendered
             if isinstance(clause, BooleanExpression):
                 pending.extend(clause.operands)
@@ -173,7 +174,10 @@ class SearchQueryParser:
         for token, following in pairwise(tokens):
             if (
                 token.kind is _TokenKind.WORD
-                and following.kind in _FIELD_OPERATORS
+                and (
+                    following.kind in _FIELD_OPERATORS
+                    or (following.kind is _TokenKind.WORD and following.value.casefold() == "is")
+                )
                 and self.registry.resolve(token.value) == field
             ):
                 return tokens
@@ -293,17 +297,21 @@ class SearchQueryParser:
         if token.kind not in {_TokenKind.WORD, _TokenKind.PHRASE}:
             _fail("expected a search term", token.position)
         self._advance()
-        if token.kind is _TokenKind.WORD and self._peek().kind in {
-            _TokenKind.COLON,
-            _TokenKind.LESS_THAN,
-            _TokenKind.LESS_THAN_OR_EQUAL,
-            _TokenKind.GREATER_THAN,
-            _TokenKind.GREATER_THAN_OR_EQUAL,
-        }:
-            return self._parse_field(token)
+        if token.kind is _TokenKind.WORD:
+            following = self._peek()
+            if following.kind in _FIELD_OPERATORS:
+                return self._parse_field(token)
+            if following.kind is _TokenKind.WORD and following.value.casefold() == "is":
+                set_token = self._tokens[self._index + 1]
+                if set_token.kind is _TokenKind.NOT:
+                    set_token = self._tokens[self._index + 2]
+                if (set_token.kind is _TokenKind.WORD and set_token.value.casefold() == "set") or (
+                    set_token.kind is _TokenKind.END and self._registry.resolve(token.value) is not None
+                ):
+                    return self._parse_presence(token)
         return TextExpression(token.value, phrase=token.kind is _TokenKind.PHRASE)
 
-    def _parse_field(self, name: _Token) -> FieldExpression:
+    def _resolve_field(self, name: _Token) -> FieldDefinition:
         field = self.registry.resolve(name.value)
         if field is None:
             if self._registry.resolve(name.value) is not None:
@@ -313,6 +321,20 @@ class SearchQueryParser:
                 name.position,
                 suggestions=self.registry.suggestions(name.value),
             )
+        return field
+
+    def _parse_presence(self, name: _Token) -> PresenceExpression:
+        field = self._resolve_field(name)
+        self._advance()
+        is_set = not self._accept(_TokenKind.NOT)
+        token = self._peek()
+        if token.kind is not _TokenKind.WORD or token.value.casefold() != "set":
+            _fail("expected 'SET' after 'IS' or 'IS NOT'", token.position)
+        self._advance()
+        return PresenceExpression(field, is_set=is_set)
+
+    def _parse_field(self, name: _Token) -> FieldExpression:
+        field = self._resolve_field(name)
         operator_token = self._advance()
         operator = {
             _TokenKind.COLON: ComparisonOperator.EQUAL,
@@ -396,6 +418,9 @@ def _render_expression(expression: QueryExpression) -> str:
     """Render a parsed expression with its Boolean grouping preserved."""
     if isinstance(expression, TextExpression):
         return _quote(expression.value) if expression.phrase else expression.value
+    if isinstance(expression, PresenceExpression):
+        operator = "IS SET" if expression.is_set else "IS NOT SET"
+        return f"{expression.field.name} {operator}"
     if isinstance(expression, FieldExpression):
         if isinstance(expression.value, RangeValue):
             value = f"[{_scalar(expression.value.lower)} TO {_scalar(expression.value.upper)}]"
