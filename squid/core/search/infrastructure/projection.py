@@ -25,8 +25,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from whenever import Instant
 
-from squid.core.accounts.infrastructure.attribution import attributed_credits
-from squid.core.accounts.models import Account, CreatorAlias
+from squid.core.accounts.infrastructure.attribution import attributed_credits, public_creator_ids
+from squid.core.accounts.models import CreatorAlias
 from squid.core.builds.domain.titles import format_build_category
 from squid.core.builds.errors import InvalidBuildError
 from squid.core.builds.infrastructure.loading import BuildLoader
@@ -426,15 +426,16 @@ class SearchProjectionLoader:
         )
         creator_names = tuple(name for creator in creators if (name := _mapped_text(creator, "name")) is not None)
         attributed = attributed_credits()
+        public_ids = public_creator_ids()
         creator_ids = tuple(
             str(public_id)
             for public_id in (
                 await self._session.scalars(
-                    select(Account.public_creator_id)
-                    .join(attributed, attributed.c.account_id == Account.id)
+                    select(public_ids.c.public_id)
+                    .join(attributed, attributed.c.account_id == public_ids.c.account_id)
                     .where(attributed.c.build_id == build_id)
                     .distinct()
-                    .order_by(Account.public_creator_id)
+                    .order_by(public_ids.c.public_id)
                 )
             ).all()
         )

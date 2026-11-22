@@ -112,3 +112,30 @@ async def test_creator_ids_follow_claims_and_identity_visibility(
 
     assert await _found(service, f"creator:{public_id}") == {str(by_alias), str(by_java), str(by_private_discord)}
     assert await owners(by_private_discord) == {0: account.public_creator_id}
+
+
+async def test_a_merged_accounts_old_id_still_finds_its_builds(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    uow_factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory, verification_code_pepper="pepper")
+    surviving = await transact(
+        uow_factory,
+        lambda uow: uow.accounts.create(consent=CONSENT, identities=(AccountIdentity.discord(1),)),
+        commit=True,
+    )
+    absorbed = await transact(
+        uow_factory,
+        lambda uow: uow.accounts.create(consent=CONSENT, identities=(AccountIdentity.discord(2),)),
+        commit=True,
+    )
+    assert surviving.id is not None
+    assert absorbed.id is not None
+    old_id = absorbed.public_creator_id
+    build = await _credited_build(migrated_session_factory, absorbed.id, name="absorbed", kind="discord", subject="2")
+
+    await transact(uow_factory, lambda uow: uow.accounts.merge(surviving.id, absorbed.id), commit=True)
+    await _project(migrated_session_factory)
+    service = SearchService(uow_factory=uow_factory)
+
+    assert await _found(service, f"creator:{old_id}") == {str(build)}
+    assert await _found(service, f"creator:{surviving.public_creator_id}") == {str(build)}

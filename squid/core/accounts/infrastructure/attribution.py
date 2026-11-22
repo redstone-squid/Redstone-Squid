@@ -7,7 +7,7 @@ owner hid.
 
 from sqlalchemy import Subquery, case, column, select, table, union
 
-from squid.core.accounts.models import AccountIdentity, CreatorAlias
+from squid.core.accounts.models import Account, AccountIdentity, CreatorAlias, PublicCreatorRedirect
 
 BUILD_CREDITS = table(
     "build_credits",
@@ -51,3 +51,16 @@ def attributed_credits() -> Subquery:
         .join(CreatorAlias, CreatorAlias.id == BUILD_CREDITS.c.alias_id)
         .where(CreatorAlias.account_id.is_not(None)),
     ).subquery("attributed_credits")
+
+
+def public_creator_ids() -> Subquery:
+    """Every public ID that names an account: its current one and those retired by merges.
+
+    Indexing retired IDs keeps links made before a merge finding the merged account's builds.
+
+    Columns: `account_id`, `public_id`.
+    """
+    return union(
+        select(Account.id.label("account_id"), Account.public_creator_id.label("public_id")),
+        select(PublicCreatorRedirect.target_account_id, PublicCreatorRedirect.retired_public_creator_id),
+    ).subquery("public_creator_ids")
