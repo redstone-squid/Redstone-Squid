@@ -1,7 +1,8 @@
 import { defineMiddleware } from "astro:middleware";
-import { DEFAULT_LOCALE, localeFromPath, unprefixedPath } from "@/locales/locale";
+import { DEFAULT_LOCALE, localeFromPath, localizePath, unprefixedPath } from "@/locales/locale";
 import { createApiClient } from "@/server/api";
 import { getRuntimeConfig } from "@/server/config";
+import { findRedirect } from "@/server/redirects";
 import { withRequestLocale } from "@/server/request-locale";
 
 /**
@@ -29,6 +30,9 @@ export const onRequest = defineMiddleware(async (context, next) => {
       duration_ms: Math.round(performance.now() - startedAt),
       ...fields,
     });
+  // A moved route answers in the request's locale, before any rendering.
+  const moved = findRedirect(unprefixedPath(pathname));
+  if (moved !== undefined) return context.redirect(localizePath(`${moved}${search}`, locale), 308);
   try {
     context.locals.config = getRuntimeConfig();
     context.locals.api = createApiClient(locale, context.locals.config);
