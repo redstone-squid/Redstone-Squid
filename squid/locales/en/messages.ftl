@@ -5316,6 +5316,9 @@ search-reference-examples = Examples
 # squid/bot/catalogue/search/help.py:146, squid/bot/catalogue/search/help.py:147
 search-reference-fields = What you can search
 
+# squid/bot/catalogue/search/help.py:74
+search-reference-holder-measurements = `volume<=100 opening_time<=10gt` matches when one holder meets both limits. Use `gt` for game ticks or `s` for seconds.
+
 # squid/bot/catalogue/search/help.py:91
 search-reference-intro = Type words to match titles and descriptions. Add filter lists every field and its known values, or type filters yourself, like `width<=5`.
 
@@ -5333,6 +5336,9 @@ search-reference-label-credit = Creator and version
 
 # squid/bot/catalogue/search/help.py:119
 search-reference-label-dates = Dates
+
+# squid/bot/catalogue/search/help.py:73
+search-reference-label-holder-measurements = Holder measurements
 
 # squid/bot/catalogue/search/help.py:55, squid/bot/catalogue/search/help.py:97
 search-reference-label-kind = Kind

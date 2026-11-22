@@ -456,6 +456,11 @@ class SearchScreen(sd.Screen[None, Any, RedstoneSquid]):
             and self._open_holder is not None
             and (not hit.build_id or len(hit.holder_build_ids) > 1)
         ):
+            details: list[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = [
+                sl.paragraph(line) for line in _holder_lines(hit)
+            ]
+            if hit.matched_holder_id is not None and hit.metrics:
+                details.insert(0, sl.paragraph(_detail_text(hit)).truncate())
             return record_standings(
                 _highlighted(hit.title_match or SearchText(hit.title)),
                 hit.subtitle,
@@ -463,7 +468,7 @@ class SearchScreen(sd.Screen[None, Any, RedstoneSquid]):
                 VersionScope(hit.version_scope),
                 hit.holder_build_ids,
                 self._open_holder,
-                details=tuple(sl.paragraph(line) for line in _holder_lines(hit)),
+                details=details,
             )
         if isinstance(hit, BuildSearchHit) and self._source.base_request.group_by_build:
             restored = self._restored_detail

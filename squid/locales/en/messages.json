@@ -17634,6 +17634,15 @@
       "squid/bot/catalogue/search/help.py:147"
     ]
   },
+  "search-reference-holder-measurements": {
+    "fingerprint": "98443d5f9380480659812474ee468e802f13a5ee92285be4b637ee46843c4f33",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/catalogue/search/help.py:74"
+    ]
+  },
   "search-reference-intro": {
     "fingerprint": "e2155aa4d00d7a3aead6ab5dad5654401cf18f606b9e7e469a9e21672e3567d1",
     "attributes": [],
@@ -17692,6 +17701,15 @@
     "arguments": [],
     "locations": [
       "squid/bot/catalogue/search/help.py:119"
+    ]
+  },
+  "search-reference-label-holder-measurements": {
+    "fingerprint": "d6e71eb9fcad94d459872828addd0918ed4eab481d1929c680effd11235ca439",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/catalogue/search/help.py:73"
     ]
   },
   "search-reference-label-kind": {

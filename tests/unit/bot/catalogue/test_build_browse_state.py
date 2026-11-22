@@ -806,6 +806,8 @@ async def test_search_reference_runs_examples_and_exposes_more_than_modal_hints(
     async with stage(screen, owner=object()) as ui:
         await toggle_help(ui)
         assert any((r"fastest\_smallest" if records else "completion_at") in text for text in ui.texts())
+        if records:
+            assert any("volume<=100 opening_time<=10gt" in text for text in ui.texts())
         await ui.press("search-reference.syntax")
         assert any("leaves matches out" in text for text in ui.texts())
         ui.assert_within_limits()
@@ -817,7 +819,7 @@ async def test_search_reference_runs_examples_and_exposes_more_than_modal_hints(
         if records:
             assert ui.control("fastest").payload["style"] == 3
         assert screen._query.text == (
-            "kind:door AND criterion:fastest AND version_scope:all_time"
+            "kind:door AND criterion:fastest AND version_scope:all_time AND door_height>=3"
             if records
             else "door AND width<=5 AND height<=6"
         )

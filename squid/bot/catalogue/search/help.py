@@ -70,6 +70,13 @@ def search_help(
                 ),
             ),
             _entry(
+                tr(t"search-reference-label-holder-measurements = Holder measurements"),
+                md_tr(
+                    t"search-reference-holder-measurements = `volume<=100 opening_time<=10gt` matches when one "
+                    t"holder meets both limits. Use `gt` for game ticks or `s` for seconds."
+                ),
+            ),
+            _entry(
                 tr(t"search-reference-label-version-scope = Version scope"),
                 md_tr(t"search-reference-version-scope = `version_scope:` {scopes}"),
             ),
