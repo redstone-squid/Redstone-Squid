@@ -37,6 +37,16 @@ tester.run("frontend import boundaries", importBoundaries, {
       code: 'import { Dialog } from "bits-ui";',
       errors: [{ messageId: "primitives" }],
     },
+    {
+      filename: feature,
+      code: 'import { Chart } from "layerchart";',
+      errors: [{ messageId: "primitives" }],
+    },
+    {
+      filename: featureModule,
+      code: 'import { createTable } from "@tanstack/svelte-table";',
+      errors: [{ messageId: "primitives" }],
+    },
     { filename: feature, code: 'import("../../server/api");', errors: [{ messageId: "server" }] },
     {
       filename: feature,

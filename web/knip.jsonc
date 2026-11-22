@@ -9,5 +9,12 @@
   "ignore": ["src/generated/**", "**/*.gen.ts"],
   // Approved libraries installed before their first use, so agents reach for them instead of
   // writing their own. Remove an entry once code imports it. See "Libraries" in AGENTS.md.
-  "ignoreDependencies": ["@tanstack/svelte-query", "es-toolkit", "runed", "temporal-polyfill"],
+  "ignoreDependencies": [
+    "@tanstack/svelte-query",
+    "@tanstack/svelte-table",
+    "es-toolkit",
+    "layerchart",
+    "runed",
+    "temporal-polyfill",
+  ],
 }

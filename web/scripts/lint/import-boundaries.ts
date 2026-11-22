@@ -39,7 +39,10 @@ function locate(file: string): { src: string; segments: string[] } | undefined {
   return { src: file.slice(0, index + 5), segments: file.slice(index + 5).split("/") };
 }
 
-/** Enforce the `LAYERS` table, keep bits-ui inside src/ui, and keep server code out of the browser. */
+// Libraries that only src/ui wraps, so features get one accessible, themed version of each.
+const UI_ONLY = /^(?:bits-ui|layerchart|@tanstack\/svelte-table)(?:\/|$)/;
+
+/** Enforce the `LAYERS` table, keep `UI_ONLY` libraries inside src/ui, and keep server code out of the browser. */
 export const importBoundaries: Rule.RuleModule = {
   meta: {
     type: "problem",
@@ -52,7 +55,7 @@ export const importBoundaries: Rule.RuleModule = {
         ]),
       ),
       primitives:
-        "Import the shared UI wrapper instead. Interaction primitives belong inside src/ui.",
+        "Import the src/ui component that wraps this library; only src/ui uses it directly.",
       server: "Browser code cannot import server modules or Node built-ins.",
     },
   },
@@ -71,7 +74,7 @@ export const importBoundaries: Rule.RuleModule = {
       )
         return;
       const imported = source.value;
-      if (from !== "ui" && /^bits-ui(?:\/|$)/.test(imported)) {
+      if (from !== "ui" && UI_ONLY.test(imported)) {
         context.report({ node, messageId: "primitives" });
       }
       if (isBrowser && imported.startsWith("node:")) {
