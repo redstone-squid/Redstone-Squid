@@ -80,4 +80,12 @@ The bundled collector logs received telemetry. Configure a trace exporter
 in [the collector configuration](../deploy/otel-collector.yaml) for persistent
 storage and search.
 
+On 10% of catalogue page loads that have a sampled server trace, the browser
+reports time to first byte, time to DOM completion, and the category of its
+first uncaught JavaScript error or unhandled promise rejection, if one occurs.
+The site sends these reports without cookies, URLs, error messages, or stacks.
+The same-origin endpoint caps report size and volume per web process and exports
+browser spans with a link to the page span. The web trace sampler also applies
+to these spans.
+
 For optional media workers, see [Media processing deployment](media-processing.md).

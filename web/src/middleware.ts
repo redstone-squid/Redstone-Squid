@@ -1,4 +1,4 @@
-import { SpanKind } from "@opentelemetry/api";
+import { SpanKind, TraceFlags, trace } from "@opentelemetry/api";
 import { defineMiddleware, sequence } from "astro:middleware";
 import { DEFAULT_LOCALE, localeFromPath, localizePath, unprefixedPath } from "@/locales/locale";
 import { createApiClient } from "@/server/api";
@@ -7,17 +7,31 @@ import { findRedirect } from "@/server/redirects";
 import { withRequestLocale } from "@/server/request-locale";
 import { traceHttp } from "@/server/telemetry";
 
-const traceRequest = defineMiddleware((context, next) =>
-  traceHttp(
+const traceRequest = defineMiddleware((context, next) => {
+  if (context.routePattern === "/telemetry/browser") return next();
+  return traceHttp(
     "catalogue request",
     SpanKind.SERVER,
     {
       "http.request.method": context.request.method,
       "http.route": context.routePattern,
     },
-    next,
-  ),
-);
+    async () => {
+      const response = await next();
+      const span = trace.getActiveSpan()?.spanContext();
+      if (
+        span?.traceFlags === TraceFlags.SAMPLED &&
+        response.headers.get("Content-Type")?.startsWith("text/html") === true
+      ) {
+        response.headers.append(
+          "Server-Timing",
+          `squid;desc="00-${span.traceId}-${span.spanId}-01"`,
+        );
+      }
+      return response;
+    },
+  );
+});
 
 /**
  * Set up request locals and log each request.
@@ -28,6 +42,7 @@ const traceRequest = defineMiddleware((context, next) =>
  * streaming, rather than truncating a 200 response.
  */
 const catalogueRequest = defineMiddleware(async (context, next) => {
+  if (context.routePattern === "/telemetry/browser") return next();
   const startedAt = performance.now();
   const { pathname, search } = context.url;
   const prefixed = localeFromPath(pathname);

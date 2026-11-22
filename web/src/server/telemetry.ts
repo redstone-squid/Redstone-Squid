@@ -1,4 +1,4 @@
-import { SpanKind, SpanStatusCode, trace } from "@opentelemetry/api";
+import { ROOT_CONTEXT, SpanKind, SpanStatusCode, TraceFlags, trace } from "@opentelemetry/api";
 import { NodeSDK } from "@opentelemetry/sdk-node";
 
 if (process.env.SQUID_OBSERVABILITY_ENABLED === "true") {
@@ -34,4 +34,31 @@ export function traceHttp(
       span.end();
     }
   });
+}
+
+/** Link a browser report to its page span without using client input as the parent. */
+export function recordBrowserReport(
+  traceparent: string,
+  kind: "navigation" | "script_error" | "unhandled_rejection",
+  timings: Record<string, number>,
+): void {
+  const span = tracer.startSpan(
+    "catalogue browser report",
+    {
+      links: [
+        {
+          context: {
+            traceId: traceparent.slice(3, 35),
+            spanId: traceparent.slice(36, 52),
+            traceFlags: TraceFlags.SAMPLED,
+            isRemote: true,
+          },
+        },
+      ],
+      attributes: { "browser.report.kind": kind, ...timings },
+    },
+    ROOT_CONTEXT,
+  );
+  if (kind !== "navigation") span.setStatus({ code: SpanStatusCode.ERROR });
+  span.end();
 }

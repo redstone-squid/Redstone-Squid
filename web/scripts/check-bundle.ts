@@ -11,8 +11,11 @@ const interactiveBudget = { initialKiB: 96, completeKiB: 160 };
 const budgets: EntryBudget[] = [
   {
     // Loads on every page, so it must stay tiny.
-    entries: ["src/layouts/DocumentHead.astro?astro&type=script&index=0&lang.ts"],
-    label: "Service worker registration (every page)",
+    entries: [
+      "src/layouts/DocumentHead.astro?astro&type=script&index=0&lang.ts",
+      "src/layouts/DocumentHead.astro?astro&type=script&index=1&lang.ts",
+    ],
+    label: "Shared page scripts",
     initialKiB: 1,
     completeKiB: 1,
     renderer: false,
