@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { ProgressProps } from "../upload";
+  import type { ProgressProps } from "@/ui/upload";
   let { label, value, max = 100 }: ProgressProps = $props();
 </script>
 

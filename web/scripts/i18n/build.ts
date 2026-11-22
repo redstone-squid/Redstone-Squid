@@ -6,14 +6,14 @@ import { compileCatalogs, functionName } from "./compile";
 import { compileVocabulary, type Vocabulary } from "./vocabulary";
 
 // Check the catalogs in src/locales/<locale>/messages.ftl, then compile them into
-// src/locales/messages.ts and the exported domain labels into src/locales/vocabulary.ts.
+// src/locales/messages.gen.ts and the exported domain labels into src/locales/vocabulary.gen.ts.
 //
 //   (no flag)  fail if anything is invalid, unused, unreviewed, or out of date
 //   --write    regenerate the compiled modules
 //   --review   record that every translation matches the current English
 const write = process.argv.includes("--write");
 const review = process.argv.includes("--review");
-const target = "src/locales/messages.ts";
+const target = "src/locales/messages.gen.ts";
 const catalogPath = (locale: string) => `src/locales/${locale}/messages.ftl`;
 const revisionsPath = (locale: string) => `src/locales/${locale}/source-revisions.json`;
 
@@ -52,10 +52,10 @@ for (const locale of SUPPORTED_LOCALES.filter((locale) => locale !== "en")) {
     );
 }
 
-// Lint requires `import * as m from ".../locales/messages"`, so calls always read `m.name`.
+// Lint requires `import * as m from "@/locales/messages.gen"`, so calls always read `m.name`.
 const called = new Set<string>();
 for (const file of globSync("src/**/*.{ts,svelte,astro}")) {
-  if (file === target) continue;
+  if (file.endsWith(".gen.ts")) continue;
   for (const match of readFileSync(file, "utf8").matchAll(/\bm\.([A-Za-z0-9]+)/g))
     if (match[1] !== undefined) called.add(match[1]);
 }
@@ -65,7 +65,7 @@ if (unused.length > 0)
 
 await emit(target, compileCatalogs(catalogs));
 const vocabulary = JSON.parse(readFileSync("../contracts/vocabulary.json", "utf8")) as Vocabulary;
-await emit("src/locales/vocabulary.ts", compileVocabulary(vocabulary, SUPPORTED_LOCALES));
+await emit("src/locales/vocabulary.gen.ts", compileVocabulary(vocabulary, SUPPORTED_LOCALES));
 console.info(
   `Compiled ${Object.keys(english).length} messages in ${SUPPORTED_LOCALES.length} locales.`,
 );

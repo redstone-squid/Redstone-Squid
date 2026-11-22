@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { decodeProblemDetail } from "../../src/lib/problem-details";
+import { decodeProblemDetail } from "@/lib/problem-details";
 
 describe("HTTP problem detail decoding", () => {
   it("preserves valid fields and application codes introduced by a newer API", () => {

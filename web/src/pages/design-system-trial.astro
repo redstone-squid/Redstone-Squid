@@ -1,10 +1,10 @@
 ---
-import WorkbenchLayout from "../workbench/WorkbenchLayout.astro";
-import LinkButton from "../ui/astro/LinkButton.astro";
-import Panel from "../ui/astro/Panel.astro";
-import * as m from "../locales/messages";
-import SvelteDraftTrial from "../workbench/DraftTrial.svelte";
-import "../workbench/workbench.css";
+import WorkbenchLayout from "@/workbench/WorkbenchLayout.astro";
+import LinkButton from "@/ui/astro/LinkButton.astro";
+import Panel from "@/ui/astro/Panel.astro";
+import * as m from "@/locales/messages.gen";
+import SvelteDraftTrial from "@/workbench/DraftTrial.svelte";
+import "@/workbench/workbench.css";
 const locale = Astro.url.searchParams.get("lang") === "zh-CN" ? "zh-CN" : "en";
 const theme = Astro.url.searchParams.get("theme") === "dark" ? "dark" : "light";
 const selected = Astro.url.searchParams.get("scenario");

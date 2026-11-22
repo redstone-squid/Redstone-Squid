@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { takeSelectedFiles, type FilePickerProps } from "../upload";
+  import { takeSelectedFiles, type FilePickerProps } from "@/ui/upload";
   let { label, onFiles, accept, multiple, disabled }: FilePickerProps = $props();
 </script>
 

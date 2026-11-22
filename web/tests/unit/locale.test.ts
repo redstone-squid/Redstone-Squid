@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { localeFromPath, localizePath } from "../../src/locales/locale";
+import { localeFromPath, localizePath } from "@/locales/locale";
 
 describe("locale mapping", () => {
   it("reads the locale only from a whole path prefix", () => {

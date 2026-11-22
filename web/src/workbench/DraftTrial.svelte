@@ -1,14 +1,14 @@
 <script lang="ts">
   import { onDestroy, untrack } from "svelte";
-  import type { Locale } from "../locales/locale";
-  import * as m from "../locales/messages";
-  import Button from "../ui/svelte/Button.svelte";
-  import SelectField from "../ui/svelte/SelectField.svelte";
-  import FilePicker from "../ui/svelte/FilePicker.svelte";
-  import Progress from "../ui/svelte/Progress.svelte";
-  import Notice from "../ui/svelte/Notice.svelte";
-  import { layoutStyles } from "../ui/variants";
-  import Field from "../ui/svelte/Field.svelte";
+  import type { Locale } from "@/locales/locale";
+  import * as m from "@/locales/messages.gen";
+  import Button from "@/ui/svelte/Button.svelte";
+  import SelectField from "@/ui/svelte/SelectField.svelte";
+  import FilePicker from "@/ui/svelte/FilePicker.svelte";
+  import Progress from "@/ui/svelte/Progress.svelte";
+  import Notice from "@/ui/svelte/Notice.svelte";
+  import { layoutStyles } from "@/ui/variants";
+  import Field from "@/ui/svelte/Field.svelte";
   import {
     createDraftFixture,
     draftErrorMessages,

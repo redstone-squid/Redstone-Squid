@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { buildsGet, buildsList } from "../../src/generated/sdk.gen";
-import type { BuildsListResponse } from "../../src/generated/types.gen";
-import { ApiError, createApiClient, unwrap } from "../../src/server/api";
-import type { RuntimeConfig } from "../../src/server/config";
+import { buildsGet, buildsList } from "@/generated/sdk.gen";
+import type { BuildsListResponse } from "@/generated/types.gen";
+import { ApiError, createApiClient, unwrap } from "@/server/api";
+import type { RuntimeConfig } from "@/server/config";
 
 const config: RuntimeConfig = {
   apiBaseUrl: "https://api.catalogue.test",

@@ -1,11 +1,11 @@
 ---
 import SummaryCard from "./SummaryCard.astro";
-import Badge from "../../ui/astro/Badge.astro";
+import Badge from "@/ui/astro/Badge.astro";
 import RecordFreshness from "./RecordFreshness.astro";
-import type { PublishedRecordResult } from "../../generated/types.gen";
-import { localizePath, type Locale } from "../../locales/locale";
-import * as m from "../../locales/messages";
-import { buildKindLabel, recordCriterionLabel, versionScopeLabel } from "../../locales/vocabulary";
+import type { PublishedRecordResult } from "@/generated/types.gen";
+import { localizePath, type Locale } from "@/locales/locale";
+import * as m from "@/locales/messages.gen";
+import { buildKindLabel, recordCriterionLabel, versionScopeLabel } from "@/locales/vocabulary.gen";
 type Props = { record: PublishedRecordResult; locale: Locale; linked?: boolean };
 const { record, locale, linked = true } = Astro.props;
 ---

@@ -1,9 +1,10 @@
+import path from "node:path";
 import { svelte } from "@sveltejs/vite-plugin-svelte";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   plugins: [svelte({ configFile: false })],
-  resolve: { conditions: ["browser"] },
+  resolve: { alias: { "@": path.resolve(import.meta.dirname, "src") }, conditions: ["browser"] },
   test: {
     environment: "jsdom",
     include: ["tests/unit/**/*.test.ts"],
@@ -17,7 +18,7 @@ export default defineConfig({
         "src/features/**/*.{ts,svelte}",
         "src/workbench/**/*.{ts,svelte}",
       ],
-      exclude: ["src/generated/**", "src/locales/messages.ts", "src/locales/vocabulary.ts"],
+      exclude: ["src/generated/**", "**/*.gen.ts"],
       reporter: ["text", "json-summary"],
       thresholds: {
         lines: 90,

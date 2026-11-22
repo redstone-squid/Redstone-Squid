@@ -1,8 +1,8 @@
 import { render, screen, cleanup, waitFor } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it } from "vitest";
-import FormSpecimen from "../../src/workbench/FormSpecimen.svelte";
-import Field from "../../src/ui/svelte/Field.svelte";
+import FormSpecimen from "@/workbench/FormSpecimen.svelte";
+import Field from "@/ui/svelte/Field.svelte";
 import Harness from "./fixtures/SvelteDialogHarness.svelte";
 
 afterEach(cleanup);

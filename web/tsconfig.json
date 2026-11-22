@@ -4,6 +4,7 @@
     "allowJs": false,
     "exactOptionalPropertyTypes": false,
     "noUncheckedIndexedAccess": true,
+    "paths": { "@/*": ["./src/*"] },
     "types": ["vitest/globals", "@testing-library/jest-dom"]
   },
   "include": [".astro/types.d.ts", "**/*"],

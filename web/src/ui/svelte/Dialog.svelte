@@ -3,7 +3,7 @@
   import X from "@lucide/svelte/icons/x";
   import { cx } from "class-variance-authority";
   import type { ComponentProps, Snippet } from "svelte";
-  import { buttonStyles, type ButtonVariants } from "../variants";
+  import { buttonStyles, type ButtonVariants } from "@/ui/variants";
   type Props = Omit<ComponentProps<typeof Primitive.Root>, "children"> & {
     title: string;
     description: string;

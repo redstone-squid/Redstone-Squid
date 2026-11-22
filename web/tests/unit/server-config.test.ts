@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { getRuntimeConfig } from "../../src/server/config";
+import { getRuntimeConfig } from "@/server/config";
 
 const productionEnvironment = {
   API_BASE_URL: "https://api.redstone-squid.org/",

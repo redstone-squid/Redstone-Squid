@@ -1,11 +1,11 @@
 <script lang="ts">
-  import type { Locale } from "../locales/locale";
-  import * as m from "../locales/messages";
-  import CheckField from "../ui/svelte/CheckField.svelte";
-  import Field from "../ui/svelte/Field.svelte";
-  import FieldGroup from "../ui/svelte/FieldGroup.svelte";
-  import SelectField from "../ui/svelte/SelectField.svelte";
-  import TextareaField from "../ui/svelte/TextareaField.svelte";
+  import type { Locale } from "@/locales/locale";
+  import * as m from "@/locales/messages.gen";
+  import CheckField from "@/ui/svelte/CheckField.svelte";
+  import Field from "@/ui/svelte/Field.svelte";
+  import FieldGroup from "@/ui/svelte/FieldGroup.svelte";
+  import SelectField from "@/ui/svelte/SelectField.svelte";
+  import TextareaField from "@/ui/svelte/TextareaField.svelte";
 
   let { locale, state }: { locale: Locale; state: "normal" | "invalid" | "disabled" } = $props();
   const disabled = $derived(state === "disabled");

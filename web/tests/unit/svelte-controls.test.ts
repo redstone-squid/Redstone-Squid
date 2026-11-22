@@ -1,9 +1,9 @@
 import { render, screen, cleanup, waitFor } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import Controls from "../../src/workbench/Controls.svelte";
-import type { Locale } from "../../src/locales/locale";
-import * as m from "../../src/locales/messages";
+import Controls from "@/workbench/Controls.svelte";
+import type { Locale } from "@/locales/locale";
+import * as m from "@/locales/messages.gen";
 
 afterEach(cleanup);
 for (const locale of ["en", "zh-CN"] satisfies Locale[]) {

@@ -29,8 +29,7 @@ export default tseslint.config(
       "eslint.config.js",
       "coverage/**",
       "src/generated/**",
-      "src/locales/messages.ts",
-      "src/locales/vocabulary.ts",
+      "**/*.gen.ts",
       "playwright-report/**",
       "test-results/**",
       "review-gallery/**",
@@ -56,8 +55,8 @@ export default tseslint.config(
         },
         {
           selector:
-            "ImportDeclaration[source.value=/locales\\/messages$/] > :matches(ImportSpecifier, ImportDefaultSpecifier, ImportNamespaceSpecifier[local.name!='m'])",
-          message: 'Import messages as `import * as m from ".../locales/messages"`.',
+            "ImportDeclaration[source.value=/locales\\/messages\\.gen$/] > :matches(ImportSpecifier, ImportDefaultSpecifier, ImportNamespaceSpecifier[local.name!='m'])",
+          message: 'Import messages as `import * as m from "@/locales/messages.gen"`.',
         },
       ],
     },
@@ -154,7 +153,13 @@ export default tseslint.config(
     plugins: {
       squid: { rules: { "import-boundaries": importBoundaries, "no-raw-text": noRawText } },
     },
-    rules: { "squid/import-boundaries": "error" },
+    rules: {
+      "squid/import-boundaries": "error",
+      "no-restricted-imports": [
+        "error",
+        { patterns: [{ group: ["../*"], message: "Import from outside this directory with @/." }] },
+      ],
+    },
   },
   {
     // Messages format numbers and dates with NUMBER() and DATETIME(), so translators own them.

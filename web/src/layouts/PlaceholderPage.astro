@@ -1,9 +1,9 @@
 ---
 import CatalogueLayout from "./CatalogueLayout.astro";
-import { localizePath, type Locale } from "../locales/locale";
-import * as m from "../locales/messages";
-import Layout from "../ui/astro/Layout.astro";
-import LinkButton from "../ui/astro/LinkButton.astro";
+import { localizePath, type Locale } from "@/locales/locale";
+import * as m from "@/locales/messages.gen";
+import Layout from "@/ui/astro/Layout.astro";
+import LinkButton from "@/ui/astro/LinkButton.astro";
 
 /** Error pages pass `status` for the matching copy; the route itself sets the response status. */
 type Props = { title: (locale: Locale) => string; home?: true } | { status: 404 | 503 };

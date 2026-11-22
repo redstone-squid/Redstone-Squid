@@ -17,8 +17,9 @@ tester.run("frontend import boundaries", importBoundaries, {
     { filename: ui, code: 'import { Field } from "./Field";' },
     { filename: feature, code: 'import { Button } from "../../ui/svelte/Button.svelte";' },
     { filename: feature, code: 'import { draft } from "./draft";' },
-    { filename: featureModule, code: 'import * as m from "../../src/locales/messages";' },
+    { filename: featureModule, code: 'import * as m from "@/locales/messages.gen";' },
     { filename: page, code: 'import { unwrap } from "../../server/api";' },
+    { filename: page, code: 'import { unwrap } from "@/server/api";' },
     { filename: page, code: 'import Editor from "../../features/builds/Editor.svelte";' },
     { filename: `${src}/middleware.ts`, code: 'import { createApiClient } from "./server/api";' },
     {
@@ -37,6 +38,16 @@ tester.run("frontend import boundaries", importBoundaries, {
       errors: [{ messageId: "primitives" }],
     },
     { filename: feature, code: 'import("../../server/api");', errors: [{ messageId: "server" }] },
+    {
+      filename: feature,
+      code: 'import { unwrap } from "@/server/api";',
+      errors: [{ messageId: "server" }],
+    },
+    {
+      filename: featureModule,
+      code: 'import { x } from "@/features/records/x";',
+      errors: [{ messageId: "featureLayer", data: { from: "features", to: "features" } }],
+    },
     { filename: feature, code: 'export * from "node:fs";', errors: [{ messageId: "server" }] },
     {
       filename: featureModule,

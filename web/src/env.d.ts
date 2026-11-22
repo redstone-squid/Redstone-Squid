@@ -14,9 +14,9 @@ interface ImportMeta {
 declare namespace App {
   interface Locals {
     /** Request locale, resolved from the URL prefix by middleware. */
-    locale: import("./locales/locale").Locale;
-    config: import("./server/config").RuntimeConfig;
+    locale: import("@/locales/locale").Locale;
+    config: import("@/server/config").RuntimeConfig;
     /** Generated SDK client for this request's locale; pass it as `client` to SDK functions. */
-    api: import("./generated/client").Client;
+    api: import("@/generated/client").Client;
   }
 }

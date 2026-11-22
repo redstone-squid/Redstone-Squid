@@ -67,7 +67,7 @@ export const noRawText: Rule.RuleModule = {
     type: "problem",
     schema: [],
     messages: {
-      text: "Move user-visible text to src/locales/*/messages.ftl and call it through `m` from src/locales/messages.",
+      text: "Move user-visible text to src/locales/*/messages.ftl and call it through `m` from @/locales/messages.gen.",
     },
   },
   create(context) {

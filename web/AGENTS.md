@@ -18,7 +18,9 @@ interaction. The site reads the Python API through an SDK generated from
 | `src/ui`         | The design system. Knows nothing about the application                   | `ui` only                                              |
 | `src/generated`  | The OpenAPI SDK. Run `bun run sdk:generate` after the contract changes   |                                                        |
 
-`scripts/lint/import-boundaries.ts` enforces this table through ESLint. If a rule blocks you,
+Import across directories with `@/` (`@/server/api`); only same-directory imports stay
+relative. Generated files end in `.gen.ts`, are rebuilt by a script, and are never edited by
+hand. `scripts/lint/import-boundaries.ts` enforces this table through ESLint. If a rule blocks you,
 move the code to the right layer rather than working around the rule.
 
 ## Requests
@@ -68,11 +70,11 @@ An error thrown inside a component after rendering starts truncates a 200 respon
 ## Text
 
 Every visible string lives in the Fluent catalogs `src/locales/<locale>/messages.ftl`, with the
-same IDs in every locale. `bun run i18n:generate` compiles them into `src/locales/messages.ts`,
+same IDs in every locale. `bun run i18n:generate` compiles them into `src/locales/messages.gen.ts`,
 one typed function per message, so an island ships only the messages it calls:
 
 ```ts
-import * as m from "../../locales/messages";
+import * as m from "@/locales/messages.gen";
 
 m.recordHolderCount(locale, { count: holders.length });
 ```
@@ -82,7 +84,7 @@ m.recordHolderCount(locale, { count: holders.length });
   number, `DATETIME()` a date. Format numbers and dates inside the message, not in code.
 - Domain values such as record criteria, build kinds, and statuses have one label each, in
   `squid/core/vocabulary.py`, shared with the bot. `just export-vocabulary` writes them to
-  `contracts/vocabulary.json`, which compiles into `src/locales/vocabulary.ts`:
+  `contracts/vocabulary.json`, which compiles into `src/locales/vocabulary.gen.ts`:
   `recordCriterionLabel(locale, record.criterion)`.
 - To pick a message by any other value, write a map checked against the union type, such as
   `{ required: m.trialRequired, ... } satisfies Record<DraftError, unknown>`. Never build a

@@ -1,8 +1,8 @@
 ---
-import { type Locale } from "../locales/locale";
-import * as m from "../locales/messages";
-import LinkButton from "../ui/astro/LinkButton.astro";
-import { buttonStyles } from "../ui/variants";
+import { type Locale } from "@/locales/locale";
+import * as m from "@/locales/messages.gen";
+import LinkButton from "@/ui/astro/LinkButton.astro";
+import { buttonStyles } from "@/ui/variants";
 import { selectedOption } from "./story-option";
 
 type Props = { locale: Locale; theme: "light" | "dark" };

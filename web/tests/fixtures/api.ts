@@ -14,7 +14,7 @@ import type {
   PublishedRecordResult,
   SearchSuggestions,
   SuggestionPage,
-} from "../../src/generated/types.gen";
+} from "@/generated/types.gen";
 
 // Deterministic public catalogue data for browser checks; this is not a full API emulator.
 const port = Number(process.env.FIXTURE_API_PORT ?? 8787);

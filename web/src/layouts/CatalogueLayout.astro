@@ -2,13 +2,13 @@
 import type { ComponentProps } from "astro/types";
 import LanguageSelector from "./LanguageSelector.astro";
 import DocumentHead from "./DocumentHead.astro";
-import { localizePath } from "../locales/locale";
-import * as m from "../locales/messages";
+import { localizePath } from "@/locales/locale";
+import * as m from "@/locales/messages.gen";
 import "@fontsource-variable/inter";
 import "@fontsource-variable/jetbrains-mono";
 import "@fontsource/noto-sans-sc/400.css";
 import "@fontsource/noto-sans-sc/600.css";
-import "../ui/base.css";
+import "@/ui/base.css";
 import "./catalogue-layout.css";
 type Props = ComponentProps<typeof DocumentHead>;
 const { locale, config } = Astro.locals;

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createDraftFixture, validateDraft } from "../../src/workbench/draft-fixture";
+import { createDraftFixture, validateDraft } from "@/workbench/draft-fixture";
 
 describe("draft trial fixture", () => {
   it("rejects unknown versions and fractional, zero or negative door widths", () => {

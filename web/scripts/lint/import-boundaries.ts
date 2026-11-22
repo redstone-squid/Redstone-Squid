@@ -87,8 +87,15 @@ export const importBoundaries: Rule.RuleModule = {
       if (isBrowser && imported.startsWith("node:")) {
         context.report({ node, messageId: "server" });
       }
-      if (!self || !imported.startsWith(".")) return;
-      const target = locate(path.resolve(path.dirname(filename), imported).replaceAll("\\", "/"));
+      if (!self) return;
+      // `@/` is the tsconfig alias for src/.
+      const absolute = imported.startsWith("@/")
+        ? `${self.src}${imported.slice(2)}`
+        : imported.startsWith(".")
+          ? path.resolve(path.dirname(filename), imported).replaceAll("\\", "/")
+          : undefined;
+      if (absolute === undefined) return;
+      const target = locate(absolute);
       if (target?.src !== self.src) return;
       const to = target.segments[0];
       if (isBrowser && to === "server") {

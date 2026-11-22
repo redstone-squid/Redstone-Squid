@@ -1,4 +1,4 @@
-import * as m from "../locales/messages";
+import * as m from "@/locales/messages.gen";
 
 export const versionOptions = ["Java 1.21.4", "Java 1.20.6", "Bedrock 1.21.50"] as const;
 export type DraftInput = {

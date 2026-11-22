@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
-  import { noticeStyles, type NoticeProps } from "../variants";
+  import { noticeStyles, type NoticeProps } from "@/ui/variants";
   let { title, tone, role, children }: NoticeProps & { children: Snippet } = $props();
 </script>
 

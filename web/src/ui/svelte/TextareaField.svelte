@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { HTMLTextareaAttributes } from "svelte/elements";
   import { cx } from "class-variance-authority";
-  import type { FieldMessages } from "../field";
+  import type { FieldMessages } from "@/ui/field";
   import FieldFrame from "./FieldFrame.svelte";
   type Props = HTMLTextareaAttributes & FieldMessages;
   let {

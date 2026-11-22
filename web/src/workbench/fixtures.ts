@@ -1,4 +1,4 @@
-import * as m from "../locales/messages";
+import * as m from "@/locales/messages.gen";
 
 export const buildFixtures = [
   {

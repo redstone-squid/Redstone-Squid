@@ -1,7 +1,7 @@
 ---
-import type { PublishedRecordResult } from "../../generated/types.gen";
-import type { Locale } from "../../locales/locale";
-import * as m from "../../locales/messages";
+import type { PublishedRecordResult } from "@/generated/types.gen";
+import type { Locale } from "@/locales/locale";
+import * as m from "@/locales/messages.gen";
 
 type Props = { record: PublishedRecordResult; locale: Locale };
 const { record, locale } = Astro.props;

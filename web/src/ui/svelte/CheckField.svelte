@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { HTMLInputAttributes } from "svelte/elements";
 
-  import type { FieldMessages } from "../field";
+  import type { FieldMessages } from "@/ui/field";
   import FieldFrame from "./FieldFrame.svelte";
   type Props = HTMLInputAttributes & FieldMessages & { type?: "checkbox" | "radio" };
   let {

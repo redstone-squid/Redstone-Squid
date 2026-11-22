@@ -1,8 +1,8 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import Autocomplete from "../../src/ui/svelte/Autocomplete.svelte";
-import type { Suggestions } from "../../src/ui/svelte/Autocomplete.svelte";
+import Autocomplete from "@/ui/svelte/Autocomplete.svelte";
+import type { Suggestions } from "@/ui/svelte/Autocomplete.svelte";
 
 afterEach(cleanup);
 

@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { HTMLFieldsetAttributes } from "svelte/elements";
   import { cx } from "class-variance-authority";
-  import { fieldAttributes, type FieldMessages } from "../field";
+  import { fieldAttributes, type FieldMessages } from "@/ui/field";
   let {
     id,
     label,

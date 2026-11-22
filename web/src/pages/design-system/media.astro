@@ -1,7 +1,7 @@
 ---
-import WorkbenchLayout from "../../workbench/WorkbenchLayout.astro";
-import * as m from "../../locales/messages";
-import LinkButton from "../../ui/astro/LinkButton.astro";
+import WorkbenchLayout from "@/workbench/WorkbenchLayout.astro";
+import * as m from "@/locales/messages.gen";
+import LinkButton from "@/ui/astro/LinkButton.astro";
 
 const params = Astro.url.searchParams;
 const locale = params.get("lang") === "zh-CN" ? "zh-CN" : "en";

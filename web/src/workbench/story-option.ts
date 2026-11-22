@@ -1,4 +1,4 @@
-import type { Locale } from "../locales/locale";
+import type { Locale } from "@/locales/locale";
 
 /** Story options keyed by their query-parameter value, each with its label message. */
 export type StoryOptionLabels<T extends string> = Record<T, (locale: Locale) => string>;

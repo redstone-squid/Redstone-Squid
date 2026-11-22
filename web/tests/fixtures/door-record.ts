@@ -1,4 +1,4 @@
-import type { DoorRecordEvidence } from "../../src/generated/types.gen";
+import type { DoorRecordEvidence } from "@/generated/types.gen";
 
 export const doorEvidence: DoorRecordEvidence = {
   evaluation: {

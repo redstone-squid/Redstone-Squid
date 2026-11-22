@@ -1,6 +1,6 @@
-import { createClient, type Client } from "../generated/client";
-import type { Locale } from "../locales/locale";
-import { decodeProblemDetail, type ApiProblemDetail } from "../lib/problem-details";
+import { createClient, type Client } from "@/generated/client";
+import type { Locale } from "@/locales/locale";
+import { decodeProblemDetail, type ApiProblemDetail } from "@/lib/problem-details";
 import type { RuntimeConfig } from "./config";
 
 const API_TIMEOUT_MS = 5_000;

@@ -1,15 +1,15 @@
 ---
-import LanguageSelector from "../layouts/LanguageSelector.astro";
-import Pagination from "../features/catalogue/Pagination.astro";
-import type { PublishedRecordResult } from "../generated/types.gen";
-import { type Locale } from "../locales/locale";
-import * as m from "../locales/messages";
-import { readOffset } from "../lib/pagination";
-import LinkButton from "../ui/astro/LinkButton.astro";
-import Layout from "../ui/astro/Layout.astro";
-import Panel from "../ui/astro/Panel.astro";
+import LanguageSelector from "@/layouts/LanguageSelector.astro";
+import Pagination from "@/features/catalogue/Pagination.astro";
+import type { PublishedRecordResult } from "@/generated/types.gen";
+import { type Locale } from "@/locales/locale";
+import * as m from "@/locales/messages.gen";
+import { readOffset } from "@/lib/pagination";
+import LinkButton from "@/ui/astro/LinkButton.astro";
+import Layout from "@/ui/astro/Layout.astro";
+import Panel from "@/ui/astro/Panel.astro";
 import { buildFixtures } from "./fixtures";
-import RecordSummary from "../features/catalogue/RecordSummary.astro";
+import RecordSummary from "@/features/catalogue/RecordSummary.astro";
 
 type Props = { locale: Locale };
 const { locale } = Astro.props;

@@ -1,7 +1,7 @@
 import { defineMiddleware } from "astro:middleware";
-import { localeFromPath, localizePath } from "./locales/locale";
-import { createApiClient } from "./server/api";
-import { getRuntimeConfig } from "./server/config";
+import { localeFromPath, localizePath } from "@/locales/locale";
+import { createApiClient } from "@/server/api";
+import { getRuntimeConfig } from "@/server/config";
 
 /**
  * Set up request locals and log each request.
