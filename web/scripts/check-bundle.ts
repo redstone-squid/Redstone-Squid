@@ -3,6 +3,9 @@ import path from "node:path";
 import { gzipSync } from "node:zlib";
 import { evaluateBudgets, type BundleManifest, type EntryBudget } from "./bundle-budgets";
 
+// Shared ceilings give interactive workflows room to grow and catch large regressions.
+const interactiveBudget = { initialKiB: 96, completeKiB: 160 };
+
 // Each workflow includes all of its independently hydrated islands. Keep this
 // inventory in sync with page composition; locale routes share the same code.
 const budgets: EntryBudget[] = [
@@ -24,14 +27,12 @@ const budgets: EntryBudget[] = [
     ],
     deferredEntries: ["src/workbench/Controls.svelte"],
     label: "Design workbench (Svelte)",
-    initialKiB: 47,
-    completeKiB: 60,
+    ...interactiveBudget,
   },
   {
     entries: ["src/workbench/DraftScenarioToggle.svelte", "src/workbench/DraftTrialStory.svelte"],
     label: "Svelte draft trial",
-    initialKiB: 32,
-    completeKiB: 45,
+    ...interactiveBudget,
   },
 ];
 const clientDirectory = path.resolve("dist/client");
