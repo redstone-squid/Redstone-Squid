@@ -1,0 +1,26 @@
+---
+import { tagsGetBySlug } from "@/generated/sdk.gen";
+import CatalogueLayout from "@/layouts/CatalogueLayout.astro";
+import { localizePath } from "@/locales/locale";
+import { unwrap } from "@/server/api";
+import PageHeading from "@/ui/astro/PageHeading.astro";
+
+const slug = Astro.params.slug;
+if (!slug) return Astro.rewrite("/404");
+const result = await tagsGetBySlug({ client: Astro.locals.api, path: { slug } });
+if (result.response?.status === 404) return Astro.rewrite("/404");
+const tag = unwrap(result);
+if (slug !== tag.slug) {
+  return new Response(null, {
+    status: 302,
+    headers: {
+      Location: localizePath(`/tags/${tag.slug}${Astro.url.search}`),
+      "Cache-Control": "no-store",
+    },
+  });
+}
+---
+
+<CatalogueLayout title={tag.name}>
+  <PageHeading title={tag.name} />
+</CatalogueLayout>

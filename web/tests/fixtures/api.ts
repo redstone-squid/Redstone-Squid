@@ -231,6 +231,13 @@ async function routeRequest(request: Request): Promise<Response> {
   const url = new URL(request.url);
   if (url.pathname === "/livez") return new Response("ok");
 
+  if (url.pathname.startsWith("/v1/tags/by-slug/")) {
+    if (["zero-tick", "old-name"].includes(url.pathname.split("/").at(-1) ?? "")) {
+      return json({ name: "Zero tick", slug: "zero-tick" });
+    }
+    return problem(request, 404, "not_found");
+  }
+
   if (url.pathname === "/v1/builds") {
     const query = url.searchParams.get("q") ?? "";
     if (query.includes("syntax:error") || query === "(")
