@@ -46,7 +46,7 @@ from squid.core.events.infrastructure.repository import publish_domain_event
 from squid.core.messages.domain import MessageSnapshot
 from squid.core.messages.models import Message
 from squid.core.settings.infrastructure.repository import ensure_server_settings
-from squid.core.tags.domain import TagAuthority, TagSemanticKind, TagValueType
+from squid.core.tags.domain import TagSemanticKind, TagValueType
 from squid.core.tags.infrastructure.loading import assignment_units, definition_units
 from squid.core.tags.models import (
     TagAssignment,
@@ -335,8 +335,6 @@ class BuildRepository:
                     unit=assignment.presentation_unit.key if assignment.presentation_unit else None,
                 )
             )
-            if tag_row.authority != TagAuthority.OFFICIAL:
-                continue
             if tag_row.semantic_kind == TagSemanticKind.PATTERN:
                 title_tags[assignment.build_id]["patterns"].append(tag_row.display_name)
             elif tag_row.semantic_kind == TagSemanticKind.RESTRICTION and tag_row.restriction_type is not None:

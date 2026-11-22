@@ -8,16 +8,16 @@ from squid.core.builds.domain import BuildCategory, ShowcaseTag, UnresolvedTags
 from squid.core.builds.errors import InvalidBuildError
 from squid.core.builds.models import Build
 from squid.core.errors import ValidationError
-from squid.core.tags.domain import TagAuthority, TagSemanticKind, TagValue, coerce_assignment_value
+from squid.core.tags.domain import TagSemanticKind, TagValue, coerce_assignment_value
 from squid.core.tags.models import TagAssignment, TagDefinition
 
 
 @dataclass(frozen=True, slots=True)
 class TagResolution:
-    """The outcome of resolving requested tag names against official tags.
+    """The outcome of resolving requested tag names against approved tags.
 
     Unknown names are reported normalized (see :func:`normalize_tag_name`); a
-    name is unknown when it matches no approved official definition, or when it
+    name is unknown when it matches no approved definition, or when it
     matches more than one and the request is therefore ambiguous.
     """
 
@@ -27,9 +27,9 @@ class TagResolution:
 
 
 class BuildTagResolver(Protocol):
-    """Resolve restriction and pattern names against the official tags."""
+    """Resolve restriction and pattern names against approved tags."""
 
-    async def resolve_official(
+    async def resolve_tags(
         self,
         *,
         build_kind: str | None,
@@ -50,9 +50,9 @@ async def apply_build_tags(build: Build, resolver: BuildTagResolver) -> None:
     the other direction, then rewrites the lists with the resolved display names
     so the prepared build agrees with what a later reload will show.
 
-    Replace official restriction and pattern tags while retaining other tags. Names that resolve
-    to no single official tag become the build's unresolved names (see UnresolvedTags). The
-    build's earlier unresolved names are resolved again, so one that now matches an official tag
+    Replace restriction and pattern tags while retaining other tags. Names that resolve
+    to no single approved tag become the build's unresolved names (see UnresolvedTags). The
+    build's earlier unresolved names are resolved again, so one that now matches an approved tag
     becomes an assignment. Doors and extenders with no requested or unresolved pattern use Regular.
     """
     # Collect every name to resolve, deduplicated the way unresolved names are, so that the ones the
@@ -66,7 +66,7 @@ async def apply_build_tags(build: Build, resolver: BuildTagResolver) -> None:
     patterns = list(requested.patterns) or (
         ["Regular"] if build.category in {BuildCategory.DOOR, BuildCategory.EXTENDER} else []
     )
-    resolution = await resolver.resolve_official(
+    resolution = await resolver.resolve_tags(
         build_kind=build.category.value,
         restrictions=requested.restriction_names(),
         patterns=patterns,
@@ -76,10 +76,7 @@ async def apply_build_tags(build: Build, resolver: BuildTagResolver) -> None:
     )
 
     retained = [
-        assignment
-        for assignment in build.tags
-        if assignment.definition.authority is not TagAuthority.OFFICIAL
-        or assignment.definition.semantic_kind not in {TagSemanticKind.RESTRICTION, TagSemanticKind.PATTERN}
+        assignment for assignment in build.tags if assignment.definition.semantic_kind is TagSemanticKind.SHOWCASE
     ]
     build.tags = [*retained, *resolution.assignments]
 

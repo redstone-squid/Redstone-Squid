@@ -1,4 +1,4 @@
-# Unresolved build taxonomy audit
+# Audit of unresolved build tags
 
 The November 15, 2026 historical import snapshot (`historical-final.dump`) contains
 **9,189 unresolved entries across 5,294 builds**. The snapshot predates bulk approval
@@ -18,7 +18,7 @@ within each field.
 | Miscellaneous restrictions | 588 | 1,443 |
 | **Total** | **2,210** | **9,189** |
 
-## First pass
+## Initial recommendations
 
 1. **Add straightforward aliases.** 495 entries match candidate aliases for
    tags already applicable to the build. Start with `non-loc` → **Not
@@ -35,7 +35,7 @@ within each field.
    See the [door rules](../door-rules.md).
 3. **Extend existing tags to the categories where their definitions apply.**
    385 entries already match a name or alias but are on extenders, utilities,
-   or entrances. The snapshot's official taxonomy applies only to doors.
+   or entrances. The snapshot's official catalogue applies only to doors.
    Start with broadly applicable component restrictions such as **No
    Observers** (104 entries) and **No Entities** (59). Check the geometry
    definitions before extending **Flush** (53) or **Staircase** (20).
@@ -45,7 +45,7 @@ within each field.
    **No Jukeboxes** (34), **No Comparators** (30), and **No Target Blocks**
    (27). Agree on scope and applicable build kinds before backfilling.
 
-## Terms that need evidence
+## Terms flagged for review
 
 | Observed family | Entries | Proposed treatment |
 | --- | ---: | --- |
@@ -69,7 +69,7 @@ build-specific qualifiers as notes. The inventory flags 239 entries for
 structured fields or notes. A further 3,540 entries are outside the curated
 proposals and need individual review.
 
-After approving changes, re-run taxonomy resolution on affected builds
+After approving changes, re-run tag resolution on affected builds
 through the build write path so assignments and unresolved values are updated
 together. Preview the changes by build kind and preserve the raw value wherever
 the evidence is ambiguous.

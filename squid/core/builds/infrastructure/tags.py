@@ -61,9 +61,9 @@ class PostgresBuildTags:
         return (
             await session.scalars(
                 select(TagDefinition.display_name).where(
-                    TagDefinition.authority == "official",
                     TagDefinition.semantic_kind == "restriction",
                     TagDefinition.restriction_type == type,
+                    TagDefinition.withdrawn.is_(False),
                     TagDefinition.moderation_status == "approved",
                 )
             )
@@ -82,14 +82,14 @@ class PostgresBuildTags:
             )
         ).all()
 
-    async def resolve_official(
+    async def resolve_tags(
         self,
         *,
         build_kind: str | None,
         restrictions: Sequence[str],
         patterns: Sequence[str],
     ) -> TagResolution:
-        rows, unknown_restrictions, unknown_patterns = await self._resolve_official_tag_rows(
+        rows, unknown_restrictions, unknown_patterns = await self._resolve_tag_rows(
             build_kind=build_kind,
             restrictions=restrictions,
             patterns=patterns,
@@ -118,14 +118,14 @@ class PostgresBuildTags:
             )
         ).all()
 
-    async def _resolve_official_tag_rows(
+    async def _resolve_tag_rows(
         self,
         *,
         build_kind: str | None,
         restrictions: Sequence[str],
         patterns: Sequence[str],
     ) -> tuple[list[TagDefinition], set[str], set[str]]:
-        """Match approved official names and aliases, optionally limited to a build kind.
+        """Match approved tag names and aliases, optionally limited to a build kind.
 
         Only unambiguous names select tags. Return selected rows in display order
         and normalized names that could not be resolved, separated by semantic kind.
@@ -159,8 +159,8 @@ class PostgresBuildTags:
             .options(selectinload(TagDefinition.aliases))
             .outerjoin(TagAlias, TagAlias.tag_id == TagDefinition.id)
             .where(
-                TagDefinition.authority == "official",
                 TagDefinition.moderation_status == "approved",
+                TagDefinition.withdrawn.is_(False),
                 matched_kind,
             )
             .order_by(TagDefinition.default_display_order, TagDefinition.id)

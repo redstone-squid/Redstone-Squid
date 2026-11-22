@@ -127,7 +127,7 @@ def tag_sources(repository: TagReader, tags: PendingTagDefinitions) -> tuple[Sug
         ),
         SuggestionSource(
             id="approved_restrictions",
-            provider=TagProvider(repository, TagSemanticKind.RESTRICTION.value),
+            provider=TagProvider(repository, TagSemanticKind.RESTRICTION.value, authority=None),
             kind=SourceKind.ENUMERABLE,
             multi_value=",",
             kind_label="restriction",
@@ -140,8 +140,6 @@ def tag_sources(repository: TagReader, tags: PendingTagDefinitions) -> tuple[Sug
             kind_label="pattern",
         ),
         SuggestionSource(
-            # Showcase tags are proposed by users, so unlike restrictions and patterns they are
-            # never `official` and must not be filtered on authority.
             id="approved_showcase_tags",
             provider=TagProvider(repository, TagSemanticKind.SHOWCASE.value, authority=None),
             kind=SourceKind.ENUMERABLE,

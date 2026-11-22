@@ -34,7 +34,7 @@ from squid.core.edits.domain import EditCommand, EditResult, EditValues, LatestR
 from squid.core.errors import AuthorizationError
 from squid.core.permissions.application.services import PermissionService
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.core.tags.domain import TagModerationStatus, TagValueType
+from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagValueType
 from squid.core.versions.application import VersionService
 from tests.support.build_edits import build_edit_session
 from tests.support.submission_targets import seed_account_and_version
@@ -115,6 +115,26 @@ async def test_build_receipts_restore_children_and_unresolved_tags_in_one_audit_
     replay = await executor.execute(result.receipt.command, actor)
     assert replay.replayed
     assert replay.outcome == result.outcome
+
+
+async def test_unofficial_component_restriction_round_trips_through_build_edits(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    service, executor, actor, build = await setup(migrated_session_factory)
+    assert build.id is not None
+    target = LatestRevision(build_target(build.id))
+    for names in (["Cracked"], []):
+        await executor.execute(
+            EditCommand(BUILD_EDIT, (target,), patch_values(BuildEditPatch(component_restrictions=names))),
+            actor,
+        )
+        current = await service.get(build.id)
+        assert current is not None
+        assert current.component_restrictions == names
+        assert not UnresolvedTags.read(current.extra_info).restrictions
+        assert [assignment.definition.authority for assignment in current.tags] == (
+            [TagAuthority.USER] if names else []
+        )
 
 
 async def test_competing_build_edits_and_unrelated_child_write_fence_undo(

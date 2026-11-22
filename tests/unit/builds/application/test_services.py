@@ -175,7 +175,7 @@ class FakeTagResolver:
         }
         self.known_patterns = known_patterns
 
-    async def resolve_official(
+    async def resolve_tags(
         self,
         *,
         build_kind: str | None,

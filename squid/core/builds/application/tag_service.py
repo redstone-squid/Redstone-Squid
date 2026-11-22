@@ -33,7 +33,7 @@ class BuildTagRepository(Protocol):
     async def add_restriction_alias(self, name_or_alias: str, alias: str) -> None: ...
     async def get_valid_restrictions(self, type: RestrictionTypeLiteral) -> Sequence[str]: ...
     async def get_valid_door_types(self) -> Sequence[str]: ...
-    async def resolve_official(
+    async def resolve_tags(
         self, *, build_kind: str | None, restrictions: Sequence[str], patterns: Sequence[str]
     ) -> TagResolution: ...
     async def showcase_definitions(self, keys: Sequence[str]) -> Sequence[TagDefinition]: ...
@@ -85,11 +85,11 @@ class BuildTagService:
             dict(zip((*types, "patterns"), results, strict=True))
         ).model_dump_json(by_alias=True)
 
-    async def resolve_official(
+    async def resolve_tags(
         self, *, build_kind: str | None, restrictions: Sequence[str], patterns: Sequence[str]
     ) -> TagResolution:
         async with self._uow_factory() as uow:
-            return await uow.build_tags.resolve_official(
+            return await uow.build_tags.resolve_tags(
                 build_kind=build_kind, restrictions=restrictions, patterns=patterns
             )
 
@@ -113,7 +113,7 @@ class BuildTagService:
             else:
                 expanded.append(value)
         restrictions = expanded
-        resolution = await self.resolve_official(build_kind=None, restrictions=restrictions, patterns=())
+        resolution = await self.resolve_tags(build_kind=None, restrictions=restrictions, patterns=())
         return _validated_names(
             restrictions,
             [item.definition for item in resolution.assignments if item.definition.restriction_type == type],
@@ -122,7 +122,7 @@ class BuildTagService:
 
     async def validate_door_types(self, door_types: list[str]) -> tuple[list[str], list[str]]:
         """Split door pattern names into recognized display names and unrecognized input."""
-        resolution = await self.resolve_official(build_kind="Door", restrictions=(), patterns=door_types)
+        resolution = await self.resolve_tags(build_kind="Door", restrictions=(), patterns=door_types)
         return _validated_names(
             door_types, [item.definition for item in resolution.assignments], resolution.unknown_patterns
         )

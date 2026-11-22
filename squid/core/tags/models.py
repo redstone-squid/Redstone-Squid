@@ -118,8 +118,9 @@ class TagDefinition(SlugMixin, AuditTimestampsMixin, Revisioned, Base, kw_only=T
         ),
         CheckConstraint(
             "(authority = 'official') OR "
-            "(semantic_kind = 'showcase' AND restriction_type IS NULL AND record_operator IS NULL)",
-            name="tag_definitions_user_showcase_only_check",
+            "(record_operator IS NULL AND (semantic_kind = 'showcase' OR "
+            "(semantic_kind = 'restriction' AND restriction_type = 'component' AND value_type = 'none')))",
+            name="tag_definitions_user_kind_check",
         ),
         CheckConstraint(
             "(semantic_kind = 'restriction' AND restriction_type IS NOT NULL) OR "

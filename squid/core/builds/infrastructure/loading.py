@@ -20,7 +20,7 @@ from squid.core.errors import DataIntegrityError
 from squid.core.messages.domain import MessageRef
 from squid.core.messages.models import Message
 from squid.core.sponsors import PublicSponsor
-from squid.core.tags.domain import TagAuthority, TagSemanticKind
+from squid.core.tags.domain import TagSemanticKind
 from squid.core.versions.models import Version
 
 
@@ -129,31 +129,25 @@ class BuildLoader:
         source_messages = tuple(values.source_messages.get(sql_build.id, ()))
 
         tags = list(sql_build.tags)
-        official_restrictions = [
+        restrictions = [
             assignment.definition
             for assignment in tags
-            if assignment.definition.authority is TagAuthority.OFFICIAL
-            and assignment.definition.semantic_kind is TagSemanticKind.RESTRICTION
+            if assignment.definition.semantic_kind is TagSemanticKind.RESTRICTION
         ]
-        official_patterns = [
+        patterns = [
             assignment.definition.display_name
             for assignment in tags
-            if assignment.definition.authority is TagAuthority.OFFICIAL
-            and assignment.definition.semantic_kind is TagSemanticKind.PATTERN
+            if assignment.definition.semantic_kind is TagSemanticKind.PATTERN
         ]
         sql_build.versions = list(values.versions.get(sql_build.id, ()))
-        sql_build.patterns = official_patterns
+        sql_build.patterns = patterns
         sql_build.wiring_placement_restrictions = [
-            r.display_name for r in official_restrictions if r.restriction_type == "wiring-placement"
+            r.display_name for r in restrictions if r.restriction_type == "wiring-placement"
         ]
-        sql_build.animated_restrictions = [
-            r.display_name for r in official_restrictions if r.restriction_type == "animated"
-        ]
-        sql_build.component_restrictions = [
-            r.display_name for r in official_restrictions if r.restriction_type == "component"
-        ]
+        sql_build.animated_restrictions = [r.display_name for r in restrictions if r.restriction_type == "animated"]
+        sql_build.component_restrictions = [r.display_name for r in restrictions if r.restriction_type == "component"]
         sql_build.miscellaneous_restrictions = [
-            r.display_name for r in official_restrictions if r.restriction_type == "miscellaneous"
+            r.display_name for r in restrictions if r.restriction_type == "miscellaneous"
         ]
         sql_build.credits = list(values.credits.get(sql_build.id, ()))
         sql_build.submitter_discord_id = submitter_discord_id

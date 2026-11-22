@@ -51,10 +51,13 @@ with inserted_patterns as (
     ('carpet', 'Carpet', 'carpet', 'official', 'pattern', 'none', '{name}', 40, 'approved'),
     ('semi_tnt', 'Semi TNT', 'semi tnt', 'official', 'pattern', 'none', '{name}', 41, 'approved'),
     ('full_tnt', 'Full TNT', 'full tnt', 'official', 'pattern', 'none', '{name}', 42, 'approved')
-    returning id
+    returning id, stable_key
 )
 insert into tag_applicabilities (tag_id, build_kind)
-select id, 'Door' from inserted_patterns;
+select id, kind
+from inserted_patterns
+cross join (values ('Door'), ('Entrance')) as kinds(kind)
+where kind = 'Door' or stable_key = 'sand';
 
 -- Door restrictions (formerly the `restrictions` table, now official restriction tags)
 with inserted_restrictions as (
@@ -104,14 +107,18 @@ with inserted_restrictions as (
     ('directional_with_fixes', 'Directional With Fixes', 'directional with fixes', 'official', 'restriction', 'miscellaneous', 'none', 'present', '{name}', 42, 'approved'),
     ('locational', 'Locational', 'locational', 'official', 'restriction', 'miscellaneous', 'none', 'present', '{name}', 43, 'approved'),
     ('directional', 'Directional', 'directional', 'official', 'restriction', 'miscellaneous', 'none', 'present', '{name}', 44, 'approved')
-    returning id
+    returning id, stable_key, restriction_type
 )
 insert into tag_applicabilities (tag_id, build_kind)
-select id, 'Door' from inserted_restrictions;
+select id, kind
+from inserted_restrictions
+cross join (values ('Door'), ('Entrance'), ('Extender'), ('Utility'), ('Other')) as kinds(kind)
+where kind = 'Door' or restriction_type = 'component' or stable_key = 'flush'
+    or (kind in ('Entrance', 'Extender', 'Utility') and stable_key in ('full_seamless', 'quart_seamless'))
+    or (kind = 'Entrance' and stable_key = 'full_floor_hipster');
 
--- Common spellings with the same meaning as the canonical restriction. Bare
--- "hipster" and "seamless" do not specify a tier; "sandless" does not exclude
--- every gravity block. Keep those claims distinct rather than broadening them.
+-- Common aliases for the example catalogue. The historical cleanup migration
+-- seeds its new tags and aliases separately.
 with aliases (stable_key, alias) as (
     values
     ('no_observers', 'Observerless'),
@@ -141,7 +148,79 @@ with aliases (stable_key, alias) as (
     ('semi_seamless', 'Semi-seamless'),
     ('quart_seamless', 'Quart-seamless'),
     ('flush', 'Full-flush'),
-    ('flush', 'Full Flush')
+    ('flush', 'Full Flush'),
+    ('full_seamless', 'seamless'),
+    ('full_seamless', 'seam'),
+    ('full_floor_hipster', 'hipster'),
+    ('full_floor_hipster', 'hip'),
+    ('full_floor_hipster', 'full hipster'),
+    ('full_floor_hipster', 'floor hipster'),
+    ('full_tnt', 'tnt'),
+    ('dual_cave_corner', 'dual corner'),
+    ('dual_cave_corner', 'double corner'),
+    ('no_gravity_blocks', 'sandless'),
+    ('no_gravity_blocks', 'no sand'),
+    ('no_gravity_blocks', 'sand-less'),
+    ('center_glass', 'glass center'),
+    ('center_glass', 'centre glass'),
+    ('center_glass', 'glass centre'),
+    ('slab_shifted', 'slab shifted'),
+    ('always_on_lamp', 'always-on lamp'),
+    ('sissy_bar', 'sissybar'),
+    ('sissy_bar', 'sissy-bar'),
+    ('dual_rail', 'double rail'),
+    ('semi_flush', 'semi-flush'),
+    ('semi_flush', 'semiflush'),
+    ('flush', 'fullflush'),
+    ('semi_seamless', 'semiseamless'),
+    ('semi_seamless', 'semi seam'),
+    ('super_seamless', 'superseamless'),
+    ('super_seamless', 'superseam'),
+    ('not_locational', 'non-locational'),
+    ('not_locational', 'non-loc'),
+    ('not_locational', 'non locational'),
+    ('not_locational', 'nonloc'),
+    ('not_locational', 'non loc'),
+    ('not_locational', 'nonlocational'),
+    ('not_locational', 'not loc'),
+    ('not_directional', 'non-directional'),
+    ('not_directional', 'non-dir'),
+    ('not_directional', 'non directional'),
+    ('not_directional', 'non dir'),
+    ('not_directional', 'nondir'),
+    ('not_directional', 'nondirectional'),
+    ('not_directional', 'not dir'),
+    ('locational', 'loc'),
+    ('directional', 'dir'),
+    ('no_observers', 'observer-less'),
+    ('no_observers', 'obs-less'),
+    ('no_observers', 'observer less'),
+    ('no_observers', 'no observer'),
+    ('no_observers', 'without observers'),
+    ('no_entities', 'entity-less'),
+    ('no_entities', 'entity less'),
+    ('no_entities', 'no entity'),
+    ('no_entities', '0 entity'),
+    ('no_entities', '0 entities'),
+    ('no_slime_blocks', 'slime-less'),
+    ('no_slime_blocks', 'no slimeblocks'),
+    ('no_slime_blocks', 'no slime block'),
+    ('no_slime_blocks', 'no slime'),
+    ('no_slime_blocks', 'without slime'),
+    ('no_slime_blocks', 'no slimes'),
+    ('no_honey_blocks', 'honey-less'),
+    ('no_honey_blocks', 'no honeyblocks'),
+    ('no_honey_blocks', 'no honey block'),
+    ('no_note_blocks', 'noteblock-less'),
+    ('no_note_blocks', 'no noteblocks'),
+    ('no_note_blocks', 'no note block'),
+    ('no_clocks', 'clock-less'),
+    ('no_clocks', 'no clock'),
+    ('no_sticky_pistons', 'sticky piston-less'),
+    ('no_sticky_pistons', 'sticky-pistonless'),
+    ('no_sticky_pistons', 'without sticky pistons'),
+    ('no_flying_machines', 'flyingmachineless'),
+    ('no_flying_machines', 'flying-machine-less')
 )
 insert into tag_aliases (tag_id, alias, normalized_alias)
 select definition.id, aliases.alias, lower(aliases.alias)
