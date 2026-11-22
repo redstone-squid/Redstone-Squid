@@ -189,8 +189,8 @@ async def test_build_card_video_without_preview_stays_in_gallery(display_build: 
     ("status", "expected"),
     [
         (BuildStatus.PENDING, sl.Role("build.pending", sl.Tone.WARNING, marker="⏳ ")),
-        (BuildStatus.APPROVED, sl.Role("build.confirmed", sl.Tone.SUCCESS)),
-        (BuildStatus.REJECTED, sl.Role("build.denied", sl.Tone.DANGER)),
+        (BuildStatus.APPROVED, sl.Role("build.approved", sl.Tone.SUCCESS)),
+        (BuildStatus.REJECTED, sl.Role("build.rejected", sl.Tone.DANGER)),
     ],
 )
 def test_build_statuses_have_domain_roles(status: BuildStatus, expected: sl.Role) -> None:
