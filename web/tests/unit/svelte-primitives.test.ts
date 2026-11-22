@@ -1,12 +1,11 @@
-import { render, screen, cleanup, waitFor } from "@testing-library/svelte";
+import { render, screen, waitFor } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import FormSpecimen from "@/workbench/FormSpecimen.svelte";
 import Field from "@/ui/svelte/Field.svelte";
 import Harness from "./fixtures/SvelteDialogHarness.svelte";
 import { buttonStyles, inputClass } from "@/ui/variants";
 
-afterEach(cleanup);
 describe("Svelte primitive contracts", () => {
   it("merges field classes and descriptions while preserving caller invalid semantics", () => {
     const help = document.createElement("p");

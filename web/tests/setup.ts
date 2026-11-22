@@ -1,5 +1,8 @@
 import "@testing-library/jest-dom/vitest";
-import { beforeEach } from "vitest";
+import { cleanup } from "@testing-library/svelte";
+import { afterEach, beforeEach } from "vitest";
+
+afterEach(cleanup);
 
 // Components read the page locale from <html lang>, like the browser after server rendering.
 beforeEach(() => {

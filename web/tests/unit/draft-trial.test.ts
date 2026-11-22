@@ -1,48 +1,62 @@
-import { render, screen, cleanup } from "@testing-library/svelte";
+import { render, screen } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import DraftTrial from "@/workbench/DraftTrial.svelte";
 
-afterEach(cleanup);
-
-const mount = (scenario?: "retry" | "upload-retry") => render(DraftTrial, { scenario });
-
 describe("Draft trial", () => {
-  it("validates conditional fields, filters versions, uploads and recovers from server validation", async () => {
+  it("requires a title and a positive whole opening width for a door", async () => {
     const user = userEvent.setup();
-    mount();
+    render(DraftTrial);
+    await user.type(screen.getByLabelText("Opening width"), "1.5");
     await user.click(screen.getByRole("button", { name: "Save draft" }));
     expect(screen.getByLabelText("Build title")).toHaveAttribute("aria-invalid", "true");
-    await user.type(screen.getByLabelText("Build title"), "Reserved");
-    await user.type(screen.getByLabelText("Opening width"), "1.5");
-    await user.type(screen.getByLabelText("Find a version"), "1.21.4");
-    expect(screen.queryByRole("option", { name: "Bedrock 1.21.50" })).not.toBeInTheDocument();
-    await user.selectOptions(screen.getByLabelText("Minecraft version"), "Java 1.21.4");
-    await user.click(screen.getByRole("button", { name: "Save draft" }));
     expect(screen.getByLabelText("Opening width")).toHaveAccessibleDescription(
       "Enter a positive whole number.",
     );
-    await user.clear(screen.getByLabelText("Opening width"));
+  });
+
+  it("shows matching Minecraft versions as the visitor types", async () => {
+    const user = userEvent.setup();
+    render(DraftTrial);
+    await user.type(screen.getByLabelText("Find a version"), "1.21.4");
+    expect(screen.getByRole("option", { name: "Java 1.21.4" })).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: "Bedrock 1.21.50" })).not.toBeInTheDocument();
+  });
+
+  it("allows the visitor to correct a rejected title and save", async () => {
+    const user = userEvent.setup();
+    render(DraftTrial);
+    const title = screen.getByLabelText("Build title");
+    const save = screen.getByRole("button", { name: "Save draft" });
+    await user.type(title, "Reserved");
     await user.type(screen.getByLabelText("Opening width"), "5");
-    await user.click(screen.getByRole("button", { name: "Save draft" }));
+    await user.selectOptions(screen.getByLabelText("Minecraft version"), "Java 1.21.4");
+    await user.click(save);
     expect(await screen.findByText("This title is already taken.")).toBeVisible();
-    await user.clear(screen.getByLabelText("Build title"));
-    await user.type(screen.getByLabelText("Build title"), "Copper Bolt");
+    await user.clear(title);
+    await user.type(title, "Copper Bolt");
+    await user.click(save);
+    expect(await screen.findByText("Draft saved.")).toBeVisible();
+    await user.type(title, " revised");
+    expect(screen.getByRole("status")).toHaveTextContent("Ready to edit.");
+  });
+
+  it("blocks saving while a schematic uploads and shows the attachment when it finishes", async () => {
+    const user = userEvent.setup();
+    render(DraftTrial);
+    const save = screen.getByRole("button", { name: "Save draft" });
     await user.upload(
       screen.getByLabelText("Attach a schematic"),
       new File(["fixture"], "door.schem"),
     );
     expect(screen.getByRole("progressbar")).toBeVisible();
-    expect(screen.getByRole("button", { name: "Save draft" })).toBeDisabled();
+    expect(save).toBeDisabled();
     expect(await screen.findByText("Attached: door.schem")).toBeVisible();
-    await user.click(screen.getByRole("button", { name: "Save draft" }));
-    expect(await screen.findByText("Draft saved.")).toBeVisible();
-    await user.type(screen.getByLabelText("Build title"), " revised");
-    expect(screen.getByRole("status")).toHaveTextContent("Ready to edit.");
+    expect(save).toBeEnabled();
   });
   it("retains edits across a failed save and retries without requiring a hidden field", async () => {
     const user = userEvent.setup();
-    mount("retry");
+    render(DraftTrial, { scenario: "retry" });
     await user.type(screen.getByLabelText("Build title"), "Utility build");
     await user.selectOptions(screen.getByLabelText("Category"), "utility");
     expect(screen.queryByLabelText("Opening width")).not.toBeInTheDocument();
@@ -54,7 +68,7 @@ describe("Draft trial", () => {
   });
   it("retries the selected file after an upload failure", async () => {
     const user = userEvent.setup();
-    mount("upload-retry");
+    render(DraftTrial, { scenario: "upload-retry" });
     await user.upload(
       screen.getByLabelText("Attach a schematic"),
       new File(["fixture"], "retry.schem"),
@@ -65,7 +79,7 @@ describe("Draft trial", () => {
   });
   it("cancels an upload and disposes pending work on unmount", async () => {
     const user = userEvent.setup();
-    const view = mount();
+    const view = render(DraftTrial);
     const upload = screen.getByLabelText("Attach a schematic");
     await user.upload(upload, new File(["fixture"], "first.schem"));
     await user.click(screen.getByRole("button", { name: "Cancel operation" }));

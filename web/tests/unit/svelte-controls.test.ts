@@ -1,11 +1,10 @@
-import { render, screen, cleanup, waitFor } from "@testing-library/svelte";
+import { render, screen, waitFor } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import Controls from "@/workbench/Controls.svelte";
 import type { Locale } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
 
-afterEach(cleanup);
 for (const locale of ["en", "zh-CN"] satisfies Locale[]) {
   describe(`Svelte workbench (${locale})`, () => {
     it("validates and saves a draft, then clears feedback on edit", async () => {

@@ -139,14 +139,20 @@ m.recordHolderCount({ count: holders.length });
 
 ## Tests
 
-- `tests/unit`: Vitest in jsdom. Render Svelte components with Testing Library and query
-  by role and accessible name. Coverage thresholds apply to `src/locales`, `src/ui`,
-  `src/features`, and `src/workbench`.
+- `tests/unit`: Vitest in jsdom. See [autocomplete](tests/unit/autocomplete.test.ts) for
+  role-based queries and keyboard behavior, and [API errors](tests/unit/server-api.test.ts)
+  for request and response contracts with MSW. Advance fake timers for debounce tests.
+  Coverage thresholds apply to locale, UI, feature, and workbench code.
 - `tests/e2e`: Playwright against the built site and the fixture API in `tests/fixtures/api.ts`.
+  Follow [tag pages](tests/e2e/tag-slugs.spec.ts) for visible page content and HTTP contracts.
+  Remove a route from the placeholder matrix when its page ships.
 - `tests/review`: screenshots, axe, and recorded workflows of the design-system workbench.
 - Browser specs import `test` and `expect` from `tests/support/test`. A test fails on any
   console error, and `await expect(page).toPassAxe()` runs axe. Server ports and environment
   live in `tests/support/servers.ts`.
+
+Name tests for the behavior they protect. Keep the action and outcome visible in each test.
+Use comments for timing, browser behavior, or constraints the code cannot explain on its own.
 
 ## Checks
 

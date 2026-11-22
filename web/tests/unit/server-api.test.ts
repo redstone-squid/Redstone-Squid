@@ -1,6 +1,6 @@
 import { http, HttpResponse, type JsonBodyType } from "msw";
 import { setupServer } from "msw/node";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 import { buildsGet, buildsList } from "@/generated/sdk.gen";
 import type { BuildsListResponse } from "@/generated/types.gen";
@@ -36,7 +36,7 @@ function failBuildLookup(status: number, body: JsonBodyType, headers: Record<str
 }
 
 describe("per-request API client", () => {
-  it("sends the request locale and a timeout signal", async () => {
+  it("sends the request locale and query to the API", async () => {
     let request: Request | undefined;
     server.use(
       http.get(`${API}/v1/builds`, (info) => {
@@ -48,7 +48,32 @@ describe("per-request API client", () => {
     expect(unwrap(await buildsList({ client, query: { after_id: 7 } }))).toEqual(emptyPage);
     expect(request?.url).toBe(`${API}/v1/builds?after_id=7`);
     expect(request?.headers.get("Accept-Language")).toBe("zh-CN");
-    expect(request?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("returns a service error when the API deadline expires", async () => {
+    const started = Promise.withResolvers<undefined>();
+    const release = Promise.withResolvers<undefined>();
+    server.use(
+      http.get(`${API}/v1/builds`, async () => {
+        started.resolve(undefined);
+        await release.promise;
+        return HttpResponse.json(emptyPage);
+      }),
+    );
+    const deadline = new AbortController();
+    // Hold the response so the deadline expires while fetch is waiting for the API.
+    const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValueOnce(deadline.signal);
+    try {
+      const pending = buildsList({ client: createApiClient("en", config) });
+      await started.promise;
+      deadline.abort(new DOMException("Deadline expired", "TimeoutError"));
+      release.resolve(undefined);
+      const result = await pending;
+      expect(() => unwrap(result)).toThrow(expect.objectContaining({ status: 503 }));
+    } finally {
+      release.resolve(undefined);
+      timeout.mockRestore();
+    }
   });
 });
 

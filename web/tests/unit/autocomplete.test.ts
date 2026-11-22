@@ -1,10 +1,12 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/svelte";
+import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import Autocomplete from "@/ui/svelte/Autocomplete.svelte";
 import type { Suggestions } from "@/ui/svelte/Autocomplete.svelte";
 
-afterEach(cleanup);
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 const versions = ["Java 1.20", "Java 1.21", "Java 1.21.4"];
 
@@ -33,13 +35,16 @@ function setup(
 
 describe("Autocomplete", () => {
   it("waits for the minimum length before loading", async () => {
+    vi.useFakeTimers();
     const load = vi.fn(() => Promise.resolve({ items: [] }));
-    const { user, input } = setup(load);
-    await user.type(input, "J");
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    const { input } = setup(load);
+    await fireEvent.focus(input);
+    await fireEvent.input(input, { target: { value: "J" } });
+    await vi.runOnlyPendingTimersAsync();
     expect(load).not.toHaveBeenCalled();
-    await user.type(input, "a");
-    await waitFor(() => expect(load).toHaveBeenCalledWith("Ja", 2, expect.any(AbortSignal)));
+    await fireEvent.input(input, { target: { value: "Ja" } });
+    await vi.runOnlyPendingTimersAsync();
+    expect(load).toHaveBeenCalledWith("Ja", 2, expect.any(AbortSignal));
   });
 
   it("moves through options with the arrow keys, wraps, and chooses with Enter", async () => {
@@ -116,14 +121,16 @@ describe("Autocomplete", () => {
   });
 
   it("waits for IME composition to finish before loading", async () => {
+    vi.useFakeTimers();
     const load = vi.fn(() => Promise.resolve({ items: [] }));
     const { input } = setup(load);
     await fireEvent.focus(input);
     await fireEvent.compositionStart(input);
     await fireEvent.input(input, { target: { value: "红石" } });
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    await vi.runOnlyPendingTimersAsync();
     expect(load).not.toHaveBeenCalled();
     await fireEvent.compositionEnd(input, { target: { value: "红石" } });
-    await waitFor(() => expect(load).toHaveBeenCalledWith("红石", 2, expect.any(AbortSignal)));
+    await vi.runOnlyPendingTimersAsync();
+    expect(load).toHaveBeenCalledWith("红石", 2, expect.any(AbortSignal));
   });
 });
