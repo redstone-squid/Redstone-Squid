@@ -12,7 +12,6 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.bootstrap import create_schematic_service
 from squid.config import SchematicConfig
 from squid.core.actors import Actor
 from squid.core.artifacts.infrastructure import LocalArtifactStore
@@ -20,6 +19,7 @@ from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.schematics.application import IngestedSchematic, IngestRequest
 from squid.core.schematics.application.jobs import SchematicJobService
 from squid.core.schematics.application.storage import SchematicStorageService
+from squid.core.schematics.bootstrap import create_schematic_service
 from squid.core.schematics.errors import InvalidSchematicError
 from squid.core.schematics.infrastructure.durable import SchematicJobRunner
 from squid.core.schematics.infrastructure.worker import SchematicWorkerPool
