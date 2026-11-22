@@ -65,8 +65,9 @@ An error thrown inside a component after rendering starts truncates a 200 respon
 2. Put the components under `src/features/<area>/`. Compose them from `src/ui` first;
    see `src/ui/README.md`.
 3. Add its text to the catalogs; see [Text](#text).
-4. Cover pure logic with a Vitest test in `tests/unit` and the route with a Playwright
-   test in `tests/e2e`. Check both locales.
+4. Cover the route's public behavior in Playwright. Exercise both locales when localization
+   affects the URL, rendered content, or workflow. Use Vitest for independent logic and
+   edge cases that are easier to exercise without the running site.
 
 ## Styling
 
@@ -144,10 +145,9 @@ declaration and explain surprising decisions beside the code that depends on the
 
 ## Tests
 
-- `tests/unit`: Vitest in jsdom. See [autocomplete](tests/unit/autocomplete.test.ts) for
-  role-based queries and keyboard behavior, and [API errors](tests/unit/server-api.test.ts)
-  for request and response contracts with MSW. Advance fake timers for debounce tests.
-  Coverage thresholds apply to locale, UI, feature, and workbench code.
+- `tests/unit`: Vitest in jsdom with shared Svelte cleanup. See
+  [autocomplete](tests/unit/autocomplete.test.ts) for keyboard behavior and
+  [API errors](tests/unit/server-api.test.ts) for HTTP contracts with MSW.
 - `tests/e2e`: Playwright against the built site and the fixture API in `tests/fixtures/api.ts`.
   Follow [tag pages](tests/e2e/tag-slugs.spec.ts) for visible page content and HTTP contracts.
   Remove a route from the placeholder matrix when its page ships.
@@ -157,10 +157,21 @@ declaration and explain surprising decisions beside the code that depends on the
   `await expect(page).toPassAxe()` runs axe. Server ports and environment live in
   `tests/support/servers.ts`.
 
-Name tests for the behavior they protect. Keep the action and outcome visible in each test.
-Use generated catalogue messages for accessible names in interaction tests. Assert errors on
-their fields and feedback in the relevant status region. Use literal expectations for fixture
-data, public URLs, and tests that verify translation output.
+- Name the regression each test catches. Prefer one case at the cheapest layer that can
+  observe it. Add a second layer when it covers a distinct risk such as hydration, browser
+  focus, or the HTTP response. Check for an existing case before adding one.
+- Query by role and accessible name. Use generated catalogue messages with an explicit
+  locale in Playwright. Assert errors on their fields and feedback in the status region.
+  Keep literal expectations for fixture data, public URLs, and translation output.
+- Assert the effect of the action. A deadline should abort a pending request. A keyboard
+  interaction should move focus or select a value. Use fake timers for debounce and wait
+  for observable changes in browser tests.
+- Remove assertions that only pin incidental markup, class lists, or internal ordering.
+  Keep those details where they are the contract under test. When a helper's only callers
+  are its tests, check whether the code and its tests can both go.
+- Keep actions and outcomes visible in the spec. Use fixtures for shared setup and
+  extract a helper when repeated setup obscures the test. Comment on timing or browser
+  constraints a reader would otherwise have to reconstruct.
 
 ## Checks
 
@@ -179,7 +190,8 @@ from `web/` before committing web work.
 - knip fails on unused files, exports, and dependencies. Delete dead code instead of
   exporting it for later.
 
-From `web/`: `bun run format`, `bun run lint`, `bun run check`, `bun run test`, then
-`bun run build` and the relevant Playwright tests, such as
+From `web/`, format touched files with Prettier and run `bun run lint`, `bun run check`,
+and `bun run test` as applicable. Vitest checks coverage for locale, UI, feature, and
+workbench code. Run `bun run build` before the relevant Playwright tests, such as
 `bunx playwright test tests/e2e --project=chromium-desktop`. Run `bun run test:review`
 after visual changes. CI runs all of these.
