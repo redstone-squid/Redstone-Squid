@@ -35,6 +35,7 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/TRIGGER_FUNCTIONS/reject_build_history_mutation.sql
 \ir public/TRIGGER_FUNCTIONS/reject_door_range_snapshot_mutation.sql
 \ir public/TRIGGER_FUNCTIONS/reject_submission_finalization_input_update.sql
+\ir public/TRIGGER_FUNCTIONS/reserve_tag_slug.sql
 \ir public/FUNCTIONS/upsert_discord_sync_request.sql
 \ir public/FUNCTIONS/upsert_search_projection_request.sql
 \ir public/TABLES/account_identities.sql
@@ -187,6 +188,7 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/SEQUENCES/tag_definitions_id_seq.sql
 \ir public/TABLES/tag_record_thresholds.sql
 \ir public/TABLES/tag_relations.sql
+\ir public/TABLES/tag_slugs.sql
 \ir public/TABLES/tag_units.sql
 \ir public/TABLES/title_definition_facets.sql
 \ir public/TABLES/title_definitions.sql

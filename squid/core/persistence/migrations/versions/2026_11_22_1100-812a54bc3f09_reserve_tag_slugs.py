@@ -67,6 +67,7 @@ FOR EACH ROW EXECUTE FUNCTION public.reserve_tag_slug();
         END $$;
     """)
     op.execute("SET CONSTRAINTS ALL IMMEDIATE")
+    op.execute("SET CONSTRAINTS ALL DEFERRED")
     op.execute("ALTER TABLE tag_definitions ALTER COLUMN slug SET NOT NULL")
     op.execute("""
         ALTER TABLE tag_definitions ADD CONSTRAINT tag_definitions_slug_owner_fkey

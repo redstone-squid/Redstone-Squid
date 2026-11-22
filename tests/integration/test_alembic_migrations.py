@@ -2585,3 +2585,30 @@ def test_build_review_status_migration_updates_indexed_documents_and_facets(
             ]
     finally:
         engine.dispose()
+
+
+def test_tag_slug_backfill_prefers_query_names(migration_database_url: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config(toml_file="pyproject.toml")
+    command.upgrade(config, "5fa81c27d6b4")
+    engine = create_engine(migration_database_url)
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text("""
+                INSERT INTO tag_definitions (stable_key, display_name, normalized_name, authority, semantic_kind,
+                                             value_type, moderation_status, render_template, default_display_order, query_name)
+                VALUES ('fallback', 'Slug test', 'slug test', 'user', 'showcase', 'none', 'approved', '{name}', 0, NULL),
+                       ('named', 'Another name', 'another name', 'user', 'showcase', 'none', 'approved', '{name}', 0, 'slug_test')
+            """)
+            )
+        command.upgrade(config, "812a54bc3f09")
+        with engine.connect() as connection:
+            rows = dict(connection.execute(text("SELECT stable_key, slug FROM tag_definitions")).tuples().all())
+            assert rows["named"] == "slug-test"
+            assert rows["fallback"].startswith("slug-test-")
+        command.downgrade(config, "5fa81c27d6b4")
+        with engine.connect() as connection:
+            assert connection.scalar(text("SELECT to_regclass('public.tag_slugs')")) is None
+    finally:
+        engine.dispose()

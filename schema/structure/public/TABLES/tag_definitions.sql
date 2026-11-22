@@ -21,6 +21,7 @@ CREATE TABLE public.tag_definitions (
     created_by_account_id integer,
     revision bigint DEFAULT 1 NOT NULL,
     withdrawn boolean DEFAULT false NOT NULL,
+    slug text NOT NULL,
     CONSTRAINT tag_definitions_authority_check CHECK ((authority = ANY (ARRAY['official'::text, 'user'::text]))),
     CONSTRAINT tag_definitions_display_order_check CHECK ((default_display_order >= 0)),
     CONSTRAINT tag_definitions_moderation_status_check CHECK ((moderation_status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text, 'archived'::text]))),
@@ -58,6 +59,8 @@ CREATE TRIGGER tag_definitions_enqueue_records AFTER INSERT OR DELETE OR UPDATE 
 
 CREATE TRIGGER tag_definitions_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.tag_definitions FOR EACH ROW EXECUTE FUNCTION public.enqueue_metadata_search_projection();
 
+CREATE TRIGGER tag_definitions_reserve_slug BEFORE INSERT OR UPDATE OF slug ON public.tag_definitions FOR EACH ROW EXECUTE FUNCTION public.reserve_tag_slug();
+
 ALTER TABLE ONLY public.tag_definitions
     ADD CONSTRAINT tag_definitions_canonical_unit_fkey FOREIGN KEY (canonical_unit_key) REFERENCES public.tag_units(key) ON DELETE RESTRICT;
 
@@ -66,4 +69,7 @@ ALTER TABLE ONLY public.tag_definitions
 
 ALTER TABLE ONLY public.tag_definitions
     ADD CONSTRAINT tag_definitions_display_unit_fkey FOREIGN KEY (default_display_unit_key) REFERENCES public.tag_units(key) ON DELETE RESTRICT;
+
+ALTER TABLE ONLY public.tag_definitions
+    ADD CONSTRAINT tag_definitions_slug_owner_fkey FOREIGN KEY (slug, id) REFERENCES public.tag_slugs(slug, tag_id) DEFERRABLE INITIALLY DEFERRED;
 

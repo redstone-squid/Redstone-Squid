@@ -1027,6 +1027,45 @@ $$;
 
 
 --
+-- Name: reserve_tag_slug(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.reserve_tag_slug() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    automatic boolean := NEW.slug IS NULL;
+    base text;
+    candidate text;
+BEGIN
+    IF automatic THEN
+        IF TG_OP = 'UPDATE' AND OLD.slug IS NOT NULL THEN
+            RAISE EXCEPTION 'A tag slug cannot be cleared' USING ERRCODE = '23502';
+        END IF;
+        base := trim(both '-' from regexp_replace(lower(coalesce(NEW.query_name, NEW.display_name)), '[^a-z0-9]+', '-', 'g'));
+        candidate := coalesce(nullif(base, ''), 'tag');
+        base := candidate;
+    ELSE
+        candidate := NEW.slug;
+    END IF;
+    LOOP
+        INSERT INTO public.tag_slugs (slug, tag_id) VALUES (candidate, NEW.id)
+        ON CONFLICT (slug) DO NOTHING;
+        IF FOUND OR EXISTS (SELECT 1 FROM public.tag_slugs WHERE slug = candidate AND tag_id = NEW.id) THEN
+            NEW.slug := candidate;
+            RETURN NEW;
+        END IF;
+        IF NOT automatic THEN
+            RAISE EXCEPTION 'Tag slug % is already reserved', candidate USING ERRCODE = '23505';
+        END IF;
+        SELECT base || '-' || string_agg(substr('abcdefghijklmnopqrstuvwxyz0123456789', 1 + floor(random()*36)::int, 1), '')
+        INTO candidate FROM generate_series(1, 5);
+    END LOOP;
+END
+$$;
+
+
+--
 -- Name: upsert_discord_sync_request(text, text, text); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -5458,6 +5497,7 @@ CREATE TABLE public.tag_definitions (
     created_by_account_id integer,
     revision bigint DEFAULT 1 NOT NULL,
     withdrawn boolean DEFAULT false NOT NULL,
+    slug text NOT NULL,
     CONSTRAINT tag_definitions_authority_check CHECK ((authority = ANY (ARRAY['official'::text, 'user'::text]))),
     CONSTRAINT tag_definitions_display_order_check CHECK ((default_display_order >= 0)),
     CONSTRAINT tag_definitions_moderation_status_check CHECK ((moderation_status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text, 'archived'::text]))),
@@ -5533,6 +5573,24 @@ CREATE TABLE public.tag_relations (
 --
 
 COMMENT ON TABLE public.tag_relations IS 'A semantic relationship between official restrictions.';
+
+
+--
+-- Name: tag_slugs; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.tag_slugs (
+    slug text NOT NULL,
+    tag_id bigint,
+    CONSTRAINT tag_slugs_format_check CHECK ((slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'::text))
+);
+
+
+--
+-- Name: TABLE tag_slugs; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.tag_slugs IS 'Reserved tag URL spellings, retained after retirement.';
 
 
 --
@@ -7378,6 +7436,22 @@ ALTER TABLE ONLY public.tag_relations
 
 
 --
+-- Name: tag_slugs tag_slugs_owner_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tag_slugs
+    ADD CONSTRAINT tag_slugs_owner_key UNIQUE (slug, tag_id);
+
+
+--
+-- Name: tag_slugs tag_slugs_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tag_slugs
+    ADD CONSTRAINT tag_slugs_pkey PRIMARY KEY (slug);
+
+
+--
 -- Name: tag_units tag_units_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -8709,6 +8783,13 @@ CREATE INDEX tag_relations_target_idx ON public.tag_relations USING btree (targe
 
 
 --
+-- Name: tag_slugs_tag_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX tag_slugs_tag_id_idx ON public.tag_slugs USING btree (tag_id);
+
+
+--
 -- Name: title_definition_facets_lookup_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -9266,6 +9347,13 @@ CREATE TRIGGER tag_definitions_enqueue_records AFTER INSERT OR DELETE OR UPDATE 
 --
 
 CREATE TRIGGER tag_definitions_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.tag_definitions FOR EACH ROW EXECUTE FUNCTION public.enqueue_metadata_search_projection();
+
+
+--
+-- Name: tag_definitions tag_definitions_reserve_slug; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER tag_definitions_reserve_slug BEFORE INSERT OR UPDATE OF slug ON public.tag_definitions FOR EACH ROW EXECUTE FUNCTION public.reserve_tag_slug();
 
 
 --
@@ -10432,6 +10520,14 @@ ALTER TABLE ONLY public.tag_definitions
 
 
 --
+-- Name: tag_definitions tag_definitions_slug_owner_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tag_definitions
+    ADD CONSTRAINT tag_definitions_slug_owner_fkey FOREIGN KEY (slug, id) REFERENCES public.tag_slugs(slug, tag_id) DEFERRABLE INITIALLY DEFERRED;
+
+
+--
 -- Name: tag_record_thresholds tag_record_thresholds_definition_value_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -10453,6 +10549,14 @@ ALTER TABLE ONLY public.tag_relations
 
 ALTER TABLE ONLY public.tag_relations
     ADD CONSTRAINT tag_relations_target_fkey FOREIGN KEY (target_tag_id) REFERENCES public.tag_definitions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: tag_slugs tag_slugs_tag_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.tag_slugs
+    ADD CONSTRAINT tag_slugs_tag_id_fkey FOREIGN KEY (tag_id) REFERENCES public.tag_definitions(id) ON DELETE SET NULL DEFERRABLE INITIALLY DEFERRED;
 
 
 --
