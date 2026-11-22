@@ -31,7 +31,7 @@ from squid.core.accounts.models import CataloguePreference
 from squid.core.actors import Actor
 from squid.core.builds.application import BuildQueryService, BuildService
 from squid.core.builds.application.edits import BUILD_STATUS_EDIT, build_target
-from squid.core.builds.domain import BuildStatus, EditAccess
+from squid.core.builds.domain import BuildStatus, CreditRole, EditAccess
 from squid.core.builds.models import Build
 from squid.core.edits.application import EditRunner
 from squid.core.edits.domain import EditValues
@@ -49,6 +49,7 @@ from squid.core.records.application.models import PublishedRecordResult
 from squid.core.records.domain import RecordCriterion, VersionScope
 from squid.core.schematics.application import SchematicService
 from squid.core.search.application import SearchService
+from squid.core.search.application.completion import render_value
 from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY
 from squid.core.search.application.parser import QuerySyntaxError, SearchQueryParser
 from squid.core.search.domain import RecordQuery, SearchMode, SearchRequest, SearchResultAnchor, SearchScope, SearchSort
@@ -71,6 +72,9 @@ type BuildRenderer = Callable[[Build], Awaitable[sl.LayoutNode[ComponentsV2Targe
 type RefreshPosts = Callable[[int], Awaitable[None]]
 
 router = AppRoutes()
+
+MAX_CREDITS_LISTED = 25
+"""Maximum credits offered by one Discord select."""
 
 
 class _BuildSource:
@@ -182,6 +186,7 @@ class _BuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         grants: Grants,
         actor_account_id: int | None,
         refresh_posts: RefreshPosts,
+        accounts: AccountService | None = None,
     ) -> None:
         if isinstance(build, int):
             build_id, seed = build, None
@@ -208,11 +213,12 @@ class _BuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         self.grants = grants
         self._actor_account_id = actor_account_id
         self._refresh_posts = refresh_posts
+        self._accounts = accounts
 
     @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
     async def projection(
         self,
-    ) -> tuple[Build, sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]], bool]:
+    ) -> tuple[Build, sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]], bool, dict[int, UUID]]:
         self._changes.watch()
         build, self._seed = self._seed, None
         if build is None:
@@ -223,7 +229,10 @@ class _BuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         has_schematic = (
             self._schematics.available and await self._schematics.featured_for_build(self._build_id) is not None
         )
-        return build, await self._render_build(build), has_schematic
+        owners = (
+            await self._accounts.credit_owners(self._build_id) if self._accounts is not None and build.credits else {}
+        )
+        return build, await self._render_build(build), has_schematic, owners
 
     @override
     def render(self) -> sl.DocumentLike[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
@@ -231,19 +240,51 @@ class _BuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         if not isinstance(state, sl.resources.Ready) and state.previous is None:
             return (sl.status(tr(t"bot-submission-build-browse-loading-build = Loading build.")),)
         if isinstance(state, sl.resources.Ready):
-            build, node, has_schematic = state.value
+            build, node, has_schematic, owners = state.value
         else:
             assert state.previous is not None
-            build, node, has_schematic = state.previous.value
+            build, node, has_schematic, owners = state.previous.value
         if self._decision is not None:
             return (node, self._decision)
         nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = [node]
+        if build.credits:
+            nodes.append(self._creators(build, owners))
         if actions := self._detail_actions(build, has_schematic=has_schematic):
             nodes.append(actions)
         nodes.extend(self.controller.controls())
         if has_schematic:
             nodes.append(self.schematics)
         return nodes
+
+    def _creators(
+        self, build: Build, owners: dict[int, UUID]
+    ) -> sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
+        """Open each credit's creator page, or the builds credited to a name nobody has claimed."""
+        return sl.choices(
+            *(
+                sl.choice(
+                    credit.name if credit.role is CreditRole.CREATOR else f"{credit.name} ({credit.role.value})",
+                    key=str(position),
+                    description=tr(t"build-credit-open-page = Open creator page")
+                    if position in owners
+                    else tr(t"build-credit-search-name = Builds credited to this name"),
+                )
+                for position, credit in enumerate(build.credits[:MAX_CREDITS_LISTED])
+            ),
+            key="creators",
+            selection=sl.controlled((), partial(self._open_credit, build, owners)),
+        )
+
+    async def _open_credit(self, build: Build, owners: dict[int, UUID], event: sd.ChoiceEvent[RedstoneSquid]) -> None:
+        position = int(event.selected[0])
+        request = event.context
+        if (public_id := owners.get(position)) is not None:
+            # Dispatched by address: the creator page module imports this one.
+            router = request.client.ui_router
+            await router.dispatch(request, router.resolve(f"/creators/{public_id}"))
+            return
+        query = f"creator:{render_value(build.credits[position].name, quoted=True)}"
+        await request.respond(await BuildBrowseScreen.create_search(request, query=query, typed=False))
 
     async def _toggle_schematics(self, _event: sl.PressEvent) -> None:
         self._show_schematics = not self._show_schematics
@@ -826,6 +867,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             grants=self.grants,
             actor_account_id=self._actor_account_id,
             refresh_posts=self._refresh_posts,
+            accounts=self._accounts,
         )
 
     def _build_actions(self, build: Build) -> tuple[sl.semantic.RoutedActionControl, ...]:

@@ -49,6 +49,10 @@ async def _project(session_factory: async_sessionmaker[AsyncSession]) -> None:
             pass
 
 
+async def _owners(uow_factory: partial[SqlAlchemyUnitOfWork], build_id: int) -> dict[int, UUID]:
+    return await transact(uow_factory, lambda uow: uow.accounts.credit_owners(build_id))
+
+
 async def _found(service: SearchService, query: str, scope: SearchScope = SearchScope.BUILDS) -> set[str]:
     return {hit.source_id for hit in (await service.search(SearchRequest(query, scope=scope))).hits}
 
@@ -98,9 +102,13 @@ async def test_creator_ids_follow_claims_and_identity_visibility(
     assert await _found(service, f"creator:{public_id}") == {str(by_alias), str(by_java)}
     assert await _found(service, f"creator:{public_id.upper()}") == {str(by_alias), str(by_java)}
     assert str(impostor) not in await _found(service, f'creator:"{public_id}"')
+    owners = partial(_owners, uow_factory)
+    assert await owners(by_alias) == await owners(by_java) == {0: account.public_creator_id}
+    assert await owners(by_private_discord) == await owners(impostor) == {}
 
     async with migrated_session_factory.begin() as session:
         await session.execute(text("UPDATE account_identities SET is_public = true WHERE subject = '7'"))
     await _project(migrated_session_factory)
 
     assert await _found(service, f"creator:{public_id}") == {str(by_alias), str(by_java), str(by_private_discord)}
+    assert await owners(by_private_discord) == {0: account.public_creator_id}

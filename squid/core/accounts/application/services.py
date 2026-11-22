@@ -406,6 +406,14 @@ class AccountService:
             record = await uow.accounts.get_creator_profile_record(public_id)
             return None if record is None else PublicCreatorProfile.from_record(record)
 
+    async def credit_owners(self, build_id: int) -> dict[int, UUID]:
+        """Map each credit position on a build to the public ID of the creator it belongs to.
+
+        Unclaimed names and credits matching only a private identity are absent.
+        """
+        async with self._uow_factory() as uow:
+            return await uow.accounts.credit_owners(build_id)
+
     async def refresh_java_identity(self, account_id: int, *, java_uuid: UUID | None = None) -> IdentityRefresh:
         """Fetch a linked Java identity's current name from Mojang and reconcile its credit.
 

@@ -226,6 +226,10 @@ class FakeAccountRepository:
         self.profiles[account_id] = cleared
         return cleared
 
+    async def credit_owners(self, build_id: int) -> dict[int, UUID]:
+        del build_id
+        return {}
+
     async def get_creator_profile_record(self, public_id: UUID) -> CreatorProfileRecord | None:
         account = next(
             (candidate for candidate in self.accounts.values() if candidate.public_creator_id == public_id),

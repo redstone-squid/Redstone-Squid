@@ -2,6 +2,7 @@
 
 from collections.abc import Sequence
 from typing import override
+from uuid import UUID
 
 import discord
 import simcord
@@ -45,6 +46,11 @@ class WorkspaceAccounts(AccountService):
         assert provider is IdentityProvider.DISCORD
         self.lookups.append(subject)
         return self.discord_accounts.get(subject)
+
+    @override
+    async def credit_owners(self, build_id: int) -> dict[int, UUID]:
+        del build_id
+        return {}
 
     @override
     async def editor_snapshot(self, account_id: int) -> AccountEditorSnapshot:

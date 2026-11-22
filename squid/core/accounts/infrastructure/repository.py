@@ -543,6 +543,19 @@ class AccountRepository:
             canonical_public_id=canonical_id,
         )
 
+    async def credit_owners(self, build_id: int) -> dict[int, uuid.UUID]:
+        """Map credit positions to public creator IDs, using the shared attribution rule."""
+        attributed = attributed_credits()
+        rows = await self._session().execute(
+            select(attributed.c.position, Account.public_creator_id)
+            .join(Account, Account.id == attributed.c.account_id)
+            .where(attributed.c.build_id == build_id)
+            # A credit claimed through an alias by one account and matching another's identity
+            # belongs to both; show the older account so the choice is stable.
+            .order_by(attributed.c.position, Account.id.desc())
+        )
+        return {position: public_id for position, public_id in rows}
+
     async def claim_unclaimed_alias(self, *, account_id: int, name: str, method: ClaimMethod) -> CreatorAlias | None:
         """Claim an alias only if it remains unclaimed at update time."""
         session = self._session()

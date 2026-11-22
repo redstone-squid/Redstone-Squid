@@ -113,7 +113,7 @@ class CreatorPage(sd.Screen[None, Any, RedstoneSquid]):
         """Search the catalogue for one name, including builds by others who share it."""
         name = self.profile.aliases[int(event.selected[0])].name
         query = f"creator:{render_value(name, quoted=True)}"
-        await event.context.respond(await BuildBrowseScreen.create_search(event.context, query=query))
+        await event.context.respond(await BuildBrowseScreen.create_search(event.context, query=query, typed=False))
 
 
 def _build_count(count: int) -> sl.TextLike:

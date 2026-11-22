@@ -21,7 +21,7 @@ from squid.bot.utils.web import MediaPreviewClient
 from squid.core.accounts.application import AccountService
 from squid.core.accounts.models import CataloguePreference
 from squid.core.builds.application import BuildQueryService, BuildService
-from squid.core.builds.domain import BuildStatus
+from squid.core.builds.domain import BuildStatus, Credit, CreditRole
 from squid.core.builds.models import Build, DoorBuild
 from squid.core.messages.domain import MessageRef
 from squid.core.pagination import Page, PageAnchor, PageSelector
@@ -52,10 +52,11 @@ from squid.core.search.domain import (
 from squid.core.search.domain.query import TextExpression
 from squid.core.suggestions.application import Candidate, SuggestionRegistry, SuggestionService
 from squid.core.suggestions.application import SuggestionSource as RegisteredSource
+from squid_i18n import Text
 from squid_reactivity import LocalTopicBus
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import StagedUI, stage
-from squid_ui.testing import press_event, submit_event
+from squid_ui.testing import find_all, press_event, submit_event
 from tests.support.grants import grants
 from tests.unit.suggestions.test_services import RecordingProvider
 
@@ -71,8 +72,11 @@ def _screen(
     initial_records: bool = False,
     record_tools: RecordsScreen | None = None,
     submitter_account_id: int | None = None,
+    credits: list[Credit] | None = None,
+    accounts: AccountService | None = None,
 ) -> BuildBrowseScreen:
     build = DoorBuild(id=7, submission_status=status, submitter_account_id=submitter_account_id)
+    build.credits = credits or []
     queries = AsyncMock(spec=BuildQueryService)
     queries.get.return_value = build
     queries.semantic.return_value = build
@@ -108,6 +112,7 @@ def _screen(
         search=search,
         record_tools=record_tools,
         initial_records=initial_records,
+        accounts=accounts,
     )
 
 
@@ -340,6 +345,38 @@ async def test_schematic_controls_survive_opening_and_cancelling_review() -> Non
         await ui.press("approve")
         await ui.press("build-review.cancel")
         ui.control("schematic-info")
+
+
+async def test_each_credit_opens_its_creator_page_or_searches_its_name() -> None:
+    owner = uuid4()
+    accounts = AsyncMock(spec=AccountService)
+    accounts.credit_owners.return_value = {0: owner}
+    screen = _screen(
+        credits=[Credit(name="Notch"), Credit(name="Jeb", role=CreditRole.LAYOUT)],
+        accounts=cast(AccountService, accounts),
+    )
+    await screen.on_load()
+    assert screen._selected is not None
+    detail = cast(_BuildDetail, screen._selected._detail.value)
+    await detail.projection.resolve()
+
+    (creators,) = find_all(detail.render(), sl.semantic.Choices, key="creators")
+    assert [
+        (Text(choice.label).resolve(), Text(choice.description or "").resolve()) for choice in creators.choices
+    ] == [
+        ("Notch", "Open creator page"),
+        ("Jeb (layout)", "Builds credited to this name"),
+    ]
+
+    router = Mock(resolve=Mock(return_value="match"), dispatch=AsyncMock())
+    event = Mock(selected=("0",), context=Mock(client=Mock(ui_router=router)))
+    state = detail.projection.status
+    assert isinstance(state, sl.resources.Ready)
+    build, _, _, owners = state.value
+    await detail._open_credit(build, owners, event)
+
+    router.resolve.assert_called_once_with(f"/creators/{owner}")
+    router.dispatch.assert_awaited_once()
 
 
 async def test_open_id_through_the_discord_modal() -> None:
