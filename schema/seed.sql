@@ -117,8 +117,8 @@ where kind = 'Door' or restriction_type = 'component' or stable_key = 'flush'
     or (kind in ('Entrance', 'Extender', 'Utility') and stable_key in ('full_seamless', 'quart_seamless'))
     or (kind = 'Entrance' and stable_key = 'full_floor_hipster');
 
--- Common aliases for the example catalogue. The historical cleanup migration
--- seeds its new tags and aliases separately.
+-- Common aliases for the example catalogue. The live catalogue
+-- uses separate catalogue data.
 with aliases (stable_key, alias) as (
     values
     ('no_observers', 'Observerless'),

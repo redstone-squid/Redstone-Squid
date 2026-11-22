@@ -120,6 +120,19 @@ async def test_build_receipts_restore_children_and_unresolved_tags_in_one_audit_
 async def test_unofficial_component_restriction_round_trips_through_build_edits(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
+    async with migrated_session_factory.begin() as session:
+        tag_id = await session.scalar(
+            text("""
+            INSERT INTO tag_definitions (
+                stable_key, display_name, normalized_name, authority, semantic_kind, restriction_type,
+                value_type, render_template, default_display_order, moderation_status
+            ) VALUES ('cracked', 'Cracked', 'cracked', 'user', 'restriction', 'component', 'none', '{name}', 0, 'approved')
+            RETURNING id
+        """)
+        )
+        await session.execute(
+            text("INSERT INTO tag_applicabilities (tag_id, build_kind) VALUES (:id, 'Other')"), {"id": tag_id}
+        )
     service, executor, actor, build = await setup(migrated_session_factory)
     assert build.id is not None
     target = LatestRevision(build_target(build.id))
