@@ -110,7 +110,9 @@ async def test_dry_run_only_calls_unretained_inference() -> None:
     retained.assert_not_awaited()
     infer = cast(AsyncMock, runtime.build_inference.infer)
     infer.assert_awaited_once()
-    (inputs,) = infer.await_args.args
+    call = infer.await_args
+    assert call is not None
+    (inputs,) = call.args
     assert isinstance(inputs, BuildInferenceInput)
     assert [(item.message_id, item.content) for item in inputs.primary] == [(2, "Build log message 2")]
     assert [item.message_id for item in inputs.context] == [1]
@@ -137,12 +139,14 @@ async def test_real_import_uses_the_shared_retained_run() -> None:
     cast(AsyncMock, runtime.submission_inference.resume).assert_awaited_once_with(run_id, Actor(account_id=7))
     infer = cast(AsyncMock, runtime.submission_inference.infer)
     infer.assert_awaited_once()
-    actual_run, owner, inputs = infer.await_args.args
+    call = infer.await_args
+    assert call is not None
+    actual_run, owner, inputs = call.args
     assert (actual_run, owner) == (run_id, 7)
     assert isinstance(inputs, BuildInferenceInput)
     assert [item.message_id for item in inputs.primary] == [1]
     assert not inputs.images
-    assert infer.await_args.kwargs == {"model": "x", "reasoning_effort": None, "source_files": ()}
+    assert call.kwargs == {"model": "x", "reasoning_effort": None, "source_files": ()}
 
 
 @pytest.mark.parametrize(("existing", "skipped", "failed"), [([True, True], 1, 0), ([True, False], 0, 1)])
