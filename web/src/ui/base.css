@@ -58,6 +58,7 @@
     display: block;
     max-width: 100%;
   }
+  /* stylelint-disable declaration-no-important -- Reduced motion must beat component styles. */
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
@@ -67,4 +68,5 @@
       scroll-behavior: auto !important;
     }
   }
+  /* stylelint-enable declaration-no-important */
 }

@@ -14,10 +14,15 @@ export function fieldAttributes(
   id: string,
   { hint, error, "aria-describedby": describedBy, "aria-invalid": invalid }: FieldAccessibility,
 ) {
-  const descriptions = [describedBy, hint && `${id}-hint`, error && `${id}-error`];
+  // FieldFrame renders a hint or error only when it is non-empty.
+  const descriptions = [
+    describedBy,
+    hint == null || hint === "" ? undefined : `${id}-hint`,
+    error == null || error === "" ? undefined : `${id}-error`,
+  ].filter(Boolean);
   return {
     id,
-    "aria-describedby": descriptions.filter(Boolean).join(" ") || undefined,
+    "aria-describedby": descriptions.length > 0 ? descriptions.join(" ") : undefined,
     "aria-invalid": invalid ?? Boolean(error),
   };
 }

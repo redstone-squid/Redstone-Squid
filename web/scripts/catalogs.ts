@@ -22,7 +22,7 @@ class Dependencies extends Visitor {
   }
   override visitTermReference(node: TermReference): void {
     this.references.push({
-      id: `-${node.id.name}` + (node.attribute ? `.${node.attribute.name}` : ""),
+      id: `-${node.id.name}${node.attribute ? `.${node.attribute.name}` : ""}`,
       inheritVariables: false,
     });
     // Terms have their own argument scope; expressions in call arguments still belong to the caller.
@@ -90,14 +90,14 @@ export function compareCatalogs(
       );
     }
   }
-  if (errors.length)
+  if (errors.length > 0)
     throw new Error(`Catalog IDs and variables must match English:\n${errors.join("\n")}`);
 }
 
 export function generateKeys(contract: Record<string, string[]>): string {
   const keys = Object.keys(contract).map((id) => id.replace("-", "."));
   const variables = Object.entries(contract)
-    .filter(([, names]) => names.length)
+    .filter(([, names]) => names.length > 0)
     .map(
       ([id, names]) =>
         `  "${id.replace("-", ".")}": { ${names.map((name) => `${name}: string | number`).join("; ")} };`,

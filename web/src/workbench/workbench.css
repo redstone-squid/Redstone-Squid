@@ -90,8 +90,8 @@
     grid-template-columns: 1.15fr 1fr;
     overflow: hidden;
     border-radius: var(--radius-lg);
-    background: #17251f;
-    color: #f6f8f4;
+    background: var(--cover-surface);
+    color: var(--cover-text);
   }
   .sq-library-cover > :first-child {
     padding: clamp(1.5rem, 4vw, 3.5rem);
@@ -101,13 +101,13 @@
     font-size: clamp(2.25rem, 4vw, 4rem);
   }
   .sq-library-cover .sq-lede {
-    color: #cfdbd2;
+    color: var(--cover-text-muted);
     margin-bottom: var(--space-5);
   }
   .sq-cover-art {
     display: grid;
     place-items: center;
-    background: #e6ebe3;
+    background: var(--cover-art-surface);
     overflow: hidden;
   }
   .sq-cover-art img {

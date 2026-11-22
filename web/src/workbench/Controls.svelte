@@ -13,7 +13,7 @@
   let title = $state("");
   let submitted = $state(false);
   let saved = $state(false);
-  const invalid = $derived(submitted && !title.trim());
+  const invalid = $derived(submitted && title.trim() === "");
 </script>
 
 <div class="sq-stack">

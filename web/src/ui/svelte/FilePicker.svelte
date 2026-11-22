@@ -12,7 +12,7 @@
     {disabled}
     onchange={(event) => {
       const files = takeSelectedFiles(event.currentTarget);
-      if (files.length) onFiles(files);
+      if (files.length > 0) onFiles(files);
     }}
   />
 </label>

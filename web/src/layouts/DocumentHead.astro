@@ -49,4 +49,5 @@ const jsonLd = Astro.props.structuredData
 <meta name="twitter:title" content={title} />
 <meta name="twitter:description" content={description} />
 <title>{title}</title>
+{/* eslint-disable-next-line astro/no-set-html-directive -- jsonLd is escaped above. */}
 {jsonLd && <script is:inline type="application/ld+json" set:html={jsonLd} />}

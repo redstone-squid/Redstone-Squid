@@ -19,7 +19,7 @@ export const SUPPORTED_LOCALES = Object.keys(LOCALES) as Locale[];
 function createBundle(locale: Locale, source: string): FluentBundle {
   const bundle = new FluentBundle(locale, { useIsolating: false });
   const errors = bundle.addResource(new FluentResource(source));
-  if (errors.length) throw new AggregateError(errors, `Invalid ${locale} catalog`);
+  if (errors.length > 0) throw new AggregateError(errors, `Invalid ${locale} catalog`);
   return bundle;
 }
 const bundles = {
@@ -33,7 +33,7 @@ export function localeFromPath(pathname: string): Locale {
   return (
     SUPPORTED_LOCALES.find((locale) => {
       const prefix = LOCALES[locale].prefix;
-      return prefix && (pathname === prefix || pathname.startsWith(`${prefix}/`));
+      return prefix !== "" && (pathname === prefix || pathname.startsWith(`${prefix}/`));
     }) ?? "en"
   );
 }
@@ -42,11 +42,11 @@ export function localeFromPath(pathname: string): Locale {
 export function localizePath(path: string, locale: Locale): string {
   const url = new URL(path, "https://catalogue.invalid");
   const prefix = LOCALES[localeFromPath(url.pathname)].prefix;
-  const unprefixed = url.pathname.slice(prefix.length) || "/";
+  const rest = url.pathname.slice(prefix.length);
+  const unprefixed = rest === "" ? "/" : rest;
   const targetPrefix = LOCALES[locale].prefix;
-  url.pathname = targetPrefix
-    ? `${targetPrefix}${unprefixed === "/" ? "" : unprefixed}`
-    : unprefixed;
+  url.pathname =
+    targetPrefix !== "" ? `${targetPrefix}${unprefixed === "/" ? "" : unprefixed}` : unprefixed;
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
@@ -65,10 +65,10 @@ export function translate(
   for (const candidate of locale === "en" ? (["en"] as const) : ([locale, "en"] as const)) {
     const bundle = bundles[candidate];
     const message = bundle.getMessage(key.replaceAll(".", "-"));
-    if (!message?.value) continue;
+    if (message?.value == null) continue;
     const errors: Error[] = [];
     const result = bundle.formatPattern(message.value, variables, errors);
-    if (!errors.length) return result;
+    if (errors.length === 0) return result;
   }
   throw new Error(`Unable to format translation: ${locale}/${key}`);
 }

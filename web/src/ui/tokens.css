@@ -37,6 +37,11 @@
     --content-width: 76rem;
     --duration-fast: 140ms;
     --layer-dialog: 50;
+    /* The workbench cover keeps the same dark palette in both themes. */
+    --cover-surface: #17251f;
+    --cover-text: #f6f8f4;
+    --cover-text-muted: #cfdbd2;
+    --cover-art-surface: #e6ebe3;
   }
   :root[data-theme="dark"] {
     color-scheme: dark;

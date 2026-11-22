@@ -20,7 +20,7 @@ const phaseMessages = {
 } as const;
 
 export function draftFeedback(phase: DraftPhase, errors: DraftErrors) {
-  if (phase === "idle" && Object.keys(errors).length) {
+  if (phase === "idle" && Object.keys(errors).length > 0) {
     return { tone: "warning", message: "trial.fix-errors" } as const;
   }
   return phaseMessages[phase];
@@ -30,7 +30,7 @@ export type SaveResult = { kind: "saved" } | { kind: "invalid"; errors: DraftErr
 
 export function validateDraft(input: DraftInput): DraftErrors {
   return {
-    ...(!input.title.trim() ? { title: "required" as const } : {}),
+    ...(input.title.trim() === "" ? { title: "required" as const } : {}),
     ...(input.category === "door" &&
     (!Number.isInteger(Number(input.width)) || Number(input.width) <= 0)
       ? { width: "positive" as const }

@@ -20,7 +20,7 @@
   } from "./draft-fixture";
   let { locale, scenario }: { locale: Locale; scenario?: DraftScenario } = $props();
   const t = (key: StaticMessageKey): string => translate(locale, key);
-  let input = $state<DraftInput>({ title: "", category: "door", width: "", version: "" });
+  const input = $state<DraftInput>({ title: "", category: "door", width: "", version: "" });
   let search = $state("");
   let errors = $state<DraftErrors>({});
   let phase = $state<DraftPhase>("idle");
@@ -42,7 +42,7 @@
   }
   async function save(): Promise<void> {
     errors = validateDraft(input);
-    if (Object.keys(errors).length) return;
+    if (Object.keys(errors).length > 0) return;
     operation?.abort();
     const controller = new AbortController();
     operation = controller;
@@ -99,7 +99,7 @@
       bind:value={input.title}
       required
       oninput={edited}
-      error={errors.title ? t(`trial.${errors.title}`) : undefined}
+      error={errors.title !== undefined ? t(`trial.${errors.title}`) : undefined}
     />
     <SelectField label={t("trial.category")} bind:value={input.category} onchange={edited}>
       <option value="door">{t("trial.door")}</option>
@@ -111,7 +111,7 @@
         bind:value={input.width}
         required
         oninput={edited}
-        error={errors.width ? t(`trial.${errors.width}`) : undefined}
+        error={errors.width !== undefined ? t(`trial.${errors.width}`) : undefined}
       />{/if}
     <Field
       label={t("trial.find-version")}
@@ -126,7 +126,7 @@
       label={t("workbench.minecraft-version")}
       bind:value={input.version}
       required
-      error={errors.version ? t(`trial.${errors.version}`) : undefined}
+      error={errors.version !== undefined ? t(`trial.${errors.version}`) : undefined}
       onchange={edited}
     >
       <option value="">{t("trial.choose-version")}</option>

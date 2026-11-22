@@ -7,7 +7,7 @@ import type { Rule } from "eslint";
  * Files directly in `src/` (middleware) may import anything. A feature may import its own
  * directory but not another feature.
  */
-export const LAYERS = {
+const LAYERS = {
   pages: [
     "pages",
     "layouts",

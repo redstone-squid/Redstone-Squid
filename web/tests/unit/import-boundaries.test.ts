@@ -1,6 +1,6 @@
 import { RuleTester } from "eslint";
 import { describe, it } from "vitest";
-import { importBoundaries } from "../../scripts/import-boundaries";
+import { importBoundaries } from "../../scripts/lint/import-boundaries";
 
 RuleTester.describe = describe;
 RuleTester.it = it;

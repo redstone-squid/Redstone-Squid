@@ -26,7 +26,7 @@ const manifest = JSON.parse(
 const assets = (await readdir(path.join(clientDirectory, "_astro"), { recursive: true }))
   .filter((file) => file.endsWith(".js"))
   .sort();
-if (!assets.length)
+if (assets.length === 0)
   throw new Error("No emitted client JavaScript; run the production build first.");
 const sizes = new Map(
   await Promise.all(
@@ -59,4 +59,4 @@ const total = [...sizes.values()].reduce((sum, size) => sum + size, 0);
 console.info(
   `All emitted JavaScript: ${(total / 1024).toFixed(1)} KiB gzip (informational; unrelated workflows are not combined).`,
 );
-if (failures.length) throw new Error(failures.join("\n"));
+if (failures.length > 0) throw new Error(failures.join("\n"));

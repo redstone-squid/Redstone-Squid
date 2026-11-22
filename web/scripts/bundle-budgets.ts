@@ -1,4 +1,4 @@
-export type BundleChunk = {
+type BundleChunk = {
   file: string;
   isEntry?: boolean;
   imports?: string[];
