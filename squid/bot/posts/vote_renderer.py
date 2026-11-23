@@ -107,11 +107,13 @@ class VoteSessionRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
                 sl.heading(tr(t"build-edit-vote-title = Proposed build edit")),
                 sd.v2.text(sl.md(t"{build.one_line_title}")),
                 sd.v2.text(Text.join("\n", lines[:6])),
-                sd.v2.file(
+                sl.download(
                     sl.file(
                         json.dumps(target.changes, indent=2, ensure_ascii=False).encode(),
                         filename=f"build-{target.build_id}-proposed-changes.json",
-                    )
+                    ),
+                    label="",
+                    key="proposed-changes",
                 ),
             )
         else:

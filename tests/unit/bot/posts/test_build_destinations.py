@@ -16,7 +16,7 @@ from squid.core.builds.domain import BuildStatus, Credit
 from squid.core.builds.models import Build, OtherBuild
 from squid.core.settings.application import SettingsService
 from squid.core.settings.domain import Setting
-from squid.core.voting.domain import BuildVoteTarget, VoteStatus
+from squid.core.voting.domain import BuildEditVoteTarget, BuildVoteTarget, VoteKind, VoteStatus
 from tests.support.discord import make_layout_bot
 from tests.support.services import bot_services
 from tests.support.voting import build_snapshot
@@ -52,9 +52,17 @@ class Settings(SettingsService):
 
 @pytest.mark.parametrize("build_status", [BuildStatus.PENDING, BuildStatus.APPROVED, BuildStatus.REJECTED])
 @pytest.mark.parametrize("vote_status", [VoteStatus.OPEN, VoteStatus.CLOSED])
-async def test_review_destinations_follow_the_session(build_status: BuildStatus, vote_status: VoteStatus) -> None:
+@pytest.mark.parametrize("kind", [VoteKind.BUILD, VoteKind.BUILD_EDIT])
+async def test_review_destinations_follow_the_session(
+    build_status: BuildStatus, vote_status: VoteStatus, kind: VoteKind
+) -> None:
     build = OtherBuild(id=7, submission_status=build_status)
-    snapshot = build_snapshot(status=vote_status, target=BuildVoteTarget(7))
+    target = (
+        BuildEditVoteTarget(7, 1, {"dimensions": [2, 3, 4]}, (("dimensions", [1, 2, 3], [2, 3, 4]),))
+        if kind is VoteKind.BUILD_EDIT
+        else BuildVoteTarget(7)
+    )
+    snapshot = build_snapshot(kind=kind, status=vote_status, target=target)
     settings = Settings()
     channels = {
         201: Mock(spec=discord.TextChannel, id=201, guild=Guild(10)),
@@ -79,6 +87,8 @@ async def test_review_destinations_follow_the_session(build_status: BuildStatus,
         [(200, 10), (201, 10)] if vote_status is VoteStatus.OPEN else [(200, 10)]
     )
     assert settings.requested == (["Vote"] if vote_status is VoteStatus.OPEN else [])
+    if kind is VoteKind.BUILD_EDIT:
+        assert [asset.name for asset in posts[0].payload.assets] == ["build-7-proposed-changes.json"]
 
 
 @pytest.mark.parametrize("status", [BuildStatus.PENDING, BuildStatus.APPROVED, BuildStatus.REJECTED, None])
