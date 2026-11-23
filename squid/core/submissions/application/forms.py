@@ -11,11 +11,11 @@ Checked-in revisions are immutable for submissions. Edit-only fields and edit ru
 appear in the submit projection, so adding them does not change a pinned revision.
 """
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
-from squid.core.errors import InvalidStateError
+from squid.core.errors import InvalidStateError, JSONValue
 from squid.core.i18n import localization_for, tr
 from squid.core.submissions.domain import (
     CategoryForm,
@@ -23,15 +23,18 @@ from squid.core.submissions.domain import (
     ControlKind,
     EditRules,
     FieldConstraints,
+    FieldRule,
     FormField,
     FormManifest,
     FormPurpose,
     FormSection,
+    SubmissionAttentionReason,
     SubmissionOrigin,
     ValueKind,
     VisibilityOperator,
     VisibilityRule,
 )
+from squid.core.submissions.domain.links import valid_link_url
 from squid_i18n import Text, localization_scope
 
 CURRENT_SUBMISSION_PROTOCOL = 1
@@ -641,6 +644,14 @@ def _extender_form(localize: Callable[[Text], str]) -> CategoryForm:
     )
 
 
+def _valid_link_list(value: JSONValue, _related: Mapping[str, JSONValue]) -> bool:
+    return (
+        isinstance(value, Sequence)
+        and not isinstance(value, str)
+        and all(isinstance(url, str) and valid_link_url(url) for url in value)
+    )
+
+
 def _links_and_location(localize: Callable[[Text], str], revision: int) -> FormSection:
     """External references for submissions, and location details for saved-build editing."""
 
@@ -655,6 +666,7 @@ def _links_and_location(localize: Callable[[Text], str], revision: int) -> FormS
             constraints=FieldConstraints(max_length=2048, max_items=100)
             if revision >= 6
             else FieldConstraints(max_items=100),
+            rules=(FieldRule("absolute_web_urls", SubmissionAttentionReason.WRONG_TYPE, _valid_link_list),),
             required_capability="repeatable_text",
             purposes=frozenset({FormPurpose.SUBMIT, FormPurpose.EDIT}) if revision >= 6 else _EDIT_ONLY,
         )

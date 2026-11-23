@@ -1,7 +1,8 @@
 """The build form's two projections: submitting a new build and editing a saved one."""
 
+from squid.core.errors import JSONValue
 from squid.core.submissions.application.forms import build_edit_manifest, build_submission_manifest
-from squid.core.submissions.domain import FormManifest
+from squid.core.submissions.domain import FormManifest, SubmissionOrigin
 
 SUBMISSION_ONLY = {
     "schematic_visibility",
@@ -57,3 +58,19 @@ def test_editing_uses_the_limits_a_saved_build_may_hold() -> None:
     assert submitted["credits"].required
     assert not edited["credits"].required
     assert edited["completion"].constraints.max_length == 100
+
+
+def test_edit_carries_forward_an_unchanged_legacy_link() -> None:
+    manifest = build_edit_manifest()
+    origin = SubmissionOrigin.DISCORD
+    before: dict[str, JSONValue] = {"image_urls": ["legacy/path.png"]}
+
+    assert manifest.validate_answers("other", before, origin=origin) == {"image_urls": "wrong_type"}
+    assert manifest.validate_transition("other", before, before | {"display_name": "New name"}, origin=origin) == {}
+    assert manifest.validate_transition("other", before, {"image_urls": ["another/path.png"]}, origin=origin) == {
+        "image_urls": "wrong_type"
+    }
+    assert (
+        manifest.validate_transition("other", before, {"image_urls": ["https://example.test/path.png"]}, origin=origin)
+        == {}
+    )

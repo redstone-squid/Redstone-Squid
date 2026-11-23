@@ -16,7 +16,6 @@ from squid.core.builds.domain.credits import read_credits
 from squid.core.builds.domain.showcase import read_showcase_tags
 from squid.core.errors import JSONValue, ValidationError
 from squid.core.i18n import tr
-from squid.core.submissions.domain.links import LINK_FIELDS, valid_link_url
 from squid_i18n import md_tr
 
 if TYPE_CHECKING:
@@ -304,12 +303,6 @@ class FormField:
     def validate_value(self, value: JSONValue) -> str | None:
         """Return a validation reason code or None, without checking dynamic options."""
         if not _matches_kind(value, self.value_kind):
-            return "wrong_type"
-        if (
-            self.id in LINK_FIELDS
-            and isinstance(value, list)
-            and any(not isinstance(url, str) or not valid_link_url(url) for url in value)
-        ):
             return "wrong_type"
         constraints = self.constraints
         if constraints.must_equal is not None and value != constraints.must_equal:
