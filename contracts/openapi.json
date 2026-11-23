@@ -1112,7 +1112,7 @@
           "builds"
         ],
         "summary": "EditBuild",
-        "description": "Edit an owned pending build, or any build with `build.submission.edit`.",
+        "description": "Apply a permitted build edit or submit it for review.",
         "operationId": "builds_update",
         "parameters": [
           {
@@ -1308,6 +1308,21 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "202": {
+            "description": "The edit was submitted for review. Build-Edit-Vote contains the vote ID.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BuildDetail"
                 }
               }
             },
@@ -26797,6 +26812,7 @@
         "type": "string",
         "enum": [
           "build",
+          "build_edit",
           "delete_log",
           "generic"
         ],

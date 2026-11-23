@@ -2377,7 +2377,7 @@ export type VoteInput = {
  *
  * What a vote session decides, and therefore how it closes.
  */
-export type VoteKind = 'build' | 'delete_log' | 'generic';
+export type VoteKind = 'build' | 'build_edit' | 'delete_log' | 'generic';
 
 /**
  * VoteOptionSummary
@@ -2879,6 +2879,10 @@ export type BuildsUpdateResponses = {
      * Request fulfilled, document follows
      */
     200: BuildDetail;
+    /**
+     * The edit was submitted for review. Build-Edit-Vote contains the vote ID.
+     */
+    202: BuildDetail;
 };
 
 export type BuildsUpdateResponse = BuildsUpdateResponses[keyof BuildsUpdateResponses];

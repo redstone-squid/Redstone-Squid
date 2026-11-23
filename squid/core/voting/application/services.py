@@ -79,7 +79,7 @@ class VoteService:
         set its own multipliers and decide the shared outcome.
         """
         match snapshot.kind:
-            case VoteKind.BUILD:
+            case VoteKind.BUILD | VoteKind.BUILD_EDIT:
                 return self._build_owner_guild_id
             case VoteKind.DELETE_LOG:
                 return snapshot.target.server_id if isinstance(snapshot.target, DeleteLogVoteTarget) else None

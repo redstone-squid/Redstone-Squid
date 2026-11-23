@@ -8,9 +8,10 @@ import anyio
 import pytest
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from whenever import Instant
 
 from squid.config import EMBEDDING_DIMENSION
-from squid.core.accounts.models import Account
+from squid.core.accounts.models import Account, AccountIdentity
 from squid.core.actors import Actor
 from squid.core.builds.application import BuildEditPatch, BuildService
 from squid.core.builds.application.edits import (
@@ -32,10 +33,16 @@ from squid.core.builds.models import Build, OtherBuild
 from squid.core.edits.application import EditExecutor
 from squid.core.edits.domain import EditCommand, EditResult, EditValues, LatestRevision, Revision, RevisionConflictError
 from squid.core.errors import AuthorizationError
+from squid.core.events import DomainEvent
 from squid.core.permissions.application.services import PermissionService
+from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
+from squid.core.permissions.models import PermissionGrant
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagValueType
 from squid.core.versions.application import VersionService
+from squid.core.voting.application.services import VoteService
+from squid.core.voting.domain import BuildEditVoteTarget, VoteChoice, VoteKind, VoteSessionResult
+from squid.worker.events import ApplyBuildVoteOutcomeHandler
 from tests.support.build_edits import build_edit_session
 from tests.support.submission_targets import seed_account_and_version
 
@@ -68,6 +75,88 @@ async def setup(
         Actor(account_id=account_id),
         build,
     )
+
+
+async def test_credited_creator_proposes_published_changes_and_vote_applies_the_exact_patch(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    service, executor, owner, build = await setup(migrated_session_factory)
+    async with migrated_session_factory.begin() as session:
+        creator = Account()
+        session.add(creator)
+        await session.flush()
+        identity = AccountIdentity.discord(123)
+        identity.account_id = creator.id
+        session.add(identity)
+    await service.edit(
+        build.id,
+        BuildEditPatch(credits=[Credit(name="Creator", kind=CreditKind.DISCORD, subject="123")]),
+        actor="test",
+        source="test",
+    )
+    await service.approve(build.id, actor="test", source="test")
+    actor = Actor(account_id=creator.id)
+    current = await service.get(build.id)
+    assert current is not None
+    assert current.is_creator(actor.account_id)
+    target = build_target(build.id)
+
+    with pytest.raises(AuthorizationError):
+        await executor.execute(
+            EditCommand(BUILD_EDIT, (LatestRevision(target),), patch_values(BuildEditPatch(credits=[]))), owner
+        )
+
+    command = EditCommand(
+        BUILD_EDIT,
+        (Revision(target, current.revision),),
+        patch_values(BuildEditPatch(dimensions=(1, 2, 3), extra_user_info="reviewed")),
+    )
+    result = await executor.execute(command, actor)
+    vote_id = result.outcome.review_vote_id
+    assert vote_id is not None
+    assert not result.outcome.changed
+    assert (await executor.execute(command, actor)).outcome.review_vote_id == vote_id
+    published = await service.get(build.id)
+    assert published is not None
+    assert published.description == "original"
+    assert published.revision == current.revision
+    snapshot = await VoteService(uow_factory=factory).get_session(vote_id)
+    assert snapshot is not None
+    assert snapshot.kind is VoteKind.BUILD_EDIT
+    assert isinstance(snapshot.target, BuildEditVoteTarget)
+    async with factory() as uow:
+        option = next(option for option in snapshot.options if option.choice is VoteChoice.APPROVE)
+        assert owner.account_id is not None
+        mutation = await uow.votes.cast_vote(vote_id, owner.account_id, 1, option, 3)
+        assert mutation is not None
+        await uow.commit()
+    closed = await VoteService(uow_factory=factory).get_session(vote_id)
+    assert closed is not None
+    assert closed.result is VoteSessionResult.APPROVED
+    handler = ApplyBuildVoteOutcomeHandler(VoteService(uow_factory=factory), service)
+    event = DomainEvent(
+        id=1,
+        event_type="vote_session.closed",
+        aggregate_kind="vote_session",
+        aggregate_id=vote_id,
+        occurred_at=Instant.now(),
+    )
+    await handler.handle(event)
+    await handler.handle(event)
+    updated = await service.get(build.id)
+    assert updated is not None
+    assert updated.dimensions == (1, 2, 3)
+    assert updated.description == "reviewed"
+    assert updated.submission_status is BuildStatus.APPROVED
+    async with migrated_session_factory() as session:
+        applications = await session.scalars(
+            select(BuildHistoryEntry).where(
+                BuildHistoryEntry.correlation_kind == "vote_session",
+                BuildHistoryEntry.correlation_id == str(vote_id),
+            )
+        )
+        assert len(applications.all()) == 1
 
 
 @pytest.mark.parametrize("latest", [False, True])
@@ -202,8 +291,8 @@ async def test_preparation_does_not_lock_the_build_and_rechecks_after_another_co
     service, executor, actor, build = await setup(sessions)
     prepare = service.prepare_edit
 
-    async def pause(actor: Actor, build: Build, patch: BuildEditPatch, *, showcase_only: bool = False) -> Build:
-        result = await prepare(actor, build, patch, showcase_only=showcase_only)
+    async def pause(actor: Actor, build: Build, patch: BuildEditPatch) -> Build:
+        result = await prepare(actor, build, patch)
         entered.set()
         await resume.wait()
         return result
@@ -291,6 +380,8 @@ async def test_typed_credit_edit_undo_and_redo_preserve_identity_and_role(
 ) -> None:
     service, executor, actor, build = await setup(migrated_session_factory)
     assert build.id is not None
+    async with migrated_session_factory.begin() as session:
+        session.add(PermissionGrant(pattern=BUILD_SUBMISSION_EDIT.name, effect=1, subject_account_id=actor.account_id))
     credits = [
         Credit(name="Alex", kind=CreditKind.DISCORD, subject="123", username="alex_d"),
         Credit(name="Alex", role=CreditRole.LAYOUT),
@@ -317,7 +408,7 @@ async def test_typed_credit_edit_undo_and_redo_preserve_identity_and_role(
     assert redone.credits == credits
 
 
-async def test_submitter_may_change_only_showcase_tags_once_the_build_is_confirmed(
+async def test_submitter_can_edit_showcase_tags_and_description_after_confirmation(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     sessions = migrated_session_factory
@@ -379,15 +470,16 @@ async def test_submitter_may_change_only_showcase_tags_once_the_build_is_confirm
     assert current is not None
     assert current.tags == []
 
-    with pytest.raises(AuthorizationError):
-        await executor.execute(
-            EditCommand(
-                BUILD_EDIT,
-                (Revision(build_target(build.id), undone.outcome.revisions[0].value),),
-                patch_values(BuildEditPatch(showcase_tags=[ShowcaseTag("compact")], extra_user_info="edited")),
-            ),
-            actor,
-        )
+    edited = await executor.execute(
+        EditCommand(
+            BUILD_EDIT,
+            (Revision(build_target(build.id), undone.outcome.revisions[0].value),),
+            patch_values(BuildEditPatch(showcase_tags=[ShowcaseTag("compact")], extra_user_info="edited")),
+        ),
+        actor,
+    )
+    assert edited.outcome.review_vote_id is None
+    assert edited.outcome.changed
 
 
 async def test_build_events_and_vector_share_the_content_transaction(

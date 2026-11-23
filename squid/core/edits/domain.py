@@ -130,6 +130,7 @@ class PreparedEdit:
     after: EditValues
     final: bool = False
     revisions: tuple[Revision, ...] = field(kw_only=True)
+    review_vote_id: int | None = field(default=None, kw_only=True)
 
     @property
     def changed(self) -> bool:
@@ -172,6 +173,7 @@ class EditOutcome:
     revisions: tuple[Revision, ...]
     changed: bool
     final: bool
+    review_vote_id: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

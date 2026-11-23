@@ -19,6 +19,7 @@ from squid.core.settings.infrastructure.repository import ensure_server_settings
 from squid.core.settings.models import ServerSetting
 from squid.core.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
+    BuildEditVoteTarget,
     BuildVoteTarget,
     DeleteLogVoteTarget,
     EmojiPreset,
@@ -73,6 +74,34 @@ class VoteRepository:
 
     def __init__(self, session: Callable[[], AsyncSession]):
         self._session = session
+
+    async def create_build_edit_session(
+        self, *, author_account_id: int, pass_threshold: int, fail_threshold: int, target: BuildEditVoteTarget
+    ) -> int:
+        session = self._session()
+        guild_ids = (
+            await session.scalars(
+                select(GuildVoteEmoji.guild_id).where(GuildVoteEmoji.kind == VoteKind.BUILD_EDIT).distinct()
+            )
+        ).all()
+        presets = await self.get_emoji_presets(guild_ids, VoteKind.BUILD_EDIT) if guild_ids else {}
+        options = normalize_vote_options(
+            (*DEFAULT_VOTE_OPTIONS, *(option for preset in presets.values() for option in preset.options)),
+            kind=VoteKind.BUILD_EDIT,
+        )
+        session_id = await self._create_session(
+            session, author_account_id, VoteKind.BUILD_EDIT, pass_threshold, fail_threshold, options
+        )
+        await session.execute(
+            insert(BuildVoteSession).values(
+                vote_session_id=session_id,
+                build_id=target.build_id,
+                changes=list(target.changes),
+                proposal_revision=target.revision,
+                proposal_patch=dict(target.patch),
+            )
+        )
+        return session_id
 
     async def get_or_create_build_submission_session(
         self,
@@ -787,6 +816,18 @@ class VoteRepository:
                     select(BuildVoteSession.build_id).where(BuildVoteSession.vote_session_id == row.id)
                 )
                 return (None if build_id is None else BuildVoteTarget(build_id)), None
+            case VoteKind.BUILD_EDIT:
+                proposal = await session.scalar(
+                    select(BuildVoteSession).where(BuildVoteSession.vote_session_id == row.id)
+                )
+                if proposal is None or proposal.proposal_revision is None or proposal.proposal_patch is None:
+                    return None, None
+                return BuildEditVoteTarget(
+                    proposal.build_id,
+                    proposal.proposal_revision,
+                    proposal.proposal_patch,
+                    tuple((field, before, after) for field, before, after in proposal.changes),
+                ), None
             case VoteKind.DELETE_LOG:
                 target_row = (
                     await session.execute(

@@ -7,6 +7,7 @@ CREATE TABLE public.edit_operations (
     final boolean NOT NULL,
     created_at timestamp with time zone NOT NULL,
     expires_at timestamp with time zone NOT NULL,
+    review_vote_id bigint,
     CONSTRAINT edit_operations_fingerprint_length CHECK ((octet_length(fingerprint) = 32))
 );
 

@@ -32,6 +32,7 @@ from squid.core.actors import Actor
 from squid.core.builds.application import BuildEditPatch, BuildService
 from squid.core.builds.application.edits import BUILD_EDIT, build_target, patch_values
 from squid.core.builds.domain import UnresolvedTags
+from squid.core.builds.domain.edit_policy import BuildEditDecision, decide_build_edit
 from squid.core.builds.errors import BuildEditValidationError
 from squid.core.builds.models import Build
 from squid.core.edits.application import EditRunner
@@ -85,6 +86,7 @@ class BuildEditWorkspace(sl.Reactive):
         *,
         load_options: OptionLoader,
         showcase_only: bool = False,
+        is_moderator: bool = True,
     ) -> None:
         """Start from `build`.
 
@@ -93,6 +95,7 @@ class BuildEditWorkspace(sl.Reactive):
         """
         self.manifest = manifest
         self.showcase_only = showcase_only
+        self.is_moderator = is_moderator
         self.category = build.category.value.lower()
         self._load_options = load_options
         self.option_sets = dict(option_sets)
@@ -132,7 +135,9 @@ class BuildEditWorkspace(sl.Reactive):
         return tuple(
             field
             for field in self.manifest.fields_for(self.category)
-            if field.is_visible(answers, self.origin) and (not self.showcase_only or field.id == "showcase_tags")
+            if field.is_visible(answers, self.origin)
+            and (not self.showcase_only or field.id == "showcase_tags")
+            and (self.is_moderator or field.id != "credits")
         )
 
     @sl.computed
@@ -240,6 +245,7 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
 
     _base_revision: int = sl.state(0)
     confirming: bool = sl.state(False)
+    needs_vote: bool = sl.state(False)
     saved: bool = sl.state(False)
     conflict: bool = sl.state(False)
     """The build changed after the staged answers were loaded, so they cannot be saved."""
@@ -441,7 +447,9 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
             actions.extend(
                 (
                     sl.action_control(
-                        tr(t"bot-submission-ui-views-apply-changes = Apply changes"),
+                        tr(t"build-edit-submit-for-review = Submit for review")
+                        if self.needs_vote
+                        else tr(t"bot-submission-ui-views-apply-changes = Apply changes"),
                         sd.on_press(self._apply),
                         key="apply",
                         tone=sl.Tone.SUCCESS,
@@ -528,9 +536,16 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
     async def _review(self, event: sl.ActionEventView) -> None:
         if not await self._may_event(event):
             return
-        if not self.workspace.patch().attributes():
+        fields = set(self.workspace.patch().attributes())
+        if not fields:
             self.workspace.notice = tr(t"bot-submission-ui-views-no-changes-to-review-yet = No changes to review yet.")
             return
+        self.needs_vote = (
+            decide_build_edit(
+                fields, status=self.build.submission_status, is_creator=True, is_moderator=self.workspace.is_moderator
+            )
+            is BuildEditDecision.REVIEW
+        )
         self.confirming = True
 
     async def _unconfirm(self, event: sl.ActionEventView) -> None:
@@ -544,7 +559,7 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
             return
         await event.acknowledge()
         try:
-            await self.controller.bind(BUILD_EDIT, build_target(self._build_id), self._base_revision).save(
+            result = await self.controller.bind(BUILD_EDIT, build_target(self._build_id), self._base_revision).save(
                 patch_values(patch), tr(t"build-edit-history-save = Save build changes")
             )
         except RevisionConflictError:
@@ -554,7 +569,11 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
             self.confirming = False
             self.workspace.notice = self.workspace.describe_issues(error.issues)
         else:
-            self.saved = True
+            if (vote_id := result.outcome.review_vote_id) is not None:
+                self.confirming = False
+                self.workspace.notice = tr(t"build-edit-review-queued = Submitted for review as vote #{vote_id}.")
+            else:
+                self.saved = True
 
     async def _refresh_saved(self) -> None:
         """Start again from the saved build after a save, an undo of one, or a reload."""

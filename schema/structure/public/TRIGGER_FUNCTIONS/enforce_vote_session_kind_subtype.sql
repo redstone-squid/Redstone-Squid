@@ -44,7 +44,11 @@ BEGIN
         INTO build_count, delete_log_count, generic_count;
 
         IF NOT (
-            (session_kind = 'build' AND build_count = 1 AND delete_log_count = 0 AND generic_count = 0)
+            (session_kind IN ('build', 'build_edit') AND build_count = 1 AND delete_log_count = 0 AND generic_count = 0
+                AND (session_kind = 'build_edit') = EXISTS (
+                    SELECT 1 FROM public.build_vote_sessions
+                    WHERE vote_session_id = target_id AND proposal_revision IS NOT NULL
+                ))
             OR (session_kind = 'delete_log' AND build_count = 0 AND delete_log_count = 1 AND generic_count = 0)
             OR (session_kind = 'generic' AND build_count = 0 AND delete_log_count = 0 AND generic_count = 1)
         ) THEN

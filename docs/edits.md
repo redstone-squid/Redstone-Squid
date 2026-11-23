@@ -155,3 +155,16 @@ edit adds a new history entry rather than removing one.
 - **Minecraft versions.** `squid/core/versions` handles the game versions a build works in.
 - **Snapshots.** `squid/core/starboard/application/snapshots.py` holds detached copies of
   records that handlers compare before replacing.
+
+
+## Build edit policy
+
+The submitting account and accounts resolved from saved creator credits can edit a build.
+Creators can change names, descriptions, and showcase tags directly. They can also correct
+pending submissions. Changes to other published facts go through a build edit vote.
+Attribution is reserved to accounts with `build.submission.edit`, which can apply other
+edits directly too.
+
+A review retains the whole proposed patch and its base revision. A passing vote applies the
+patch only if the author still qualifies and the reviewed revision and diff still match. The
+API returns HTTP 202 and the vote ID in `Build-Edit-Vote` when it queues an edit review.

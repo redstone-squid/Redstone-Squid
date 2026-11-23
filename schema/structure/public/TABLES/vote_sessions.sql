@@ -7,7 +7,7 @@ CREATE TABLE public.vote_sessions (
     pass_threshold smallint,
     result text DEFAULT 'pending'::text NOT NULL,
     author_account_id integer NOT NULL,
-    CONSTRAINT vote_sessions_kind_check CHECK ((kind = ANY (ARRAY['build'::text, 'delete_log'::text, 'generic'::text]))),
+    CONSTRAINT vote_sessions_kind_check CHECK ((kind = ANY (ARRAY['build'::text, 'build_edit'::text, 'delete_log'::text, 'generic'::text]))),
     CONSTRAINT vote_sessions_result_check CHECK ((result = ANY (ARRAY['approved'::text, 'denied'::text, 'cancelled'::text, 'pending'::text]))),
     CONSTRAINT vote_sessions_status_check CHECK ((status = ANY (ARRAY['open'::text, 'closed'::text, 'counting'::text, 'review'::text, 'void'::text]))),
     CONSTRAINT vote_sessions_threshold_kind_check CHECK (

@@ -5,7 +5,7 @@ The values needed for undo are not stored; they stay in the editor's receipts.
 
 from uuid import UUID
 
-from sqlalchemy import Boolean, CheckConstraint, Index, LargeBinary, Text
+from sqlalchemy import BigInteger, Boolean, CheckConstraint, Index, LargeBinary, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
 from sqlalchemy.orm import Mapped, mapped_column
@@ -28,5 +28,6 @@ class EditOperation(Base, kw_only=True):
     revisions: Mapped[list[dict[str, str | int]]] = mapped_column(JSONB, nullable=False)
     changed: Mapped[bool] = mapped_column(Boolean, nullable=False)
     final: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    review_vote_id: Mapped[int | None] = mapped_column(BigInteger, default=None)
     created_at: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
     expires_at: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)

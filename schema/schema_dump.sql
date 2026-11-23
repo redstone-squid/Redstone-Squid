@@ -540,7 +540,11 @@ BEGIN
         INTO build_count, delete_log_count, generic_count;
 
         IF NOT (
-            (session_kind = 'build' AND build_count = 1 AND delete_log_count = 0 AND generic_count = 0)
+            (session_kind IN ('build', 'build_edit') AND build_count = 1 AND delete_log_count = 0 AND generic_count = 0
+                AND (session_kind = 'build_edit') = EXISTS (
+                    SELECT 1 FROM public.build_vote_sessions
+                    WHERE vote_session_id = target_id AND proposal_revision IS NOT NULL
+                ))
             OR (session_kind = 'delete_log' AND build_count = 0 AND delete_log_count = 1 AND generic_count = 0)
             OR (session_kind = 'generic' AND build_count = 0 AND delete_log_count = 0 AND generic_count = 1)
         ) THEN
@@ -2068,7 +2072,10 @@ COMMENT ON TABLE public.build_versions IS 'Association table between builds and 
 CREATE TABLE public.build_vote_sessions (
     vote_session_id bigint NOT NULL,
     build_id bigint NOT NULL,
-    changes jsonb NOT NULL
+    changes jsonb NOT NULL,
+    proposal_revision bigint,
+    proposal_patch jsonb,
+    CONSTRAINT build_vote_sessions_proposal_check CHECK ((((proposal_revision IS NULL) AND (proposal_patch IS NULL)) OR ((proposal_revision IS NOT NULL) AND (proposal_revision > 0) AND (proposal_patch IS NOT NULL) AND (jsonb_typeof(proposal_patch) = 'object'::text))))
 );
 
 
@@ -2877,6 +2884,7 @@ CREATE TABLE public.edit_operations (
     final boolean NOT NULL,
     created_at timestamp with time zone NOT NULL,
     expires_at timestamp with time zone NOT NULL,
+    review_vote_id bigint,
     CONSTRAINT edit_operations_fingerprint_length CHECK ((octet_length(fingerprint) = 32))
 );
 
@@ -3137,7 +3145,7 @@ CREATE TABLE public.guild_vote_emojis (
     label text,
     "position" smallint NOT NULL,
     CONSTRAINT guild_vote_emojis_choice_check CHECK ((choice = ANY (ARRAY['approve'::text, 'deny'::text, 'generic'::text]))),
-    CONSTRAINT guild_vote_emojis_kind_check CHECK ((kind = ANY (ARRAY['build'::text, 'delete_log'::text, 'generic'::text])))
+    CONSTRAINT guild_vote_emojis_kind_check CHECK ((kind = ANY (ARRAY['build'::text, 'build_edit'::text, 'delete_log'::text, 'generic'::text])))
 );
 
 
@@ -3157,7 +3165,7 @@ CREATE TABLE public.guild_vote_role_weights (
     kind text NOT NULL,
     role_id bigint NOT NULL,
     multiplier double precision NOT NULL,
-    CONSTRAINT guild_vote_role_weights_kind_check CHECK ((kind = ANY (ARRAY['build'::text, 'delete_log'::text, 'generic'::text]))),
+    CONSTRAINT guild_vote_role_weights_kind_check CHECK ((kind = ANY (ARRAY['build'::text, 'build_edit'::text, 'delete_log'::text, 'generic'::text]))),
     CONSTRAINT guild_vote_role_weights_multiplier_check CHECK (((multiplier > (0)::double precision) AND (multiplier <> 'Infinity'::double precision) AND (multiplier <> 'NaN'::double precision)))
 );
 
@@ -6050,7 +6058,7 @@ CREATE TABLE public.vote_sessions (
     pass_threshold smallint,
     result text DEFAULT 'pending'::text NOT NULL,
     author_account_id integer NOT NULL,
-    CONSTRAINT vote_sessions_kind_check CHECK ((kind = ANY (ARRAY['build'::text, 'delete_log'::text, 'generic'::text]))),
+    CONSTRAINT vote_sessions_kind_check CHECK ((kind = ANY (ARRAY['build'::text, 'build_edit'::text, 'delete_log'::text, 'generic'::text]))),
     CONSTRAINT vote_sessions_result_check CHECK ((result = ANY (ARRAY['approved'::text, 'denied'::text, 'cancelled'::text, 'pending'::text]))),
     CONSTRAINT vote_sessions_status_check CHECK ((status = ANY (ARRAY['open'::text, 'closed'::text, 'counting'::text, 'review'::text, 'void'::text]))),
     CONSTRAINT vote_sessions_threshold_kind_check CHECK (

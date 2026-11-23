@@ -216,6 +216,7 @@ class Build(Base, StagedMedia, StagedTags, StagedCredits, kw_only=True):
     component_restrictions: list[str] = field(default_factory=list)
     miscellaneous_restrictions: list[str] = field(default_factory=list)
     credits: list[Credit] = field(default_factory=list)
+    credited_creator_account_ids: frozenset[int] = field(default_factory=frozenset, init=False, compare=False)
     sponsor: Final[PublicSponsor | None] = frozen_field(default=None)
     """Public sponsor details captured at submission time."""
     submitter_discord_id: int | None = None
@@ -301,17 +302,22 @@ class Build(Base, StagedMedia, StagedTags, StagedCredits, kw_only=True):
         values["sponsor"] = None if self.sponsor is None else asdict(self.sponsor)
         return values
 
-    def edit_access(self, account_id: int | None, *, may_edit_any: bool) -> EditAccess:
-        """How much of this build `account_id` may edit.
+    def is_creator(self, account_id: int | None) -> bool:
+        """Recognize the submitter and accounts linked to saved creator credits."""
+        return account_id is not None and (
+            account_id == self.submitter_account_id or account_id in self.credited_creator_account_ids
+        )
 
-        `may_edit_any` is whether they hold build-edit permission. Without it, the submitter may
-        edit their build fully while it is pending, and its showcase tags at any time.
+    def edit_access(self, account_id: int | None, *, may_edit_any: bool) -> EditAccess:
+        """Whether this account may open an editor for the build.
+
+        The edit policy decides whether a creator's change can apply directly or needs review.
         """
         if may_edit_any:
             return EditAccess.FULL
-        if account_id is None or account_id != self.submitter_account_id:
+        if not self.is_creator(account_id):
             return EditAccess.NONE
-        return EditAccess.FULL if self.submission_status is BuildStatus.PENDING else EditAccess.SHOWCASE_TAGS
+        return EditAccess.FULL
 
     def copy_for_edit(self, *, source_messages: tuple[MessageRef, ...] | None = None) -> Build:
         """Create an unsaved copy for previewing edits, without ORM history.
@@ -335,7 +341,9 @@ class Build(Base, StagedMedia, StagedTags, StagedCredits, kw_only=True):
             values["source_messages"] = source_messages
         else:
             values["source_message_content"] = self.source_message_content
-        return type(self)(**values)
+        copied = type(self)(**values)
+        copied.credited_creator_account_ids = self.credited_creator_account_ids
+        return copied
 
     def diff[T: Any](self, other: Build, *, allow_different_id: bool = False) -> list[tuple[str, T, T]]:
         """Return changed fields as (name, old value, new value) tuples.

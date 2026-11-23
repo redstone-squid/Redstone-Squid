@@ -1,19 +1,30 @@
 """Deciding where a vote session's cards live and what they say."""
 
+import json
 import logging
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, final, override
 
 import discord
 
+import squid_ui as sl
+import squid_ui.ext.discord as sd
 from squid.bot.posts.renderer import DesiredPost, PostRenderer
 from squid.bot.submission.build_card import render_build_card
 from squid.bot.voting.rendering import render_build_review, render_delete_log, render_generic_poll
 from squid.bot.voting.sessions import configured_vote_channels
 from squid.core.accounts.domain import IdentityProvider
 from squid.core.concurrency import DISCORD_FANOUT_LIMIT, TaskFailure, settle_all
+from squid.core.i18n import tr
 from squid.core.posts.domain import ResourceKind
-from squid.core.voting.domain import BuildVoteTarget, DeleteLogVoteTarget, PollScope, VoteSessionSnapshot
+from squid.core.voting.domain import (
+    BuildEditVoteTarget,
+    BuildVoteTarget,
+    DeleteLogVoteTarget,
+    PollScope,
+    VoteSessionSnapshot,
+)
+from squid_i18n import Text
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -43,7 +54,7 @@ class VoteSessionRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
         snapshot = await self.bot.services.votes.get_session(int(resource_key))
         if snapshot is None:
             return None
-        if snapshot.kind == "build":
+        if snapshot.kind in {"build", "build_edit"}:
             return await self._build_review(snapshot)
         if snapshot.kind == "delete_log":
             return await self._delete_log(snapshot)
@@ -74,7 +85,7 @@ class VoteSessionRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
 
     async def _build_review(self, snapshot: VoteSessionSnapshot) -> Sequence[DesiredPost]:
         target = snapshot.target
-        if not isinstance(target, BuildVoteTarget):
+        if not isinstance(target, BuildVoteTarget | BuildEditVoteTarget):
             logger.warning("A build review session has no build", extra={"squid.vote_session.id": snapshot.id})
             return ()
         build = await self.bot.services.build_queries.get(target.build_id)
@@ -87,9 +98,26 @@ class VoteSessionRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
             # a retried or partially delivered submission complete itself.
             channels.update({channel.id: channel.guild.id for channel in await configured_vote_channels(self.bot)})
 
-        card = await render_build_card(
-            build, self.bot.media_previews, schematic_summaries=self.bot.services.schematic_summaries
-        )
+        if isinstance(target, BuildEditVoteTarget):
+            lines = [
+                sl.md(t"**{field.replace('_', ' ').capitalize()}**\n{_vote_value(before)} → {_vote_value(after)}")
+                for field, before, after in target.changes
+            ]
+            card = sd.v2.panel(
+                sl.heading(tr(t"build-edit-vote-title = Proposed build edit")),
+                sd.v2.text(sl.md(t"{build.one_line_title}")),
+                sd.v2.text(Text.join("\n", lines[:6])),
+                sd.v2.file(
+                    sl.file(
+                        json.dumps(target.changes, indent=2, ensure_ascii=False).encode(),
+                        filename=f"build-{target.build_id}-proposed-changes.json",
+                    )
+                ),
+            )
+        else:
+            card = await render_build_card(
+                build, self.bot.media_previews, schematic_summaries=self.bot.services.schematic_summaries
+            )
         posts: list[DesiredPost] = []
         for channel_id, guild_id in channels.items():
             # Rendered per post: the guild decides which emoji the instructions name.
@@ -161,3 +189,11 @@ def _add_reaction(message: discord.Message, emoji: str):
         await message.add_reaction(emoji)
 
     return add
+
+
+def _vote_value(value: object) -> str:
+    """Present an old or new value as text within the vote card's display budget."""
+    if value is None:
+        return "—"
+    text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
+    return text if len(text) <= 140 else text[:139] + "…"

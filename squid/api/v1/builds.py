@@ -6,6 +6,7 @@ from uuid import UUID
 
 from litestar import Response, Router, get, patch
 from litestar.di import NamedDependency, Provide
+from litestar.openapi.datastructures import ResponseSpec
 from litestar.params import FromPath, FromQuery, HeaderParameter, JSONBody, QueryParameter
 
 from squid.api.contract import ANONYMOUS, DEVICE, SERVICE, WEB, WEB_WRITE, browser_only, contract, transport_only
@@ -60,7 +61,12 @@ _BUILD_ETAG = re.compile(r'^"build-(?P<build_id>[1-9][0-9]*)-r(?P<revision>[1-9]
 
 @patch(
     "/{build_id:int}",
-    responses=responses(400, 401, 403, 404, 409, 412, 422, 503),
+    responses={
+        **responses(400, 401, 403, 404, 409, 412, 422, 503),
+        202: ResponseSpec(
+            BuildDetail, description="The edit was submitted for review. Build-Edit-Vote contains the vote ID."
+        ),
+    },
     before_request=reserve_edit_before_request,
     guards=[requires(BUILD_SUBMISSION_CREATE)],
     dependencies={"operation_id": Provide(edit_operation_id, sync_to_thread=False)},
@@ -77,9 +83,9 @@ async def edit_build(
     operation_id: NamedDependency[UUID],
     if_match: Annotated[str | None, HeaderParameter(name="If-Match")] = None,
 ) -> Response[BuildDetail]:
-    """Edit an owned pending build, or any build with `build.submission.edit`."""
+    """Apply a permitted build edit or submit it for review."""
     caller.require_consented_account()
-    await services.edits.execute(
+    result = await services.edits.execute(
         EditCommand(
             BUILD_EDIT,
             (
@@ -95,7 +101,11 @@ async def edit_build(
     build = await services.builds.get(build_id)
     if build is None:
         raise BuildNotFoundError(build_id)
-    return Response(BuildDetail.from_domain(build), headers={"ETag": build_etag(build)})
+    headers = {"ETag": build_etag(build)}
+    if result.outcome.review_vote_id is not None:
+        headers["Build-Edit-Vote"] = str(result.outcome.review_vote_id)
+        return Response(BuildDetail.from_domain(build), status_code=202, headers=headers)
+    return Response(BuildDetail.from_domain(build), headers=headers)
 
 
 @get(

@@ -7,6 +7,7 @@ from uuid import UUID
 from whenever import Instant
 
 from squid.core.actors import Actor
+from squid.core.builds.application.edit_values import build_values, changed_build_values
 from squid.core.builds.application.editing import BuildEditPatch
 from squid.core.builds.application.ports import (
     BuildLockManager,
@@ -15,11 +16,12 @@ from squid.core.builds.application.ports import (
 )
 from squid.core.builds.application.restrictions import RestrictionReader
 from squid.core.builds.application.tags import BuildTagResolver, apply_build_tags, replace_showcase_tags
-from squid.core.builds.domain import BuildInput, BuildStatus, EditAccess, RestrictionTypeLiteral, sort_restrictions
+from squid.core.builds.domain import BuildInput, BuildStatus, RestrictionTypeLiteral, sort_restrictions
+from squid.core.builds.domain.edit_policy import BuildEditDecision, decide_build_edit
 from squid.core.builds.errors import BuildEditValidationError, BuildNotFoundError, BuildRevisionMismatchError
 from squid.core.builds.history import BuildEditActor, BuildEditContext, HistoryOperation
 from squid.core.builds.models import Build
-from squid.core.errors import AccountRequiredError, InvalidStateError
+from squid.core.errors import AccountRequiredError, AuthorizationError, InvalidStateError, ValidationError
 from squid.core.permissions.application.services import PermissionService
 from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 from squid.core.sentinel import UNSET
@@ -27,6 +29,7 @@ from squid.core.submissions.application.build_answers import answers_from_build
 from squid.core.submissions.application.forms import build_edit_manifest
 from squid.core.submissions.domain import SubmissionOrigin
 from squid.core.unit_of_work import UnitOfWorkFactory
+from squid.core.voting.domain import BuildEditVoteTarget
 
 _edit_manifest = cache(build_edit_manifest)
 
@@ -161,12 +164,13 @@ class BuildService:
         if actor.account_id is None:
             raise AccountRequiredError
         build = await self._get_required(build_id)
-        await self.authorize_edit(actor, build)
         self._check_revision(build, expected_revision)
-        await self._apply_patch(build, patch)
+        changes_extra_info = patch.extra_info is not UNSET and patch.extra_info != build.extra_info
+        await self.prepare_edit(actor, build, patch)
         await self._persist_prepared(
             build,
             actor=actor,
+            changes_extra_info=changes_extra_info,
             context=BuildEditContext(operation="edit", source=source, actor_account_id=actor.account_id),
         )
         return build
@@ -185,35 +189,55 @@ class BuildService:
                 build.id, expected_revision=expected_revision, current_revision=build.revision
             )
 
-    async def authorize_edit(
-        self, actor: Actor, build: Build, *, uow: BuildUnitOfWork | None = None, showcase_only: bool = False
-    ) -> None:
-        """Require the access `Build.edit_access` grants for this edit.
-
-        Pass `showcase_only` when the edit changes nothing but showcase tags, and `uow` to check
-        within the caller's transaction.
-        """
+    async def edit_decision(
+        self, actor: Actor, build: Build, fields: set[str], *, uow: BuildUnitOfWork | None = None
+    ) -> BuildEditDecision:
         if self._permissions is None:
             msg = "Authorized editing requires a permission service."
             raise InvalidStateError(msg)
-        may_edit_any = (await self._permissions.check(actor, BUILD_SUBMISSION_EDIT, uow=uow)).allowed
-        access = build.edit_access(actor.account_id, may_edit_any=may_edit_any)
-        if access is EditAccess.FULL or (showcase_only and access is EditAccess.SHOWCASE_TAGS):
-            return
-        # Raise the shared permission denial, which explains which rule refused the node.
-        await self._permissions.require(actor, BUILD_SUBMISSION_EDIT, uow=uow)
+        is_moderator = (await self._permissions.check(actor, BUILD_SUBMISSION_EDIT, uow=uow)).allowed
+        return decide_build_edit(
+            fields,
+            status=build.submission_status,
+            is_creator=build.is_creator(actor.account_id),
+            is_moderator=is_moderator,
+        )
 
-    async def prepare_edit(
-        self, actor: Actor, build: Build, patch: BuildEditPatch, *, showcase_only: bool = False
-    ) -> Build:
-        """Apply an authorized patch and prepare derived values without saving.
+    async def authorize_edit(self, actor: Actor, build: Build, *, uow: BuildUnitOfWork | None = None) -> None:
+        """Require direct authority for workflows that apply extracted build facts."""
+        if await self.edit_decision(actor, build, {"recalculation"}, uow=uow) is not BuildEditDecision.DIRECT:
+            raise AuthorizationError
 
-        The caller must recheck permissions and the revision when it later writes
-        the build; this preparation does not reserve the current revision.
-        """
-        await self.authorize_edit(actor, build, showcase_only=showcase_only)
+    async def prepare_edit(self, actor: Actor, build: Build, patch: BuildEditPatch) -> Build:
+        """Apply a candidate patch. The writer checks changed fields against the locked build."""
+        if await self.edit_decision(actor, build, set()) is BuildEditDecision.DENY:
+            raise AuthorizationError
         await self._apply_patch(build, patch)
         return build
+
+    async def apply_reviewed_edit(self, target: BuildEditVoteTarget, *, author_account_id: int, vote_id: int) -> bool:
+        """Apply the exact reviewed change once, if its base revision still exists."""
+        async with self._uow_factory() as uow:
+            build = await uow.builds.get_for_update(target.build_id)
+            if build is None or build.revision != target.revision or not build.is_creator(author_account_id):
+                return False
+            before = build_values(build)
+            try:
+                await self._apply_patch(build, BuildEditPatch.from_attributes(target.patch))
+            except ValidationError:
+                return False
+            if changed_build_values(before, build_values(build)) != target.changes:
+                return False
+            async with uow.builds.editing(
+                actor=author_account_id,
+                source="build_edit_vote",
+                operation="moderation",
+                correlation_kind="vote_session",
+                correlation_id=str(vote_id),
+            ):
+                await uow.builds.save(build)
+            await uow.commit()
+            return True
 
     async def approve(
         self,
@@ -296,7 +320,9 @@ class BuildService:
         await self._prepare_for_persistence(build)
         await self._persist_prepared(build, context=context)
 
-    async def _persist_prepared(self, build: Build, *, context: BuildEditContext, actor: Actor | None = None) -> None:
+    async def _persist_prepared(
+        self, build: Build, *, context: BuildEditContext, actor: Actor | None = None, changes_extra_info: bool = False
+    ) -> None:
         """Save prepared values within a short write scope.
 
         For existing builds, the application lease covers this scope, and
@@ -331,7 +357,13 @@ class BuildService:
                 current = await self._get_for_update(uow, build.id)
                 self._check_revision(current, build.revision)
                 if actor is not None:
-                    await self.authorize_edit(actor, current, uow=uow)
+                    fields = {name for name, _, _ in changed_build_values(build_values(current), build_values(build))}
+                    if current.ai_generated != build.ai_generated:
+                        fields.add("ai_generated")
+                    if changes_extra_info:
+                        fields.add("extra_info")
+                    if await self.edit_decision(actor, current, fields, uow=uow) is not BuildEditDecision.DIRECT:
+                        raise AuthorizationError
                 await uow.builds.save(build)
                 await uow.commit()
 

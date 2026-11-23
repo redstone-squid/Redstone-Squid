@@ -3,7 +3,7 @@ CREATE TABLE public.guild_vote_role_weights (
     kind text NOT NULL,
     role_id bigint NOT NULL,
     multiplier double precision NOT NULL,
-    CONSTRAINT guild_vote_role_weights_kind_check CHECK ((kind = ANY (ARRAY['build'::text, 'delete_log'::text, 'generic'::text]))),
+    CONSTRAINT guild_vote_role_weights_kind_check CHECK ((kind = ANY (ARRAY['build'::text, 'build_edit'::text, 'delete_log'::text, 'generic'::text]))),
     CONSTRAINT guild_vote_role_weights_multiplier_check CHECK (((multiplier > (0)::double precision) AND (multiplier <> 'Infinity'::double precision) AND (multiplier <> 'NaN'::double precision)))
 );
 

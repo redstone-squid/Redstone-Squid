@@ -6,7 +6,7 @@ from squid.core.builds.history import BuildEditActor, HistoryOperation
 from squid.core.events import DomainEvent, UnsupportedEventVersionError
 from squid.core.notifications import NotificationService
 from squid.core.voting.application.services import VoteService
-from squid.core.voting.domain import BuildVoteTarget, VoteSessionResult, VoteSessionSnapshot
+from squid.core.voting.domain import BuildEditVoteTarget, BuildVoteTarget, VoteSessionResult, VoteSessionSnapshot
 
 _NOTIFICATION_EVENT_SCHEMA_VERSIONS = {
     "build.submitted": frozenset({1, 2}),
@@ -24,6 +24,10 @@ class VoteOutcomeReader(Protocol):
 
 class BuildStatusWriter(Protocol):
     """Apply the final moderation status of a build."""
+
+    async def apply_reviewed_edit(
+        self, target: BuildEditVoteTarget, *, author_account_id: int, vote_id: int
+    ) -> bool: ...
 
     async def approve(
         self,
@@ -57,7 +61,15 @@ class ApplyBuildVoteOutcomeHandler:
 
     async def handle(self, event: DomainEvent) -> None:
         snapshot = await self._votes.get_session(event.aggregate_id)
-        if snapshot is None or snapshot.is_open or not isinstance(snapshot.target, BuildVoteTarget):
+        if snapshot is None or snapshot.is_open:
+            return
+        if isinstance(snapshot.target, BuildEditVoteTarget):
+            if snapshot.result is VoteSessionResult.APPROVED:
+                await self._builds.apply_reviewed_edit(
+                    snapshot.target, author_account_id=snapshot.author_account_id, vote_id=snapshot.id
+                )
+            return
+        if not isinstance(snapshot.target, BuildVoteTarget):
             return
         if snapshot.result is VoteSessionResult.APPROVED:
             await self._builds.approve(

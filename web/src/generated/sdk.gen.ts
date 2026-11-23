@@ -148,7 +148,7 @@ export const buildsGet = <ThrowOnError extends boolean = false>(options: Options
 /**
  * EditBuild
  *
- * Edit an owned pending build, or any build with `build.submission.edit`.
+ * Apply a permitted build edit or submit it for review.
  */
 export const buildsUpdate = <ThrowOnError extends boolean = false>(options: Options<BuildsUpdateData, ThrowOnError>): RequestResult<BuildsUpdateResponses, BuildsUpdateErrors, ThrowOnError> => (options.client ?? client).patch<BuildsUpdateResponses, BuildsUpdateErrors, ThrowOnError>({
     security: [{

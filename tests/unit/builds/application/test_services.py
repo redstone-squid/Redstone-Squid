@@ -575,14 +575,23 @@ class TestAuthorizedEditing:
 
         assert build.description == "moderated"
 
-    async def test_ownership_does_not_survive_confirmation(self, existing_build: DoorBuild) -> None:
-        """Confirmation ends the submitter's permission to edit through ownership alone."""
+    async def test_a_creator_can_edit_published_description(self, existing_build: DoorBuild) -> None:
+        existing_build.submission_status = BuildStatus.APPROVED
+        existing_build.credited_creator_account_ids = frozenset({2})
+        await apply_build_tags(existing_build, FakeTagResolver())
+        repository = FakeBuildRepository(existing_build)
+        service = build_service(repository, permissions=self._permissions())
+
+        build = await service.apply_edit(self.STRANGER, 42, BuildEditPatch(extra_user_info="updated"))
+        assert build.description == "updated"
+
+    async def test_a_creator_cannot_directly_change_published_dimensions(self, existing_build: DoorBuild) -> None:
         existing_build.submission_status = BuildStatus.APPROVED
         repository = FakeBuildRepository(existing_build)
         service = build_service(repository, permissions=self._permissions())
 
         with pytest.raises(AuthorizationError):
-            await service.apply_edit(self.OWNER, 42, BuildEditPatch(extra_user_info="mine"))
+            await service.apply_edit(self.OWNER, 42, BuildEditPatch(dimensions=(1, 2, 3)))
 
         assert repository.saved == []
 

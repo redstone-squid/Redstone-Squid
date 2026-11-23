@@ -26,8 +26,7 @@ async def prepare_build_editor(
 ) -> BuildEditScreen:
     """Construct an editor and its callbacks without presenting or authorizing it yet.
 
-    show_build_editor checks access before presentation. The editor is limited to showcase
-    tags when that is all `Build.edit_access` grants.
+    show_build_editor checks access before presentation. Moderators can edit attribution.
     """
     client = request.client
     prepared: BuildEditScreen | None = None
@@ -42,7 +41,7 @@ async def prepare_build_editor(
 
     # The editor keeps the scope it opened with; losing full access closes it rather than narrowing it.
     scope = await access(build)
-    showcase_only = scope is EditAccess.SHOWCASE_TAGS
+    is_moderator = (await client.services.permissions.check(await actor(), BUILD_SUBMISSION_EDIT)).allowed
 
     async def authorize() -> bool:
         current = await access(build if prepared is None else prepared.build)
@@ -71,7 +70,7 @@ async def prepare_build_editor(
         manifest,
         {source: await load_options(source) for source in sources},
         load_options=load_options,
-        showcase_only=showcase_only,
+        is_moderator=is_moderator,
     )
     prepared = BuildEditScreen(
         build,

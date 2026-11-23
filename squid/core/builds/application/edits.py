@@ -7,20 +7,22 @@ outcome share one transaction. The row lock provides exclusion with every build
 writer, including callers which also use the longer application lease.
 """
 
-import json
 from dataclasses import dataclass
 from typing import Protocol, cast
 
 from squid.core.actors import Actor
 from squid.core.builds.application.edit_schema import BuildPatch
+from squid.core.builds.application.edit_values import build_values as build_values
+from squid.core.builds.application.edit_values import changed_build_values
+from squid.core.builds.application.edit_values import patch_values as patch_values
 from squid.core.builds.application.editing import BuildEditPatch
 from squid.core.builds.application.ports import BuildUnitOfWork
 from squid.core.builds.application.services import BuildService
-from squid.core.builds.domain import BuildStatus, Info, ShowcaseTag, UnresolvedTags
-from squid.core.builds.domain.expansion import DoorExpansion
+from squid.core.builds.domain import BuildStatus, Info, UnresolvedTags
+from squid.core.builds.domain.edit_policy import BuildEditDecision
 from squid.core.builds.domain.tags import RESTRICTION_FIELDS
 from squid.core.builds.errors import BuildNotFoundError
-from squid.core.builds.models import Build, DoorBuild, ExtenderBuild
+from squid.core.builds.models import Build
 from squid.core.edits.application import EditUnitOfWork
 from squid.core.edits.domain import (
     EditCommand,
@@ -34,6 +36,7 @@ from squid.core.edits.domain import (
 )
 from squid.core.errors import (
     AccountRequiredError,
+    AuthorizationError,
     DataIntegrityError,
     InvalidStateError,
     ValidationError,
@@ -41,8 +44,9 @@ from squid.core.errors import (
 from squid.core.permissions.application.ports import PermissionUnitOfWork
 from squid.core.permissions.application.services import PermissionService
 from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_APPROVE, BUILD_SUBMISSION_REJECT
-from squid.core.sentinel import UNSET
-from squid.core.tags.domain import TagSemanticKind, assignment_value
+from squid.core.settings.application.ports import SettingsUnitOfWork
+from squid.core.settings.domain.runtime import RuntimeSettings
+from squid.core.voting.domain import BuildEditVoteTarget
 
 BUILD_STATUS_EDIT = "build.status"
 
@@ -53,86 +57,19 @@ def build_target(build_id: int) -> EditTarget:
     return EditTarget("build", str(build_id))
 
 
-def _patch_document(patch: BuildEditPatch) -> dict[str, object]:
-    values = patch.attributes()
-    if patch.credits is not UNSET:
-        values["credits"] = [credit.to_json() for credit in patch.credits]
-    if patch.showcase_tags is not UNSET:
-        values["showcase_tags"] = [tag.to_json() for tag in patch.showcase_tags]
-    if isinstance(patch.door_expansion, DoorExpansion):
-        values["door_expansion"] = patch.door_expansion.model_dump(mode="json")
-    return values
-
-
-def patch_values(patch: BuildEditPatch) -> EditValues:
-    return EditValues(json.dumps(_patch_document(patch)))
-
-
-def build_values(build: Build) -> EditValues:
-    """Capture editable facts without derived values or submission origin."""
-    patch = BuildEditPatch(
-        display_name=build.display_name,
-        version_spec=build.version_spec,
-        versions=list(build.versions),
-        showcase_tags=[
-            ShowcaseTag(assignment.definition.stable_key, assignment_value(assignment.value))
-            for assignment in build.tags
-            if assignment.definition.semantic_kind is TagSemanticKind.SHOWCASE
-        ],
-        dimensions=build.dimensions,
-        door_type=list(build.patterns),
-        wiring_placement_restrictions=list(build.wiring_placement_restrictions),
-        animated_restrictions=list(build.animated_restrictions),
-        component_restrictions=list(build.component_restrictions),
-        miscellaneous_restrictions=list(build.miscellaneous_restrictions),
-        extra_user_info=build.description,
-        credits=list(build.credits),
-        image_urls=list(build.image_urls),
-        video_urls=list(build.video_urls),
-        world_download_urls=list(build.world_download_urls),
-        schematic_urls=list(build.schematic_urls),
-        render_urls=list(build.render_urls),
-        server_ip=build.server_address,
-        coordinates=build.server_coordinates,
-        command_to_get_to_build=build.server_command,
-        completion_time=build.completion_time,
-    )
-    if isinstance(build, DoorBuild):
-        patch = BuildEditPatch.combine(
-            (
-                patch,
-                BuildEditPatch(
-                    door_dimensions=build.door_dimensions,
-                    # Without this an expansion-only edit compares equal before
-                    # and after, is skipped, and cannot be undone.
-                    door_expansion=build.expansion,
-                    door_orientation_type=build.orientation,
-                    visible_opening_time=build.visible_opening_time,
-                    visible_closing_time=build.visible_closing_time,
-                    normal_opening_time=build.normal_opening_time,
-                    normal_closing_time=build.normal_closing_time,
-                ),
-            )
-        )
-    if isinstance(build, ExtenderBuild):
-        patch = BuildEditPatch.combine(
-            (
-                patch,
-                BuildEditPatch(
-                    extender_orientation=build.orientation,
-                    extension_length=build.extension_length,
-                    extension_time=build.extension_time,
-                    retraction_time=build.retraction_time,
-                ),
-            )
-        )
-    unresolved: Info = {}
-    UnresolvedTags.read(build.extra_info).write(unresolved)
-    return EditValues(json.dumps(_patch_document(patch) | {"unresolved_tags": unresolved}))
-
-
 class BuildEditUnitOfWork(BuildUnitOfWork, EditUnitOfWork, PermissionUnitOfWork, Protocol):
     pass
+
+
+class BuildEditVoteWriter(Protocol):
+    async def create_build_edit_session(
+        self, *, author_account_id: int, pass_threshold: int, fail_threshold: int, target: BuildEditVoteTarget
+    ) -> int: ...
+
+
+class BuildFieldsUnitOfWork(BuildEditUnitOfWork, SettingsUnitOfWork, Protocol):
+    @property
+    def votes(self) -> BuildEditVoteWriter: ...
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -144,7 +81,7 @@ class BuildFieldsEdit:
     def __init__(self, builds: BuildService) -> None:
         self._builds = builds
 
-    async def prepare(self, uow: BuildEditUnitOfWork, actor: Actor, command: EditCommand) -> PreparedBuildEdit:
+    async def prepare(self, uow: BuildFieldsUnitOfWork, actor: Actor, command: EditCommand) -> PreparedBuildEdit:
         if actor.account_id is None:
             raise AccountRequiredError
         if len(command.expected) != 1 or command.expected[0].target.kind != "build":
@@ -167,11 +104,6 @@ class BuildFieldsEdit:
         if build.revision != expected.value:
             raise RevisionConflictError(expected, build.revision)
         before = build_values(build)
-        # Undo replays every field, so judge the edit by what it changes, not by what it sends.
-        current_values = before.unpack()
-        showcase_only = all(
-            current_values.get(name) == value for name, value in values.items() if name != "showcase_tags"
-        ) and (unresolved is None or unresolved == current_values["unresolved_tags"])
         attributes = patch.edit_attributes()
         if unresolved is not None:
             if not isinstance(unresolved, dict) or unresolved.keys() - {"unknown_restrictions", "unknown_patterns"}:
@@ -185,15 +117,30 @@ class BuildFieldsEdit:
             for name in RESTRICTION_FIELDS:
                 attributes[name] = [*cast(list[str], attributes.get(name, [])), *retained.restriction_names(name)]
             attributes["door_type"] = [*cast(list[str], attributes.get("door_type", [])), *retained.patterns]
-        await self._builds.prepare_edit(
-            actor, build, BuildEditPatch.from_attributes(attributes), showcase_only=showcase_only
-        )
+        candidate = BuildEditPatch.from_attributes(attributes)
+        await self._builds.prepare_edit(actor, build, candidate)
         current = await uow.builds.get_for_update(build_id)
         if current is None:
             raise BuildNotFoundError(build_id)
         require_revision(expected, current.revision)
-        await self._builds.authorize_edit(actor, current, uow=uow, showcase_only=showcase_only)
-        return PreparedBuildEdit(before, build_values(build), build=build, revisions=(expected,))
+        after = build_values(build)
+        changes = changed_build_values(before, after)
+        changed = {key for key, _, _ in changes}
+        decision = await self._builds.edit_decision(actor, current, changed, uow=uow)
+        if decision is BuildEditDecision.DENY or (decision is BuildEditDecision.REVIEW and command.purpose != "edit"):
+            raise AuthorizationError(public_context={"fields": sorted(changed)})
+        if decision is BuildEditDecision.REVIEW:
+            settings = await uow.settings.runtime(RuntimeSettings())
+            vote_id = await uow.votes.create_build_edit_session(
+                author_account_id=actor.account_id,
+                pass_threshold=settings.build_vote_pass_threshold,
+                fail_threshold=settings.build_vote_fail_threshold,
+                target=BuildEditVoteTarget(build_id, expected.value, patch_values(candidate).unpack(), changes),
+            )
+            return PreparedBuildEdit(
+                before, before, final=True, review_vote_id=vote_id, build=build, revisions=(expected,)
+            )
+        return PreparedBuildEdit(before, after, build=build, revisions=(expected,))
 
     async def apply(
         self, uow: BuildEditUnitOfWork, actor: Actor, command: EditCommand, prepared: PreparedEdit
@@ -216,7 +163,7 @@ class BuildStatusEdit:
     def __init__(self, permissions: PermissionService) -> None:
         self._permissions = permissions
 
-    async def prepare(self, uow: BuildEditUnitOfWork, actor: Actor, command: EditCommand) -> PreparedBuildEdit:
+    async def prepare(self, uow: BuildFieldsUnitOfWork, actor: Actor, command: EditCommand) -> PreparedBuildEdit:
         if actor.account_id is None:
             raise AccountRequiredError
         if len(command.expected) != 1 or command.expected[0].target.kind != "build":

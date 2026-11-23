@@ -1022,11 +1022,14 @@ bot-recount-that-vote-is-already-closed = That vote is already closed.
 # squid/bot/recount_cog.py:115
 bot-recount-votes-recounted = Votes recounted.
 
-# squid/bot/settings/screen.py:617
+# squid/bot/settings/screen.py:618
 bot-settings-role-multiplier = { $role } — { NUMBER($multiplier, useGrouping: 0, maximumSignificantDigits: 6) }x
 
-# squid/bot/settings/screen.py:349
+# squid/bot/settings/screen.py:350
 bot-settings-view-bot-language = Bot language
+
+# squid/bot/settings/screen.py:72
+bot-settings-view-build-edit-reviews = Build edit reviews
 
 # squid/bot/settings/screen.py:71
 bot-settings-view-build-reviews = Build reviews
@@ -1034,34 +1037,34 @@ bot-settings-view-build-reviews = Build reviews
 # squid/bot/settings/screen.py:66
 bot-settings-view-builds-awaiting-review = Builds awaiting review
 
-# squid/bot/settings/screen.py:254
+# squid/bot/settings/screen.py:255
 bot-settings-view-change-as-many-as-you-like-an = Change as many as you like; an emptied picker clears that setting.
 
-# squid/bot/settings/screen.py:327
+# squid/bot/settings/screen.py:328
 bot-settings-view-changed = Changed { $setting_label }
 
-# squid/bot/settings/screen.py:336
+# squid/bot/settings/screen.py:337
 bot-settings-view-changed-the-bot-language = Changed the bot language
 
-# squid/bot/settings/screen.py:414
+# squid/bot/settings/screen.py:415
 bot-settings-view-choose-a-role = Choose a role
 
-# squid/bot/settings/screen.py:428
+# squid/bot/settings/screen.py:429
 bot-settings-view-confirm-reset = Confirm reset
 
 # squid/bot/settings/screen.py:65
 bot-settings-view-confirmed-builds = Approved builds
 
-# squid/bot/settings/screen.py:631
+# squid/bot/settings/screen.py:632
 bot-settings-view-deleted-role = _Deleted role_ ({ $role_id })
 
-# squid/bot/settings/screen.py:72
+# squid/bot/settings/screen.py:73
 bot-settings-view-deletion-votes = Deletion votes
 
-# squid/bot/settings/screen.py:422
+# squid/bot/settings/screen.py:423
 bot-settings-view-edit-emojis = Edit emojis
 
-# squid/bot/settings/screen.py:624
+# squid/bot/settings/screen.py:625
 bot-settings-view-emojis = Emojis
 
 # squid/bot/settings/screen.py:63
@@ -1070,52 +1073,52 @@ bot-settings-view-fastest-record-builds = Fastest-record builds
 # squid/bot/settings/screen.py:64
 bot-settings-view-first-of-a-kind-builds = First-of-a-kind builds
 
-# squid/bot/settings/screen.py:295
+# squid/bot/settings/screen.py:296
 bot-settings-view-follow-discord = Follow Discord
 
-# squid/bot/settings/screen.py:531
+# squid/bot/settings/screen.py:532
 bot-settings-view-is-not-a-vote-choice = `{ $choice_text }` is not a vote choice.
 
-# squid/bot/settings/screen.py:610, squid/bot/settings/screen.py:622
+# squid/bot/settings/screen.py:611, squid/bot/settings/screen.py:623
 bot-settings-view-none = _None_
 
-# squid/bot/settings/screen.py:356
+# squid/bot/settings/screen.py:357
 bot-settings-view-not-found = _Not found_ ({ $channel_id })
 
-# squid/bot/settings/screen.py:354
+# squid/bot/settings/screen.py:355
 bot-settings-view-not-set = _Not set_
 
-# squid/bot/settings/screen.py:661
+# squid/bot/settings/screen.py:662
 bot-settings-view-one-choice-emoji-per-line = One `choice | emoji` per line
 
-# squid/bot/settings/screen.py:73
+# squid/bot/settings/screen.py:74
 bot-settings-view-polls = Polls
 
-# squid/bot/settings/screen.py:430
+# squid/bot/settings/screen.py:431
 bot-settings-view-reset = Reset
 
-# squid/bot/settings/screen.py:625
+# squid/bot/settings/screen.py:626
 bot-settings-view-role-multipliers = Role multipliers
 
-# squid/bot/settings/screen.py:263
+# squid/bot/settings/screen.py:264
 bot-settings-view-server-settings = Server settings
 
 # squid/bot/settings/screen.py:62
 bot-settings-view-smallest-record-builds = Smallest-record builds
 
-# squid/bot/settings/screen.py:460
+# squid/bot/settings/screen.py:461
 bot-settings-view-that-role-has-been-deleted = That role has been deleted.
 
-# squid/bot/settings/screen.py:455
+# squid/bot/settings/screen.py:456
 bot-settings-view-that-role-selection-is-invalid = That role selection is invalid.
 
-# squid/bot/settings/screen.py:468
+# squid/bot/settings/screen.py:469
 bot-settings-view-vote-weight-for = Vote weight for { $role_name }
 
-# squid/bot/settings/screen.py:154
+# squid/bot/settings/screen.py:155
 bot-settings-view-voting = Voting
 
-# squid/bot/settings/screen.py:396
+# squid/bot/settings/screen.py:397
 bot-settings-view-voting-2 = Voting — { $kind_label }
 
 # squid/bot/starboard/render.py:27
@@ -1404,31 +1407,31 @@ bot-submission-submit-nothing-to-recalculate = Nothing to recalculate
 # squid/bot/submission/cog.py:274
 bot-submission-submit-the-whole-build-e-g-x-x = Build dimensions as width x height x depth, e.g. `5x7x4`.
 
-# squid/bot/submission/ui/opening.py:97
+# squid/bot/submission/ui/opening.py:96
 bot-submission-ui-opening-cannot-edit-this-build = Cannot edit this build
 
-# squid/bot/submission/ui/build_edit.py:444
+# squid/bot/submission/ui/build_edit.py:452
 bot-submission-ui-views-apply-changes = Apply changes
 
-# squid/bot/submission/ui/build_edit.py:449
+# squid/bot/submission/ui/build_edit.py:457
 bot-submission-ui-views-back = Back
 
-# squid/bot/submission/ui/build_edit.py:480
+# squid/bot/submission/ui/build_edit.py:488
 bot-submission-ui-views-cancel = Cancel
 
-# squid/bot/submission/ui/build_edit.py:348
+# squid/bot/submission/ui/build_edit.py:354
 bot-submission-ui-views-edit-build = Edit build
 
-# squid/bot/submission/ui/build_edit.py:317
+# squid/bot/submission/ui/build_edit.py:323
 bot-submission-ui-views-loading-build = Loading build.
 
-# squid/bot/submission/ui/build_edit.py:532
+# squid/bot/submission/ui/build_edit.py:541
 bot-submission-ui-views-no-changes-to-review-yet = No changes to review yet.
 
-# squid/bot/submission/ui/build_edit.py:476
+# squid/bot/submission/ui/build_edit.py:484
 bot-submission-ui-views-reload-latest = Reload latest
 
-# squid/bot/submission/ui/build_edit.py:455
+# squid/bot/submission/ui/build_edit.py:463
 bot-submission-ui-views-review-changes = Review changes
 
 # squid/bot/tags_view.py:277
@@ -1909,64 +1912,73 @@ build-edit-form-videos = Video links
 # squid/core/submissions/application/forms.py:695
 build-edit-form-world-downloads = World download links
 
-# squid/bot/submission/ui/build_edit.py:174
+# squid/bot/submission/ui/build_edit.py:179
 build-edit-history-fields = Edit build fields
 
-# squid/bot/submission/ui/build_edit.py:548
+# squid/bot/submission/ui/build_edit.py:563
 build-edit-history-save = Save build changes
 
-# squid/bot/submission/ui/build_edit.py:209
+# squid/bot/submission/ui/build_edit.py:214
 build-edit-history-unlisted = Remove names not in the catalogue
 
-# squid/bot/submission/ui/build_edit.py:502
+# squid/bot/submission/ui/build_edit.py:574
+build-edit-review-queued = Submitted for review as vote #{ $vote_id }.
+
+# squid/bot/submission/ui/build_edit.py:510
 build-edit-search-destination = Add a pattern to build #{ $build_id }
 
-# squid/bot/submission/ui/build_edit.py:465
+# squid/bot/submission/ui/build_edit.py:473
 build-edit-search-patterns = Search patterns
 
-# squid/bot/submission/ui/build_edit.py:511
+# squid/bot/submission/ui/build_edit.py:519
 build-edit-search-unavailable = Return to the editor before adding a pattern.
+
+# squid/bot/submission/ui/build_edit.py:450
+build-edit-submit-for-review = Submit for review
+
+# squid/bot/posts/vote_renderer.py:107
+build-edit-vote-title = Proposed build edit
 
 # squid/bot/submission/ui/controls.py:30
 build-editor-build-deleted = That build no longer exists.
 
-# squid/bot/submission/ui/build_edit.py:331
+# squid/bot/submission/ui/build_edit.py:337
 build-editor-concurrent-change = This build changed while you were editing. Reload the latest version; your staged changes will be discarded.
 
-# squid/bot/submission/ui/opening.py:98
+# squid/bot/submission/ui/opening.py:97
 build-editor-edit-access-required = Only the build's submitter or a trusted staff member can edit it.
 
-# squid/bot/submission/ui/build_edit.py:592
+# squid/bot/submission/ui/build_edit.py:611
 build-editor-edit-access-required-views = Only the build's submitter or a trusted staff member can edit it.
 
-# squid/bot/submission/ui/build_edit.py:346
+# squid/bot/submission/ui/build_edit.py:352
 build-editor-edit-tags = Edit tags
 
-# squid/bot/submission/ui/build_edit.py:386
+# squid/bot/submission/ui/build_edit.py:392
 build-editor-expired = This editor expired. Unsaved changes were discarded.
 
-# squid/bot/submission/ui/build_edit.py:391
+# squid/bot/submission/ui/build_edit.py:397
 build-editor-open-new-editor = Open new editor
 
-# squid/bot/submission/ui/build_edit.py:323
+# squid/bot/submission/ui/build_edit.py:329
 build-editor-reloaded-discarded-changes = Fresh editor loaded. Unsaved changes from the previous editor were discarded.
 
-# squid/bot/submission/ui/build_edit.py:364
+# squid/bot/submission/ui/build_edit.py:370
 build-editor-remove-unlisted = Remove names not in the catalogue…
 
-# squid/bot/submission/ui/build_edit.py:431
+# squid/bot/submission/ui/build_edit.py:437
 build-editor-removed-unlisted = Removed: { $names }
 
-# squid/bot/submission/ui/build_edit.py:339
+# squid/bot/submission/ui/build_edit.py:345
 build-editor-review-hint = Review the changed values below, then apply them.
 
-# squid/bot/submission/ui/build_edit.py:341
+# squid/bot/submission/ui/build_edit.py:347
 build-editor-staging-hint = Edit each section, then review and save. Changes are not saved yet.
 
-# squid/bot/submission/ui/build_edit.py:166
+# squid/bot/submission/ui/build_edit.py:171
 build-editor-stale-form = These answers changed while the form was open. Open it again.
 
-# squid/bot/submission/ui/build_edit.py:411
+# squid/bot/submission/ui/build_edit.py:417
 build-editor-unlisted = Not in the catalogue: { $names }
 
 # squid/bot/catalogue/browse.py:724, squid/bot/catalogue/browse.py:896
@@ -2050,7 +2062,7 @@ builds-attribute-immutable = Attribute `{ $name }` is immutable!
 # squid/core/builds/errors.py:11
 builds-build-data-invalid = The build data is invalid.
 
-# squid/core/builds/models.py:230
+# squid/core/builds/models.py:231
 builds-build-instantiated-directly = Build cannot be instantiated directly; construct a category subclass or a BuildInput.
 
 # squid/core/builds/errors.py:30
@@ -3008,7 +3020,7 @@ draft-editor-choose = Choose…
 # squid/bot/submission/ui/drafts.py:708
 draft-editor-choose-file = Choose a file to manage…
 
-# squid/bot/submission/ui/build_edit.py:614, squid/bot/submission/ui/sections.py:371
+# squid/bot/submission/ui/build_edit.py:633, squid/bot/submission/ui/sections.py:371
 draft-editor-done = Done
 
 # squid/bot/submission/ui/sections.py:90
@@ -3131,7 +3143,7 @@ draft-editor-picker-other-pages = Choices on other pages are kept.
 # squid/bot/submission/ui/sections.py:240
 draft-editor-picker-required = **{ $label }** · Required
 
-# squid/bot/submission/ui/build_edit.py:471, squid/bot/submission/ui/drafts.py:576
+# squid/bot/submission/ui/build_edit.py:479, squid/bot/submission/ui/drafts.py:576
 draft-editor-preview = Preview
 
 # squid/bot/submission/ui/drafts.py:839, squid/bot/submission/ui/drafts.py:841
@@ -3332,28 +3344,28 @@ editor-detail-closed = Done. You can dismiss this message.
 # squid/bot/submission/ui/sections.py:361
 editor-detail-locked = These answers can no longer be edited here.
 
-# squid/core/edits/domain.py:219
+# squid/core/edits/domain.py:221
 edits-commit-uncertain = The change may not have been saved. Check the values and try again.
 
-# squid/core/edits/domain.py:233
+# squid/core/edits/domain.py:235
 edits-concurrent-write = Another edit committed first. Reload this item before trying again.
 
-# squid/core/edits/domain.py:163
+# squid/core/edits/domain.py:164
 edits-final = This operation cannot be undone.
 
 # squid/api/revisions.py:15
 edits-invalid-revision = This revision does not match the item being edited.
 
-# squid/core/edits/domain.py:229
+# squid/core/edits/domain.py:231
 edits-operation-expired = This edit has expired. Reload the item before editing again.
 
-# squid/core/edits/domain.py:209
+# squid/core/edits/domain.py:211
 edits-operation-reused = This operation identifier was already used for another edit.
 
 # squid/bot/edit_controller.py:248
 edits-refresh = Refresh saved values
 
-# squid/core/edits/domain.py:191
+# squid/core/edits/domain.py:193
 edits-revision-conflict = This item changed elsewhere. Reload it before editing.
 
 # squid/api/revisions.py:11
@@ -5490,34 +5502,34 @@ search-sort-oldest = { $field }, oldest first
 # squid/core/search/application/ranking.py:78
 search-weight-negative = weight for { $branch_name } cannot be negative
 
-# squid/bot/settings/screen.py:310
+# squid/bot/settings/screen.py:311
 settings-channel-invalid = That channel selection is invalid.
 
-# squid/bot/settings/screen.py:541
+# squid/bot/settings/screen.py:542
 settings-custom-emoji-unavailable = The custom emoji { $emoji } is inaccessible.
 
-# squid/bot/settings/screen.py:524
+# squid/bot/settings/screen.py:525
 settings-emoji-format-error = Each line must read `choice | emoji`.
 
-# squid/bot/settings/screen.py:347
+# squid/bot/settings/screen.py:348
 settings-follow-server-language = Following this server's Discord language
 
-# squid/bot/settings/screen.py:639
+# squid/bot/settings/screen.py:640
 settings-review-weighting-explained = Build reviews are weighted by the network's own server, so these multipliers do not apply here.
 
-# squid/bot/settings/screen.py:652
+# squid/bot/settings/screen.py:653
 settings-role-multiplier-help = Multiplier; leave empty to remove this role's weight
 
 # squid/core/settings/domain/runtime.py:41
 settings-runtime-invalid-channel-ids = Channel IDs must be positive signed 64-bit integers
 
-# squid/bot/settings/screen.py:162
+# squid/bot/settings/screen.py:163
 settings-tab-diagnostics = Diagnostics
 
-# squid/bot/settings/screen.py:146
+# squid/bot/settings/screen.py:147
 settings-tab-server = Server
 
-# squid/bot/settings/screen.py:513
+# squid/bot/settings/screen.py:514
 settings-vote-multiplier-invalid = A vote multiplier must be a positive number, such as 1.5.
 
 # squid/bot/submission/ui/showcase_tags.py:52

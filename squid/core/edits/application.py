@@ -125,7 +125,13 @@ class EditExecutor[UowT: EditUnitOfWork]:
             raise InvalidStateError(message)
         receipt = EditReceipt(command, prepared.before, prepared.after, versions, prepared.final)
         outcome = EditOutcome(
-            command.operation_id, actor_key, command.fingerprint, versions, prepared.changed, prepared.final
+            command.operation_id,
+            actor_key,
+            command.fingerprint,
+            versions,
+            prepared.changed,
+            prepared.final,
+            prepared.review_vote_id,
         )
         await uow.edits.record(outcome)
         # Defer caller cancellation while commit settles. Once confirmed, the

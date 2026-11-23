@@ -37,6 +37,7 @@ class PostgresEditRepository:
             ),
             row.changed,
             row.final,
+            row.review_vote_id,
         )
 
     async def record(self, outcome: EditOutcome) -> None:
@@ -52,6 +53,7 @@ class PostgresEditRepository:
                 ],
                 changed=outcome.changed,
                 final=outcome.final,
+                review_vote_id=outcome.review_vote_id,
                 created_at=now,
                 expires_at=now.add(hours=REPLAY_RETENTION_HOURS),
             )

@@ -69,6 +69,7 @@ SETTING_LABELS: dict[ScalarChannelSetting, Text] = {
 
 KIND_LABELS: dict[VoteKind, Text] = {
     VoteKind.BUILD: tr(t"bot-settings-view-build-reviews = Build reviews"),
+    VoteKind.BUILD_EDIT: tr(t"bot-settings-view-build-edit-reviews = Build edit reviews"),
     VoteKind.DELETE_LOG: tr(t"bot-settings-view-deletion-votes = Deletion votes"),
     VoteKind.GENERIC: tr(t"bot-settings-view-polls = Polls"),
 }
@@ -634,7 +635,7 @@ class VotingSettings(sl.Component[ComponentsV2Target, sd.Request]):
         return role.name
 
     def _scope_note(self) -> sl.TextLike | None:
-        if self.kind is not VoteKind.BUILD or self._owner_guild_id in (None, self._guild.id):
+        if self.kind not in {VoteKind.BUILD, VoteKind.BUILD_EDIT} or self._owner_guild_id in (None, self._guild.id):
             return None
         return tr(
             t"settings-review-weighting-explained = Build reviews are weighted by "

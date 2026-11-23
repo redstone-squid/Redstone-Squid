@@ -5,6 +5,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict
 
 from squid.core.voting.domain import (
+    BuildEditVoteTarget,
     BuildVoteTarget,
     PollScope,
     VoteKind,
@@ -117,7 +118,9 @@ class VoteSessionDetail(BaseModel):
             result=session.result,
             pass_threshold=session.pass_threshold,
             fail_threshold=session.fail_threshold,
-            build_id=session.target.build_id if isinstance(session.target, BuildVoteTarget) else None,
+            build_id=session.target.build_id
+            if isinstance(session.target, BuildVoteTarget | BuildEditVoteTarget)
+            else None,
             options=[VoteOptionSummary.from_domain(option) for option in options_by_id.values()],
             tallies=tallies,
             poll=(

@@ -29,6 +29,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from whenever import Instant
 
+from squid.core.errors import JSONValue
 from squid.core.persistence.base import Base
 from squid.core.persistence.types import InstantUTC, StrEnumText
 from squid.core.voting.domain import PollScope, VoteChoice, VoteKind, VoteSessionResult, VoteStatus, VoteVisibility
@@ -158,7 +159,15 @@ class BuildVoteSession(Base, kw_only=True):
     """Link a build review to its target and recorded changes."""
 
     __tablename__ = "build_vote_sessions"
-    __table_args__ = (Index("build_vote_sessions_build_idx", "build_id"),)
+    __table_args__ = (
+        Index("build_vote_sessions_build_idx", "build_id"),
+        CheckConstraint(
+            "(proposal_revision IS NULL AND proposal_patch IS NULL) OR "
+            "(proposal_revision IS NOT NULL AND proposal_revision > 0 "
+            "AND proposal_patch IS NOT NULL AND jsonb_typeof(proposal_patch) = 'object')",
+            name="build_vote_sessions_proposal_check",
+        ),
+    )
     vote_session_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey(
@@ -180,6 +189,8 @@ class BuildVoteSession(Base, kw_only=True):
         primary_key=True,
     )
     changes: Mapped[list[Any]] = mapped_column(JSONB, nullable=False)
+    proposal_revision: Mapped[int | None] = mapped_column(BigInteger, default=None)
+    proposal_patch: Mapped[dict[str, JSONValue] | None] = mapped_column(JSONB(none_as_null=True), default=None)
 
 
 class DeleteLogVoteSession(Base, kw_only=True):

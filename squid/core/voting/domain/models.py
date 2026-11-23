@@ -20,6 +20,7 @@ from math import isfinite
 from whenever import Instant
 
 from squid.core.actors import Actor
+from squid.core.errors import JSONValue
 from squid.core.permissions.domain.catalogue import VOTE_POLL_CLOSE_ANY, VOTE_POLL_RECOUNT
 from squid.core.scores import round_score
 from squid.core.voting.errors import InvalidVoteConfigurationError
@@ -31,6 +32,7 @@ class VoteKind(StrEnum):
     """What a vote session decides, and therefore how it closes."""
 
     BUILD = "build"
+    BUILD_EDIT = "build_edit"
     DELETE_LOG = "delete_log"
     GENERIC = "generic"
 
@@ -162,6 +164,16 @@ class BuildVoteTarget:
 
 
 @dataclass(frozen=True, slots=True)
+class BuildEditVoteTarget:
+    """A proposed patch against the build revision shown to voters."""
+
+    build_id: int
+    revision: int
+    patch: Mapping[str, JSONValue]
+    changes: tuple[VoteChange, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class DeleteLogVoteTarget:
     """The Discord message a moderation session votes to delete."""
 
@@ -170,7 +182,7 @@ class DeleteLogVoteTarget:
     server_id: int
 
 
-type VoteTarget = BuildVoteTarget | DeleteLogVoteTarget | None
+type VoteTarget = BuildVoteTarget | BuildEditVoteTarget | DeleteLogVoteTarget | None
 """What a closing session acts on. Generic polls act on nothing and carry `None`."""
 
 
@@ -233,6 +245,10 @@ def validate_session_payload(
     match kind:
         case VoteKind.BUILD:
             valid_target = isinstance(target, BuildVoteTarget)
+            requires_poll = False
+            valid_choices = {VoteChoice.APPROVE, VoteChoice.DENY}
+        case VoteKind.BUILD_EDIT:
+            valid_target = isinstance(target, BuildEditVoteTarget)
             requires_poll = False
             valid_choices = {VoteChoice.APPROVE, VoteChoice.DENY}
         case VoteKind.DELETE_LOG:
