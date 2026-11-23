@@ -2,7 +2,7 @@
 
 from dataclasses import replace
 from typing import cast, override
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 from uuid import UUID
 
 import discord
@@ -11,9 +11,11 @@ import pytest
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.catalogue.search.results import SearchScreen
+from squid.bot.routes import ScreenUnavailable
 from squid.bot.submission import build_card as build_card_module
 from squid.bot.submission.build_card import build_metadata_fields, render_build_card
 from squid.bot.submission.ui.build_edit import BuildEditScreen
+from squid.bot.submission.ui.source_preview import preview_build_source
 from squid.bot.ui import render_payload
 from squid.bot.utils.web import MediaPreviewClient
 from squid.core.builds.application import BuildService
@@ -113,7 +115,7 @@ async def test_build_card_renders_composable_v2_card(display_build: Build) -> No
 
 
 @pytest.mark.parametrize("draft", [False, True])
-def test_build_card_quotes_source_messages(draft: bool) -> None:
+def test_build_card_hides_source_content_behind_preview(draft: bool) -> None:
     content = "Original **source** " + "x" * 400
     if draft:
         build = DoorBuild(source_messages=(MessageSnapshot(id=3, guild_id=1, channel_id=2, content=content),))
@@ -124,12 +126,48 @@ def test_build_card_quotes_source_messages(draft: bool) -> None:
             source_message_content=content,
         )
 
-    payload = str(render_payload([build_card_module.build_card(build)]).layout.to_components())
+    payload = render_payload([build_card_module.build_card(build)]).layout.to_components()
 
-    assert "https://discord.com/channels/1/2/3" in payload
-    assert r"Original \\*\\*source\\*\\*" in payload
-    assert "…" in payload
-    assert "x" * 300 not in payload
+    source_row = next(
+        child for child in payload[0]["components"] if child["type"] == discord.ComponentType.action_row.value
+    )
+    preview, jump = source_row["components"]
+    assert preview["custom_id"] == preview_build_source.custom_id(channel_id=2, message_id=3)
+    assert jump["url"] == "https://discord.com/channels/1/2/3"
+    assert "Original **source**" not in str(payload)
+    assert "x" * 100 not in str(payload)
+
+
+@pytest.mark.parametrize("can_read", [True, False])
+async def test_source_preview_respects_channel_access_and_sends_a_private_card(can_read: bool) -> None:
+    channel = MagicMock(spec=discord.TextChannel)
+    channel.guild.fetch_member = AsyncMock()
+    channel.permissions_for.return_value = discord.Permissions(view_channel=True, read_message_history=can_read)
+    channel.fetch_message = AsyncMock()
+    channel.fetch_message.return_value.content = "Original **source** " + "x" * 400
+    channel.fetch_message.return_value.jump_url = "https://discord.com/channels/1/2/3"
+    request = MagicMock()
+    request.client.get_or_fetch_messageable_channel = AsyncMock(return_value=channel)
+    request.respond = AsyncMock()
+
+    if not can_read:
+        with pytest.raises(ScreenUnavailable):
+            await preview_build_source.function(request, channel_id=2, message_id=3)
+        channel.fetch_message.assert_not_awaited()
+        request.respond.assert_not_awaited()
+        return
+
+    await preview_build_source.function(request, channel_id=2, message_id=3)
+
+    channel.fetch_message.assert_awaited_once_with(3)
+    response = request.respond.await_args
+    assert response is not None
+    assert response.kwargs["audience"] == "personal"
+    payload = render_payload([response.args[0]]).layout.to_components()
+    assert payload[0]["type"] == discord.ComponentType.container.value
+    assert r"Original \\*\\*source\\*\\*" in str(payload)
+    assert "…" in str(payload)
+    assert "x" * 300 not in str(payload)
 
 
 @pytest.mark.parametrize(

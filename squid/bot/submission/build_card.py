@@ -12,10 +12,10 @@ from urllib.parse import urlsplit
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.catalogue.schematics.presentation import schematic_caption
-from squid.bot.message_preview import message_preview
 from squid.bot.submission.attachment_display import attachment_issue_line
 from squid.bot.submission.ui.attachment_review import review_attachments
 from squid.bot.submission.ui.expandable_size import expandable_size_text
+from squid.bot.submission.ui.source_preview import preview_build_source
 from squid.bot.ui import (
     truncate_display_text,
     user_inline_text,
@@ -27,7 +27,6 @@ from squid.core.builds.domain import BuildStatus
 from squid.core.builds.domain.models import AttachmentFailureInfo, SchematicDuplicateInfo
 from squid.core.builds.domain.titles import format_build_display_title
 from squid.core.builds.models import Build, DoorBuild, ExtenderBuild
-from squid.core.messages.domain import MessageSnapshot
 from squid.core.observability import add_counter
 from squid.core.tags.domain import TagModerationStatus, TagSemanticKind
 from squid_i18n import Text
@@ -240,19 +239,22 @@ def _build_source(build: Build) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Re
     )
     if build.edited_time is not None:
         footer += f" • Updated <t:{build.edited_time.timestamp()}:R>"
-    source = next(
-        (
-            message
-            for message in build.source_messages
-            if message.channel_id is not None and message.guild_id is not None
-        ),
-        None,
-    )
-    content = source.content if isinstance(source, MessageSnapshot) else build.source_message_content
-    content = _compact_plain(content) if content else ""
-    excerpt = sl.plain(truncate_display_text(content, 300)) if content else None
-    preview = message_preview(content=excerpt, jump_url=source.link if source else None)
-    return (sl.note(sl.plain(footer)), *preview)
+    note = sl.note(sl.plain(footer))
+    for source in build.source_messages:
+        if source.channel_id is not None and source.guild_id is not None and (jump_url := source.link):
+            return (
+                note,
+                sl.action_controls(
+                    sl.routed_action_control(
+                        "Preview original",
+                        preview_build_source.custom_id(channel_id=source.channel_id, message_id=source.id),
+                        key="preview",
+                    ),
+                    sl.link("Original Discord message", jump_url, key="jump"),
+                    key="source-actions",
+                ),
+            )
+    return (note,)
 
 
 def _field_ladders(build: Build) -> dict[str, tuple[str, ...]]:

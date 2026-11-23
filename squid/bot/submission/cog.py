@@ -28,6 +28,7 @@ from squid.bot.submission.ui.controls import edit_build, recover_build_editor, r
 from squid.bot.submission.ui.drafts import DraftEditorScreen
 from squid.bot.submission.ui.inference import reopen_inference
 from squid.bot.submission.ui.saved_drafts import SavedDraftsScreen
+from squid.bot.submission.ui.source_preview import preview_build_source
 from squid.bot.utils.autocomplete import suggests
 from squid.core.actors import Actor
 from squid.core.builds.domain import DoorOrientationLiteral
@@ -427,6 +428,7 @@ async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
         BuildCreatorsScreen.open,
         open_consent_prompt,
         review_attachments,
+        preview_build_source,
         edit_build,
         recover_build_editor,
         reopen_revision,
