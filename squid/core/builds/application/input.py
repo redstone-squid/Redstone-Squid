@@ -9,7 +9,7 @@ from squid.core.i18n import tr
 _BARE_NUMBER = re.compile(r"[~≈]?\s*[+-]?(?:\d+(?:\.\d+)?|\.\d+)")
 
 
-def parse_build_ticks(text: str) -> int:
+def parse_build_ticks(text: str, *, allow_negative: bool = False) -> int:
     """Parse "30gt", "15rt", or "1.5s" into game ticks, insisting on a unit.
 
     parse_time_string reads a bare number as seconds, but submitters often mean ticks,
@@ -19,7 +19,7 @@ def parse_build_ticks(text: str) -> int:
         message = tr(t"build-input-time-unit = Add a unit: gt for game ticks, rt for redstone ticks, or s for seconds.")
         raise ValidationError(message)
     ticks = parse_time_string(text)
-    if ticks is None or ticks < 0:
+    if ticks is None or (ticks < 0 and not allow_negative):
         message = tr(t"build-input-time-invalid = Enter a time such as 30gt, 15rt, or 1.5s.")
         raise ValidationError(message)
     return ticks

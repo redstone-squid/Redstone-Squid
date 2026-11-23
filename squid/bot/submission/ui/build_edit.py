@@ -32,6 +32,7 @@ from squid.core.actors import Actor
 from squid.core.builds.application import BuildEditPatch, BuildService
 from squid.core.builds.application.edits import BUILD_EDIT, build_target, patch_values
 from squid.core.builds.domain import UnresolvedTags
+from squid.core.builds.errors import BuildEditValidationError
 from squid.core.builds.models import Build
 from squid.core.edits.application import EditRunner
 from squid.core.edits.domain import RevisionConflictError
@@ -106,6 +107,8 @@ class BuildEditWorkspace(sl.Reactive):
         self.notice = ""
         self.history.clear()
 
+    editing_saved_build = True
+
     @property
     def origin(self) -> SubmissionOrigin:
         return SubmissionOrigin.DISCORD
@@ -178,17 +181,22 @@ class BuildEditWorkspace(sl.Reactive):
         return None
 
     def _problem(self, values: Mapping[str, JSONValue]) -> TextLike | None:
-        """Describe the invalid values among `values`, judged with the other staged answers."""
-        errors = self.manifest.validate_answers(
-            self.category, {**self.staged, **values}, origin=self.origin, require_complete=False
+        """Describe issues the candidate adds or changes relative to the saved build."""
+        errors = self.manifest.validate_transition(
+            self.category, self.saved.answers, {**self.staged, **values}, origin=self.origin
         )
+        return self.describe_issues(errors) if errors else None
+
+    def describe_issues(self, issues: Mapping[str, str]) -> Text:
+        """Render field validation issues using this editor's labels."""
         labels = {field.id: field.label for field in self.manifest.fields_for(self.category)}
-        problems = [
-            Text.join("", (md(t"**{labels.get(field_id, field_id)}**"), ": ", problem_text(errors[field_id])))
-            for field_id in values
-            if field_id in errors
-        ]
-        return Text.join("\n", problems) if problems else None
+        return Text.join(
+            "\n",
+            (
+                Text.join("", (md(t"**{labels.get(field_id, field_id)}**"), ": ", problem_text(reason)))
+                for field_id, reason in issues.items()
+            ),
+        )
 
     def remove_unresolved(self, transaction: sl.runtime.Transaction, names: Collection[str]) -> None:
         """Remove names that match no catalogue entry, as one undoable step; must run inside a UI action."""
@@ -542,6 +550,9 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
         except RevisionConflictError:
             self.confirming = False
             self.conflict = True
+        except BuildEditValidationError as error:
+            self.confirming = False
+            self.workspace.notice = self.workspace.describe_issues(error.issues)
         else:
             self.saved = True
 

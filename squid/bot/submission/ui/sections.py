@@ -49,6 +49,8 @@ from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.interactions import PressHandler
 from squid_ui.pages import InitialPage
 
+_parse_edit_ticks = partial(parse_build_ticks, allow_negative=True)
+
 MAX_MODAL_FIELDS = 5
 """Discord modals hold at most five inputs."""
 
@@ -101,6 +103,9 @@ class AnswerWorkspace(Protocol):
     `answers` includes the form's defaults; `stored_answers` holds only what was set, which a
     multi-page picker needs so it keeps choices from pages it is not showing.
     """
+
+    @property
+    def editing_saved_build(self) -> bool: ...
 
     @property
     def manifest(self) -> FormManifest: ...
@@ -476,13 +481,22 @@ async def present_chunk_form(ws: AnswerWorkspace, chunk: FormSection, event: sd.
     grouped = {field_id for group in groups for field_id in group.field_ids}
 
     async def submitted(event: sl.SubmitEvent) -> None:
+        # A Discord prefill can be shorter than the saved text. Keep the original
+        # whenever Discord returns the displayed input verbatim.
+        unchanged = (
+            {entry.key for entry in entries if event.attempted.get(entry.key) == entry.format(entry.default)}
+            if ws.editing_saved_build
+            else set()
+        )
         values: dict[str, JSONValue] = {}
         for group in groups:
+            if group.key in unchanged:
+                continue
             raw = event.values.get(group.key)
             parts = parse_dimensions(str(raw)) if raw else (None, None, None)
             values.update(zip(group.field_ids, parts, strict=True))
         for field in chunk.fields:
-            if field.id in grouped:
+            if field.id in grouped or field.id in unchanged:
                 continue
             raw = event.values.get(field.id)
             if field.value_kind is ValueKind.CREDIT_LIST:
@@ -500,9 +514,9 @@ async def present_chunk_form(ws: AnswerWorkspace, chunk: FormSection, event: sd.
     for field in chunk.fields:
         group = next((group for group in groups if group.field_ids[0] == field.id), None)
         if group is not None:
-            entries.append(_dimensions_entry(group, chunk.fields, answers))
+            entries.append(_dimensions_entry(group, chunk.fields, answers, editing=ws.editing_saved_build))
         elif field.id not in grouped:
-            entries.append(_form_entry(field, answers.get(field.id)))
+            entries.append(_form_entry(field, answers.get(field.id), editing=ws.editing_saved_build))
     await event.present_form(
         sl.forms.FormSpec[sd.Request[Any, Any]](chunk.title[:45], tuple(entries)),
         key=f"draft-{chunk.id}",
@@ -519,11 +533,12 @@ class _TicksField(sl.forms.DurationField[Any]):
         return _seconds(value) if isinstance(value, int) and not isinstance(value, bool) else None
 
 
-def _form_entry(field: FormField, value: JSONValue) -> sl.forms.FormField[Any, Any]:
+def _form_entry(field: FormField, value: JSONValue, *, editing: bool = False) -> sl.forms.FormField[Any, Any]:
     """Build the modal input for one manifest field, prefilled with its saved value.
 
     Discord marks required inputs itself, so labels carry no "(required)" suffix.
     """
+    required = field.required and not editing
     label = field.label[:45]
     help_text = field.help_text or (field.label if len(field.label) > 45 else None)
     description = help_text[:100] if help_text else None
@@ -531,7 +546,7 @@ def _form_entry(field: FormField, value: JSONValue) -> sl.forms.FormField[Any, A
         return _CreditsField(
             key=field.id,
             label=label,
-            required=field.required,
+            required=required,
             maximum=4000,
             default="\n".join(format_credit(credit) for credit in read_credits(value or [])),
             description="One per line: Name, discord:@user, java:IGN, bedrock:Name. Optional: | layout or | contributor",
@@ -545,47 +560,49 @@ def _form_entry(field: FormField, value: JSONValue) -> sl.forms.FormField[Any, A
                 sl.forms.ChoiceOption("false", tr(t"draft-editor-no = No"), value=False),
             )
         )
+        if editing and isinstance(value, str) and value and all(option.value != value for option in options):
+            options += (sl.forms.ChoiceOption("__saved__", value[:100], value),)
         return sl.forms.ChoiceField[JSONValue, Any](
-            key=field.id, label=label, description=description, required=field.required, default=value, options=options
+            key=field.id, label=label, description=description, required=required, default=value, options=options
         )
     if field.value_kind is ValueKind.GAME_TICKS:
         return _TicksField(
             key=field.id,
             label=label,
             description=description,
-            required=field.required,
+            required=required,
             default=cast(int | None, value),
             placeholder="30gt, 15rt, or 1.5s",
-            parser=parse_build_ticks,
+            parser=_parse_edit_ticks if editing else parse_build_ticks,
         )
     if field.value_kind is ValueKind.INTEGER:
         return sl.forms.IntField[Any](
             key=field.id,
             label=label,
             description=description,
-            required=field.required,
+            required=required,
             default=cast(int | None, value),
-            minimum=cast(int | None, field.constraints.minimum),
-            maximum=cast(int | None, field.constraints.maximum),
+            minimum=None if editing else cast(int | None, field.constraints.minimum),
+            maximum=None if editing else cast(int | None, field.constraints.maximum),
         )
     if field.value_kind is ValueKind.NUMBER:
         return sl.forms.FloatField[Any](
             key=field.id,
             label=label,
             description=description,
-            required=field.required,
+            required=required,
             default=cast(float | None, value),
-            minimum=field.constraints.minimum,
-            maximum=field.constraints.maximum,
+            minimum=None if editing else field.constraints.minimum,
+            maximum=None if editing else field.constraints.maximum,
         )
     if field.repeatable:
         return sl.forms.TextAreaField[Any](
             key=field.id,
             label=label,
             description=description,
-            required=field.required,
+            required=required,
             maximum=4000,
-            default="\n".join(_as_list(value)),
+            default="\n".join(_as_list(value))[:4000] if editing else "\n".join(_as_list(value)),
             placeholder=tr(t"draft-editor-one-per-line = One per line"),
         )
     maximum = min(4000, field.constraints.max_length or 4000)
@@ -595,9 +612,9 @@ def _form_entry(field: FormField, value: JSONValue) -> sl.forms.FormField[Any, A
         key=field.id,
         label=label,
         description=description,
-        required=field.required,
-        maximum=maximum,
-        default=value if isinstance(value, str) else None,
+        required=required,
+        maximum=4000 if editing else maximum,
+        default=(value[:4000] if editing else value) if isinstance(value, str) else None,
     )
 
 
@@ -640,7 +657,7 @@ def dimension_groups(fields: Sequence[FormField]) -> tuple[DimensionGroup, ...]:
 
 
 def _dimensions_entry(
-    group: DimensionGroup, fields: Sequence[FormField], answers: Mapping[str, JSONValue]
+    group: DimensionGroup, fields: Sequence[FormField], answers: Mapping[str, JSONValue], *, editing: bool = False
 ) -> sl.forms.FormField[Any, Any]:
     """Build the single modal input for a size, prefilled as "5 x 7 x ?"."""
     values = tuple(answers.get(field_id) for field_id in group.field_ids)
@@ -648,7 +665,7 @@ def _dimensions_entry(
         key=group.key,
         label=group.label,
         description=tr(t"draft-editor-size-help = Width x height x depth in blocks. Use ? for a value you don't know."),
-        required=any(field.required for field in fields if field.id in group.field_ids),
+        required=not editing and any(field.required for field in fields if field.id in group.field_ids),
         default=None
         if all(value is None for value in values)
         else format_dimensions(tuple(value if isinstance(value, int) else None for value in values)),

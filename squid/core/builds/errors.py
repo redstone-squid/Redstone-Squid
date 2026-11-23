@@ -13,6 +13,14 @@ class InvalidBuildError(ValidationError):
     default_resource = "build"
 
 
+class BuildEditValidationError(InvalidBuildError):
+    """An edit introduces an issue or changes the inputs to an existing issue."""
+
+    def __init__(self, issues: dict[str, str]) -> None:
+        self.issues = dict(issues)
+        super().__init__(public_context={"fields": self.issues})
+
+
 class BuildNotFoundError(NotFoundError):
     """A build could not be found."""
 

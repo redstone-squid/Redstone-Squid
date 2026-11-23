@@ -15,7 +15,7 @@ import squid_ui.ext.discord as sd
 from squid.bot.catalogue.search.contextual import ContextualSearches, search_autocomplete
 from squid.bot.submission.cog import BuildCommands
 from squid.bot.submission.ui.build_edit import BuildEditScreen
-from squid.bot.submission.ui.sections import SectionEditorScreen
+from squid.bot.submission.ui.sections import SectionEditorScreen, modal_chunks, present_chunk_form
 from squid.bot.utils.autocomplete import BotInteraction
 from squid.core.builds.application import BuildService
 from squid.core.builds.domain import BuildStatus, ShowcaseTag, UnresolvedTags
@@ -234,6 +234,32 @@ def test_editor_visibility_follows_staged_answers_and_rollback() -> None:
         assert workspace.prefill({"version_compatibility": "1.21"}) is None
     assert "display_name" in {field.id for field in workspace.fields}
     assert "display_name" in {field.id for section in workspace.sections for field in section.fields}
+
+
+async def test_section_modal_allows_an_unchanged_invalid_timing() -> None:
+    workspace = editor(_door(normal_opening_time=-20, normal_closing_time=20)).workspace
+    section = workspace.section("door_timing")
+    assert section is not None
+    event = AsyncMock()
+    await present_chunk_form(workspace, modal_chunks(section)[0], event)
+    form = event.present_form.call_args.args[0]
+    save = event.present_form.call_args.kwargs["on_submit"]
+
+    parsed = await form.evaluate({"opening_time": "-1s", "closing_time": "2s"})
+    assert not parsed.errors
+    with sl.runtime.transaction() as tx:
+        await save(SimpleNamespace(values=parsed.values, attempted=parsed.attempted, transaction=tx))
+    assert workspace.patch().attributes() == {"normal_closing_time": 40}
+
+    await present_chunk_form(workspace, modal_chunks(section)[0], event)
+    form = event.present_form.call_args.args[0]
+    save = event.present_form.call_args.kwargs["on_submit"]
+    parsed = await form.evaluate({"opening_time": "-2s", "closing_time": "2s"})
+    assert not parsed.errors
+    with sl.runtime.transaction() as tx:
+        await save(SimpleNamespace(values=parsed.values, attempted=parsed.attempted, transaction=tx))
+    assert workspace.patch().attributes() == {"normal_closing_time": 40}
+    assert "Too small" in sl.text.source_text(workspace.notice)
 
 
 async def test_an_invalid_value_stages_nothing_and_says_why() -> None:

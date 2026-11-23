@@ -471,10 +471,22 @@ class FormManifest:
         required answers are allowed. Dynamic options must be checked separately;
         only inline options are validated here.
         """
-        answers = self.apply_defaults(category, answers, origin=origin)
-        fields = self.fields_for(category)
-        definitions = {item.id: item for item in fields}
-        errors = {field_id: "unknown_field" for field_id in answers.keys() - definitions.keys()}
+        return self._validate_answers(
+            self.fields_for(category),
+            self.apply_defaults(category, answers, origin=origin),
+            origin=origin,
+            require_complete=require_complete,
+        )
+
+    @staticmethod
+    def _validate_answers(
+        fields: tuple[FormField, ...],
+        answers: Mapping[str, JSONValue],
+        *,
+        origin: SubmissionOrigin,
+        require_complete: bool = True,
+    ) -> dict[str, str]:
+        errors = {field_id: "unknown_field" for field_id in answers.keys() - {item.id for item in fields}}
         for item in fields:
             if not item.is_visible(answers, origin):
                 continue
@@ -487,6 +499,32 @@ class FormManifest:
             if error is not None:
                 errors[item.id] = error
         return errors
+
+    def validate_transition(
+        self,
+        category: str,
+        before: Mapping[str, JSONValue],
+        after: Mapping[str, JSONValue],
+        *,
+        origin: SubmissionOrigin,
+    ) -> dict[str, str]:
+        """Report new issues and issues whose inputs changed during an edit."""
+        before = self.apply_defaults(category, before, origin=origin)
+        after = self.apply_defaults(category, after, origin=origin)
+        fields = self.fields_for(category)
+        existing = self._validate_answers(fields, before, origin=origin)
+        problems = self._validate_answers(fields, after, origin=origin)
+        dependencies = {item.id: item.visible_when.field_id for item in fields if item.visible_when is not None}
+        return {
+            field_id: reason
+            for field_id, reason in problems.items()
+            if existing.get(field_id) != reason
+            or before.get(field_id) != after.get(field_id)
+            or (
+                (dependency := dependencies.get(field_id)) is not None
+                and before.get(dependency) != after.get(dependency)
+            )
+        }
 
     def apply_defaults(
         self,

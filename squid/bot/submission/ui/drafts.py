@@ -223,6 +223,8 @@ class DraftWorkspace(sl.Reactive):
     def section(self, section_id: str) -> FormSection | None:
         return next((section for section in self.sections if section.id == section_id), None)
 
+    editing_saved_build = False
+
     @property
     def origin(self) -> SubmissionOrigin:
         return self.draft.origin
