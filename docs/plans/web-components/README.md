@@ -32,27 +32,70 @@ squid/core, so screens are composed from `web/src/ui` instead of one-off markup.
 - Builds and records share `features/catalogue`, since a record shows its holders as build
   cards and features cannot import each other.
 
-## Progress
+## Status and resuming
 
-- Phase 0 and Phase 1 are done: tokens, the Svelte-only `src/ui` grouped by folder, the
-  catalogue features in Svelte, and the workbench with one stories page per folder and a
-  coverage test.
+Paused after Phase 1 (commits `960679e9a` to `01cf8de84`). Phases 0 and 1 are done; start
+at Phase 2.
+
+What exists in `web/src/ui`, by folder: `layout` (Layout, Container), `content` (Heading,
+Text, Link, Icon, Code, Prose, Timestamp, VisuallyHidden, SkipLink), `actions` (Button),
+`feedback` (Badge, Chip, Notice, Progress, Skeleton, Spinner, EmptyState, ErrorState),
+`data` (Card, Image, Avatar, DescriptionList, StatGroup, Disclosure, List, ListItem,
+Timeline, Diff), `navigation` (Breadcrumbs, Pagination, NavList, Tabs and SegmentedControl in
+link mode), `patterns` (PageHeader, Section). `forms` and `overlays` hold the pre-existing
+components, moved but not yet reworked; Phases 2 and 3 replace them.
+
+Conventions to follow:
+
+- **Stories.** Each `src/ui/<folder>` has `src/workbench/stories/<Folder>Stories.svelte`
+  with `<Story name="X" source="folder/X">` blocks and a `<Variant label>` per specimen,
+  showing every variant and state. Raw English fixture text is fine there. A new folder (such
+  as `chart` or `table`) needs an entry in `src/workbench/groups.ts`, a line in
+  `src/pages/design-system/[group].astro`, and one in the `it.each` list of
+  `tests/unit/workbench-stories.test.ts`.
+- **Coverage.** `tests/unit/workbench-stories.test.ts` fails when a `src/ui/**/*.svelte` has
+  no story, except its `INTERNAL` set. Vitest coverage for `src/ui` must stay at 90% lines,
+  functions, statements and 85% branches.
+- **Review.** `tests/review/workbench.spec.ts` screenshots every group page in both themes on
+  desktop and mobile, with axe and an overflow check. After a visual change, run
+  `bun run test:review:update`, inspect the images, then `bun run test:review`. Broken-image
+  demos use `https://media.fixture.invalid/broken.png`; a real 404 fails the console check.
+  Navigation landmarks on one page need distinct names.
+- **Styles.** No `variants.ts`. A style shared by a folder goes in that folder's `styles.ts`
+  (`forms/styles.ts` exists; recreate `overlays/styles.ts` with `Menu`). Code that wants a
+  button's look renders `Button`, through bits-ui's `child` snippet for triggers.
+- **Types from `.svelte` files.** ESLint resolves types imported from a `.svelte` module as
+  `any`, so shared prop types belong in a `.ts` file beside the component.
+- **Inline styles.** Data-driven geometry (`style:width`) is allowed with an
+  `eslint-disable svelte/no-inline-styles` block and a reason.
+- **Image fallbacks.** `src/ui/image-fallback.ts` must stay a non-module script loaded only by
+  `DocumentHead`; making it a module or loading it elsewhere splits it into a chunk that fails
+  on the offline page.
+
+How to resume:
+
+1. Read `components.md` §2 for the component being built and `screens.md` for its users.
+2. Phases 2, 3 and 4 can run in parallel in separate worktrees, with these limits:
+   - Phase 3's `Dialog` rewrite needs Phase 2's fields for its stories only.
+   - Phase 4's `DataTable` column menu needs Phase 3's `Menu`. Build `DataTable` without
+     column visibility first, or wait for `Menu`.
+   - Merge conflicts are limited to the catalogs, `groups.ts`, the `[group].astro` page and
+     the coverage test's group list.
+3. Then Phase 5 (patterns) and Phase 6 (infrastructure), then Phase 7 (lint enforcement),
+   which must leave zero violations behind.
+4. Each phase ends the way Phase 1 did: stories, unit tests for keyboard and focus contracts,
+   refreshed review screenshots, `src/ui/README.md` updated, and small commits.
+
+Not yet run: `bun run test:compatibility` (Firefox and WebKit).
 
 ## Build order
 
 Each phase ends with workbench stories, unit tests (keyboard and focus), review screenshots and axe for every new component, and the README table updated.
 
-**Phase 0: foundations (no new components)**
-1. Add the tokens in §2.4: color roles in both themes with contrast checks, type scale, weights, tracking, spacing and sizes, radii, motion, the z utilities, and `themeColor` in `themes.ts`.
-2. Fix the base layer: neutral `h1`–`h3` sizes and CJK tracking.
-3. Fix the existing violations in §0 (items 1–8) inside `src/ui` and layouts.
-4. Add `@tanstack/svelte-table` and `layerchart` (exact version pin). Remove `@tanstack/svelte-query` from the knip ignore list once it is first used.
+**Phase 0: foundations.** Done.
 
-**Phase 1: static primitives.** No interactivity, renderable from Astro without hydration.
-- `Layout`, `Container`, `Heading`, `Text`, `Link`, `Icon`, `VisuallyHidden`, `SkipLink`, `Button` (with `href`), `Badge`, `Chip` (link and static), `Card`, `Notice`, `Timestamp`, `DescriptionList`, `StatGroup`, `Image`, `Avatar`, `Code`, `Prose`, `Disclosure`, `Skeleton`, `Progress`, `EmptyState`, `ErrorState`, `Breadcrumbs`, `Pagination`, `NavList`, `Tabs` (link mode), `SegmentedControl` (link mode), `Timeline`, `Diff`, `List`/`ListItem`.
-- Then migrate the existing features (`BuildCard`, `RecordCard`, `RecordDetail`, the records list, the tag page, `PlaceholderPage`, `CatalogueLayout`) and the workbench to these components.
-- Delete `src/ui/astro/`, `BuildPreview.astro`, `SummaryCard.astro`, `features/catalogue/Pagination.astro`, and the duplicate workbench messages.
-- *Depends on:* Phase 0.
+**Phase 1: static primitives and migration.** Done. `PageHeader`, `Section` and `Spinner`
+were built here, ahead of their phases.
 
 **Phase 2: form primitives.**
 - `FieldFrame` fix, `TextField`, `TextareaField`, `SelectField`, `CheckField`, `Switch`, `ChoiceGroup`, `FieldGroup`, `RangeField`, `UnitField`, `CodeEntry`, `ErrorSummary`, `FormActions`, `SaveStatus`, `FileDrop`.
@@ -60,7 +103,7 @@ Each phase ends with workbench stories, unit tests (keyboard and focus), review 
 - *Depends on:* Phase 1 (`Text`, `Icon`, `Chip`).
 
 **Phase 3: overlays and interactive navigation.**
-- `Dialog` (rewritten), `Sheet`, `Popover`, `Tooltip`, `Menu` (with the `details` fallback), `Tabs` panel mode, `SegmentedControl` radio mode, `CopyButton`, `Spinner`, `Announcer`.
+- `Dialog` (rewritten), `Sheet`, `Popover`, `Tooltip`, `Menu` (with the `details` fallback, then replace `LanguageSelector`'s hand-built menu), `Tabs` panel mode, `SegmentedControl` radio mode, `CopyButton`, `Announcer`.
 - *Depends on:* Phase 2 for the dialog contents.
 
 **Phase 4: data and charts.**
@@ -69,7 +112,7 @@ Each phase ends with workbench stories, unit tests (keyboard and focus), review 
 - `Chart` frame, `SeriesChart`, `RangeChart`, `DistributionBar` on LayerChart: static server rendering first, then interactive tooltips and keyboard.
 
 **Phase 5: patterns.**
-- `PageHeader`, `Section`, `SplitLayout`, `NavBar`, `SearchBox`, `FilterPanel`, `ActiveFilters`, `ResultsToolbar`, `ResultsView`, `ConfirmDialog`, `SettingsList`, `MediaUploader`, `OneTimeSecret`, `StepFlow`, `FlashNotice`.
+- `SplitLayout`, `NavBar`, `SearchBox`, `FilterPanel`, `ActiveFilters`, `ResultsToolbar`, `ResultsView`, `ConfirmDialog`, `SettingsList`, `MediaUploader`, `OneTimeSecret`, `StepFlow`, `FlashNotice`.
 - Then rebuild `CatalogueLayout` and the header with `NavBar` and the `UserMenu` island once `/v1/session` exists.
 
 **Phase 6: application infrastructure.** Parallel with Phase 5.
