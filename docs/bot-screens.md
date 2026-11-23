@@ -1,16 +1,27 @@
 # Bot screen conventions
 
-These rules keep the bot's Discord screens consistent. A screen is one interactive message built
-with Squid UI, such as `/notifications` or the build browser. Run `just ui-gallery` to see every
-screen the tests render, and compare it before and after a layout change.
+Start with the task the reader opened the message to do. For example, someone finishing a
+draft needs to see which required answer is missing and how to edit it. Sketch the message
+top to bottom, then compare the sketch with the rendered state in `ui-gallery/index.html`.
+Run `just ui-gallery tests/unit/bot/submission/test_build_edit.py` for the build editor, or
+substitute the test file for your screen.
 
 ## Rows of controls
 
-Discord stacks every row of buttons and every select menu on its own line, so each extra row
-makes a screen longer and harder to scan.
+Each select menu takes a row. Buttons in the same `sl.action_controls` share rows in the
+order given, up to five per row when shown individually. A standalone form or toggle takes
+its own row. For an Edit form and two actions labelled Preview and Cancel, moving just the
+form changes the message:
 
-- Put related controls in one `sl.action_controls`. It holds actions, links, toggles, and forms,
-  and keeps them in the order given. A toggle or form outside it takes a whole row by itself.
+| Layout | Visible button rows |
+| --- | --- |
+| `sl.stack(edit_form, sl.action_controls(preview, cancel, key="actions"))` | `[Edit]`<br>`[Preview] [Cancel]` |
+| `sl.action_controls(edit_form, preview, cancel, key="actions")` | `[Edit] [Preview] [Cancel]` |
+
+The form fields appear when the reader presses Edit. With the default display, the planner
+can fold eligible actions into a select menu when space is tight. Use
+`display=sl.semantic.ControlDisplay.INDIVIDUAL` when those actions need visible buttons.
+
 - End a screen with one row of controls. Put the main action first, then secondary actions such
   as Undo, and the action that leaves the screen, such as Cancel or Back, last.
 - Put a note about the main action, such as "Publishing is final", just above that last row.

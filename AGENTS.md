@@ -7,6 +7,8 @@ This codebase is yours: what it's for and how it's built are your call, and you'
 
 ## Code and Documentation
 
+- When designing Discord screens, use [the bot screen guide](docs/bot-screens.md) to predict the
+  message's reading order and control rows. Compare the result with the gallery for that screen.
 - Do not use `from __future__ import annotations` or quote forward references in annotations.
   Python 3.14 defers annotation evaluation by default.
 - Keep docstrings plain and concise, with Google-style sections where useful. Explain behavior and
