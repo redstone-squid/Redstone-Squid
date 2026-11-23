@@ -24,6 +24,19 @@ squid/core, so screens are composed from `web/src/ui` instead of one-off markup.
   with a table toggle. The view lives in the URL.
 - Lint enforces the system: no arbitrary Tailwind values or raw style constants outside
   `src/ui`, and no raw interactive elements in features and layouts.
+- Astro is for pages and layouts; ui and feature components are Svelte, so Astro slot
+  wrappers only appear at page and layout boundaries.
+- `variants.ts` is gone. A style lives in the component that owns it; a style shared by a
+  folder lives in that folder's `styles.ts`, imported only inside `src/ui`. Code that wants a
+  button's look renders `Button` (bits-ui triggers through their `child` snippet).
+- Builds and records share `features/catalogue`, since a record shows its holders as build
+  cards and features cannot import each other.
+
+## Progress
+
+- Phase 0 and Phase 1 are done: tokens, the Svelte-only `src/ui` grouped by folder, the
+  catalogue features in Svelte, and the workbench with one stories page per folder and a
+  coverage test.
 
 ## Build order
 
@@ -67,7 +80,7 @@ Each phase ends with workbench stories, unit tests (keyboard and focus), review 
 **Phase 7: enforcement.**
 - ESLint bans:
   - arbitrary Tailwind values outside `src/ui`, and inside it except in an allowlist;
-  - importing `variants.ts` and the other style constants outside `src/ui`. Make them non-exported, or exported only through a `src/ui/internal` path the boundary rule blocks;
+  - importing any `src/ui/**/styles.ts` outside `src/ui`;
   - `layerchart`, `bits-ui` and `@tanstack/svelte-table` imports outside `src/ui`;
   - raw `<button>`, `<input>`, `<select>`, `<textarea>`, `<table>`, `<dialog>` and `<img>` elements in `src/features` and `src/layouts`, which must use the `ui` components (escape hatch: a lint-disable with a reason).
 - Stylelint: the z-index ladder only, no raw durations.

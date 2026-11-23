@@ -1,8 +1,10 @@
 # Website
 
 The public catalogue. Astro renders every page on the server; Svelte islands handle
-interaction. The site reads the Python API through an SDK generated from
-`../contracts/openapi.json`. Use bun for every command.
+interaction. Astro is for pages and layouts; `src/ui` and feature components are Svelte,
+which Astro renders statically unless a page hydrates them with a `client:` directive. The
+site reads the Python API through an SDK generated from `../contracts/openapi.json`. Use bun
+for every command.
 
 ## Layout
 
@@ -39,7 +41,7 @@ or read `Astro.locals`. `src/pages/records/` is the reference: copy it for a new
 
 ```astro
 ---
-import RecordDetail from "@/features/catalogue/RecordDetail.astro";
+import RecordDetail from "@/features/catalogue/RecordDetail.svelte";
 import { recordsGet } from "@/generated/sdk.gen";
 import CatalogueLayout from "@/layouts/CatalogueLayout.astro";
 import { load } from "@/server/api";
@@ -59,8 +61,9 @@ const record = loaded.data;
 `load()` turns an API 404 into the 404 page and logs any other failure, including a timeout,
 as the 503 page. Responses stream, so load and choose the status before the template renders;
 an error thrown inside a component after rendering starts truncates a 200 response. Listings
-read their page with `readPageAddress` and link onward with `Pagination` from the API's
-`next` and `prev` anchors; mark pages after the first `noindex`.
+read their page with `readPageAddress` from `src/server/pagination.ts`, turn the API's `next`
+and `prev` anchors into links with `pageHref`, and pass those to the feature, which renders
+`Pagination`; mark pages after the first `noindex`.
 
 ## Adding a page
 
@@ -79,7 +82,8 @@ rejects `class` attributes in `src/pages`. Colors exist only as theme tokens: ea
 block in `src/ui/themes.css`, written in `oklch()`, listed in `src/ui/themes.ts`, and mapped to
 utilities such as `bg-surface` and `text-fg-muted` in `src/ui/app.css`. Lint rejects unknown
 classes and arbitrary colors. Classes are joined with `cn`, never merged at runtime, so give each
-cva variant sole ownership of the properties it sets. See `src/ui/README.md`.
+cva variant sole ownership of the properties it sets. A style shared by a family of components
+lives in that folder's `styles.ts`, which only `src/ui` imports. See `src/ui/README.md`.
 
 ## Routes that move
 
@@ -111,9 +115,11 @@ Use these before writing your own. Ask before adding a library that overlaps one
 | Utilities such as debounce, groupBy, pick, or retry      | `es-toolkit`                                                           |
 | Svelte state helpers: debounced values, watch, listeners | `runed`                                                                |
 | Icons                                                    | `@lucide/svelte`                                                       |
-| Class variants                                           | `class-variance-authority`, as in `src/ui/variants.ts`                 |
+| Class variants                                           | `class-variance-authority`, inside the component that owns them        |
 | Mocking the API in unit tests                            | `msw`, as in `tests/unit/server-api.test.ts`                           |
 | Fetching from the browser inside an island               | `@tanstack/svelte-query`; pages load data on the server                |
+| Tables with sorting, column visibility, or grouped rows  | `@tanstack/svelte-table`, wrapped in `src/ui`                          |
+| Charts                                                   | `layerchart` (pinned exactly), wrapped in `src/ui`                     |
 | Date arithmetic: durations, time zones, "3 days ago"     | `temporal-polyfill` (Node 24 lacks Temporal); format dates in messages |
 
 `knip.jsonc` lists libraries installed ahead of their first use; remove an entry once code
