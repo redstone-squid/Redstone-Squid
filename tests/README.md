@@ -39,7 +39,7 @@ Each test loads the selected extensions on a fresh Redstone Squid bot with in-pr
 Drive commands and components as guild members and assert on the resulting messages.
 SimCord records outgoing REST requests for details such as allowed mentions.
 
-See the [command coverage inventory](../docs/plans/simcord-migration.md) for the journeys covered.
+See the [Discord coverage inventory](../docs/plans/completed/simcord-migration.md) for the journeys covered.
 
 ## What to test
 

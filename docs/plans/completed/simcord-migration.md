@@ -16,10 +16,13 @@ an in-memory Discord guild and the application services needed for that journey.
 
 First-time submission tests patch the consent prompt's wait with `env.external_wait`. Agree and
 Cancel still run through the real buttons. The tests verify the button acknowledgment and
-that only acceptance creates an account and draft. The archive test declares the idle
-reaction workers' queue reads so SimCord can settle between gateway events.
+that only acceptance creates an account and draft.
 
-MessageTrackingCog, GuildStateCog, LoggingCog, ReconciliationCog, DomainEventCog and WelcomeRelay
-expose listeners or workers rather than commands. Keep their focused event-order, delivery and
-recovery tests. Future gateway scenarios include message edits/deletes and public vote and starboard
-reactions. The third-party jishaku extension is outside this inventory.
+Gateway scenarios exercise message edits and deletions through both message tracking and
+starboard listeners. A voter adds and removes a reaction on a published public poll to cast
+and withdraw a ballot. Starboard scenarios check emoji filtering, vote recording and
+withdrawal, and debounced refresh requests. The reaction tests declare idle worker queue
+reads so SimCord can settle between gateway events.
+
+Keep the focused listener and worker tests for event ordering, delivery, and recovery.
+The third-party jishaku extension is outside this inventory.
