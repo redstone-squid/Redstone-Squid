@@ -46,11 +46,3 @@ def normalize_extender_orientation(value: str | None) -> str | None:
         message = tr(t"build-input-extender-orientation = Choose Horizontal, Up, or Down.")
         raise ValidationError(message)
     return _EXTENDER_DIRECTIONS[text]
-
-
-def validate_extension_length(value: int | None) -> int | None:
-    """Validate a supplied extender length while allowing an explicit clear."""
-    if value is not None and (isinstance(value, bool) or not 1 <= value <= 512):
-        message = tr(t"build-input-extension-length = Extension length must be between 1 and 512 blocks.")
-        raise ValidationError(message)
-    return value

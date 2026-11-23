@@ -18571,8 +18571,7 @@
               {
                 "type": "null"
               }
-            ],
-            "maxLength": 120
+            ]
           },
           "version_spec": {
             "oneOf": [
@@ -18582,8 +18581,7 @@
               {
                 "type": "null"
               }
-            ],
-            "maxLength": 500
+            ]
           },
           "versions": {
             "oneOf": [
@@ -18596,8 +18594,7 @@
               {
                 "type": "null"
               }
-            ],
-            "maxLength": 500
+            ]
           },
           "showcase_tags": {
             "oneOf": [
@@ -18610,8 +18607,7 @@
               {
                 "type": "null"
               }
-            ],
-            "maxLength": 50
+            ]
           },
           "dimensions": {
             "oneOf": [
@@ -18761,8 +18757,7 @@
               {
                 "type": "null"
               }
-            ],
-            "maxLength": 10000
+            ]
           },
           "credits": {
             "oneOf": [
@@ -18775,8 +18770,7 @@
               {
                 "type": "null"
               }
-            ],
-            "maxLength": 100
+            ]
           },
           "creators_ign": {
             "oneOf": [
@@ -18803,8 +18797,7 @@
               {
                 "type": "null"
               }
-            ],
-            "maxLength": 100
+            ]
           },
           "video_urls": {
             "oneOf": [
@@ -18817,8 +18810,7 @@
               {
                 "type": "null"
               }
-            ],
-            "maxLength": 100
+            ]
           },
           "world_download_urls": {
             "oneOf": [
@@ -18831,8 +18823,7 @@
               {
                 "type": "null"
               }
-            ],
-            "maxLength": 100
+            ]
           },
           "schematic_urls": {
             "oneOf": [
@@ -18870,8 +18861,7 @@
               {
                 "type": "null"
               }
-            ],
-            "maxLength": 500
+            ]
           },
           "coordinates": {
             "oneOf": [
@@ -18881,8 +18871,7 @@
               {
                 "type": "null"
               }
-            ],
-            "maxLength": 500
+            ]
           },
           "command_to_get_to_build": {
             "oneOf": [
@@ -18892,8 +18881,7 @@
               {
                 "type": "null"
               }
-            ],
-            "maxLength": 2000
+            ]
           },
           "completion_time": {
             "oneOf": [
@@ -18903,8 +18891,7 @@
               {
                 "type": "null"
               }
-            ],
-            "maxLength": 100
+            ]
           }
         },
         "type": "object",
@@ -19942,8 +19929,7 @@
               {
                 "type": "null"
               }
-            ],
-            "maxLength": 100
+            ]
           },
           "patterns": {
             "oneOf": [
@@ -19956,8 +19942,7 @@
               {
                 "type": "null"
               }
-            ],
-            "maxLength": 50
+            ]
           },
           "opening_time": {
             "oneOf": [
@@ -21332,15 +21317,13 @@
       "ExtenderPatch": {
         "properties": {
           "orientation": {
-            "type": [
-              "null",
-              "string"
-            ],
-            "enum": [
-              "Horizontal",
-              "Upward",
-              "Downward",
-              null
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
             ]
           },
           "extension_length": {
@@ -21351,9 +21334,7 @@
               {
                 "type": "null"
               }
-            ],
-            "maximum": 512,
-            "minimum": 1
+            ]
           },
           "extension_time": {
             "oneOf": [

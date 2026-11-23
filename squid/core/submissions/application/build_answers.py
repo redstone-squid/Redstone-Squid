@@ -48,7 +48,7 @@ class BuildAnswers:
     unresolved: UnresolvedTags
 
 
-def answers_from_build(build: Build, options: CatalogueOptions) -> BuildAnswers:
+def answers_from_build(build: Build, options: CatalogueOptions | None = None) -> BuildAnswers:
     """Return `build` as edit-form answers.
 
     `options` must hold the `approved_restrictions` and `approved_patterns` choices; names that
@@ -77,23 +77,33 @@ def answers_from_build(build: Build, options: CatalogueOptions) -> BuildAnswers:
         "command_to_get_to_build": build.server_command,
     }
     unresolved = UnresolvedTags.read(build.extra_info)
-    restriction_keys: list[JSONValue] = []
-    for field_name in RESTRICTION_FIELDS:
-        for name in getattr(build, field_name):
-            key = match_choice(name, options.get("approved_restrictions", ()))
+    if options is None:
+        for field_id, kind in (("restrictions", TagSemanticKind.RESTRICTION), ("patterns", TagSemanticKind.PATTERN)):
+            answers[field_id] = [
+                assignment.definition.stable_key
+                for assignment in build.tags
+                if assignment.definition.semantic_kind is kind
+            ]
+    else:
+        restriction_keys: list[JSONValue] = []
+        for field_name in RESTRICTION_FIELDS:
+            for name in getattr(build, field_name):
+                key = match_choice(name, options.get("approved_restrictions", ()))
+                if key is None:
+                    unresolved = unresolved.add(restrictions=((field_name, name),))
+                else:
+                    restriction_keys.append(key)
+        answers["restrictions"] = restriction_keys
+        pattern_keys: list[JSONValue] = []
+        for name in build.patterns:
+            key = match_choice(name, options.get("approved_patterns", ()))
             if key is None:
-                unresolved = unresolved.add(restrictions=((field_name, name),))
+                unresolved = unresolved.add(patterns=(name,))
             else:
-                restriction_keys.append(key)
-    answers["restrictions"] = restriction_keys
-    pattern_keys: list[JSONValue] = []
-    for name in build.patterns:
-        key = match_choice(name, options.get("approved_patterns", ()))
-        if key is None:
-            unresolved = unresolved.add(patterns=(name,))
-        else:
-            pattern_keys.append(key)
-    answers["patterns"] = pattern_keys
+                pattern_keys.append(key)
+        answers["patterns"] = pattern_keys
+    if not isinstance(build, DoorBuild | ExtenderBuild):
+        del answers["patterns"]
     if isinstance(build, DoorBuild):
         answers |= {
             "opening_width": build.door_width,
@@ -107,7 +117,9 @@ def answers_from_build(build: Build, options: CatalogueOptions) -> BuildAnswers:
         }
     if isinstance(build, ExtenderBuild):
         answers |= {
-            "movement_orientation": _EXTENDER_DIRECTIONS.get(build.orientation or ""),
+            "movement_orientation": _EXTENDER_DIRECTIONS.get(build.orientation, build.orientation)
+            if build.orientation is not None
+            else None,
             "extension_length": build.extension_length,
             "extension_time": build.extension_time,
             "retraction_time": build.retraction_time,

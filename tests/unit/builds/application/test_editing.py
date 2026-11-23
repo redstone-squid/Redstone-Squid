@@ -140,12 +140,6 @@ def test_extender_timings_are_set_and_cleared() -> None:
     assert build.extension_time is None
 
 
-@pytest.mark.parametrize("length", [0, -1, 513])
-def test_extender_edits_reject_invalid_lengths(length: int) -> None:
-    with pytest.raises(InvalidBuildError, match="between 1 and 512"):
-        BuildEditPatch(extension_length=length).apply(ExtenderBuild())
-
-
 def test_extender_geometry_rejects_other_categories() -> None:
     with pytest.raises(InvalidBuildError, match="Extender fields"):
         BuildEditPatch(extension_length=3).apply(DoorBuild())

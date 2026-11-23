@@ -122,9 +122,8 @@ def test_door_patch_rejects_a_cleared_collection() -> None:
         DoorPatch(patterns=None)
 
 
-def test_door_patch_rejects_non_positive_dimensions() -> None:
-    with pytest.raises(ValidationError):
-        DoorPatch(door_dimensions=(0, 2, None))
+def test_door_patch_decodes_legacy_dimensions_for_transition_validation() -> None:
+    assert DoorPatch(door_dimensions=(0, 2, None)).edit_attributes() == {"door_dimensions": (0, 2, None)}
 
 
 def test_name_and_visible_timings_preserve_explicit_clears() -> None:
@@ -134,8 +133,6 @@ def test_name_and_visible_timings_preserve_explicit_clears() -> None:
         "visible_opening_time": None,
         "visible_closing_time": 7,
     }
-    with pytest.raises(ValidationError):
-        DoorPatch.model_validate({"visible_opening_time": -1})
 
 
 def test_extender_patch_preserves_omission_and_clear_semantics() -> None:
@@ -149,10 +146,6 @@ def test_extender_patch_preserves_omission_and_clear_semantics() -> None:
     }
     with pytest.raises(ValidationError):
         BuildPatch(extender=None)
-    with pytest.raises(ValidationError):
-        ExtenderPatch.model_validate({"extension_length": -1})
-    with pytest.raises(ValidationError):
-        ExtenderPatch.model_validate({"retraction_time": -1})
 
 
 def test_versions_and_showcase_tags_replace_but_cannot_be_null() -> None:

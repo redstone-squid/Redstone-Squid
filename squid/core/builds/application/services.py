@@ -1,6 +1,7 @@
 """Application services for build submission and editing."""
 
 from collections.abc import Sequence
+from functools import cache
 from uuid import UUID
 
 from whenever import Instant
@@ -15,14 +16,19 @@ from squid.core.builds.application.ports import (
 from squid.core.builds.application.restrictions import RestrictionReader
 from squid.core.builds.application.tags import BuildTagResolver, apply_build_tags, replace_showcase_tags
 from squid.core.builds.domain import BuildInput, BuildStatus, EditAccess, RestrictionTypeLiteral, sort_restrictions
-from squid.core.builds.errors import BuildNotFoundError, BuildRevisionMismatchError
+from squid.core.builds.errors import BuildEditValidationError, BuildNotFoundError, BuildRevisionMismatchError
 from squid.core.builds.history import BuildEditActor, BuildEditContext, HistoryOperation
 from squid.core.builds.models import Build
 from squid.core.errors import AccountRequiredError, InvalidStateError
 from squid.core.permissions.application.services import PermissionService
 from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 from squid.core.sentinel import UNSET
+from squid.core.submissions.application.build_answers import answers_from_build
+from squid.core.submissions.application.forms import build_edit_manifest
+from squid.core.submissions.domain import SubmissionOrigin
 from squid.core.unit_of_work import UnitOfWorkFactory
+
+_edit_manifest = cache(build_edit_manifest)
 
 
 class BuildService:
@@ -331,10 +337,16 @@ class BuildService:
 
     async def _apply_patch(self, build: Build, patch: BuildEditPatch) -> None:
         """Apply a patch, including the showcase tags it cannot resolve itself, and prepare derived values."""
+        before = answers_from_build(build).answers
         patch.apply(build)
         if patch.showcase_tags is not UNSET:
             await replace_showcase_tags(build, patch.showcase_tags, self._tags)
         await self._prepare_for_persistence(build)
+        problems = _edit_manifest().validate_transition(
+            build.category.value.lower(), before, answers_from_build(build).answers, origin=SubmissionOrigin.DISCORD
+        )
+        if problems:
+            raise BuildEditValidationError(problems)
 
     async def _prepare_for_persistence(self, build: Build) -> None:
         """Resolve application-owned defaults and derived values before a relational write."""

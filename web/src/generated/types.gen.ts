@@ -837,7 +837,7 @@ export type ExtenderDetails = {
  * ExtenderPatch
  */
 export type ExtenderPatch = {
-    orientation?: 'Horizontal' | 'Upward' | 'Downward' | null;
+    orientation?: string | null;
     extension_length?: number | null;
     extension_time?: number | null;
     retraction_time?: number | null;

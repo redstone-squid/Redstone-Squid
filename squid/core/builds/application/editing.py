@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Self, cast
 
 from squid.core.builds.application.commands import Dimensions
-from squid.core.builds.application.input import normalize_extender_orientation, validate_extension_length
+from squid.core.builds.application.input import normalize_extender_orientation
 from squid.core.builds.domain import (
     DoorOrientationLiteral,
     Info,
@@ -174,7 +174,6 @@ class BuildEditPatch:
             InvalidBuildError: If a door-specific field targets another category.
         """
         direct_fields = (
-            "display_name",
             "version_spec",
             "versions",
             "wiring_placement_restrictions",
@@ -191,6 +190,9 @@ class BuildEditPatch:
             value = getattr(self, name)
             if value is not UNSET:
                 setattr(build, name, value)
+
+        if self.display_name is not UNSET:
+            build.display_name = (self.display_name or "").strip() or None
 
         if self.door_type is not UNSET:
             build.patterns = self.door_type
@@ -270,12 +272,12 @@ class BuildEditPatch:
                     public_context={"fields": patched_extender_fields},
                 )
             try:
-                if self.extender_orientation is not UNSET:
+                if self.extender_orientation is not UNSET and self.extender_orientation != build.orientation:
                     build.orientation = normalize_extender_orientation(self.extender_orientation)
-                if self.extension_length is not UNSET:
-                    build.extension_length = validate_extension_length(self.extension_length)
             except ValueError as error:
                 raise InvalidBuildError(str(error)) from error
+            if self.extension_length is not UNSET:
+                build.extension_length = self.extension_length
             if self.extension_time is not UNSET:
                 build.extension_time = self.extension_time
             if self.retraction_time is not UNSET:

@@ -19,8 +19,14 @@ from squid.core.builds.application.services import (
 )
 from squid.core.builds.application.tags import TagResolution, apply_build_tags
 from squid.core.builds.domain import BuildCategory, BuildStatus, ShowcaseTag, normalize_tag_name
-from squid.core.builds.errors import BuildBusyError, BuildNotFoundError, BuildRevisionMismatchError, InvalidBuildError
-from squid.core.builds.models import Build, DoorBuild, OtherBuild, UtilityBuild
+from squid.core.builds.errors import (
+    BuildBusyError,
+    BuildEditValidationError,
+    BuildNotFoundError,
+    BuildRevisionMismatchError,
+    InvalidBuildError,
+)
+from squid.core.builds.models import Build, DoorBuild, ExtenderBuild, OtherBuild, UtilityBuild
 from squid.core.errors import AuthorizationError, InvalidStateError
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.application.ports import PermissionRepository, SubjectRecords
@@ -305,6 +311,42 @@ async def test_edit_prepares_a_detached_patch_then_commits(existing_build: DoorB
     assert existing_build.dimensions == (None, None, None)
     assert repository.saved[0].description == "changed"
     assert locks.releases == [42]
+
+
+async def test_edit_can_carry_forward_an_unchanged_invalid_door_dimension(existing_build: DoorBuild) -> None:
+    existing_build.door_width = -1
+    existing_build.door_height = 3
+    repository = FakeBuildRepository(existing_build)
+    service = build_service(repository)
+
+    result = await service.edit(42, BuildEditPatch(door_dimensions=(-1, 4, None)), actor="test", source="test")
+    assert isinstance(result, DoorBuild)
+    assert result.door_dimensions == (-1, 4, None)
+
+    with pytest.raises(BuildEditValidationError) as error:
+        await service.edit(42, BuildEditPatch(door_dimensions=(-2, 3, None)), actor="test", source="test")
+    assert error.value.issues == {"opening_width": "below_minimum"}
+
+    fixed = await service.edit(42, BuildEditPatch(door_dimensions=(2, 3, None)), actor="test", source="test")
+    assert isinstance(fixed, DoorBuild)
+    assert fixed.door_dimensions == (2, 3, None)
+    assert repository.saved == [result, fixed]
+
+
+@pytest.mark.parametrize(
+    ("patch", "issues"),
+    [
+        (BuildEditPatch(extension_length=-1), {"extension_length": "below_minimum"}),
+        (BuildEditPatch(extension_length=513), {"extension_length": "above_maximum"}),
+        (BuildEditPatch(retraction_time=-1), {"retraction_time": "below_minimum"}),
+    ],
+)
+async def test_edit_rejects_new_extender_issues(patch: BuildEditPatch, issues: dict[str, str]) -> None:
+    repository = FakeBuildRepository(ExtenderBuild(id=42))
+    with pytest.raises(BuildEditValidationError) as error:
+        await build_service(repository).edit(42, patch, actor="test", source="test")
+    assert error.value.issues == issues
+    assert repository.saved == []
 
 
 async def test_invalid_patch_does_not_acquire_a_write_lock(existing_build: DoorBuild) -> None:

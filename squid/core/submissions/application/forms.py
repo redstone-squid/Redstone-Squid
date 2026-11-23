@@ -545,6 +545,7 @@ def _door_form(localize: Callable[[Text], str], revision: int = CURRENT_SUBMISSI
                         control=ControlKind.CHOICE,
                         value_kind=ValueKind.STRING,
                         required=True,
+                        edit_rules=EditRules(required=False),
                         options=(
                             ChoiceOption("door", localize(tr(t"submissions-application-forms-door = Door"))),
                             ChoiceOption("skydoor", localize(tr(t"submissions-application-forms-skydoor = Skydoor"))),
@@ -597,6 +598,7 @@ def _extender_form(localize: Callable[[Text], str]) -> CategoryForm:
                         control=ControlKind.CHOICE,
                         value_kind=ValueKind.STRING,
                         required=True,
+                        edit_rules=EditRules(required=False),
                         options=(
                             ChoiceOption(
                                 "horizontal", localize(tr(t"submissions-application-forms-horizontal = Horizontal"))
@@ -733,6 +735,7 @@ def _integer_field(
         control=ControlKind.NUMBER,
         value_kind=ValueKind.INTEGER,
         required=required,
+        edit_rules=EditRules(required=False) if required else None,
         constraints=FieldConstraints(minimum=1, maximum=maximum),
     )
 

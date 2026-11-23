@@ -1,7 +1,7 @@
-"""Validation shared by build editors and the HTTP patch contract."""
+"""Decode build edit patches before applying build validation rules."""
 
 from collections.abc import Mapping
-from typing import ClassVar, Literal, Self
+from typing import ClassVar, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
@@ -27,12 +27,12 @@ class DoorPatch(BaseModel):
 
     expansion: DoorExpansion | None = None
     door_dimensions: InputDimensions | None = None
-    orientation: str | None = Field(default=None, max_length=100)
-    patterns: list[str] | None = Field(default=None, max_length=50)
-    opening_time: int | None = Field(default=None, ge=0)
-    closing_time: int | None = Field(default=None, ge=0)
-    visible_opening_time: int | None = Field(default=None, ge=0)
-    visible_closing_time: int | None = Field(default=None, ge=0)
+    orientation: str | None = None
+    patterns: list[str] | None = None
+    opening_time: int | None = None
+    closing_time: int | None = None
+    visible_opening_time: int | None = None
+    visible_closing_time: int | None = None
 
     # Wire name -> BuildEditPatch field name.
     _EDIT_FIELDS: ClassVar[Mapping[str, str]] = {
@@ -48,16 +48,11 @@ class DoorPatch(BaseModel):
 
     @model_validator(mode="after")
     def _reject_invalid_clears(self) -> Self:
-        if {"credits", "creators_ign"} <= self.model_fields_set:
-            raise PydanticCustomError(_INVALID_VALUE, "Supply either credits or creators_ign.")
         non_nullable = {"door_dimensions", "patterns"}
         invalid = sorted(name for name in self.model_fields_set & non_nullable if getattr(self, name) is None)
         if invalid:
             msg = "fields cannot be null: {fields}"
             raise PydanticCustomError(_INVALID_VALUE, msg, {"fields": ", ".join(invalid)})
-        if self.door_dimensions is not None and any(value is not None and value <= 0 for value in self.door_dimensions):
-            msg = "door_dimensions must be positive when supplied"
-            raise PydanticCustomError(_INVALID_VALUE, msg)
         return self
 
     def edit_attributes(self) -> dict[str, object]:
@@ -73,10 +68,10 @@ class ExtenderPatch(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    orientation: Literal["Horizontal", "Upward", "Downward"] | None = None
-    extension_length: int | None = Field(default=None, ge=1, le=512)
-    extension_time: int | None = Field(default=None, ge=0)
-    retraction_time: int | None = Field(default=None, ge=0)
+    orientation: str | None = None
+    extension_length: int | None = None
+    extension_time: int | None = None
+    retraction_time: int | None = None
 
     # Wire name -> BuildEditPatch field name.
     _EDIT_FIELDS: ClassVar[Mapping[str, str]] = {
@@ -97,11 +92,11 @@ class BuildPatch(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    display_name: str | None = Field(default=None, max_length=120)
-    version_spec: str | None = Field(default=None, max_length=500)
-    versions: list[str] | None = Field(default=None, max_length=500)
+    display_name: str | None = None
+    version_spec: str | None = None
+    versions: list[str] | None = None
     """Canonical version names, such as "Java 1.20.4", replacing the build's versions."""
-    showcase_tags: list[ShowcaseTag] | None = Field(default=None, max_length=50)
+    showcase_tags: list[ShowcaseTag] | None = None
     """Approved showcase tags with their values, if they take one, replacing the build's showcase tags.
 
     A value is the raw text, such as "1.5" or "true", in the tag's canonical unit."""
@@ -114,21 +109,23 @@ class BuildPatch(BaseModel):
     miscellaneous_restrictions: list[str] | None = Field(default=None, max_length=100)
     locationality: str | None = Field(default=None, max_length=100)
     directionality: str | None = Field(default=None, max_length=100)
-    extra_user_info: str | None = Field(default=None, max_length=10_000)
-    credits: list[Credit] | None = Field(default=None, max_length=100)
+    extra_user_info: str | None = None
+    credits: list[Credit] | None = None
     creators_ign: list[str] | None = Field(default=None, max_length=100, deprecated=True)
-    image_urls: list[str] | None = Field(default=None, max_length=100)
-    video_urls: list[str] | None = Field(default=None, max_length=100)
-    world_download_urls: list[str] | None = Field(default=None, max_length=100)
+    image_urls: list[str] | None = None
+    video_urls: list[str] | None = None
+    world_download_urls: list[str] | None = None
     schematic_urls: list[str] | None = Field(default=None, max_length=100)
     render_urls: list[str] | None = Field(default=None, max_length=100)
-    server_ip: str | None = Field(default=None, max_length=500)
-    coordinates: str | None = Field(default=None, max_length=500)
-    command_to_get_to_build: str | None = Field(default=None, max_length=2_000)
-    completion_time: str | None = Field(default=None, max_length=100)
+    server_ip: str | None = None
+    coordinates: str | None = None
+    command_to_get_to_build: str | None = None
+    completion_time: str | None = None
 
     @model_validator(mode="after")
     def _reject_invalid_clears(self) -> Self:
+        if {"credits", "creators_ign"} <= self.model_fields_set:
+            raise PydanticCustomError(_INVALID_VALUE, "Supply either credits or creators_ign.")
         non_nullable = {
             "versions",
             "showcase_tags",
@@ -153,9 +150,6 @@ class BuildPatch(BaseModel):
         if invalid:
             msg = "fields cannot be null: {fields}"
             raise PydanticCustomError(_INVALID_VALUE, msg, {"fields": ", ".join(invalid)})
-        if self.dimensions is not None and any(value is not None and value <= 0 for value in self.dimensions):
-            msg = "dimensions must be positive when supplied"
-            raise PydanticCustomError(_INVALID_VALUE, msg)
         return self
 
     def edit_attributes(self) -> dict[str, object]:
