@@ -132,3 +132,16 @@ sample as Alice, undo the decision, or inspect the panel's state.
 Each page load starts a fresh screen with disposable data. The preview supports
 callback buttons and links. Idle previews expire after ten minutes. Ctrl-C stops
 the server. Use `just ui-gallery` for static snapshots.
+
+## Build media card refresh
+
+Run `psql -X -v cutoff=<UTC-media-fix-deployment-time> -f scripts/refresh_build_media_cards.sql` against the
+production database. The default preview uses a read-only transaction. It counts existing approved Discord
+cards rendered before the cutoff whose builds retain media outputs. Use `-v only_ids=1574,10133,10134`
+for a canary. Add `-v execute=on` to queue one batch through normal Discord reconciliation.
+
+The batch defaults to 100 builds and can be adjusted with `-v batch_size=...` up to 500. Reuse the same
+cutoff and pass `-v after_id=<next_after_id>` to continue after each batch. Finish with a preview from
+the start to catch cards that were skipped because they already had queue entries. The script leaves
+existing requests intact and excludes suppressed or deleted cards. Normal reconciliation still applies
+the current channel configuration. Deferred attachments need their own recovery.
