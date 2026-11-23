@@ -1,9 +1,10 @@
 """Direct Components V2 rules for the shared composition boundary."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 
 from squid_i18n import tree
+from squid_ui.authoring import semantic as sem
 from squid_ui.authoring.presentations import FidelityEffect, SemanticRef
 from squid_ui.capabilities import Capability
 from squid_ui.content.assets import Asset
@@ -73,7 +74,9 @@ from squid_ui.planning.realizations import (
     matrix_text,
     record_text,
 )
-from squid_ui.planning.resources import Axis, ResourceCost
+from squid_ui.planning.resources import EMPTY_COST, Axis, ResourceCost
+
+_COMPONENT_COSTS = (EMPTY_COST, *(ResourceCost({Axis.COMPONENTS: count}) for count in range(1, 4)))
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,7 +108,71 @@ class V2CompositionRules[RenderTargetT, ContextT]:
             ),
         )
 
-        return constrain_offers(offers, context, self.limits.components, v2=self.limits)
+        checked = constrain_offers(offers, context, self.limits.components, v2=self.limits)
+        domain = checked.offers if isinstance(checked, OfferDiscovery) else checked
+        bounded = tuple(self._bound_offer(offer, context) for offer in domain)
+        return replace(checked, offers=bounded) if isinstance(checked, OfferDiscovery) else bounded
+
+    def _bound_offer(
+        self, offer: RealizationOffer[RenderTargetT, ContextT, Realization], context: PlanningContext
+    ) -> RealizationOffer[RenderTargetT, ContextT, Realization]:
+        match offer.payload:
+            case NativeSectionRealization():
+                accessory = offer.children[-1]
+                # A valid section must realize at least one text component.
+                # An opaque accessory can declare its own component cost.
+                known_accessory = isinstance(
+                    accessory.graph.units[accessory.reference].value,
+                    primitive.Button
+                    | primitive.RoutedButton
+                    | primitive.LinkButton
+                    | primitive.PremiumButton
+                    | primitive.Thumbnail,
+                )
+                return replace(
+                    offer, minimum_cost=_COMPONENT_COSTS[1], minimum_subtree_cost=_COMPONENT_COSTS[2 + known_accessory]
+                )
+            case RowRealization() | ControlRealization() | PremiumRealization():
+                count = 1
+            case (
+                ThumbnailRealization()
+                | SeparatorRealization()
+                | FileRealization()
+                | ImageRealization()
+                | DownloadRealization()
+            ):
+                count = 1
+            case SelectRealization() | EntityRealization():
+                count = 2
+            case PanelRealization(framed=framed, thumbnail=thumbnail):
+                count = int(framed) + (2 if thumbnail is not None else 0)
+            case ActionsRealization():
+                # Direct controls require a row. Count the row once even when
+                # several controls can share it.
+                count = int(
+                    any(
+                        isinstance(
+                            child.graph.units[child.reference].value,
+                            sem.ActionControl
+                            | sem.RoutedActionControl
+                            | sem.Link
+                            | sem.Toggle
+                            | sem.FormTrigger
+                            | primitive.Button
+                            | primitive.RoutedButton
+                            | primitive.LinkButton
+                            | primitive.PremiumButton,
+                        )
+                        for child in offer.children
+                    )
+                )
+            case TextRealization() as payload:
+                count = int(bool(discord_text(payload, context.escape_text)))
+            case FlowRealization() | FieldsRealization() | TextSequenceRealization():
+                count = 0
+            case _:
+                return offer
+        return replace(offer, minimum_cost=_COMPONENT_COSTS[count])
 
     def evaluate(
         self, candidate: CandidateComposition[RenderTargetT, ContextT, Realization], context: PlanningContext

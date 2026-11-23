@@ -27,6 +27,7 @@ from squid_ui.planning.certification import FamilyCertifier, FamilyRejection
 from squid_ui.planning.composition import (
     BuiltComposition,
     CandidateViolation,
+    CapacityExceeded,
     LocalCapacityExceeded,
     OccurrenceId,
     PlanningContext,
@@ -48,15 +49,19 @@ class JointInfeasibleError(UnsolvableLayoutError):
                 if isinstance(violation, LocalCapacityExceeded)
             )
         )[:8]
+        context: dict[str, object] = {}
+        if limits:
+            context["local_limits"] = [
+                {"limit": limit, "used": used, "capacity": capacity} for limit, used, capacity in limits
+            ]
+        if diagnostics.unavoidable_overflow:
+            context["minimum_costs"] = [
+                {"axis": limit.axis, "minimum": limit.used, "capacity": limit.capacity}
+                for limit in diagnostics.unavoidable_overflow
+            ]
         super().__init__(
             "no declared joint allocation is feasible",
-            context={
-                "local_limits": [
-                    {"limit": limit, "used": used, "capacity": capacity} for limit, used, capacity in limits
-                ]
-            }
-            if limits
-            else None,
+            context=context or None,
         )
 
 
@@ -135,6 +140,7 @@ class _SearchCoordinator[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
         self.generated = 0
         self.initial_evaluations = self.context.work.target_evaluations
         self.exhausted = False
+        self.unavoidable_overflow: tuple[CapacityExceeded, ...] = ()
 
     def run(self) -> JointResult[OutputT]:
         try:
@@ -162,6 +168,8 @@ class _SearchCoordinator[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
                     self._enqueue(self.partitions.expand(task))
                     continue
                 feasible, satisfied = self._certify(task)
+                if self.unavoidable_overflow:
+                    break
                 if not feasible and (task.repair or not self.offers.repair_started):
                     self._enqueue(self.offers.repair(task.choices))
                 if feasible and satisfied:
@@ -230,6 +238,7 @@ class _SearchCoordinator[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
                 for violation in certificate.violations
                 if isinstance(violation, UnsupportedCapability)
             )
+            self.unavoidable_overflow = self.offers.check_root_bound(certificate.violations)
             return False, False
         satisfied = self.frontier.consider(family, task.choices, region_map, certificate)
         return True, satisfied
@@ -237,11 +246,12 @@ class _SearchCoordinator[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
     def _result(self) -> JointResult[OutputT]:
         """Return the best retained allocation, or raise why the search found none."""
 
-        exhausted = self.exhausted or self.offers.exhausted
+        exhausted = (self.exhausted or self.offers.exhausted) and not self.unavoidable_overflow
         # A pruned offer can prevent discovery of later
         # occurrences. The infeasibility is known even if option validation is incomplete.
         if (
             not exhausted
+            and not self.unavoidable_overflow
             and (self.frontier.has_result or not self.offers.pruned)
             and (
                 self.selected.keys() - self.offers.seen_occurrences
@@ -254,12 +264,12 @@ class _SearchCoordinator[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
             SearchCompletion.EXHAUSTED
             if exhausted
             else SearchCompletion.UNSUPPORTED
-            if self.unsupported
+            if self.unsupported and not self.unavoidable_overflow
             else SearchCompletion.COMPLETE
         )
         diagnostics = SearchDiagnostics(
             completion,
-            not exhausted and not self.unsupported,
+            completion == SearchCompletion.COMPLETE,
             self.context.work.spent,
             self.context.work.limit,
             self.generated,
@@ -267,11 +277,12 @@ class _SearchCoordinator[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
             self.certifier.certified_combinations,
             tuple(self.violations),
             tuple(sorted(self.unsupported, key=lambda identity: identity.path)),
+            self.unavoidable_overflow,
         )
         if not self.frontier.has_result:
             if exhausted:
                 raise JointExhaustedError(diagnostics)
-            if self.unsupported:
+            if self.unsupported and not self.unavoidable_overflow:
                 raise JointUnsupportedError(diagnostics)
             raise JointInfeasibleError(diagnostics)
         allocation, qualities = self.frontier.best()

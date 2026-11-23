@@ -12,10 +12,11 @@ from functools import cached_property
 
 from rpds import HashTrieMap, List
 
-from squid_ui.errors import LayoutInvariantError
+from squid_ui.errors import LayoutInvariantError, LayoutSearchExhaustedError
 from squid_ui.planning.allocation_policy import dense_ranks
 from squid_ui.planning.composition import (
     CandidateViolation,
+    CapacityExceeded,
     DiscoveryCompletion,
     OccurrenceId,
     OfferDiscovery,
@@ -25,6 +26,7 @@ from squid_ui.planning.composition import (
     TargetRules,
     UnsupportedCapability,
 )
+from squid_ui.planning.resources import EMPTY_COST, ResourceCost
 
 type OfferChoice = tuple[OccurrenceId, str]
 
@@ -34,11 +36,12 @@ class Pending[T]:
     siblings: tuple[T, ...]
     index: int = 0
     tail: Pending[T] | None = None
+    bound: bool = True
 
     def advance(self) -> Pending[T] | None:
         if self.index + 1 == len(self.siblings):
             return self.tail
-        return Pending(self.siblings, self.index + 1, self.tail)
+        return Pending(self.siblings, self.index + 1, self.tail, self.bound)
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +53,7 @@ class AssignmentTask[RenderTargetT, ContextT, PayloadT]:
     probe: bool = False
     fraction: float = 1.0
     repair: Mapping[OccurrenceId, str] | None = None
+    minimum_cost: ResourceCost = EMPTY_COST
 
 
 class OfferExplorer[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, PreparationT]:
@@ -77,6 +81,11 @@ class OfferExplorer[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepara
         self.repair_started = False
         self.exhausted = False
         self.pruned = False
+        self.explored: set[int] = set()
+        self.minimums: dict[int, ResourceCost] = {}
+        self.bounds_checked = False
+        self.suffix_minimums: dict[tuple[int, int], ResourceCost] = {}
+        self.bound_rejections: set[CapacityExceeded] = set()
         self.choice_counts: dict[OccurrenceId, int] = {}
         # Keep each occurrence alive while its identity keys a cached discovery.
         self.discoveries: dict[
@@ -97,6 +106,86 @@ class OfferExplorer[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepara
                 indexed[choice].append(choices)
         return indexed
 
+    def _discover(
+        self, occurrence: SemanticOccurrence[RenderTargetT, ContextT], *, speculative: bool = False
+    ) -> (
+        tuple[RealizationOffer[RenderTargetT, ContextT, PayloadT], ...]
+        | OfferDiscovery[RenderTargetT, ContextT, PayloadT]
+    ):
+        discovery = self.discoveries.get(id(occurrence))
+        if discovery is None:
+            discovery = self.rules.offers(
+                occurrence,
+                replace(self.context, palette=occurrence.palette) if occurrence.palette is not None else self.context,
+            )
+            if (
+                not speculative
+                or not isinstance(discovery, OfferDiscovery)
+                or discovery.completion != DiscoveryCompletion.EXHAUSTED
+            ):
+                self.discoveries[id(occurrence)] = discovery
+                self.discovery_owners[id(occurrence)] = occurrence
+        return discovery
+
+    def check_root_bound(self, rejection: tuple[CandidateViolation, ...]) -> tuple[CapacityExceeded, ...]:
+        """Try a proof after a capacity rejection, reserving work for ordinary search."""
+        if self.bounds_checked or not any(isinstance(item, CapacityExceeded) for item in rejection):
+            return ()
+        self.bounds_checked = True
+        try:
+            with self.context.work.allowance(self.context.work.remaining // 8):
+                minimum = self._minimum(self.root)
+        except LayoutSearchExhaustedError:
+            return ()
+        return tuple(
+            CapacityExceeded(self.root.identity, axis, cost, capacity)
+            for axis, cost, capacity in minimum.over(self.context.capacities)
+        )
+
+    def _minimum(self, occurrence: SemanticOccurrence[RenderTargetT, ContextT]) -> ResourceCost:
+        key = id(occurrence)
+        if (cached := self.minimums.get(key)) is not None:
+            return cached
+        self.context.work.consume()
+        discovery = self._discover(occurrence, speculative=True)
+        if isinstance(discovery, OfferDiscovery):
+            if discovery.completion != DiscoveryCompletion.COMPLETE:
+                # An undiscovered offer could have a lower cost.
+                return EMPTY_COST
+            domain = discovery.offers
+        else:
+            domain = discovery
+        minimum: ResourceCost | None = None
+        for offer in domain:
+            self.context.work.consume()
+            cost = offer.minimum_cost
+            if cost is None or offer.region is not None:
+                minimum = EMPTY_COST
+                break
+            for child in offer.children:
+                if (child_cost := self._minimum(child)).values:
+                    cost += child_cost
+            if offer.minimum_subtree_cost.values:
+                cost = ResourceCost(
+                    {
+                        **cost.values,
+                        **{
+                            axis: max(cost.get(axis), amount)
+                            for axis, amount in offer.minimum_subtree_cost.values.items()
+                        },
+                    }
+                )
+            minimum = (
+                cost
+                if minimum is None
+                else ResourceCost({axis: min(amount, cost.get(axis)) for axis, amount in minimum.values.items()})
+            )
+            if not minimum.values:
+                break
+        result = minimum if minimum is not None else EMPTY_COST
+        self.minimums[key] = result
+        return result
+
     def branch(
         self, task: AssignmentTask[RenderTargetT, ContextT, PayloadT]
     ) -> Iterator[AssignmentTask[RenderTargetT, ContextT, PayloadT]]:
@@ -106,17 +195,9 @@ class OfferExplorer[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepara
         rest = task.pending.advance()
         self.seen_occurrences.add(occurrence.identity)
         self.context.work.consume()
-        # An occurrence's immutable context is shared by queued assignments.
-        # Keep its owner alive so object identities cannot be recycled.
-        discovery = self.discoveries.get(id(occurrence))
-        fresh = discovery is None
-        if discovery is None:
-            discovery = self.rules.offers(
-                occurrence,
-                replace(self.context, palette=occurrence.palette) if occurrence.palette is not None else self.context,
-            )
-            self.discoveries[id(occurrence)] = discovery
-            self.discovery_owners[id(occurrence)] = occurrence
+        fresh = id(occurrence) not in self.explored
+        self.explored.add(id(occurrence))
+        discovery = self._discover(occurrence)
         if isinstance(discovery, OfferDiscovery):
             offers = discovery.offers
             if discovery.completion == DiscoveryCompletion.EXHAUSTED:
@@ -182,14 +263,48 @@ class OfferExplorer[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepara
                 counts = dict(ranks_key)
                 counts[rank] = counts.get(rank, 0) + 1
                 ranks_key = tuple(sorted(counts.items(), reverse=True))
+            bound = task.pending.bound and offer.minimum_cost is not None and offer.region is None
+            minimum = task.minimum_cost
+            if bound and offer.minimum_cost is not None and offer.minimum_cost.values:
+                minimum += offer.minimum_cost
+            pending = Pending(offer.children, tail=rest, bound=bound) if offer.children else rest
+            # Repair probes use a rejected candidate to choose their next
+            # structural step. Let them reach certification.
+            if task.repair is None and self.minimums and minimum.values:
+                optimistic = minimum
+                cursor = pending
+                while cursor is not None:
+                    if cursor.bound:
+                        key = (id(cursor.siblings), cursor.index)
+                        extra = self.suffix_minimums.get(key)
+                        if extra is None:
+                            suffix = EMPTY_COST
+                            for sibling in cursor.siblings[cursor.index :]:
+                                self.context.work.consume()
+                                if (cost := self.minimums.get(id(sibling))) is not None and cost.values:
+                                    suffix += cost
+                            self.suffix_minimums[key] = suffix
+                            extra = suffix
+                        if extra.values:
+                            optimistic += extra
+                    cursor = cursor.tail
+                if overflow := tuple(optimistic.over(self.context.capacities)):
+                    self.pruned = True
+                    for axis, cost, capacity in overflow:
+                        rejection = CapacityExceeded(self.root.identity, axis, cost, capacity)
+                        if rejection not in self.bound_rejections:
+                            self.bound_rejections.add(rejection)
+                            self.violations.append(rejection)
+                    continue
             yield AssignmentTask(
-                Pending(offer.children, tail=rest) if offer.children else rest,
+                pending,
                 task.history.push_front((offer, rank)),
                 task.selected.insert(occurrence.identity, offer.key),
                 ranks_key,
                 probe=task.probe,
                 fraction=task.fraction,
                 repair=task.repair,
+                minimum_cost=minimum,
             )
         if occurrence.identity in self.selected and self.selected[occurrence.identity] not in keys:
             message = f"unknown fixed offer for {occurrence.identity.path!r}"

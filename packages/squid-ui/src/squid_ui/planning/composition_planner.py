@@ -232,8 +232,8 @@ def _plan[RenderTargetT, AdapterT, BodyT: scene.Body, PayloadT, ResourceT, Prepa
                 partition_hint=partition_hint,
                 excluded=options.excluded,
             )
-        except JointInfeasibleError:
-            if contextual_resolved or request.partial_layout:
+        except JointInfeasibleError as error:
+            if contextual_resolved or request.partial_layout or error.diagnostics.unavoidable_overflow:
                 raise
             return _plan(
                 rendered,

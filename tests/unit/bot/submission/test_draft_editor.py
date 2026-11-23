@@ -82,6 +82,7 @@ from squid_ui.content.text import source_text
 from squid_ui.ext.discord.modal import build_form_modal
 from squid_ui.ext.discord.testing import commit_render, payload_problems, stage
 from squid_ui.interactions.forms import FormValueError
+from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.runtime import transaction
 from squid_ui.testing import find, find_all, labels, texts
 from tests.support.draft_edits import DraftEditRecorder
@@ -527,6 +528,27 @@ async def test_editor_messages_lock_once_the_draft_is_submitted() -> None:
     await editor.workspace.reload()
     assert "can no longer be edited" in rendered_text(child)
     assert not labels(child.render())
+
+
+async def test_schematic_and_undo_prove_the_door_editor_exceeds_one_message() -> None:
+    services, drafts = setup("door")
+    intake = services.submission_intake
+    assert isinstance(intake, Intake)
+    intake.files = (SuppliedAttachment(uuid4(), "door.litematic", "schematic", IntakeStatus.READY),)
+    editor = await open_editor(services, drafts, render_card=AsyncMock())
+    with transaction() as tx:
+        await editor.workspace.save_values(tx, {"ai_generated": False})
+    assert editor.workspace.edits.undoable
+
+    with pytest.raises(JointInfeasibleError) as caught:
+        commit_render(sd.MessageRoot(editor, access=sd.Owner(7), timeout=None))
+    (overflow,) = caught.value.diagnostics.unavoidable_overflow
+    assert overflow.axis == "components"
+    assert overflow.used > overflow.capacity == 40
+    assert caught.value.diagnostics.target_evaluations == 1
+
+    continued = sd.MessageRoot(DraftEditorScreen(editor.workspace), access=sd.Owner(7), timeout=None, max_messages=2)
+    assert not payload_problems(commit_render(continued).to_components())
 
 
 async def test_preview_draws_partial_facts_and_updates_as_they_are_filled() -> None:

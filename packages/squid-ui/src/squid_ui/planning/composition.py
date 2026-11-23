@@ -244,6 +244,16 @@ class RealizationOffer[RenderTargetT, ContextT, PayloadT]:
     rejections: tuple[CandidateViolation, ...] = ()
     """Intrinsic failures that rule out this offer for every partition."""
 
+    minimum_cost: ResourceCost | None = field(default=None, kw_only=True)
+    """Unavoidable additive cost of this realization, excluding its children.
+
+    None leaves the subtree opaque to lower-bound analysis. Non-opaque offers
+    guarantee their children are realized, subject to pagination.
+    """
+
+    minimum_subtree_cost: ResourceCost = field(default=EMPTY_COST, kw_only=True)
+    """A lower bound for the realization and its children together."""
+
     def atomic_violations(self, context: PlanningContext) -> tuple[CandidateViolation, ...]:
         """Check an opaque offer using its declared placement, capabilities, and costs."""
         occurrence = self.occurrence
