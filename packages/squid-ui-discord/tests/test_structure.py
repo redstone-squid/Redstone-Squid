@@ -27,6 +27,7 @@ from squid_ui.ext.discord.primitives import (
     Paginate,
     Panel,
     Row,
+    Section,
     Text,
     Variant,
     Variants,
@@ -98,6 +99,18 @@ def test_invalid_option_rules_out_every_page_split(label, key, description, limi
     assert isinstance(violation, LocalCapacityExceeded)
     assert violation.occurrence.path[-2:] == ("@option", "24")
     assert (violation.limit, violation.used, violation.capacity) == (limit, 104, 100)
+
+
+def test_native_section_wrappers_prove_component_overflow() -> None:
+    sections = [Section((Text(f"Section {index}"),), LinkButton("Open", "https://e.invalid")) for index in range(14)]
+
+    with pytest.raises(JointInfeasibleError) as caught:
+        _planned(sections)
+
+    diagnostics = caught.value.diagnostics
+    (overflow,) = diagnostics.unavoidable_overflow
+    assert (overflow.axis, overflow.used, overflow.capacity) == ("components", 42, 40)
+    assert diagnostics.target_evaluations == 1
 
 
 def test_select_option_count_guides_page_splits() -> None:

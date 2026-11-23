@@ -581,12 +581,12 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
         return (sl.block(*children, accent=accent), *ws.edits.controls())
 
     def _overview(self, phase: Phase) -> list[Any]:
-        """One row per section and the Files row, then the Submit row."""
+        """Page through draft sections while keeping submission actions visible."""
         ws = self.workspace
-        children = self.section_overview(
+        sections = self.section_overview(
             [EditorSection(section.id, section_text(ws, section)) for section in ws.sections]
         )
-        children.append(
+        files: list[Any] = [
             sd.v2.section(
                 _files_text(ws),
                 accessory=(
@@ -595,9 +595,9 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
                     else sd.v2.button(tr(t"draft-editor-add-files = Add files"), self._add_files, key="add_files")
                 ),
             )
-        )
+        ]
         if any(file.kind == "schematic" for file in ws.attachments):
-            children.append(
+            files.append(
                 sl.action_controls(
                     sl.action_control(
                         tr(t"draft-inference-action = Infer from schematic"),
@@ -608,14 +608,17 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
                 )
             )
         if ws.notice and ws.hallway_report is not None:
-            children.append(
+            files.append(
                 sl.download(
                     ws.hallway_report,
                     label=tr(t"draft-hallway-download = Hallway candidates and block coordinates"),
                     key="hallway-report",
                 )
             )
-        children.append(sd.v2.separator())
+        children: list[Any] = [
+            sl.region(*sections, sl.unbreakable(sl.group(*files)), key="draft-sections", title=""),
+            sd.v2.separator(),
+        ]
         preview = ws.render_card is not None and sl.action_control(
             tr(t"draft-editor-preview = Preview"), self._preview, key="preview"
         )
