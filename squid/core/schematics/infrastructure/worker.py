@@ -40,6 +40,7 @@ from squid.core.errors import DomainError, InfrastructureError
 from squid.core.observability import add_counter, record_gauge, record_histogram, trace_context_headers
 from squid.core.schematics.application.commands import RenderRequest, SimulationRequest
 from squid.core.schematics.application.video import VideoRenderRequest
+from squid.core.schematics.domain.doors.detection import DoorDetection
 from squid.core.schematics.domain.models import (
     AnalyzerCapabilities,
     AutostackLattice,
@@ -545,6 +546,12 @@ class SchematicWorkerPool:
                 }
                 frame = await self._call("render_video", params, (data,), self._config.video_timeout_seconds)
                 return _payload(frame)
+
+    async def detect_door(self, data: bytes, *, source_format: SchematicFormat) -> DoorDetection:
+        frame = await self._call(
+            "detect_door", {"source_format": source_format.value}, (data,), self._config.simulate_timeout_seconds
+        )
+        return wire.decode_door(_result(frame)["door"])
 
     async def simulate(self, data: bytes, *, request: SimulationRequest) -> SimulationResult:
         params = {"request": wire.encode_simulation_request(request)}

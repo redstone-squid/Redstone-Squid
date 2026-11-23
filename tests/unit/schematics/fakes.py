@@ -5,6 +5,7 @@ from whenever import Instant
 from squid.core.schematics.application.attachments import SchematicPublication, StoredSchematic
 from squid.core.schematics.application.commands import RenderRequest, SimulationRequest
 from squid.core.schematics.application.previews import PreviewObjectReservation, StoredRender
+from squid.core.schematics.domain.doors.detection import DoorDetection
 from squid.core.schematics.domain.models import (
     AnalyzerCapabilities,
     AutostackLattice,
@@ -134,6 +135,9 @@ class FakeSchematicAnalyzer:
         if self.failure is not None:
             raise self.failure
         return self.render_output
+
+    async def detect_door(self, data: bytes, *, source_format: SchematicFormat) -> DoorDetection:
+        return self.analysis.door or DoorDetection()
 
     async def simulate(self, data: bytes, *, request: SimulationRequest) -> SimulationResult:
         self.simulate_calls.append((data, request))

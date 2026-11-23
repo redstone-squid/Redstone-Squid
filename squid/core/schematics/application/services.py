@@ -4,7 +4,7 @@ import asyncio
 import contextlib
 import logging
 from collections.abc import Generator, Iterable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from squid.core.errors import DataIntegrityError, SquidError
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, offset_page
@@ -29,6 +29,7 @@ from squid.core.schematics.application.previews import (
     StoredRender,
 )
 from squid.core.schematics.application.video_service import SchematicVideoService
+from squid.core.schematics.domain.doors.detection import MAX_WORLD_VOLUME, DoorDetection
 from squid.core.schematics.domain.formats import inflated_size_at_most, sniff_schematic_format
 from squid.core.schematics.domain.models import (
     AnalyzerCapabilities,
@@ -163,6 +164,20 @@ class SchematicService:
                 with_lattice=request.with_lattice,
                 source_format=source_format,
             )
+        metrics = analysis.metrics
+        names = {state.partition("[")[0] for state in metrics.block_counts or ()}
+        if (
+            names & {"minecraft:piston", "minecraft:sticky_piston"}
+            and metrics.allocated_dimensions.volume <= MAX_WORLD_VOLUME
+        ):
+            try:
+                with self._quarantining(sha256, operation="detect_door"):
+                    door = await self._analyzer.detect_door(request.data, source_format=source_format)
+            except SquidError as exc:
+                # Optional simulation must not reject an otherwise readable upload.
+                logger.warning("Door detection for %s failed: %s", sha256, exc)
+                door = DoorDetection(reason="Door simulation was unavailable.")
+            analysis = replace(analysis, door=door)
         return IngestedSchematic(sha256, analysis)
 
     async def attach(

@@ -3,6 +3,8 @@
 import gzip
 import logging
 import zlib
+from dataclasses import replace
+from unittest.mock import AsyncMock
 
 import pytest
 from whenever import Instant
@@ -20,6 +22,7 @@ from squid.core.schematics.application import (
     SkippedRender,
 )
 from squid.core.schematics.application.services import summarise_losses
+from squid.core.schematics.domain.doors.detection import DoorDetection
 from squid.core.schematics.domain.models import (
     SCHEMATIC_FILE_SCHEMA_MAX_BYTES,
     AutostackLattice,
@@ -201,6 +204,27 @@ async def test_ingest_stores_bytes_and_passes_the_sniffed_format_to_the_analyzer
 
     assert store.files[ingested.sha256] == data
     assert analyzer.analyze_calls == [(data, SchematicFormat.LITEMATIC, True)]
+
+
+@pytest.mark.parametrize("worker_available", [True, False])
+async def test_piston_upload_keeps_static_analysis_when_testing_its_control(worker_available: bool) -> None:
+    analysis = make_analysis()
+    analysis = replace(analysis, metrics=replace(analysis.metrics, block_counts={"minecraft:sticky_piston": 1}))
+    schematics, analyzer, _ = service(FakeSchematicAnalyzer(analysis))
+    measured = DoorDetection(reason="Several possible door controls were found.")
+    detect = AsyncMock(
+        return_value=measured, side_effect=None if worker_available else SchematicSupportUnavailableError()
+    )
+    analyzer.detect_door = detect
+    data = litematic_bytes()
+
+    ingested = await schematics.ingest(IngestRequest(data=data, filename="door.litematic"))
+
+    detect.assert_awaited_once_with(data, source_format=SchematicFormat.LITEMATIC)
+    assert ingested.analysis.metrics == analysis.metrics
+    assert ingested.analysis.door == (
+        measured if worker_available else DoorDetection(reason="Door simulation was unavailable.")
+    )
 
 
 async def test_public_content_requires_the_build_attachment_and_complete_publication() -> None:

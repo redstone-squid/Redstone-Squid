@@ -4,6 +4,7 @@ import importlib.util
 from functools import cache
 
 from squid.core.schematics.application.commands import RenderRequest, SimulationRequest
+from squid.core.schematics.domain.doors.detection import DoorDetection
 from squid.core.schematics.domain.models import (
     AnalyzerCapabilities,
     AutostackLattice,
@@ -77,6 +78,9 @@ class NullSchematicAnalyzer:
     async def render(
         self, data: bytes, *, request: RenderRequest, resource_pack: VerifiedResourcePack | None = None
     ) -> bytes:
+        raise self._unavailable()
+
+    async def detect_door(self, data: bytes, *, source_format: SchematicFormat) -> DoorDetection:
         raise self._unavailable()
 
     async def simulate(self, data: bytes, *, request: SimulationRequest) -> SimulationResult:

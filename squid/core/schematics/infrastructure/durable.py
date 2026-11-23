@@ -35,6 +35,7 @@ from squid.core.schematics.application.jobs import (
 )
 from squid.core.schematics.application.ports import SchematicAnalyzer
 from squid.core.schematics.application.video import SchematicVideoRenderer, VideoRenderRequest
+from squid.core.schematics.domain.doors.detection import DoorDetection
 from squid.core.schematics.domain.models import (
     AnalyzerCapabilities,
     AutostackLattice,
@@ -180,6 +181,17 @@ class QueuedSchematicAnalyzer:
             timeout_seconds=self._config.job_wait_timeout_seconds,
         )
         return response.payload or b""
+
+    async def detect_door(self, data: bytes, *, source_format: SchematicFormat) -> DoorDetection:
+        """Queue a two-use simulation using the same staged inputs as timing jobs."""
+        self._require_enabled()
+        response = await self._request(
+            "simulate",
+            {"measurement": "door_geometry", "source_format": source_format.value},
+            (data,),
+            timeout_seconds=self._config.job_wait_timeout_seconds,
+        )
+        return wire.decode_door(response.result["door"])
 
     async def simulate(self, data: bytes, *, request: SimulationRequest) -> SimulationResult:
         self._require_enabled()
@@ -403,6 +415,9 @@ class SchematicJobRunner:
                 resource_pack=wire.decode_resource_pack(params.get("resource_pack"), inputs[1]),
             )
             return {}, rendered
+        if operation == "simulate" and params.get("measurement") == "door_geometry":
+            door = await self._analyzer.detect_door(inputs[0], source_format=SchematicFormat(params["source_format"]))
+            return {"door": wire.encode_door(door)}, None
         if operation == "simulate":
             simulation = await self._analyzer.simulate(
                 inputs[0], request=wire.decode_simulation_request(params.get("request"))

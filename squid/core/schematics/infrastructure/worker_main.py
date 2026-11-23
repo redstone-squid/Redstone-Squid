@@ -23,6 +23,7 @@ except ImportError:  # pragma: no cover - Windows has no rlimits
 from squid.config import load_worker_log_config, load_worker_observability_config
 from squid.core.errors import DomainError, SquidError
 from squid.core.observability import extracted_trace_span
+from squid.core.schematics.domain.models import SchematicFormat
 from squid.core.schematics.domain.values import VerifiedResourcePack
 from squid.core.schematics.errors import (
     AmbiguousSimulationInputError,
@@ -168,6 +169,10 @@ def handle(
             scratch=Path(params["scratch"]),
             helper=str(params["helper"]),
         )
+
+    if operation == "detect_door":
+        door = engine.detect_door(payloads[0], source_format=SchematicFormat(params["source_format"]))
+        return {"door": wire.encode_door(door)}, b""
 
     if operation == "simulate":
         result = engine.simulate(

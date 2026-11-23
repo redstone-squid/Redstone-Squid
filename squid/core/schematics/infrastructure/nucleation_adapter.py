@@ -26,6 +26,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictInt, TypeAdapter, Valid
 
 from squid.core.schematics.application.commands import RenderRequest, SimulationRequest
 from squid.core.schematics.application.video import VideoRenderRequest
+from squid.core.schematics.domain.doors.detection import MAX_WORLD_VOLUME, DoorDetection, detect_cycle
 from squid.core.schematics.domain.formats import sniff_schematic_format
 from squid.core.schematics.domain.models import (
     AnalyzerCapabilities,
@@ -58,7 +59,7 @@ from squid.core.schematics.infrastructure.java_structure import (
 
 logger = logging.getLogger(__name__)
 
-ANALYSIS_SCHEMA_VERSION = 2
+ANALYSIS_SCHEMA_VERSION = 3
 """Bumped whenever the set of facts we derive changes, independently of the engine version."""
 
 _UNKNOWN_DATA_VERSION = -1
@@ -123,6 +124,7 @@ class _LatticeWire(_EngineRecord):
 
 
 _CONVERSION_WIRE = TypeAdapter(_ConversionWire)
+_BOUNDS_WIRE = TypeAdapter(tuple[int, int, int, int, int, int])
 _SNAPSHOT_WIRE = TypeAdapter(list[_SnapshotBlock])
 _EVENTS_WIRE = TypeAdapter(list[_SimulationEvent])
 _AUDIT_WIRE = TypeAdapter(_BlockEntityAudit)
@@ -257,6 +259,90 @@ def _render_config(request: RenderRequest) -> Any:
     return config
 
 
+def _tick_simulation(schematic: nucleation.Schematic, origin: Vector3) -> nucleation.TickSimulation:
+    try:
+        return nucleation.TickSimulation.from_schematic(
+            schematic,
+            nucleation.TickSettleMode.InWorld,
+            *origin,
+            "",
+        )
+    except Exception as exc:
+        detail = _optional_engine_evidence(lambda: str(nucleation.TickSimulation.last_error_detail()), "tick error")
+        msg = detail or str(exc) or "The tick engine could not load this schematic."
+        raise InvalidSchematicError(
+            context={"engine_error": msg},
+            developer_action="Inspect the schematic worker logs for the native tick-engine rejection.",
+        ) from exc
+
+
+def _world_snapshot(simulation: nucleation.TickSimulation, origin: Vector3) -> dict[Vector3, str]:
+    """Translate simulation-local block positions back into the uploaded schematic."""
+    ox, oy, oz = origin
+    rows = _engine_json(simulation.world_snapshot_json(), _SNAPSHOT_WIRE, "simulation snapshot")
+    return {(row.pos[0] + ox, row.pos[1] + oy, row.pos[2] + oz): row.state for row in rows}
+
+
+def detect_door(data: bytes, *, source_format: SchematicFormat) -> DoorDetection:
+    """Operate one control twice to observe the two settled layouts of a door.
+
+    Native snapshots contain only non-air states. GameTest import subtracts the
+    schematic minimum on every axis, including for negative-coordinate regions.
+    Restore that offset before resolving Insign coordinates or reporting any
+    geometry. The origin supplied to the engine controls world-position hashing.
+
+    Each use gets a bounded settling interval. An unresolved control or an
+    unfinished transition leaves the original static analysis available.
+    """
+    schematic = _load(data, source_format=source_format)
+    bounds = _engine_json(schematic.bounding_box_json(), _BOUNDS_WIRE, "schematic bounds")
+    ox, oy, oz, xmax, ymax, zmax = bounds
+    if (xmax - ox + 1) * (ymax - oy + 1) * (zmax - oz + 1) > MAX_WORLD_VOLUME:
+        return DoorDetection(reason="Schematic exceeds the hallway search volume.")
+    origin = ox, oy, oz
+    simulation = _tick_simulation(schematic, origin)
+    budget = SimulationRequest().max_ticks
+    if not simulation.run_until_quiescent(budget):
+        return DoorDetection(reason="The starting state did not settle.")
+    initial = _world_snapshot(simulation, origin)
+    controls = [
+        _SnapshotBlock(pos=p, state=s)
+        for p, s in initial.items()
+        if s.partition("[")[0].endswith((":lever", "_button"))
+    ]
+    if not controls:
+        return DoorDetection(reason="No supported door control was found.")
+    try:
+        control, _ = _resolve_simulation_input(schematic, controls, None)
+    except AmbiguousSimulationInputError:
+        return DoorDetection(reason="Several possible door controls were found.")
+    local = control[0] - ox, control[1] - oy, control[2] - oz
+    endpoints = []
+    for _ in range(2):
+        simulation.use_block(*local)
+        if not simulation.run_until_quiescent(budget):
+            return DoorDetection(reason="The input cycle did not settle.")
+        endpoints.append(_world_snapshot(simulation, origin))
+    if simulation.piston_retract_contacts():
+        return DoorDetection(reason="The engine reported unsupported piston/entity contacts.")
+    actuated, returned = endpoints
+    if initial == actuated:
+        return DoorDetection(reason="Actuating the control did not change the settled layout.")
+    # Blockpedia describes model geometry by block ID. Partial or unknown
+    # geometry can contribute evidence to a pattern, but cannot prove a seal.
+    states = set(initial.values()) | set(actuated.values())
+    full_names: set[str] = set()
+    for name in {state.partition("[")[0] for state in states}:
+        try:
+            facts = nucleation.Blocks.get_json(name)
+        except Exception:
+            continue
+        if _json_object(facts, "block geometry").get("full_cube") is True:
+            full_names.add(name)
+    full_states = {state for state in states if state.partition("[")[0] in full_names}
+    return detect_cycle(initial, actuated, returned, full_states)
+
+
 def simulate(data: bytes, *, request: SimulationRequest) -> SimulationResult:
     """Actuate one input in a quiescent schematic and collect piston timing evidence.
 
@@ -267,22 +353,7 @@ def simulate(data: bytes, *, request: SimulationRequest) -> SimulationResult:
     missing block entities nor unsupported piston/entity contacts.
     """
     schematic = _load(data)
-    try:
-        simulation = nucleation.TickSimulation.from_schematic(
-            schematic,
-            nucleation.TickSettleMode.InWorld,
-            0,
-            0,
-            0,
-            "",
-        )
-    except Exception as exc:
-        detail = _optional_engine_evidence(lambda: str(nucleation.TickSimulation.last_error_detail()), "tick error")
-        msg = detail or str(exc) or "The tick engine could not load this schematic."
-        raise InvalidSchematicError(
-            context={"engine_error": msg},
-            developer_action="Inspect the schematic worker logs for the native tick-engine rejection.",
-        ) from exc
+    simulation = _tick_simulation(schematic, (0, 0, 0))
 
     if int(simulation.changes_count()) != 0 or not bool(simulation.is_quiescent()):
         msg = "This schematic was already active when loaded, so a timing would be unreliable."

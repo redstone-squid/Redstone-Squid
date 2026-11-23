@@ -28,6 +28,7 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, TypeAd
 
 from squid.core.schematics.application.commands import RenderRequest, SimulationRequest
 from squid.core.schematics.application.video import VideoRenderRequest
+from squid.core.schematics.domain.doors.detection import DoorDetection
 from squid.core.schematics.domain.models import (
     AnalyzerCapabilities,
     AutostackLattice,
@@ -47,13 +48,13 @@ MAX_FRAME_BYTES = 256 * 1024 * 1024
 """Maximum combined header and body size, excluding the eight-byte length prefix."""
 
 type Operation = Literal[
-    "capabilities", "analyze", "convert", "compare", "render", "render_video", "simulate", "autostack"
+    "capabilities", "analyze", "convert", "compare", "render", "render_video", "simulate", "detect_door", "autostack"
 ]
 type ErrorKind = Literal["invalid", "ambiguous_simulation_input", "too_large", "unavailable", "internal"]
 """Error kinds the supervisor accepts when reconstructing a typed exception."""
 
 _OPERATIONS: frozenset[str] = frozenset(
-    {"capabilities", "analyze", "convert", "compare", "render", "render_video", "simulate", "autostack"}
+    {"capabilities", "analyze", "convert", "compare", "render", "render_video", "simulate", "detect_door", "autostack"}
 )
 _REQUEST_PAYLOAD_ARITY: Mapping[Operation, int] = {
     "capabilities": 0,
@@ -63,6 +64,7 @@ _REQUEST_PAYLOAD_ARITY: Mapping[Operation, int] = {
     "render": 1,
     "render_video": 1,
     "simulate": 1,
+    "detect_door": 1,
     "autostack": 1,
 }
 _RESPONSE_PAYLOAD_ARITY: Mapping[Operation, int] = {
@@ -73,6 +75,7 @@ _RESPONSE_PAYLOAD_ARITY: Mapping[Operation, int] = {
     "render": 1,
     "render_video": 1,
     "simulate": 0,
+    "detect_door": 0,
     "autostack": 1,
 }
 _DURABLE_REQUEST_PAYLOAD_ARITY: Mapping[Operation, tuple[int, ...]] = {
@@ -216,6 +219,7 @@ class _AnalysisJson(_WorkerJson):
     analyzer_version: str
     analysis_schema_version: Annotated[int, Field(strict=True, ge=1)]
     lattice: _LatticeJson | None = None
+    door: DoorDetection | None = None
 
 
 class _ComparisonJson(_WorkerJson):
@@ -471,6 +475,17 @@ def _read_exactly(stream: IO[bytes], size: int) -> bytes:
         chunks.append(chunk)
         remaining -= len(chunk)
     return b"".join(chunks)
+
+
+_DOOR = TypeAdapter(DoorDetection)
+
+
+def encode_door(door: DoorDetection) -> dict[str, Any]:
+    return _DOOR.dump_python(door, mode="json")
+
+
+def decode_door(payload: object) -> DoorDetection:
+    return _DOOR.validate_python(payload)
 
 
 def encode_analysis(analysis: SchematicAnalysis) -> Mapping[str, Any]:

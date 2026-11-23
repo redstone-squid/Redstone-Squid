@@ -7,6 +7,7 @@ from whenever import Instant
 from squid.core.schematics.application.attachments import SchematicPublication, StoredSchematic
 from squid.core.schematics.application.commands import RenderRequest, SimulationRequest
 from squid.core.schematics.application.previews import PreviewObjectReservation, StoredRender
+from squid.core.schematics.domain.doors.detection import DoorDetection
 from squid.core.schematics.domain.models import (
     AnalyzerCapabilities,
     AutostackLattice,
@@ -63,6 +64,8 @@ class SchematicAnalyzer(Protocol):
     async def render(
         self, data: bytes, *, request: RenderRequest, resource_pack: VerifiedResourcePack | None = None
     ) -> bytes: ...
+
+    async def detect_door(self, data: bytes, *, source_format: SchematicFormat) -> DoorDetection: ...
 
     async def simulate(self, data: bytes, *, request: SimulationRequest) -> SimulationResult: ...
 

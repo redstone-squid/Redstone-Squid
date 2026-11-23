@@ -353,3 +353,13 @@ async def test_repeated_crashes_trip_the_circuit_breaker_instead_of_spawning_for
 
         # Operators without an OTel exporter must still see the outage in the logs.
         assert [record.getMessage() for record in caplog.records if "circuit breaker opened" in record.getMessage()]
+
+
+@owned_pool
+async def test_detect_door_returns_source_coordinates_from_a_real_cycle(
+    pool: SchematicWorkerPool, framed_piston_door: bytes
+) -> None:
+    result = await pool.detect_door(framed_piston_door, source_format=SchematicFormat.LITEMATIC)
+    assert any(h.axis == 2 and h.seal == "sealed" and h.agreed_blocks == ((-5, 1, 0),) for h in result.candidates), (
+        result
+    )

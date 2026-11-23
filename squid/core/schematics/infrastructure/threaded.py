@@ -10,6 +10,7 @@ import logging
 
 from squid.config import SchematicConfig
 from squid.core.schematics.application.commands import RenderRequest, SimulationRequest
+from squid.core.schematics.domain.doors.detection import DoorDetection
 from squid.core.schematics.domain.models import (
     AnalyzerCapabilities,
     AutostackLattice,
@@ -93,6 +94,9 @@ class ThreadedSchematicAnalyzer:
         raise SchematicRenderUnavailableError(
             msg, developer_action="Rendering needs the subprocess pool; wgpu state is process-global."
         )
+
+    async def detect_door(self, data: bytes, *, source_format: SchematicFormat) -> DoorDetection:
+        raise SchematicSupportUnavailableError(developer_action="Door detection needs the simulation worker.")
 
     async def simulate(self, data: bytes, *, request: SimulationRequest) -> SimulationResult:
         msg = "The in-process schematic analyzer will not simulate."

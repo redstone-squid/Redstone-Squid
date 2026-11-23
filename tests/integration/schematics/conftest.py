@@ -136,3 +136,26 @@ def slow_schematic() -> bytes:
     for index in range(200_000):
         schematic.set_block_from_string(index % 500, (index // 500) % 500, index // 250_000, "minecraft:stone")
     return base64.b64decode(schematic.to_litematic_b64())
+
+
+@pytest.fixture
+def framed_piston_door() -> bytes:
+    """A sticky piston pushes the west frame block into a one-cell doorway.
+
+    The negative offset exercises the conversion from the simulator's local
+    positions to the coordinates the submitter sees in a litematic editor.
+    """
+    schematic = nucleation.Schematic.create("translated door")
+    for x in range(-10, -3):
+        schematic.set_block(x, 0, 0, "minecraft:stone")
+    for x, state in (
+        (-10, "minecraft:lever[face=floor,facing=east,powered=false]"),
+        (-9, "minecraft:redstone_wire{simulate=true}"),
+        (-8, "minecraft:redstone_wire{simulate=true}"),
+        (-7, "minecraft:sticky_piston[facing=east,extended=false]"),
+        (-6, "minecraft:stone"),
+        (-4, "minecraft:stone"),
+    ):
+        schematic.set_block(x, 1, 0, state)
+    schematic.set_block(-5, 2, 0, "minecraft:stone")
+    return base64.b64decode(schematic.to_litematic_b64())
