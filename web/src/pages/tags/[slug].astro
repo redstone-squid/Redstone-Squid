@@ -3,7 +3,7 @@ import { tagsGetBySlug } from "@/generated/sdk.gen";
 import CatalogueLayout from "@/layouts/CatalogueLayout.astro";
 import { localizePath } from "@/locales/locale";
 import { load } from "@/server/api";
-import PageHeading from "@/ui/astro/PageHeading.astro";
+import PageHeader from "@/ui/patterns/PageHeader.svelte";
 
 const slug = Astro.params.slug;
 if (!slug) return Astro.rewrite("/404");
@@ -22,5 +22,5 @@ if (slug !== tag.slug) {
 ---
 
 <CatalogueLayout title={tag.name}>
-  <PageHeading title={tag.name} />
+  <PageHeader title={tag.name} />
 </CatalogueLayout>

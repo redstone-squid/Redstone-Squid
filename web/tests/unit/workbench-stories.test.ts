@@ -1,75 +1,95 @@
-import { render, screen } from "@testing-library/svelte";
+import { globSync, readFileSync } from "node:fs";
+import { render, screen, within } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
-import { createRawSnippet } from "svelte";
-import { afterEach, expect, it } from "vitest";
+import type { Component } from "svelte";
+import { describe, expect, it } from "vitest";
 import * as m from "@/locales/messages.gen";
-import BrowsingPreview from "@/workbench/BrowsingPreview.svelte";
-import ButtonStory from "@/workbench/ButtonStory.svelte";
-import FieldStory from "@/workbench/FieldStory.svelte";
-import LayoutStory from "@/workbench/LayoutStory.svelte";
-import ThemeToggle from "@/workbench/ThemeToggle.svelte";
-import { buttonStyles } from "@/ui/variants";
+import DraftDialog from "@/workbench/DraftDialog.svelte";
+import Foundations from "@/workbench/Foundations.svelte";
+import { GROUPS, isGroup } from "@/workbench/groups";
+import ActionsStories from "@/workbench/stories/ActionsStories.svelte";
+import ContentStories from "@/workbench/stories/ContentStories.svelte";
+import DataStories from "@/workbench/stories/DataStories.svelte";
+import FeedbackStories from "@/workbench/stories/FeedbackStories.svelte";
+import FormsStories from "@/workbench/stories/FormsStories.svelte";
+import LayoutStories from "@/workbench/stories/LayoutStories.svelte";
+import NavigationStories from "@/workbench/stories/NavigationStories.svelte";
+import OverlaysStories from "@/workbench/stories/OverlaysStories.svelte";
+import PatternsStories from "@/workbench/stories/PatternsStories.svelte";
 
-afterEach(() => {
-  history.replaceState(null, "", "/");
-  delete document.documentElement.dataset.theme;
-  document
-    .querySelectorAll("[data-workbench-media], [data-workbench-trial]")
-    .forEach((link) => link.remove());
-});
+// Building blocks of other components, with no use on their own.
+const INTERNAL = new Set(["forms/FieldFrame"]);
 
-it("restores all previews on history traversal and updates the existing history entry", async () => {
-  const user = userEvent.setup();
-  const initialSearch = "?theme=unknown&variant=unknown&keep=1";
-  history.replaceState({ fixture: true }, "", `/design-system${initialSearch}#fields`);
-  const trialNav = document.createElement("a");
-  trialNav.href = "/design-system-trial?theme=light";
-  trialNav.dataset.workbenchTrial = "";
-  const mediaNav = document.createElement("a");
-  mediaNav.href = "/design-system/media";
-  mediaNav.dataset.workbenchMedia = "";
-  document.body.append(trialNav, mediaNav);
-  render(ThemeToggle, { theme: "light" });
-  render(ButtonStory, { search: initialSearch });
-  render(FieldStory, { search: initialSearch });
-  const layout = render(LayoutStory, { search: initialSearch });
-  const first = createRawSnippet(() => ({ render: () => "<p>First sample record</p>" }));
-  const next = createRawSnippet(() => ({ render: () => "<p>Second sample record</p>" }));
-  render(BrowsingPreview, { search: initialSearch, first, next });
+describe("workbench", () => {
+  it("has a story for every src/ui component", () => {
+    const components = globSync("src/ui/**/*.svelte")
+      .map((path) => path.replace(/^src\/ui\//, "").replace(/\.svelte$/, ""))
+      .filter((source) => !INTERNAL.has(source));
+    const stories = globSync("src/workbench/stories/*.svelte")
+      .map((path) => readFileSync(path, "utf8"))
+      .join("\n");
+    const covered = new Set([...stories.matchAll(/source="([^"]+)"/g)].map(([, source]) => source));
+    expect(components.filter((source) => !covered.has(source))).toEqual([]);
+  });
 
-  const trial = screen.getByRole("link", { name: m.trialTitle() });
-  const category = screen.getByRole("combobox", { name: m.trialCategory() });
-  expect(trial).toHaveClass(...buttonStyles({ variant: "primary" }).split(" "));
-  expect(screen.getByText("First sample record")).toBeVisible();
-  expect(category).toBeEnabled();
+  it("has a stories component for every group", () => {
+    const files = globSync("src/workbench/stories/*Stories.svelte").map((path) =>
+      path
+        .replace(/^.*\//, "")
+        .replace(/Stories\.svelte$/, "")
+        .toLowerCase(),
+    );
+    expect(files.sort()).toEqual(Object.keys(GROUPS).sort());
+    expect(isGroup("forms")).toBe(true);
+    expect(isGroup("media")).toBe(false);
+    expect(isGroup(undefined)).toBe(false);
+  });
 
-  const historyLength = history.length;
-  await user.selectOptions(screen.getByRole("combobox", { name: m.workbenchVariant() }), "quiet");
-  await user.selectOptions(screen.getByRole("combobox", { name: m.workbenchSize() }), "small");
-  await user.click(screen.getByRole("button", { name: m.workbenchDarkTheme() }));
-  await user.click(screen.getByRole("button", { name: m.workbenchDisabled() }));
-  await user.click(screen.getByRole("button", { name: m.workbenchStack() }));
-  await user.click(screen.getByRole("button", { name: m.workbenchCompact() }));
-  await user.click(screen.getByRole("button", { name: m.commonLoadMore() }));
+  it.each<[string, Component]>([
+    ["layout", LayoutStories],
+    ["content", ContentStories],
+    ["actions", ActionsStories],
+    ["feedback", FeedbackStories],
+    ["data", DataStories],
+    ["navigation", NavigationStories],
+    ["forms", FormsStories],
+    ["overlays", OverlaysStories],
+    ["patterns", PatternsStories],
+  ])("renders the %s stories", (_group, Stories) => {
+    const { container } = render(Stories);
+    expect(container.querySelectorAll("section[id]").length).toBeGreaterThan(0);
+  });
 
-  expect(history).toHaveProperty("length", historyLength);
-  expect(history.state).toEqual({ fixture: true });
-  expect(location.hash).toBe("#fields");
-  expect(new URLSearchParams(location.search).get("keep")).toBe("1");
-  expect(new URL(trialNav.href).search).toBe("?theme=dark");
-  expect(new URL(mediaNav.href).searchParams.get("offset")).toBe("1");
-  expect(trial).toHaveClass(...buttonStyles({ variant: "quiet", size: "small" }).split(" "));
-  expect(screen.getByText("Second sample record")).toBeVisible();
-  expect(category).toBeDisabled();
-  await user.click(screen.getByRole("button", { name: m.commonPrevious() }));
-  expect(new URLSearchParams(location.search).has("offset")).toBe(false);
+  it("renders the foundations", () => {
+    render(Foundations);
+    expect(screen.getByRole("region", { name: m.workbenchFoundations() })).toHaveTextContent(
+      "--line-strong",
+    );
+  });
 
-  history.replaceState(null, "", "/design-system?theme=light&layout=row&fieldState=invalid");
-  window.dispatchEvent(new PopStateEvent("popstate"));
-  expect(await screen.findByRole("button", { name: m.workbenchDarkTheme() })).toBeVisible();
-  expect(category).toHaveAccessibleDescription(m.trialRequired());
-  expect(layout.container.querySelector("code")).toHaveTextContent(
-    '<Layout pattern="row" gap="normal">',
-  );
-  expect(screen.getByText("First sample record")).toBeVisible();
+  it("keeps interactive stories working after hydration", async () => {
+    const user = userEvent.setup();
+    render(FeedbackStories);
+    const flush = screen.getByRole("button", { name: "Flush" });
+    await user.click(flush);
+    expect(flush).toHaveAttribute("aria-pressed", "false");
+    await user.click(screen.getByRole("button", { name: "Remove flush" }));
+    expect(screen.queryByRole("button", { name: "Remove flush" })).not.toBeInTheDocument();
+  });
+
+  it("clears the saved status when the draft title changes", async () => {
+    const user = userEvent.setup();
+    render(DraftDialog);
+    await user.click(screen.getByRole("button", { name: m.workbenchNewDraft() }));
+    const dialog = within(await screen.findByRole("dialog"));
+    const title = dialog.getByRole("textbox", { name: m.workbenchBuildTitle() });
+    const status = dialog.getByRole("status");
+    await user.click(dialog.getByRole("button", { name: m.workbenchSaveDraft() }));
+    expect(status).toHaveTextContent(m.workbenchCheckTheHighlightedField());
+    await user.type(title, "Copper Bolt");
+    await user.click(dialog.getByRole("button", { name: m.workbenchSaveDraft() }));
+    expect(status).toHaveTextContent(m.workbenchExampleDraftSaved());
+    await user.type(title, " revised");
+    expect(status).toHaveTextContent(/^$/);
+  });
 });

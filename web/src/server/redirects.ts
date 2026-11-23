@@ -7,7 +7,9 @@
  * 308 in the request's locale and keeps the query string. Never remove an entry; tests check
  * that every target is a real route and that redirects do not chain.
  */
-export const REDIRECTS: Readonly<Record<string, string>> = {};
+export const REDIRECTS: Readonly<Record<string, string>> = {
+  "/design-system/media": "/design-system/data",
+};
 
 export type CompiledRedirect = { pattern: RegExp; target: string };
 
@@ -48,10 +50,14 @@ export function redirectProblems(
 ): string[] {
   const shape = (path: string) => path.replace(SEGMENT, ":");
   const routeShapes = new Set(routes.map(shape));
+  // A literal target such as /design-system/data is served by a route like /design-system/:group.
+  const routePatterns = compileRedirects(Object.fromEntries(routes.map((route) => [route, route])));
+  const isRoute = (target: string) =>
+    routeShapes.has(shape(target)) || routePatterns.some(({ pattern }) => pattern.test(target));
   const sources = new Set(Object.keys(table).map(shape));
   const parameters = (path: string) => [...path.matchAll(SEGMENT)].map((match) => match[1]);
   return Object.entries(table).flatMap(([source, target]) => [
-    ...(routeShapes.has(shape(target)) ? [] : [`${source}: target ${target} is not a route`]),
+    ...(isRoute(target) ? [] : [`${source}: target ${target} is not a route`]),
     ...(sources.has(shape(target)) ? [`${source}: target ${target} redirects again`] : []),
     ...(routeShapes.has(shape(source)) ? [`${source}: shadows an existing route`] : []),
     ...parameters(target)

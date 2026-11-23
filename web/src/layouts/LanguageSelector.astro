@@ -1,4 +1,7 @@
 ---
+import Check from "@lucide/svelte/icons/check";
+import ChevronDown from "@lucide/svelte/icons/chevron-down";
+import Icon from "@/ui/content/Icon.svelte";
 import { LOCALES, PUBLIC_LOCALES, localizePath } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
 type Props = { align?: "start" | "end" };
@@ -9,27 +12,27 @@ const path = `${Astro.url.pathname}${Astro.url.search}`;
 
 <details class="group relative text-sm text-fg" data-align={align}>
   <summary
-    class="flex min-h-11 cursor-pointer list-none items-center gap-3 rounded-sm border border-line px-3 py-2 [&::-webkit-details-marker]:hidden"
+    class="flex min-h-control cursor-pointer list-none items-center gap-2 rounded-sm border border-line-strong bg-surface px-3 py-2 [&::-webkit-details-marker]:hidden"
     aria-label={`${LOCALES[locale].label} · ${m.navLanguage()}`}
   >
     <span lang={locale}>{LOCALES[locale].label}</span>
-    <span aria-hidden="true">⌄</span>
+    <Icon icon={ChevronDown} class="transition-transform group-open:rotate-180" />
   </summary>
   <ul
-    class="absolute top-full right-0 z-20 mt-1.5 max-h-[60vh] max-w-[calc(100vw-2rem)] min-w-44 overflow-auto rounded-sm border border-line bg-surface p-1 shadow-card group-data-[align=start]:right-auto group-data-[align=start]:left-0"
+    class="absolute top-full right-0 z-dropdown mt-1.5 max-h-[60vh] max-w-[calc(100vw-2rem)] min-w-44 overflow-auto rounded-sm border border-line bg-surface-raised p-1 shadow-overlay group-data-[align=start]:right-auto group-data-[align=start]:left-0"
     aria-label={m.navLanguage()}
   >
     {PUBLIC_LOCALES.map((language) => (
       <li>
         <a
-          class="flex justify-between gap-4 rounded-[0.25rem] px-3 py-2.5 no-underline hover:bg-surface-muted aria-[current=true]:bg-surface-muted"
+          class="flex justify-between gap-4 rounded-xs px-3 py-2.5 no-underline hover:bg-surface-muted aria-[current=true]:bg-surface-muted"
           href={localizePath(path, language)}
           lang={language}
           hreflang={language}
           aria-current={language === locale ? "true" : undefined}
         >
           {LOCALES[language].label}
-          <span aria-hidden="true">{language === locale ? "✓" : ""}</span>
+          {language === locale && <Icon icon={Check} />}
         </a>
       </li>
     ))}

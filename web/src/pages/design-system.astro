@@ -1,40 +1,35 @@
 ---
+import { localizePath } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
-import Panel from "@/ui/astro/Panel.astro";
+import Card from "@/ui/data/Card.svelte";
+import Text from "@/ui/content/Text.svelte";
+import Layout from "@/ui/layout/Layout.svelte";
+import Section from "@/ui/patterns/Section.svelte";
 import { parseTheme } from "@/ui/themes";
-import BrowsingStories from "@/workbench/BrowsingStories.astro";
-import ButtonStory from "@/workbench/ButtonStory.svelte";
-import SvelteControls from "@/workbench/Controls.svelte";
 import Cover from "@/workbench/Cover.astro";
-import FieldStory from "@/workbench/FieldStory.svelte";
-import FoundationsStory from "@/workbench/FoundationsStory.astro";
-import LayoutStory from "@/workbench/LayoutStory.svelte";
-import PatternsStory from "@/workbench/PatternsStory.astro";
-import StatesStory from "@/workbench/StatesStory.astro";
+import Foundations from "@/workbench/Foundations.svelte";
+import { GROUPS } from "@/workbench/groups";
 import WorkbenchLayout from "@/workbench/WorkbenchLayout.astro";
 
 const theme = parseTheme(Astro.url.searchParams.get("theme"));
-const { search } = Astro.url;
 ---
 
 <WorkbenchLayout title={m.workbenchPageTitle()} {theme}>
   <Cover {theme} />
-  <FoundationsStory />
-  <Panel
-    id="components"
-    title={m.workbenchComponents()}
-    description={m.workbenchComponentsDescription()}
-  >
-    <ButtonStory client:load {search} />
-    <SvelteControls client:visible />
-  </Panel>
-  <Panel id="fields" title={m.workbenchFormControls()}>
-    <FieldStory client:load {search} />
-  </Panel>
-  <Panel id="layouts" title={m.workbenchLayouts()}>
-    <LayoutStory client:load {search} />
-  </Panel>
-  <PatternsStory />
-  <BrowsingStories />
-  <StatesStory />
+  <Foundations />
+  <Section title={m.workbenchComponents()} description={m.workbenchComponentsDescription()}>
+    <Layout as="ul" pattern="grid" min="tile">
+      {Object.entries(GROUPS).map(([slug, group]) => (
+        <Card
+          as="li"
+          title={group.title}
+          href={localizePath(`/design-system/${slug}?theme=${theme}`)}
+        >
+          <Text size="sm" tone="muted">
+            {group.description}
+          </Text>
+        </Card>
+      ))}
+    </Layout>
+  </Section>
 </WorkbenchLayout>

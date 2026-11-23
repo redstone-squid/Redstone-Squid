@@ -1,0 +1,34 @@
+---
+import PageHeader from "@/ui/patterns/PageHeader.svelte";
+import { parseTheme } from "@/ui/themes";
+import { GROUPS, isGroup } from "@/workbench/groups";
+import ActionsStories from "@/workbench/stories/ActionsStories.svelte";
+import ContentStories from "@/workbench/stories/ContentStories.svelte";
+import DataStories from "@/workbench/stories/DataStories.svelte";
+import FeedbackStories from "@/workbench/stories/FeedbackStories.svelte";
+import FormsStories from "@/workbench/stories/FormsStories.svelte";
+import LayoutStories from "@/workbench/stories/LayoutStories.svelte";
+import NavigationStories from "@/workbench/stories/NavigationStories.svelte";
+import OverlaysStories from "@/workbench/stories/OverlaysStories.svelte";
+import PatternsStories from "@/workbench/stories/PatternsStories.svelte";
+import WorkbenchLayout from "@/workbench/WorkbenchLayout.astro";
+
+const group = Astro.params.group;
+if (!isGroup(group)) return Astro.rewrite("/404");
+const theme = parseTheme(Astro.url.searchParams.get("theme"));
+const { title, description } = GROUPS[group];
+---
+
+<WorkbenchLayout {title} {theme}>
+  <PageHeader {title} {description} />
+  {/* Each group hydrates, so stories exercise server rendering and hydration together. */}
+  {group === "layout" && <LayoutStories client:load />}
+  {group === "content" && <ContentStories client:load />}
+  {group === "actions" && <ActionsStories client:load />}
+  {group === "feedback" && <FeedbackStories client:load />}
+  {group === "data" && <DataStories client:load />}
+  {group === "navigation" && <NavigationStories client:load />}
+  {group === "forms" && <FormsStories client:load />}
+  {group === "overlays" && <OverlaysStories client:load />}
+  {group === "patterns" && <PatternsStories client:load />}
+</WorkbenchLayout>

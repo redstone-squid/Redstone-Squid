@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pageHref, readOffset, readPageAddress } from "@/features/catalogue/pagination";
+import { pageHref, readPageAddress } from "@/server/pagination";
 
 const params = (search: string) => new URLSearchParams(search);
 
@@ -15,7 +15,6 @@ describe("page addresses", () => {
     "skips the invalid value %s and falls back to the next address",
     (value) => {
       expect(readPageAddress(params(`after_id=${value}&offset=20`))).toEqual({ offset: 20 });
-      expect(readOffset(params(`offset=${value}`))).toBeUndefined();
     },
   );
 

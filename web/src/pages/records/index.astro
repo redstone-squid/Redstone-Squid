@@ -1,11 +1,11 @@
 ---
-import { readPageAddress } from "@/features/catalogue/pagination";
-import RecordList from "@/features/catalogue/RecordList.astro";
+import RecordList from "@/features/catalogue/RecordList.svelte";
 import { recordsList } from "@/generated/sdk.gen";
 import CatalogueLayout from "@/layouts/CatalogueLayout.astro";
 import * as m from "@/locales/messages.gen";
 import { load } from "@/server/api";
-import PageHeading from "@/ui/astro/PageHeading.astro";
+import { pageHref, readPageAddress } from "@/server/pagination";
+import PageHeader from "@/ui/patterns/PageHeader.svelte";
 
 const page = readPageAddress(Astro.url.searchParams);
 const loaded = await load(
@@ -21,6 +21,10 @@ const { items, next, prev } = loaded.data;
   canonicalPath="/records"
   noindex={Object.keys(page).length > 0}
 >
-  <PageHeading title={m.recordsTitle()} description={m.recordsIntro()} />
-  <RecordList records={items} {next} {prev} url={Astro.url} />
+  <PageHeader title={m.recordsTitle()} description={m.recordsIntro()} />
+  <RecordList
+    records={items}
+    prevHref={prev ? pageHref(Astro.url, prev) : null}
+    nextHref={next ? pageHref(Astro.url, next) : null}
+  />
 </CatalogueLayout>

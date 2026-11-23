@@ -1,14 +1,14 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
   import * as m from "@/locales/messages.gen";
-  import Button from "@/ui/svelte/Button.svelte";
-  import SelectField from "@/ui/svelte/SelectField.svelte";
-  import FilePicker from "@/ui/svelte/FilePicker.svelte";
-  import Progress from "@/ui/svelte/Progress.svelte";
-  import Notice from "@/ui/svelte/Notice.svelte";
-  import { cn } from "@/ui/cn";
-  import { kickerClass, layoutStyles, mutedClass } from "@/ui/variants";
-  import Field from "@/ui/svelte/Field.svelte";
+  import Button from "@/ui/actions/Button.svelte";
+  import SelectField from "@/ui/forms/SelectField.svelte";
+  import FilePicker from "@/ui/forms/FilePicker.svelte";
+  import Progress from "@/ui/feedback/Progress.svelte";
+  import Notice from "@/ui/feedback/Notice.svelte";
+  import Layout from "@/ui/layout/Layout.svelte";
+  import Text from "@/ui/content/Text.svelte";
+  import Field from "@/ui/forms/Field.svelte";
   import {
     createDraftFixture,
     draftErrorMessages,
@@ -89,16 +89,16 @@
 </script>
 
 <form
-  class={layoutStyles({ pattern: "stack" })}
+  class="grid gap-6"
   novalidate
   onsubmit={(event) => {
     event.preventDefault();
     void save();
   }}
 >
-  <p class={mutedClass}>{m.trialDisclaimer()}</p>
-  <fieldset class={cn(layoutStyles({ pattern: "stack" }), "min-w-0")} disabled={!ready || busy}>
-    <legend class={kickerClass}>{m.trialDetails()}</legend>
+  <Text tone="muted">{m.trialDisclaimer()}</Text>
+  <fieldset class="grid min-w-0 gap-6" disabled={!ready || busy}>
+    <legend class="mb-3 text-sm font-semibold text-fg-muted">{m.trialDetails()}</legend>
     <Field
       label={m.workbenchBuildTitle()}
       bind:value={input.title}
@@ -142,12 +142,12 @@
   {#if phase === "uploading"}<Progress label={m.trialUploading()} value={progress} />{/if}
   {#if retryFile}
     <Notice role="alert" tone="warning">{m.trialUploadFailure()}</Notice>
-    <div class={layoutStyles({ pattern: "actions" })}>
+    <Layout pattern="cluster">
       <Button disabled={busy} onclick={() => void upload(retryFile)}>{m.trialRetryUpload()}</Button>
-    </div>
+    </Layout>
   {/if}
   {#if attachment}<p>{m.trialAttachment({ filename: attachment })}</p>{/if}
-  <div class={layoutStyles({ pattern: "actions" })}>
+  <Layout pattern="cluster">
     <Button type="submit" variant="primary" disabled={!ready || busy}
       >{(phase === "saving"
         ? m.trialSaving
@@ -160,6 +160,6 @@
           phase = "idle";
         }}>{m.trialCancel()}</Button
       >{/if}
-  </div>
+  </Layout>
   <Notice role="status" tone={feedback.tone}>{feedback.message()}</Notice>
 </form>

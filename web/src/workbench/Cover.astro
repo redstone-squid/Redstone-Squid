@@ -1,26 +1,33 @@
 ---
+import Moon from "@lucide/svelte/icons/moon";
+import Sun from "@lucide/svelte/icons/sun";
 import * as m from "@/locales/messages.gen";
+import Button from "@/ui/actions/Button.svelte";
 import type { Theme } from "@/ui/themes";
-import { layoutStyles } from "@/ui/variants";
-import ThemeToggle from "./ThemeToggle.svelte";
 
 type Props = { theme: Theme };
 const { theme } = Astro.props;
+// The theme lives in the URL, so switching is a link and the rest of the query is kept.
+const next: Theme = theme === "dark" ? "light" : "dark";
+const target = new URL(Astro.url);
+target.searchParams.set("theme", next);
 ---
 
-<header class="grid grid-cols-[1.15fr_1fr] overflow-hidden rounded-lg bg-cover text-cover-fg max-md:grid-cols-1">
-  <div class="self-center p-[clamp(1.5rem,4vw,3.5rem)]">
-    <h1 class="text-[clamp(2.25rem,4vw,4rem)]">{m.workbenchPageTitle()}</h1>
-    <p class="mt-4 mb-6 max-w-[42rem] text-[1.0625rem] text-cover-fg-muted">
-      {m.workbenchLibraryDescription()}
-    </p>
-    <div class={layoutStyles({ pattern: "row" })}>
-      <ThemeToggle client:load {theme} />
+<header class="grid overflow-hidden rounded-lg bg-cover text-cover-fg md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
+  <div class="grid content-center gap-4 p-6 md:p-12">
+    <h1 class="text-3xl font-bold tracking-tight md:text-display md:tracking-display">
+      {m.workbenchPageTitle()}
+    </h1>
+    <p class="max-w-prose text-lg text-cover-fg-muted">{m.workbenchLibraryDescription()}</p>
+    <div>
+      <Button href={`${target.pathname}${target.search}`} icon={next === "dark" ? Moon : Sun}>
+        {next === "dark" ? m.workbenchDarkTheme() : m.workbenchLightTheme()}
+      </Button>
     </div>
   </div>
-  <div aria-hidden="true" class="grid place-items-center overflow-hidden bg-cover-art max-md:h-36">
+  <div aria-hidden="true" class="grid h-36 place-items-center bg-cover-art md:h-auto">
     <img
-      class="size-full object-cover max-md:h-36 max-md:object-contain"
+      class="size-full object-contain md:object-cover"
       src="/fixtures/copper-door.svg"
       alt=""
       width="640"

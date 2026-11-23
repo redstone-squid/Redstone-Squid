@@ -5,22 +5,18 @@ import { attachReviewScreenshot } from "@tests/support/review-screenshot";
 
 test.use({ video: "on" });
 
-test("switches the draft scenario without reloading the form", async ({ page }) => {
+test("switches the draft scenario with a link that keeps the theme", async ({ page }) => {
   await page.goto("/design-system-trial?theme=dark");
-  const navigations: string[] = [];
-  page.on("request", (request) => {
-    if (request.isNavigationRequest()) navigations.push(request.url());
-  });
-  const title = page.getByRole("textbox", { name: m.workbenchBuildTitle("en") });
-  await title.fill("Copper Bolt");
-  const scenario = page.getByRole("button", { name: m.trialUploadScenario("en") });
-  await scenario.focus();
-  await scenario.press("Enter");
-  await expect(scenario).toBeFocused();
-  await expect(scenario).toHaveAttribute("aria-pressed", "true");
+  const scenario = page.getByRole("link", { name: m.trialUploadScenario("en") });
+  await scenario.click();
   await expect(page).toHaveURL(/\?theme=dark&scenario=upload-retry$/);
-  await expect(title).toHaveValue("Copper Bolt");
-  expect(navigations).toEqual([]);
+  await expect(scenario).toHaveAttribute("aria-current", "true");
+  await page.getByLabel(m.trialUpload("en")).setInputFiles({
+    name: "door.schem",
+    mimeType: "application/octet-stream",
+    buffer: Buffer.from("fixture"),
+  });
+  await expect(page.getByRole("alert")).toHaveText(m.trialUploadFailure("en"));
 });
 
 for (const locale of ["en", "zh-CN"] as const) {
@@ -71,7 +67,7 @@ for (const locale of ["en", "zh-CN"] as const) {
   });
 
   test(`${locale} / dialog keyboard behavior`, async ({ page }) => {
-    await page.goto(localizePath("/design-system", locale));
+    await page.goto(localizePath("/design-system/overlays", locale));
     const trigger = page.getByRole("button", { name: m.workbenchNewDraft(locale), exact: true });
     await trigger.scrollIntoViewIfNeeded();
     await expect(trigger).toBeEnabled();

@@ -8,15 +8,31 @@ import "@fontsource-variable/jetbrains-mono";
 import "@fontsource/noto-sans-sc/400.css";
 import "@fontsource/noto-sans-sc/600.css";
 import "@/ui/app.css";
+import SkipLink from "@/ui/content/SkipLink.svelte";
+import NavList from "@/ui/navigation/NavList.svelte";
 import type { Theme } from "@/ui/themes";
-import { cn } from "@/ui/cn";
-import { kickerClass, mutedClass } from "@/ui/variants";
+import { GROUPS } from "./groups";
 type Props = { title: string; theme: Theme };
 const { title, theme } = Astro.props;
 const { locale } = Astro.locals;
-const query = new URLSearchParams({ theme });
-const onLibrary = unprefixedPath(Astro.url.pathname).replace(/\/$/, "") === "/design-system";
-const library = onLibrary ? "" : localizePath(`/design-system?${query}`);
+const path = unprefixedPath(Astro.url.pathname).replace(/\/$/, "");
+// Every workbench link keeps the chosen theme.
+const link = (route: string) => ({
+  href: localizePath(`${route}?theme=${theme}`),
+  current: path === route,
+});
+const groups = [
+  {
+    items: [
+      { label: m.workbenchFoundations(), ...link("/design-system") },
+      ...Object.entries(GROUPS).map(([slug, group]) => ({
+        label: group.title,
+        ...link(`/design-system/${slug}`),
+      })),
+      { label: m.trialTitle(), ...link("/design-system-trial") },
+    ],
+  },
+];
 ---
 
 <!doctype html>
@@ -25,55 +41,27 @@ const library = onLibrary ? "" : localizePath(`/design-system?${query}`);
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width" />
     <meta name="robots" content="noindex,nofollow" />
-    <title>{title} · Redstone Squid</title>
+    <title>{title} · {m.siteName()}</title>
     <link rel="icon" href="/favicon.svg" />
     <link rel="preload" href={interLatin} as="font" type="font/woff2" crossorigin="anonymous" />
   </head>
   <body>
-    <a
-      class="fixed -top-40 left-4 z-100 bg-surface p-4 [clip-path:inset(50%)] focus:top-4 focus:[clip-path:none]"
-      href="#main"
-    >
-      {m.workbenchSkipToContent()}
-    </a>
-    <header class="flex items-center justify-between gap-4 border-b border-line bg-surface px-8 py-4 max-md:p-4">
-      <a class="flex items-center gap-3 font-[750] no-underline" href="/">
+    <SkipLink href="#main" label={m.workbenchSkipToContent()} />
+    <header class="flex items-center justify-between gap-4 border-b border-line bg-surface px-gutter py-4">
+      <a class="flex items-center gap-3 rounded-sm font-bold no-underline" href={localizePath("/")}>
         <img class="size-8 shrink-0" src="/favicon.svg" width="32" height="32" alt="" />
-        Redstone Squid
+        {m.siteName()}
       </a>
-      <div class="flex flex-wrap items-center gap-3" data-workbench-language>
-        <span class={mutedClass}>{m.workbenchWorkbench()}</span>
+      <div class="flex flex-wrap items-center gap-3">
+        <span class="text-fg-muted max-sm:hidden">{m.workbenchWorkbench()}</span>
         <LanguageSelector />
       </div>
     </header>
-    <div class="m-auto grid max-w-[100rem] grid-cols-[13rem_minmax(0,1fr)] max-[70rem]:grid-cols-[10rem_minmax(0,1fr)] max-md:block">
-      <aside class="sticky top-0 self-start rounded-br-md border border-t-0 border-line bg-surface px-6 py-12 max-md:static max-md:rounded-none max-md:border-0 max-md:border-b max-md:px-4 max-md:py-3">
-        <p class={cn(kickerClass, "max-md:hidden")}>{m.workbenchWorkbench()}</p>
-        <nav
-          aria-label={m.workbenchWorkbench()}
-          class="grid gap-2 *:rounded-sm *:p-2 *:text-sm *:no-underline *:hover:bg-surface-muted max-md:flex max-md:flex-wrap max-md:gap-1"
-        >
-          <a href={`${library}#foundations`}>{m.workbenchFoundations()}</a>
-          <a href={`${library}#components`}>{m.workbenchComponents()}</a>
-          <a href={`${library}#fields`}>{m.workbenchFormControls()}</a>
-          <a href={`${library}#layouts`}>{m.workbenchLayouts()}</a>
-          <a href={`${library}#patterns`}>{m.workbenchPagePatterns()}</a>
-          <a href={`${library}#browsing`}>{m.workbenchBrowsing()}</a>
-          <a href={`${library}#states`}>{m.workbenchFeedbackStates()}</a>
-          <a href={localizePath(`/design-system-trial?${query}`)} data-workbench-trial>
-            {m.trialTitle()}
-          </a>
-        </nav>
-        <p class="mt-16 font-sans text-xs/[1.8] text-fg-muted max-md:hidden">
-          Astro + Svelte
-          <br />
-          Bits UI
-        </p>
+    <div class="mx-auto grid max-w-wide md:grid-cols-[minmax(0,13rem)_minmax(0,1fr)]">
+      <aside class="border-b border-line bg-surface px-gutter py-4 md:sticky md:top-0 md:self-start md:border-e md:border-b-0 md:px-4 md:py-10">
+        <NavList label={m.workbenchWorkbench()} {groups} />
       </aside>
-      <main
-        id="main"
-        class="grid w-full max-w-content min-w-0 gap-12 p-12 max-[70rem]:p-6 max-md:gap-8 max-md:px-4 max-md:py-8"
-      >
+      <main id="main" class="grid w-full min-w-0 content-start gap-10 px-gutter py-10">
         <slot />
       </main>
     </div>

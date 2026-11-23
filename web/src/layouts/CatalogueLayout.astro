@@ -1,14 +1,16 @@
 ---
+import ArrowUpRight from "@lucide/svelte/icons/arrow-up-right";
 import type { ComponentProps } from "astro/types";
 import LanguageSelector from "./LanguageSelector.astro";
 import DocumentHead from "./DocumentHead.astro";
 import { localizePath, unprefixedPath } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
 import "@/ui/app.css";
-import { cn } from "@/ui/cn";
-import { buttonStyles, mutedClass } from "@/ui/variants";
+import Button from "@/ui/actions/Button.svelte";
+import SkipLink from "@/ui/content/SkipLink.svelte";
+import Container from "@/ui/layout/Container.svelte";
 type Props = ComponentProps<typeof DocumentHead>;
-const { locale, config } = Astro.locals;
+const { config } = Astro.locals;
 const activePath = unprefixedPath(Astro.url.pathname);
 const nav = [
   [m.navBuilds, "/builds"],
@@ -19,38 +21,28 @@ const nav = [
 ---
 
 <!doctype html>
-<html lang={locale}>
+<html lang={Astro.locals.locale}>
   <head>
     <DocumentHead {...Astro.props} />
   </head>
   <body>
-    <a
-      class="fixed top-4 left-4 z-100 bg-surface p-4 [clip-path:inset(50%)] focus:[clip-path:none]"
-      href="#main-content"
-    >
-      {m.navSkip()}
-    </a>
+    <SkipLink href="#main-content" label={m.navSkip()} />
     <header class="border-b border-line bg-surface">
-      <div class="mx-auto flex min-h-22 w-[calc(100%-4rem)] max-w-content flex-wrap items-center gap-8 py-4 max-[65rem]:gap-4 max-sm:w-[calc(100%-2rem)] max-sm:gap-3">
+      <Container class="flex min-h-header flex-wrap items-center gap-x-8 gap-y-3 py-3">
         <a
-          class="inline-flex items-center gap-3 font-[750] whitespace-nowrap no-underline"
+          class="inline-flex items-center gap-3 rounded-sm font-bold whitespace-nowrap no-underline"
           href={localizePath("/")}
         >
-          <span
-            class="grid size-8 place-items-center rounded-sm bg-accent text-on-accent"
-            aria-hidden="true"
-          >
-            R
-          </span>
-          <span>{m.siteName()}</span>
+          <img class="size-8" src="/favicon.svg" width="32" height="32" alt="" />
+          {m.siteName()}
         </a>
         <nav
           aria-label={m.navPrimary()}
-          class="flex items-center gap-6 max-[65rem]:order-3 max-[65rem]:w-full max-sm:justify-between max-sm:gap-2 max-sm:text-sm"
+          class="flex items-center gap-6 max-lg:order-3 max-lg:w-full max-sm:justify-between max-sm:gap-2 max-sm:text-sm"
         >
           {nav.map(([label, href]) => (
             <a
-              class="py-2 text-fg-muted no-underline aria-[current=page]:text-accent aria-[current=page]:shadow-[0_2px_currentColor]"
+              class="border-b-2 border-transparent py-2 text-fg-muted no-underline hover:text-fg aria-[current=page]:border-accent aria-[current=page]:text-fg"
               href={localizePath(href)}
               aria-current={
                 activePath === href || activePath.startsWith(`${href}/`) ? "page" : undefined
@@ -60,44 +52,38 @@ const nav = [
             </a>
           ))}
         </nav>
-        <div class="ml-auto flex items-center gap-2 max-sm:m-0 max-sm:w-full max-sm:justify-between">
+        <div class="ms-auto flex items-center gap-2 max-sm:ms-0 max-sm:w-full max-sm:justify-between">
           <LanguageSelector align="start" />
-          <a class={buttonStyles({ variant: "primary" })} href={localizePath("/submit")}>
-            {m.navSubmit()} <span aria-hidden="true">↗</span>
-          </a>
+          <Button variant="primary" href={localizePath("/submit")} iconEnd={ArrowUpRight}>
+            {m.navSubmit()}
+          </Button>
         </div>
-      </div>
+      </Container>
     </header>
-    <main
-      id="main-content"
-      class="mx-auto grid w-[calc(100%-4rem)] max-w-content content-start gap-8 py-12 max-sm:w-[calc(100%-2rem)]"
-    >
+    <Container as="main" id="main-content" class="grid content-start gap-8 py-12">
       <slot />
-    </main>
-    <footer class="mx-auto flex w-[calc(100%-4rem)] max-w-content justify-between gap-8 border-t border-line py-12 max-sm:w-[calc(100%-2rem)] max-sm:flex-col">
-      <div>
-        <a
-          class="inline-flex items-center gap-3 font-[750] whitespace-nowrap no-underline"
-          href={localizePath("/")}
-        >
-          <span
-            class="grid size-8 place-items-center rounded-sm bg-accent text-on-accent"
-            aria-hidden="true"
+    </Container>
+    <footer class="border-t border-line">
+      <Container class="flex justify-between gap-8 py-12 max-sm:flex-col">
+        <div>
+          <a
+            class="inline-flex items-center gap-3 rounded-sm font-bold whitespace-nowrap no-underline"
+            href={localizePath("/")}
           >
-            R
-          </span>
-          {m.siteName()}
-        </a>
-        <p class={cn(mutedClass, "mt-4 max-w-[34rem] text-sm")}>{m.footerNote()}</p>
-      </div>
-      <nav aria-label={m.navCommunity()} class="flex flex-wrap items-start gap-6">
-        <a href={config.discordCommunityUrl} rel="noreferrer">
-          {m.footerDiscord()}
-        </a>
-        <a href={config.botInviteUrl} rel="noreferrer">
-          {m.footerInvite()}
-        </a>
-      </nav>
+            <img class="size-8" src="/favicon.svg" width="32" height="32" alt="" />
+            {m.siteName()}
+          </a>
+          <p class="mt-4 max-w-prose text-sm text-fg-muted">{m.footerNote()}</p>
+        </div>
+        <nav aria-label={m.navCommunity()} class="flex flex-wrap items-start gap-6">
+          <a href={config.discordCommunityUrl} rel="noreferrer">
+            {m.footerDiscord()}
+          </a>
+          <a href={config.botInviteUrl} rel="noreferrer">
+            {m.footerInvite()}
+          </a>
+        </nav>
+      </Container>
     </footer>
   </body>
 </html>

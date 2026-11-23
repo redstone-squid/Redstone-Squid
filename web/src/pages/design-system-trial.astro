@@ -1,21 +1,37 @@
 ---
-import WorkbenchLayout from "@/workbench/WorkbenchLayout.astro";
-import PageHeading from "@/ui/astro/PageHeading.astro";
-import Panel from "@/ui/astro/Panel.astro";
+import FlaskConical from "@lucide/svelte/icons/flask-conical";
 import * as m from "@/locales/messages.gen";
-import DraftScenarioToggle from "@/workbench/DraftScenarioToggle.svelte";
-import DraftTrialStory from "@/workbench/DraftTrialStory.svelte";
+import Button from "@/ui/actions/Button.svelte";
+import PageHeader from "@/ui/patterns/PageHeader.svelte";
+import Section from "@/ui/patterns/Section.svelte";
 import { parseTheme } from "@/ui/themes";
-const theme = parseTheme(Astro.url.searchParams.get("theme"));
-const { search } = Astro.url;
+import DraftTrial from "@/workbench/DraftTrial.svelte";
+import WorkbenchLayout from "@/workbench/WorkbenchLayout.astro";
+
+const params = Astro.url.searchParams;
+const theme = parseTheme(params.get("theme"));
+const selected = params.get("scenario");
+const scenario = selected === "retry" || selected === "upload-retry" ? selected : undefined;
+// The scenario is a fixture choice kept in the URL; toggling it reloads the trial.
+const toggle = new URL(Astro.url);
+if (scenario === "upload-retry") toggle.searchParams.delete("scenario");
+else toggle.searchParams.set("scenario", "upload-retry");
 ---
 
 <WorkbenchLayout title={m.trialTitle()} {theme}>
-  <PageHeading title={m.trialTitle()}>
-    <p>Svelte 5</p>
-    <DraftScenarioToggle client:load {search} />
-  </PageHeading>
-  <Panel id="trial" title={m.trialDetails()}>
-    <DraftTrialStory client:load {search} />
-  </Panel>
+  <PageHeader title={m.trialTitle()}>
+    <Button
+      slot="actions"
+      size="sm"
+      variant={scenario === "upload-retry" ? "primary" : "secondary"}
+      href={`${toggle.pathname}${toggle.search}`}
+      aria-current={scenario === "upload-retry" ? "true" : undefined}
+      icon={FlaskConical}
+    >
+      {m.trialUploadScenario()}
+    </Button>
+  </PageHeader>
+  <Section title={m.trialDetails()} surface>
+    <DraftTrial client:load {scenario} />
+  </Section>
 </WorkbenchLayout>

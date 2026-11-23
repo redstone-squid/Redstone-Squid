@@ -2,8 +2,6 @@ import { render, screen, waitFor, within } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import DraftTrial from "@/workbench/DraftTrial.svelte";
-import DraftScenarioToggle from "@/workbench/DraftScenarioToggle.svelte";
-import DraftTrialStory from "@/workbench/DraftTrialStory.svelte";
 import * as m from "@/locales/messages.gen";
 
 describe("Draft trial", () => {
@@ -85,29 +83,15 @@ describe("Draft trial", () => {
     await waitFor(() => expect(status).toHaveTextContent(m.trialSaved()));
     expect(title).toHaveValue("Utility build");
   });
-  it("changes the upload scenario without resetting the draft or the selected file on retry", async () => {
+  it("retries a failed upload with the same file in the upload-retry scenario", async () => {
     const user = userEvent.setup();
-    const originalUrl = location.href;
-    try {
-      render(DraftTrialStory, { search: "" });
-      render(DraftScenarioToggle, { search: "" });
-      const toggle = screen.getByRole("button", { name: m.trialUploadScenario() });
-      const title = screen.getByRole("textbox", { name: m.workbenchBuildTitle() });
-      await user.type(title, "Keep this title");
-      await user.click(toggle);
-      expect(toggle).toHaveAttribute("aria-pressed", "true");
-      const file = new File(["fixture"], "retry.schem");
-      await user.upload(screen.getByLabelText(m.trialUpload()), file);
-      expect(await screen.findByRole("alert")).toHaveTextContent(m.trialUploadFailure());
-      await user.click(screen.getByRole("button", { name: m.trialRetryUpload() }));
-      expect(await screen.findByText(m.trialAttachment({ filename: file.name }))).toBeVisible();
-      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
-      await user.click(toggle);
-      expect(toggle).toHaveAttribute("aria-pressed", "false");
-      expect(title).toHaveValue("Keep this title");
-    } finally {
-      history.replaceState(null, "", originalUrl);
-    }
+    render(DraftTrial, { scenario: "upload-retry" });
+    const file = new File(["fixture"], "retry.schem");
+    await user.upload(screen.getByLabelText(m.trialUpload()), file);
+    expect(await screen.findByRole("alert")).toHaveTextContent(m.trialUploadFailure());
+    await user.click(screen.getByRole("button", { name: m.trialRetryUpload() }));
+    expect(await screen.findByText(m.trialAttachment({ filename: file.name }))).toBeVisible();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
   it("re-enables saving when the visitor cancels an upload", async () => {
     const user = userEvent.setup();

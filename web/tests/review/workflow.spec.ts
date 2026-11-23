@@ -4,7 +4,7 @@ test.use({ video: "on", reducedMotion: "no-preference" });
 
 test.describe("workflow recording", () => {
   test("create a draft / validation and keyboard recovery", async ({ page }, testInfo) => {
-    await page.goto("/design-system");
+    await page.goto("/design-system/overlays");
     const trigger = page.getByRole("button", { name: m.workbenchNewDraft("en"), exact: true });
     await trigger.scrollIntoViewIfNeeded();
     await expect(trigger).toBeEnabled();

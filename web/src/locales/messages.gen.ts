@@ -170,30 +170,6 @@ export function buildCreators(locale: Locale = getLocale()): string {
   }
 }
 
-/** Builder notes */
-export function buildDescription(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Builder notes";
-    case "zh-CN":
-      return "建造者说明";
-    case "en-XA":
-      return "[" + "Ɓûîļđéŕ ñöţéš" + "······]";
-  }
-}
-
-/** Media */
-export function buildMedia(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Media";
-    case "zh-CN":
-      return "媒体";
-    case "en-XA":
-      return "[" + "Ṁéđîå" + "··]";
-  }
-}
-
 /** Active records */
 export function recordsTitle(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -312,18 +288,6 @@ export function aboutTitle(locale: Locale = getLocale()): string {
       return "关于本目录";
     case "en-XA":
       return "[" + "Åƀöûţ ţĥé çåţåļöĝûé" + "········]";
-  }
-}
-
-/** Load more */
-export function commonLoadMore(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Load more";
-    case "zh-CN":
-      return "加载更多";
-    case "en-XA":
-      return "[" + "Ļöåđ ɱöŕé" + "····]";
   }
 }
 
@@ -475,126 +439,6 @@ export function workbenchComponentsDescription(locale: Locale = getLocale()): st
   }
 }
 
-/** No preview available */
-export function workbenchNoPreviewAvailable(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "No preview available";
-    case "zh-CN":
-      return "暂无预览";
-    case "en-XA":
-      return "[" + "Ñö þŕéṽîéŵ åṽåîļåƀļé" + "········]";
-  }
-}
-
-/** Dimensions */
-export function workbenchDimensions(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Dimensions";
-    case "zh-CN":
-      return "尺寸";
-    case "en-XA":
-      return "[" + "Đîɱéñšîöñš" + "····]";
-  }
-}
-
-/** Opening */
-export function workbenchOpening(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Opening";
-    case "zh-CN":
-      return "开启时间";
-    case "en-XA":
-      return "[" + "Öþéñîñĝ" + "···]";
-  }
-}
-
-/** Give every outcome a clear next step. */
-export function workbenchStatesDescription(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Give every outcome a clear next step.";
-    case "zh-CN":
-      return "为每种结果提供清晰的后续步骤。";
-    case "en-XA":
-      return "[" + "Ĝîṽé éṽéŕý öûţçöɱé å çļéåŕ ñéẋţ šţéþ." + "···············]";
-  }
-}
-
-/** Approved */
-export function workbenchApproved(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Approved";
-    case "zh-CN":
-      return "已通过";
-    case "en-XA":
-      return "[" + "Åþþŕöṽéđ" + "····]";
-  }
-}
-
-/** Ready to explore */
-export function workbenchReadyToExplore(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Ready to explore";
-    case "zh-CN":
-      return "可以开始探索";
-    case "en-XA":
-      return "[" + "Ŕéåđý ţö éẋþļöŕé" + "·······]";
-  }
-}
-
-/** The community has verified this build. */
-export function workbenchApprovedDescription(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "The community has verified this build.";
-    case "zh-CN":
-      return "社区已验证此作品。";
-    case "en-XA":
-      return "[" + "Ţĥé çöɱɱûñîţý ĥåš ṽéŕîƒîéđ ţĥîš ƀûîļđ." + "················]";
-  }
-}
-
-/** Empty */
-export function workbenchEmpty(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Empty";
-    case "zh-CN":
-      return "空状态";
-    case "en-XA":
-      return "[" + "Éɱþţý" + "··]";
-  }
-}
-
-/** No matching builds */
-export function workbenchNoMatchingBuilds(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "No matching builds";
-    case "zh-CN":
-      return "没有匹配的作品";
-    case "en-XA":
-      return "[" + "Ñö ɱåţçĥîñĝ ƀûîļđš" + "········]";
-  }
-}
-
-/** Try a broader size or another Minecraft version. */
-export function workbenchEmptyDescription(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Try a broader size or another Minecraft version.";
-    case "zh-CN":
-      return "尝试更宽泛的尺寸或其他 Minecraft 版本。";
-    case "en-XA":
-      return "[" + "Ţŕý å ƀŕöåđéŕ šîžé öŕ åñöţĥéŕ Ṁîñéçŕåƒţ ṽéŕšîöñ." + "····················]";
-  }
-}
-
 /** Unavailable */
 export function workbenchUnavailable(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -604,66 +448,6 @@ export function workbenchUnavailable(locale: Locale = getLocale()): string {
       return "暂不可用";
     case "en-XA":
       return "[" + "Ûñåṽåîļåƀļé" + "·····]";
-  }
-}
-
-/** Couldn’t load builds */
-export function workbenchCouldnTLoadBuilds(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Couldn’t load builds";
-    case "zh-CN":
-      return "无法加载作品";
-    case "en-XA":
-      return "[" + "Çöûļđñ’ţ ļöåđ ƀûîļđš" + "········]";
-  }
-}
-
-/** Your filters are preserved. Try again shortly. */
-export function workbenchUnavailableDescription(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Your filters are preserved. Try again shortly.";
-    case "zh-CN":
-      return "筛选条件已保留。请稍后重试。";
-    case "en-XA":
-      return "[" + "Ýöûŕ ƒîļţéŕš åŕé þŕéšéŕṽéđ. Ţŕý åĝåîñ šĥöŕţļý." + "···················]";
-  }
-}
-
-/** Fetching builds… */
-export function workbenchFetchingBuilds(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Fetching builds…";
-    case "zh-CN":
-      return "正在获取作品…";
-    case "en-XA":
-      return "[" + "Ƒéţçĥîñĝ ƀûîļđš…" + "·······]";
-  }
-}
-
-/** Redstone Squid / Design foundations */
-export function workbenchRedstoneSquidDesignFoundations(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Redstone Squid / Design foundations";
-    case "zh-CN":
-      return "Redstone Squid / 设计基础";
-    case "en-XA":
-      return "[" + "Ŕéđšţöñé Šǫûîđ / Đéšîĝñ ƒöûñđåţîöñš" + "··············]";
-  }
-}
-
-/** Fixture illustrations, not real build schematics. */
-export function workbenchFixtureDisclaimer(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Fixture illustrations, not real build schematics.";
-    case "zh-CN":
-      return "示意图为测试素材，并非真实作品结构。";
-    case "en-XA":
-      return "[" + "Ƒîẋţûŕé îļļûšţŕåţîöñš, ñöţ ŕéåļ ƀûîļđ šçĥéɱåţîçš." + "····················]";
   }
 }
 
@@ -775,42 +559,6 @@ export function workbenchCheckTheHighlightedField(locale: Locale = getLocale()):
   }
 }
 
-/** Browse examples */
-export function workbenchBrowseExamples(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Browse examples";
-    case "zh-CN":
-      return "浏览示例";
-    case "en-XA":
-      return "[" + "Ɓŕöŵšé éẋåɱþļéš" + "······]";
-  }
-}
-
-/** Creator */
-export function workbenchCreator(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Creator";
-    case "zh-CN":
-      return "创作者";
-    case "en-XA":
-      return "[" + "Çŕéåţöŕ" + "···]";
-  }
-}
-
-/** Public name shown on the build. */
-export function workbenchPublicNameShownOnTheBuild(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Public name shown on the build.";
-    case "zh-CN":
-      return "在作品页面展示的公开名称。";
-    case "en-XA":
-      return "[" + "Þûƀļîç ñåɱé šĥöŵñ öñ ţĥé ƀûîļđ." + "·············]";
-  }
-}
-
 /** Minecraft version */
 export function workbenchMinecraftVersion(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -820,22 +568,6 @@ export function workbenchMinecraftVersion(locale: Locale = getLocale()): string 
       return "Minecraft 版本";
     case "en-XA":
       return "[" + "Ṁîñéçŕåƒţ ṽéŕšîöñ" + "·······]";
-  }
-}
-
-/** Keyboard, focus, validation, and disabled states share the same primitives. */
-export function workbenchControlsDescription(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Keyboard, focus, validation, and disabled states share the same primitives.";
-    case "zh-CN":
-      return "键盘、焦点、验证和禁用状态使用统一的基础组件。";
-    case "en-XA":
-      return (
-        "[" +
-        "Ķéýƀöåŕđ, ƒöçûš, ṽåļîđåţîöñ, åñđ đîšåƀļéđ šţåţéš šĥåŕé ţĥé šåɱé þŕîɱîţîṽéš." +
-        "······························]"
-      );
   }
 }
 
@@ -887,45 +619,6 @@ export function workbenchComponents(locale: Locale = getLocale()): string {
   }
 }
 
-/** Page patterns */
-export function workbenchPagePatterns(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Page patterns";
-    case "zh-CN":
-      return "页面模式";
-    case "en-XA":
-      return "[" + "Þåĝé þåţţéŕñš" + "······]";
-  }
-}
-
-/** Feedback states */
-export function workbenchFeedbackStates(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Feedback states";
-    case "zh-CN":
-      return "反馈状态";
-    case "en-XA":
-      return "[" + "Ƒééđƀåçķ šţåţéš" + "······]";
-  }
-}
-
-/** Illustrated { $title } fixture */
-export function workbenchFixtureAlt(
-  args: { title: string | number },
-  locale: Locale = getLocale(),
-): string {
-  switch (locale) {
-    case "en":
-      return "Illustrated " + formatValue(locale, args.title) + " fixture";
-    case "zh-CN":
-      return formatValue(locale, args.title) + " 示意图";
-    case "en-XA":
-      return "[" + "Îļļûšţŕåţéđ " + formatValue(locale, args.title) + " ƒîẋţûŕé" + "········]";
-  }
-}
-
 /** Piston door */
 export function workbenchPistonDoor(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -938,30 +631,6 @@ export function workbenchPistonDoor(locale: Locale = getLocale()): string {
   }
 }
 
-/** Seamless door */
-export function workbenchSeamlessDoor(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Seamless door";
-    case "zh-CN":
-      return "无缝门";
-    case "en-XA":
-      return "[" + "Šéåɱļéšš đööŕ" + "······]";
-  }
-}
-
-/** Extender */
-export function workbenchExtender(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Extender";
-    case "zh-CN":
-      return "活塞扩展器";
-    case "en-XA":
-      return "[" + "Éẋţéñđéŕ" + "····]";
-  }
-}
-
 /** Design system */
 export function workbenchPageTitle(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -971,32 +640,6 @@ export function workbenchPageTitle(locale: Locale = getLocale()): string {
       return "设计系统";
     case "en-XA":
       return "[" + "Đéšîĝñ šýšţéɱ" + "······]";
-  }
-}
-
-/** { $count -> [one] One example build *[other] { $count } example builds } */
-export function workbenchBuildCount(args: { count: number }, locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return select(
-        locale,
-        args.count,
-        { one: "One example build", other: formatNumber(locale, args.count) + " example builds" },
-        "other",
-      );
-    case "zh-CN":
-      return formatNumber(locale, args.count) + " 个示例作品";
-    case "en-XA":
-      return (
-        "[" +
-        select(
-          locale,
-          args.count,
-          { one: "Öñé éẋåɱþļé ƀûîļđ", other: formatNumber(locale, args.count) + " éẋåɱþļé ƀûîļđš" },
-          "other",
-        ) +
-        "······]"
-      );
   }
 }
 
@@ -1391,102 +1034,6 @@ export function recordRefreshPending(locale: Locale = getLocale()): string {
   }
 }
 
-/** Link button */
-export function workbenchLinkButton(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Link button";
-    case "zh-CN":
-      return "链接按钮";
-    case "en-XA":
-      return "[" + "Ļîñķ ƀûţţöñ" + "·····]";
-  }
-}
-
-/** Variant */
-export function workbenchVariant(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Variant";
-    case "zh-CN":
-      return "样式";
-    case "en-XA":
-      return "[" + "Ṽåŕîåñţ" + "···]";
-  }
-}
-
-/** Size */
-export function workbenchSize(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Size";
-    case "zh-CN":
-      return "尺寸";
-    case "en-XA":
-      return "[" + "Šîžé" + "··]";
-  }
-}
-
-/** Primary */
-export function workbenchPrimary(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Primary";
-    case "zh-CN":
-      return "主要";
-    case "en-XA":
-      return "[" + "Þŕîɱåŕý" + "···]";
-  }
-}
-
-/** Secondary */
-export function workbenchSecondary(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Secondary";
-    case "zh-CN":
-      return "次要";
-    case "en-XA":
-      return "[" + "Šéçöñđåŕý" + "····]";
-  }
-}
-
-/** Quiet */
-export function workbenchQuiet(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Quiet";
-    case "zh-CN":
-      return "低调";
-    case "en-XA":
-      return "[" + "Ǫûîéţ" + "··]";
-  }
-}
-
-/** Default */
-export function workbenchNormal(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Default";
-    case "zh-CN":
-      return "默认";
-    case "en-XA":
-      return "[" + "Đéƒåûļţ" + "···]";
-  }
-}
-
-/** Compact */
-export function workbenchSmall(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Compact";
-    case "zh-CN":
-      return "紧凑";
-    case "en-XA":
-      return "[" + "Çöɱþåçţ" + "···]";
-  }
-}
-
 /** Inspect the tokens and try the controls used across the build catalogue. */
 export function workbenchLibraryDescription(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -1524,210 +1071,6 @@ export function workbenchTypography(locale: Locale = getLocale()): string {
       return "字体";
     case "en-XA":
       return "[" + "Ţýþöĝŕåþĥý" + "····]";
-  }
-}
-
-/** Browsing */
-export function workbenchBrowsing(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Browsing";
-    case "zh-CN":
-      return "浏览";
-    case "en-XA":
-      return "[" + "Ɓŕöŵšîñĝ" + "····]";
-  }
-}
-
-/** Explore the media gallery */
-export function workbenchMediaStory(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Explore the media gallery";
-    case "zh-CN":
-      return "查看媒体图库";
-    case "en-XA":
-      return "[" + "Éẋþļöŕé ţĥé ɱéđîå ĝåļļéŕý" + "··········]";
-  }
-}
-
-/** Form controls */
-export function workbenchFormControls(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Form controls";
-    case "zh-CN":
-      return "表单控件";
-    case "en-XA":
-      return "[" + "Ƒöŕɱ çöñţŕöļš" + "······]";
-  }
-}
-
-/** Field state */
-export function workbenchFieldState(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Field state";
-    case "zh-CN":
-      return "字段状态";
-    case "en-XA":
-      return "[" + "Ƒîéļđ šţåţé" + "·····]";
-  }
-}
-
-/** Invalid */
-export function workbenchInvalid(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Invalid";
-    case "zh-CN":
-      return "验证失败";
-    case "en-XA":
-      return "[" + "Îñṽåļîđ" + "···]";
-  }
-}
-
-/** Disabled */
-export function workbenchDisabled(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Disabled";
-    case "zh-CN":
-      return "禁用";
-    case "en-XA":
-      return "[" + "Đîšåƀļéđ" + "····]";
-  }
-}
-
-/** Describe the opening sequence or timing. */
-export function workbenchNotesHint(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Describe the opening sequence or timing.";
-    case "zh-CN":
-      return "描述开启过程或时序。";
-    case "en-XA":
-      return "[" + "Đéšçŕîƀé ţĥé öþéñîñĝ šéǫûéñçé öŕ ţîɱîñĝ." + "················]";
-  }
-}
-
-/** Minecraft edition */
-export function workbenchEdition(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Minecraft edition";
-    case "zh-CN":
-      return "Minecraft 版本类型";
-    case "en-XA":
-      return "[" + "Ṁîñéçŕåƒţ éđîţîöñ" + "·······]";
-  }
-}
-
-/** Include build dimensions */
-export function workbenchIncludeDimensions(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Include build dimensions";
-    case "zh-CN":
-      return "包含作品尺寸";
-    case "en-XA":
-      return "[" + "Îñçļûđé ƀûîļđ đîɱéñšîöñš" + "··········]";
-  }
-}
-
-/** Choose a category */
-export function workbenchSelectCategory(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Choose a category";
-    case "zh-CN":
-      return "选择类别";
-    case "en-XA":
-      return "[" + "Çĥööšé å çåţéĝöŕý" + "·······]";
-  }
-}
-
-/** Layouts */
-export function workbenchLayouts(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Layouts";
-    case "zh-CN":
-      return "布局";
-    case "en-XA":
-      return "[" + "Ļåýöûţš" + "···]";
-  }
-}
-
-/** Stack */
-export function workbenchStack(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Stack";
-    case "zh-CN":
-      return "纵向排列";
-    case "en-XA":
-      return "[" + "Šţåçķ" + "··]";
-  }
-}
-
-/** Row */
-export function workbenchRow(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Row";
-    case "zh-CN":
-      return "横向排列";
-    case "en-XA":
-      return "[" + "Ŕöŵ" + "··]";
-  }
-}
-
-/** Grid */
-export function workbenchGrid(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Grid";
-    case "zh-CN":
-      return "网格";
-    case "en-XA":
-      return "[" + "Ĝŕîđ" + "··]";
-  }
-}
-
-/** Compact */
-export function workbenchCompact(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Compact";
-    case "zh-CN":
-      return "紧凑";
-    case "en-XA":
-      return "[" + "Çöɱþåçţ" + "···]";
-  }
-}
-
-/** Spacious */
-export function workbenchSection(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Spacious";
-    case "zh-CN":
-      return "宽松";
-    case "en-XA":
-      return "[" + "Šþåçîöûš" + "····]";
-  }
-}
-
-/** Status badges */
-export function workbenchStatusBadges(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Status badges";
-    case "zh-CN":
-      return "状态徽标";
-    case "en-XA":
-      return "[" + "Šţåţûš ƀåđĝéš" + "······]";
   }
 }
 
@@ -1983,6 +1326,30 @@ export function buildOpening(locale: Locale = getLocale()): string {
       return "开门时间";
     case "en-XA":
       return "[" + "Öþéñîñĝ" + "···]";
+  }
+}
+
+/** ? */
+export function buildDimensionUnknown(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "?";
+    case "zh-CN":
+      return "?";
+    case "en-XA":
+      return "[" + "?" + "·]";
+  }
+}
+
+/** Unknown */
+export function buildTimingUnknown(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Unknown";
+    case "zh-CN":
+      return "未知";
+    case "en-XA":
+      return "[" + "Ûñķñöŵñ" + "···]";
   }
 }
 

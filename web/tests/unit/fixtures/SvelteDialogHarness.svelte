@@ -1,6 +1,6 @@
 <script lang="ts">
-  import Dialog from "@/ui/svelte/Dialog.svelte";
-  import Button from "@/ui/svelte/Button.svelte";
+  import Button from "@/ui/actions/Button.svelte";
+  import Dialog from "@/ui/overlays/Dialog.svelte";
   let open = $state(false);
 </script>
 
