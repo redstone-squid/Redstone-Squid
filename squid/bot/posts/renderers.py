@@ -42,7 +42,10 @@ class BuildCardRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
             return ()
 
         card = await render_build_card(
-            build, self.bot.media_previews, schematic_summaries=self.bot.services.schematic_summaries
+            build,
+            self.bot.media_previews,
+            schematic_summaries=self.bot.services.schematic_summaries,
+            published_media=self.bot.services.published_build_media,
         )
         assert build.id is not None
         # Imported here because the catalogue imports squid.bot.app, which imports this module.

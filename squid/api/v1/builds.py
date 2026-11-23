@@ -1,13 +1,19 @@
 """Build read and write routes."""
 
 import re
+import shutil
+import tempfile
+from dataclasses import replace
+from pathlib import Path
 from typing import Annotated, cast
 from uuid import UUID
 
 from litestar import Response, Router, get, patch
+from litestar.background_tasks import BackgroundTask
 from litestar.di import NamedDependency, Provide
 from litestar.openapi.datastructures import ResponseSpec
 from litestar.params import FromPath, FromQuery, HeaderParameter, JSONBody, QueryParameter
+from litestar.response import File
 
 from squid.api.contract import ANONYMOUS, DEVICE, SERVICE, WEB, WEB_WRITE, browser_only, contract, transport_only
 from squid.api.dependencies import (
@@ -120,14 +126,57 @@ async def edit_build(
     security=[ANONYMOUS],
     opt=contract(cli=transport_only()),
 )
-async def get_build(build_id: FromPath[int], build_queries: BuildQueries) -> Response[BuildDetail]:
+async def get_build(build_id: FromPath[int], build_queries: BuildQueries, services: Services) -> Response[BuildDetail]:
     """Return one approved public build.
 
     Pending and rejected builds return 404, as do missing builds. This endpoint does
     not expose unpublished submissions, even to callers who can view them elsewhere.
     """
     build = await build_queries.get_public(build_id)
-    return Response(BuildDetail.from_domain(build), headers={"ETag": build_etag(build)})
+    detail = BuildDetail.from_domain(build)
+    if media := services.published_build_media:
+        images, videos = await media.urls(build_id)
+        detail = replace(
+            detail,
+            links=detail.links.model_copy(
+                update={"images": [*images, *detail.links.images], "videos": [*videos, *detail.links.videos]}
+            ),
+        )
+    return Response(detail, headers={"ETag": build_etag(build)})
+
+
+@get(
+    "/{build_id:int}/media/{upload_id:uuid}/content",
+    responses=responses(404, 503),
+    operation_id="build_media_content_get",
+    security=[ANONYMOUS],
+    opt=contract(cli=transport_only()),
+    media_type="application/octet-stream",
+)
+async def get_build_media(build_id: FromPath[int], upload_id: FromPath[UUID], services: Services) -> File:
+    """Serve a retained media output while its build is approved."""
+    media = services.published_build_media
+    outputs = await media.outputs(build_id, upload_id=upload_id) if media else []
+    if media is None or not outputs:
+        raise BuildNotFoundError(build_id)
+    artifact = outputs[0]
+    directory = Path(tempfile.mkdtemp(prefix="squid-build-media-"))
+    path = directory / "content"
+    try:
+        downloaded = await media.artifacts.get_path(artifact.object_key, path, max_bytes=artifact.byte_size)
+    except BaseException:
+        shutil.rmtree(directory)
+        raise
+    if downloaded is None or downloaded.byte_size != artifact.byte_size or downloaded.sha256 != artifact.sha256:
+        shutil.rmtree(directory)
+        raise BuildNotFoundError(build_id)
+    return File(
+        path,
+        media_type=artifact.content_type,
+        content_disposition_type="inline",
+        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
+        background=BackgroundTask(shutil.rmtree, directory),
+    )
 
 
 @get(
@@ -237,5 +286,5 @@ router = Router(
     },
     path="/builds",
     tags=["builds"],
-    route_handlers=[edit_build, get_build, list_builds],
+    route_handlers=[edit_build, get_build, get_build_media, list_builds],
 )

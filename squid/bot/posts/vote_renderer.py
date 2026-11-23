@@ -118,7 +118,10 @@ class VoteSessionRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
             )
         else:
             card = await render_build_card(
-                build, self.bot.media_previews, schematic_summaries=self.bot.services.schematic_summaries
+                build,
+                self.bot.media_previews,
+                schematic_summaries=self.bot.services.schematic_summaries,
+                published_media=self.bot.services.published_build_media,
             )
         posts: list[DesiredPost] = []
         for channel_id, guild_id in channels.items():

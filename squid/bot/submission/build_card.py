@@ -7,6 +7,7 @@ selection and wrap the returned node with their controls or message payload.
 import logging
 import mimetypes
 from collections.abc import Sequence
+from itertools import batched
 from urllib.parse import urlsplit
 
 import squid_ui as sl
@@ -27,9 +28,11 @@ from squid.core.builds.domain import BuildStatus
 from squid.core.builds.domain.models import AttachmentFailureInfo, SchematicDuplicateInfo
 from squid.core.builds.domain.titles import format_build_display_title
 from squid.core.builds.models import Build, DoorBuild, ExtenderBuild
+from squid.core.media.infrastructure.build_media import PublishedBuildMedia
 from squid.core.observability import add_counter
 from squid.core.tags.domain import TagModerationStatus, TagSemanticKind
 from squid_i18n import Text
+from squid_ui.ext.discord.limits import V2Limits
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 logger = logging.getLogger(__name__)
@@ -114,6 +117,7 @@ async def render_build_card(
     media_previews: MediaPreviewClient,
     *,
     schematic_summaries: BuildSchematicSummaryProvider | None = None,
+    published_media: PublishedBuildMedia | None = None,
 ) -> sl.LayoutNode[ComponentsV2Target, sd.Request]:
     """Resolve media and the public schematic summary before composing the card."""
     summary = None
@@ -126,7 +130,11 @@ async def render_build_card(
             summary = await schematic_summaries.summary_for(build.id)
         except Exception:
             logger.warning("Could not read schematic measurements for build %s", build.id, exc_info=True)
-    thumbnail, media = await _get_media_urls(build, media_previews)
+    attached_images: list[str] = []
+    attached_videos: list[str] = []
+    if published_media is not None and build.submission_status is BuildStatus.APPROVED:
+        attached_images, attached_videos = await published_media.urls(build.id)
+    thumbnail, media = await _get_media_urls(build, media_previews, attached_images, attached_videos)
     return build_card(build, thumbnail=thumbnail, media=media, schematic=summary)
 
 
@@ -167,7 +175,10 @@ def build_card(
         _field_section("Tags", fields, fallbacks, {"Tags"}),
         _field_section("Credits", fields, fallbacks, {"Creators", "Date Of Completion", "Sponsoring Server"}),
         _build_resources(build, fields, fallbacks, schematic),
-        bool(media) and sl.media(*media, key="media"),
+        *(
+            sl.media(*items, key=f"media-{index}")
+            for index, items in enumerate(batched(media, V2Limits().gallery_items, strict=False))
+        ),
         *_build_source(build),
         accent=_status_tone(build.submission_status, build_id=build.id),
         thumbnail=thumbnail,
@@ -278,11 +289,16 @@ def _field_ladders(build: Build) -> dict[str, tuple[str, ...]]:
     return ladders
 
 
-async def _get_media_urls(build: Build, media_previews: MediaPreviewClient) -> tuple[str | None, list[str]]:
+async def _get_media_urls(
+    build: Build,
+    media_previews: MediaPreviewClient,
+    attached_images: Sequence[str] = (),
+    attached_videos: Sequence[str] = (),
+) -> tuple[str | None, list[str]]:
     """Choose an image thumbnail and retain the remaining images and direct video files."""
-    images: list[str] = []
+    images = list(attached_images)
     video_previews: list[str] = []
-    videos: list[str] = []
+    videos = list(attached_videos)
     for url in (*build.image_urls, *build.video_urls):
         parsed = urlsplit(url)
         mimetype, _ = mimetypes.guess_type(parsed.path)

@@ -1345,6 +1345,147 @@
         }
       }
     },
+    "/v1/builds/{build_id}/media/{upload_id}/content": {
+      "get": {
+        "tags": [
+          "builds"
+        ],
+        "summary": "GetBuildMedia",
+        "description": "Serve a retained media output while its build is approved.",
+        "operationId": "build_media_content_get",
+        "parameters": [
+          {
+            "name": "build_id",
+            "in": "path",
+            "schema": {
+              "type": "integer"
+            },
+            "required": true,
+            "deprecated": false
+          },
+          {
+            "name": "upload_id",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "deprecated": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "File Download",
+            "headers": {
+              "content-length": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "File size in bytes",
+                "required": false,
+                "deprecated": false
+              },
+              "last-modified": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "description": "Last modified data-time in RFC 2822 format",
+                "required": false,
+                "deprecated": false
+              },
+              "etag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Entity tag",
+                "required": false,
+                "deprecated": false
+              },
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "contentMediaType": "application/octet-stream"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {}
+        ],
+        "x-squid-cli": {
+          "classification": "transport-only"
+        }
+      }
+    },
     "/v1/builds": {
       "get": {
         "tags": [

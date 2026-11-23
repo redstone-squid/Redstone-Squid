@@ -194,6 +194,7 @@ class MediaConfig(_FrozenModel):
     """Private media normalization queue and subprocess configuration."""
 
     enabled: bool = False
+    public_base_url: AnyHttpUrl | None = None
     ffmpeg: str = Field(default="ffmpeg", min_length=1)
     ffprobe: str = Field(default="ffprobe", min_length=1)
     working_directory: Path | None = None
@@ -205,6 +206,7 @@ class MediaConfig(_FrozenModel):
     max_open_files: int = Field(default=128, gt=0)
     threads: int = Field(default=2, ge=1, le=16)
 
+    _empty_public_base_url = field_validator("public_base_url", mode="before")(_empty_to_none)
     _empty_working_directory = field_validator("working_directory", mode="before")(_empty_to_none)
 
 

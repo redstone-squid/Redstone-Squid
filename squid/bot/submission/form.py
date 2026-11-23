@@ -158,7 +158,10 @@ async def open_submission_form(
         changes=request.client.topic_bus.topic("submission_draft", str(draft_id)),
         resolve_actor=partial(request.client.actors.resolve, request, refresh=True),
         render_card=lambda build: render_build_card(
-            build, request.client.media_previews, schematic_summaries=request.client.services.schematic_summaries
+            build,
+            request.client.media_previews,
+            schematic_summaries=request.client.services.schematic_summaries,
+            published_media=request.client.services.published_build_media,
         ),
         notice=_unused_values_notice(unresolved, manifest, category_code),
     )

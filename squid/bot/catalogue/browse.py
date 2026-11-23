@@ -516,7 +516,10 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             topics=request.client.topic_bus,
             initial_id=build_id,
             render_build=lambda build: render_build_card(
-                build, request.client.media_previews, schematic_summaries=request.client.services.schematic_summaries
+                build,
+                request.client.media_previews,
+                schematic_summaries=request.client.services.schematic_summaries,
+                published_media=request.client.services.published_build_media,
             ),
             grants=grants,
             actor_account_id=subject.account_id,

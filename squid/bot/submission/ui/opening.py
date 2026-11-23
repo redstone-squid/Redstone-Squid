@@ -49,7 +49,10 @@ async def prepare_build_editor(
 
     async def render_build(current: Build) -> Any:
         return await render_build_card(
-            current, client.media_previews, schematic_summaries=client.services.schematic_summaries
+            current,
+            client.media_previews,
+            schematic_summaries=client.services.schematic_summaries,
+            published_media=client.services.published_build_media,
         )
 
     async def refresh_posts(build_id: int) -> None:

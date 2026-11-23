@@ -25,6 +25,7 @@ from squid.core.builds.domain import BuildStatus
 from squid.core.builds.domain.credits import name_credits
 from squid.core.builds.models import Build, BuildLink, DoorBuild
 from squid.core.edits.domain import Revision, RevisionConflictError
+from squid.core.media.infrastructure.build_media import PublishedBuildMedia
 from squid.core.messages.domain import MessageRef, MessageSnapshot
 from squid.core.search.application import SearchService
 from squid.core.search.domain import BuildSearchHit, RecordSearchHit, SearchPage, SearchRequest
@@ -183,6 +184,30 @@ async def test_build_card_preserves_image_urls(display_build: Build, url: str) -
     payload = render_payload([await render_build_card(display_build, MediaPreviewClient())]).layout.to_components()
 
     assert url in str(payload)
+
+
+@pytest.mark.parametrize("status", [BuildStatus.APPROVED, BuildStatus.PENDING])
+async def test_build_card_displays_retained_media_only_on_approved_builds(
+    display_build: Build, status: BuildStatus
+) -> None:
+    display_build.submission_status = status
+    images = [f"https://example.com/v1/builds/7/media/{index}/content" for index in range(12)]
+    media = AsyncMock(spec=PublishedBuildMedia)
+    media.urls.return_value = (images, [])
+
+    card = await render_build_card(display_build, MediaPreviewClient(), published_media=media)
+    components = list(render_payload([card]).layout.walk_children())
+
+    if status is BuildStatus.PENDING:
+        media.urls.assert_not_awaited()
+        assert images[0] not in str(render_payload([card]).layout.to_components())
+    else:
+        media.urls.assert_awaited_once_with(7)
+        assert [item.media.url for item in components if isinstance(item, discord.ui.Thumbnail)] == images[:1]
+        gallery_urls = [
+            entry.media.url for item in components if isinstance(item, discord.ui.MediaGallery) for entry in item.items
+        ]
+        assert gallery_urls[:11] == images[1:]
 
 
 async def test_build_card_does_not_embed_unresolved_page_urls(display_build: Build) -> None:

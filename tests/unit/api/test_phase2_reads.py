@@ -2,6 +2,8 @@
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from hashlib import sha256
+from pathlib import Path
 from typing import cast, override
 from uuid import UUID
 
@@ -9,14 +11,19 @@ import pytest
 from litestar import Litestar, Request
 from litestar.di import Provide
 from litestar.testing import TestClient
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from squid.api.v1.schemas.votes import VoteSessionDetail
 from squid.core.accounts.application import AccountService
 from squid.core.accounts.domain import CreditedAlias, PublicCreatorProfile
 from squid.core.accounts.models import CreatorAlias
+from squid.core.artifacts.infrastructure import LocalArtifactStore
 from squid.core.builds.application import BuildQueryService
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build, DoorBuild
+from squid.core.media.domain.jobs import MediaArtifactRole
+from squid.core.media.infrastructure.build_media import PublishedBuildMedia
+from squid.core.media.models import MediaArtifactRecord
 from squid.core.schematics.application import RenderedSchematic, RenderRequest, RenderSkipReason, SchematicService
 from squid.core.schematics.errors import SchematicNotFoundError, SchematicRenderRefusedError
 from squid.core.tags.application import TagService
@@ -135,6 +142,24 @@ class ConfirmedBuildFake(BuildQueryService):
         )
 
 
+class PublishedMediaFake(PublishedBuildMedia):
+    def __init__(self, tmp_path: Path, data: bytes) -> None:
+        super().__init__(async_sessionmaker(), LocalArtifactStore(tmp_path), public_base_url="https://example.com")
+        self.artifact = MediaArtifactRecord(
+            upload_id=UUID("12345678-1234-5678-1234-567812345678"),
+            role=MediaArtifactRole.OUTPUT,
+            object_key="output",
+            content_type="image/png",
+            byte_size=len(data),
+            sha256=sha256(data).hexdigest(),
+        )
+        (tmp_path / self.artifact.object_key).write_bytes(data)
+
+    @override
+    async def outputs(self, build_id: int, *, upload_id: UUID | None = None) -> list[MediaArtifactRecord]:
+        return [self.artifact] if build_id == 7 and upload_id in {None, self.artifact.upload_id} else []
+
+
 class VoteFake(VoteService):
     def __init__(self, session: VoteSessionSnapshot) -> None:
         self.session = session
@@ -152,6 +177,7 @@ class PartialReadServices:
     build_queries: BuildQueryService | None = None
     schematics: SchematicService | None = None
     votes: VoteService | None = None
+    published_build_media: PublishedBuildMedia | None = None
 
 
 def _override(
@@ -163,6 +189,7 @@ def _override(
     build_queries: BuildQueryService | None = None,
     schematics: SchematicService | None = None,
     votes: VoteService | None = None,
+    published_build_media: PublishedBuildMedia | None = None,
 ) -> None:
     """Replace dependencies with only the services required by the tested routes.
 
@@ -178,6 +205,7 @@ def _override(
             build_queries=build_queries,
             schematics=schematics,
             votes=votes,
+            published_build_media=published_build_media,
         ),
     )
 
@@ -186,6 +214,28 @@ def _override(
 
     provider = cast(Provide, app.dependencies["services"])
     provider.dependency = provide_services
+
+
+def test_public_build_links_and_serves_retained_media(
+    app_factory: tuple[Litestar, MockDatabaseManager], tmp_path: Path
+) -> None:
+    app, _database = app_factory
+    data = b"processed image"
+    media = PublishedMediaFake(tmp_path, data)
+    _override(app, build_queries=ConfirmedBuildFake(), published_build_media=media)
+    resource = f"/v1/builds/7/media/{media.artifact.upload_id}/content"
+
+    with TestClient(app) as client:
+        detail = client.get("/v1/builds/7")
+        content = client.get(resource)
+        unrelated = client.get(resource.replace("/builds/7/", "/builds/8/"))
+
+    assert detail.status_code == 200
+    assert detail.json()["links"]["images"] == [f"https://example.com{resource}"]
+    assert content.status_code == 200
+    assert content.headers["content-type"] == "image/png"
+    assert content.content == data
+    assert unrelated.status_code == 404
 
 
 def test_tag_and_version_collections_use_page_envelope(

@@ -7,8 +7,9 @@ Other image formats are rejected.
 Original videos can require a player that supports their source codec; processing does not guarantee browser playback.
 
 Submission media processing is optional and disabled by default. The API streams an owned draft upload into private
-object storage, and only the database worker claims the durable processing job. Enabling the feature does not make
-raw or processed object keys public.
+object storage, and only the database worker claims the durable processing job. Enabling the feature keeps raw object keys private. The public build API serves processed image and video outputs
+from approved submissions when `SQUID_MEDIA_PUBLIC_BASE_URL` points to the public API origin. It falls
+back to `SQUID_SCHEMATIC_RENDER_PUBLIC_BASE_URL` when the media URL is unset.
 
 ## Worker image contract
 

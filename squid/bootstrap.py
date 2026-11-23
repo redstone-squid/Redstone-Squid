@@ -64,6 +64,7 @@ from squid.core.media.application.jobs import MediaProcessingJobRunner, MediaPro
 from squid.core.media.application.services import MediaProcessingService
 from squid.core.media.domain import MediaLimits
 from squid.core.media.infrastructure import FfmpegMediaProcessor, MediaProcessLimits
+from squid.core.media.infrastructure.build_media import PublishedBuildMedia
 from squid.core.messages.application import MessageService
 from squid.core.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
 from squid.core.minecraft_auth.application.crypto import MinecraftSecretCodec
@@ -347,6 +348,13 @@ class _ServiceGraph:
         store = create_artifact_store(self.config.object_storage)
         self.resources.push_async_callback(store.aclose)
         return store
+
+    @cached_property
+    def published_build_media(self) -> PublishedBuildMedia | None:
+        base_url = self.config.media.public_base_url or self.config.schematics.render_public_base_url
+        if base_url is None:
+            return None
+        return PublishedBuildMedia(self.db.async_session, self.artifacts, public_base_url=str(base_url))
 
     @cached_property
     def media_job_service(self) -> MediaProcessingJobService:
@@ -661,6 +669,7 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         submission_inference=graph.submissions.inference,
         suggestions=graph.suggestions,
         media_jobs=graph.media_jobs,
+        published_build_media=graph.published_build_media,
         minecraft_installations=graph.minecraft_installations,
         minecraft_player_authorization=graph.minecraft_player_authorization,
         accounts=graph.accounts,
@@ -695,6 +704,7 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         records=graph.records,
         record_computation=graph.record_computation,
         schematics=graph.schematics,
+        published_build_media=graph.published_build_media,
         schematic_summaries=SchematicServiceSummaryProvider(
             graph.schematics,
             public_base_url=(

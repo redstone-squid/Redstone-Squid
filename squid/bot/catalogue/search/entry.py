@@ -89,6 +89,9 @@ async def open_search(
         page,
         load_build=client.services.build_queries.get,
         render_build=lambda build: render_build_card(
-            build, client.media_previews, schematic_summaries=client.services.schematic_summaries
+            build,
+            client.media_previews,
+            schematic_summaries=client.services.schematic_summaries,
+            published_media=client.services.published_build_media,
         ),
     )

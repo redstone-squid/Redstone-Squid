@@ -2949,6 +2949,46 @@ export type BuildsUpdateResponses = {
 
 export type BuildsUpdateResponse = BuildsUpdateResponses[keyof BuildsUpdateResponses];
 
+export type BuildMediaContentGetData = {
+    body?: never;
+    path: {
+        build_id: number;
+        upload_id: string;
+    };
+    query?: never;
+    url: '/v1/builds/{build_id}/media/{upload_id}/content';
+};
+
+export type BuildMediaContentGetErrors = {
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type BuildMediaContentGetError = BuildMediaContentGetErrors[keyof BuildMediaContentGetErrors];
+
+export type BuildMediaContentGetResponses = {
+    /**
+     * File Download
+     */
+    200: Blob | File;
+};
+
+export type BuildMediaContentGetResponse = BuildMediaContentGetResponses[keyof BuildMediaContentGetResponses];
+
 export type BuildsListData = {
     body?: never;
     path?: never;

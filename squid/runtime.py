@@ -36,6 +36,7 @@ from squid.core.events.infrastructure.listener import DomainEventWakeListener
 from squid.core.events.models import DomainEvent
 from squid.core.idempotency import IdempotencyService
 from squid.core.media.application.jobs import MediaProcessingJobRunner, MediaProcessingJobService, MediaStorageCleanup
+from squid.core.media.infrastructure.build_media import PublishedBuildMedia
 from squid.core.messages.application import MessageService
 from squid.core.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
 from squid.core.notifications import NotificationService
@@ -139,6 +140,7 @@ class ApiServices:
     versions: VersionService
     votes: VoteService
     vote_members: InteractiveVoteActorResolver | None
+    published_build_media: PublishedBuildMedia | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -182,6 +184,7 @@ class BotServices:
     notifications: NotificationService
     welcome_relay: WelcomeRelayService
     schematic_summaries: BuildSchematicSummaryProvider | None = None
+    published_build_media: PublishedBuildMedia | None = None
     open_topic_bridge: TopicBridgeFactory | None = None
 
 
