@@ -78,7 +78,11 @@ def section[RenderTargetT = RenderTarget, ContextT = object](
     thumbnail: str | None = None,
     key: str | None = None,
 ) -> Section[RenderTargetT, ContextT]:
-    """A titled block of related content; see `Section` for accent and thumbnail options."""
+    """A titled block of related content.
+
+    On Discord V2 a top-level section frames its heading and body in one container.
+    Nested sections keep their headings and share the outer frame. A thumbnail sits beside the heading.
+    """
     return Section(heading, _children(children, "sl.section()"), accent, thumbnail, key)
 
 

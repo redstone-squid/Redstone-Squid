@@ -218,7 +218,11 @@ def action_controls[ContextT](
     display: ControlDisplay = ControlDisplay.AUTO,
     flexibility: Flexibility = Flexibility.NORMAL,
 ) -> ActionControls[ContextT]:
-    """The controls offered by a view, laid out in order; ``key`` carries the chosen presentation."""
+    """Lay out controls in the given order. ``key`` identifies their presentation.
+
+    On Discord, individual buttons share rows of up to five. A nested ``control_group``
+    starts a separate row. AUTO lets eligible actions fold into a menu when space is tight.
+    """
     return ActionControls(
         _collect(
             entries,

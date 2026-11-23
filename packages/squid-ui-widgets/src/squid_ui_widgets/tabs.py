@@ -14,11 +14,14 @@ from squid_ui_widgets.machines.tabs import TabsState as TabsState
 class Tabs[RenderTargetT: RenderTarget = RenderTarget, ContextT = object](
     ComponentDriver[TabsState, RenderTargetT, ContextT]
 ):
-    """Show one selected tab and notify on selection changes.
+    """Show a selector above the selected tab's content and notify on selection changes.
 
-    Each instance owns its selection. ``initial_state`` overrides the starting tab
-    chosen by ``initial``. Machine configuration and pure transitions are available
-    through ``machine``; ``machine_state`` is the current, nonpersistent selection.
+    On Discord, up to five tabs share one button row. Six or more use a select menu.
+    The optional title goes above the selector.
+
+    Each instance owns its selection. ``initial_state`` overrides ``initial``.
+    ``machine`` exposes the configuration and pure transitions. ``machine_state``
+    holds the current, nonpersistent selection.
     """
 
     @property

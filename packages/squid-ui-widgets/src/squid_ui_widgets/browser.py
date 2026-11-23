@@ -69,18 +69,20 @@ type BrowserOverview[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT
 class Browser[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = object](Component[RenderTargetT, ContextT]):
     """Browse a batch source and open one item's detail content.
 
-    The session owns source navigation and focus. Detail content is prepared through
-    an atomic resource when focus changes; the factory must be safe to retry. Refreshing
-    the same item retains its detail, whose component owns refresh of its domain data.
+    The list shows your overview, a bullet per item, an item picker, then navigation.
+    An empty batch shows `empty` in place of the bullets and picker. Opening an item
+    replaces the list with its detail. The row below starts with Previous and Next
+    when there are other items, followed by Back and `entry_actions`. Keep item
+    actions to two so all five buttons fit on one Discord row.
 
-    Paging and stepping between opened items say Previous and Next. Pass `chronology` for a
-    list sorted by time to label them Newer and Older instead. `show_fetch_size` adds
-    an items-per-batch form (1 to 25); changing it returns to the beginning.
+    Back returns to the list. Supply `on_back` to choose another destination and keep
+    the session's focus. For time-sorted lists, `chronology` labels page and item steps
+    Newer and Older. `show_fetch_size` adds a form for changing the batch size (1 to 25)
+    and changing size returns to the beginning.
 
-    Back in an opened item returns to the list. Pass `on_back` when the list is not a
-    useful destination, such as a browser opened directly on one item; the handler then
-    decides where Back goes and the session keeps its focus. `entry_actions` adds an opened
-    item's own actions after Back, in the same row, so keep them to two.
+    The session owns navigation and focus. The detail factory runs through an atomic
+    resource on focus changes and must be safe to retry. Refreshing the same item
+    retains its detail component, which owns refresh of its domain data.
     """
 
     def __init__(
