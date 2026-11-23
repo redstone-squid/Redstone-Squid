@@ -12,7 +12,7 @@ import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.catalogue.search.results import SearchScreen
 from squid.bot.submission import build_card as build_card_module
-from squid.bot.submission.build_card import build_description, build_metadata_fields, render_build_card
+from squid.bot.submission.build_card import build_metadata_fields, render_build_card
 from squid.bot.submission.ui.build_edit import BuildEditScreen
 from squid.bot.ui import render_payload
 from squid.bot.utils.web import MediaPreviewClient
@@ -390,18 +390,29 @@ async def test_build_editor_turns_a_revision_conflict_into_a_reload_choice(
         assert not ui.root.finished
 
 
-def test_build_card_does_not_repeat_headline_component_restrictions(display_build: Build) -> None:
-    build = display_build
+def test_build_card_isolates_submitter_markdown(display_build: Build) -> None:
+    description = ">>> Uses *two* observers\n\nSecond paragraph"
+    build = replace(display_build, description=description, miscellaneous_restrictions=["Locational"])
 
-    assert build_description(build) is None
+    payload = render_payload([build_card_module.build_card(build)]).layout.to_components()
+    contents = [child["content"] for child in payload[0]["components"] if "content" in child]
+    assert description in contents
+    assert "**Locational**." in contents
+    assert any(content.endswith("Submission ID: 7") for content in contents)
 
 
-def test_build_card_shows_the_submitter_description_escaped(display_build: Build) -> None:
-    build = replace(display_build, description="Uses *two* observers")
+def test_build_card_escapes_inline_title_and_fits_a_long_description(display_build: Build) -> None:
+    build = replace(
+        display_build,
+        component_restrictions=["*Custom*\nrestriction"],
+        description="Uses *two* observers. " * 250,
+    )
 
-    description = build_description(build)
-    assert description is not None
-    assert source_text(description) == "\nUses *two* observers"
+    presentation = render_payload([build_card_module.build_card(build)])
+    payload = str(presentation.layout.to_components())
+    assert repr(r"\*Custom\* restriction")[1:-1] in payload
+    assert "Uses " in payload
+    assert_within_limits(presentation.layout)
 
 
 def test_build_card_credits_the_sponsoring_server_and_website(display_build: Build) -> None:

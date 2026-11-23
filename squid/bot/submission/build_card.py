@@ -27,7 +27,7 @@ from squid.core.builds.models import Build, DoorBuild, ExtenderBuild
 from squid.core.messages.domain import MessageSnapshot
 from squid.core.observability import add_counter
 from squid.core.tags.domain import TagModerationStatus, TagSemanticKind
-from squid_i18n import Text
+from squid_i18n import Text, discord_markup
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 logger = logging.getLogger(__name__)
@@ -138,10 +138,17 @@ def build_card(
     """Compose the full card from a build and its resolved resources."""
     fields = build_metadata_fields(build)
     fallbacks = _field_ladders(build)
-    description = build_description(build)
+    restrictions = _build_restrictions(build)
+    description = build.description
     return sl.section(
-        sl.heading(sl.md(format_build_display_title(build, markdown=True))),
-        description and sl.paragraph(description).truncate(),
+        sl.heading(sl.plain(_compact_plain(format_build_display_title(build, markdown=False)))),
+        restrictions and sl.paragraph(restrictions),
+        # Keep Discord Markdown in a separate text component from the card copy.
+        description
+        and sl.fallback(
+            sl.paragraph(discord_markup(description)),
+            sl.paragraph(sl.plain(description)).truncate(),
+        ),
         _field_section("Review warnings", fields, fallbacks, {"⚠ Possible duplicate", "⚠ Attachment issues"}),
         _attachment_review_action(build),
         _field_section(
@@ -302,8 +309,8 @@ async def _get_media_urls(build: Build, media_previews: MediaPreviewClient) -> t
     return (images[0] if images else None), list(dict.fromkeys((*images[1:], *videos)))
 
 
-def build_description(build: Build) -> Text | None:
-    """Describe locational/directional restrictions and escaped submitter notes, or return None."""
+def _build_restrictions(build: Build) -> Text | None:
+    """Describe locational and directional restrictions when present."""
     desc: list[sl.TextLike] = []
 
     if "Locational" in build.miscellaneous_restrictions:
@@ -315,9 +322,6 @@ def build_description(build: Build) -> Text | None:
         desc.append(sl.md("**Directional**."))
     elif "Directional with fixes" in build.miscellaneous_restrictions:
         desc.append(sl.md("**Directional** with known fixes for each direction."))
-
-    if build.description:
-        desc.append("\n" + build.description)
 
     return Text.join("\n", desc) if desc else None
 
