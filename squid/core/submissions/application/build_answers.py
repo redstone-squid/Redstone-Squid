@@ -102,8 +102,6 @@ def answers_from_build(build: Build, options: CatalogueOptions | None = None) ->
             else:
                 pattern_keys.append(key)
         answers["patterns"] = pattern_keys
-    if not isinstance(build, DoorBuild | ExtenderBuild):
-        del answers["patterns"]
     if isinstance(build, DoorBuild):
         answers |= {
             "opening_width": build.door_width,
