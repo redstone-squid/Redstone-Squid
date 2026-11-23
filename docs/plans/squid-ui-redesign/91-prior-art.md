@@ -101,7 +101,7 @@ Three things. Only the first is worth acting on, and not yet.
 
 ### 3.1 Salsa's durability tiers — the global-epoch fast path, named
 
-`_EPOCH` is a single process-wide integer bumped by every write anywhere (`core.py:394`,
+`_EPOCH` is a single per-thread integer bumped by every write anywhere (`core.py:394`,
 `core.py:402`). A derived node that settled in the current epoch returns its version without
 walking its sources; once *any* write lands, that fast path is gone for **every** node in the
 process, and each one re-walks its whole source dict on its next read (`core.py:1636`).
@@ -208,13 +208,11 @@ one row.
 
 ### 6.1 Confirmed, no action
 
-**Salsa durability: wait for profiling.** Agrees with §3.1, with numbers — under 5% likely to be
-needed for Discord-sized UIs, 15–25% for a general web runtime. Its added suggestion, "design the
-internals so this is possible later, expose nothing publicly", needs no work: durability is a
-per-tier epoch array replacing one global integer, entirely inside `_bump_epoch` and
-`_Derived.settle`, with no public surface to prepare and no field to add now. Speculative internal
-metadata (`cell.change_class`) would be the thing that goes stale. Recorded so nobody builds
-scaffolding for it.
+**Salsa durability: defer.** In a local Discord staging profile, one warmed build browser
+alternated eight page jumps between pages 3 and 4 against a mocked catalogue. With one browser
+mounted, then with twelve on the same thread, both runs advanced the epoch 96 times and made
+112 source-version checks. Neither called `_ComputedMemo.validated`. Durability tiers would
+skip no work on this path. Revisit with a screen that reads a substantial computed graph.
 
 **Differential dataflow belongs in a separate layer implementing the common source protocol, and
 ordinary `state[list[T]]` must not learn collection-query semantics.** Agrees with §3.3, and the
