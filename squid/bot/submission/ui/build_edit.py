@@ -18,14 +18,16 @@ proposals instead.
 
 from collections.abc import Awaitable, Callable, Collection, Iterable, Mapping
 from copy import deepcopy
+from dataclasses import replace
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Any, override
+from typing import TYPE_CHECKING, Any, ClassVar, override
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.edit_controller import EditController
 from squid.bot.edit_history import history_controls
 from squid.bot.submission.ui.editor import BuildEditorScreen, EditorSection
+from squid.bot.submission.ui.expandable_size import DoorSizeEditor
 from squid.bot.submission.ui.sections import form_sections, problem_text, section_text
 from squid.bot.ui import tr
 from squid.core.actors import Actor
@@ -33,8 +35,9 @@ from squid.core.builds.application import BuildEditPatch, BuildService
 from squid.core.builds.application.edits import BUILD_EDIT, build_target, patch_values
 from squid.core.builds.domain import UnresolvedTags
 from squid.core.builds.domain.edit_policy import BuildEditDecision, decide_build_edit
+from squid.core.builds.domain.expansion import DoorExpansion
 from squid.core.builds.errors import BuildEditValidationError
-from squid.core.builds.models import Build
+from squid.core.builds.models import Build, DoorBuild
 from squid.core.edits.application import EditRunner
 from squid.core.edits.domain import RevisionConflictError
 from squid.core.errors import JSONValue
@@ -70,6 +73,7 @@ class BuildEditWorkspace(sl.Reactive):
 
     staged: Mapping[str, JSONValue] = sl.state({})
     """Edited answers keyed by field ID; a field the build has no value for holds None or []."""
+    expansion: DoorExpansion | None = sl.state(None)
     unresolved: UnresolvedTags = sl.state(UnresolvedTags())
     """Names on the build that match no catalogue entry and that the user has not removed."""
     notice: sl.TextLike = sl.state("")
@@ -105,6 +109,8 @@ class BuildEditWorkspace(sl.Reactive):
     def reset(self, build: Build) -> None:
         """Discard edits and their history, and start again from `build` as saved."""
         self.saved = answers_from_build(build, self.option_sets)
+        self.saved_expansion = build.expansion if isinstance(build, DoorBuild) else None
+        self.expansion = self.saved_expansion
         self.staged = dict(self.saved.answers)
         self.unresolved = self.saved.unresolved
         self.notice = ""
@@ -227,7 +233,22 @@ class BuildEditWorkspace(sl.Reactive):
 
     def patch(self) -> BuildEditPatch:
         """The changes to save, in the build patch's terms; empty when nothing differs from the saved build."""
-        return patch_from_answers(self.saved, self.staged, self.unresolved, self.option_sets)
+        patch = patch_from_answers(self.saved, self.staged, self.unresolved, self.option_sets)
+        if self.expansion != self.saved_expansion:
+            return replace(patch, door_expansion=self.expansion)
+        return patch
+
+    def stage_expansion(
+        self, transaction: sl.runtime.Transaction, expansion: DoorExpansion | None, *, base_revision: int | None = None
+    ) -> None:
+        if base_revision is not None and base_revision != self.revision:
+            self.notice = tr(t"build-editor-stale-form = These answers changed while the form was open. Open it again.")
+            return
+        self.notice = ""
+        if self.expansion != expansion:
+            self.expansion = expansion
+            self.revision += 1
+            self.history.record(transaction, tr(t"expandable-size-history = Edit expandable size"))
 
 
 class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
@@ -242,6 +263,8 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
     policy = sd.ResponseSpec(
         timeout=900, live_updates=True, retain_routed_on_timeout=True, session=sd.SessionSpec("build-edit")
     )
+
+    section_editors: ClassVar[Mapping[str, type[DoorSizeEditor]]] = {DoorSizeEditor.section_id_key: DoorSizeEditor}
 
     _base_revision: int = sl.state(0)
     confirming: bool = sl.state(False)
@@ -407,6 +430,8 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
         sections: list[EditorSection] = []
         for section in ws.sections:
             text = section_text(ws, section)
+            if (editor := self.section_editors.get(section.id)) is not None:
+                text = Text.join("\n", (text, editor.summary(ws)))
             field_ids = {field.id for field in section.fields}
             unlisted = (
                 *(ws.unresolved.restriction_names() if "restrictions" in field_ids else ()),
@@ -430,6 +455,10 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
             lines: list[TextLike] = []
             if fields:
                 lines.append(section_text(ws, FormSection(section.id, section.title, fields), show_empty=True))
+            if (editor := self.section_editors.get(section.id)) is not None and (
+                review := editor.review(ws)
+            ) is not None:
+                lines.append(review)
             if removed and field_ids & {"restrictions", "patterns"}:
                 if not lines:
                     lines.append(md(t"**{section.title}**"))
@@ -491,8 +520,14 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
 
     @override
     async def _edit_section(self, section_id: str, event: sd.PressEvent) -> None:
-        if await self._may_event(event):
-            await super()._edit_section(section_id, event)
+        if not await self._may_event(event):
+            return
+        if (editor := self.section_editors.get(section_id)) is not None and self.workspace.section(
+            section_id
+        ) is not None:
+            await self.open_child(event, editor(self.workspace), on_result=self._child_closed)
+            return
+        await super()._edit_section(section_id, event)
 
     async def _remove_unlisted(self, event: sd.SelectionEvent) -> None:
         if await self._may_event(event):

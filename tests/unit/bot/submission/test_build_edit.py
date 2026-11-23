@@ -15,11 +15,13 @@ import squid_ui.ext.discord as sd
 from squid.bot.catalogue.search.contextual import ContextualSearches, search_autocomplete
 from squid.bot.submission.cog import BuildCommands
 from squid.bot.submission.ui.build_edit import BuildEditScreen
+from squid.bot.submission.ui.expandable_size import DoorSizeEditor
 from squid.bot.submission.ui.sections import SectionEditorScreen, modal_chunks, present_chunk_form
 from squid.bot.utils.autocomplete import BotInteraction
 from squid.core.builds.application import BuildService
 from squid.core.builds.domain import BuildStatus, ShowcaseTag, UnresolvedTags
 from squid.core.builds.domain.credits import name_credits
+from squid.core.builds.domain.expandable_size import ExpandableSize
 from squid.core.builds.models import Build, DoorBuild, ExtenderBuild, OtherBuild
 from squid.core.sentinel import UNSET
 from squid.core.submissions.domain import ChoiceOption, FormManifest
@@ -234,6 +236,36 @@ def test_editor_visibility_follows_staged_answers_and_rollback() -> None:
         assert workspace.prefill({"version_compatibility": "1.21"}) is None
     assert "display_name" in {field.id for field in workspace.fields}
     assert "display_name" in {field.id for section in workspace.sections for field in section.fields}
+
+
+async def test_basic_expandable_size_stages_a_range_alongside_the_measured_size() -> None:
+    build = _door(door_width=3, door_height=3)
+    workspace = editor(build).workspace
+    child = DoorSizeEditor(workspace)
+    root = sd.MessageRoot(child, access=sd.Owner(7), timeout=None)
+    assert_within_limits(commit_render(root))
+    event = AsyncMock()
+    await child._basic(event)
+    spec = event.present_form.call_args.args[0]
+    save = event.present_form.call_args.kwargs["on_submit"]
+    parsed = await spec.evaluate(
+        {"axis": "width", "minimum": "3", "maximum_kind": "finite", "maximum": "15", "step": "1"}
+    )
+    assert not parsed.errors
+    with sl.runtime.transaction() as tx:
+        await save(SimpleNamespace(values=parsed.values, transaction=tx))
+    size = ExpandableSize(axis="width", minimum=3, maximum_kind="finite", maximum=15)
+    assert workspace.patch().attributes() == {"door_expansion": size.to_expansion()}
+    assert build.door_dimensions == (3, 3, None)
+    assert build.expansion is None
+    assert ExpandableSize.from_expansion(workspace.expansion) == size
+    assert (
+        ExpandableSize.from_expansion(size.to_expansion().model_copy(update={"raw_description": "Original evidence"}))
+        is None
+    )
+
+    await workspace.history.undo()
+    assert workspace.patch().attributes() == {}
 
 
 async def test_section_modal_allows_an_unchanged_invalid_timing() -> None:

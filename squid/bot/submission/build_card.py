@@ -15,6 +15,7 @@ from squid.bot.catalogue.schematics.presentation import schematic_caption
 from squid.bot.message_preview import message_preview
 from squid.bot.submission.attachment_display import attachment_issue_line
 from squid.bot.submission.ui.attachment_review import review_attachments
+from squid.bot.submission.ui.expandable_size import expandable_size_text
 from squid.bot.ui import (
     truncate_display_text,
 )
@@ -339,6 +340,8 @@ def build_metadata_fields(build: Build) -> dict[str, str]:
 
     # The times are stored as game ticks, so they need to be divided by 20 to get seconds
     if isinstance(build, DoorBuild):
+        if build.expansion is not None:
+            fields["Expandable Size"] = expandable_size_text(build.expansion).resolve()
         if build.normal_opening_time:
             fields["Opening Time"] = f"{build.normal_opening_time / 20}s"
         if build.normal_closing_time:

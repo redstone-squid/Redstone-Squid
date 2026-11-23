@@ -13,7 +13,7 @@ appear in the submit projection, so adding them does not change a pinned revisio
 
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Final, Protocol
 
 from squid.core.errors import InvalidStateError, JSONValue
 from squid.core.i18n import localization_for, tr
@@ -36,6 +36,8 @@ from squid.core.submissions.domain import (
 )
 from squid.core.submissions.domain.links import valid_link_url
 from squid_i18n import Text, localization_scope
+
+DOOR_GEOMETRY_SECTION_ID: Final = "door_geometry"
 
 CURRENT_SUBMISSION_PROTOCOL = 1
 CURRENT_SUBMISSION_SCHEMA = "build_submission.v1"
@@ -518,7 +520,7 @@ def _door_form(localize: Callable[[Text], str], revision: int = CURRENT_SUBMISSI
         label=localize(tr(t"submissions-application-forms-door = Door")),
         sections=(
             FormSection(
-                id="door_geometry",
+                id=DOOR_GEOMETRY_SECTION_ID,
                 title=localize(tr(t"submissions-application-forms-door-geometry = Opening size and door type")),
                 fields=(
                     _integer_field(
