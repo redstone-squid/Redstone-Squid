@@ -391,12 +391,12 @@ async def test_build_editor_turns_a_revision_conflict_into_a_reload_choice(
 
 
 def test_build_card_isolates_submitter_markdown(display_build: Build) -> None:
-    description = ">>> Uses *two* observers\n\nSecond paragraph"
+    description = ">>> Uses *two* observers\n\nSecond paragraph with an unmatched **"
     build = replace(display_build, description=description, miscellaneous_restrictions=["Locational"])
 
     payload = render_payload([build_card_module.build_card(build)]).layout.to_components()
     contents = [child["content"] for child in payload[0]["components"] if "content" in child]
-    assert description in contents
+    assert any("*two*" in content and r"unmatched \*\*" in content for content in contents)
     assert "**Locational**." in contents
     assert any(content.endswith("Submission ID: 7") for content in contents)
 
@@ -411,7 +411,7 @@ def test_build_card_escapes_inline_title_and_fits_a_long_description(display_bui
     presentation = render_payload([build_card_module.build_card(build)])
     payload = str(presentation.layout.to_components())
     assert repr(r"\*Custom\* restriction")[1:-1] in payload
-    assert "Uses " in payload
+    assert "Uses *two* observers." in payload
     assert_within_limits(presentation.layout)
 
 

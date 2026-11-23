@@ -17,7 +17,7 @@ import squid_ui as ui
 import squid_ui.ext.discord as sd
 from squid.bot.chrome import CHROME
 from squid.core.i18n import tr
-from squid_i18n import Text
+from squid_i18n import NEUTRAL, Text, resolve_text
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 
@@ -58,6 +58,8 @@ __all__ = [
     "text_node",
     "tr",
     "truncate_display_text",
+    "user_inline_text",
+    "user_markdown_paragraph",
 ]
 
 
@@ -127,6 +129,25 @@ def render_payload(
         strict=strict,
         composition=composition,
         reservation=reservation,
+    )
+
+
+def user_inline_text(content: str) -> Text:
+    """Render user text literally on a single line."""
+    return ui.plain(" ".join(content.split()))
+
+
+def user_markdown_paragraph(content: str) -> ui.LayoutNode[ComponentsV2Target, sd.Request]:
+    """Render user Markdown in its own Discord text component.
+
+    Parse the fragment independently so unmatched delimiters are rendered as
+    literal text. Use visible text for the excerpt when block formatting cannot
+    be shortened.
+    """
+    markdown = ui.md(content)
+    return ui.fallback(
+        ui.paragraph(markdown).truncate(),
+        ui.paragraph(resolve_text(markdown, NEUTRAL).plain().rstrip()).truncate(),
     )
 
 

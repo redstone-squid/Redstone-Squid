@@ -18,6 +18,8 @@ from squid.bot.submission.ui.attachment_review import review_attachments
 from squid.bot.submission.ui.expandable_size import expandable_size_text
 from squid.bot.ui import (
     truncate_display_text,
+    user_inline_text,
+    user_markdown_paragraph,
 )
 from squid.bot.utils.web import MediaPreviewClient
 from squid.core.builds.application.ports import BuildSchematicSummary, BuildSchematicSummaryProvider
@@ -28,7 +30,7 @@ from squid.core.builds.models import Build, DoorBuild, ExtenderBuild
 from squid.core.messages.domain import MessageSnapshot
 from squid.core.observability import add_counter
 from squid.core.tags.domain import TagModerationStatus, TagSemanticKind
-from squid_i18n import Text, discord_markup
+from squid_i18n import Text
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 logger = logging.getLogger(__name__)
@@ -142,14 +144,9 @@ def build_card(
     restrictions = _build_restrictions(build)
     description = build.description
     return sl.section(
-        sl.heading(sl.plain(_compact_plain(format_build_display_title(build, markdown=False)))),
+        sl.heading(user_inline_text(format_build_display_title(build, markdown=False))),
         restrictions and sl.paragraph(restrictions),
-        # Keep Discord Markdown in a separate text component from the card copy.
-        description
-        and sl.fallback(
-            sl.paragraph(discord_markup(description)),
-            sl.paragraph(sl.plain(description)).truncate(),
-        ),
+        description and user_markdown_paragraph(description),
         _field_section("Review warnings", fields, fallbacks, {"⚠ Possible duplicate", "⚠ Attachment issues"}),
         _attachment_review_action(build),
         _field_section(
