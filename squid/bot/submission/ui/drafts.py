@@ -26,8 +26,9 @@ build. That request can queue the build, wait for files to finish processing, or
 issues for the submitter to fix; the panel shows which of these happened.
 """
 
+import json
 from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from enum import Enum, auto
 from functools import partial
 from typing import Any, Self, cast, override
@@ -138,6 +139,8 @@ class DraftWorkspace(sl.Reactive):
 
     notice: sl.TextLike = sl.state("")
     """An error from the last action, shown until the next action replaces it."""
+    hallway_report: sl.document.Asset | None = sl.state(None, opaque=True)
+    """Block coordinates for the inference result in the current notice."""
     option_sets: Mapping[str, tuple[ChoiceOption, ...]] = sl.state({})
     """Catalogue options keyed by option source, used for labels and select menus."""
 
@@ -352,6 +355,7 @@ class DraftWorkspace(sl.Reactive):
         )
 
     async def remove_file(self, file_id: UUID) -> None:
+        self.hallway_report = None
         await self.edits.bind(DRAFT_ATTACHMENTS, draft_target(self._draft_id), self.draft.snapshot.revision).save(
             AttachmentValues(files=(FileMembership(source_id=file_id, present=False),)).edit_values(),
             tr(t"draft-history-remove-file = Remove submission file"),
@@ -369,6 +373,7 @@ class DraftWorkspace(sl.Reactive):
 
     async def infer_schematic(self, transaction: sl.runtime.Transaction) -> None:
         """Fill empty answers from the main schematic, retaining the revision reviewed."""
+        self.hallway_report = None
         try:
             await self.reload()
             actor = await self.resolve_actor()
@@ -402,16 +407,43 @@ class DraftWorkspace(sl.Reactive):
             self.notice = (
                 tr(
                     t"draft-inference-review = Schematic suggestions filled empty answers. "
-                    t"Review the build dimensions, width/depth orientation, name, credits, and restrictions below. "
-                    t"Category, opening size, orientation, and opening/closing times were not detected."
+                    t"Review the dimensions, orientation, name, credits, and restrictions below."
                 )
                 if values
                 else tr(t"draft-inference-no-values = No new answers could be inferred from this schematic.")
             )
+            door = result.door
+            if door is not None and door.candidates:
+                self.hallway_report = sl.file(
+                    json.dumps(asdict(door), separators=(",", ":")).encode(),
+                    filename=f"hallways-{result.upload_id}.json",
+                )
+                summaries = []
+                for hall in door.candidates[:3]:
+                    axis = "XYZ"[hall.axis]
+                    sizes = ", ".join(f"{w} x {h}" for w, h in sorted(hall.opening_sizes))
+                    arrangements = ", ".join(
+                        sorted({pattern.arrangement.replace("_", " ") for pattern in hall.patterns})
+                    )
+                    seal = {
+                        "sealed": tr(t"draft-hallway-sealed = Sealed"),
+                        "passage_remains": tr(t"draft-hallway-passage = An air path remains"),
+                        "unknown": tr(t"draft-hallway-seal-unknown = Seal uncertain"),
+                    }[hall.seal]
+                    count = len(hall.disputed_blocks)
+                    summaries.append(
+                        tr(
+                            t"draft-hallway-candidate = {axis} axis, {sizes}. {seal}. {count} unresolved blocks. {arrangements}"
+                        )
+                    )
+                self.notice = Text.join("\n", (self.notice, *summaries))
+            elif door is not None and door.reason:
+                self.notice = Text.join("\n", (self.notice, door.reason))
         except SquidError as error:
             self.notice = error.public_text()
 
     async def make_main_schematic(self, file_id: UUID) -> None:
+        self.hallway_report = None
         await self.edits.bind(DRAFT_ATTACHMENTS, draft_target(self._draft_id), self.draft.snapshot.revision).save(
             AttachmentValues(primary=file_id, select_primary=True).edit_values(),
             tr(t"draft-history-primary = Choose primary schematic"),
@@ -422,6 +454,7 @@ class DraftWorkspace(sl.Reactive):
     ) -> UUID | None:
         """Register hidden replacement bytes, then atomically swap the two references."""
         revision = self.draft.snapshot.revision if base_revision is None else base_revision
+        self.hallway_report = None
         replacement = await self.uploads.replace(
             file_id, source, revision, tr(t"draft-history-replace-file = Replace submission file")
         )
@@ -569,6 +602,14 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
                         key="infer_schematic",
                     ),
                     key="draft-inference-actions",
+                )
+            )
+        if ws.notice and ws.hallway_report is not None:
+            children.append(
+                sl.download(
+                    ws.hallway_report,
+                    label=tr(t"draft-hallway-download = Hallway candidates and block coordinates"),
+                    key="hallway-report",
                 )
             )
         children.append(sd.v2.separator())

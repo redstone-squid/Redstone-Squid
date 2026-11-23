@@ -418,6 +418,32 @@ export type CsrfTokenResponse = {
 };
 
 /**
+ * DoorCandidate
+ */
+export type DoorCandidate = {
+    axis: number;
+    closed_endpoint: 'initial' | 'actuated';
+    seal: 'sealed' | 'passage_remains' | 'unknown';
+    interior: Array<[
+        number,
+        number,
+        number
+    ]>;
+    closed_blocks: Array<ObservedBlock>;
+    patterns: Array<PatternMatch>;
+    agreed_blocks: Array<[
+        number,
+        number,
+        number
+    ]>;
+    disputed_blocks: Array<[
+        number,
+        number,
+        number
+    ]>;
+};
+
+/**
  * DoorDetails
  */
 export type DoorDetails = {
@@ -428,6 +454,14 @@ export type DoorDetails = {
     patterns: Array<string>;
     visible_opening_time: number | null;
     visible_closing_time: number | null;
+};
+
+/**
+ * DoorDetection
+ */
+export type DoorDetection = {
+    candidates?: Array<DoorCandidate>;
+    reason?: string;
 };
 
 /**
@@ -1266,6 +1300,18 @@ export type NotificationSubscriptionDetail = {
 };
 
 /**
+ * ObservedBlock
+ */
+export type ObservedBlock = {
+    position: [
+        number,
+        number,
+        number
+    ];
+    state: string;
+};
+
+/**
  * OwnVoteSelection
  */
 export type OwnVoteSelection = {
@@ -1373,6 +1419,21 @@ export type PaperChallengeCreateRequest = {
  */
 export type PaperChallengeExchangeRequest = {
     device_code: string;
+};
+
+/**
+ * PatternMatch
+ */
+export type PatternMatch = {
+    arrangement: string;
+    depth: number;
+    facing: number;
+    compositions: Array<string>;
+    blocks: Array<[
+        number,
+        number,
+        number
+    ]>;
 };
 
 /**
@@ -1858,7 +1919,7 @@ export type SanitizationCapabilities = {
  */
 export type SchematicDetection = {
     field_id: string;
-    status?: 'not_detected';
+    status?: 'detected' | 'ambiguous' | 'not_detected';
     value?: JsonValue;
     reason?: string;
 };
@@ -1940,6 +2001,7 @@ export type SchematicSubmissionSuggestions = {
     suggestions?: Array<SchematicFieldSuggestion>;
     detections?: Array<SchematicDetection>;
     measurements?: SchematicMetrics | null;
+    door?: DoorDetection | null;
 };
 
 /**

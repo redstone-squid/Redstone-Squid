@@ -19738,6 +19738,103 @@
         ],
         "title": "CsrfTokenResponse"
       },
+      "DoorCandidate": {
+        "properties": {
+          "axis": {
+            "type": "integer"
+          },
+          "closed_endpoint": {
+            "type": "string",
+            "enum": [
+              "initial",
+              "actuated"
+            ]
+          },
+          "seal": {
+            "type": "string",
+            "enum": [
+              "sealed",
+              "passage_remains",
+              "unknown"
+            ]
+          },
+          "interior": {
+            "items": {
+              "prefixItems": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                }
+              ],
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "closed_blocks": {
+            "items": {
+              "$ref": "#/components/schemas/ObservedBlock"
+            },
+            "type": "array"
+          },
+          "patterns": {
+            "items": {
+              "$ref": "#/components/schemas/PatternMatch"
+            },
+            "type": "array"
+          },
+          "agreed_blocks": {
+            "items": {
+              "prefixItems": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                }
+              ],
+              "type": "array"
+            },
+            "type": "array"
+          },
+          "disputed_blocks": {
+            "items": {
+              "prefixItems": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                }
+              ],
+              "type": "array"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "required": [
+          "agreed_blocks",
+          "axis",
+          "closed_blocks",
+          "closed_endpoint",
+          "disputed_blocks",
+          "interior",
+          "patterns",
+          "seal"
+        ],
+        "title": "DoorCandidate"
+      },
       "DoorDetails": {
         "properties": {
           "category": {
@@ -19804,6 +19901,24 @@
           "visible_opening_time"
         ],
         "title": "DoorDetails"
+      },
+      "DoorDetection": {
+        "properties": {
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/DoorCandidate"
+            },
+            "type": "array",
+            "default": []
+          },
+          "reason": {
+            "type": "string",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [],
+        "title": "DoorDetection"
       },
       "DoorExpansion": {
         "properties": {
@@ -22764,6 +22879,33 @@
         ],
         "title": "NotificationSubscriptionDetail"
       },
+      "ObservedBlock": {
+        "properties": {
+          "position": {
+            "prefixItems": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "type": "array"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "required": [
+          "position",
+          "state"
+        ],
+        "title": "ObservedBlock"
+      },
       "OwnVoteSelection": {
         "properties": {
           "option_id": {
@@ -23177,6 +23319,51 @@
           "device_code"
         ],
         "title": "PaperChallengeExchangeRequest"
+      },
+      "PatternMatch": {
+        "properties": {
+          "arrangement": {
+            "type": "string"
+          },
+          "depth": {
+            "type": "integer"
+          },
+          "facing": {
+            "type": "integer"
+          },
+          "compositions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "blocks": {
+            "items": {
+              "prefixItems": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                }
+              ],
+              "type": "array"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "required": [
+          "arrangement",
+          "blocks",
+          "compositions",
+          "depth",
+          "facing"
+        ],
+        "title": "PatternMatch"
       },
       "PointStatus": {
         "type": "string",
@@ -25192,7 +25379,11 @@
           },
           "status": {
             "type": "string",
-            "const": "not_detected",
+            "enum": [
+              "detected",
+              "ambiguous",
+              "not_detected"
+            ],
             "default": "not_detected"
           },
           "value": {
@@ -25204,7 +25395,7 @@
           },
           "reason": {
             "type": "string",
-            "default": "Detection is not implemented."
+            "default": "No measurement is available for this field."
           }
         },
         "type": "object",
@@ -25444,6 +25635,16 @@
             "oneOf": [
               {
                 "$ref": "#/components/schemas/SchematicMetrics"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "door": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DoorDetection"
               },
               {
                 "type": "null"

@@ -6,6 +6,7 @@ from uuid import UUID
 
 from squid.core.builds.domain.credits import name_credits
 from squid.core.errors import JSONValue
+from squid.core.schematics.domain.doors.detection import DoorDetection
 from squid.core.schematics.domain.models import SchematicAnalysis, SchematicMetrics
 from squid.core.submissions.application.drafts import StoredDraft
 from squid.core.submissions.application.forms import SubmissionFormService
@@ -23,12 +24,12 @@ class SchematicFieldSuggestion:
 
 @dataclass(frozen=True, slots=True)
 class SchematicDetection:
-    """A semantic detector result; no detector currently recognizes these fields."""
+    """A field-level conclusion drawn from schematic evidence."""
 
     field_id: str
-    status: Literal["not_detected"] = "not_detected"
+    status: Literal["detected", "ambiguous", "not_detected"] = "not_detected"
     value: JSONValue = None
-    reason: str = "Detection is not implemented."
+    reason: str = "No measurement is available for this field."
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +40,7 @@ class SchematicSubmissionSuggestions:
     suggestions: tuple[SchematicFieldSuggestion, ...] = ()
     detections: tuple[SchematicDetection, ...] = ()
     measurements: SchematicMetrics | None = None
+    door: DoorDetection | None = None
 
 
 class SchematicSubmissionInference:
@@ -49,21 +51,48 @@ class SchematicSubmissionInference:
         self._versions = versions
 
     def detect(self, analysis: SchematicAnalysis) -> tuple[SchematicDetection, ...]:
-        """Reserved API for recognition of mechanism geometry and timing."""
-        return tuple(
-            SchematicDetection(field_id)
-            for field_id in (
-                "category",
-                "opening_width",
-                "opening_height",
-                "opening_depth",
-                "door_orientation",
-                "opening_time",
-                "closing_time",
-                "visible_opening_time",
-                "visible_closing_time",
-            )
+        """Suggest a measurement only when every hallway interpretation agrees.
+
+        Measure the opening across the passage. Depth is the span of a matched
+        closed arrangement, which may be much shorter than the captured tunnel.
+        Missing patterns leave depth unknown. A vertical axis alone cannot
+        distinguish a skydoor from a trapdoor.
+        """
+        fields = (
+            "category",
+            "opening_width",
+            "opening_height",
+            "opening_depth",
+            "door_orientation",
+            "opening_time",
+            "closing_time",
+            "visible_opening_time",
+            "visible_closing_time",
         )
+        detections = {field: SchematicDetection(field) for field in fields}
+        if analysis.door is None or not analysis.door.candidates:
+            return tuple(detections.values())
+        values: dict[str, set[int | str | None]] = {
+            field: set() for field in ("opening_width", "opening_height", "opening_depth", "door_orientation")
+        }
+        for hall in analysis.door.candidates:
+            for width, height in hall.opening_sizes:
+                values["opening_width"].add(width)
+                values["opening_height"].add(height)
+            values["door_orientation"].add("door" if hall.axis != 1 else None)
+            if not hall.patterns:
+                values["opening_depth"].add(None)
+            for match in hall.patterns:
+                distances = [pos[hall.axis] for pos in match.blocks]
+                values["opening_depth"].add(max(distances) - min(distances) + 1)
+        for field, options in values.items():
+            if len(options) == 1 and None not in options:
+                detections[field] = SchematicDetection(
+                    field, "detected", next(iter(options)), "All candidate hallway interpretations agree."
+                )
+            elif len(options) > 1:
+                detections[field] = SchematicDetection(field, "ambiguous", reason="Hallway interpretations differ.")
+        return tuple(detections.values())
 
     async def suggest(
         self, draft: StoredDraft, upload_id: UUID, state: DraftSchematicState, analysis: SchematicAnalysis | None
@@ -132,6 +161,13 @@ class SchematicSubmissionInference:
                         "restrictions", keys, "Components absent from the uploaded selection's block inventory."
                     )
                 )
+        detections = self.detect(analysis)
+        if draft.snapshot.category == "door":
+            candidates.extend(
+                SchematicFieldSuggestion(item.field_id, item.value, item.reason)
+                for item in detections
+                if item.status == "detected"
+            )
         suggestions: list[SchematicFieldSuggestion] = []
         if manifest is not None:
             for candidate in candidates:
@@ -143,5 +179,5 @@ class SchematicSubmissionInference:
                 if candidate.field_id not in errors and candidate.field_id in visible:
                     suggestions.append(candidate)
         return SchematicSubmissionSuggestions(
-            upload_id, state, draft.snapshot.revision, tuple(suggestions), self.detect(analysis), metrics
+            upload_id, state, draft.snapshot.revision, tuple(suggestions), detections, metrics, analysis.door
         )

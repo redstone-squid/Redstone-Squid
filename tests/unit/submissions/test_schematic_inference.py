@@ -8,6 +8,8 @@ from pytest_mock import MockerFixture
 
 from squid.core.actors import Actor
 from squid.core.errors import NotFoundError
+from squid.core.schematics.domain.doors.detection import detect_cycle
+from squid.core.schematics.infrastructure import wire
 from squid.core.submissions.application.forms import CheckedInFormManifestRegistry, FormOptionSet, SubmissionFormService
 from squid.core.submissions.application.schematic_inference import SchematicSubmissionInference
 from squid.core.submissions.application.schematics import DraftSchematicService
@@ -137,3 +139,19 @@ async def test_draft_and_file_access_are_checked_before_returning_metadata(mocke
     with pytest.raises(DraftAccessDeniedError):
         await service.suggestions(draft.snapshot.id, Actor(account_id=43), source.id)
     uow.draft_schematics.analysis_for_draft.assert_not_called()
+
+
+async def test_inference_reports_shared_dimensions_with_ambiguous_block_placements(
+    inference: SchematicSubmissionInference,
+) -> None:
+    opened = {(x, y, z): "stone" for z in (0, 1) for x, y in ((-1, 0), (1, 0), (0, -1), (0, 1))}
+    closed = opened | {(0, 0, 0): "glass", (0, 0, 1): "glass"}
+    door = detect_cycle(opened, closed, opened, {"stone", "glass"})
+    analysis = replace(make_analysis(), door=door)
+    restored = wire.decode_analysis(wire.encode_analysis(analysis))
+    result = await inference.suggest(stored_draft(), uuid4(), DraftSchematicState.READY, restored)
+    assert result.door == door
+    assert door.candidates[0].disputed_blocks == ((0, 0, 0), (0, 0, 1))
+    detected = {d.field_id: d.value for d in result.detections if d.status == "detected"}
+    assert detected == {"door_orientation": "door", "opening_width": 1, "opening_height": 1}
+    assert any(d.field_id == "opening_depth" and d.status == "ambiguous" for d in result.detections)

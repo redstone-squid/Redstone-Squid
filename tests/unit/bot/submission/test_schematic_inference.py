@@ -8,6 +8,7 @@ from uuid import uuid4
 import pytest
 
 from squid.core.actors import Actor
+from squid.core.schematics.domain.doors.detection import detect_cycle
 from squid.core.submissions.application.intake import SuppliedAttachment
 from squid.core.submissions.application.schematic_inference import (
     SchematicFieldSuggestion,
@@ -34,11 +35,14 @@ async def test_submit_panel_infers_missing_values_without_overwriting_command_op
     schematics.list = AsyncMock(
         return_value=(DraftSchematic(source_id, "door.schem", "a" * 64, 1, DraftSchematicState.READY, primary=True),)
     )
+    opened = {(x, y, z): "stone" for z in (0, 1) for x, y in ((-1, 0), (1, 0), (0, -1), (0, 1))}
+    closed = opened | {(0, 0, 0): "glass", (0, 0, 1): "glass"}
     schematics.suggestions = AsyncMock(
         return_value=SchematicSubmissionSuggestions(
             source_id,
             DraftSchematicState.READY,
             0,
+            door=detect_cycle(opened, closed, opened, {"stone", "glass"}),
             suggestions=(
                 SchematicFieldSuggestion("capture_width", 5, "Measured bounds"),
                 SchematicFieldSuggestion("display_name", "Metadata title", "Embedded title"),
@@ -53,6 +57,10 @@ async def test_submit_panel_infers_missing_values_without_overwriting_command_op
     assert drafts.current.snapshot.answers["display_name"] == "My title"
     assert drafts.current.snapshot.answers["capture_width"] == 5
     assert "opening_width" not in drafts.current.snapshot.answers
+    report = editor.workspace.hallway_report
+    assert report is not None
+    assert report.name == f"hallways-{source_id}.json"
+    assert "Hallway candidates and block coordinates" in labels(editor.render())
     assert len(editor.workspace.edits.undoable) == 1
     schematics.suggestions.assert_awaited_once_with(drafts.current.snapshot.id, Actor(account_id=7), source_id)
 
