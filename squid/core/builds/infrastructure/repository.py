@@ -9,7 +9,7 @@ from dataclasses import replace
 from decimal import Decimal
 from typing import Any, cast
 
-from sqlalchemy import Select, delete, func, select, update
+from sqlalchemy import Select, Table, delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import raiseload, selectinload
@@ -45,6 +45,7 @@ from squid.core.errors import DataIntegrityError, InvalidStateError, Persistence
 from squid.core.events.infrastructure.repository import publish_domain_event
 from squid.core.messages.domain import MessageSnapshot
 from squid.core.messages.models import Message
+from squid.core.records.models import DoorTimingVariant, ExtenderTimingVariant
 from squid.core.settings.infrastructure.repository import ensure_server_settings
 from squid.core.tags.domain import TagSemanticKind, TagValueType
 from squid.core.tags.infrastructure.loading import assignment_units, definition_units
@@ -495,6 +496,52 @@ class BuildRepository:
             session = self._session()
             await self._update(session, build)
             await publish_domain_event(session, BuildEdited(build.id, build.revision))
+
+    async def change_category(self, current: Build, target: Build) -> int:
+        """Replace a locked subtype in the active attributed build-edit transaction."""
+        assert current.id == target.id and current.category is not target.category
+        session = self._session()
+        builds = cast(Table, Build.__table__)
+        current_type = cast(Table, type(current).__table__)
+        target_type = cast(Table, type(target).__table__)
+        # Hold the subtype row against new FK references, then lock any timing
+        # variants before taking the historical snapshot that will retain them.
+        await session.execute(
+            select(current_type.c.build_id).where(current_type.c.build_id == current.id).with_for_update()
+        )
+        variant_type = (
+            DoorTimingVariant
+            if isinstance(current, DoorBuild)
+            else ExtenderTimingVariant
+            if isinstance(current, ExtenderBuild)
+            else None
+        )
+        if variant_type is not None:
+            await session.execute(select(variant_type.id).where(variant_type.build_id == current.id).with_for_update())
+        await session.execute(select(func.capture_build_edit(current.id)))
+        revision = (
+            await session.execute(
+                update(builds)
+                .where(builds.c.id == current.id, builds.c.revision == current.revision)
+                .values(
+                    category=target.category, revision=builds.c.revision + 1, edited_time=Instant.now(), embedding=None
+                )
+                .returning(builds.c.revision)
+            )
+        ).scalar_one_or_none()
+        if revision is None:
+            raise BuildRevisionMismatchError(current.id, expected_revision=current.revision)
+        # The deferred subtype constraint permits the short interval while the
+        # parent has its new discriminator but still has the old subtype row.
+        await session.execute(delete(current_type).where(current_type.c.build_id == current.id))
+        subtype_values = {
+            column.name: current.id if column.name == "build_id" else getattr(target, column.name)
+            for column in target_type.columns
+        }
+        await session.execute(target_type.insert().values(subtype_values))
+        session.expunge(current)
+        await publish_domain_event(session, BuildEdited(current.id, revision))
+        return revision
 
     async def _insert(self, session: AsyncSession, build: Build) -> None:
         """Insert a prepared build within the caller's transaction, including its database events."""

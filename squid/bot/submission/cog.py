@@ -23,13 +23,17 @@ from squid.bot.submission.ui.attachment_review import (
     review_attachments,
     warn_if_attachment_archive_unavailable,
 )
+from squid.bot.submission.ui.category_change import BuildCategoryEditor
 from squid.bot.submission.ui.controls import edit_build, recover_build_editor, reopen_revision
 from squid.bot.submission.ui.drafts import DraftEditorScreen
 from squid.bot.submission.ui.inference import reopen_inference
 from squid.bot.submission.ui.saved_drafts import SavedDraftsScreen
 from squid.bot.utils.autocomplete import suggests
+from squid.core.actors import Actor
 from squid.core.builds.domain import DoorOrientationLiteral
 from squid.core.builds.domain.models import BuildCategoryLiteral
+from squid.core.builds.errors import BuildNotFoundError
+from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_RECLASSIFY
 from squid.core.search.domain import SearchMode
 from squid_i18n import md_tr, tr
 
@@ -364,6 +368,34 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         )
         if form is not None:
             await request.respond(form)
+
+    @build_group.command(
+        name=tr(t"command-build-category-name = change-category"),
+        description=tr(t"command-build-category-help = Change the category of a saved build."),
+        defer="private",
+        options={
+            "build_id": sd.Option(
+                name=tr(t"command-build-browse-build-id-name = id"),
+                description=tr(t"command-build-category-id = Build whose category you want to change."),
+                autocomplete=suggests("builds"),
+            ),
+        },
+    )
+    async def change_category(self, request: sd.Request[Self, BotT], build_id: int) -> BuildCategoryEditor:
+        """Open a private moderator preview for a category change."""
+        client = request.client
+
+        async def actor() -> Actor:
+            return await client.actors.resolve(request, refresh=True)
+
+        async def refresh() -> None:
+            await client.refresh_posts("build", str(build_id))
+
+        await client.services.permissions.require(await actor(), BUILD_SUBMISSION_RECLASSIFY)
+        build = await client.services.builds.get(build_id)
+        if build is None:
+            raise BuildNotFoundError(build_id)
+        return BuildCategoryEditor(build, client.services.edits, actor, refresh)
 
     @build_group.command(
         name=tr(t"command-build-drafts-name = drafts"),

@@ -44,6 +44,7 @@ from squid.core.builds.application import (
     BuildService,
     RestrictionService,
 )
+from squid.core.builds.application.category_edits import BUILD_CATEGORY_EDIT, BuildCategoryEdit
 from squid.core.builds.application.edits import BUILD_EDIT, BUILD_STATUS_EDIT, BuildFieldsEdit, BuildStatusEdit
 from squid.core.builds.application.locks import BuildLockService
 from squid.core.builds.application.tag_service import BuildTagService
@@ -296,6 +297,7 @@ class _ServiceGraph:
                 ROLE_DELETE: PermissionRoleDeletion(self.permission_admin),
                 BUILD_EDIT: BuildFieldsEdit(self.builds),
                 BUILD_STATUS_EDIT: BuildStatusEdit(self.permissions),
+                BUILD_CATEGORY_EDIT: BuildCategoryEdit(self.permissions),
                 RUNTIME_EDIT: RuntimeSettingsEdit(self.permissions, RuntimeSettings()),
                 GUILD_EDIT: GuildSettingsEdit(self.permissions),
                 PROFILE_CLEAR: AccountProfileClear(self.permissions),

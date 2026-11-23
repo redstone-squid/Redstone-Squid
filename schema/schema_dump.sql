@@ -131,7 +131,16 @@ SELECT jsonb_build_object(
     'links', COALESCE((SELECT jsonb_agg(jsonb_build_object('url', r.url, 'media_type', r.media_type) ORDER BY r.media_type, r.url) FROM public.build_links r  WHERE r.build_id = b.id), '[]'::jsonb),
     'source_messages', COALESCE((SELECT jsonb_agg(jsonb_build_object('message_id', r.message_id) ORDER BY r.position, r.message_id) FROM public.build_source_messages r  WHERE r.build_id = b.id), '[]'::jsonb),
     'schematics', COALESCE((SELECT jsonb_agg(jsonb_build_object('id', r.id, 'file_sha256', r.file_sha256, 'is_primary', r.is_primary, 'original_filename', r.original_filename, 'uploaded_by_account_id', r.uploaded_by_account_id, 'visibility', r.visibility, 'license_code', r.license_code, 'rights_attested_at', r.rights_attested_at, 'rights_attested_by_account_id', r.rights_attested_by_account_id, 'published_at', r.published_at, 'withdrawn_at', r.withdrawn_at) ORDER BY r.id) FROM public.build_schematics r  WHERE r.build_id = b.id), '[]'::jsonb)
-) FROM public.builds b WHERE b.id = target_build_id;
+) || jsonb_strip_nulls(jsonb_build_object(
+    'door_timing_variants', (
+        SELECT jsonb_agg(to_jsonb(v) - 'build_id' ORDER BY v.id)
+        FROM public.door_timing_variants v WHERE v.build_id = b.id
+    ),
+    'extender_timing_variants', (
+        SELECT jsonb_agg(to_jsonb(v) - 'build_id' ORDER BY v.id)
+        FROM public.extender_timing_variants v WHERE v.build_id = b.id
+    )
+)) FROM public.builds b WHERE b.id = target_build_id;
 $$;
 
 

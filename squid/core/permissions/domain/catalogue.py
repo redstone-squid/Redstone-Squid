@@ -167,6 +167,12 @@ BUILD_SUBMISSION_EDIT = _b.node(
     NodeScope.GLOBAL,
     tr(t"permissions-edit-unsubmitted-builds = Edit builds you did not submit."),
 )
+BUILD_SUBMISSION_RECLASSIFY = _b.node(
+    "build.submission.reclassify",
+    NodeScope.GLOBAL,
+    tr(t"permissions-reclassify-build = Change a saved build's category."),
+    tags=(Tag.MODERATION,),
+)
 BUILD_SUBMISSION_APPROVE = _b.node(
     "build.submission.approve",
     NodeScope.GLOBAL,

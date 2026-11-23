@@ -57,6 +57,7 @@ type OptionLoader = Callable[[str], Awaitable[tuple[ChoiceOption, ...]]]
 
 type CardRenderer = Callable[[Build], Awaitable[sl.LayoutNode[ComponentsV2Target, sd.Request]]]
 
+_CATEGORY_CHANGED = tr(t"build-editor-category-changed = This build's category changed. Open a new editor.")
 _MAX_SELECT_OPTIONS = 25
 
 
@@ -340,11 +341,13 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
     @override
     def render(self) -> sl.DocumentLike[ComponentsV2Target, sd.Request]:
         if self.expired:
-            return self._expired()
+            return self._restart(tr(t"build-editor-expired = This editor expired. Unsaved changes were discarded."))
         state = self.projection.status
         if self._seed is None and not isinstance(state, sl.resources.Ready) and state.previous is None:
             return (sl.status(tr(t"bot-submission-ui-views-loading-build = Loading build.")),)
         ws = self.workspace
+        if self.build.category.value.lower() != ws.category:
+            return self._restart(_CATEGORY_CHANGED)
         nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request]] = []
         if self._recovered:
             nodes.append(
@@ -406,15 +409,12 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
             nodes.extend(self.controller.controls())
         return nodes
 
-    def _expired(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
+    def _restart(self, reason: TextLike) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
         # Route registration imports the editor through opening.py, so resolve the route here.
         from squid.bot.submission.ui import controls as build_controls
 
         return (
-            sl.status(
-                tr(t"build-editor-expired = This editor expired. Unsaved changes were discarded."),
-                tone=sl.Tone.WARNING,
-            ),
+            sl.status(reason, tone=sl.Tone.WARNING),
             sl.action_controls(
                 sl.routed_action_control(
                     tr(t"build-editor-open-new-editor = Open new editor"),
@@ -615,6 +615,9 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
         current = await self.builds.get(self._build_id)
         if current is None:
             raise LookupError(self._build_id)
+        if current.category.value.lower() != self.workspace.category:
+            await self.projection.reload()
+            return
         self.workspace.reset(current)
         self.confirming = False
         self.conflict = False
@@ -641,6 +644,9 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
         await self.controller.refresh()
 
     async def _may_event(self, event: sl.interactions.ActionResponder) -> bool:
+        if self.build.category.value.lower() != self.workspace.category:
+            await event.notice(_CATEGORY_CHANGED)
+            return False
         if not await self.may_edit():
             await event.notice(
                 tr(

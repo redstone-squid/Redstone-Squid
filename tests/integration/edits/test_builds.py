@@ -14,6 +14,7 @@ from squid.config import EMBEDDING_DIMENSION
 from squid.core.accounts.models import Account, AccountIdentity
 from squid.core.actors import Actor
 from squid.core.builds.application import BuildEditPatch, BuildService
+from squid.core.builds.application.category_edits import BUILD_CATEGORY_EDIT, BuildCategoryEdit
 from squid.core.builds.application.edits import (
     BUILD_EDIT,
     BUILD_STATUS_EDIT,
@@ -29,15 +30,16 @@ from squid.core.builds.application.tag_service import BuildTagService
 from squid.core.builds.domain import BuildStatus, ShowcaseTag, UnresolvedTags
 from squid.core.builds.domain.credits import Credit, CreditKind, CreditRole
 from squid.core.builds.history_models import BuildHistoryEntry
-from squid.core.builds.models import Build, OtherBuild
+from squid.core.builds.models import Build, DoorBuild, ExtenderBuild, OtherBuild
 from squid.core.edits.application import EditExecutor
 from squid.core.edits.domain import EditCommand, EditResult, EditValues, LatestRevision, Revision, RevisionConflictError
 from squid.core.errors import AuthorizationError
 from squid.core.events import DomainEvent
 from squid.core.permissions.application.services import PermissionService
-from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
+from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT, BUILD_SUBMISSION_RECLASSIFY
 from squid.core.permissions.models import PermissionGrant
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.records.models import DoorTimingVariant
 from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagValueType
 from squid.core.versions.application import VersionService
 from squid.core.voting.application.services import VoteService
@@ -75,6 +77,69 @@ async def setup(
         Actor(account_id=account_id),
         build,
     )
+
+
+async def test_moderator_changes_category_in_place_and_archives_old_timing_variants(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    sessions = migrated_session_factory
+    factory = partial(SqlAlchemyUnitOfWork, sessions)
+    account_id = await seed_account_and_version(sessions)
+    actor = Actor(account_id=account_id)
+    edits = EditExecutor(factory, {BUILD_CATEGORY_EDIT: BuildCategoryEdit(PermissionService(uow_factory=factory))})
+    door = DoorBuild(
+        submitter_account_id=account_id,
+        submission_status=BuildStatus.APPROVED,
+        width=9,
+        door_width=3,
+        door_height=4,
+        credits=[Credit(name="Builder")],
+        versions=["Java 1.21.0"],
+        display_name="Example",
+    )
+    async with factory() as uow, uow.builds.editing(actor=account_id, source="test"):
+        await uow.builds.save(door)
+        await uow.commit()
+    async with sessions.begin() as session:
+        session.add(DoorTimingVariant(build_id=door.id, label="parallel", opening_time=12))
+
+    target = build_target(door.id)
+    request = EditValues.of({"category": "Extender", "extender": {"extension_length": 5}})
+    command = EditCommand(BUILD_CATEGORY_EDIT, (Revision(target, door.revision),), request)
+    with pytest.raises(AuthorizationError):
+        await edits.execute(command, actor)
+
+    async with sessions.begin() as session:
+        session.add(PermissionGrant(pattern=BUILD_SUBMISSION_RECLASSIFY.name, effect=1, subject_account_id=account_id))
+
+    result = await edits.execute(command, actor)
+    assert result.outcome.final
+    assert (await edits.execute(command, actor)).replayed
+    assert result.outcome.revisions == (Revision(target, door.revision + 1),)
+    with pytest.raises(RevisionConflictError):
+        await edits.execute(EditCommand(BUILD_CATEGORY_EDIT, command.expected, request), actor)
+    async with factory() as uow:
+        extender = await uow.builds.get_by_id(door.id)
+        assert isinstance(extender, ExtenderBuild)
+        assert extender.extension_length == 5
+        assert extender.orientation is None
+        assert extender.width == 9
+        assert extender.credits == door.credits
+        assert extender.versions == door.versions
+        assert extender.display_name == door.display_name
+        history = await uow.build_history.list_history(door.id)
+        latest = history.items[0]
+        entry = await uow.build_history.get_history_entry(door.id, latest.id)
+        assert entry is not None
+        assert entry.before is not None
+        assert entry.after is not None
+        assert entry.before.payload["doors"] is not None
+        assert entry.after.payload["doors"] is None
+        variants = entry.before.payload["door_timing_variants"]
+        assert isinstance(variants, list)
+        assert isinstance(variants[0], dict)
+        assert variants[0]["opening_time"] == 12
+        assert "door_timing_variants" not in entry.after.payload
 
 
 async def test_credited_creator_proposes_published_changes_and_vote_applies_the_exact_patch(
