@@ -12,7 +12,7 @@ from squid_ui.ext.discord.target_types import ComponentsV2Target
 router = AppRoutes()
 
 
-@router.route("/builds/source/{channel_id}/{message_id}")
+@router.route("/build-source/{channel_id}/{message_id}")
 async def preview_build_source(request: AppRequest, channel_id: int, message_id: int) -> None:
     unavailable = "The original Discord message is unavailable or you do not have access to it."
     channel = await request.client.get_or_fetch_messageable_channel(channel_id)
