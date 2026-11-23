@@ -1,5 +1,7 @@
 """Form manifests, partial validation and immutable revisioned draft operations."""
 
+from collections.abc import Mapping
+from dataclasses import replace
 from uuid import UUID
 
 import anyio
@@ -12,6 +14,7 @@ from squid.core.submissions.application import (
     CheckedInFormManifestRegistry,
     FormOptionSet,
     SubmissionFormService,
+    build_edit_manifest,
     build_submission_manifest,
 )
 from squid.core.submissions.domain import (
@@ -24,6 +27,8 @@ from squid.core.submissions.domain import (
     DraftStatus,
     FieldOperation,
     FieldOperationKind,
+    FieldRule,
+    SubmissionAttentionReason,
     SubmissionOrigin,
     ValueKind,
 )
@@ -105,6 +110,56 @@ def test_partial_validation_allows_incomplete_draft_but_rejects_wrong_values() -
         origin=SubmissionOrigin.DISCORD,
         require_complete=False,
     ) == {"extension_length": "below_minimum"}
+
+
+def test_transition_uses_all_inputs_and_distinguishes_rules_on_the_same_field() -> None:
+    def no_later_than_opening(value: JSONValue, related: Mapping[str, JSONValue]) -> bool:
+        opening = related["opening_time"]
+        assert type(value) is int
+        assert type(opening) is int
+        return value <= opening
+
+    def no_later_than_closing(value: JSONValue, related: Mapping[str, JSONValue]) -> bool:
+        closing = related["closing_time"]
+        assert type(value) is int
+        assert type(closing) is int
+        return value <= closing
+
+    manifest = build_edit_manifest()
+    door = manifest.category("door")
+    rules = (
+        FieldRule("opening_limit", SubmissionAttentionReason.ABOVE_MAXIMUM, no_later_than_opening, ("opening_time",)),
+        FieldRule("closing_limit", SubmissionAttentionReason.ABOVE_MAXIMUM, no_later_than_closing, ("closing_time",)),
+    )
+    door = replace(
+        door,
+        sections=tuple(
+            replace(
+                section,
+                fields=tuple(
+                    replace(field, rules=rules) if field.id == "visible_opening_time" else field
+                    for field in section.fields
+                ),
+            )
+            for section in door.sections
+        ),
+    )
+    manifest = replace(manifest, categories=(door,))
+    before: dict[str, JSONValue] = {"opening_time": 4, "visible_opening_time": 6, "closing_time": 8}
+    origin = SubmissionOrigin.DISCORD
+
+    assert manifest.validate_answers("door", before, origin=origin) == {"visible_opening_time": "above_maximum"}
+    assert manifest.validate_transition("door", before, before | {"display_name": "New name"}, origin=origin) == {}
+    assert manifest.validate_transition("door", before, before | {"opening_time": 5}, origin=origin) == {
+        "visible_opening_time": "above_maximum"
+    }
+    assert manifest.validate_transition("door", before, before | {"closing_time": 5}, origin=origin) == {
+        "visible_opening_time": "above_maximum"
+    }
+    assert manifest.validate_transition("door", before, before | {"opening_time": 6}, origin=origin) == {}
+    assert manifest.validate_answers("door", {"visible_opening_time": 6, "opening_time": "bad"}, origin=origin) == {
+        "opening_time": "wrong_type"
+    }
 
 
 @pytest.mark.asyncio

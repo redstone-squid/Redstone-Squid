@@ -7,10 +7,10 @@ a later form change does not silently change the meaning of existing answers.
 """
 
 import re
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
-from typing import Self
+from typing import TYPE_CHECKING, Self
 
 from squid.core.builds.domain.credits import read_credits
 from squid.core.builds.domain.showcase import read_showcase_tags
@@ -18,6 +18,9 @@ from squid.core.errors import JSONValue, ValidationError
 from squid.core.i18n import tr
 from squid.core.submissions.domain.links import LINK_FIELDS, valid_link_url
 from squid_i18n import md_tr
+
+if TYPE_CHECKING:
+    from squid.core.submissions.domain.finalization import SubmissionAttentionReason
 
 _STABLE_ID = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _OPTION_VALUE_TYPES = frozenset({None, "text", "numeric", "boolean"})
@@ -188,6 +191,33 @@ class EditRules:
 
 
 @dataclass(frozen=True, slots=True)
+class FieldRule:
+    """An additional check reported on its declaring field.
+
+    The predicate receives that field's value and the values of the fields in
+    `depends_on`. It runs when every input is visible and has a value of the
+    declared kind. The rule ID identifies the check independently of its reason.
+    """
+
+    id: str
+    reason: SubmissionAttentionReason
+    accepts: Callable[[JSONValue, Mapping[str, JSONValue]], bool]
+    depends_on: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        _require_stable_id(self.id, "rule ID")
+        _require_unique(self.depends_on, "rule input fields")
+
+
+@dataclass(frozen=True, slots=True)
+class _ValidationIssue:
+    field_id: str
+    reason: str
+    inputs: frozenset[str]
+    rule_id: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class FormField:
     """A form field with its value type, presentation, and validation rules."""
 
@@ -209,10 +239,12 @@ class FormField:
     """The tasks that show this field; see `FormPurpose`."""
     edit_rules: EditRules | None = None
     """Overrides applied in the edit projection."""
+    rules: tuple[FieldRule, ...] = ()
 
     def __post_init__(self) -> None:
         _require_stable_id(self.id, "field ID")
         field_id = self.id
+        _require_unique((rule.id for rule in self.rules), f"rules for {field_id}")
         if not self.label.strip():
             raise ValidationError(
                 md_tr(
@@ -396,10 +428,13 @@ class FormManifest:
             raise ValidationError(msg)
         _require_unique((section.id for section in self.common_sections), "common section IDs")
         _require_unique((category.code for category in self.categories), "category codes")
-        common_ids = tuple(item.id for section in self.common_sections for item in section.fields)
+        common_fields = tuple(item for section in self.common_sections for item in section.fields)
+        common_ids = tuple(item.id for item in common_fields)
         _require_unique(common_ids, "common field IDs")
         for category in self.categories:
-            overlap = set(common_ids).intersection(item.id for item in category.fields)
+            category_fields = category.fields
+            category_ids = {item.id for item in category_fields}
+            overlap = set(common_ids) & category_ids
             if overlap:
                 category_code = category.code
                 fields = sorted(overlap)
@@ -409,6 +444,14 @@ class FormManifest:
                         t"common fields: {fields}",
                     )
                 )
+
+            known_fields = category_ids.union(common_ids)
+            for item in (*common_fields, *category_fields):
+                for rule in item.rules:
+                    unknown = set(rule.depends_on) - known_fields
+                    if unknown or item.id in rule.depends_on:
+                        message = f"Invalid input fields for {category.code}.{item.id}.{rule.id}: {rule.depends_on!r}"
+                        raise ValidationError(message)
 
     def for_purpose(self, purpose: FormPurpose) -> Self:
         """Return the form for one task: only its fields, with edit rules applied when editing.
@@ -471,34 +514,52 @@ class FormManifest:
         required answers are allowed. Dynamic options must be checked separately;
         only inline options are validated here.
         """
-        return self._validate_answers(
+        issues = self._validation_issues(
             self.fields_for(category),
             self.apply_defaults(category, answers, origin=origin),
             origin=origin,
             require_complete=require_complete,
         )
+        errors: dict[str, str] = {}
+        for issue in issues:
+            errors.setdefault(issue.field_id, issue.reason)
+        return errors
 
     @staticmethod
-    def _validate_answers(
+    def _validation_issues(
         fields: tuple[FormField, ...],
         answers: Mapping[str, JSONValue],
         *,
         origin: SubmissionOrigin,
         require_complete: bool = True,
-    ) -> dict[str, str]:
-        errors = {field_id: "unknown_field" for field_id in answers.keys() - {item.id for item in fields}}
-        for item in fields:
-            if not item.is_visible(answers, origin):
-                continue
-            value = answers.get(item.id)
-            if value is None:
-                if item.required and require_complete:
-                    errors[item.id] = "required"
-                continue
-            error = item.validate_value(value)
-            if error is not None:
-                errors[item.id] = error
-        return errors
+    ) -> Iterable[_ValidationIssue]:
+        unknown = answers.keys() - {item.id for item in fields}
+        for field_id in sorted(unknown):
+            yield _ValidationIssue(field_id, "unknown_field", frozenset({field_id}))
+
+        visible = {item.id: item for item in fields if item.is_visible(answers, origin)}
+        present = {field_id: value for field_id in visible if (value := answers.get(field_id)) is not None}
+        reasons = {field_id: visible[field_id].validate_value(value) for field_id, value in present.items()}
+        typed = present.keys() - {field_id for field_id, reason in reasons.items() if reason == "wrong_type"}
+        visibility = {
+            field_id: item.visible_when.field_id for field_id, item in visible.items() if item.visible_when is not None
+        }
+        for field_id, item in visible.items():
+            inputs = frozenset({field_id, visibility.get(field_id, field_id)})
+            if field_id in typed:
+                for rule in item.rules:
+                    if typed.issuperset(rule.depends_on) and not rule.accepts(
+                        present[field_id], {dependency: present[dependency] for dependency in rule.depends_on}
+                    ):
+                        rule_inputs = inputs.union(
+                            rule.depends_on, (visibility[key] for key in rule.depends_on if key in visibility)
+                        )
+                        yield _ValidationIssue(field_id, rule.reason.value, rule_inputs, rule.id)
+            reason = reasons.get(field_id)
+            if field_id not in present and item.required and require_complete:
+                reason = "required"
+            if reason is not None:
+                yield _ValidationIssue(field_id, reason, inputs)
 
     def validate_transition(
         self,
@@ -512,19 +573,12 @@ class FormManifest:
         before = self.apply_defaults(category, before, origin=origin)
         after = self.apply_defaults(category, after, origin=origin)
         fields = self.fields_for(category)
-        existing = self._validate_answers(fields, before, origin=origin)
-        problems = self._validate_answers(fields, after, origin=origin)
-        dependencies = {item.id: item.visible_when.field_id for item in fields if item.visible_when is not None}
-        return {
-            field_id: reason
-            for field_id, reason in problems.items()
-            if existing.get(field_id) != reason
-            or before.get(field_id) != after.get(field_id)
-            or (
-                (dependency := dependencies.get(field_id)) is not None
-                and before.get(dependency) != after.get(dependency)
-            )
-        }
+        existing = set(self._validation_issues(fields, before, origin=origin))
+        errors: dict[str, str] = {}
+        for issue in self._validation_issues(fields, after, origin=origin):
+            if issue not in existing or any(before.get(key) != after.get(key) for key in issue.inputs):
+                errors.setdefault(issue.field_id, issue.reason)
+        return errors
 
     def apply_defaults(
         self,
