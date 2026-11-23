@@ -1,8 +1,5 @@
 """Exercise member, moderator and bot-owner commands through Discord."""
 
-from collections.abc import Awaitable, Callable
-from functools import partial
-
 import discord
 import pytest
 import simcord
@@ -35,7 +32,7 @@ from tests.e2e.discord.community_services import (
     PublishedTags,
     VotePosts,
 )
-from tests.e2e.discord.environment import command_environment, displayed_text
+from tests.e2e.discord.environment import allow_idle_reaction_workers, command_environment, displayed_text
 from tests.e2e.discord.workspace_services import WorkspaceAccounts, staff_permissions
 from tests.support.services import bot_services
 from tests.support.voting import build_snapshot
@@ -62,13 +59,7 @@ async def test_archive_then_paste_moves_the_selected_message_with_its_attachment
         accounts=accounts, permissions=staff_permissions(MESSAGE_ARCHIVE_CREATE), error_reports=OwnerReports()
     )
     async with command_environment(ADMIN, services=services) as (bot, env):
-        # Adding the archive's reaction starts the router's persistent workers. An idle
-        # shard is waiting for another gateway event while its handlers remain observable.
-        async def read_next[T](get: Callable[[], Awaitable[T]]) -> T:
-            return await env.external_wait(get(), reason="next Discord reaction")
-
-        for queue in bot.reactions._queues:
-            monkeypatch.setattr(queue, "get", partial(read_next, queue.get))
+        allow_idle_reaction_workers(bot, env, monkeypatch)
         source = env.guild.create_text_channel("source")
         destination = env.guild.create_text_channel("archive")
         moderator = community_moderator(env, accounts)

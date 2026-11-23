@@ -1,10 +1,11 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from dataclasses import replace
 from functools import partial
 from typing import override
 
 import discord
+import pytest
 import simcord
 from discord.ext import commands
 
@@ -43,6 +44,15 @@ async def command_environment(
             yield bot, env
         finally:
             await bot.close()
+
+
+def allow_idle_reaction_workers(bot: RedstoneSquid, env: simcord.Env, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The workers persist after each reaction. Only the queue read waits for external input.
+    async def read_next[T](get: Callable[[], Awaitable[T]]) -> T:
+        return await env.external_wait(get(), reason="next Discord reaction")
+
+    for queue in bot.reactions._queues:
+        monkeypatch.setattr(queue, "get", partial(read_next, queue.get))
 
 
 def displayed_text(message: discord.Message) -> list[str]:
