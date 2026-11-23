@@ -13,6 +13,9 @@ from squid_i18n import md_tr
 RESOURCE_PACK_MEDIA_TYPE: Literal["application/zip"] = "application/zip"
 
 
+type Vector3 = tuple[int, int, int]
+
+
 @dataclass(frozen=True, slots=True)
 class RgbaColor:
     """Four finite normalized channels in red, green, blue, alpha order."""

@@ -8,7 +8,8 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Literal
 
-type Vector3 = tuple[int, int, int]
+from squid.core.schematics.domain.doors.detection import DoorDetection
+from squid.core.schematics.domain.values import Vector3 as Vector3
 
 SCHEMATIC_FILE_SCHEMA_MAX_BYTES = 16 * 1024 * 1024
 """Fixed compressed-byte ceiling encoded in the database schema."""
@@ -190,6 +191,7 @@ class SchematicAnalysis:
     analyzer_version: str
     analysis_schema_version: int
     lattice: AutostackLattice | None = None
+    door: DoorDetection | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -30,7 +30,7 @@ def test_irregular_mixed_panel_and_extra_layer(reverse: bool) -> None:
     assert candidate.axis == 2
     assert candidate.closed_endpoint == ("initial" if reverse else "actuated")
     assert candidate.seal == "sealed"
-    assert candidate.opening_size == (2, 2)
+    assert candidate.opening_sizes == {(2, 2)}
     assert not candidate.agreed_blocks
     assert set(candidate.disputed_blocks) == set(panel)
     assert {m.depth for m in candidate.patterns if m.arrangement == "flat"} == {1, 2}
@@ -42,7 +42,7 @@ def test_partial_panel_keeps_the_whole_hallway_and_reports_no_pattern() -> None:
     opened = framed(profile, 3)
     closed = opened | {(x, y, 1): STONE for x in range(2) for y in range(2)}
     (candidate,) = detect_cycle(opened, closed, opened, FULL).candidates
-    assert candidate.opening_size == (3, 3)
+    assert candidate.opening_sizes == {(3, 3)}
     assert candidate.seal == "passage_remains"
     assert not candidate.patterns
 
@@ -68,3 +68,14 @@ def test_bar_pattern_allows_a_passage_and_partial_blocks_cannot_prove_a_seal() -
     (candidate,) = detect_cycle(opened, opened | partial, opened, FULL).candidates
     assert candidate.seal == "unknown"
     assert not detect_cycle(opened, opened | partial, opened | partial, FULL).candidates
+
+
+def test_plug_fits_the_narrow_part_of_a_tapered_hallway() -> None:
+    wide = {(x, 0) for x in range(-1, 2)}
+    opened = framed(wide, 1) | {(x, y, 1): state for (x, y, _), state in framed({(0, 0)}, 1).items()}
+    closed = opened | {(0, 0, 1): GLASS}
+
+    (door,) = detect_cycle(opened, closed, opened, FULL).candidates
+    assert door.seal == "sealed"
+    assert door.opening_sizes == {(1, 1)}
+    assert door.agreed_blocks == ((0, 0, 1),)
