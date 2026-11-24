@@ -20,7 +20,7 @@ stories per folder; `/zh-cn/design-system` shows them in Simplified Chinese.
 | Copying a value                                           | `actions/CopyButton` beside the value in a selectable `Code`                     |
 | State and tags                                            | `feedback/Badge` for a state such as pending, `feedback/Chip` for tags           |
 | Messages, outcomes, failures                              | `feedback/Notice`; choose its `role` by how it should be announced               |
-| Island messages with no visible home, such as new counts  | `announce()` from `feedback/announcer.svelte`, read by the layout's `Announcer`  |
+| Island messages with no visible home, such as new counts  | `announce()` from `feedback/announcer`, read by the layout's `Announcer`         |
 | Loading, empty, failed regions                            | `feedback/Skeleton`, `EmptyState`, `ErrorState`; `Spinner` beside one line       |
 | Progress and levels                                       | `feedback/Progress`, with `kind="meter"` for votes or completeness               |
 | One item as a card                                        | `data/Card`; with `title` and `href` the whole card links                        |

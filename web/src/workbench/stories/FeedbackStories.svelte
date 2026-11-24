@@ -4,7 +4,7 @@
   import Button from "@/ui/actions/Button.svelte";
   import Layout from "@/ui/layout/Layout.svelte";
   import Announcer from "@/ui/feedback/Announcer.svelte";
-  import { announce } from "@/ui/feedback/announcer.svelte";
+  import { announce } from "@/ui/feedback/announcer";
   import Badge from "@/ui/feedback/Badge.svelte";
   import Chip from "@/ui/feedback/Chip.svelte";
   import EmptyState from "@/ui/feedback/EmptyState.svelte";

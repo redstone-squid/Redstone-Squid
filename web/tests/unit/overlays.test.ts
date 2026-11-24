@@ -4,7 +4,7 @@ import { createRawSnippet } from "svelte";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import CopyButton from "@/ui/actions/CopyButton.svelte";
 import Announcer from "@/ui/feedback/Announcer.svelte";
-import { announce } from "@/ui/feedback/announcer.svelte";
+import { announce } from "@/ui/feedback/announcer";
 import SegmentedControl from "@/ui/navigation/SegmentedControl.svelte";
 import Tabs from "@/ui/navigation/Tabs.svelte";
 import Menu from "@/ui/overlays/Menu.svelte";
