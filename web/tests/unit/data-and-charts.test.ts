@@ -145,7 +145,7 @@ describe("SeriesChart", () => {
     expect(
       within(table)
         .getAllByRole("row")
-        .map((row) => row.textContent?.trim()),
+        .map((row) => row.textContent.trim()),
     ).toEqual(["YearSubmittedConfirmed", "20243", "202552"]);
     expect(screen.getByRole("link", { name: "Submitted, 2024: 3" })).toHaveAttribute(
       "href",
@@ -259,7 +259,7 @@ describe("DistributionBar", () => {
       otherLabel: "Other",
     });
     expect(
-      screen.getAllByRole("listitem").map((item) => item.textContent?.replace(/\s+/g, " ").trim()),
+      screen.getAllByRole("listitem").map((item) => item.textContent.replace(/\s+/g, " ").trim()),
     ).toEqual(["Stone 9", "Dust 5", "Other 3"]);
     expect(screen.getByRole("link", { name: "Stone" })).toHaveAttribute("href", "/stone");
   });
@@ -286,10 +286,10 @@ describe("Gallery", () => {
   it("switches the viewer from a thumbnail link and pages the lightbox with arrow keys", async () => {
     const user = userEvent.setup();
     render(Gallery, { items, labels });
-    const thumbs = screen.getAllByRole("link");
-    expect(thumbs[1]).toHaveAttribute("href", "/b.png");
-    await user.click(thumbs[1]!);
-    expect(thumbs[1]).toHaveAttribute("aria-current", "true");
+    const second = screen.getAllByRole("link")[1];
+    expect(second).toHaveAttribute("href", "/b.png");
+    if (second !== undefined) await user.click(second);
+    expect(second).toHaveAttribute("aria-current", "true");
 
     await user.click(screen.getByRole("button", { name: "View full size" }));
     const dialog = await screen.findByRole("dialog", { name: "2 of 3" });
@@ -303,7 +303,9 @@ describe("Gallery", () => {
 
   it("plays videos in native controls", () => {
     const { container } = render(Gallery, {
-      items: [{ ...items[0]!, kind: "video" as const, src: "/clip.mp4" }],
+      items: items
+        .slice(0, 1)
+        .map((item) => ({ ...item, kind: "video" as const, src: "/clip.mp4" })),
       labels,
     });
     expect(container.querySelector("video")).toHaveAttribute("poster", "/a-thumb.png");

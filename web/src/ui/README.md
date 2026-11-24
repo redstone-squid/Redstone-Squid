@@ -27,6 +27,11 @@ stories per folder; `/zh-cn/design-system` shows them in Simplified Chinese.
 | Rows of items                                             | `data/List` and `ListItem`                                                      |
 | Labelled values and headline numbers                      | `data/DescriptionList`, `data/StatGroup`                                        |
 | Images and people                                         | `data/Image` (fixed frame with fallback), `data/Avatar`                         |
+| Media with thumbnails and a lightbox                      | `data/Gallery`                                                                  |
+| Tabular data, sorted by the server, with grouped rows     | `table/DataTable`; sort, `hide=` and `open=` are links                          |
+| Values over time or categories                            | `chart/SeriesChart` (line, step, bar, stacked bar)                              |
+| Values over runs of widths                                | `chart/RangeChart`                                                              |
+| Ranked shares, top N plus other                           | `chart/DistributionBar`                                                         |
 | Events and changes                                        | `data/Timeline`, `data/Diff`                                                    |
 | Hidden detail                                             | `data/Disclosure`                                                               |
 | Moving between pages and views                            | `navigation/Breadcrumbs`, `Tabs`, `SegmentedControl`, `NavList`, `Pagination`   |
@@ -68,6 +73,11 @@ from its content, so give it a parent that sets the width. Page regions such as 
 are not query containers: containment makes each a stacking context, which would trap the
 header's menus beneath the main content. `tests/review/reflow.spec.ts` checks every width
 from 320px to 1600px.
+
+Charts take series data, draw static SVG on the server and ship the same data as a table;
+`interactive` adds a tooltip and arrow keys once hydrated. Series colors are the `chart-*`
+tokens, assigned in order through a `tone` and never used for text. `DataTable` and the
+charts take snippets or format functions, so a Svelte feature component wraps them for Astro.
 
 Astro wraps slot content passed to a Svelte component in an `astro-static-slot` element,
 which `app.css` displays as `contents`. The wrapper still breaks list and table structure,

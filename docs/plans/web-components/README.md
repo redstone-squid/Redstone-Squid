@@ -34,23 +34,29 @@ squid/core, so screens are composed from `web/src/ui` instead of one-off markup.
 
 ## Status and resuming
 
-Phases 0 and 1 (commits `960679e9a` to `01cf8de84`), 2 (from `27440a843`) and 3 are done.
+Phases 0 to 4 are done: 0 and 1 in commits `960679e9a` to `01cf8de84`, then 2, 3 and 4,
+built in parallel and joined on one branch. Phase 5 is next. Left from Phase 4: the
+`DataTable` column menu, a `Menu` of `hide=` links above the table (a `visibilityHref(hidden)`
+prop, with a GET-form fallback) that feeds `hidden`; columns gain `hideable`.
 
 What exists in `web/src/ui`, by folder: `layout` (Layout, Container), `content` (Heading,
 Text, Link, Icon, Code, Prose, Timestamp, VisuallyHidden, SkipLink), `actions` (Button),
 `feedback` (Badge, Chip, Notice, Progress, Skeleton, Spinner, EmptyState, ErrorState),
 `data` (Card, Image, Avatar, DescriptionList, StatGroup, Disclosure, List, ListItem,
-Timeline, Diff), `navigation` (Breadcrumbs, Pagination, NavList, Tabs in link and panel
+Timeline, Diff, Gallery), `table` (DataTable), `chart` (Chart, SeriesChart, RangeChart,
+DistributionBar), `navigation` (Breadcrumbs, Pagination, NavList, Tabs in link and panel
 mode, SegmentedControl in link and radio mode), `patterns` (PageHeader, Section), `forms`
 (every §2.2 component), `overlays` (Dialog, Sheet, Popover, Tooltip, Menu), plus
-`actions/CopyButton` and `feedback/Announcer` and `SaveStatus`. `LanguageSelector` is a
-`Menu` with `nojs`. Left over: Phase 5 places `Announcer` in `CatalogueLayout` as an island.
+`actions/CopyButton` and `feedback/Announcer`. `LanguageSelector` is a `Menu` with `nojs`. Left over: Phase 5 places `Announcer` in `CatalogueLayout` as an island.
 
-Phase 2 departures from §2.2: `RangeField` takes `separator` and `inputmode` instead of
-`bounds` and `step`, which a text input cannot enforce; `UnitField` submits the typed number
-and unit id (`name`, `unitName`); `FileDrop` passes skipped files as a second `onFiles`
-argument; `Autocomplete`, `Combobox` and `ListField` take label functions such as
-`labels.count(n)`, so only Svelte features can render them.
+Departures from §2.2: `RangeField` takes `separator` and `inputmode` instead of `bounds` and
+`step`, which a text input cannot enforce; `UnitField` submits the typed number and unit id
+(`name`, `unitName`); `FileDrop` passes skipped files as a second `onFiles` argument;
+`Autocomplete`, `Combobox` and `ListField` take label functions such as `labels.count(n)`,
+so only Svelte features can render them. `DistributionBar` is HTML bars, not LayerChart, so
+labels wrap and stay text. The `DataTable` header is not sticky to the page, because its
+horizontal scroll container captures `position: sticky`; revisit with a page-height scroll
+region if long tables need it.
 
 Conventions to follow:
 
@@ -117,7 +123,7 @@ were built here, ahead of their phases.
 - `Dialog` (rewritten), `Sheet`, `Popover`, `Tooltip`, `Menu` (with the `details` fallback, then replace `LanguageSelector`'s hand-built menu), `Tabs` panel mode, `SegmentedControl` radio mode, `CopyButton`, `Announcer`.
 - _Depends on:_ Phase 2 for the dialog contents.
 
-**Phase 4: data and charts.**
+**Phase 4: data and charts.** Done.
 
 - `DataTable`: `@tanstack/svelte-table`, server-driven sort, visibility, expansion, pinned column and the no-JS link model. It needs Phase 3 `Menu` for columns.
 - `Gallery`: needs Phase 3 `Dialog`.
