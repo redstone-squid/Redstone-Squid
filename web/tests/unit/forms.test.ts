@@ -9,7 +9,7 @@ import ErrorSummary from "@/ui/forms/ErrorSummary.svelte";
 import FileDrop from "@/ui/forms/FileDrop.svelte";
 import FormActions from "@/ui/forms/FormActions.svelte";
 import RangeField from "@/ui/forms/RangeField.svelte";
-import SaveStatus from "@/ui/forms/SaveStatus.svelte";
+import SaveStatus from "@/ui/feedback/SaveStatus.svelte";
 import SelectField from "@/ui/forms/SelectField.svelte";
 import Switch from "@/ui/forms/Switch.svelte";
 import TextareaField from "@/ui/forms/TextareaField.svelte";

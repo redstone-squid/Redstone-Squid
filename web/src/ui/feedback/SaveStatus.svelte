@@ -12,7 +12,7 @@
   import { cn } from "@/ui/cn";
   import Button from "@/ui/actions/Button.svelte";
   import Timestamp from "@/ui/content/Timestamp.svelte";
-  import Spinner from "@/ui/feedback/Spinner.svelte";
+  import Spinner from "./Spinner.svelte";
 
   /**
    * Where an autosaving form stands: unsaved changes, saving, saved (with `savedAt`), offline,

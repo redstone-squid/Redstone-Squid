@@ -47,7 +47,7 @@ Timeline, Diff, Gallery), `table` (DataTable), `chart` (Chart, SeriesChart, Rang
 DistributionBar), `navigation` (Breadcrumbs, Pagination, NavList, Tabs in link and panel
 mode, SegmentedControl in link and radio mode), `patterns` (PageHeader, Section), `forms`
 (every §2.2 component), `overlays` (Dialog, Sheet, Popover, Tooltip, Menu), plus
-`actions/CopyButton` and `feedback/Announcer`. `LanguageSelector` is a `Menu` with `nojs`. Left over: Phase 5 places `Announcer` in `CatalogueLayout` as an island.
+`actions/CopyButton`, `feedback/Announcer` and `feedback/SaveStatus`. `LanguageSelector` is a `Menu` with `nojs`. Left over: Phase 5 places `Announcer` in `CatalogueLayout` as an island.
 
 Departures from §2.2: `RangeField` takes `separator` and `inputmode` instead of `bounds` and
 `step`, which a text input cannot enforce; `UnitField` submits the typed number and unit id

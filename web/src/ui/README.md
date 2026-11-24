@@ -6,46 +6,46 @@ stories per folder; `/zh-cn/design-system` shows them in Simplified Chinese.
 
 ## Composing a screen
 
-| Need                                                      | Use                                                                             |
-| --------------------------------------------------------- | ------------------------------------------------------------------------------- |
-| Page width and gutter                                     | `layout/Container`                                                              |
-| Vertical rhythm, wrapping rows, title and actions, grids  | `layout/Layout` with `stack`, `cluster`, `split`, `grid` (`min`), `center`      |
-| Page title, breadcrumbs, meta, actions                    | `patterns/PageHeader` (the page's only `h1`)                                    |
-| A titled part of a page                                   | `patterns/Section`, with `surface` for a panel                                  |
-| Headings, body text, links, code                          | `content/Heading`, `Text`, `Link`, `Code`, `Prose` for rendered Markdown        |
-| Dates                                                     | `content/Timestamp`; format the label in a message                              |
-| Two or three facts of one kind, such as count and version | `content/MetaList`; facts with other roles go elsewhere                         |
-| Icons                                                     | `content/Icon` wrapping a lucide icon; decorative unless labelled               |
-| Commands and links that look like them                    | `actions/Button`, with `href` for a link and `pending` while saving             |
-| Copying a value                                           | `actions/CopyButton` beside the value in a selectable `Code`                    |
-| State and tags                                            | `feedback/Badge` for a state such as pending, `feedback/Chip` for tags          |
-| Messages, outcomes, failures                              | `feedback/Notice`; choose its `role` by how it should be announced              |
-| Island messages with no visible home, such as new counts  | `announce()` from `feedback/announcer.svelte`, read by the layout's `Announcer` |
-| Loading, empty, failed regions                            | `feedback/Skeleton`, `EmptyState`, `ErrorState`; `Spinner` beside one line      |
-| Progress and levels                                       | `feedback/Progress`, with `kind="meter"` for votes or completeness              |
-| One item as a card                                        | `data/Card`; with `title` and `href` the whole card links                       |
-| Rows of items                                             | `data/List` and `ListItem`                                                      |
-| Labelled values and headline numbers                      | `data/DescriptionList`, `data/StatGroup`                                        |
-| Images and people                                         | `data/Image` (fixed frame with fallback), `data/Avatar`                         |
-| Media with thumbnails and a lightbox                      | `data/Gallery`                                                                  |
-| Tabular data, sorted by the server, with grouped rows     | `table/DataTable`; sort, `hide=` and `open=` are links                          |
-| Values over time or categories                            | `chart/SeriesChart` (line, step, bar, stacked bar)                              |
-| Values over runs of widths                                | `chart/RangeChart`                                                              |
-| Ranked shares, top N plus other                           | `chart/DistributionBar`                                                         |
-| Events and changes                                        | `data/Timeline`, `data/Diff`                                                    |
-| Hidden detail                                             | `data/Disclosure`                                                               |
-| Moving between pages and views                            | `navigation/Breadcrumbs`, `Tabs`, `SegmentedControl`, `NavList`, `Pagination`   |
-| In-page alternatives without a URL                        | `navigation/Tabs` with `mode="panel"`                                           |
-| A choice among a few options in a form                    | `navigation/SegmentedControl` with `mode="radio"`                               |
-| Text, numbers, choices from a short list                  | `forms/TextField`, `TextareaField`, `SelectField`, `ChoiceGroup`                |
-| Booleans                                                  | `forms/CheckField` saved with the form, `Switch` applied at once                |
-| Related fields, ranges, units, one-time codes             | `forms/FieldGroup`, `RangeField`, `UnitField`, `CodeEntry`                      |
-| Suggestions or picking from a long set                    | `forms/Autocomplete` for free text, `Combobox` for values from a set            |
-| Repeatable rows and files                                 | `forms/ListField`, `FileDrop`                                                   |
-| Ending a form and reporting its state                     | `forms/FormActions`, `ErrorSummary` after a failed submit, `SaveStatus`         |
-| A modal task, or a panel from a screen edge               | `overlays/Dialog`, `overlays/Sheet`; give triggers a `fallbackHref`             |
-| Actions or links behind a button                          | `overlays/Menu`; `nojs` for links and forms that work without JavaScript        |
-| Help beside a control, names of icon buttons              | `overlays/Popover`, `overlays/Tooltip` (never the only source of information)   |
+| Need                                                      | Use                                                                              |
+| --------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Page width and gutter                                     | `layout/Container`                                                               |
+| Vertical rhythm, wrapping rows, title and actions, grids  | `layout/Layout` with `stack`, `cluster`, `split`, `grid` (`min`), `center`       |
+| Page title, breadcrumbs, meta, actions                    | `patterns/PageHeader` (the page's only `h1`)                                     |
+| A titled part of a page                                   | `patterns/Section`, with `surface` for a panel                                   |
+| Headings, body text, links, code                          | `content/Heading`, `Text`, `Link`, `Code`, `Prose` for rendered Markdown         |
+| Dates                                                     | `content/Timestamp`; format the label in a message                               |
+| Two or three facts of one kind, such as count and version | `content/MetaList`; facts with other roles go elsewhere                          |
+| Icons                                                     | `content/Icon` wrapping a lucide icon; decorative unless labelled                |
+| Commands and links that look like them                    | `actions/Button`, with `href` for a link and `pending` while saving              |
+| Copying a value                                           | `actions/CopyButton` beside the value in a selectable `Code`                     |
+| State and tags                                            | `feedback/Badge` for a state such as pending, `feedback/Chip` for tags           |
+| Messages, outcomes, failures                              | `feedback/Notice`; choose its `role` by how it should be announced               |
+| Island messages with no visible home, such as new counts  | `announce()` from `feedback/announcer.svelte`, read by the layout's `Announcer`  |
+| Loading, empty, failed regions                            | `feedback/Skeleton`, `EmptyState`, `ErrorState`; `Spinner` beside one line       |
+| Progress and levels                                       | `feedback/Progress`, with `kind="meter"` for votes or completeness               |
+| One item as a card                                        | `data/Card`; with `title` and `href` the whole card links                        |
+| Rows of items                                             | `data/List` and `ListItem`                                                       |
+| Labelled values and headline numbers                      | `data/DescriptionList`, `data/StatGroup`                                         |
+| Images and people                                         | `data/Image` (fixed frame with fallback), `data/Avatar`                          |
+| Media with thumbnails and a lightbox                      | `data/Gallery`                                                                   |
+| Tabular data, sorted by the server, with grouped rows     | `table/DataTable`; sort, `hide=` and `open=` are links                           |
+| Values over time or categories                            | `chart/SeriesChart` (line, step, bar, stacked bar)                               |
+| Values over runs of widths                                | `chart/RangeChart`                                                               |
+| Ranked shares, top N plus other                           | `chart/DistributionBar`                                                          |
+| Events and changes                                        | `data/Timeline`, `data/Diff`                                                     |
+| Hidden detail                                             | `data/Disclosure`                                                                |
+| Moving between pages and views                            | `navigation/Breadcrumbs`, `Tabs`, `SegmentedControl`, `NavList`, `Pagination`    |
+| In-page alternatives without a URL                        | `navigation/Tabs` with `mode="panel"`                                            |
+| A choice among a few options in a form                    | `navigation/SegmentedControl` with `mode="radio"`                                |
+| Text, numbers, choices from a short list                  | `forms/TextField`, `TextareaField`, `SelectField`, `ChoiceGroup`                 |
+| Booleans                                                  | `forms/CheckField` saved with the form, `Switch` applied at once                 |
+| Related fields, ranges, units, one-time codes             | `forms/FieldGroup`, `RangeField`, `UnitField`, `CodeEntry`                       |
+| Suggestions or picking from a long set                    | `forms/Autocomplete` for free text, `Combobox` for values from a set             |
+| Repeatable rows and files                                 | `forms/ListField`, `FileDrop`                                                    |
+| Ending a form and reporting its state                     | `forms/FormActions`, `ErrorSummary` after a failed submit, `feedback/SaveStatus` |
+| A modal task, or a panel from a screen edge               | `overlays/Dialog`, `overlays/Sheet`; give triggers a `fallbackHref`              |
+| Actions or links behind a button                          | `overlays/Menu`; `nojs` for links and forms that work without JavaScript         |
+| Help beside a control, names of icon buttons              | `overlays/Popover`, `overlays/Tooltip` (never the only source of information)    |
 
 Shared components take their text through props, from `@/locales/messages.gen`. Keep API
 calls, validation rules, and translations in the feature. When several features need the

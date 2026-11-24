@@ -1,6 +1,7 @@
 <script lang="ts">
   import Tag from "@lucide/svelte/icons/tag";
   import Button from "@/ui/actions/Button.svelte";
+  import Layout from "@/ui/layout/Layout.svelte";
   import Announcer from "@/ui/feedback/Announcer.svelte";
   import { announce } from "@/ui/feedback/announcer.svelte";
   import Badge from "@/ui/feedback/Badge.svelte";
@@ -9,6 +10,7 @@
   import ErrorState from "@/ui/feedback/ErrorState.svelte";
   import Notice from "@/ui/feedback/Notice.svelte";
   import Progress from "@/ui/feedback/Progress.svelte";
+  import SaveStatus, { type SaveState } from "@/ui/feedback/SaveStatus.svelte";
   import Skeleton from "@/ui/feedback/Skeleton.svelte";
   import Spinner from "@/ui/feedback/Spinner.svelte";
   import Story from "./Story.svelte";
@@ -18,6 +20,25 @@
   let flush = $state(true);
   let chips = $state(["width ≥ 5", "flush"]);
   let results = $state(312);
+  const saveStates: SaveState[] = [
+    "idle",
+    "dirty",
+    "saving",
+    "saved",
+    "offline",
+    "error",
+    "conflict",
+  ];
+  const saveLabels = {
+    idle: "All changes saved",
+    dirty: "Unsaved changes",
+    saving: "Saving",
+    saved: "Saved",
+    offline: "Offline. Changes are kept on this device.",
+    error: "Couldn’t save",
+    conflict: "Changed elsewhere. Review before saving.",
+    retry: "Retry",
+  };
 </script>
 
 <Story
@@ -143,4 +164,23 @@
     <p class="text-sm text-fg-muted" aria-hidden="true">Reads “{results} builds”</p>
   </div>
   <Announcer />
+</Story>
+
+<Story
+  name="SaveStatus"
+  source="feedback/SaveStatus"
+  description="Where an autosaving form stands."
+>
+  <Layout pattern="grid" min="card">
+    {#each saveStates as saveState (saveState)}
+      <Variant label={saveState}>
+        <SaveStatus
+          state={saveState}
+          labels={saveLabels}
+          savedAt={{ datetime: "2026-11-24T10:32:00Z", label: "10:32" }}
+          onRetry={() => undefined}
+        />
+      </Variant>
+    {/each}
+  </Layout>
 </Story>

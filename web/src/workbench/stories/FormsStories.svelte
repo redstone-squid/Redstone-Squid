@@ -16,7 +16,6 @@
   import FormActions from "@/ui/forms/FormActions.svelte";
   import ListField from "@/ui/forms/ListField.svelte";
   import RangeField from "@/ui/forms/RangeField.svelte";
-  import SaveStatus, { type SaveState } from "@/ui/forms/SaveStatus.svelte";
   import SelectField from "@/ui/forms/SelectField.svelte";
   import Switch from "@/ui/forms/Switch.svelte";
   import TextareaField from "@/ui/forms/TextareaField.svelte";
@@ -44,25 +43,6 @@
     { id: "rt", label: "redstone ticks", factor: 2 },
     { id: "s", label: "s", factor: 20 },
   ];
-  const saveStates: SaveState[] = [
-    "idle",
-    "dirty",
-    "saving",
-    "saved",
-    "offline",
-    "error",
-    "conflict",
-  ];
-  const saveLabels = {
-    idle: "All changes saved",
-    dirty: "Unsaved changes",
-    saving: "Saving",
-    saved: "Saved",
-    offline: "Offline. Changes are kept on this device.",
-    error: "Couldn’t save",
-    conflict: "Changed elsewhere. Review before saving.",
-    retry: "Retry",
-  };
 
   let note = $state("Opens in 0.6 s with no visible pistons.");
   let notifications = $state(true);
@@ -435,21 +415,6 @@
       </FormActions>
     </div>
   </Variant>
-</Story>
-
-<Story name="SaveStatus" source="forms/SaveStatus" description="Where an autosaving form stands.">
-  <Layout pattern="grid" min="card">
-    {#each saveStates as saveState (saveState)}
-      <Variant label={saveState}>
-        <SaveStatus
-          state={saveState}
-          labels={saveLabels}
-          savedAt={{ datetime: "2026-11-24T10:32:00Z", label: "10:32" }}
-          onRetry={() => undefined}
-        />
-      </Variant>
-    {/each}
-  </Layout>
 </Story>
 
 <Story name="FileDrop" source="forms/FileDrop" description="Pick or drop files.">
