@@ -247,8 +247,9 @@ class SubmissionFinalizationService:
         artifact processing remains, retain a wait that the worker can recheck.
         Other preparation issues are retained for correction before resubmission.
         """
-        current = await self._drafts.get_accessible(draft_id, actor)
-        return await self._submit(current, actor, locale=locale, now=now or Instant.now(), refresh_retention=True)
+        with actor.audit_scope():
+            current = await self._drafts.get_accessible(draft_id, actor)
+            return await self._submit(current, actor, locale=locale, now=now or Instant.now(), refresh_retention=True)
 
     async def _submit(
         self, current: StoredDraft, actor: Actor, *, locale: str | None, now: Instant, refresh_retention: bool

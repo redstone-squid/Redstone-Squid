@@ -2,6 +2,7 @@
 
 from collections.abc import Callable
 from typing import override
+from uuid import UUID
 
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,9 +10,9 @@ from whenever import Instant
 
 from squid.core.accounts.domain import consent_refresh_required
 from squid.core.accounts.models import Account
-from squid.core.auth.application.ports import WebSessionRepository
+from squid.core.auth.application.ports import ImpersonationRepository, WebSessionRepository
 from squid.core.auth.domain.sessions import WebSessionIdentity
-from squid.core.auth.models.sessions import OAuthState, WebSession
+from squid.core.auth.models.sessions import ImpersonationSession, ImpersonationUse, OAuthState, WebSession
 
 
 class PostgresWebSessionRepository(WebSessionRepository):
@@ -91,3 +92,30 @@ class PostgresWebSessionRepository(WebSessionRepository):
         session = self._session()
         await session.execute(update(WebSession).where(WebSession.token_hash == token_hash).values(revoked_at=now))
         await session.flush()
+
+
+class PostgresImpersonationRepository(ImpersonationRepository):
+    def __init__(self, session: Callable[[], AsyncSession]) -> None:
+        self._session = session
+
+    @override
+    async def add(self, session: ImpersonationSession) -> None:
+        self._session().add(session)
+
+    @override
+    async def locked(self, session_id: UUID, operator_id: int, binding: str) -> ImpersonationSession | None:
+        return await self._session().scalar(
+            select(ImpersonationSession)
+            .where(
+                ImpersonationSession.id == session_id,
+                ImpersonationSession.operator_id == operator_id,
+                ImpersonationSession.binding == binding,
+            )
+            .with_for_update()
+        )
+
+    @override
+    async def record_use(self, session_id: UUID, operation: str) -> UUID:
+        use = ImpersonationUse(session_id=session_id, operation=operation)
+        self._session().add(use)
+        return use.id

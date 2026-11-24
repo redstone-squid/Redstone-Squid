@@ -1,8 +1,15 @@
 """Trusted identity and permission context shared by application operations."""
 
-from dataclasses import dataclass
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
+from dataclasses import dataclass, field
+from uuid import UUID
 
 from squid.core.errors import AuthenticationError, InvalidStateError
+
+impersonation_use: ContextVar[UUID | None] = ContextVar("impersonation_use", default=None)
+"""Authorized invocation whose application transactions are being audited."""
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
@@ -23,6 +30,14 @@ class Actor:
     is_bot_owner: bool = False
     discord_guild_admin: bool = False
     highest_permission_rank: int | None = None
+
+    audit_use_id: UUID | None = field(default=None, compare=False, repr=False)
+
+    @contextmanager
+    def audit_scope(self) -> Iterator[None]:
+        """Carry a callback's attribution into its transaction, including nested services."""
+        with impersonation_use.set(self.audit_use_id or impersonation_use.get()):
+            yield
 
     @property
     def key(self) -> str:
@@ -50,3 +65,12 @@ class Actor:
             message = "Permission administration requires a resolved role rank"
             raise InvalidStateError(message)
         return self.highest_permission_rank
+
+
+@dataclass(frozen=True, slots=True)
+class ActingContext:
+    """Application identity and its authenticated operator for one invocation."""
+
+    operator: Actor
+    effective: Actor
+    session_id: UUID | None = None

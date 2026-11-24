@@ -1,6 +1,7 @@
 """Authentication persistence ports."""
 
 from typing import Protocol
+from uuid import UUID
 
 from whenever import Instant
 
@@ -8,7 +9,7 @@ from squid.core.accounts.domain import AccountConsent, IdentityProvider
 from squid.core.accounts.models import Account
 from squid.core.auth.domain.sessions import WebSessionIdentity
 from squid.core.auth.models.entities import ApiKey
-from squid.core.auth.models.sessions import OAuthState
+from squid.core.auth.models.sessions import ImpersonationSession, OAuthState
 from squid.core.permissions.application.ports import PermissionUnitOfWork
 from squid.core.permissions.domain import Pattern
 from squid.core.unit_of_work import UnitOfWork
@@ -88,3 +89,23 @@ class WebSessionUnitOfWork(UnitOfWork, Protocol):
 
     @property
     def web_sessions(self) -> WebSessionRepository: ...
+
+
+class ImpersonationRepository(Protocol):
+    async def add(self, session: ImpersonationSession) -> None: ...
+
+    async def locked(self, session_id: UUID, operator_id: int, binding: str) -> ImpersonationSession | None: ...
+
+    async def record_use(self, session_id: UUID, operation: str) -> UUID: ...
+
+
+class ImpersonationAccounts(Protocol):
+    async def get_by_id(self, account_id: int) -> Account | None: ...
+
+
+class ImpersonationUnitOfWork(PermissionUnitOfWork, Protocol):
+    @property
+    def impersonation(self) -> ImpersonationRepository: ...
+
+    @property
+    def accounts(self) -> ImpersonationAccounts: ...

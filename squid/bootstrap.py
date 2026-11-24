@@ -37,6 +37,7 @@ from squid.core.artifacts.infrastructure import create_artifact_store
 from squid.core.auth.application import ApiKeyService
 from squid.core.auth.application.providers import PROVIDER_FACTORIES, OAuthProvider
 from squid.core.auth.application.web import WebSessionService
+from squid.core.auth.impersonation import ImpersonationService
 from squid.core.auth.infrastructure.viewer import ViewerQueries
 from squid.core.builds.application import (
     BuildEmbeddingService,
@@ -643,6 +644,7 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         msg = "The API runtime requires an idempotency response-encryption keyring."
         raise RuntimeError(msg)
     return ApiServices(
+        impersonation=ImpersonationService(graph.uow_factory, graph.permissions),
         viewer_queries=ViewerQueries(db.async_session),
         settings=graph.settings,
         edits=graph.edits,
@@ -685,6 +687,7 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
     """Create only capabilities used by Discord gateway features."""
     graph = _ServiceGraph(db, config, resources_stack)
     return BotServices(
+        impersonation=ImpersonationService(graph.uow_factory, graph.permissions),
         builds=graph.builds,
         error_reports=graph.error_reports,
         build_inference=graph.build_inference,

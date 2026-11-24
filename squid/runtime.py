@@ -24,6 +24,7 @@ from squid.core.accounts.application import AccountService
 from squid.core.artifacts import ArtifactStore
 from squid.core.auth.application import ApiKeyService
 from squid.core.auth.application.web import WebSessionService
+from squid.core.auth.impersonation import ImpersonationService
 from squid.core.auth.infrastructure.viewer import ViewerQueries
 from squid.core.builds.application import BuildInferenceService, BuildQueryService, BuildService, RestrictionService
 from squid.core.builds.application.ports import BuildSchematicSummaryProvider
@@ -141,6 +142,7 @@ class ApiServices:
     versions: VersionService
     votes: VoteService
     vote_members: InteractiveVoteActorResolver | None
+    impersonation: ImpersonationService
     viewer_queries: ViewerQueries
     published_build_media: PublishedBuildMedia | None = None
 
@@ -179,6 +181,7 @@ class BotServices:
     accounts: AccountService
     versions: VersionService
     votes: VoteService
+    impersonation: ImpersonationService
     vote_cards: Callable[[discord.Client], VoteCardReactions]
     """Build the vote card adapter for the bot's own client, which bootstrap cannot see."""
     discord_reconciliation: DiscordReconciliationService

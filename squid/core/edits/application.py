@@ -87,8 +87,9 @@ class EditExecutor[UowT: EditUnitOfWork]:
     async def execute(self, command: EditCommand, actor: Actor) -> EditResult:
         confirmed: EditResult | None = None
         try:
-            async with self._factory() as uow:
-                confirmed = await self._execute_in(uow, command, actor)
+            with actor.audit_scope():
+                async with self._factory() as uow:
+                    confirmed = await self._execute_in(uow, command, actor)
         except Exception:
             if confirmed is None:
                 raise

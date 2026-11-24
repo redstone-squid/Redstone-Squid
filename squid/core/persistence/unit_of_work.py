@@ -4,12 +4,15 @@ from types import TracebackType
 from typing import Literal, Self
 
 from anyio import CancelScope
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm.exc import StaleDataError
 
 from squid.core.accounts.infrastructure.repository import AccountRepository
+from squid.core.actors import impersonation_use
 from squid.core.auth.infrastructure.repository import PostgresApiKeyRepository
-from squid.core.auth.infrastructure.sessions import PostgresWebSessionRepository
+from squid.core.auth.infrastructure.sessions import PostgresImpersonationRepository, PostgresWebSessionRepository
+from squid.core.auth.models.sessions import ImpersonationUse
 from squid.core.builds.infrastructure.embeddings import PostgresBuildIndex
 from squid.core.builds.infrastructure.history import BuildHistoryQueries
 from squid.core.builds.infrastructure.locks import PostgresBuildLockRepository
@@ -82,6 +85,7 @@ class SqlAlchemyUnitOfWork:
         self._sessions = sessions
         self._session: AsyncSession | None = None
         self._state: Literal["new", "active", "finished"] = "new"
+        self._impersonation = PostgresImpersonationRepository(self._active_session)
         self._edits = PostgresEditRepository(self._active_session)
         self._domain_events = PostgresDomainEventRepository(self._active_session)
         self._reconciliation = PostgresDiscordSyncQueue(self._active_session)
@@ -128,6 +132,10 @@ class SqlAlchemyUnitOfWork:
         self._starboards = PostgresStarboardRepository(self._active_session)
         self._tags = PostgresTagDefinitionRepository(self._active_session)
         self._versions = VersionRepository(self._active_session)
+
+    @property
+    def impersonation(self) -> PostgresImpersonationRepository:
+        return self._impersonation
 
     @property
     def edits(self) -> PostgresEditRepository:
@@ -389,6 +397,12 @@ class SqlAlchemyUnitOfWork:
         """Commit the transaction and stop accepting repository operations."""
         session = self._active_session()
         try:
+            if use_id := impersonation_use.get():
+                await session.execute(
+                    update(ImpersonationUse)
+                    .where(ImpersonationUse.id == use_id)
+                    .values(commits=ImpersonationUse.commits + 1)
+                )
             await session.commit()
         except StaleDataError as error:
             raise ConcurrentEditError from error

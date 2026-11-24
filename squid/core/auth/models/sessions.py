@@ -54,3 +54,30 @@ class OAuthState(Base, kw_only=True):
     redirect_to: Mapped[str | None] = mapped_column(Text, default=None)
     created_at: Mapped[Instant] = mapped_column(InstantUTC(), server_default=func.now(), default_factory=Instant.now)
     expires_at: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
+
+
+class ImpersonationSession(Base, kw_only=True):
+    """A debugging session bound to its operator's authenticated entry point."""
+
+    __tablename__ = "impersonation_sessions"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default_factory=uuid.uuid4)
+    operator_id: Mapped[int]
+    target_id: Mapped[int]
+    binding: Mapped[str] = mapped_column(Text)
+    reason: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[Instant] = mapped_column(InstantUTC(), default_factory=Instant.now)
+    expires_at: Mapped[Instant] = mapped_column(InstantUTC())
+    revoked_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+
+
+class ImpersonationUse(Base, kw_only=True):
+    """An authorized impersonated operation tied to its originating session."""
+
+    __tablename__ = "impersonation_uses"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default_factory=uuid.uuid4)
+    session_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("impersonation_sessions.id"))
+    operation: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[Instant] = mapped_column(InstantUTC(), default_factory=Instant.now)
+    commits: Mapped[int] = mapped_column(default=0)

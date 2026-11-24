@@ -310,6 +310,12 @@ ACCOUNT_IDENTITY_REFRESH_ANY = _b.node(
     tr(t"permissions-re-read-user = Re-read another user's linked Minecraft name."),
     tags=(Tag.MODERATION,),
 )
+ACCOUNT_IMPERSONATE = _b.node(
+    "account.session.impersonate",
+    NodeScope.GLOBAL,
+    tr(t"permissions-impersonate-account = Act as another account during a debugging session."),
+    tags=(Tag.DESTRUCTIVE,),
+)
 ACCOUNT_SELF_MANAGE = _b.node(
     "account.self.manage",
     NodeScope.GLOBAL,
