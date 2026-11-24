@@ -11,6 +11,7 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 import { arbitraryValue, uiArbitraryValue } from "./scripts/lint/arbitrary-values.ts";
 import { importBoundaries } from "./scripts/lint/import-boundaries.ts";
+import { noRawElements } from "./scripts/lint/no-raw-elements.ts";
 import { noRawText } from "./scripts/lint/no-raw-text.ts";
 
 const arbitraryColor = {
@@ -286,7 +287,13 @@ export default tseslint.config(
   {
     files: ["src/**/*.{ts,astro,svelte}", "src/**/*.astro/*.{js,ts}"],
     plugins: {
-      squid: { rules: { "import-boundaries": importBoundaries, "no-raw-text": noRawText } },
+      squid: {
+        rules: {
+          "import-boundaries": importBoundaries,
+          "no-raw-elements": noRawElements,
+          "no-raw-text": noRawText,
+        },
+      },
     },
     rules: {
       "squid/import-boundaries": "error",
@@ -345,6 +352,11 @@ export default tseslint.config(
     files: ["src/{pages,layouts,features}/**/*.{astro,svelte}"],
     ignores: ["src/pages/design-system*", "src/pages/design-system/**"],
     rules: { "squid/no-raw-text": "error" },
+  },
+  {
+    // Features and layouts render controls, tables, dialogs, and images through src/ui.
+    files: ["src/{layouts,features}/**/*.{astro,svelte}"],
+    rules: { "squid/no-raw-elements": "error" },
   },
   {
     files: ["tests/unit/**/*.ts"],
