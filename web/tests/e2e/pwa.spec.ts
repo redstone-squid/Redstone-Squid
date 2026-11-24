@@ -12,6 +12,12 @@ test("serves an installable web app manifest", async ({ request }) => {
 
 test.describe("with a service worker", () => {
   test.use({ serviceWorkers: "allow" });
+  // Firefox's offline emulation fails navigations before a controlling worker can answer,
+  // and Playwright cannot route the worker's own requests there to fake an outage.
+  test.skip(
+    ({ browserName }) => browserName === "firefox",
+    "Firefox cannot emulate offline for workers",
+  );
 
   test("shows the offline page in the visitor's locale when a navigation fails", async ({
     context,
