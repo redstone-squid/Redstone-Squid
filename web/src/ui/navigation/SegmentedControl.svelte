@@ -37,7 +37,7 @@
       size === "sm" ? "min-h-control-sm" : "min-h-control",
     ),
   );
-  const trackClass = "flex rounded-sm border border-line-strong bg-surface p-0.5";
+  const trackClass = "flex flex-wrap rounded-sm border border-line-strong bg-surface p-0.5";
 </script>
 
 {#snippet segment(item: LinkSegment | RadioSegment)}

@@ -56,12 +56,12 @@
   {#if hasHint || aside}
     <div
       class={cn(
-        "flex items-start justify-between gap-3",
+        "flex flex-wrap items-start justify-between gap-x-3 gap-y-1",
         inline ? "ps-7" : width !== "full" && "max-w-field-md",
       )}
     >
       {#if hasHint}<p id={`${control.id}-hint`} class={fieldMessageClass}>{hint}</p>{/if}
-      {#if aside}<div class="ms-auto shrink-0">{@render aside()}</div>{/if}
+      {#if aside}<div class="ms-auto min-w-0">{@render aside()}</div>{/if}
     </div>
   {/if}
   {#if error != null && error !== ""}<p
