@@ -50,9 +50,12 @@ third-party; revisit this then.
 
 ## Status and resuming
 
-Phases 0 to 6 are done. Phase 6 added `src/ui/lib` (`url-state`, `focus`, `query-client`),
-`src/api-client` (`api-error`, `mutation`) and `features/submissions/draft-sync.ts`; their
-users arrive with the screens. Phase 7 is next.
+Phases 0 to 7 are done; Phase 8 (screens) is next. Phase 6 added `src/ui/lib`,
+`src/api-client` and `features/submissions/draft-sync.ts`, whose users arrive with the
+screens. Phase 7's lint rules are listed in `web/AGENTS.md` under Checks; the only
+disables are Dialog's `full-mobile` viewport breakpoint and the footer logo's `<img>`.
+Phase 7 also added the `--duration-*` tokens from §2.4, which had been missed, and a
+`submit` mode for `SegmentedControl`, used by the footer's appearance switch.
 
 What exists in `web/src/ui`, by folder: `layout` (Layout, Container), `content` (Heading,
 Text, Link, Icon, Code, Prose, Timestamp, VisuallyHidden, SkipLink), `actions` (Button,
@@ -124,19 +127,9 @@ Conventions to follow:
   `DocumentHead`; making it a module or loading it elsewhere splits it into a chunk that fails
   on the offline page.
 
-How to resume:
-
-1. Read `components.md` §2 for the component being built and `screens.md` for its users.
-2. Phases 2, 3 and 4 can run in parallel in separate worktrees, with these limits:
-   - Phase 3's `Dialog` rewrite needs Phase 2's fields for its stories only.
-   - Phase 4's `DataTable` column menu needs Phase 3's `Menu`. Build `DataTable` without
-     column visibility first, or wait for `Menu`.
-   - Merge conflicts are limited to the catalogs, `groups.ts`, the `[group].astro` page and
-     the coverage test's group list.
-3. Then Phase 5 (patterns), then Phase 7 (lint enforcement), which must leave zero
-   violations behind.
-4. Each phase ends the way Phase 1 did: stories, unit tests for keyboard and focus contracts,
-   `test:review --grep` passing for the touched groups, `src/ui/README.md` updated, and small commits.
+How to resume: read `screens.md` for the next Phase 8 screen, its API items in
+`api-gaps.md`, and `components.md` §3 for its feature components. Compose from `src/ui`
+(see its README); lint rejects raw controls and arbitrary values in features.
 
 Not yet run: `bun run test:compatibility` (Firefox and WebKit).
 
@@ -155,7 +148,7 @@ were built here, ahead of their phases.
 - Then `Autocomplete` (refit), `Combobox` (bits-ui), `ListField`.
 - _Depends on:_ Phase 1 (`Text`, `Icon`, `Chip`).
 
-**Phase 3: overlays and interactive navigation.**
+**Phase 3: overlays and interactive navigation.** Done.
 
 - `Dialog` (rewritten), `Sheet`, `Popover`, `Tooltip`, `Menu` (with the `details` fallback, then replace `LanguageSelector`'s hand-built menu), `Tabs` panel mode, `SegmentedControl` radio mode, `CopyButton`, `Announcer`.
 - _Depends on:_ Phase 2 for the dialog contents.
@@ -166,7 +159,7 @@ were built here, ahead of their phases.
 - `Gallery`: needs Phase 3 `Dialog`.
 - `Chart` frame, `SeriesChart`, `RangeChart`, `DistributionBar` on LayerChart: static server rendering first, then interactive tooltips and keyboard.
 
-**Phase 5: patterns.**
+**Phase 5: patterns.** Done.
 
 - `SplitLayout`, `NavBar`, `SearchBox`, `FilterPanel`, `ActiveFilters`, `ResultsToolbar`, `ResultsView`, `ConfirmDialog`, `SettingsList`, `MediaUploader`, `OneTimeSecret`, `StepFlow`, `FlashNotice`.
 - Then rebuild `CatalogueLayout` and the header with `NavBar`; the `UserMenu` island follows in Phase 8.
@@ -177,7 +170,7 @@ were built here, ahead of their phases.
 - `src/api-client/mutation.ts`: CSRF, Idempotency-Key, If-Match, ProblemDetail parsing with zod, the error-code map, and the same-origin proxy decision (API item 52).
 - `features/submissions/draft-sync.ts`: the operation queue, with Vitest coverage for rebase, conflict, offline and replay.
 
-**Phase 7: enforcement.**
+**Phase 7: enforcement.** Done.
 
 - ESLint bans:
   - arbitrary Tailwind values outside `src/ui`, and inside it except in an allowlist;
