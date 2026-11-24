@@ -6,6 +6,8 @@
  * both values here; app.css maps the tokens to Tailwind utilities.
  *
  * Contrast targets against `surface`: text colors 4.5:1, `line-strong` and chart colors 3:1.
+ * Chart colors are categorical, used in order: they pass the dataviz validator for lightness,
+ * chroma, and color-blind separation of neighbours in both themes.
  * `line` is for dividers and card edges only; control borders use `line-strong`.
  */
 :root {
@@ -36,12 +38,12 @@
   --overlay: oklch(23.03% 0.0195 166.98 / 0.702);
   --pressed: oklch(19.79% 0.0198 144.78 / 0.2);
   --shadow-color: light-dark(oklch(23.03% 0.0195 166.98 / 0.039), oklch(0% 0 0 / 0.133));
-  --chart-1: light-dark(oklch(55% 0.15 255), oklch(74% 0.12 255));
-  --chart-2: light-dark(oklch(60% 0.13 55), oklch(78% 0.13 60));
-  --chart-3: light-dark(oklch(56% 0.085 185), oklch(76% 0.1 185));
-  --chart-4: light-dark(oklch(55% 0.17 340), oklch(74% 0.15 340));
-  --chart-5: light-dark(oklch(58% 0.12 120), oklch(80% 0.13 120));
-  --chart-6: light-dark(oklch(52% 0.16 295), oklch(72% 0.13 295));
+  --chart-1: light-dark(oklch(57.53% 0.1626 255.53), oklch(62.21% 0.1612 255.05));
+  --chart-2: light-dark(oklch(64.27% 0.1724 40.69), oklch(62.21% 0.1726 40.11));
+  --chart-3: light-dark(oklch(60.62% 0.1269 162.54), oklch(62.12% 0.1283 163.11));
+  --chart-4: light-dark(oklch(64.12% 0.1339 77.4), oklch(66.99% 0.1425 73.23));
+  --chart-5: light-dark(oklch(63.24% 0.1637 357.67), oklch(62.24% 0.1712 0.84));
+  --chart-6: light-dark(oklch(52.85% 0.1798 142.5), oklch(62.1% 0.2073 142.56));
 
   /* High contrast: 7:1 text, 4.5:1 control borders and focus, 3:1 dividers. */
   --fg-more: light-dark(oklch(20% 0.0102 164.07), oklch(98% 0.0073 132.42));
