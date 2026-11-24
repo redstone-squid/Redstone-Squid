@@ -1,10 +1,12 @@
 <script lang="ts">
   import type { HTMLInputAttributes } from "svelte/elements";
-
-  import { cn } from "@/ui/cn";
   import type { FieldMessages } from "@/ui/forms/field";
   import FieldFrame from "./FieldFrame.svelte";
-  type Props = HTMLInputAttributes & FieldMessages & { type?: "checkbox" | "radio" };
+  import { checkboxClass } from "./styles";
+
+  /** One checkbox with its label, and an optional `hint` describing what it changes. */
+  type Props = Omit<HTMLInputAttributes, "type" | "width"> &
+    Omit<FieldMessages, "labelVisibility" | "width">;
   let {
     label,
     detail,
@@ -14,9 +16,7 @@
     "aria-describedby": describedBy,
     "aria-invalid": invalid,
     class: className,
-    type = "checkbox",
     checked = $bindable(false),
-    onchange,
     ...props
   }: Props = $props();
 </script>
@@ -29,17 +29,14 @@
   {id}
   aria-describedby={describedBy}
   aria-invalid={invalid}
+  class={className}
   inline
 >
   {#snippet children(attributes)}<input
       {...props}
       {...attributes}
-      {type}
-      {checked}
-      onchange={(event) => {
-        checked = event.currentTarget.checked;
-        onchange?.(event);
-      }}
-      class={cn("my-[0.2em] size-[1.15em] flex-none self-start accent-accent", className)}
+      type="checkbox"
+      bind:checked
+      class={checkboxClass}
     />{/snippet}
 </FieldFrame>

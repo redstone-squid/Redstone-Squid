@@ -4,7 +4,7 @@
   import { onMount } from "svelte";
   import * as m from "@/locales/messages.gen";
   import Button from "@/ui/actions/Button.svelte";
-  import Field from "@/ui/forms/Field.svelte";
+  import TextField from "@/ui/forms/TextField.svelte";
   import Layout from "@/ui/layout/Layout.svelte";
   import Dialog from "@/ui/overlays/Dialog.svelte";
 
@@ -36,7 +36,7 @@
       }}
     >
       <Layout pattern="stack">
-        <Field
+        <TextField
           label={m.workbenchBuildTitle()}
           bind:value={title}
           required

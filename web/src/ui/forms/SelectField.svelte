@@ -1,21 +1,32 @@
 <script lang="ts">
+  import ChevronDown from "@lucide/svelte/icons/chevron-down";
   import type { HTMLSelectAttributes } from "svelte/elements";
   import { cn } from "@/ui/cn";
-  import type { FieldMessages } from "@/ui/forms/field";
-  import { inputClass } from "./styles";
+  import type { FieldMessages, SelectOption } from "@/ui/forms/field";
   import FieldFrame from "./FieldFrame.svelte";
-  type Props = HTMLSelectAttributes & FieldMessages;
+  import { inputClass } from "./styles";
+
+  /**
+   * A native select, from `options` or `<option>` children. `placeholder` adds a first
+   * option with an empty value, such as "Choose a version", which a required select rejects.
+   */
+  type Props = Omit<HTMLSelectAttributes, "width"> &
+    FieldMessages & { options?: SelectOption[]; placeholder?: string };
   let {
     label,
     detail,
     hint,
     error,
+    labelVisibility,
+    width,
     id,
     "aria-describedby": describedBy,
     "aria-invalid": invalid,
     class: className,
+    options,
+    placeholder,
     value = $bindable(),
-    children: options,
+    children: optionChildren,
     ...props
   }: Props = $props();
 </script>
@@ -25,14 +36,35 @@
   {detail}
   {hint}
   {error}
+  {labelVisibility}
+  {width}
   {id}
   aria-describedby={describedBy}
   aria-invalid={invalid}
+  class={className}
 >
-  {#snippet children(attributes)}<select
-      {...props}
-      {...attributes}
-      bind:value
-      class={cn(inputClass, className)}>{@render options?.()}</select
-    >{/snippet}
+  {#snippet children(attributes)}
+    <div class="relative">
+      <select
+        {...props}
+        {...attributes}
+        bind:value
+        class={cn(
+          inputClass,
+          "w-full cursor-pointer appearance-none pe-10 disabled:cursor-not-allowed",
+        )}
+      >
+        {#if placeholder !== undefined}<option value="">{placeholder}</option>{/if}
+        {#each options ?? [] as option (option.value)}<option
+            value={option.value}
+            disabled={option.disabled}>{option.label}</option
+          >{/each}
+        {@render optionChildren?.()}
+      </select>
+      <ChevronDown
+        class="pointer-events-none absolute end-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted"
+        aria-hidden="true"
+      />
+    </div>
+  {/snippet}
 </FieldFrame>

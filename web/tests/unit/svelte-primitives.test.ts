@@ -13,7 +13,7 @@ import ListItem from "@/ui/data/ListItem.svelte";
 import Chip from "@/ui/feedback/Chip.svelte";
 import Notice from "@/ui/feedback/Notice.svelte";
 import Progress from "@/ui/feedback/Progress.svelte";
-import Field from "@/ui/forms/Field.svelte";
+import TextField from "@/ui/forms/TextField.svelte";
 import Layout from "@/ui/layout/Layout.svelte";
 import Breadcrumbs from "@/ui/navigation/Breadcrumbs.svelte";
 import Pagination from "@/ui/navigation/Pagination.svelte";
@@ -288,13 +288,13 @@ describe("forms and overlays", () => {
     help.textContent = "External explanation";
     document.body.append(help);
     try {
-      render(Field, {
+      render(TextField, {
         label: "First",
         "aria-describedby": "external-help",
         "aria-invalid": "grammar",
         error: "Check spelling",
       });
-      render(Field, { label: "Second", hint: "Another name" });
+      render(TextField, { label: "Second", hint: "Another name" });
       const first = screen.getByRole("textbox", { name: "First" });
       const second = screen.getByRole("textbox", { name: "Second" });
       expect(first).toHaveAccessibleDescription("External explanation Check spelling");

@@ -18,7 +18,7 @@ import OverlaysStories from "@/workbench/stories/OverlaysStories.svelte";
 import PatternsStories from "@/workbench/stories/PatternsStories.svelte";
 
 // Building blocks of other components, with no use on their own.
-const INTERNAL = new Set(["forms/FieldFrame"]);
+const INTERNAL = new Set(["forms/FieldFrame", "forms/CharacterCount"]);
 
 describe("workbench", () => {
   it("has a story for every src/ui component", () => {
