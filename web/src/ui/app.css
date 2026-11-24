@@ -72,8 +72,9 @@
   --radius-md: 0.75rem;
   --radius-lg: 1.25rem;
 
-  /* Page edge padding, the 44px touch target, and the sticky-header offset for anchors. */
+  /* Page and panel padding, the 44px touch target, and the sticky-header offset for anchors. */
   --spacing-gutter: clamp(1rem, 4vw, 3rem);
+  --spacing-panel: clamp(1rem, 3vw, 1.5rem);
   --spacing-control: 2.75rem;
   --spacing-control-sm: 2.25rem;
   --spacing-header: 5.5rem;

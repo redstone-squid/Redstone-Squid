@@ -9,6 +9,12 @@ import tseslint from "typescript-eslint";
 import { importBoundaries } from "./scripts/lint/import-boundaries.ts";
 import { noRawText } from "./scripts/lint/no-raw-text.ts";
 
+const arbitraryColor = {
+  pattern:
+    "^(?:.*:)?(?:bg|text|border|outline|ring|fill|stroke|accent|caret|decoration|shadow|from|via|to)-\\[(?:#|rgb|hsl|oklch|color)",
+  message: "Use a theme color from src/ui/themes.css instead of an arbitrary color.",
+};
+
 // Shared so blocks that add restrictions keep these.
 const restrictedSyntax = [
   {
@@ -155,14 +161,23 @@ export default tseslint.config(
       "better-tailwindcss/no-duplicate-classes": "error",
       "better-tailwindcss/no-deprecated-classes": "error",
       "better-tailwindcss/no-unnecessary-whitespace": "error",
+      "better-tailwindcss/no-restricted-classes": ["error", { restrict: [arbitraryColor] }],
+    },
+  },
+  {
+    // Components adapt to the space they are given, not to the window: one component can sit
+    // in a page, a card, or a dialog. Only page layouts may use viewport breakpoints.
+    files: ["src/ui/**/*.svelte", "src/features/**/*.{astro,svelte}"],
+    rules: {
       "better-tailwindcss/no-restricted-classes": [
         "error",
         {
           restrict: [
+            arbitraryColor,
             {
-              pattern:
-                "^(?:.*:)?(?:bg|text|border|outline|ring|fill|stroke|accent|caret|decoration|shadow|from|via|to)-\\[(?:#|rgb|hsl|oklch|color)",
-              message: "Use a theme color from src/ui/themes.css instead of an arbitrary color.",
+              pattern: "^(?:.*:)?(?:max-)?(?:sm|md|lg|xl|2xl|min-\\[.*\\]|max-\\[.*\\]):",
+              message:
+                "Use a container query (@container with @md: and similar) or a fluid layout instead of a viewport breakpoint.",
             },
           ],
         },

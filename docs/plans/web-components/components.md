@@ -122,7 +122,7 @@ The `src/ui` primitives and patterns, the feature components built from them, an
 #### Actions
 
 **`Button`** (merges `LinkButton`)
-- *API:* `variant` (`primary | secondary | quiet | danger`), `size` (`sm | md`), `href?` (renders `<a>`), `type`, `icon?`, `iconEnd?`, `iconOnly?` (a `label` is then required and becomes `aria-label`), `pending?` plus `pendingLabel`, `disabled?`, `fullWidth?` (`always | mobile`), `external?`, `form?`, `name`/`value` (for multi-action POST forms).
+- *API:* `variant` (`primary | secondary | quiet | danger`), `size` (`sm | md`), `href?` (renders `<a>`), `type`, `icon?`, `iconEnd?`, `iconOnly?` (a `label` is then required and becomes `aria-label`), `pending?` plus `pendingLabel`, `disabled?`, `fullWidth?`, `external?`, `form?`, `name`/`value` (for multi-action POST forms).
 - *States:*
   - `pending`: spinner replaces the start icon, width is preserved, the button gets `aria-disabled="true"` and rejects clicks, and `pendingLabel` goes into a visually hidden live region.
   - `disabled`: native disabled on buttons; links in a disabled state render as `<span aria-disabled>`.

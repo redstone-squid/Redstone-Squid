@@ -46,6 +46,17 @@ imports. Use sentence case for headings, labels, and badges. Numbers and measure
 sans face (`numeric` for tabular figures); monospace is only for `Code`. A badge marks one
 state; categories and versions are plain text in the eyebrow or a muted meta line.
 
+Layouts are fluid rather than tuned to a few screen sizes: `Layout` grids and wrapping rows,
+`minmax(0, 1fr)` tracks, and `clamp()` gutters and panel padding (`px-gutter`, `p-panel`).
+When a component must change shape, it queries its own width: `@container` on its root and
+variants such as `@max-lg:hidden` on its children, as in `Card`, `Breadcrumbs`, and
+`Pagination`. Lint rejects viewport breakpoints (`md:`) outside page layouts, because one
+component can sit in a page, a card, or a dialog. A query container cannot take its width
+from its content, so give it a parent that sets the width. Page regions such as `Container`
+are not query containers: containment makes each a stacking context, which would trap the
+header's menus beneath the main content. `tests/review/reflow.spec.ts` checks every width
+from 320px to 1600px.
+
 Astro wraps slot content passed to a Svelte component in an `astro-static-slot` element,
 which `app.css` displays as `contents`. The wrapper still breaks list and table structure,
 so components that render list items or rows take data, not slotted rows.

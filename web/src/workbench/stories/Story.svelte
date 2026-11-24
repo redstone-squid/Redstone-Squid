@@ -13,7 +13,7 @@
 <section
   id={name.toLowerCase()}
   aria-labelledby={`${name.toLowerCase()}-title`}
-  class="grid min-w-0 gap-4 rounded-md border border-line bg-surface p-4 shadow-card md:p-6"
+  class="grid min-w-0 gap-4 rounded-md border border-line bg-surface p-panel shadow-card"
 >
   <header class="grid gap-1">
     <h2 id={`${name.toLowerCase()}-title`} class="text-xl font-bold tracking-tight">{name}</h2>

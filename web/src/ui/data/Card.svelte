@@ -36,7 +36,7 @@
     class: className,
     children,
   }: Props = $props();
-  const paddings = { sm: "p-3", md: "p-4 md:p-5", lg: "p-5 md:p-6" };
+  const paddings = { sm: "p-3", md: "p-4 @sm:p-5", lg: "p-5 @sm:p-6" };
   const tones = {
     default: "border-line bg-surface",
     muted: "border-line bg-surface-muted",
@@ -48,7 +48,7 @@
 <svelte:element
   this={as}
   class={cn(
-    "relative isolate flex min-w-0 flex-col overflow-hidden rounded-md border shadow-card",
+    "@container relative isolate flex min-w-0 flex-col overflow-hidden rounded-md border shadow-card",
     href !== undefined &&
       "transition-[border-color] duration-150 hover:border-line-strong has-[[data-card-link]:focus-visible]:outline-3 has-[[data-card-link]:focus-visible]:outline-offset-3 has-[[data-card-link]:focus-visible]:outline-focus",
     tones[tone],

@@ -35,7 +35,7 @@
   aria-labelledby={headingId}
   class={cn(
     "grid min-w-0 content-start gap-4",
-    surface && "rounded-md border border-line bg-surface p-4 shadow-card md:p-6",
+    surface && "rounded-md border border-line bg-surface p-panel shadow-card",
     className,
   )}
 >

@@ -44,7 +44,7 @@
           setTimeout(() => (pending = false), 1500);
         }}>Click to save</Button
       >
-      <Button variant="primary" fullWidth="mobile">Full width on mobile</Button>
+      <Button variant="primary" fullWidth>Full width</Button>
     </div>
   </Variant>
 </Story>

@@ -63,7 +63,7 @@
       label?: string;
       pending?: boolean;
       pendingLabel?: string;
-      fullWidth?: "always" | "mobile";
+      fullWidth?: boolean;
       children?: Snippet;
     };
   let {
@@ -76,7 +76,7 @@
     label,
     pending = false,
     pendingLabel,
-    fullWidth,
+    fullWidth = false,
     disabled = false,
     type = "button",
     class: className,
@@ -89,11 +89,7 @@
       variant,
       size,
       iconOnly,
-      className: cn(
-        fullWidth === "always" && "w-full",
-        fullWidth === "mobile" && "max-sm:w-full",
-        className,
-      ),
+      className: cn(fullWidth && "w-full", className),
     }),
   );
   const iconClass = $derived(size === "sm" ? "size-4" : "size-[1.125rem]");

@@ -10,8 +10,8 @@
    * Links between pages of a listing. Previous and next keep their places at either end and
    * are shown disabled when there is no page in that direction; the control disappears when
    * there is only one page. `range` is the formatted position, such as "21–40 of 312".
-   * `pages` adds numbered links for listings addressed by offset; `name` is each link's full
-   * accessible name, such as "Page 3".
+   * `pages` adds numbered links for listings addressed by offset, hidden below 32rem wide;
+   * `name` is each link's full accessible name, such as "Page 3".
    */
   type Props = {
     prevHref?: string | null;
@@ -33,7 +33,7 @@
 </script>
 
 {#if visible}
-  <nav aria-label={labels.nav} class={cn("grid min-w-0 gap-3", className)}>
+  <nav aria-label={labels.nav} class={cn("@container grid min-w-0 gap-3", className)}>
     <div class="flex flex-wrap items-center justify-between gap-3">
       <Button
         size="sm"
@@ -43,7 +43,7 @@
         icon={ChevronLeft}>{labels.previous}</Button
       >
       {#if pages.length > 1}
-        <ol class="flex flex-wrap items-center gap-1 max-sm:hidden">
+        <ol class="flex flex-wrap items-center gap-1 @max-lg:hidden">
           {#each pages as page (page.href)}
             <li>
               <Button
