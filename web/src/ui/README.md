@@ -12,6 +12,14 @@ stories per folder; `/zh-cn/design-system` shows them in Simplified Chinese.
 | Vertical rhythm, wrapping rows, title and actions, grids  | `layout/Layout` with `stack`, `cluster`, `split`, `grid` (`min`), `center`       |
 | Page title, breadcrumbs, meta, actions                    | `patterns/PageHeader` (the page's only `h1`)                                     |
 | A titled part of a page                                   | `patterns/Section`, with `surface` for a panel                                   |
+| The site header                                           | `patterns/NavBar`; its links collapse into a popover when narrow                 |
+| A sidebar of filters or section navigation                | `patterns/SplitLayout`, `collapse="sheet"` to hide it behind a button            |
+| Searching and filtering a listing                         | `patterns/SearchBox`, `FilterPanel`, `ActiveFilters`: GET forms and links        |
+| The bar above results, and the results themselves         | `patterns/ResultsToolbar`, `patterns/ResultsView` (loading, empty, error)        |
+| Confirming an irreversible action                         | `patterns/ConfirmDialog`, with `fallbackHref` to a confirmation page             |
+| Settings that save on change                              | `patterns/SettingsList` of `Switch`es with per-row `SaveStatus`                  |
+| Draft files, secrets shown once, multi-step flows         | `patterns/MediaUploader`, `OneTimeSecret`, `StepFlow`                            |
+| The outcome after a POST redirect                         | `patterns/FlashNotice` in the `PageHeader` notice slot                           |
 | Headings, body text, links, code                          | `content/Heading`, `Text`, `Link`, `Code`, `Prose` for rendered Markdown         |
 | Dates                                                     | `content/Timestamp`; format the label in a message                               |
 | Two or three facts of one kind, such as count and version | `content/MetaList`; facts with other roles go elsewhere                          |

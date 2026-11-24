@@ -50,21 +50,41 @@ third-party; revisit this then.
 
 ## Status and resuming
 
-Phases 0 to 4 are done: 0 and 1 in commits `960679e9a` to `01cf8de84`, then 2, 3 and 4,
-built in parallel and joined on one branch. Phase 6 is done: `src/ui/lib` (`url-state`,
-`focus`, `query-client`), `src/api-client` (`api-error`, `mutation`) and
-`features/submissions/draft-sync.ts`. Its users arrive with the screens; `ListField` should
-switch to `focusAfterRemoval` once Phase 5 has merged. Phase 5 is next.
+Phases 0 to 6 are done. Phase 6 added `src/ui/lib` (`url-state`, `focus`, `query-client`),
+`src/api-client` (`api-error`, `mutation`) and `features/submissions/draft-sync.ts`; their
+users arrive with the screens. Phase 7 is next.
 
 What exists in `web/src/ui`, by folder: `layout` (Layout, Container), `content` (Heading,
-Text, Link, Icon, Code, Prose, Timestamp, VisuallyHidden, SkipLink), `actions` (Button),
-`feedback` (Badge, Chip, Notice, Progress, Skeleton, Spinner, EmptyState, ErrorState),
-`data` (Card, Image, Avatar, DescriptionList, StatGroup, Disclosure, List, ListItem,
-Timeline, Diff, Gallery), `table` (DataTable), `chart` (Chart, SeriesChart, RangeChart,
-DistributionBar), `navigation` (Breadcrumbs, Pagination, NavList, Tabs in link and panel
-mode, SegmentedControl in link and radio mode), `patterns` (PageHeader, Section), `forms`
-(every §2.2 component), `overlays` (Dialog, Sheet, Popover, Tooltip, Menu), plus
-`actions/CopyButton`, `feedback/Announcer` and `feedback/SaveStatus`. `LanguageSelector` is a `Menu` with `nojs`. Left over: Phase 5 places `Announcer` in `CatalogueLayout` as an island.
+Text, Link, Icon, Code, Prose, Timestamp, VisuallyHidden, SkipLink), `actions` (Button,
+CopyButton), `feedback` (Badge, Chip, Notice, Progress, Skeleton, Spinner, EmptyState,
+ErrorState, SaveStatus, Announcer), `data` (Card, Image, Avatar, DescriptionList, StatGroup,
+Disclosure, List, ListItem, Timeline, Diff, Gallery), `table` (DataTable), `chart` (Chart,
+SeriesChart, RangeChart, DistributionBar), `navigation` (Breadcrumbs, Pagination, NavList,
+Tabs and SegmentedControl in both modes), `forms` (every §2.2 component), `overlays`
+(Dialog, Sheet, Popover, Tooltip, Menu), and `patterns` (every §2.3 pattern).
+`CatalogueLayout`'s header is a `NavBar`, and the layout renders `Announcer`.
+
+Left over from Phase 5:
+
+- The `UserMenu` island. `/v1/session` exists and Phase 6 supplies the query client; it
+  needs the browser read through the same-origin proxy (API item 52). Its place is marked in
+  `CatalogueLayout`'s actions.
+- `FlashNotice` takes text; the one-shot flash cookie in `src/server/cookies.ts` waits for
+  the first POST-redirect-GET endpoint.
+- `WorkbenchLayout` still has its own sidebar (§0 item 22); `SplitLayout` would make its
+  `aside` and `NavList` two landmarks with one name.
+
+Departures from §2.3: `NavBar` and `SplitLayout` collapse into native popovers rather than
+a `Sheet` or `<details>`. One copy of the markup serves both layouts through a container
+query (`popover-inline` in `app.css`), so filter fields keep their ids and values and nothing
+needs hydration; the price is light dismiss without a focus trap. `NavBar` takes `home` as
+data, because Astro passes a Svelte component only one slotted child. `Announcer` is not an
+island: `announce()` writes to the server-rendered region, which saved 23 KiB of runtime on
+every page. `SettingsList` rows take a labelled control instead of their own label, since
+`Switch` already labels itself. `ResultsToolbar` has no `columns`; `DataTable` renders its
+column menu. `SearchBox` has `compact` instead of `size`. `FilterPanel` takes a
+preformatted `activeLabel`, and its auto-apply navigates with `location.assign`; url-state's
+`commitUrlState` is for islands that refetch without navigating.
 
 Departures from §2.2: `RangeField` takes `separator` and `inputmode` instead of `bounds` and
 `step`, which a text input cannot enforce; `UnitField` submits the typed number and unit id
