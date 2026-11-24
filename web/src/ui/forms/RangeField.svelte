@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { cn } from "@/ui/cn";
   import type { FieldMessages } from "@/ui/forms/field";
   import FieldGroup from "./FieldGroup.svelte";
   import TextField from "./TextField.svelte";
@@ -33,8 +34,8 @@
   }: Props = $props();
 </script>
 
-<FieldGroup {...group}>
-  <div class="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-start sm:gap-3">
+<FieldGroup {...group} class={cn("@container", group.class)}>
+  <div class="flex min-w-0 flex-col gap-2 @md:flex-row @md:items-start @md:gap-3">
     <TextField
       {width}
       name={min.name}
@@ -46,7 +47,7 @@
       {inputmode}
       {disabled}
     />
-    <span class="text-fg-muted sm:mt-2.5" aria-hidden="true">{separator}</span>
+    <span class="text-fg-muted @md:mt-2.5" aria-hidden="true">{separator}</span>
     <TextField
       {width}
       name={max.name}

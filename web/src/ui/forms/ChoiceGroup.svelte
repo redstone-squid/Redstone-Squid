@@ -41,7 +41,7 @@
   }: Props = $props();
   const groupId = $props.id();
   const invalid = $derived(error != null && error !== "");
-  const columnClass = { 2: "sm:grid-cols-2", 3: "sm:grid-cols-3", 4: "sm:grid-cols-4" };
+  const columnClass = { 2: "@md:grid-cols-2", 3: "@md:grid-cols-3", 4: "@md:grid-cols-4" };
 
   const isChecked = (option: string) =>
     Array.isArray(value) ? value.includes(option) : value === option;
@@ -60,7 +60,7 @@
   }
 </script>
 
-<FieldGroup {...frame} id={groupId} {hint} {error} class={className}>
+<FieldGroup {...frame} id={groupId} {hint} {error} class={cn("@container", className)}>
   <div
     class={cn(
       "min-w-0",

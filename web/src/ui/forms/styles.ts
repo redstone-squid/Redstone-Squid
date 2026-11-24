@@ -24,7 +24,7 @@ export const inputClass = cn(
  */
 export const boxClass = cn(
   controlBorder,
-  "flex min-h-control w-full min-w-0 items-stretch overflow-hidden",
+  "flex min-h-control w-full min-w-0 items-stretch",
   "hover:not-data-disabled:not-has-aria-invalid:border-fg-muted has-aria-invalid:border-danger",
   "has-focus-visible:outline-3 has-focus-visible:outline-offset-3 has-focus-visible:outline-focus",
   "data-disabled:bg-surface-muted data-disabled:text-fg-muted data-readonly:bg-surface-muted",
@@ -59,5 +59,5 @@ export const popupClass = cn(
 );
 export const popupOptionClass = cn(
   "grid cursor-pointer gap-0.5 rounded-xs px-3 py-2 text-sm wrap-anywhere text-fg",
-  "hover:bg-surface-muted aria-selected:bg-accent-soft aria-selected:forced-highlight data-highlighted:bg-accent-soft data-highlighted:forced-highlight",
+  "hover:bg-surface-muted aria-selected:forced-highlight aria-selected:bg-accent-soft data-highlighted:forced-highlight data-highlighted:bg-accent-soft",
 );

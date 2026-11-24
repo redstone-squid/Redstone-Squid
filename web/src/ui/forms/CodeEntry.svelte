@@ -38,7 +38,7 @@
   const strip = (raw: string) =>
     raw
       .toUpperCase()
-      .replace(charset === "digits" ? /[^0-9]/g : /[^0-9A-Z]/g, "")
+      .replace(charset === "digits" ? /\D/g : /[^0-9A-Z]/g, "")
       .slice(0, length);
 
   function group(code: string): string {

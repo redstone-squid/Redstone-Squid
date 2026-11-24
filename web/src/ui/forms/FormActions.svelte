@@ -21,15 +21,15 @@
 
 <div
   class={cn(
-    "grid min-w-0 gap-3",
+    "@container grid min-w-0 gap-3",
     sticky && "sticky bottom-0 z-sticky -mx-1 border-t border-line bg-surface px-1 py-3",
     className,
   )}
 >
   {#if note !== undefined}<p class="text-sm text-fg-muted">{note}</p>{/if}
-  <div class="flex flex-col-reverse gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-    {#if destructive}<div class="flex flex-col sm:me-auto">{@render destructive()}</div>{/if}
-    <div class="flex flex-col-reverse gap-3 sm:ms-auto sm:flex-row sm:items-center">
+  <div class="flex flex-col-reverse gap-3 @md:flex-row @md:flex-wrap @md:items-center">
+    {#if destructive}<div class="flex flex-col @md:me-auto">{@render destructive()}</div>{/if}
+    <div class="flex flex-col-reverse gap-3 @md:ms-auto @md:flex-row @md:items-center">
       {@render secondary?.()}
       {@render primary()}
     </div>

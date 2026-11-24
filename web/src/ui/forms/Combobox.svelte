@@ -241,7 +241,7 @@
             }}
             onkeydown={(event) => {
               if (event.key === "Backspace" && search === "" && values.length > 0)
-                remove(values[values.length - 1] ?? "");
+                remove(values.at(-1) ?? "");
             }}
           />
           <Combobox.Trigger

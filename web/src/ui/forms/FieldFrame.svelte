@@ -51,7 +51,7 @@
     <label class={cn(labelClass, labelVisibility === "hidden" && "sr-only")} for={control.id}
       >{@render caption()}</label
     >
-    <div class={cn("min-w-0", widthClass[width])}>{@render children(control)}</div>
+    <div class={cn("relative min-w-0", widthClass[width])}>{@render children(control)}</div>
   {/if}
   {#if hasHint || aside}
     <div

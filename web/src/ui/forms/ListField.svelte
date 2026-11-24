@@ -114,17 +114,17 @@
   <p id={`${id}-label`} class={labelClass}>{label}</p>
   {#if hint !== undefined}<p id={`${id}-hint`} class={fieldMessageClass}>{hint}</p>{/if}
   {#if items.length > 0}
-    <ol bind:this={rows} class="grid list-none gap-3">
+    <ol bind:this={rows} class="@container grid list-none gap-3">
       {#each items as item, index (keys[index])}
         {@const rowLabel = labels.rowLabel(index + 1)}
         <li
-          class="grid min-w-0 gap-3 rounded-md border border-line bg-surface p-4 sm:grid-cols-[1fr_auto]"
+          class="grid min-w-0 gap-3 rounded-md border border-line bg-surface p-4 @md:grid-cols-[1fr_auto]"
         >
           <fieldset class="grid min-w-0 gap-4">
             <legend class="mb-3 text-xs font-semibold text-fg-muted">{rowLabel}</legend>
             {@render row(item, index, rowLabel)}
           </fieldset>
-          <div class="flex items-start gap-1 max-sm:justify-end">
+          <div class="flex items-start gap-1 @max-md:justify-end">
             {#if reorderable}
               <Button
                 size="sm"
