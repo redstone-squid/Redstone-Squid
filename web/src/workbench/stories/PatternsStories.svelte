@@ -43,13 +43,13 @@
   const wait = () => new Promise<void>((resolve) => setTimeout(resolve, 800));
   const saveLabels = {
     idle: "",
-    dirty: "Unsaved",
-    saving: "Saving",
-    saved: "Saved",
-    offline: "Offline",
-    error: "Could not save",
-    conflict: "Changed elsewhere",
-    retry: "Retry",
+    dirty: m.storyUnsaved(),
+    saving: m.storySaving(),
+    saved: m.storySaved(),
+    offline: m.storyOffline(),
+    error: m.storyCouldNotSave(),
+    conflict: m.storyChangedElsewhere(),
+    retry: m.storyRetry(),
   };
   const settingStates = $state<Record<string, SaveState>>({
     dm: "idle",
@@ -71,29 +71,36 @@
     },
     { id: "open", name: "door-opening.mp4", status: "processing" },
     { id: "wiring", name: "wiring-closeup.png", status: "uploading", progress: 40 },
-    { id: "huge", name: "full-build-render.png", status: "failed", error: "Larger than 8 MB." },
+    { id: "huge", name: "full-build-render.png", status: "failed", error: m.storyLargerThan8Mb() },
     { id: "old", name: "old-screenshot.png", status: "removed" },
   ]);
   function setMedia(id: string, change: Partial<MediaItem>): void {
     media = media.map((item) => (item.id === id ? { ...item, ...change } : item));
   }
   const mediaStatus: Record<MediaStatus, string> = {
-    queued: "Waiting to upload",
-    uploading: "Uploading",
-    processing: "Processing",
-    ready: "Ready",
-    failed: "Upload failed",
-    removed: "Removed",
+    queued: m.storyWaitingToUpload(),
+    uploading: m.storyUploading(),
+    processing: m.storyProcessing(),
+    ready: m.storyReady(),
+    failed: m.storyUploadFailed(),
+    removed: m.storyRemoved(),
   };
   const mergeSteps = ["code", "preview", "confirm"];
   let mergeStep = $state("code");
   const stepLabels = {
-    pending: "Not started",
-    current: "Current step",
-    done: "Done",
-    error: "Needs attention",
+    pending: m.storyNotStarted(),
+    current: m.storyCurrentStep(),
+    done: m.storyDone(),
+    error: m.storyNeedsAttention(),
   };
   let resultsStatus = $state<(typeof statuses)[number]>("ready");
+  const statusLabels = {
+    ready: m.storyReady(),
+    refreshing: m.storyRefreshing(),
+    loading: m.storyLoading(),
+    empty: m.storyEmpty(),
+    error: m.storyErrorState(),
+  };
 </script>
 
 <Story name="PageHeader" source="patterns/PageHeader" description={m.storyPageHeaderDescription()}>
@@ -123,33 +130,29 @@
   </Section>
 </Story>
 
-{#snippet navActions()}<Button size="sm" variant="primary">Submit</Button>{/snippet}
+{#snippet navActions()}<Button size="sm" variant="primary">{m.navSubmit()}</Button>{/snippet}
 
-<Story
-  name="NavBar"
-  source="patterns/NavBar"
-  description="The site header body. The links collapse into a popover when the bar is narrow."
->
+<Story name="NavBar" source="patterns/NavBar" description={m.storyNavbarDescription()}>
   {@const links = [
-    { label: "Builds", href: "#navbar-builds", current: true },
-    { label: "Records", href: "#navbar-records" },
-    { label: "Search", href: "#navbar-search" },
-    { label: "About", href: "#navbar-about" },
+    { label: m.navBuilds(), href: "#navbar-builds", current: true },
+    { label: m.navRecords(), href: "#navbar-records" },
+    { label: m.navSearch(), href: "#navbar-search" },
+    { label: m.navAbout(), href: "#navbar-about" },
   ]}
-  <Variant label="as wide as the page">
+  <Variant label={m.storyAsWideAsThePage()}>
     <NavBar
-      label="Story navigation"
-      menuLabel="Menu"
+      label={m.storyStoryNavigation()}
+      menuLabel={m.navMenu()}
       home={{ label: m.siteName(), href: "#navbar", logo: "/favicon.svg" }}
       {links}
       actions={navActions}
     />
   </Variant>
-  <Variant label="narrow frame, links collapsed">
+  <Variant label={m.storyNarrowFrameLinksCollapsed()}>
     <div class="max-w-dialog-sm">
       <NavBar
-        label="Narrow story navigation"
-        menuLabel="Menu"
+        label={m.storyNarrowStoryNavigation()}
+        menuLabel={m.navMenu()}
         home={{ label: m.siteName(), href: "#navbar", logo: "/favicon.svg" }}
         {links}
       />
@@ -157,37 +160,38 @@
   </Variant>
 </Story>
 
-<Story
-  name="SearchBox"
-  source="patterns/SearchBox"
-  description="A GET search form that keeps other query parameters."
->
+<Story name="SearchBox" source="patterns/SearchBox" description={m.storySearchboxDescription()}>
   <Layout pattern="grid" min="card-wide">
-    <Variant label="page search, keeping scope">
+    <Variant label={m.storyPageSearchKeepingScope()}>
       <SearchBox
         action="/design-system/patterns"
-        label="Search builds and records"
-        placeholder="Piston door, 3×3, CircuitSage"
-        submitLabel="Search"
+        label={m.storySearchBuildsAndRecords()}
+        placeholder={m.storySearchPlaceholder()}
+        submitLabel={m.navSearch()}
         hidden={{ scope: "builds" }}
         value="flush"
       />
     </Variant>
-    <Variant label="compact, for the header">
-      <SearchBox action="/design-system/patterns" label="Search" submitLabel="Search" compact />
-    </Variant>
-    <Variant label="with suggestions">
+    <Variant label={m.storyCompactForTheHeader()}>
       <SearchBox
         action="/design-system/patterns"
-        label="Search records"
-        submitLabel="Search"
+        label={m.navSearch()}
+        submitLabel={m.navSearch()}
+        compact
+      />
+    </Variant>
+    <Variant label={m.storyWithSuggestions()}>
+      <SearchBox
+        action="/design-system/patterns"
+        label={m.storySearchRecords()}
+        submitLabel={m.navSearch()}
         suggestions={{
           labels: {
-            suggestions: "Suggested searches",
-            loading: "Loading",
-            error: "Suggestions are unavailable.",
-            noResults: "No suggestions",
-            count: (count) => `${count} suggestions`,
+            suggestions: m.storySuggestedSearches(),
+            loading: m.storyLoading(),
+            error: m.storySuggestionsAreUnavailable(),
+            noResults: m.storyNoSuggestions(),
+            count: (count) => m.storySuggestionCount({ count }),
           },
           load: (query) =>
             Promise.resolve({
@@ -203,54 +207,54 @@
 
 {#snippet filterFields()}
   <SelectField
-    label="Category"
+    label={m.trialCategory()}
     name="category"
     value="door"
     options={[
-      { value: "", label: "Any category" },
-      { value: "door", label: "Piston door" },
-      { value: "extender", label: "Extender" },
+      { value: "", label: m.storyAnyCategory() },
+      { value: "door", label: m.workbenchPistonDoor() },
+      { value: "extender", label: m.storyExtender() },
     ]}
   />
-  <CheckField label="Record holders only" name="holders" value="1" checked />
+  <CheckField label={m.storyRecordHoldersOnly()} name="holders" value="1" checked />
 {/snippet}
 
 <Story
   name="FilterPanel"
   source="patterns/FilterPanel"
-  description="Filters in a GET form; auto-apply navigates after a change once hydrated."
+  description={m.storyFilterpanelDescription()}
 >
   <Layout pattern="grid" min="card-wide">
-    <Variant label="apply button, two active">
+    <Variant label={m.storyApplyButtonTwoActive()}>
       <FilterPanel
         action="/design-system/patterns"
-        title="Filters"
-        activeLabel="2 active"
-        applyLabel="Apply filters"
+        title={m.storyFilters()}
+        activeLabel={m.storyTwoActive()}
+        applyLabel={m.storyApplyFilters()}
         resetHref="/design-system/patterns"
-        resetLabel="Reset"
+        resetLabel={m.storyReset()}
         hidden={{ q: "door" }}
         children={filterFields}
       />
     </Variant>
-    <Variant label="in a SplitLayout sheet">
+    <Variant label={m.storyInASplitlayoutSheet()}>
       <SplitLayout
-        sidebarLabel="Filters"
-        triggerLabel="Filters · 2"
-        closeLabel="Close filters"
+        sidebarLabel={m.storyFilters()}
+        triggerLabel={m.storyFiltersTwo()}
+        closeLabel={m.storyCloseFilters()}
         collapse="sheet"
       >
         {#snippet sidebar()}
           <FilterPanel
             action="/design-system/patterns"
-            title="Filters"
-            applyLabel="Apply filters"
+            title={m.storyFilters()}
+            applyLabel={m.storyApplyFilters()}
             resetHref="/design-system/patterns"
-            resetLabel="Reset"
+            resetLabel={m.storyReset()}
             children={filterFields}
           />
         {/snippet}
-        <p class="text-sm">Results.</p>
+        <p class="text-sm">{m.storyResults()}</p>
       </SplitLayout>
     </Variant>
   </Layout>
@@ -259,67 +263,81 @@
 <Story
   name="ActiveFilters"
   source="patterns/ActiveFilters"
-  description="Removable chips for applied filters, each a link to the URL without it."
+  description={m.storyActivefiltersDescription()}
 >
   <ActiveFilters
     items={[
-      { label: "Piston door", removeLabel: "Remove Piston door", removeHref: "#activefilters-1" },
-      { label: "Width ≥ 5", removeLabel: "Remove width ≥ 5", removeHref: "#activefilters-2" },
       {
-        label: "Record holders",
-        removeLabel: "Remove Record holders",
+        label: m.workbenchPistonDoor(),
+        removeLabel: m.storyRemovePistonDoor(),
+        removeHref: "#activefilters-1",
+      },
+      {
+        label: m.storyWidthAtLeast5(),
+        removeLabel: m.storyRemoveWidthAtLeast5(),
+        removeHref: "#activefilters-2",
+      },
+      {
+        label: m.storyRecordHolders(),
+        removeLabel: m.storyRemoveRecordHolders(),
         removeHref: "#activefilters-3",
       },
     ]}
     clearHref="#activefilters"
-    labels={{ region: "Active filters", clear: "Clear all filters" }}
+    labels={{ region: m.storyActiveFilters(), clear: m.storyClearAllFilters() }}
   />
 </Story>
 
 <Story
   name="ResultsToolbar"
   source="patterns/ResultsToolbar"
-  description="Count, sort menu, view switch and extra actions, all links."
+  description={m.storyResultstoolbarDescription()}
 >
   <ResultsToolbar
-    count="312 builds"
+    count={m.story312Builds()}
     sort={{
-      label: "Sort order",
-      current: "Sort: Newest",
+      label: m.storySortOrder(),
+      current: m.storySortNewest(),
       options: [
-        { label: "Newest", href: "#resultstoolbar-newest", current: true },
-        { label: "Fastest opening", href: "#resultstoolbar-fastest" },
-        { label: "Smallest volume", href: "#resultstoolbar-smallest" },
+        { label: m.storyNewest(), href: "#resultstoolbar-newest", current: true },
+        { label: m.storyFastestOpening(), href: "#resultstoolbar-fastest" },
+        { label: m.storySmallestVolume(), href: "#resultstoolbar-smallest" },
       ],
     }}
     view={{
-      label: "Results view",
+      label: m.storyResultsView(),
       items: [
-        { label: "Cards", href: "#resultstoolbar-cards", current: true, icon: LayoutGrid },
-        { label: "Table", href: "#resultstoolbar-table", icon: Table },
+        { label: m.storyCards(), href: "#resultstoolbar-cards", current: true, icon: LayoutGrid },
+        { label: m.storyTable(), href: "#resultstoolbar-table", icon: Table },
       ],
     }}
   >
-    {#snippet extra()}<Button size="sm" variant="quiet">Follow this search</Button>{/snippet}
+    {#snippet extra()}<Button size="sm" variant="quiet">{m.storyFollowThisSearch()}</Button
+      >{/snippet}
   </ResultsToolbar>
-  <Variant label="count only, live">
-    <ResultsToolbar count="1 record" live />
+  <Variant label={m.storyCountOnlyLive()}>
+    <ResultsToolbar count={m.storyOneRecord()} live />
   </Variant>
 </Story>
 
 <Story
   name="ResultsView"
   source="patterns/ResultsView"
-  description="Cards or table by view, with loading, refreshing, empty and error states."
+  description={m.storyResultsviewDescription()}
 >
   <SegmentedControl
     mode="radio"
     name="results-status"
-    label="Results state"
+    label={m.storyResultsState()}
     bind:value={resultsStatus}
-    items={statuses.map((status) => ({ label: status, value: status }))}
+    items={statuses.map((status) => ({ label: statusLabels[status], value: status }))}
   />
-  <ResultsView view="cards" status={resultsStatus} busyLabel="Loading builds" id="story-results">
+  <ResultsView
+    view="cards"
+    status={resultsStatus}
+    busyLabel={m.storyLoadingBuilds()}
+    id="story-results"
+  >
     {#snippet cards()}
       <Layout as="ul" pattern="grid">
         {#each buildFixtures() as build, index (build.id)}
@@ -329,23 +347,23 @@
     {/snippet}
     {#snippet empty()}
       <EmptyState
-        title="No builds match “flush 9×9”"
-        description="Remove a filter or search all builds."
+        title={m.storyNoBuildsMatchFlush()}
+        description={m.storyRemoveAFilterOrSearchAll()}
       />
     {/snippet}
     {#snippet error()}
       <ErrorState
-        title="Builds could not load"
-        retryLabel="Try again"
+        title={m.storyBuildsCouldNotLoad()}
+        retryLabel={m.storyTryAgain()}
         onRetry={() => (resultsStatus = "ready")}
       />
     {/snippet}
   </ResultsView>
-  <Variant label="table view, loading">
+  <Variant label={m.storyTableViewLoading()}>
     <ResultsView
       view="table"
       status="loading"
-      busyLabel="Loading records"
+      busyLabel={m.storyLoadingRecords()}
       id="story-table-results"
     />
   </Variant>
@@ -354,59 +372,59 @@
 <Story
   name="ConfirmDialog"
   source="patterns/ConfirmDialog"
-  description="Confirms an irreversible action; danger starts focus on Cancel."
+  description={m.storyConfirmdialogDescription()}
 >
   <Layout pattern="cluster">
     <ConfirmDialog
-      title="Revoke Laptop CLI?"
-      description="The device signs out at once and must enroll again."
-      confirmLabel="Revoke"
-      cancelLabel="Cancel"
-      closeLabel="Close"
-      pendingLabel="Revoking"
-      trigger={{ label: "Revoke device", variant: "danger" }}
+      title={m.storyRevokeLaptopCli()}
+      description={m.storyDeviceSignsOut()}
+      confirmLabel={m.storyRevoke()}
+      cancelLabel={m.storyCancel()}
+      closeLabel={m.storyClose()}
+      pendingLabel={m.storyRevoking()}
+      trigger={{ label: m.storyRevokeDevice(), variant: "danger" }}
       fallbackHref="#confirmdialog"
       onConfirm={wait}
     />
     <ConfirmDialog
-      title="Merge accounts?"
+      title={m.storyMergeAccountsQuestion()}
       consequences={[
-        "Builds and records move to CircuitSage.",
-        "The other account's sign-in links are removed.",
-        "This cannot be undone.",
+        m.storyBuildsMoveToCircuitsage(),
+        m.storySignInLinksRemoved(),
+        m.storyCannotBeUndone(),
       ]}
       requireText={{
-        label: "Type CircuitSage to confirm",
+        label: m.storyTypeCircuitsage(),
         expected: "CircuitSage",
-        error: "Type the account name exactly.",
+        error: m.storyTypeAccountNameExactly(),
       }}
-      confirmLabel="Merge accounts"
-      cancelLabel="Cancel"
-      closeLabel="Close"
-      trigger={{ label: "Merge accounts" }}
+      confirmLabel={m.storyMergeAccounts()}
+      cancelLabel={m.storyCancel()}
+      closeLabel={m.storyClose()}
+      trigger={{ label: m.storyMergeAccounts() }}
       onConfirm={wait}
     />
     <ConfirmDialog
-      title="Reject this proposal?"
-      confirmLabel="Reject"
-      cancelLabel="Cancel"
-      closeLabel="Close"
+      title={m.storyRejectThisProposal()}
+      confirmLabel={m.storyReject()}
+      cancelLabel={m.storyCancel()}
+      closeLabel={m.storyClose()}
       error={revokeError}
-      trigger={{ label: "Reject, failing" }}
+      trigger={{ label: m.storyRejectFailing() }}
       onConfirm={async () => {
         await wait();
-        revokeError = "The proposal changed since you opened it. Reload and try again.";
+        revokeError = m.storyProposalChanged();
         throw new Error("conflict");
       }}
     />
     <ConfirmDialog
       tone="default"
-      title="Publish the draft?"
-      description="Staff will review it before it appears in the catalogue."
-      confirmLabel="Publish"
-      cancelLabel="Not yet"
-      closeLabel="Close"
-      trigger={{ label: "Publish", variant: "primary" }}
+      title={m.storyPublishTheDraft()}
+      description={m.storyStaffWillReview()}
+      confirmLabel={m.storyPublish()}
+      cancelLabel={m.storyNotYet()}
+      closeLabel={m.storyClose()}
+      trigger={{ label: m.storyPublish(), variant: "primary" }}
       onConfirm={wait}
     />
   </Layout>
@@ -414,19 +432,19 @@
 
 {#snippet dmSwitch()}
   <Switch
-    label="Direct messages"
-    hint="Messages from the bot about your builds."
+    label={m.storyDirectMessages()}
+    hint={m.storyMessagesFromTheBot()}
     checked
     onchange={() => saveSetting("dm")}
   />
 {/snippet}
 {#snippet digestSwitch()}
-  <Switch label="Weekly digest" onchange={() => saveSetting("digest")} />
+  <Switch label={m.storyWeeklyDigest()} onchange={() => saveSetting("digest")} />
 {/snippet}
 {#snippet mentionsSwitch()}
   <Switch
-    label="Mentions"
-    error="Your Discord DMs are closed."
+    label={m.storyMentions()}
+    error={m.storyDiscordDmsClosed()}
     onchange={() => saveSetting("mentions")}
   />
 {/snippet}
@@ -434,11 +452,11 @@
 <Story
   name="SettingsList"
   source="patterns/SettingsList"
-  description="Settings that save on change, each with its own status. Toggle them to see saving."
+  description={m.storySettingslistDescription()}
 >
   <SettingsList
-    title="Notifications"
-    description="Changes save as you make them."
+    title={m.storyNotifications()}
+    description={m.storyChangesSaveAsYouMakeThem()}
     labels={saveLabels}
     onRetry={saveSetting}
     items={[
@@ -452,24 +470,24 @@
 <Story
   name="MediaUploader"
   source="patterns/MediaUploader"
-  description="Files with status, progress, retry, primary and an inline undo for removal."
+  description={m.storyMediauploaderDescription()}
 >
   <MediaUploader
     items={media}
-    label="Images and videos"
-    hint="Show the door closed and open."
-    limitsLabel="Up to 10 files, 8 MB each."
+    label={m.storyImagesAndVideos()}
+    hint={m.storyShowTheDoorClosedAndOpen()}
+    limitsLabel={m.storyUpTo10Files()}
     accept="image/*,video/*"
     labels={{
-      drop: "Drop files here, or",
-      browse: "Choose files",
+      drop: m.storyDropFilesHereOr(),
+      browse: m.storyChooseFiles(),
       status: mediaStatus,
-      primary: "Cover",
-      remove: (name) => `Remove ${name}`,
-      undo: "Undo",
-      retry: "Retry",
-      setPrimary: (name) => `Use ${name} as the cover`,
-      summary: ({ ready, failed }) => `${ready} files ready, ${failed} failed`,
+      primary: m.storyCover(),
+      remove: (name) => m.storyRemoveFile({ name }),
+      undo: m.storyUndo(),
+      retry: m.storyRetry(),
+      setPrimary: (name) => m.storyUseAsCover({ name }),
+      summary: ({ ready, failed }) => m.storyFilesSummary({ ready, failed }),
     }}
     onFiles={(files) => {
       media = [
@@ -493,65 +511,65 @@
 <Story
   name="OneTimeSecret"
   source="patterns/OneTimeSecret"
-  description="A secret shown once, with copy and an acknowledgement; leaving early asks first."
+  description={m.storyOnetimesecretDescription()}
 >
   <OneTimeSecret
     value="sqd_inst_7f3a9c2e41b84d0f9a6e5c1b2d3f4a5b"
-    label="Installation secret"
-    warning="Copy this secret now. It will not be shown again."
-    detail="Paste it into the plugin's config.yml."
-    copyLabels={{ label: "Copy", copied: "Copied", failed: "Copy failed" }}
-    acknowledgeLabel="I saved the secret"
+    label={m.storyInstallationSecret()}
+    warning={m.storyCopyThisSecretNow()}
+    detail={m.storyPasteIntoConfig()}
+    copyLabels={{ label: m.storyCopy(), copied: m.storyCopied(), failed: m.storyCopyFailed() }}
+    acknowledgeLabel={m.storyISavedTheSecret()}
     guardUnload={false}
   />
 </Story>
 
-<Story
-  name="StepFlow"
-  source="patterns/StepFlow"
-  description="Steps with the current one marked; moving between steps focuses the step heading."
->
+<Story name="StepFlow" source="patterns/StepFlow" description={m.storyStepflowDescription()}>
   <StepFlow
-    label="Merge progress"
+    label={m.storyMergeProgress()}
     current={mergeStep}
     labels={stepLabels}
     steps={[
-      { id: "code", label: "Enter the code", status: mergeStep === "code" ? "pending" : "done" },
+      {
+        id: "code",
+        label: m.storyEnterTheCode(),
+        status: mergeStep === "code" ? "pending" : "done",
+      },
       {
         id: "preview",
-        label: "Review the merge",
+        label: m.storyReviewTheMerge(),
         status: mergeStep === "confirm" ? "done" : "pending",
       },
-      { id: "confirm", label: "Confirm", status: "pending" },
+      { id: "confirm", label: m.storyConfirm(), status: "pending" },
     ]}
   >
     <Layout pattern="cluster">
       <Button
         disabled={mergeStep === "code"}
         onclick={() => (mergeStep = mergeSteps[mergeSteps.indexOf(mergeStep) - 1] ?? "code")}
-        >Back</Button
+        >{m.storyBack()}</Button
       >
       <Button
         variant="primary"
         disabled={mergeStep === "confirm"}
         onclick={() => (mergeStep = mergeSteps[mergeSteps.indexOf(mergeStep) + 1] ?? "confirm")}
-        >Continue</Button
+        >{m.storyContinue()}</Button
       >
     </Layout>
   </StepFlow>
-  <Variant label="a failed phase">
+  <Variant label={m.storyAFailedPhase()}>
     <StepFlow
-      label="Finalization"
+      label={m.storyFinalization()}
       current="render"
       labels={stepLabels}
       headingLevel={3}
       steps={[
-        { id: "check", label: "Check the draft", status: "done" },
-        { id: "render", label: "Render previews", status: "error" },
-        { id: "publish", label: "Publish", status: "pending" },
+        { id: "check", label: m.storyCheckTheDraft(), status: "done" },
+        { id: "render", label: m.storyRenderPreviews(), status: "error" },
+        { id: "publish", label: m.storyPublish(), status: "pending" },
       ]}
     >
-      <Notice tone="danger">The schematic could not be rendered.</Notice>
+      <Notice tone="danger">{m.storySchematicNotRendered()}</Notice>
     </StepFlow>
   </Variant>
 </Story>
@@ -559,52 +577,52 @@
 <Story
   name="FlashNotice"
   source="patterns/FlashNotice"
-  description="The outcome of a server-handled form after its redirect, announced once hydrated."
+  description={m.storyFlashnoticeDescription()}
 >
-  <FlashNotice message="Profile saved." />
-  <FlashNotice tone="info" message="The draft was discarded." />
+  <FlashNotice message={m.storyProfileSaved()} />
+  <FlashNotice tone="info" message={m.storyDraftDiscarded()} />
 </Story>
 
 {#snippet sideNav()}
   <ul class="grid gap-2 text-sm">
-    <li><a href="#splitlayout">General</a></li>
-    <li><a href="#splitlayout">Media</a></li>
-    <li><a href="#splitlayout">Credits</a></li>
+    <li><a href="#splitlayout">{m.storyGeneral()}</a></li>
+    <li><a href="#splitlayout">{m.storyMedia()}</a></li>
+    <li><a href="#splitlayout">{m.storyCredits()}</a></li>
   </ul>
 {/snippet}
 
 <Story
   name="SplitLayout"
   source="patterns/SplitLayout"
-  description="A sidebar beside the content, sized by its own width. Narrow it to see the collapse."
+  description={m.storySplitlayoutDescription()}
 >
-  <Variant label="stack, sidebar at the start">
-    <SplitLayout sidebarLabel="Sections" sidebar={sideNav}>
-      <p class="text-sm">Main content flows beside the sidebar when there is room.</p>
+  <Variant label={m.storyStackSidebarAtStart()}>
+    <SplitLayout sidebarLabel={m.storySections()} sidebar={sideNav}>
+      <p class="text-sm">{m.storyMainContentFlows()}</p>
     </SplitLayout>
   </Variant>
-  <Variant label="sheet, sidebar at the end, sticky">
+  <Variant label={m.storySheetEndSticky()}>
     <SplitLayout
-      sidebarLabel="Filters"
-      triggerLabel="Filters · 2"
-      closeLabel="Close filters"
+      sidebarLabel={m.storyFilters()}
+      triggerLabel={m.storyFiltersTwo()}
+      closeLabel={m.storyCloseFilters()}
       collapse="sheet"
       side="end"
       sticky
       sidebar={sideNav}
     >
-      <p class="text-sm">On a narrow layout the sidebar opens as a sheet from the end edge.</p>
+      <p class="text-sm">{m.storyNarrowLayoutSheet()}</p>
     </SplitLayout>
   </Variant>
-  <Variant label="sheet in a narrow frame">
+  <Variant label={m.storySheetInANarrowFrame()}>
     <div class="max-w-dialog-sm">
       <SplitLayout
-        sidebarLabel="Account"
-        closeLabel="Close account navigation"
+        sidebarLabel={m.storyAccount()}
+        closeLabel={m.storyCloseAccountNavigation()}
         collapse="sheet"
         sidebar={sideNav}
       >
-        <p class="text-sm">This frame is always narrow, so the sidebar stays behind a button.</p>
+        <p class="text-sm">{m.storyFrameAlwaysNarrow()}</p>
       </SplitLayout>
     </div>
   </Variant>

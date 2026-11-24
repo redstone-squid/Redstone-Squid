@@ -1561,6 +1561,30 @@ export function storySaving(locale: Locale = getLocale()): string {
   }
 }
 
+/** Copied */
+export function storyCopied(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Copied";
+    case "zh-CN":
+      return "已复制";
+    case "en-XA":
+      return "[" + "Çöþîéđ" + "···]";
+  }
+}
+
+/** Copy failed */
+export function storyCopyFailed(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Copy failed";
+    case "zh-CN":
+      return "复制失败";
+    case "en-XA":
+      return "[" + "Çöþý ƒåîļéđ" + "·····]";
+  }
+}
+
 /** Copper Bolt */
 export function storyCopperBolt(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -1753,6 +1777,18 @@ export function storySelected(locale: Locale = getLocale()): string {
   }
 }
 
+/** Needs attention */
+export function storyNeedsAttention(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Needs attention";
+    case "zh-CN":
+      return "需要关注";
+    case "en-XA":
+      return "[" + "Ñééđš åţţéñţîöñ" + "······]";
+  }
+}
+
 /** Notifications */
 export function storyNotifications(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -1762,6 +1798,18 @@ export function storyNotifications(locale: Locale = getLocale()): string {
       return "通知";
     case "en-XA":
       return "[" + "Ñöţîƒîçåţîöñš" + "······]";
+  }
+}
+
+/** Record holders */
+export function storyRecordHolders(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Record holders";
+    case "zh-CN":
+      return "纪录保持者";
+    case "en-XA":
+      return "[" + "Ŕéçöŕđ ĥöļđéŕš" + "······]";
   }
 }
 
@@ -1798,6 +1846,30 @@ export function storyClose(locale: Locale = getLocale()): string {
       return "关闭";
     case "en-XA":
       return "[" + "Çļöšé" + "··]";
+  }
+}
+
+/** Empty */
+export function storyEmpty(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Empty";
+    case "zh-CN":
+      return "空";
+    case "en-XA":
+      return "[" + "Éɱþţý" + "··]";
+  }
+}
+
+/** Removed */
+export function storyRemoved(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Removed";
+    case "zh-CN":
+      return "已移除";
+    case "en-XA":
+      return "[" + "Ŕéɱöṽéđ" + "···]";
   }
 }
 
@@ -1861,6 +1933,30 @@ export function storyJava121(locale: Locale = getLocale()): string {
   }
 }
 
+/** Retry */
+export function storyRetry(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Retry";
+    case "zh-CN":
+      return "重试";
+    case "en-XA":
+      return "[" + "Ŕéţŕý" + "··]";
+  }
+}
+
+/** Upload failed */
+export function storyUploadFailed(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Upload failed";
+    case "zh-CN":
+      return "上传失败";
+    case "en-XA":
+      return "[" + "Ûþļöåđ ƒåîļéđ" + "······]";
+  }
+}
+
 /** Loading */
 export function storyLoading(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -1873,6 +1969,42 @@ export function storyLoading(locale: Locale = getLocale()): string {
   }
 }
 
+/** Loading builds */
+export function storyLoadingBuilds(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Loading builds";
+    case "zh-CN":
+      return "正在加载作品";
+    case "en-XA":
+      return "[" + "Ļöåđîñĝ ƀûîļđš" + "······]";
+  }
+}
+
+/** Try again */
+export function storyTryAgain(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Try again";
+    case "zh-CN":
+      return "重试";
+    case "en-XA":
+      return "[" + "Ţŕý åĝåîñ" + "····]";
+  }
+}
+
+/** Saved */
+export function storySaved(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Saved";
+    case "zh-CN":
+      return "已保存";
+    case "en-XA":
+      return "[" + "Šåṽéđ" + "··]";
+  }
+}
+
 /** Newest */
 export function storyNewest(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -1882,6 +2014,18 @@ export function storyNewest(locale: Locale = getLocale()): string {
       return "最新";
     case "en-XA":
       return "[" + "Ñéŵéšţ" + "···]";
+  }
+}
+
+/** Publish */
+export function storyPublish(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Publish";
+    case "zh-CN":
+      return "发布";
+    case "en-XA":
+      return "[" + "Þûƀļîšĥ" + "···]";
   }
 }
 
@@ -1909,6 +2053,42 @@ export function storySilent(locale: Locale = getLocale()): string {
   }
 }
 
+/** Drop files here, or */
+export function storyDropFilesHereOr(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Drop files here, or";
+    case "zh-CN":
+      return "将文件拖到这里，或";
+    case "en-XA":
+      return "[" + "Đŕöþ ƒîļéš ĥéŕé, öŕ" + "········]";
+  }
+}
+
+/** Choose files */
+export function storyChooseFiles(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Choose files";
+    case "zh-CN":
+      return "选择文件";
+    case "en-XA":
+      return "[" + "Çĥööšé ƒîļéš" + "·····]";
+  }
+}
+
+/** Suggestions are unavailable. */
+export function storySuggestionsAreUnavailable(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Suggestions are unavailable.";
+    case "zh-CN":
+      return "无法获取建议。";
+    case "en-XA":
+      return "[" + "Šûĝĝéšţîöñš åŕé ûñåṽåîļåƀļé." + "············]";
+  }
+}
+
 /** Actions */
 export function storyActions(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -1933,6 +2113,42 @@ export function storyBreadcrumb(locale: Locale = getLocale()): string {
   }
 }
 
+/** Account */
+export function storyAccount(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Account";
+    case "zh-CN":
+      return "账号";
+    case "en-XA":
+      return "[" + "Åççöûñţ" + "···]";
+  }
+}
+
+/** Cards */
+export function storyCards(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Cards";
+    case "zh-CN":
+      return "卡片";
+    case "en-XA":
+      return "[" + "Çåŕđš" + "··]";
+  }
+}
+
+/** Reject */
+export function storyReject(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Reject";
+    case "zh-CN":
+      return "拒绝";
+    case "en-XA":
+      return "[" + "Ŕéĵéçţ" + "···]";
+  }
+}
+
 /** Table */
 export function storyTable(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -1942,6 +2158,54 @@ export function storyTable(locale: Locale = getLocale()): string {
       return "表格";
     case "en-XA":
       return "[" + "Ţåƀļé" + "··]";
+  }
+}
+
+/** Revoke device */
+export function storyRevokeDevice(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Revoke device";
+    case "zh-CN":
+      return "撤销设备授权";
+    case "en-XA":
+      return "[" + "Ŕéṽöķé đéṽîçé" + "······]";
+  }
+}
+
+/** Done */
+export function storyDone(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Done";
+    case "zh-CN":
+      return "完成";
+    case "en-XA":
+      return "[" + "Đöñé" + "··]";
+  }
+}
+
+/** Revoke Laptop CLI? */
+export function storyRevokeLaptopCli(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Revoke Laptop CLI?";
+    case "zh-CN":
+      return "撤销笔记本命令行客户端的授权？";
+    case "en-XA":
+      return "[" + "Ŕéṽöķé Ļåþţöþ ÇĻÎ?" + "········]";
+  }
+}
+
+/** Filters */
+export function storyFilters(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Filters";
+    case "zh-CN":
+      return "筛选条件";
+    case "en-XA":
+      return "[" + "Ƒîļţéŕš" + "···]";
   }
 }
 
@@ -1957,6 +2221,18 @@ export function storyColumns(locale: Locale = getLocale()): string {
   }
 }
 
+/** Sort order */
+export function storySortOrder(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Sort order";
+    case "zh-CN":
+      return "排序方式";
+    case "en-XA":
+      return "[" + "Šöŕţ öŕđéŕ" + "····]";
+  }
+}
+
 /** Edit */
 export function storyEdit(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -1966,6 +2242,18 @@ export function storyEdit(locale: Locale = getLocale()): string {
       return "编辑";
     case "en-XA":
       return "[" + "Éđîţ" + "··]";
+  }
+}
+
+/** Sort: Newest */
+export function storySortNewest(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Sort: Newest";
+    case "zh-CN":
+      return "排序：最新";
+    case "en-XA":
+      return "[" + "Šöŕţ: Ñéŵéšţ" + "·····]";
   }
 }
 
@@ -2235,6 +2523,21 @@ export function storyRemoveOption(
       return "移除 " + formatValue(locale, args.label);
     case "en-XA":
       return "[" + "Ŕéɱöṽé " + formatValue(locale, args.label) + "···]";
+  }
+}
+
+/** { $count } suggestions */
+export function storySuggestionCount(
+  args: { count: string | number },
+  locale: Locale = getLocale(),
+): string {
+  switch (locale) {
+    case "en":
+      return formatValue(locale, args.count) + " suggestions";
+    case "zh-CN":
+      return formatValue(locale, args.count) + " 条建议";
+    case "en-XA":
+      return "[" + formatValue(locale, args.count) + " šûĝĝéšţîöñš" + "·····]";
   }
 }
 

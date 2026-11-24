@@ -50,18 +50,6 @@ export function storyDiscardDraft(locale: Locale = getLocale()): string {
   }
 }
 
-/** Publish */
-export function storyPublish(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Publish";
-    case "zh-CN":
-      return "发布";
-    case "en-XA":
-      return "[" + "Þûƀļîšĥ" + "···]";
-  }
-}
-
 /** Single-line text and numbers. */
 export function storyTextFieldDescription(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -1918,30 +1906,6 @@ export function storyUnit(locale: Locale = getLocale()): string {
   }
 }
 
-/** Drop files here, or */
-export function storyDropFilesHereOr(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Drop files here, or";
-    case "zh-CN":
-      return "将文件拖到这里，或";
-    case "en-XA":
-      return "[" + "Đŕöþ ƒîļéš ĥéŕé, öŕ" + "········]";
-  }
-}
-
-/** Choose files */
-export function storyChooseFiles(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Choose files";
-    case "zh-CN":
-      return "选择文件";
-    case "en-XA":
-      return "[" + "Çĥööšé ƒîļéš" + "·····]";
-  }
-}
-
 /** Drop an image here, or */
 export function storyDropAnImageHereOr(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -2026,18 +1990,6 @@ export function storyBuilders(locale: Locale = getLocale()): string {
   }
 }
 
-/** Suggestions are unavailable. */
-export function storySuggestionsAreUnavailable(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Suggestions are unavailable.";
-    case "zh-CN":
-      return "无法获取建议。";
-    case "en-XA":
-      return "[" + "Šûĝĝéšţîöñš åŕé ûñåṽåîļåƀļé." + "············]";
-  }
-}
-
 /** No builders found */
 export function storyNoBuildersFound(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -2086,21 +2038,6 @@ export function storyAddOption(
       return "添加“" + formatValue(locale, args.text) + "”";
     case "en-XA":
       return "[" + "Åđđ “" + formatValue(locale, args.text) + "”" + "···]";
-  }
-}
-
-/** { $count } suggestions */
-export function storySuggestionCount(
-  args: { count: string | number },
-  locale: Locale = getLocale(),
-): string {
-  switch (locale) {
-    case "en":
-      return formatValue(locale, args.count) + " suggestions";
-    case "zh-CN":
-      return formatValue(locale, args.count) + " 条建议";
-    case "en-XA":
-      return "[" + formatValue(locale, args.count) + " šûĝĝéšţîöñš" + "·····]";
   }
 }
 
@@ -2234,8 +2171,10 @@ export function storyCompactTag(locale: Locale = getLocale()): string {
 }
 
 export {
+  storyChooseFiles,
   storyCopperBolt,
   storyCreator,
+  storyDropFilesHereOr,
   storyFastest,
   storyFlush,
   storyFlushLabel,
@@ -2243,10 +2182,13 @@ export {
   storyNewest,
   storyOpeningTime,
   storyPending,
+  storyPublish,
   storyRemoveOption,
   storySave,
   storySeamless,
   storySilent,
+  storySuggestionCount,
+  storySuggestionsAreUnavailable,
   storyTitle,
   storyVideo,
   storyWidth,

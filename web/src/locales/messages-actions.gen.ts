@@ -138,30 +138,6 @@ export function storyCopyAddress(locale: Locale = getLocale()): string {
   }
 }
 
-/** Copied */
-export function storyCopied(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Copied";
-    case "zh-CN":
-      return "已复制";
-    case "en-XA":
-      return "[" + "Çöþîéđ" + "···]";
-  }
-}
-
-/** Copy failed */
-export function storyCopyFailed(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Copy failed";
-    case "zh-CN":
-      return "复制失败";
-    case "en-XA":
-      return "[" + "Çöþý ƒåîļéđ" + "·····]";
-  }
-}
-
 /** variants, size { $size } */
 export function storyButtonVariants(
   args: { size: string | number },
@@ -178,6 +154,8 @@ export function storyButtonVariants(
 }
 
 export {
+  storyCopied,
+  storyCopyFailed,
   storyPending,
   storyRevoke,
   storySave,

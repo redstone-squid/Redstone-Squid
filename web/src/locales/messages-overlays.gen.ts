@@ -32,18 +32,6 @@ export function storyTokensIssuedToThisDeviceStopWorking(locale: Locale = getLoc
   }
 }
 
-/** Revoke device */
-export function storyRevokeDevice(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Revoke device";
-    case "zh-CN":
-      return "撤销设备授权";
-    case "en-XA":
-      return "[" + "Ŕéṽöķé đéṽîçé" + "······]";
-  }
-}
-
 /** Keep device */
 export function storyKeepDevice(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -65,18 +53,6 @@ export function storyRenameFromCode(locale: Locale = getLocale()): string {
       return "通过代码重命名";
     case "en-XA":
       return "[" + "Ŕéñåɱé ƒŕöɱ çöđé" + "·······]";
-  }
-}
-
-/** Done */
-export function storyDone(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Done";
-    case "zh-CN":
-      return "完成";
-    case "en-XA":
-      return "[" + "Đöñé" + "··]";
   }
 }
 
@@ -188,18 +164,6 @@ export function storyDestructiveConfirmationFocusOnTheSafeAction(
   }
 }
 
-/** Revoke Laptop CLI? */
-export function storyRevokeLaptopCli(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Revoke Laptop CLI?";
-    case "zh-CN":
-      return "撤销笔记本命令行客户端的授权？";
-    case "en-XA":
-      return "[" + "Ŕéṽöķé Ļåþţöþ ÇĻÎ?" + "········]";
-  }
-}
-
 /** The device signs out at once. You can link it again later. */
 export function storyTheDeviceSignsOutAtOnceYouCan(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -279,18 +243,6 @@ export function storySheetDescription(locale: Locale = getLocale()): string {
         "Å đîåļöĝ åţţåçĥéđ ţö å šçŕééñ éđĝé, ƒöŕ ƒîļţéŕš åñđ ñåṽîĝåţîöñ." +
         "··························]"
       );
-  }
-}
-
-/** Filters */
-export function storyFilters(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Filters";
-    case "zh-CN":
-      return "筛选条件";
-    case "en-XA":
-      return "[" + "Ƒîļţéŕš" + "···]";
   }
 }
 
@@ -391,18 +343,6 @@ export function storyNojsLinksWithTheCurrentChoice(locale: Locale = getLocale())
       return "nojs：标出当前选项的链接";
     case "en-XA":
       return "[" + "ñöĵš: ļîñķš ŵîţĥ ţĥé çûŕŕéñţ çĥöîçé" + "··············]";
-  }
-}
-
-/** Sort order */
-export function storySortOrder(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Sort order";
-    case "zh-CN":
-      return "排序方式";
-    case "en-XA":
-      return "[" + "Šöŕţ öŕđéŕ" + "····]";
   }
 }
 
@@ -534,18 +474,6 @@ export function storyArchive(locale: Locale = getLocale()): string {
   }
 }
 
-/** Sort: Newest */
-export function storySortNewest(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Sort: Newest";
-    case "zh-CN":
-      return "排序：最新";
-    case "en-XA":
-      return "[" + "Šöŕţ: Ñéŵéšţ" + "·····]";
-  }
-}
-
 /** Most votes */
 export function storyMostVotes(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -667,13 +595,19 @@ export {
   storyCopperBolt55,
   storyCreator,
   storyDate,
+  storyDone,
   storyEdit,
   storyFastest,
+  storyFilters,
   storyNewest,
   storyRevoke,
+  storyRevokeDevice,
+  storyRevokeLaptopCli,
   storySave,
   storySaving,
   storySilent,
+  storySortNewest,
+  storySortOrder,
   storyTitle,
   storyVersion,
 } from "./messages.gen";

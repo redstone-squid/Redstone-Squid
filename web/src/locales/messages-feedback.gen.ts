@@ -38,18 +38,6 @@ export function storyYourChangesAreStored(locale: Locale = getLocale()): string 
   }
 }
 
-/** Retry */
-export function storyRetry(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Retry";
-    case "zh-CN":
-      return "重试";
-    case "en-XA":
-      return "[" + "Ŕéţŕý" + "··]";
-  }
-}
-
 /** Retry with the same file or choose another. */
 export function storyRetryWithTheSameFileOrChooseAnother(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -218,18 +206,6 @@ export function storyCouldnTLoadBuilds(locale: Locale = getLocale()): string {
   }
 }
 
-/** Upload failed */
-export function storyUploadFailed(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Upload failed";
-    case "zh-CN":
-      return "上传失败";
-    case "en-XA":
-      return "[" + "Ûþļöåđ ƒåîļéđ" + "······]";
-  }
-}
-
 /** Uploading door.schem */
 export function storyUploadingDoorSchem(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -302,18 +278,6 @@ export function storySkeletonDescription(locale: Locale = getLocale()): string {
   }
 }
 
-/** Loading builds */
-export function storyLoadingBuilds(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Loading builds";
-    case "zh-CN":
-      return "正在加载作品";
-    case "en-XA":
-      return "[" + "Ļöåđîñĝ ƀûîļđš" + "······]";
-  }
-}
-
 /** No drafts yet */
 export function storyNoDraftsYet(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -371,18 +335,6 @@ export function storyTheCatalogueApiDidNotAnswerInTime(locale: Locale = getLocal
       return "目录 API 未及时响应。";
     case "en-XA":
       return "[" + "Ţĥé çåţåļöĝûé ÅÞÎ đîđ ñöţ åñšŵéŕ îñ ţîɱé." + "·················]";
-  }
-}
-
-/** Try again */
-export function storyTryAgain(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Try again";
-    case "zh-CN":
-      return "重试";
-    case "en-XA":
-      return "[" + "Ţŕý åĝåîñ" + "····]";
   }
 }
 
@@ -447,18 +399,6 @@ export function storyUnsavedChanges(locale: Locale = getLocale()): string {
       return "更改尚未保存";
     case "en-XA":
       return "[" + "Ûñšåṽéđ çĥåñĝéš" + "······]";
-  }
-}
-
-/** Saved */
-export function storySaved(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Saved";
-    case "zh-CN":
-      return "已保存";
-    case "en-XA":
-      return "[" + "Šåṽéđ" + "··]";
   }
 }
 
@@ -570,11 +510,16 @@ export {
   storyFlushLabel,
   storyJava121,
   storyLoading,
+  storyLoadingBuilds,
   storyPendingLabel,
   storyRemoveOption,
+  storyRetry,
+  storySaved,
   storySaving,
   storySeamless,
   storySelected,
   storyTones,
+  storyTryAgain,
+  storyUploadFailed,
   submissionPageTitle,
 } from "./messages.gen";

@@ -156,18 +156,6 @@ export function storyPlainSurface(locale: Locale = getLocale()): string {
   }
 }
 
-/** Needs attention */
-export function storyNeedsAttention(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Needs attention";
-    case "zh-CN":
-      return "需要关注";
-    case "en-XA":
-      return "[" + "Ñééđš åţţéñţîöñ" + "······]";
-  }
-}
-
 /** A fixed frame with a fallback. */
 export function storyImageDescription(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -385,18 +373,6 @@ export function storyListItemDescription(locale: Locale = getLocale()): string {
       return "列表中的行，参见 List 示例。";
     case "en-XA":
       return "[" + "Ŕöŵš öƒ å Ļîšţ; šéé ţĥé Ļîšţ šţöŕý." + "··············]";
-  }
-}
-
-/** Record holders */
-export function storyRecordHolders(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Record holders";
-    case "zh-CN":
-      return "纪录保持者";
-    case "en-XA":
-      return "[" + "Ŕéçöŕđ ĥöļđéŕš" + "······]";
   }
 }
 
@@ -640,18 +616,6 @@ export function storyAfter(locale: Locale = getLocale()): string {
   }
 }
 
-/** Empty */
-export function storyEmpty(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Empty";
-    case "zh-CN":
-      return "空";
-    case "en-XA":
-      return "[" + "Éɱþţý" + "··]";
-  }
-}
-
 /** Added */
 export function storyAdded(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -661,18 +625,6 @@ export function storyAdded(locale: Locale = getLocale()): string {
       return "已添加";
     case "en-XA":
       return "[" + "Åđđéđ" + "··]";
-  }
-}
-
-/** Removed */
-export function storyRemoved(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Removed";
-    case "zh-CN":
-      return "已移除";
-    case "en-XA":
-      return "[" + "Ŕéɱöṽéđ" + "···]";
   }
 }
 
@@ -778,10 +730,14 @@ export {
   storyClose,
   storyCopperBolt55,
   storyCreator,
+  storyEmpty,
   storyFastest,
   storyIrisDoor,
+  storyNeedsAttention,
   storyNotifications,
   storyOpeningTime,
+  storyRecordHolders,
+  storyRemoved,
   storyRevoke,
   storySelected,
   storyVersion,

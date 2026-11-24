@@ -134,18 +134,6 @@ export function storyYourVote(locale: Locale = getLocale()): string {
   }
 }
 
-/** Account */
-export function storyAccount(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Account";
-    case "zh-CN":
-      return "账号";
-    case "en-XA":
-      return "[" + "Åççöûñţ" + "···]";
-  }
-}
-
 /** Hidden when there is one page. */
 export function storyPaginationDescription(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -266,18 +254,6 @@ export function storySchematic(locale: Locale = getLocale()): string {
   }
 }
 
-/** Cards */
-export function storyCards(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Cards";
-    case "zh-CN":
-      return "卡片";
-    case "en-XA":
-      return "[" + "Çåŕđš" + "··]";
-  }
-}
-
 /** Seconds */
 export function storySeconds(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -311,18 +287,6 @@ export function storyApprove(locale: Locale = getLocale()): string {
       return "批准";
     case "en-XA":
       return "[" + "Åþþŕöṽé" + "···]";
-  }
-}
-
-/** Reject */
-export function storyReject(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Reject";
-    case "zh-CN":
-      return "拒绝";
-    case "en-XA":
-      return "[" + "Ŕéĵéçţ" + "···]";
   }
 }
 
@@ -407,9 +371,12 @@ export {
   navBuilds,
   navPagination,
   navRecords,
+  storyAccount,
   storyBreadcrumb,
+  storyCards,
   storyCopperBolt55,
   storyNotifications,
+  storyReject,
   storyTable,
   storyTicks,
   storyVideo,
