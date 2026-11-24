@@ -2,8 +2,10 @@
   import { cn } from "@/ui/cn";
 
   /**
-   * Short facts about one item, such as its version scope, holder count, and date, in a
-   * wrapping muted row. Spacing separates the facts, so they carry no punctuation.
+   * Two or three facts of the same kind about one item, such as a holder count and a version,
+   * separated by dots. The dots are hidden from assistive technology, which reads a list.
+   * Facts with different roles belong in different places: the eyebrow, a `Badge`, or a
+   * `DescriptionList`.
    */
   type Props = {
     items: string[];
@@ -15,10 +17,14 @@
 
 <ul
   class={cn(
-    "flex min-w-0 list-none flex-wrap gap-x-4 gap-y-1 text-fg-muted",
+    "flex min-w-0 list-none flex-wrap gap-x-2 text-fg-muted",
     size === "xs" ? "text-xs" : "text-sm",
     className,
   )}
 >
-  {#each items as item, index (index)}<li>{item}</li>{/each}
+  {#each items as item, index (index)}
+    <li class="flex gap-x-2">
+      {#if index > 0}<span aria-hidden="true">·</span>{/if}{item}
+    </li>
+  {/each}
 </ul>

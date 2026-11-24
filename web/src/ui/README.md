@@ -6,30 +6,30 @@ stories per folder; `/zh-cn/design-system` shows them in Simplified Chinese.
 
 ## Composing a screen
 
-| Need                                                     | Use                                                                           |
-| -------------------------------------------------------- | ----------------------------------------------------------------------------- |
-| Page width and gutter                                    | `layout/Container`                                                            |
-| Vertical rhythm, wrapping rows, title and actions, grids | `layout/Layout` with `stack`, `cluster`, `split`, `grid` (`min`), `center`    |
-| Page title, breadcrumbs, meta, actions                   | `patterns/PageHeader` (the page's only `h1`)                                  |
-| A titled part of a page                                  | `patterns/Section`, with `surface` for a panel                                |
-| Headings, body text, links, code                         | `content/Heading`, `Text`, `Link`, `Code`, `Prose` for rendered Markdown      |
-| Dates                                                    | `content/Timestamp`; format the label in a message                            |
-| Facts about an item: version, count, date                | `content/MetaList`, separated by space, not punctuation                       |
-| Icons                                                    | `content/Icon` wrapping a lucide icon; decorative unless labelled             |
-| Commands and links that look like them                   | `actions/Button`, with `href` for a link and `pending` while saving           |
-| State and tags                                           | `feedback/Badge` for a state such as pending, `feedback/Chip` for tags        |
-| Messages, outcomes, failures                             | `feedback/Notice`; choose its `role` by how it should be announced            |
-| Loading, empty, failed regions                           | `feedback/Skeleton`, `EmptyState`, `ErrorState`; `Spinner` beside one line    |
-| Progress and levels                                      | `feedback/Progress`, with `kind="meter"` for votes or completeness            |
-| One item as a card                                       | `data/Card`; with `title` and `href` the whole card links                     |
-| Rows of items                                            | `data/List` and `ListItem`                                                    |
-| Labelled values and headline numbers                     | `data/DescriptionList`, `data/StatGroup`                                      |
-| Images and people                                        | `data/Image` (fixed frame with fallback), `data/Avatar`                       |
-| Events and changes                                       | `data/Timeline`, `data/Diff`                                                  |
-| Hidden detail                                            | `data/Disclosure`                                                             |
-| Moving between pages and views                           | `navigation/Breadcrumbs`, `Tabs`, `SegmentedControl`, `NavList`, `Pagination` |
-| User input                                               | `forms/Field`, `SelectField`, `TextareaField`, `CheckField`, `FieldGroup`     |
-| Suggestions, files, modal forms                          | `forms/Autocomplete`, `forms/FilePicker`, `overlays/Dialog`                   |
+| Need                                                      | Use                                                                           |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| Page width and gutter                                     | `layout/Container`                                                            |
+| Vertical rhythm, wrapping rows, title and actions, grids  | `layout/Layout` with `stack`, `cluster`, `split`, `grid` (`min`), `center`    |
+| Page title, breadcrumbs, meta, actions                    | `patterns/PageHeader` (the page's only `h1`)                                  |
+| A titled part of a page                                   | `patterns/Section`, with `surface` for a panel                                |
+| Headings, body text, links, code                          | `content/Heading`, `Text`, `Link`, `Code`, `Prose` for rendered Markdown      |
+| Dates                                                     | `content/Timestamp`; format the label in a message                            |
+| Two or three facts of one kind, such as count and version | `content/MetaList`; facts with other roles go elsewhere                       |
+| Icons                                                     | `content/Icon` wrapping a lucide icon; decorative unless labelled             |
+| Commands and links that look like them                    | `actions/Button`, with `href` for a link and `pending` while saving           |
+| State and tags                                            | `feedback/Badge` for a state such as pending, `feedback/Chip` for tags        |
+| Messages, outcomes, failures                              | `feedback/Notice`; choose its `role` by how it should be announced            |
+| Loading, empty, failed regions                            | `feedback/Skeleton`, `EmptyState`, `ErrorState`; `Spinner` beside one line    |
+| Progress and levels                                       | `feedback/Progress`, with `kind="meter"` for votes or completeness            |
+| One item as a card                                        | `data/Card`; with `title` and `href` the whole card links                     |
+| Rows of items                                             | `data/List` and `ListItem`                                                    |
+| Labelled values and headline numbers                      | `data/DescriptionList`, `data/StatGroup`                                      |
+| Images and people                                         | `data/Image` (fixed frame with fallback), `data/Avatar`                       |
+| Events and changes                                        | `data/Timeline`, `data/Diff`                                                  |
+| Hidden detail                                             | `data/Disclosure`                                                             |
+| Moving between pages and views                            | `navigation/Breadcrumbs`, `Tabs`, `SegmentedControl`, `NavList`, `Pagination` |
+| User input                                                | `forms/Field`, `SelectField`, `TextareaField`, `CheckField`, `FieldGroup`     |
+| Suggestions, files, modal forms                           | `forms/Autocomplete`, `forms/FilePicker`, `overlays/Dialog`                   |
 
 Shared components take their text through props, from `@/locales/messages.gen`. Keep API
 calls, validation rules, and translations in the feature. When several features need the
@@ -44,7 +44,8 @@ the component leaves open, such as margins. A style used by one component lives 
 style shared by a folder lives in that folder's `styles.ts`, which nothing outside `src/ui`
 imports. Use sentence case for headings, labels, and badges. Numbers and measurements stay in the
 sans face (`numeric` for tabular figures); monospace is only for `Code`. A badge marks one
-state; categories and versions are plain text in the eyebrow or a muted meta line.
+state. Give every other fact a place by its role (eyebrow, `DescriptionList`, the detail page)
+and keep `MetaList` for two or three facts of one kind.
 
 Layouts are fluid rather than tuned to a few screen sizes: `Layout` grids and wrapping rows,
 `minmax(0, 1fr)` tracks, and `clamp()` gutters and panel padding (`px-gutter`, `p-panel`).

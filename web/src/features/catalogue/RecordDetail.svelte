@@ -7,14 +7,15 @@
     resolutionStatusLabel,
     versionScopeLabel,
   } from "@/locales/vocabulary.gen";
-  import MetaList from "@/ui/content/MetaList.svelte";
+  import Text from "@/ui/content/Text.svelte";
+  import DescriptionList from "@/ui/data/DescriptionList.svelte";
   import Badge from "@/ui/feedback/Badge.svelte";
   import EmptyState from "@/ui/feedback/EmptyState.svelte";
+  import Notice from "@/ui/feedback/Notice.svelte";
   import Layout from "@/ui/layout/Layout.svelte";
   import PageHeader from "@/ui/patterns/PageHeader.svelte";
   import Section from "@/ui/patterns/Section.svelte";
   import BuildCard from "./BuildCard.svelte";
-  import { recordFreshness } from "./freshness";
 
   /** A record with its classification, freshness, and holders in the API's order. */
   let { record }: { record: PublicRecordDetail } = $props();
@@ -31,11 +32,25 @@
       <Badge tone={record.status === "resolved" ? "success" : "warning"} dot>
         {m.recordStatus({ status: resolutionStatusLabel(record.status) })}
       </Badge>
-      <MetaList
-        items={[kind, versionScopeLabel(record.version_scope), ...recordFreshness(record)]}
-      />
+      <Text as="span" size="sm" tone="muted">
+        {record.last_checked_at != null
+          ? m.recordLastChecked({ date: record.last_checked_at })
+          : m.recordComputed({ date: record.computed_at })}
+      </Text>
+    {/snippet}
+    {#snippet notice()}
+      {#if record.refresh_pending === true}
+        <Notice variant="banner" title={m.recordRefreshPending()} />
+      {/if}
     {/snippet}
   </PageHeader>
+  <DescriptionList
+    layout="inline"
+    items={[
+      { term: m.recordBuildKind(), value: kind },
+      { term: m.recordVersionScope(), value: versionScopeLabel(record.version_scope) },
+    ]}
+  />
   <Section title={m.recordHolders()}>
     {#if record.holder_builds.length === 0}
       <EmptyState title={m.recordNoHolders()} />

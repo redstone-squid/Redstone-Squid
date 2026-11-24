@@ -38,16 +38,13 @@
 <Story
   name="MetaList"
   source="content/MetaList"
-  description="Facts about one item, separated by space rather than punctuation."
+  description="Two or three facts of the same kind, separated by dots."
 >
   <Variant label="sm">
-    <MetaList items={["Door", "All time", "2 holders", "Computed Jan 12, 2026"]} />
+    <MetaList items={["2 holders", "Current version"]} />
   </Variant>
-  <Variant label="xs, wrapping">
-    <MetaList
-      size="xs"
-      items={["Java 1.21", "Bedrock 1.20", "12 × 12 × 5", "8 gt opening", "Updated 3 days ago"]}
-    />
+  <Variant label="xs">
+    <MetaList size="xs" items={["Java 1.21", "Bedrock 1.20"]} />
   </Variant>
 </Story>
 

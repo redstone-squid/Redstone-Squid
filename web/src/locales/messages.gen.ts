@@ -1219,6 +1219,30 @@ export function recordStatus(
   }
 }
 
+/** Build kind */
+export function recordBuildKind(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Build kind";
+    case "zh-CN":
+      return "作品类型";
+    case "en-XA":
+      return "[" + "Ɓûîļđ ķîñđ" + "····]";
+  }
+}
+
+/** Versions */
+export function recordVersionScope(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Versions";
+    case "zh-CN":
+      return "适用版本";
+    case "en-XA":
+      return "[" + "Ṽéŕšîöñš" + "····]";
+  }
+}
+
 /** { $width } × { $height } × { $depth } */
 export function buildSize(
   args: { depth: string | number; height: string | number; width: string | number },

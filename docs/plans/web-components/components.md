@@ -54,252 +54,301 @@ The `src/ui` primitives and patterns, the feature components built from them, an
 #### Layout
 
 **`Layout`**
-- *Purpose:* arrange children. Replaces `layoutStyles` and Astro `Layout`.
-- *API:* `as` (div, section, article, header, footer, nav, ul, ol, li, main, aside); `pattern` of `stack | cluster | split | grid | center`.
+
+- _Purpose:_ arrange children. Replaces `layoutStyles` and Astro `Layout`.
+- _API:_ `as` (div, section, article, header, footer, nav, ul, ol, li, main, aside); `pattern` of `stack | cluster | split | grid | center`.
   - `split`: the first child grows and the last is pushed to the end, as in a title with actions.
   - `center`: content centered horizontally and vertically.
   - `gap` of `none | 2xs | xs | sm | md | lg | xl`. Each pattern has a default gap.
   - `align` and `justify` for cluster and split.
   - `min` (grid minimum column width) of `card | card-wide | tile`, mapped to tokens.
   - `wrap` (cluster only).
-- *A11y:* none of its own. It uses semantic elements; use `as="ul"` for lists of cards.
-- *Responsive:* grid uses auto-fit with the `min` tokens. `split` wraps below its content width.
-- *Users:* every screen.
+- _A11y:_ none of its own. It uses semantic elements; use `as="ul"` for lists of cards.
+- _Responsive:_ grid uses auto-fit with the `min` tokens. `split` wraps below its content width.
+- _Users:_ every screen.
 
 **`Container`**
-- *Purpose:* page-width wrapper with the gutter token.
-- *API:* `width` of `content | prose | form | wide`.
-- *Users:* layouts, P14, S2, A2.
+
+- _Purpose:_ page-width wrapper with the gutter token.
+- _API:_ `width` of `content | prose | form | wide`.
+- _Users:_ layouts, P14, S2, A2.
 
 **`SplitLayout`** (pattern)
-- *Purpose:* a sidebar plus main area.
-- *API:* `sidebar` snippet, `children`, `sidebarLabel`, `side` (start or end), `sticky`, `collapse` of `sheet | stack`.
+
+- _Purpose:_ a sidebar plus main area.
+- _API:_ `sidebar` snippet, `children`, `sidebarLabel`, `side` (start or end), `sticky`, `collapse` of `sheet | stack`.
   - `collapse="sheet"` puts the sidebar in a `Sheet` on mobile, opened by a trigger with `triggerLabel`. Without JS, the sheet falls back to `<details>` above the content.
-- *Users:* P2, P4, P7, P12 (filters), S2 (section nav), A2–A7 (account nav), X1–X8 (admin nav), and the workbench.
+- _Users:_ P2, P4, P7, P12 (filters), S2 (section nav), A2–A7 (account nav), X1–X8 (admin nav), and the workbench.
 
 #### Text and content
 
 **`Heading`**
-- *API:* `level` (1–6, which sets the semantic tag), `size` (`display | xl | lg | md | sm`, defaulting from the level), `eyebrow?` (short text above, replacing `kickerClass`), `id?`, `tabindexFocus?` (adds `tabindex=-1` so focus can be moved to it after navigation).
-- *Users:* every screen.
+
+- _API:_ `level` (1–6, which sets the semantic tag), `size` (`display | xl | lg | md | sm`, defaulting from the level), `eyebrow?` (short text above, replacing `kickerClass`), `id?`, `tabindexFocus?` (adds `tabindex=-1` so focus can be moved to it after navigation).
+- _Users:_ every screen.
 
 **`Text`**
-- *Purpose:* body text with a tone.
-- *API:* `as` (p, span, div), `size` (`sm | md`), `tone` (`default | muted | danger | success`), `numeric?` (tabular figures for numbers that line up or update), `truncate?` (`lines: 1 | 2 | 3`).
-- *Users:* everywhere. Replaces `mutedClass`.
+
+- _Purpose:_ body text with a tone.
+- _API:_ `as` (p, span, div), `size` (`sm | md`), `tone` (`default | muted | danger | success`), `numeric?` (tabular figures for numbers that line up or update), `truncate?` (`lines: 1 | 2 | 3`).
+- _Users:_ everywhere. Replaces `mutedClass`.
+
+**`MetaList`**
+
+- _Purpose:_ two or three facts of the same kind, such as a holder count and a version, separated by dots that assistive technology skips.
+- _Rule:_ give each fact a role before reaching for it. Classification goes in the eyebrow or title, the main number gets weight, a state is a `Badge`, labelled detail is a `DescriptionList`, and housekeeping such as "computed on" belongs on the detail page. Show a fact only when it tells the reader something, such as a version scope that narrows the record.
+- _Users:_ record and build cards, search results, list rows.
 
 **`Link`**
-- *Purpose:* inline or standalone link.
-- *API:* `href`, `variant` (`inline | standalone | subtle`), `external?` (adds an icon and an accessible "opens externally" suffix from the `externalLabel` prop, plus `rel="noreferrer"`), `current?` (sets `aria-current`).
-- *Users:* everywhere.
+
+- _Purpose:_ inline or standalone link.
+- _API:_ `href`, `variant` (`inline | standalone | subtle`), `external?` (adds an icon and an accessible "opens externally" suffix from the `externalLabel` prop, plus `rel="noreferrer"`), `current?` (sets `aria-current`).
+- _Users:_ everywhere.
 
 **`Prose`**
-- *Purpose:* renders sanitized HTML or Markdown output with typographic styles: headings with anchor links, lists, tables, code, blockquotes.
-- *API:* `html` (already sanitized server-side; the prop is typed as a branded `SafeHtml`), `size`.
-- *A11y:* headings keep their levels. The anchor links get `aria-label` from `anchorLabel`.
-- *Users:* P14, P5 (description), P13 (bio), A1 (privacy notice), P3.
+
+- _Purpose:_ renders sanitized HTML or Markdown output with typographic styles: headings with anchor links, lists, tables, code, blockquotes.
+- _API:_ `html` (already sanitized server-side; the prop is typed as a branded `SafeHtml`), `size`.
+- _A11y:_ headings keep their levels. The anchor links get `aria-label` from `anchorLabel`.
+- _Users:_ P14, P5 (description), P13 (bio), A1 (privacy notice), P3.
 
 **`Code`**
-- *Purpose:* inline code or a code block.
-- *API:* `block?`, `wrap?`, `maxLines?` (collapses into a `Disclosure` with `expandLabel`).
-- *Users:* P3, X2 (traceback), P5 (expansion expressions).
+
+- _Purpose:_ inline code or a code block.
+- _API:_ `block?`, `wrap?`, `maxLines?` (collapses into a `Disclosure` with `expandLabel`).
+- _Users:_ P3, X2 (traceback), P5 (expansion expressions).
 
 **`Kbd`**: merged into `Code` as `variant="key"` (P3 shortcuts).
 
 **`Timestamp`**
-- *API:* `datetime` (ISO string), `label` (formatted text from a message), `title?` (absolute date on hover).
-- *Renders:* `<time datetime>`. Formatting stays in the messages.
-- *Users:* P5, P6, P8, A4, A5, A6, S1, X2.
+
+- _API:_ `datetime` (ISO string), `label` (formatted text from a message), `title?` (absolute date on hover).
+- _Renders:_ `<time datetime>`. Formatting stays in the messages.
+- _Users:_ P5, P6, P8, A4, A5, A6, S1, X2.
 
 **`Icon`**
-- *Purpose:* wraps lucide.
-- *API:* `icon` (component), `size` (`sm | md | lg`), `label?`. With a label it gets `role=img` and `aria-label`; otherwise it is `aria-hidden`.
-- *Users:* everywhere.
+
+- _Purpose:_ wraps lucide.
+- _API:_ `icon` (component), `size` (`sm | md | lg`), `label?`. With a label it gets `role=img` and `aria-label`; otherwise it is `aria-hidden`.
+- _Users:_ everywhere.
 
 **`VisuallyHidden`** and **`SkipLink`**: an sr-only utility component, and a skip link (`href`, `label`).
-- *Users:* layouts and table captions.
+
+- _Users:_ layouts and table captions.
 
 #### Actions
 
 **`Button`** (merges `LinkButton`)
-- *API:* `variant` (`primary | secondary | quiet | danger`), `size` (`sm | md`), `href?` (renders `<a>`), `type`, `icon?`, `iconEnd?`, `iconOnly?` (a `label` is then required and becomes `aria-label`), `pending?` plus `pendingLabel`, `disabled?`, `fullWidth?`, `external?`, `form?`, `name`/`value` (for multi-action POST forms).
-- *States:*
+
+- _API:_ `variant` (`primary | secondary | quiet | danger`), `size` (`sm | md`), `href?` (renders `<a>`), `type`, `icon?`, `iconEnd?`, `iconOnly?` (a `label` is then required and becomes `aria-label`), `pending?` plus `pendingLabel`, `disabled?`, `fullWidth?`, `external?`, `form?`, `name`/`value` (for multi-action POST forms).
+- _States:_
   - `pending`: spinner replaces the start icon, width is preserved, the button gets `aria-disabled="true"` and rejects clicks, and `pendingLabel` goes into a visually hidden live region.
   - `disabled`: native disabled on buttons; links in a disabled state render as `<span aria-disabled>`.
-- *A11y:* native semantics, minimum 44 px target (`size=sm` keeps 36 px with a 44 px hit area through padding), visible focus ring.
-- *No-JS:* links navigate and submit buttons post.
-- *Users:* every screen.
+- _A11y:_ native semantics, minimum 44 px target (`size=sm` keeps 36 px with a 44 px hit area through padding), visible focus ring.
+- _No-JS:_ links navigate and submit buttons post.
+- _Users:_ every screen.
 
 **`ButtonGroup`**: merged into `Layout pattern="cluster"` with an `actions` alignment. No separate component.
 
 **`CopyButton`**
-- *API:* `value`, `label`, `copiedLabel`, `size`.
-- *Behavior:* copies, then for 2 s shows a check and announces `copiedLabel` through a polite live region. Without JS it is hidden: wrap it with a selectable `Code` or `CopyField`.
-- *Users:* P5 (link, server address), P16, A3 (merge code), A4 (secret), L1, L2, X2.
+
+- _API:_ `value`, `label`, `copiedLabel`, `size`.
+- _Behavior:_ copies, then for 2 s shows a check and announces `copiedLabel` through a polite live region. Without JS it is hidden: wrap it with a selectable `Code` or `CopyField`.
+- _Users:_ P5 (link, server address), P16, A3 (merge code), A4 (secret), L1, L2, X2.
 
 **`Menu`**
-- *Purpose:* dropdown of actions or links (bits-ui DropdownMenu).
-- *API:* `trigger` (Button props), `items` of `{label, href?, onSelect?, icon?, danger?, disabled?, separator?}`, or `children` for custom groups (checkbox items for column visibility).
-- *A11y:* menu button pattern. Arrow keys, typeahead, Escape and Tab close, focus returns to the trigger.
-- *No-JS:* `nojs="details"` renders a `<details>` with a list of links or forms. Only link and form items are allowed in that mode.
-- *Users:* header user menu, LanguageSelector, P5 (more actions), DataTable column visibility, list row overflow actions in A4, S1 and M1.
+
+- _Purpose:_ dropdown of actions or links (bits-ui DropdownMenu).
+- _API:_ `trigger` (Button props), `items` of `{label, href?, onSelect?, icon?, danger?, disabled?, separator?}`, or `children` for custom groups (checkbox items for column visibility).
+- _A11y:_ menu button pattern. Arrow keys, typeahead, Escape and Tab close, focus returns to the trigger.
+- _No-JS:_ `nojs="details"` renders a `<details>` with a list of links or forms. Only link and form items are allowed in that mode.
+- _Users:_ header user menu, LanguageSelector, P5 (more actions), DataTable column visibility, list row overflow actions in A4, S1 and M1.
 
 **`Popover`**
-- *Purpose:* non-modal floating content (bits-ui).
-- *API:* `trigger`, `children`, `label`, `placement`.
-- *Users:* the chart legend on mobile, filter help, P8 (status explanation), the `Tooltip` fallback on touch devices.
+
+- _Purpose:_ non-modal floating content (bits-ui).
+- _API:_ `trigger`, `children`, `label`, `placement`.
+- _Users:_ the chart legend on mobile, filter help, P8 (status explanation), the `Tooltip` fallback on touch devices.
 
 **`Tooltip`**
-- *Purpose:* supplementary label only, never the sole source of information (bits-ui). Required on icon-only buttons.
-- *API:* `content`, `children`.
-- *Users:* icon buttons, chart marks (through the chart's own tooltip), truncated table cells.
+
+- _Purpose:_ supplementary label only, never the sole source of information (bits-ui). Required on icon-only buttons.
+- _API:_ `content`, `children`.
+- _Users:_ icon buttons, chart marks (through the chart's own tooltip), truncated table cells.
 
 #### Overlays
 
 **`Dialog`** (rewritten)
-- *API:* `open` (bindable), `title`, `description?`, `closeLabel`, `size` (`sm | md | lg | full-mobile`), `trigger?` (Button props plus a label; omit it for a controlled dialog), `children`, `footer?` snippet, `dismissible` (default true; false while pending), `initialFocus?` (a selector or "first-field").
-- *A11y:* bits-ui modal, focus trap, returns focus to the trigger or a supplied `returnFocus` element, `aria-labelledby` and `aria-describedby`.
-- *Responsive:* full screen at the bottom of the viewport on small screens when `size="full-mobile"`.
-- *No-JS:* every dialog's trigger must have an `href` fallback to a page or route that performs the same task. `Dialog` takes `fallbackHref` and renders the trigger as a link until hydrated.
-- *Users:* the `ConfirmDialog` pattern, `Gallery` lightbox, P5 (render or video request), A2 (avatar picker), M3 (match picker).
+
+- _API:_ `open` (bindable), `title`, `description?`, `closeLabel`, `size` (`sm | md | lg | full-mobile`), `trigger?` (Button props plus a label; omit it for a controlled dialog), `children`, `footer?` snippet, `dismissible` (default true; false while pending), `initialFocus?` (a selector or "first-field").
+- _A11y:_ bits-ui modal, focus trap, returns focus to the trigger or a supplied `returnFocus` element, `aria-labelledby` and `aria-describedby`.
+- _Responsive:_ full screen at the bottom of the viewport on small screens when `size="full-mobile"`.
+- _No-JS:_ every dialog's trigger must have an `href` fallback to a page or route that performs the same task. `Dialog` takes `fallbackHref` and renders the trigger as a link until hydrated.
+- _Users:_ the `ConfirmDialog` pattern, `Gallery` lightbox, P5 (render or video request), A2 (avatar picker), M3 (match picker).
 
 **`Sheet`**
-- *Purpose:* a Dialog variant attached to the screen edge (`side` of `start | end | bottom`), for mobile filters and navigation.
-- *Users:* `SplitLayout` collapse, the header mobile navigation.
+
+- _Purpose:_ a Dialog variant attached to the screen edge (`side` of `start | end | bottom`), for mobile filters and navigation.
+- _Users:_ `SplitLayout` collapse, the header mobile navigation.
 
 #### Feedback and status
 
 **`Badge`**
-- *API:* `tone` (`neutral | info | success | warning | danger | accent`), `dot?`, `size` (`sm | md`).
-- *Rule:* state only: something that changes and the reader acts on, such as "pending", "approved", "outdated" or an unread count. At most one per item. Never color-only; the text carries the meaning.
-- *Not for:* categories, kinds, versions, version scopes or any other classification. Those are plain text: in the eyebrow, or in a muted meta line joined with " · ". Tags people can follow are `Chip`s.
-- *Users:* build and draft status, record status, unread count, review state in table cells.
+
+- _API:_ `tone` (`neutral | info | success | warning | danger | accent`), `dot?`, `size` (`sm | md`).
+- _Rule:_ state only: something that changes and the reader acts on, such as "pending", "approved", "outdated" or an unread count. At most one per item. Never color-only; the text carries the meaning.
+- _Not for:_ categories, kinds, versions, version scopes or any other classification. Tags people can follow are `Chip`s; see `MetaList` for where the rest goes.
+- _Users:_ build and draft status, record status, unread count, review state in table cells.
 
 **`Chip`**
-- *Purpose:* an interactive tag. Badge is the static one.
-- *API:* `as` (link, button or static); `href?`; `pressed?` (toggle chip: `aria-pressed`); `removable?` with `removeLabel` (renders a separate remove button or link, `removeHref` for no-JS); `tone`; `icon`.
-- *Users:* P5 tags, P12, active filter chips in P2/P4/P7, schematic suggestions in S2, `ListField` tokens, P11.
+
+- _Purpose:_ an interactive tag. Badge is the static one.
+- _API:_ `as` (link, button or static); `href?`; `pressed?` (toggle chip: `aria-pressed`); `removable?` with `removeLabel` (renders a separate remove button or link, `removeHref` for no-JS); `tone`; `icon`.
+- _Users:_ P5 tags, P12, active filter chips in P2/P4/P7, schematic suggestions in S2, `ListField` tokens, P11.
 
 **`Notice`**
-- *API:* `tone` (`info | success | warning | danger`), `title?`, `children`, `actions?` snippet, `role?` (`status | alert`; omit for static notices), `icon` (on by default, chosen by tone), `variant` (`inline | banner`; a banner spans full width above the page header).
-- *Rules:*
+
+- _API:_ `tone` (`info | success | warning | danger`), `title?`, `children`, `actions?` snippet, `role?` (`status | alert`; omit for static notices), `icon` (on by default, chosen by tone), `variant` (`inline | banner`; a banner spans full width above the page header).
+- _Rules:_
   - Only one live notice per region.
   - `alert` is for failures the user must act on now.
   - `status` is for outcomes: saved, sent, approved.
   - It is the only success-feedback mechanism (no toasts).
-- *Users:* every mutation and status banner: pending build (P5), expiry (S2), consent (A1), DMs suspended (A7), flash messages after redirects.
+- _Users:_ every mutation and status banner: pending build (P5), expiry (S2), consent (A1), DMs suspended (A7), flash messages after redirects.
 
 **`SaveStatus`**
-- *API:* `state` (`idle | dirty | saving | saved | offline | error | conflict`), `labels` (one per state), `savedAt?` (a `Timestamp`), `onRetry?`.
-- *A11y:* `role=status`, announces only transitions to saved, error and conflict, throttled to at most one announcement every 5 s.
-- *Users:* S2, M4, A2, X1, `SettingsList`.
+
+- _API:_ `state` (`idle | dirty | saving | saved | offline | error | conflict`), `labels` (one per state), `savedAt?` (a `Timestamp`), `onRetry?`.
+- _A11y:_ `role=status`, announces only transitions to saved, error and conflict, throttled to at most one announcement every 5 s.
+- _Users:_ S2, M4, A2, X1, `SettingsList`.
 
 **`Progress`** (merged with Meter)
-- *API:* `label`, `value?` (omitted means indeterminate), `max`, `kind` (`progress | meter`), `valueLabel?` (e.g. "3 of 5 votes"), `thresholds?` (`[{value, label, tone}]`, drawn as markers), `tone`, `size`.
-- *Renders:* `<progress>` for progress. For meters, a `div role="meter"` with `aria-valuenow` and `aria-valuetext`, because the native `<meter>` styling is unreliable.
-- *Users:* uploads (S2), finalization (S3), vote tallies with pass and fail thresholds (M1, M2, A5), media limits (S2), draft completeness (S1, S2).
+
+- _API:_ `label`, `value?` (omitted means indeterminate), `max`, `kind` (`progress | meter`), `valueLabel?` (e.g. "3 of 5 votes"), `thresholds?` (`[{value, label, tone}]`, drawn as markers), `tone`, `size`.
+- _Renders:_ `<progress>` for progress. For meters, a `div role="meter"` with `aria-valuenow` and `aria-valuetext`, because the native `<meter>` styling is unreliable.
+- _Users:_ uploads (S2), finalization (S3), vote tallies with pass and fail thresholds (M1, M2, A5), media limits (S2), draft completeness (S1, S2).
 
 **`Spinner`**
-- *API:* `label`, `size`.
-- *Rule:* used only inside `Button` pending and inline beside under one line of text. Never for page or region loading.
-- *Users:* Button, Autocomplete, Combobox loading, CopyButton.
+
+- _API:_ `label`, `size`.
+- _Rule:_ used only inside `Button` pending and inline beside under one line of text. Never for page or region loading.
+- _Users:_ Button, Autocomplete, Combobox loading, CopyButton.
 
 **`Skeleton`**
-- *API:* `shape` (`text | heading | block | avatar | card | row`), `lines?`, `width` (`full | 3/4 | 1/2 | 1/3`). It is `aria-hidden`. The parent region carries `aria-busy="true"` and a hidden loading label.
-- *Users:* island-loaded regions: P5 schematics, A6 inbox refresh, header counts, Combobox results, DataTable `loading` state, `ResultsView`.
+
+- _API:_ `shape` (`text | heading | block | avatar | card | row`), `lines?`, `width` (`full | 3/4 | 1/2 | 1/3`). It is `aria-hidden`. The parent region carries `aria-busy="true"` and a hidden loading label.
+- _Users:_ island-loaded regions: P5 schematics, A6 inbox refresh, header counts, Combobox results, DataTable `loading` state, `ResultsView`.
 
 **`EmptyState`** (pattern, but listed here because it is so common)
-- *API:* `title`, `description?`, `icon?`, `actions?` snippet, `size` (`inline | page`).
-- *Users:* every list: P2, P4, P7, P11, P12, P13, A3–A7, S1, M1, X2–X4.
+
+- _API:_ `title`, `description?`, `icon?`, `actions?` snippet, `size` (`inline | page`).
+- _Users:_ every list: P2, P4, P7, P11, P12, P13, A3–A7, S1, M1, X2–X4.
 
 **`ErrorState`**
-- *API:* `title`, `description`, `reference?` (error reference with copy), `onRetry?` or `retryHref?`, `retryLabel`.
-- *Users:* failures in island queries, P9 analysis failure, S3 dead jobs, and system pages.
+
+- _API:_ `title`, `description`, `reference?` (error reference with copy), `onRetry?` or `retryHref?`, `retryLabel`.
+- _Users:_ failures in island queries, P9 analysis failure, S3 dead jobs, and system pages.
 
 #### Data display
 
 **`Card`**
-- *API:* `as` (article, li, div), `href?` and `linkLabel?` (a stretched link: the heading's link covers the card while inner links stay clickable), `padding` (`sm | md | lg`), `tone` (`default | muted | selected | warning`), `media?` snippet (top, aspect ratio set by `mediaAspect`: `wide | square | video`), `header?`, `children`, `footer?`.
-- *A11y:* one link per card, on the heading. The stretched link uses a pseudo-element, so screen readers hear only the heading.
-- *Users:* BuildCard, RecordCard, Creator tiles, S1 drafts, P1 sections, P16, `ChoiceGroup` card variant, A4 installations.
+
+- _API:_ `as` (article, li, div), `href?` and `linkLabel?` (a stretched link: the heading's link covers the card while inner links stay clickable), `padding` (`sm | md | lg`), `tone` (`default | muted | selected | warning`), `media?` snippet (top, aspect ratio set by `mediaAspect`: `wide | square | video`), `header?`, `children`, `footer?`.
+- _A11y:_ one link per card, on the heading. The stretched link uses a pseudo-element, so screen readers hear only the heading.
+- _Users:_ BuildCard, RecordCard, Creator tiles, S1 drafts, P1 sections, P16, `ChoiceGroup` card variant, A4 installations.
 
 **`Surface`**
-- *Purpose:* the old `panelClass`: a bordered surface with padding, no link.
-- *Decision:* merged into `Card` without `href`, and into `Section` with `surface` (pattern). No separate component.
+
+- _Purpose:_ the old `panelClass`: a bordered surface with padding, no link.
+- _Decision:_ merged into `Card` without `href`, and into `Section` with `surface` (pattern). No separate component.
 
 **`DescriptionList`**
-- *API:* `items` of `{term, value?, numeric?, href?}` or `children` (`DescriptionItem` subcomponent with a value snippet); `layout` (`stacked | inline | grid`, where grid gives 2–4 columns responsively); `size`; `divided?`.
-- *Renders:* `<dl>`, with each pair in a `<div>`.
-- *Users:* P5 specs, P8 metrics, P9 point, P13 stats, A3, A4 device details, L1, L2, X2 detail, schematic metrics, M3.
+
+- _API:_ `items` of `{term, value?, numeric?, href?}` or `children` (`DescriptionItem` subcomponent with a value snippet); `layout` (`stacked | inline | grid`, where grid gives 2–4 columns responsively); `size`; `divided?`.
+- _Renders:_ `<dl>`, with each pair in a `<div>`.
+- _Users:_ P5 specs, P8 metrics, P9 point, P13 stats, A3, A4 device details, L1, L2, X2 detail, schematic metrics, M3.
 
 **`StatGroup`**
-- *API:* `items` of `{label, value, unit?, href?, hint?}`, `size` (`md | lg`).
-- *Renders:* a `<dl>` with a large value.
-- *Users:* P1 counts, P5 key stats (size, opening time), P8 record metric, P13 stats, X2 summary.
+
+- _API:_ `items` of `{label, value, unit?, href?, hint?}`, `size` (`md | lg`).
+- _Renders:_ a `<dl>` with a large value.
+- _Users:_ P1 counts, P5 key stats (size, opening time), P8 record metric, P13 stats, X2 summary.
 
 **`List` and `ListItem`**
-- *Purpose:* a divided list of rows.
-- *ListItem API:* `leading?` snippet (icon, avatar, thumbnail), `title`, `href?` (stretched link), `meta?` snippet (badges, timestamp), `description?`, `trailing?` snippet (actions), `unread?` (accent marker plus hidden "unread" text from `unreadLabel`), `selected?`.
-- *List API:* `as` (ul or ol), `divided`, `density`, `label`.
-- *Users:* A6 inbox, A3 identities, A4 devices, S1 drafts, A7 subscriptions, P11 glossary, X3, X4, P8 holder history (compact), S2 uploaded files.
+
+- _Purpose:_ a divided list of rows.
+- _ListItem API:_ `leading?` snippet (icon, avatar, thumbnail), `title`, `href?` (stretched link), `meta?` snippet (badges, timestamp), `description?`, `trailing?` snippet (actions), `unread?` (accent marker plus hidden "unread" text from `unreadLabel`), `selected?`.
+- _List API:_ `as` (ul or ol), `divided`, `density`, `label`.
+- _Users:_ A6 inbox, A3 identities, A4 devices, S1 drafts, A7 subscriptions, P11 glossary, X3, X4, P8 holder history (compact), S2 uploaded files.
 
 **`Timeline`**
-- *API:* `items` of `{id, datetime, dateLabel, title, href?, tone?, icon?, body?}`, with a `children` snippet per item when the caller is Svelte; `order` (`newest | oldest`).
-- *Renders:* `<ol>` with an accessible date per item.
-- *Users:* P6 build history, P8 record holder succession, S3 attempts, X2 log tail (optional).
+
+- _API:_ `items` of `{id, datetime, dateLabel, title, href?, tone?, icon?, body?}`, with a `children` snippet per item when the caller is Svelte; `order` (`newest | oldest`).
+- _Renders:_ `<ol>` with an accessible date per item.
+- _Users:_ P6 build history, P8 record holder succession, S3 attempts, X2 log tail (optional).
 
 **`Diff`**
-- *API:* `rows` of `{label, before, after, kind: added | removed | changed | unchanged}`, `labels` (`{before, after, empty}`), `showUnchanged?`, `layout` (`table | stacked`, stacked on mobile).
-- *A11y:* a table with column headers. Change kind is spelled out in text, not shown only by color.
-- *Users:* P6, M3, M4 (conflict review), A3 merge preview (counts), X5.
+
+- _API:_ `rows` of `{label, before, after, kind: added | removed | changed | unchanged}`, `labels` (`{before, after, empty}`), `showUnchanged?`, `layout` (`table | stacked`, stacked on mobile).
+- _A11y:_ a table with column headers. Change kind is spelled out in text, not shown only by color.
+- _Users:_ P6, M3, M4 (conflict review), A3 merge preview (counts), X5.
 
 **`Image`**
-- *API:* `src`, `alt`, `width`, `height` (required: no CLS), `sizes?`, `srcset?`, `aspect` (`wide | square | video | natural`), `fit`, `loading` (`lazy | eager`), `fallbackLabel`, `fallbackIcon?`.
-- *Behavior:* the HTTPS check is a prop-level contract that features enforce. On error it swaps to the fallback; no inline `onerror` attribute (a hydrated `onerror` plus a CSS `:has` fallback without JS).
-- *Users:* BuildCard, Gallery, Avatar, P5, P16.
+
+- _API:_ `src`, `alt`, `width`, `height` (required: no CLS), `sizes?`, `srcset?`, `aspect` (`wide | square | video | natural`), `fit`, `loading` (`lazy | eager`), `fallbackLabel`, `fallbackIcon?`.
+- _Behavior:_ the HTTPS check is a prop-level contract that features enforce. On error it swaps to the fallback; no inline `onerror` attribute (a hydrated `onerror` plus a CSS `:has` fallback without JS).
+- _Users:_ BuildCard, Gallery, Avatar, P5, P16.
 
 **`Avatar`**
-- *API:* `src?`, `name` (initials fallback, hidden from screen readers), `alt` (empty when decorative), `size`.
-- *Users:* P13, header user menu, A2, credits, M1 submitter.
+
+- _API:_ `src?`, `name` (initials fallback, hidden from screen readers), `alt` (empty when decorative), `size`.
+- _Users:_ P13, header user menu, A2, credits, M1 submitter.
 
 **`Gallery`**
-- *API:* `items` of `{kind: image | video | embed, src, thumb, width, height, alt, caption?}`, `labels` (`{next, previous, close, openItem, of}`).
-- *Behavior:* a main viewer with a thumbnail strip, and a lightbox Dialog for full size. Arrow keys inside the lightbox. Videos use native `<video controls>` with a poster.
-- *No-JS:* the main item is the first image and thumbnails link to the full files.
-- *Users:* P5, M2, S2 (draft media preview).
+
+- _API:_ `items` of `{kind: image | video | embed, src, thumb, width, height, alt, caption?}`, `labels` (`{next, previous, close, openItem, of}`).
+- _Behavior:_ a main viewer with a thumbnail strip, and a lightbox Dialog for full size. Arrow keys inside the lightbox. Videos use native `<video controls>` with a poster.
+- _No-JS:_ the main item is the first image and thumbnails link to the full files.
+- _Users:_ P5, M2, S2 (draft media preview).
 
 **`Disclosure`**
-- *API:* `summary`, `children`, `open?`, `variant` (`plain | card`). Built on native `<details>`.
-- *Users:* P5 expansion, P8 evidence, P3 sections, X2 traceback, FAQ on P14, the `SplitLayout` no-JS fallback.
+
+- _API:_ `summary`, `children`, `open?`, `variant` (`plain | card`). Built on native `<details>`.
+- _Users:_ P5 expansion, P8 evidence, P3 sections, X2 traceback, FAQ on P14, the `SplitLayout` no-JS fallback.
 
 **`Tabs`**
-- *API:* `items` of `{id, label, count?, href?, disabled?}`, `value` (bindable), `mode` (`link | panel`), `label`, `children` snippet per panel (panel mode).
+
+- _API:_ `items` of `{id, label, count?, href?, disabled?}`, `value` (bindable), `mode` (`link | panel`), `label`, `children` snippet per panel (panel mode).
   - `link` mode renders `<nav>` with `aria-current="page"`. It is for URL state such as P2 scopes and A5 statuses, and works without JS.
   - `panel` mode uses the bits-ui Tabs pattern (arrow keys, automatic activation) for in-page content that doesn't need a URL. Use it sparingly, e.g. P5 schematic vs render.
-- *Responsive:* scrolls horizontally with edge fade. The current tab is scrolled into view.
-- *Users:* P2, P7, A5, A6 (all or unread), M1, P13 (builds or records).
+- _Responsive:_ scrolls horizontally with edge fade. The current tab is scrolled into view.
+- _Users:_ P2, P7, A5, A6 (all or unread), M1, P13 (builds or records).
 
 **`SegmentedControl`**
-- *API:* `items` of `{value, label, icon?, href?}`, `value`, `mode` (`link | radio`), `label`, `size`.
+
+- _API:_ `items` of `{value, label, icon?, href?}`, `value`, `mode` (`link | radio`), `label`, `size`.
   - Link mode is for view toggles in the URL (`view=cards|table`, record siblings: criterion and scope).
   - Radio mode wraps a native radio group with button styling, for forms such as duration units and vote options.
-- *Users:* P2, P4, P7 view toggle; P8 siblings; P13; `UnitField`; VoteControl.
+- _Users:_ P2, P4, P7 view toggle; P8 siblings; P13; `UnitField`; VoteControl.
 
 **`Pagination`** (moved from features)
-- *API:* `prevHref?`, `nextHref?`, `pages?` (`{current, count, hrefFor(n)}`, offset listings only; the feature passes precomputed hrefs as an array of `{n, href}` for islands), `range?` (`{from, to, total}` together with a `rangeLabel` string), `labels` (`{nav, previous, next, page}`), `pageSize?` (`{value, options:[{value, href}]}`), `compact?` (mobile: prev, "3 / 12", next).
-- *Behavior:* previous and next keep their position and become disabled spans at either end, per the bot conventions. The whole control is omitted when there is a single page.
-- *A11y:* `nav` with a label, `rel=prev/next`, `aria-current="page"`.
-- *Users:* P2, P4, P6, P7, P11, P12, P13, A5, A6, M1, X2.
+
+- _API:_ `prevHref?`, `nextHref?`, `pages?` (`{current, count, hrefFor(n)}`, offset listings only; the feature passes precomputed hrefs as an array of `{n, href}` for islands), `range?` (`{from, to, total}` together with a `rangeLabel` string), `labels` (`{nav, previous, next, page}`), `pageSize?` (`{value, options:[{value, href}]}`), `compact?` (mobile: prev, "3 / 12", next).
+- _Behavior:_ previous and next keep their position and become disabled spans at either end, per the bot conventions. The whole control is omitted when there is a single page.
+- _A11y:_ `nav` with a label, `rel=prev/next`, `aria-current="page"`.
+- _Users:_ P2, P4, P6, P7, P11, P12, P13, A5, A6, M1, X2.
 
 **`Breadcrumbs`**
-- *API:* `items` of `{label, href?}`, `label`.
-- *Renders:* `nav > ol`, with `aria-current` on the last item. Collapses middle items on mobile.
-- *Users:* P5 (Builds > Doors > title), P6, P8, P9 point, P12, M2, M3, M4, X2 detail.
+
+- _API:_ `items` of `{label, href?}`, `label`.
+- _Renders:_ `nav > ol`, with `aria-current` on the last item. Collapses middle items on mobile.
+- _Users:_ P5 (Builds > Doors > title), P6, P8, P9 point, P12, M2, M3, M4, X2 detail.
 
 **`NavList`**
-- *Purpose:* vertical section navigation.
-- *API:* `items` of `{label, href, icon?, count?, current?}` grouped by `{heading?, items}`, `label`.
-- *Users:* account sidebar (A2–A7), admin sidebar (X1–X8), the S2 section index (with completeness markers), the P3 table of contents, P14, the workbench.
+
+- _Purpose:_ vertical section navigation.
+- _API:_ `items` of `{label, href, icon?, count?, current?}` grouped by `{heading?, items}`, `label`.
+- _Users:_ account sidebar (A2–A7), admin sidebar (X1–X8), the S2 section index (with completeness markers), the P3 table of contents, P14, the workbench.
 
 #### Charts (LayerChart 2.x, pinned exactly; imported only in `src/ui/chart/*`)
 
@@ -312,168 +361,193 @@ The `src/ui` primitives and patterns, the feature components built from them, an
 - Marks with `href` render as SVG `<a>` elements, so selection works without JS.
 
 **`Chart`** (the frame every chart variant uses)
-- *API:*
+
+- _API:_
   - `title` and `description` (required): they become the `<figure>` caption and the SVG `aria-labelledby` / `aria-describedby`.
   - `height` (`sm | md | lg`).
   - `table` (`{caption, columns:[{key, label, numeric?}], rows}`, derived by default from series).
   - `legend` (`auto | none`).
   - `labels` (`{showData, hideData}`).
   - `interactive?`, `status?` (`ready | loading | empty | error`, with matching text props).
-- *Renders:* `<figure>`; the SVG gets `role="img"`, or `role="group"` when it contains links. A `<details>` holds the table.
+- _Renders:_ `<figure>`; the SVG gets `role="img"`, or `role="group"` when it contains links. A `<details>` holds the table.
 
 **`SeriesChart`** (line, step and bar over a continuous or band x axis)
-- *API:*
+
+- _API:_
   - `kind` (`line | step | bar | stacked-bar`).
   - `x` and `y` axes: `{type: linear | integer | time | band, label, format?: (v) => string, domain?, nice?}`. Format functions only work from Svelte features; for Astro use, `tickLabels` is a precomputed array.
   - `series`: `[{id, label, tone: 1..6 | accent | muted, points:[{x, y, label?, href?}]}]`.
   - `annotations?`: `[{axis, value, label, tone}]` for threshold lines.
   - `tooltip?` (snippet, interactive only).
-- *Keyboard (interactive):* the plot is focusable, arrow keys move between points, the focused point's tooltip text is mirrored to a live region, and Enter follows its `href`.
+- _Keyboard (interactive):_ the plot is focusable, arrow keys move between points, the focused point's tooltip text is mirrored to a live region, and Enter follows its `href`.
 
 **`RangeChart`** (intervals along an integer domain, for door range regions)
-- *API:*
+
+- _API:_
   - `segments`: `[{from, to | null (unbounded), step?, residue?, value?, label, tone, href?}]`.
   - `x` axis as above; `unboundedLabel`.
   - `selection` (bindable width), `onSelect`.
 - Renders horizontal bands, with step and residue drawn as ticks. Supports a selected width.
 
 **`DistributionBar`** (horizontal ranked bars, top N plus "other")
-- *API:* `items` of `{label, value, href?}`, `max`, `valueFormat`, `otherLabel`.
+
+- _API:_ `items` of `{label, value, href?}`, `max`, `valueFormat`, `otherLabel`.
 - Renders well without JS.
 
 **Every chart the screens need**
 
-| # | Screen | Chart | Data shape | Interaction | No-JS |
-|---|---|---|---|---|---|
-| 1 | P9 | Smallest door record by width (`RangeChart`, y = record volume or size per region) | `DoorRangeResult.analysis.regions[]`: domain `{minimum, maximum \| null, period, residue}`, resolution, holder config ids → segments with holder build labels | Hover or focus shows holder and size. Click a width goes to `/at/[width]`. Selecting a width syncs with the table. | Static SVG with segment links, plus a table of the same data |
-| 2 | P8 | Record progression (`SeriesChart` step) | `[{date, metricValue, buildId, buildTitle}]` per criterion metric (needs API R3) | Tooltip with build and date. Points link to the build. | Static plus table; the Timeline is the primary view |
-| 3 | P5 | Schematic block composition (`DistributionBar`) | `SchematicMetrics.block_counts` → top 12 plus other | None | Full |
-| 4 | M1, M2, A5 | Vote tallies | `VoteTallies` against thresholds | A `Progress` meter, not a chart | Full |
-| 5 | P13 | Creator activity: builds per year (`SeriesChart` bar, small) | `[{year, count}]` (API C1 stats) | None | Full |
-| 6 | P2, P4 (phase 2) | Range filter histogram: distribution of width or opening time for the current query | `distributions[field].histogram = [{from, to, count}]` (API S2) | Brush to set min and max fields (interactive). Keyboard users use the inputs. | Inputs only; the histogram is decorative |
-| 7 | X2 | Errors per day by surface (`SeriesChart` stacked bar) | `[{day, surface, count}]` (API AD2) | Tooltip. A bar links to the filtered table. | Static plus table |
-| 8 | P1 (optional) | Records broken per month (`SeriesChart` bar) | `[{month, count}]` | None | Full |
+| #   | Screen           | Chart                                                                               | Data shape                                                                                                                                                    | Interaction                                                                                                        | No-JS                                                        |
+| --- | ---------------- | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------ |
+| 1   | P9               | Smallest door record by width (`RangeChart`, y = record volume or size per region)  | `DoorRangeResult.analysis.regions[]`: domain `{minimum, maximum \| null, period, residue}`, resolution, holder config ids → segments with holder build labels | Hover or focus shows holder and size. Click a width goes to `/at/[width]`. Selecting a width syncs with the table. | Static SVG with segment links, plus a table of the same data |
+| 2   | P8               | Record progression (`SeriesChart` step)                                             | `[{date, metricValue, buildId, buildTitle}]` per criterion metric (needs API R3)                                                                              | Tooltip with build and date. Points link to the build.                                                             | Static plus table; the Timeline is the primary view          |
+| 3   | P5               | Schematic block composition (`DistributionBar`)                                     | `SchematicMetrics.block_counts` → top 12 plus other                                                                                                           | None                                                                                                               | Full                                                         |
+| 4   | M1, M2, A5       | Vote tallies                                                                        | `VoteTallies` against thresholds                                                                                                                              | A `Progress` meter, not a chart                                                                                    | Full                                                         |
+| 5   | P13              | Creator activity: builds per year (`SeriesChart` bar, small)                        | `[{year, count}]` (API C1 stats)                                                                                                                              | None                                                                                                               | Full                                                         |
+| 6   | P2, P4 (phase 2) | Range filter histogram: distribution of width or opening time for the current query | `distributions[field].histogram = [{from, to, count}]` (API S2)                                                                                               | Brush to set min and max fields (interactive). Keyboard users use the inputs.                                      | Inputs only; the histogram is decorative                     |
+| 7   | X2               | Errors per day by surface (`SeriesChart` stacked bar)                               | `[{day, surface, count}]` (API AD2)                                                                                                                           | Tooltip. A bar links to the filtered table.                                                                        | Static plus table                                            |
+| 8   | P1 (optional)    | Records broken per month (`SeriesChart` bar)                                        | `[{month, count}]`                                                                                                                                            | None                                                                                                               | Full                                                         |
 
 ### 2.2 Form primitives
 
 **Shared field contract** (all fields)
-- *Props:* `label`, `detail?` (e.g. "optional", "ticks"), `hint?`, `error?`, `required?`, `disabled?`, `readonly?`, `name`, `id?`, `labelVisibility` (`visible | hidden`, hidden only inside tables or toolbars that have a visible heading).
-- *Errors:* rendered as text with an icon, linked through `aria-describedby`, and `aria-invalid` set. Never `role=alert`.
-- *Width:* `width` (`full | md | sm | xs`, tokens for 30, 16 and 8 characters) so numeric fields aren't full width.
+
+- _Props:_ `label`, `detail?` (e.g. "optional", "ticks"), `hint?`, `error?`, `required?`, `disabled?`, `readonly?`, `name`, `id?`, `labelVisibility` (`visible | hidden`, hidden only inside tables or toolbars that have a visible heading).
+- _Errors:_ rendered as text with an icon, linked through `aria-describedby`, and `aria-invalid` set. Never `role=alert`.
+- _Width:_ `width` (`full | md | sm | xs`, tokens for 30, 16 and 8 characters) so numeric fields aren't full width.
 
 **`FieldFrame`**: kept as the internal frame. Fix the alert role and the sizes.
 
 **`TextField`** (renamed from `Field`)
-- *API:* native input props, `prefix?` and `suffix?` (text or icon, e.g. unit "ticks"), `counter?` (shows `n/max` when `maxlength` is set, announced politely at 90%), `clearable?` with `clearLabel`.
-- *Users:* everywhere.
 
-**`TextareaField`**: adds `counter` and `autosize`. *Users:* A2 bio, S2 description, M4 change summary, X1.
+- _API:_ native input props, `prefix?` and `suffix?` (text or icon, e.g. unit "ticks"), `counter?` (shows `n/max` when `maxlength` is set, announced politely at 90%), `clearable?` with `clearLabel`.
+- _Users:_ everywhere.
+
+**`TextareaField`**: adds `counter` and `autosize`. _Users:_ A2 bio, S2 description, M4 change summary, X1.
 
 **`NumberField`**: merged into `TextField` with `inputmode="numeric"`, `type="text"`, plus `min`, `max`, `step` validation in the feature. Native `type=number` is avoided because of its wheel and locale problems.
 
-**`SelectField`**: native select. *API:* `options` of `{value, label, disabled?}` or a `children` snippet, and `placeholder`. *Users:* sort in toolbars, X1, small forms.
+**`SelectField`**: native select. _API:_ `options` of `{value, label, disabled?}` or a `children` snippet, and `placeholder`. _Users:_ sort in toolbars, X1, small forms.
 
 **`CheckField`** and **`Switch`**
+
 - `CheckField`: a single checkbox with a description.
 - `Switch`: a native checkbox with `role="switch"`, for settings that apply immediately, with an optional `pending` state.
-- *Users:* A2 hidden profile, A3 identity public, A7 channels, X1 booleans, DataTable column menu, S2 boolean controls.
+- _Users:_ A2 hidden profile, A3 identity public, A7 channels, X1 booleans, DataTable column menu, S2 boolean controls.
 
 **`ChoiceGroup`** (merges radio group, checkbox group, and `FieldGroup` with options)
-- *API:* `type` (`radio | checkbox`), `options` of `{value, label, description?, icon?, disabled?}`, `value` (bindable), `variant` (`list | inline | cards`), `columns?`.
-- *Renders:* `fieldset` and `legend`. Arrow keys work natively for radios.
-- *Users:* S1 category cards, S2 choice and multi_choice controls (up to about 7 options), P2 filter enums, P10, A7, VoteControl, X1.
 
-**`FieldGroup`**: kept as a fieldset wrapper for related heterogeneous fields, such as door dimensions (width, height, depth) or a range. *Users:* S2, P9 form, P10, M4.
+- _API:_ `type` (`radio | checkbox`), `options` of `{value, label, description?, icon?, disabled?}`, `value` (bindable), `variant` (`list | inline | cards`), `columns?`.
+- _Renders:_ `fieldset` and `legend`. Arrow keys work natively for radios.
+- _Users:_ S1 category cards, S2 choice and multi_choice controls (up to about 7 options), P2 filter enums, P10, A7, VoteControl, X1.
+
+**`FieldGroup`**: kept as a fieldset wrapper for related heterogeneous fields, such as door dimensions (width, height, depth) or a range. _Users:_ S2, P9 form, P10, M4.
 
 **`RangeField`**
-- *API:* `label`, `min` and `max` sub-fields (`{name, value, label}`), `unit?`, `bounds?`, `step?`. Two `TextField`s inside a `FieldGroup` with "to" between them, which reflows to stacked on mobile.
-- *Users:* P2, P4, P7 filters; P9 minimum and maximum width; X2 date range.
+
+- _API:_ `label`, `min` and `max` sub-fields (`{name, value, label}`), `unit?`, `bounds?`, `step?`. Two `TextField`s inside a `FieldGroup` with "to" between them, which reflows to stacked on mobile.
+- _Users:_ P2, P4, P7 filters; P9 minimum and maximum width; X2 date range.
 
 **`UnitField`** (duration and measurement)
-- *API:* `value` (the canonical number, e.g. game ticks), `units` (`[{id, label, factor}]`), `unit` (bindable), `labels`. Shows the converted value as a hint, e.g. "= 1.25 s".
-- *Users:* S2 duration control (game ticks, redstone ticks, seconds), P10, M4, P2 timing filters.
+
+- _API:_ `value` (the canonical number, e.g. game ticks), `units` (`[{id, label, factor}]`), `unit` (bindable), `labels`. Shows the converted value as a hint, e.g. "= 1.25 s".
+- _Users:_ S2 duration control (game ticks, redstone ticks, seconds), P10, M4, P2 timing filters.
 
 **`Autocomplete`** (free text with suggestions, refit)
-- *API:*
+
+- _API:_
   - `load(value, cursor, signal)`, with suggestions shaped `{value, label, description?}` and an optional `replacement` span.
   - `minQueryLength`, `debounceMs` (250), `multiline?`, plus the field contract.
   - `labels` (`{suggestions, loading, error, noResults}`).
-- *A11y:*
+- _A11y:_
   - Combobox (ARIA 1.2), `aria-activedescendant`, option descriptions through `aria-describedby`.
   - Escape closes. Enter selects only while an option is active, otherwise it submits the form.
   - Input method editor (IME) composition is respected.
   - Result count announced politely ("5 suggestions").
-- *No-JS:* a plain input.
-- *Users:* the `SearchBox` query, S2 free-text fields with `option_source` hints, credit names, P13 alias claim.
+- _No-JS:_ a plain input.
+- _Users:_ the `SearchBox` query, S2 free-text fields with `option_source` hints, credit names, P13 alias claim.
 
 **`Combobox`** (choose values from a set; bits-ui Combobox)
-- *API:* `options` or `load` (async with signal), `value` (string, or string[] when `multiple`), `multiple?` (selected values as removable `Chip`s inside the control), `allowCreate?` with `createLabel(text)` passed as a pre-bound string template, `labels`, plus the field contract.
-- *No-JS:* when `options` is static, render a native `<select>` (with `multiple`). When the options are async, fall back to a text input.
-- *Users:* S2 choice fields with more than 7 options or an `option_source`; the version picker (S2, P2, P9, P10); tag pickers (P9, P10, P2 filters, A7 filter subscription); M3 build match; X1 channel and role pickers; X6 subject picker.
+
+- _API:_ `options` or `load` (async with signal), `value` (string, or string[] when `multiple`), `multiple?` (selected values as removable `Chip`s inside the control), `allowCreate?` with `createLabel(text)` passed as a pre-bound string template, `labels`, plus the field contract.
+- _No-JS:_ when `options` is static, render a native `<select>` (with `multiple`). When the options are async, fall back to a text input.
+- _Users:_ S2 choice fields with more than 7 options or an `option_source`; the version picker (S2, P2, P9, P10); tag pickers (P9, P10, P2 filters, A7 filter subscription); M3 build match; X1 channel and role pickers; X6 subject picker.
 
 **`ListField`** (repeatable rows)
-- *API:* `items` (bindable array), `row` snippet (`(item, index, rowLabel) => ...`), `newItem()`, `min`, `max`, `labels` (`{add, remove, moveUp, moveDown, rowLabel(n)}`), `reorderable?`.
-- *A11y:* each row is a `fieldset` with a legend, such as "Link 2". After add, focus moves to the new row's first field. After remove, focus moves to the next row, or to the add button. Removal is announced politely.
-- *No-JS:* not supported. It is used only on JS-required screens, or the server renders N blank rows.
-- *Users:* A2 profile links, S2 credits and showcase tags, S2 repeatable fields, M4.
+
+- _API:_ `items` (bindable array), `row` snippet (`(item, index, rowLabel) => ...`), `newItem()`, `min`, `max`, `labels` (`{add, remove, moveUp, moveDown, rowLabel(n)}`), `reorderable?`.
+- _A11y:_ each row is a `fieldset` with a legend, such as "Link 2". After add, focus moves to the new row's first field. After remove, focus moves to the next row, or to the add button. Removal is announced politely.
+- _No-JS:_ not supported. It is used only on JS-required screens, or the server renders N blank rows.
+- _Users:_ A2 profile links, S2 credits and showcase tags, S2 repeatable fields, M4.
 
 **`FileDrop`** (replaces `FilePicker`)
-- *API:* `label`, `accept`, `multiple`, `maxBytes?`, `hint`, `error`, `disabled`, `onFiles`, `labels` (`{drop, browse}`). A native file input inside a drop zone, and the same file can be chosen again.
-- *A11y:* the input is the focusable element. Drag and drop is an enhancement only.
-- *Users:* the `MediaUploader` pattern (S2 media, schematics, supplied files).
+
+- _API:_ `label`, `accept`, `multiple`, `maxBytes?`, `hint`, `error`, `disabled`, `onFiles`, `labels` (`{drop, browse}`). A native file input inside a drop zone, and the same file can be chosen again.
+- _A11y:_ the input is the focusable element. Drag and drop is an enhancement only.
+- _Users:_ the `MediaUploader` pattern (S2 media, schematics, supplied files).
 
 **`CodeEntry`** (one-time code input)
-- *API:* `length`, `groups` (e.g. `[4, 4]`), `value` (bindable), `charset` (`alnum | digits`), `label`, `hint`, `error`, `autoSubmit?`.
-- *Behavior:* rendered as one input with visual grouping, not one box per character: paste works and screen readers read one field. Uppercases and strips separators. `autocomplete="one-time-code"`.
-- *Users:* L1, L2, A3 merge code.
+
+- _API:_ `length`, `groups` (e.g. `[4, 4]`), `value` (bindable), `charset` (`alnum | digits`), `label`, `hint`, `error`, `autoSubmit?`.
+- _Behavior:_ rendered as one input with visual grouping, not one box per character: paste works and screen readers read one field. Uppercases and strips separators. `autocomplete="one-time-code"`.
+- _Users:_ L1, L2, A3 merge code.
 
 **`ErrorSummary`**
-- *API:* `title`, `errors` of `{fieldId, message}`, `focusOnMount` (default true).
-- *Behavior:* `role=alert` with `tabindex=-1`. Receives focus after a failed submit. Each item links to `#fieldId`, and clicking focuses the field.
-- *Users:* S2 submit, M4, A2, X1, P10, P9 form, A1 consent.
+
+- _API:_ `title`, `errors` of `{fieldId, message}`, `focusOnMount` (default true).
+- _Behavior:_ `role=alert` with `tabindex=-1`. Receives focus after a failed submit. Each item links to `#fieldId`, and clicking focuses the field.
+- _Users:_ S2 submit, M4, A2, X1, P10, P9 form, A1 consent.
 
 **`FormActions`**
-- *API:* `primary`, `secondary?`, `destructive?` (placed at the start, separated), `note?` (text above the row, such as "Publishing is final"), `sticky?` (sticks to the bottom of the viewport on long forms).
-- *Users:* S2, M4, A2, X1, L1, L2, dialogs.
+
+- _API:_ `primary`, `secondary?`, `destructive?` (placed at the start, separated), `note?` (text above the row, such as "Publishing is final"), `sticky?` (sticks to the bottom of the viewport on long forms).
+- _Users:_ S2, M4, A2, X1, L1, L2, dialogs.
 
 ### 2.3 Patterns (domain-free compositions)
 
 **`PageHeader`** (replaces `PageHeading`)
-- *API:* `title`, `eyebrow?`, `description?`, `breadcrumbs?`, `meta?` snippet (badges and timestamps), `actions?` snippet, `media?` snippet (avatar), `notice?` snippet (banner `Notice`).
-- *Behavior:* the h1 gets `tabindex=-1` and is the focus target after client-side actions that change the whole page.
-- *Users:* every screen.
+
+- _API:_ `title`, `eyebrow?`, `description?`, `breadcrumbs?`, `meta?` snippet (badges and timestamps), `actions?` snippet, `media?` snippet (avatar), `notice?` snippet (banner `Notice`).
+- _Behavior:_ the h1 gets `tabindex=-1` and is the focus target after client-side actions that change the whole page.
+- _Users:_ every screen.
 
 **`Section`** (replaces `Panel`)
-- *API:* `title`, `level` (default 2), `description?`, `actions?` snippet (e.g. "View all"), `surface?`, `children`.
-- *Renders:* `<section aria-labelledby>`.
-- *Users:* every detail page.
+
+- _API:_ `title`, `level` (default 2), `description?`, `actions?` snippet (e.g. "View all"), `surface?`, `children`.
+- _Renders:_ `<section aria-labelledby>`.
+- _Users:_ every detail page.
 
 **`NavBar`** (site header body, domain-free)
-- *API:* `brand` snippet, `links` of `{label, href, current}`, `actions` snippet, `labels` (`{primary, menu, close}`).
-- *Behavior:* on narrow screens the links collapse into a `Sheet` opened by a menu button. Without JS this is `<details>`.
-- *Users:* `CatalogueLayout`, `WorkbenchLayout`.
+
+- _API:_ `brand` snippet, `links` of `{label, href, current}`, `actions` snippet, `labels` (`{primary, menu, close}`).
+- _Behavior:_ on narrow screens the links collapse into a `Sheet` opened by a menu button. Without JS this is `<details>`.
+- _Users:_ `CatalogueLayout`, `WorkbenchLayout`.
 
 **`SearchBox`**
-- *API:* `action` (form GET URL), `name` (`q`), `value`, `label`, `placeholder`, `submitLabel`, `load?` (wires the `Autocomplete`), `hidden?` (extra hidden params to preserve, such as scope and view), `size` (`md | lg`).
-- *No-JS:* a GET form.
-- *Users:* P1, P2, P4, P7, P11, P15, header (compact).
+
+- _API:_ `action` (form GET URL), `name` (`q`), `value`, `label`, `placeholder`, `submitLabel`, `load?` (wires the `Autocomplete`), `hidden?` (extra hidden params to preserve, such as scope and view), `size` (`md | lg`).
+- _No-JS:_ a GET form.
+- _Users:_ P1, P2, P4, P7, P11, P15, header (compact).
 
 **`FilterPanel`**
-- *API:* `action`, `children` (fields), `applyLabel`, `resetHref`, `resetLabel`, `activeCount`, `hidden?` (params to preserve), `autoApply?`.
-- *Behavior:* the form submits via GET. With JS it auto-applies on change, debounced, by navigating (`location.assign` with the new URL). Placed in `SplitLayout` with sheet collapse.
-- *Users:* P2, P4, P7, P12, P13 builds, M1, X2.
+
+- _API:_ `action`, `children` (fields), `applyLabel`, `resetHref`, `resetLabel`, `activeCount`, `hidden?` (params to preserve), `autoApply?`.
+- _Behavior:_ the form submits via GET. With JS it auto-applies on change, debounced, by navigating (`location.assign` with the new URL). Placed in `SplitLayout` with sheet collapse.
+- _Users:_ P2, P4, P7, P12, P13 builds, M1, X2.
 
 **`ActiveFilters`**
-- *API:* `items` of `{label, removeHref}`, `clearHref`, `labels`. A row of removable `Chip`s.
-- *Users:* P2, P4, P7, P12, X2.
+
+- _API:_ `items` of `{label, removeHref}`, `clearHref`, `labels`. A row of removable `Chip`s.
+- _Users:_ P2, P4, P7, P12, X2.
 
 **`ResultsToolbar`**
-- *API:* `count?` (a pre-formatted string such as "312 builds"), `sort?` (`{label, value, options:[{value, label, href}]}`, rendered as a `Menu` of links, falling back to `<details>`), `view?` (SegmentedControl link items), `columns?` (DataTable column visibility props), `extra?` snippet (e.g. a subscribe button).
-- *A11y:* the count text is rendered inside `role=status` only when results change client-side.
-- *Users:* P2, P4, P7, P12, P13, A5, M1, X2.
+
+- _API:_ `count?` (a pre-formatted string such as "312 builds"), `sort?` (`{label, value, options:[{value, label, href}]}`, rendered as a `Menu` of links, falling back to `<details>`), `view?` (SegmentedControl link items), `columns?` (DataTable column visibility props), `extra?` snippet (e.g. a subscribe button).
+- _A11y:_ the count text is rendered inside `role=status` only when results change client-side.
+- _Users:_ P2, P4, P7, P12, P13, A5, M1, X2.
 
 **`DataTable`** (`@tanstack/svelte-table` v9, which supports Svelte 5 directly)
-- *API:*
+
+- _API:_
   - `caption` (required; can be visually hidden).
   - `columns`: `[{id, header, accessor | cell snippet, align: start | end, numeric?, sortKey?, pinned?: "start", hideable?, defaultHidden?, width: xs | sm | md | lg | auto, truncate?}]`.
   - `rows`, `getRowId`.
@@ -483,52 +557,60 @@ The `src/ui` primitives and patterns, the feature components built from them, an
   - `density` (`comfortable | compact`), `loading?` (with skeleton row count), `empty` snippet, `footer` snippet (pagination).
   - `labels` (`{sortAscending, sortDescending, sortNone, expand, collapse, columns, scrollRegion}`).
   - `rowHref?` (stretched link on the first cell; never a clickable `<tr>`).
-- *A11y:*
+- _A11y:_
   - Semantic `<table>` and `<caption>`. `th scope=col`. The first pinned cell is `th scope=row`.
   - `aria-sort` on the sorted header. Sort links get the full name, e.g. "Width, sorted ascending, activate to sort descending".
   - Expand toggles are links or buttons with `aria-expanded` and `aria-controls`. Sub-rows get `aria-level` via data attributes, with indentation and a hidden "grouped under X" text.
   - The scroll container is `role=region`, `tabindex=0`, `aria-labelledby` the caption.
-- *Responsive:* horizontal scroll, a pinned first column (sticky, `z-sticky`, `bg-surface`, a shadow appears when scrolled), and a sticky header within the page scroll.
-- *No-JS:* fully server-rendered. Sort, expand and visibility are all links or a GET form. JS intercepts them, updates via `history.replaceState`, and refetches through Query, or navigates when the page isn't an island.
-- *Users:* P2 records, P2/P4 builds table, P7, P9 points, P12, P13, A5, M1, X2, X3, X4, X6, X8.
+- _Responsive:_ horizontal scroll, a pinned first column (sticky, `z-sticky`, `bg-surface`, a shadow appears when scrolled), and a sticky header within the page scroll.
+- _No-JS:_ fully server-rendered. Sort, expand and visibility are all links or a GET form. JS intercepts them, updates via `history.replaceState`, and refetches through Query, or navigates when the page isn't an island.
+- _Users:_ P2 records, P2/P4 builds table, P7, P9 points, P12, P13, A5, M1, X2, X3, X4, X6, X8.
 
 **`ResultsView`**
-- *Purpose:* chooses between the card grid and `DataTable` according to `view`, and owns the loading, empty and error states.
-- *API:* `view`, `cards` snippet, `table` snippet, `status`, `empty` and `error` snippets.
-- *Users:* P2, P4, P7, P12, P13.
+
+- _Purpose:_ chooses between the card grid and `DataTable` according to `view`, and owns the loading, empty and error states.
+- _API:_ `view`, `cards` snippet, `table` snippet, `status`, `empty` and `error` snippets.
+- _Users:_ P2, P4, P7, P12, P13.
 
 **`ConfirmDialog`**
-- *API:* `title`, `description`, `consequences?` (list of strings), `confirmLabel`, `cancelLabel`, `tone` (`danger | default`), `requireText?` (`{label, expected}`, typed confirmation), `pending`, `error?`, `onConfirm` (async), `trigger` (Button props) or `open`, and `fallbackHref` (the no-JS confirm page).
-- *Behavior:* focus starts on Cancel for danger. While pending it cannot be dismissed. An error renders inside the dialog. On success the dialog closes and focus moves to a target the caller passes (`afterConfirmFocus`).
-- *Users:* A3 unlink and merge, A4 revoke and rotate, S1 and S2 discard draft, X2 clear, X5 clear profile, X6 revoke grant, M2 reject.
+
+- _API:_ `title`, `description`, `consequences?` (list of strings), `confirmLabel`, `cancelLabel`, `tone` (`danger | default`), `requireText?` (`{label, expected}`, typed confirmation), `pending`, `error?`, `onConfirm` (async), `trigger` (Button props) or `open`, and `fallbackHref` (the no-JS confirm page).
+- _Behavior:_ focus starts on Cancel for danger. While pending it cannot be dismissed. An error renders inside the dialog. On success the dialog closes and focus moves to a target the caller passes (`afterConfirmFocus`).
+- _Users:_ A3 unlink and merge, A4 revoke and rotate, S1 and S2 discard draft, X2 clear, X5 clear profile, X6 revoke grant, M2 reject.
 
 **`SettingsList`**
-- *API:* `items` of `{id, label, description?, control snippet, state: SaveStatus state, error?}`, `title`.
-- *Behavior:* each row saves immediately with its own status. No undo, per the bot convention: changing it back reverses it.
-- *Users:* A7, A3 visibility, A2 hidden, X1 (simple toggles), and later the deferred guild settings.
+
+- _API:_ `items` of `{id, label, description?, control snippet, state: SaveStatus state, error?}`, `title`.
+- _Behavior:_ each row saves immediately with its own status. No undo, per the bot convention: changing it back reverses it.
+- _Users:_ A7, A3 visibility, A2 hidden, X1 (simple toggles), and later the deferred guild settings.
 
 **`MediaUploader`**
-- *API:* `items` of `{id, name, kind, status: queued | uploading | processing | ready | failed | removed, progress?, thumb?, error?, primary?}`, plus `FileDrop` props, `limits` (`{count, max, bytesLabel}`), `onRetry`, `onRemove`, `onUndoRemove`, `onSetPrimary?`, `labels`.
-- *Behavior:* a list of `ListItem`s with `Progress`. Removal shows an inline "Removed · Undo" row instead of a confirm, since the reference is only marked discarded.
-- *A11y:* per-item status changes are announced politely and aggregated ("2 files uploaded, 1 failed").
-- *Users:* S2 media, S2 schematics, S2 supplied files, A2 avatar (if uploads are added).
+
+- _API:_ `items` of `{id, name, kind, status: queued | uploading | processing | ready | failed | removed, progress?, thumb?, error?, primary?}`, plus `FileDrop` props, `limits` (`{count, max, bytesLabel}`), `onRetry`, `onRemove`, `onUndoRemove`, `onSetPrimary?`, `labels`.
+- _Behavior:_ a list of `ListItem`s with `Progress`. Removal shows an inline "Removed · Undo" row instead of a confirm, since the reference is only marked discarded.
+- _A11y:_ per-item status changes are announced politely and aggregated ("2 files uploaded, 1 failed").
+- _Users:_ S2 media, S2 schematics, S2 supplied files, A2 avatar (if uploads are added).
 
 **`OneTimeSecret`**
-- *API:* `value`, `label`, `warning` (must be saved now), `copyLabel`, `acknowledgeLabel`, `onAcknowledge`.
-- *Behavior:* the value is in a read-only `Code` with `CopyButton`. Navigating away before acknowledging triggers `beforeunload`.
-- *Users:* A4 installation create and rotate, A3 merge code (expiry shown), CLI token display if it is ever shown on the web.
+
+- _API:_ `value`, `label`, `warning` (must be saved now), `copyLabel`, `acknowledgeLabel`, `onAcknowledge`.
+- _Behavior:_ the value is in a read-only `Code` with `CopyButton`. Navigating away before acknowledging triggers `beforeunload`.
+- _Users:_ A4 installation create and rotate, A3 merge code (expiry shown), CLI token display if it is ever shown on the web.
 
 **`StepFlow`**
-- *API:* `steps` of `{id, label, status: pending | current | done | error}`, `current`, and a `children` snippet for the current step's content. Renders `<ol>` with `aria-current="step"`.
-- *Users:* L1, L2 (enter code, review, approved), A3 merge (code, preview, confirm), S3 finalization status.
+
+- _API:_ `steps` of `{id, label, status: pending | current | done | error}`, `current`, and a `children` snippet for the current step's content. Renders `<ol>` with `aria-current="step"`.
+- _Users:_ L1, L2 (enter code, review, approved), A3 merge (code, preview, confirm), S3 finalization status.
 
 **`Announcer`**
-- *Purpose:* one page-level polite live region (a singleton module) for island messages that have no natural home: result counts after client-side refetch, "Marked all read". Lives in the layout.
-- *Users:* P2, A6, DataTable.
+
+- _Purpose:_ one page-level polite live region (a singleton module) for island messages that have no natural home: result counts after client-side refetch, "Marked all read". Lives in the layout.
+- _Users:_ P2, A6, DataTable.
 
 **`FlashNotice`**
-- *Purpose:* reads the one-shot flash the server set after a POST-redirect-GET and renders a `Notice role=status` in the `PageHeader` slot. The cookie is owned by `src/server/cookies.ts`; the layout passes text.
-- *Users:* M4 after save, A2, A4, X1, S1 after discard.
+
+- _Purpose:_ reads the one-shot flash the server set after a POST-redirect-GET and renders a `Notice role=status` in the `PageHeader` slot. The cookie is owned by `src/server/cookies.ts`; the layout passes text.
+- _Users:_ M4 after save, A2, A4, X1, S1 after discard.
 
 ### Merged or dropped
 
@@ -546,6 +628,7 @@ The `src/ui` primitives and patterns, the feature components built from them, an
 ### 2.4 Tokens to add or change (`app.css` `@theme`, `themes.css`)
 
 **Color roles** (light and dark, `oklch`)
+
 - `line-strong`: control borders, at least 3:1 against `surface`.
 - `info`, `info-soft`, `danger-soft`.
 - `on-danger`: text on a filled danger button.
@@ -557,6 +640,7 @@ The `src/ui` primitives and patterns, the feature components built from them, an
 - `scrim-edge`: the scroll shadow on a pinned column.
 
 **Type scale** (`--text-*` with paired line heights)
+
 - `xs` 0.8125rem (13 px) / 1.5. This overrides Tailwind's 12 px for CJK legibility. Badges, hints and errors use it, replacing 0.6875 and 0.8125.
 - `sm` 0.875 / 1.55, `base` 1 / 1.6, `lg` 1.125 / 1.5, `xl` 1.25 / 1.4, `2xl` 1.5 / 1.3, `3xl` 1.875 / 1.2.
 - `display`: `clamp(2rem, 5vw, 3.5rem)` / 1.1, home hero only. Page titles use `3xl`.
@@ -568,6 +652,7 @@ The `src/ui` primitives and patterns, the feature components built from them, an
 **Tracking**: `--tracking-tight` (-0.02em) and `--tracking-display` (-0.04em), both reset to 0 under `:lang(zh)`.
 
 **Spacing and sizes**
+
 - `--spacing-gutter`: `clamp(1rem, 4vw, 3rem)`.
 - `--spacing-control`: 2.75rem (44 px); `--spacing-control-sm`: 2.25rem.
 - `--spacing-header`: header height, used for scroll-margin on anchors.
@@ -595,6 +680,7 @@ The `src/ui` primitives and patterns, the feature components built from them, an
 The primitives each one composes are listed after the arrow.
 
 **Shell (`src/layouts`, Astro)**
+
 - `CatalogueLayout`: SkipLink, NavBar, Container, Announcer, FlashNotice.
 - `SiteHeader`: NavBar, SearchBox (compact), `UserMenu` island (Avatar, Menu, Badge unread count), Button for sign in.
 - `SiteFooter`: Layout, Link.
@@ -602,6 +688,7 @@ The primitives each one composes are listed after the arrow.
 - `DocumentHead`: unchanged, plus a theme color derived from the token.
 
 **`features/builds`**
+
 - `BuildCard`: Card, Image, DescriptionList, Text.
 - `buildColumns`: DataTable column specs.
 - `BuildHeader`: PageHeader, Badge, Breadcrumbs, Button, Menu.
@@ -620,7 +707,8 @@ The primitives each one composes are listed after the arrow.
 - `BuildStatusBadge`: Badge.
 
 **`features/records`**
-- `RecordCard` (replaces `RecordSummary` and `SummaryCard`): Card, Text.
+
+- `RecordCard` (replaces `RecordSummary` and `SummaryCard`): Card, Text, MetaList, Badge.
 - `recordColumns`: DataTable column specs.
 - `RecordHeader`: PageHeader, Badge, SegmentedControl for siblings.
 - `RecordFreshness`: Text, Timestamp.
@@ -634,6 +722,7 @@ The primitives each one composes are listed after the arrow.
 - `RecordCheckForm` and `RecordCheckResult`: FieldGroup, UnitField, Combobox, Notice, HolderList.
 
 **`features/search`**
+
 - `SearchPage`: SearchBox, Tabs, ActiveFilters, FilterPanel, ResultsToolbar, ResultsView, Pagination.
 - `queryAutocomplete`: the Autocomplete loader against `/v1/search/suggest` and `/v1/suggest`.
 - `SearchResultCard`, a discriminated union: BuildCard, RecordCard, or `MetadataResult` (Card).
@@ -644,11 +733,13 @@ The primitives each one composes are listed after the arrow.
 - `SubscribeToQuery`: Button, ConfirmDialog.
 
 **`features/tags`**
+
 - `TagHeader`: PageHeader, DescriptionList.
 - `TagGlossary`: SearchBox, List, Section per kind.
 - `TagChip`: Chip.
 
 **`features/creators`**
+
 - `CreatorHeader`: PageHeader, Avatar, Link list, Badge.
 - `CreatorStats`: StatGroup, SeriesChart.
 - `AliasList`: Chip.
@@ -656,6 +747,7 @@ The primitives each one composes are listed after the arrow.
 - `CreatorWork`: Tabs, ResultsView.
 
 **`features/submissions`**
+
 - `FormRenderer`: maps `ControlKind` and `ValueKind` to fields:
   - `text` to TextField or TextareaField;
   - `number` to TextField numeric;
@@ -665,7 +757,7 @@ The primitives each one composes are listed after the arrow.
   - `boolean` to CheckField;
   - `credits` to CreditsField;
   - `showcase_tags` to ShowcaseTagsField.
-  It evaluates `visible_when`, `repeatable` (via ListField), `required_capability` and `origins`, and is also used by M4.
+    It evaluates `visible_when`, `repeatable` (via ListField), `required_capability` and `origins`, and is also used by M4.
 - `CreditsField`: ListField, Combobox, SelectField for the role.
 - `ShowcaseTagsField`: ListField, Combobox, TextField.
 - `DraftAutosave`: the operation queue engine plus SaveStatus. Logic lives in `draft-sync.ts`.
@@ -679,6 +771,7 @@ The primitives each one composes are listed after the arrow.
 - `SubmissionStatus`: StepFlow, List of issues linking to fields, Button to the build.
 
 **`features/account`**
+
 - `ProfileForm`: TextField, TextareaField, ListField, Switch, SaveStatus, FormActions.
 - `AvatarPicker`: Dialog, ChoiceGroup, Avatar.
 - `IdentityList`: List, Avatar, Switch, ConfirmDialog.
@@ -691,6 +784,7 @@ The primitives each one composes are listed after the arrow.
 - `AccountNav`: NavList.
 
 **`features/notifications`**
+
 - `InboxList` and `InboxItem`: List, ListItem unread, Timestamp, Link. Per-kind message mapping is checked with `satisfies Record<NotificationKind, …>`.
 - `NotificationBell`: Button iconOnly, Badge.
 - `PreferencesForm`: SettingsList, Switch, Notice.
@@ -698,9 +792,11 @@ The primitives each one composes are listed after the arrow.
 - `FollowButton`: Button toggle with `aria-pressed`, optimistic. Used on P5, P8, P12 and P13.
 
 **`features/device-link`**
+
 - `DeviceApproval`, shared by CLI and Minecraft: StepFlow, CodeEntry, DescriptionList, Notice warning, FormActions.
 
 **`features/review`**
+
 - `ReviewQueue`: Tabs, DataTable, Progress meter, Badge.
 - `VoteControl`: SegmentedControl radio, Button pending, Progress meter with thresholds, Notice.
 - `VoteTally`: Progress, DescriptionList.
@@ -708,6 +804,7 @@ The primitives each one composes are listed after the arrow.
 - `BuildEditForm`: FormRenderer, SaveStatus, Diff on conflict.
 
 **`features/admin`**
+
 - `RuntimeSettingsForm`: SettingsList, Section, Combobox, TextField, SaveStatus.
 - `ErrorReportTable`: FilterPanel, DataTable, SeriesChart.
 - `ErrorReportDetail`: DescriptionList, Code, Disclosure, CopyButton.
@@ -719,15 +816,18 @@ The primitives each one composes are listed after the arrow.
 - `AdminNav`: NavList.
 
 **`features/home`**
+
 - `HomeHero`: Heading display, SearchBox.
 - `CatalogueCounts`: StatGroup.
 - `RecentRecordChanges`: List.
 - `NewBuilds`: Layout grid of BuildCard.
 
 **`features/content`**
+
 - `ContentPage`: Prose, NavList as table of contents.
 
 **Shared helpers** (domain-free ones in `src/ui/lib/`)
+
 - `url-state.ts`: `withParams`, `toggleListParam`.
 - `focus.ts`: `focusHeading`, `focusAfterRemoval`.
 - `query-client.ts`: one QueryClient per page, shared by all islands.
@@ -769,11 +869,11 @@ The primitives each one composes are listed after the arrow.
 
 ### Destructive actions
 
-| Tier | Examples | Pattern |
-|---|---|---|
-| Reversible | Remove media or a schematic from a draft, unsubscribe, mark read | No confirmation. Inline "Removed · Undo" where undo exists; otherwise the toggle is its own undo. |
-| Irreversible, contained | Revoke device or grant, unlink identity, discard an empty draft, reject a proposal | `ConfirmDialog` naming the object ("Revoke *Laptop CLI*?"), with the danger button labelled with the verb, not "OK". |
-| Irreversible, broad | Merge accounts, rotate installation secret, clear all errors, clear profile, discard a draft with content | `ConfirmDialog` with a consequences list, plus typed confirmation for merge and clear-all. |
+| Tier                    | Examples                                                                                                  | Pattern                                                                                                              |
+| ----------------------- | --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| Reversible              | Remove media or a schematic from a draft, unsubscribe, mark read                                          | No confirmation. Inline "Removed · Undo" where undo exists; otherwise the toggle is its own undo.                    |
+| Irreversible, contained | Revoke device or grant, unlink identity, discard an empty draft, reject a proposal                        | `ConfirmDialog` naming the object ("Revoke _Laptop CLI_?"), with the danger button labelled with the verb, not "OK". |
+| Irreversible, broad     | Merge accounts, rotate installation secret, clear all errors, clear profile, discard a draft with content | `ConfirmDialog` with a consequences list, plus typed confirmation for merge and clear-all.                           |
 
 Without JS, the trigger links to a confirmation page (for example `/account/devices/[id]/revoke`) containing the same text and a POST form.
 
