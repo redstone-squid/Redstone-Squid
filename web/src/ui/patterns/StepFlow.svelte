@@ -3,6 +3,7 @@
   import CircleAlert from "@lucide/svelte/icons/circle-alert";
   import type { Snippet } from "svelte";
   import { cn } from "@/ui/cn";
+  import { focusTarget } from "@/ui/lib/focus";
 
   type StepStatus = "pending" | "done" | "error";
 
@@ -40,7 +41,7 @@
   let shown: string | undefined;
   $effect(() => {
     const step = current;
-    if (shown !== undefined && shown !== step) heading?.focus();
+    if (shown !== undefined && shown !== step && heading) focusTarget(heading);
     shown = step;
   });
 </script>
@@ -88,7 +89,6 @@
         this={`h${headingLevel}`}
         bind:this={heading}
         id={`${id}-heading`}
-        tabindex="-1"
         class="text-xl font-bold tracking-tight">{currentStep.label}</svelte:element
       >
       {@render children?.()}

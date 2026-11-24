@@ -5,6 +5,7 @@
   import Plus from "@lucide/svelte/icons/plus";
   import Trash from "@lucide/svelte/icons/trash-2";
   import { tick, type Snippet } from "svelte";
+  import { focusAfterRemoval } from "@/ui/lib/focus";
   import Button from "@/ui/actions/Button.svelte";
   import { cn } from "@/ui/cn";
   import { fieldErrorClass, fieldMessageClass, labelClass } from "./styles";
@@ -84,9 +85,11 @@
     keys = keys.filter((_, other) => other !== index);
     announcement = labels.removed(index + 1);
     await tick();
-    const next = firstField(Math.min(index, items.length - 1));
-    if (next) next.focus();
-    else addRow?.querySelector("button")?.focus();
+    focusAfterRemoval(
+      items.map((_, row) => firstField(row)),
+      index,
+      addRow?.querySelector("button"),
+    );
   }
   async function move(index: number, by: -1 | 1): Promise<void> {
     const target = index + by;
