@@ -5,6 +5,7 @@
     "src/sw.ts",
     "src/layouts/register-service-worker.ts",
     "src/layouts/browser-telemetry.ts",
+    "src/layouts/language-menu-position.ts",
   ],
   "ignore": ["src/generated/**", "**/*.gen.ts"],
   // Approved libraries installed before their first use, so agents reach for them instead of

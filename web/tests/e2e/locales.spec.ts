@@ -11,6 +11,25 @@ test("the language selector preserves a detail URL and its query", async ({ page
   await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
 });
 
+test("the language menu closes on Escape and on a click outside it", async ({ page }) => {
+  await page.goto("/tags/zero-tick");
+  const trigger = page
+    .getByRole("banner")
+    .getByRole("button", { name: `${LOCALES.en.label} · ${m.navLanguage("en")}` });
+  const menu = page.getByRole("list", { name: m.navLanguage("en") });
+
+  await trigger.click();
+  await expect(menu).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(menu).toBeHidden();
+  await expect(trigger).toBeFocused();
+
+  await trigger.click();
+  await expect(menu).toBeVisible();
+  await page.getByRole("main").click({ position: { x: 5, y: 5 } });
+  await expect(menu).toBeHidden();
+});
+
 test("the pseudo-locale formats interface text and stays out of search and menus", async ({
   page,
 }) => {

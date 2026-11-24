@@ -124,6 +124,37 @@
   z-index: 60;
 }
 
+/*
+ * A popover hanging below its invoker, flipping when it would overflow the viewport.
+ * `dropdown-start` lines up with the invoker's start edge, `dropdown-end` with its end edge.
+ * Browsers without anchor positioning skip these rules and center the popover in the viewport,
+ * so place it from script there.
+ */
+@utility dropdown-start {
+  @supports (position-area: block-end) {
+    inset: auto;
+    margin: 0;
+    margin-block-start: --spacing(1.5);
+    position-area: block-end span-inline-end;
+    position-try-fallbacks:
+      flip-block,
+      flip-inline,
+      flip-block flip-inline;
+  }
+}
+@utility dropdown-end {
+  @supports (position-area: block-end) {
+    inset: auto;
+    margin: 0;
+    margin-block-start: --spacing(1.5);
+    position-area: block-end span-inline-start;
+    position-try-fallbacks:
+      flip-block,
+      flip-inline,
+      flip-block flip-inline;
+  }
+}
+
 @layer base {
   html {
     background: var(--color-canvas);
