@@ -300,7 +300,7 @@
                           >
                             <ChevronRight
                               class={cn(
-                                "size-4 transition-transform duration-150",
+                                "size-4 transition-transform duration-fast",
                                 expanded && "rotate-90",
                               )}
                               aria-hidden="true"
@@ -363,7 +363,7 @@
   [data-pinned] {
     position: sticky;
     inset-inline-start: 0;
-    z-index: 10;
+    z-index: var(--z-sticky);
     border-inline-end: 1px solid var(--color-line);
     animation: pinned-shadow linear both;
     animation-timeline: scroll(nearest inline);

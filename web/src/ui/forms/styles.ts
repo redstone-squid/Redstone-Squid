@@ -8,7 +8,7 @@ export const labelClass = cn("font-semibold text-fg");
 
 const controlBorder = cn(
   "rounded-sm border border-line-strong bg-surface text-fg",
-  "transition-[border-color] duration-150 ease-standard",
+  "transition-[border-color] duration-fast ease-standard",
 );
 /** A native input, select or textarea. Callers add the inline padding and `min-h-control`. */
 export const inputClass = cn(

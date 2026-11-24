@@ -52,7 +52,7 @@
     role="presentation"
     class={cn(
       "relative grid min-w-0 justify-items-center gap-2 rounded-md border-2 border-dashed px-4 py-6 text-center",
-      "transition-[border-color,background-color] duration-150 ease-standard",
+      "transition-[border-color,background-color] duration-fast ease-standard",
       "has-focus-visible:outline-3 has-focus-visible:outline-offset-3 has-focus-visible:outline-focus",
       disabled
         ? "cursor-not-allowed border-line bg-surface-muted text-fg-muted"

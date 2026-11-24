@@ -29,7 +29,7 @@
     )}
   >
     <ChevronRight
-      class="size-4 shrink-0 transition-transform duration-150 group-open:rotate-90"
+      class="size-4 shrink-0 transition-transform duration-fast group-open:rotate-90"
       aria-hidden="true"
     />
     {summary}

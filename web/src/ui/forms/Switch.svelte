@@ -70,9 +70,9 @@
       }}
       class={cn(
         "relative h-6 w-10 shrink-0 cursor-pointer appearance-none rounded-full border border-line-strong bg-surface-muted",
-        "transition-colors duration-150 ease-standard",
+        "transition-colors duration-fast ease-standard",
         "before:absolute before:start-0.5 before:top-0.5 before:size-4.5 before:rounded-full before:bg-fg-muted",
-        "before:transition-transform before:duration-150 before:ease-standard",
+        "before:transition-transform before:duration-fast before:ease-standard",
         "checked:border-accent checked:bg-accent checked:before:translate-x-4 checked:before:bg-on-accent",
         "rtl:checked:before:-translate-x-4",
         "disabled:cursor-not-allowed disabled:opacity-50 aria-busy:cursor-progress",

@@ -5,7 +5,7 @@ import { cn } from "@/ui/cn";
 /** A panel floating beside its trigger: menus and popovers. It fades in where motion is allowed. */
 export const floatingPanelClass = cn(
   "z-dropdown max-w-[calc(100vw-2rem)] rounded-sm border border-line bg-surface-raised text-sm text-fg shadow-overlay",
-  "motion-safe:transition-opacity motion-safe:duration-150 motion-safe:starting:opacity-0",
+  "motion-safe:transition-opacity motion-safe:duration-fast motion-safe:starting:opacity-0",
 );
 
 /** One row of a menu, highlighted by pointer, arrow keys, or focus. */
@@ -19,5 +19,5 @@ export const menuItemClass = cn(
 /** The dimmed page behind a modal. */
 export const backdropClass = cn(
   "fixed inset-0 z-overlay bg-overlay",
-  "motion-safe:transition-opacity motion-safe:duration-200 motion-safe:starting:opacity-0",
+  "motion-safe:transition-opacity motion-safe:duration-normal motion-safe:starting:opacity-0",
 );

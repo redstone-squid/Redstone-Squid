@@ -83,7 +83,7 @@
           variant === "cards" && [
             "rounded-md border bg-surface p-4",
             invalid ? "border-danger" : "border-line-strong",
-            "transition-[border-color,background-color] duration-150 ease-standard",
+            "transition-[border-color,background-color] duration-fast ease-standard",
             "hover:not-has-disabled:border-fg-muted",
             "has-checked:border-accent has-checked:bg-accent-soft",
             "has-focus-visible:outline-3 has-focus-visible:outline-offset-3 has-focus-visible:outline-focus",

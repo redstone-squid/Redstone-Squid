@@ -77,7 +77,7 @@
           class={cn(
             "fixed inset-y-0 m-0 h-dvh max-h-none w-[calc(100%-3rem)] max-w-dialog-sm overflow-y-auto overscroll-contain",
             "border-line bg-surface-raised p-panel text-fg shadow-overlay backdrop:bg-overlay",
-            "motion-safe:transition-[translate] motion-safe:duration-200 motion-safe:ease-standard",
+            "motion-safe:transition-[translate] motion-safe:duration-normal motion-safe:ease-standard",
             side === "start"
               ? "start-0 end-auto rounded-e-lg border-e motion-safe:starting:-translate-x-full rtl:motion-safe:starting:translate-x-full"
               : "start-auto end-0 rounded-s-lg border-s motion-safe:starting:translate-x-full rtl:motion-safe:starting:-translate-x-full",

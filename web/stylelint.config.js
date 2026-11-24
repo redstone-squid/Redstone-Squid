@@ -24,6 +24,15 @@ export default {
     "color-no-invalid-hex": true,
     "declaration-block-no-duplicate-properties": true,
     "declaration-no-important": true,
+    // Stacking and motion come from the tokens in src/ui/app.css.
+    "declaration-property-value-allowed-list": [
+      { "z-index": ["auto", "/^var\\(--z-[a-z]+\\)$/"] },
+      { message: "Use a z-index from the ladder in src/ui/app.css, such as var(--z-sticky)." },
+    ],
+    "declaration-property-unit-disallowed-list": [
+      { "/^(?:transition|animation)/": ["s", "ms"] },
+      { message: "Use a duration token such as var(--duration-fast)." },
+    ],
     "function-calc-no-unspaced-operator": true,
     "no-duplicate-selectors": true,
     "property-no-unknown": true,

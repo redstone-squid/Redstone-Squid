@@ -20,6 +20,10 @@ const arbitraryColor = {
   message: "Use a theme color from src/ui/themes.css instead of an arbitrary color.",
 };
 
+const rawDuration = {
+  pattern: "^(?:.*:)?(?:duration|delay)-\\d",
+  message: "Use a duration token: duration-fast, duration-normal, or duration-slow.",
+};
 const viewportBreakpoint = {
   pattern: "^(?:.*:)?(?:max-)?(?:sm|md|lg|xl|2xl|min-\\[.*\\]|max-\\[.*\\]):",
   message:
@@ -28,7 +32,7 @@ const viewportBreakpoint = {
 const restrictClasses = (...restrict) => ({
   "better-tailwindcss/no-restricted-classes": [
     "error",
-    { restrict: [arbitraryColor, ...restrict] },
+    { restrict: [arbitraryColor, rawDuration, ...restrict] },
   ],
 });
 

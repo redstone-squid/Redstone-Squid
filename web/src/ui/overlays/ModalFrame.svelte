@@ -78,7 +78,7 @@
       onCloseAutoFocus={focusReturn}
       class={cn(
         "fixed z-modal flex flex-col overflow-hidden border border-line bg-surface-raised text-fg shadow-overlay",
-        "motion-safe:transition-[opacity,translate] motion-safe:duration-200 motion-safe:ease-standard motion-safe:starting:opacity-0",
+        "motion-safe:transition-[opacity,translate] motion-safe:duration-normal motion-safe:ease-standard motion-safe:starting:opacity-0",
         panelClass,
       )}
     >

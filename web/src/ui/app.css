@@ -101,6 +101,19 @@
   --ease-emphasized: cubic-bezier(0.3, 0, 0, 1.2);
 }
 
+/* Motion and stacking tokens. Use the utilities below; CSS reads the variables. */
+:root {
+  --duration-fast: 120ms;
+  --duration-normal: 200ms;
+  --duration-slow: 320ms;
+  --z-sticky: 10;
+  --z-header: 20;
+  --z-dropdown: 30;
+  --z-overlay: 40;
+  --z-modal: 50;
+  --z-skiplink: 60;
+}
+
 :root:lang(zh) {
   --tracking-tight: 0;
   --tracking-display: 0;
@@ -121,24 +134,34 @@
   grid-template-columns: repeat(auto-fill, minmax(min(100%, --value(--container-*)), 1fr));
 }
 
+@utility duration-fast {
+  transition-duration: var(--duration-fast);
+}
+@utility duration-normal {
+  transition-duration: var(--duration-normal);
+}
+@utility duration-slow {
+  transition-duration: var(--duration-slow);
+}
+
 /* One stacking ladder, so overlays never fight over arbitrary numbers. */
 @utility z-sticky {
-  z-index: 10;
+  z-index: var(--z-sticky);
 }
 @utility z-header {
-  z-index: 20;
+  z-index: var(--z-header);
 }
 @utility z-dropdown {
-  z-index: 30;
+  z-index: var(--z-dropdown);
 }
 @utility z-overlay {
-  z-index: 40;
+  z-index: var(--z-overlay);
 }
 @utility z-modal {
-  z-index: 50;
+  z-index: var(--z-modal);
 }
 @utility z-skiplink {
-  z-index: 60;
+  z-index: var(--z-skiplink);
 }
 
 /*

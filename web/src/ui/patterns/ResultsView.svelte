@@ -75,7 +75,7 @@
   {:else}
     <div
       class={cn(
-        "min-w-0 motion-safe:transition-opacity motion-safe:duration-150",
+        "min-w-0 motion-safe:transition-opacity motion-safe:duration-fast",
         status === "refreshing" && "pointer-events-none opacity-60",
       )}
     >

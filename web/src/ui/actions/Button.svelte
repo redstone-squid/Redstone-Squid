@@ -4,7 +4,7 @@
   const buttonStyles = cva(
     [
       "relative inline-flex cursor-pointer items-center justify-center gap-2 rounded-sm border",
-      "font-semibold no-underline transition-[background-color,border-color] duration-150 ease-standard",
+      "font-semibold no-underline transition-[background-color,border-color] duration-fast ease-standard",
       "active:not-disabled:not-aria-disabled:shadow-pressed",
       "disabled:cursor-not-allowed disabled:border-line disabled:bg-surface-muted disabled:text-fg-muted",
       "aria-disabled:cursor-not-allowed",
