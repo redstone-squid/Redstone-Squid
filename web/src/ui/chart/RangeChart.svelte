@@ -219,22 +219,18 @@
                   {/if}
                 {/each}
               {/if}
-              {#if segment.to === null}
-                <text x={context.width} y={top - 6} text-anchor="end" class="fill-fg-muted text-xs"
-                  >{unboundedLabel}</text
-                >
-              {/if}
             {/snippet}
             {#if segment.href !== undefined}
-              <a
-                href={segment.href}
-                aria-label={name}
-                class="group/mark no-underline focus:outline-none"
-              >
+              <a href={segment.href} aria-label={name} class="group/mark no-underline">
                 {@render marks()}
               </a>
             {:else}
               <g>{@render marks()}</g>
+            {/if}
+            {#if segment.to === null}
+              <text x={context.width} y={top - 6} text-anchor="end" class="fill-fg-muted text-xs"
+                >{unboundedLabel}</text
+              >
             {/if}
           {/each}
           {#if selected !== undefined}
