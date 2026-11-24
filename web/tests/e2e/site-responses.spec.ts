@@ -54,3 +54,15 @@ test("policy violation reports are accepted and other bodies refused", async ({ 
   const wrongType = await request.post("/telemetry/csp", { data: [report] });
   expect(wrongType.status()).toBe(415);
 });
+
+test("security.txt names a contact and expires within a year", async ({ request }) => {
+  const response = await request.get("/.well-known/security.txt");
+  expect(response.ok()).toBe(true);
+  const text = await response.text();
+  expect(text).toContain(
+    "Contact: https://github.com/redstone-squid/Redstone-Squid/security/advisories/new",
+  );
+  const expires = Date.parse(/^Expires: (.+)$/m.exec(text)?.[1] ?? "");
+  expect(expires).toBeGreaterThan(Date.now());
+  expect(expires).toBeLessThan(Date.now() + 365 * 24 * 60 * 60 * 1000);
+});
