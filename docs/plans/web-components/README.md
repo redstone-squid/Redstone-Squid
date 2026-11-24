@@ -59,7 +59,8 @@ Conventions to follow:
 - **Review.** Look at changes on the workbench page in `bun run dev`.
   `tests/review/workbench.spec.ts` runs axe and an overflow check on every group page in both
   themes on desktop and mobile; CI compares their screenshots with master's and reports
-  differences without failing. Broken-image demos use
+  differences without failing. Locally, run only `bun run test:review -- --grep <group>`
+  for the groups you touched; never update or commit screenshots. Broken-image demos use
   `https://media.fixture.invalid/broken.png`; a real 404 fails the console check. Navigation
   landmarks on one page need distinct names.
 - **Styles.** No `variants.ts`. A style shared by a folder goes in that folder's `styles.ts`
@@ -85,7 +86,7 @@ How to resume:
 3. Then Phase 5 (patterns) and Phase 6 (infrastructure), then Phase 7 (lint enforcement),
    which must leave zero violations behind.
 4. Each phase ends the way Phase 1 did: stories, unit tests for keyboard and focus contracts,
-   a passing `test:review`, `src/ui/README.md` updated, and small commits.
+   `test:review --grep` passing for the touched groups, `src/ui/README.md` updated, and small commits.
 
 Not yet run: `bun run test:compatibility` (Firefox and WebKit).
 
