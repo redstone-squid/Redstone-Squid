@@ -10,7 +10,7 @@ export const GROUPS = {
     title: "Feedback",
     description: "Badges, chips, notices, progress, and loading, empty, and error states.",
   },
-  data: { title: "Data", description: "Cards, lists, images, timelines, and diffs." },
+  data: { title: "Data", description: "Cards, lists, images, galleries, timelines, and diffs." },
   navigation: {
     title: "Navigation",
     description: "Breadcrumbs, tabs, segmented controls, navigation lists, and pagination.",

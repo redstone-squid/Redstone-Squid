@@ -6,6 +6,7 @@
   import DescriptionList from "@/ui/data/DescriptionList.svelte";
   import Diff from "@/ui/data/Diff.svelte";
   import Disclosure from "@/ui/data/Disclosure.svelte";
+  import Gallery from "@/ui/data/Gallery.svelte";
   import Image from "@/ui/data/Image.svelte";
   import List from "@/ui/data/List.svelte";
   import ListItem from "@/ui/data/ListItem.svelte";
@@ -88,6 +89,37 @@
       />
     </Variant>
   </Layout>
+</Story>
+
+<Story
+  name="Gallery"
+  source="data/Gallery"
+  description="Thumbnails link to the full files without JavaScript; hydrated, they switch the viewer and the lightbox pages with arrow keys."
+>
+  <Gallery
+    class="max-w-form"
+    items={[
+      { file: "copper-door", alt: "Copper door, front", caption: "Closed, from the front." },
+      { file: "iris-door", alt: "Iris door, open" },
+      { file: "copper-door", alt: "Copper door, wiring", caption: "The wiring behind the door." },
+    ].map(({ file, alt, caption }, index) => ({
+      kind: "image" as const,
+      src: `/fixtures/${file}.svg?view=${index}`,
+      thumb: `/fixtures/${file}.svg?view=${index}`,
+      width: 640,
+      height: 400,
+      alt,
+      caption,
+    }))}
+    labels={{
+      previous: "Previous",
+      next: "Next",
+      close: "Close",
+      openItem: "View full size",
+      fallback: "Image could not be loaded",
+      position: (current, total) => `Image ${current} of ${total}`,
+    }}
+  />
 </Story>
 
 <Story name="Avatar" source="data/Avatar" description="Initials when there is no picture.">
