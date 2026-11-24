@@ -11,11 +11,14 @@ const interactiveBudget = { initialKiB: 96, completeKiB: 160 };
 // inventory in sync with page composition; locale routes share the same code.
 const budgets: EntryBudget[] = [
   {
-    // Loads on every page, so it must stay tiny.
+    // Loads on every page, so it must stay tiny: the head's scripts and the footer's
+    // appearance switch.
     entries: [
       "src/layouts/DocumentHead.astro?astro&type=script&index=0&lang.ts",
       "src/layouts/DocumentHead.astro?astro&type=script&index=1&lang.ts",
       "src/layouts/DocumentHead.astro?astro&type=script&index=2&lang.ts",
+      "src/layouts/DocumentHead.astro?astro&type=script&index=3&lang.ts",
+      "src/layouts/AppearanceSwitch.astro?astro&type=script&index=0&lang.ts",
       "src/layouts/DocumentHead.astro?astro&type=script&index=3&lang.ts",
       "src/layouts/AppearanceSwitch.astro?astro&type=script&index=0&lang.ts",
     ],
