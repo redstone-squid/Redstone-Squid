@@ -5,6 +5,7 @@ from uuid import UUID
 
 from squid.core.errors import AuthorizationError, ConflictError, NotFoundError, ValidationError
 from squid.core.i18n import tr
+from squid.core.validation import ValidationIssue
 
 
 class DraftNotFoundError(NotFoundError):
@@ -100,5 +101,5 @@ class DraftValidationError(ValidationError):
     default_title = "Draft needs changes"
     default_resource = "submission_draft"
 
-    def __init__(self, errors: dict[str, str]) -> None:
-        super().__init__(public_context={"field_errors": errors})
+    def __init__(self, issues: tuple[ValidationIssue, ...]) -> None:
+        super().__init__(issues=issues)

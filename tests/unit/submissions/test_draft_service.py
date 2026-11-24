@@ -538,7 +538,7 @@ async def test_processing_reports_field_errors_for_incomplete_web_draft() -> Non
             Actor(account_id=7),
             locale="en",
         )
-    assert error.value.public_context["field_errors"]
+    assert error.value.field_issues
 
 
 @pytest.mark.asyncio

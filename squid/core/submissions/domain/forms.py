@@ -12,14 +12,36 @@ from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import TYPE_CHECKING, Self
 
+from pydantic import TypeAdapter
+
 from squid.core.builds.domain.credits import read_credits
 from squid.core.builds.domain.showcase import read_showcase_tags
 from squid.core.errors import JSONValue, ValidationError
 from squid.core.i18n import tr
+from squid.core.validation import (
+    AboveMaximum,
+    AboveMaximumParams,
+    BelowMinimum,
+    BelowMinimumParams,
+    FieldErrorCode,
+    RuleParams,
+    SimpleIssue,
+    TooFewItems,
+    TooFewItemsParams,
+    TooLong,
+    TooLongParams,
+    TooManyItems,
+    TooManyItemsParams,
+    TooShort,
+    TooShortParams,
+    ValidationIssue,
+)
 from squid_i18n import md_tr
 
 if TYPE_CHECKING:
     from squid.core.submissions.domain.finalization import SubmissionAttentionReason
+
+_ISSUE = TypeAdapter[ValidationIssue](ValidationIssue)
 
 _STABLE_ID = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _OPTION_VALUE_TYPES = frozenset({None, "text", "numeric", "boolean"})
@@ -210,8 +232,7 @@ class FieldRule:
 
 @dataclass(frozen=True, slots=True)
 class _ValidationIssue:
-    field_id: str
-    reason: str
+    public: ValidationIssue
     inputs: frozenset[str]
     rule_id: str | None = None
 
@@ -300,39 +321,39 @@ class FormField:
             constraints=self.constraints if rules.constraints is None else rules.constraints,
         )
 
-    def validate_value(self, value: JSONValue) -> str | None:
-        """Return a validation reason code or None, without checking dynamic options."""
+    def validate_value(self, value: JSONValue) -> ValidationIssue | None:
+        """Return a field issue or None, without checking dynamic options."""
         if not _matches_kind(value, self.value_kind):
-            return "wrong_type"
+            return SimpleIssue(field=self.id, code=FieldErrorCode.WRONG_TYPE)
         constraints = self.constraints
         if constraints.must_equal is not None and value != constraints.must_equal:
-            return "required_value"
+            return SimpleIssue(field=self.id, code=FieldErrorCode.REQUIRED_VALUE)
         if self.value_kind in {ValueKind.INTEGER, ValueKind.NUMBER, ValueKind.GAME_TICKS}:
             assert isinstance(value, int | float) and not isinstance(value, bool)
             if constraints.minimum is not None and value < constraints.minimum:
-                return "below_minimum"
+                return BelowMinimum(field=self.id, params=BelowMinimumParams(minimum=constraints.minimum))
             if constraints.maximum is not None and value > constraints.maximum:
-                return "above_maximum"
+                return AboveMaximum(field=self.id, params=AboveMaximumParams(maximum=constraints.maximum))
         if self.value_kind is ValueKind.STRING:
             assert isinstance(value, str)
             if constraints.min_length is not None and len(value) < constraints.min_length:
-                return "too_short"
+                return TooShort(field=self.id, params=TooShortParams(min_length=constraints.min_length))
             if constraints.max_length is not None and len(value) > constraints.max_length:
-                return "too_long"
+                return TooLong(field=self.id, params=TooLongParams(max_length=constraints.max_length))
         if self.value_kind in {ValueKind.STRING_LIST, ValueKind.CREDIT_LIST, ValueKind.SHOWCASE_TAG_LIST}:
             assert isinstance(value, Sequence) and not isinstance(value, str | bytes)
             if constraints.min_items is not None and len(value) < constraints.min_items:
-                return "too_few_items"
+                return TooFewItems(field=self.id, params=TooFewItemsParams(min_items=constraints.min_items))
             if constraints.max_items is not None and len(value) > constraints.max_items:
-                return "too_many_items"
+                return TooManyItems(field=self.id, params=TooManyItemsParams(max_items=constraints.max_items))
             if constraints.min_length is not None and any(
                 isinstance(item, str) and len(item) < constraints.min_length for item in value
             ):
-                return "too_short"
+                return TooShort(field=self.id, params=TooShortParams(min_length=constraints.min_length))
             if constraints.max_length is not None and any(
                 isinstance(item, str) and len(item) > constraints.max_length for item in value
             ):
-                return "too_long"
+                return TooLong(field=self.id, params=TooLongParams(max_length=constraints.max_length))
         if self.options:
             allowed = {option.value for option in self.options}
             supplied: Sequence[JSONValue]
@@ -343,7 +364,7 @@ class FormField:
             else:
                 supplied = (value,)
             if any(item not in allowed for item in supplied):
-                return "unknown_option"
+                return SimpleIssue(field=self.id, code=FieldErrorCode.UNKNOWN_OPTION)
         return None
 
 
@@ -500,7 +521,27 @@ class FormManifest:
         origin: SubmissionOrigin,
         require_complete: bool = True,
     ) -> dict[str, str]:
-        """Return field IDs mapped to validation reason codes.
+        """First reason per field for the form renderer."""
+        return self._first_reasons(
+            self.answer_issues(category, answers, origin=origin, require_complete=require_complete)
+        )
+
+    @staticmethod
+    def _first_reasons(issues: tuple[ValidationIssue, ...]) -> dict[str, str]:
+        errors: dict[str, str] = {}
+        for issue in issues:
+            errors.setdefault(issue.field, issue.code.value)
+        return errors
+
+    def answer_issues(
+        self,
+        category: str,
+        answers: Mapping[str, JSONValue],
+        *,
+        origin: SubmissionOrigin,
+        require_complete: bool = True,
+    ) -> tuple[ValidationIssue, ...]:
+        """Return every issue in validation order.
 
         Apply visible defaults first. Unknown field IDs are errors, but values of
         known hidden fields are ignored. With require_complete=False, missing
@@ -513,10 +554,7 @@ class FormManifest:
             origin=origin,
             require_complete=require_complete,
         )
-        errors: dict[str, str] = {}
-        for issue in issues:
-            errors.setdefault(issue.field_id, issue.reason)
-        return errors
+        return tuple(issue.public for issue in issues)
 
     @staticmethod
     def _validation_issues(
@@ -528,12 +566,18 @@ class FormManifest:
     ) -> Iterable[_ValidationIssue]:
         unknown = answers.keys() - {item.id for item in fields}
         for field_id in sorted(unknown):
-            yield _ValidationIssue(field_id, "unknown_field", frozenset({field_id}))
+            yield _ValidationIssue(
+                SimpleIssue(field=field_id, code=FieldErrorCode.UNKNOWN_FIELD), frozenset({field_id})
+            )
 
         visible = {item.id: item for item in fields if item.is_visible(answers, origin)}
         present = {field_id: value for field_id in visible if (value := answers.get(field_id)) is not None}
         reasons = {field_id: visible[field_id].validate_value(value) for field_id, value in present.items()}
-        typed = present.keys() - {field_id for field_id, reason in reasons.items() if reason == "wrong_type"}
+        typed = present.keys() - {
+            field_id
+            for field_id, reason in reasons.items()
+            if reason is not None and reason.code == FieldErrorCode.WRONG_TYPE
+        }
         visibility = {
             field_id: item.visible_when.field_id for field_id, item in visible.items() if item.visible_when is not None
         }
@@ -547,12 +591,19 @@ class FormManifest:
                         rule_inputs = inputs.union(
                             rule.depends_on, (visibility[key] for key in rule.depends_on if key in visibility)
                         )
-                        yield _ValidationIssue(field_id, rule.reason.value, rule_inputs, rule.id)
+                        public = _ISSUE.validate_python(
+                            {
+                                "field": field_id,
+                                "code": rule.reason.value,
+                                "params": RuleParams(rule=rule.id, depends_on=rule.depends_on),
+                            }
+                        )
+                        yield _ValidationIssue(public, rule_inputs, rule.id)
             reason = reasons.get(field_id)
             if field_id not in present and item.required and require_complete:
-                reason = "required"
+                reason = SimpleIssue(field=field_id, code=FieldErrorCode.REQUIRED)
             if reason is not None:
-                yield _ValidationIssue(field_id, reason, inputs)
+                yield _ValidationIssue(reason, inputs)
 
     def validate_transition(
         self,
@@ -562,16 +613,26 @@ class FormManifest:
         *,
         origin: SubmissionOrigin,
     ) -> dict[str, str]:
+        return self._first_reasons(self.transition_issues(category, before, after, origin=origin))
+
+    def transition_issues(
+        self,
+        category: str,
+        before: Mapping[str, JSONValue],
+        after: Mapping[str, JSONValue],
+        *,
+        origin: SubmissionOrigin,
+    ) -> tuple[ValidationIssue, ...]:
         """Report new issues and issues whose inputs changed during an edit."""
         before = self.apply_defaults(category, before, origin=origin)
         after = self.apply_defaults(category, after, origin=origin)
         fields = self.fields_for(category)
         existing = set(self._validation_issues(fields, before, origin=origin))
-        errors: dict[str, str] = {}
-        for issue in self._validation_issues(fields, after, origin=origin):
-            if issue not in existing or any(before.get(key) != after.get(key) for key in issue.inputs):
-                errors.setdefault(issue.field_id, issue.reason)
-        return errors
+        return tuple(
+            issue.public
+            for issue in self._validation_issues(fields, after, origin=origin)
+            if issue not in existing or any(before.get(key) != after.get(key) for key in issue.inputs)
+        )
 
     def apply_defaults(
         self,

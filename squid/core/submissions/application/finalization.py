@@ -7,7 +7,7 @@ stored attempt survives restarts, so clients can retrieve its progress or result
 """
 
 import logging
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
@@ -15,7 +15,7 @@ from uuid import UUID
 from whenever import Instant
 
 from squid.core.actors import Actor
-from squid.core.errors import DataIntegrityError, InvalidStateError, JSONValue
+from squid.core.errors import DataIntegrityError, InvalidStateError
 from squid.core.i18n import tr
 from squid.core.permissions.errors import PermissionDeniedError
 from squid.core.submissions.application.drafts import (
@@ -286,7 +286,7 @@ class SubmissionFinalizationService:
                     expected=current.snapshot.revision, actual=validated.draft.snapshot.revision
                 )
         except DraftValidationError as error:
-            issues = _manifest_issues(error.public_context)
+            issues = _manifest_issues(error)
             async with self._uow_factory() as uow:
                 await self._drafts.get_accessible_in(uow, draft_id, actor)
                 result = await uow.finalization_jobs.record_preparation_attention(
@@ -468,18 +468,15 @@ class SubmissionFinalizationWorker:
             return
 
 
-def _manifest_issues(context: Mapping[str, JSONValue]) -> tuple[SubmissionAttentionIssue, ...]:
-    field_errors = context.get("field_errors")
-    if not isinstance(field_errors, Mapping):
-        return (SubmissionAttentionIssue("submission", SubmissionAttentionReason.TARGET_REJECTED),)
+def _manifest_issues(error: DraftValidationError) -> tuple[SubmissionAttentionIssue, ...]:
     issues: list[SubmissionAttentionIssue] = []
-    for field_id, reason in sorted(field_errors.items()):
-        if not isinstance(reason, str):
-            continue
+    for issue in error.field_issues:
         try:
-            issues.append(SubmissionAttentionIssue(field_id, SubmissionAttentionReason(reason)))
+            attention = SubmissionAttentionIssue(issue.field, SubmissionAttentionReason(issue.code.value))
         except ValueError:
-            issues.append(SubmissionAttentionIssue("submission", SubmissionAttentionReason.TARGET_REJECTED))
+            attention = SubmissionAttentionIssue("submission", SubmissionAttentionReason.TARGET_REJECTED)
+        if attention not in issues:
+            issues.append(attention)
     return tuple(issues) or (SubmissionAttentionIssue("submission", SubmissionAttentionReason.TARGET_REJECTED),)
 
 

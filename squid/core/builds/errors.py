@@ -2,6 +2,7 @@
 
 from squid.core.errors import ConflictError, DomainError, ErrorCode, NotFoundError, ValidationError
 from squid.core.i18n import tr
+from squid.core.validation import ValidationIssue
 from squid_i18n import md_tr
 
 
@@ -16,9 +17,11 @@ class InvalidBuildError(ValidationError):
 class BuildEditValidationError(InvalidBuildError):
     """An edit introduces an issue or changes the inputs to an existing issue."""
 
-    def __init__(self, issues: dict[str, str]) -> None:
-        self.issues = dict(issues)
-        super().__init__(public_context={"fields": self.issues})
+    def __init__(self, issues: tuple[ValidationIssue, ...]) -> None:
+        super().__init__(issues=issues)
+        self.issues: dict[str, str] = {}
+        for issue in issues:
+            self.issues.setdefault(issue.field, issue.code.value)
 
 
 class BuildNotFoundError(NotFoundError):

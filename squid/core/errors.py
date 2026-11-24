@@ -5,6 +5,7 @@ from enum import StrEnum
 from typing import ClassVar, Self, override
 
 from squid.core.i18n import tr
+from squid.core.validation import ValidationIssue
 from squid_i18n import Text, source_text
 
 type JSONValue = bool | int | float | str | Sequence[JSONValue] | Mapping[str, JSONValue] | None
@@ -178,6 +179,31 @@ class DomainError(SquidError):
 
 class ValidationError(DomainError, ValueError):
     """Input does not satisfy an application rule."""
+
+    def __init__(
+        self,
+        message: str | Text | None = None,
+        *,
+        issues: Sequence[ValidationIssue] = (),
+        code: ErrorCode | None = None,
+        resource: str | None = None,
+        context: Mapping[str, JSONValue] | None = None,
+        public_context: Mapping[str, JSONValue] | None = None,
+        developer_action: str | None = None,
+        end_user_action: str | Text | None = None,
+        title: str | Text | None = None,
+    ) -> None:
+        self.field_issues = tuple(issues)
+        super().__init__(
+            message,
+            code=code,
+            resource=resource,
+            context=context,
+            public_context=public_context,
+            developer_action=developer_action,
+            end_user_action=end_user_action,
+            title=title,
+        )
 
     default_message = tr(t"core-supplied-value-invalid = The supplied value is invalid.")
     default_title = tr(t"core-errors-invalid-value = Invalid value")

@@ -374,7 +374,7 @@ class BuildService:
         if patch.showcase_tags is not UNSET:
             await replace_showcase_tags(build, patch.showcase_tags, self._tags)
         await self._prepare_for_persistence(build)
-        problems = _edit_manifest().validate_transition(
+        problems = _edit_manifest().transition_issues(
             build.category.value.lower(), before, answers_from_build(build).answers, origin=SubmissionOrigin.DISCORD
         )
         if problems:

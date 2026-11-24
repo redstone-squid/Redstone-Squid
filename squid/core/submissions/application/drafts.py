@@ -34,6 +34,7 @@ from squid.core.submissions.errors import (
     DraftValidationError,
 )
 from squid.core.unit_of_work import UnitOfWorkFactory
+from squid.core.validation import FieldErrorCode, SimpleIssue
 from squid_i18n import md_tr
 
 DEFAULT_DRAFT_RETENTION_DAYS = 7
@@ -232,9 +233,11 @@ class CheckedInFormRevisionMigration:
             answers["showcase_tags"] = [{"key": key} if isinstance(key, str) else key for key in keys]
         removed_answers = answers.keys() & (source_fields - target_fields)
         if removed_answers:
-            errors = {field_id: "removed_field" for field_id in sorted(removed_answers)}
+            errors = tuple(
+                SimpleIssue(field=field_id, code=FieldErrorCode.REMOVED_FIELD) for field_id in sorted(removed_answers)
+            )
             raise DraftValidationError(errors)
-        errors = target.validate_answers(
+        errors = target.answer_issues(
             draft.snapshot.category,
             answers,
             origin=draft.origin,
@@ -477,7 +480,7 @@ class SubmissionDraftService:
         """Validate a candidate against its pinned manifest without writing."""
         manifest = await self._pinned_manifest(current, locale)
         candidate = current.snapshot.apply(change)
-        errors = manifest.validate_answers(
+        errors = manifest.answer_issues(
             candidate.category, candidate.answers, origin=current.origin, require_complete=False
         )
         if errors:
@@ -575,17 +578,17 @@ class SubmissionDraftService:
                 for key, value in answers.items()
                 if key not in INGESTION_OPTIONAL_FIELDS or value not in (None, "", [])
             }
-        errors = manifest.validate_answers(
+        errors = manifest.answer_issues(
             current.snapshot.category,
             answers,
             origin=current.origin,
         )
         if ingested:
-            errors = {
-                key: reason
-                for key, reason in errors.items()
-                if key not in INGESTION_OPTIONAL_FIELDS or reason != "required"
-            }
+            errors = tuple(
+                issue
+                for issue in errors
+                if issue.field not in INGESTION_OPTIONAL_FIELDS or issue.code != FieldErrorCode.REQUIRED
+            )
         if errors:
             raise DraftValidationError(errors)
         normalized = manifest.visible_answers(

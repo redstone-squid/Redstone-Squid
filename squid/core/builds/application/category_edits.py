@@ -55,7 +55,7 @@ class BuildCategoryChange(BaseModel):
         details = self.door if self.door is not None else self.extender
         if details is not None:
             BuildEditPatch.from_attributes(details.edit_attributes()).apply(target)
-        problems = _edit_manifest().validate_answers(
+        problems = _edit_manifest().answer_issues(
             self.category.value.lower(), answers_from_build(target).answers, origin=SubmissionOrigin.DISCORD
         )
         if problems:
