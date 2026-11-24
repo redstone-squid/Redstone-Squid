@@ -78,6 +78,13 @@ for (const path of PAGES) {
     const failures: string[] = [];
     for (const width of WIDTHS) {
       await page.setViewportSize({ width, height: 900 });
+      // Measured plots redraw from a ResizeObserver, a frame after the layout changes.
+      await page.evaluate(
+        () =>
+          new Promise((resolve) =>
+            requestAnimationFrame(() => requestAnimationFrame(() => resolve(null))),
+          ),
+      );
       // The innermost overflowing elements are usually the cause; the rest are their ancestors.
       const elements = (await overflowing(page)).slice(-3);
       failures.push(...elements.map((element) => `${width}px: ${element}`));
