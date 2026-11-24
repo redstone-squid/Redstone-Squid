@@ -34,16 +34,17 @@ squid/core, so screens are composed from `web/src/ui` instead of one-off markup.
 
 ## Status and resuming
 
-Phases 0 and 1 are done (commits `960679e9a` to `01cf8de84`), and Phase 2 (from
-`27440a843`).
+Phases 0 and 1 (commits `960679e9a` to `01cf8de84`), 2 (from `27440a843`) and 3 are done.
 
 What exists in `web/src/ui`, by folder: `layout` (Layout, Container), `content` (Heading,
 Text, Link, Icon, Code, Prose, Timestamp, VisuallyHidden, SkipLink), `actions` (Button),
 `feedback` (Badge, Chip, Notice, Progress, Skeleton, Spinner, EmptyState, ErrorState),
 `data` (Card, Image, Avatar, DescriptionList, StatGroup, Disclosure, List, ListItem,
-Timeline, Diff), `navigation` (Breadcrumbs, Pagination, NavList, Tabs and SegmentedControl in
-link mode), `patterns` (PageHeader, Section), and `forms` (every §2.2 component, plus
-`SaveStatus`). `overlays` holds the pre-existing Dialog until Phase 3 replaces it.
+Timeline, Diff), `navigation` (Breadcrumbs, Pagination, NavList, Tabs in link and panel
+mode, SegmentedControl in link and radio mode), `patterns` (PageHeader, Section), `forms`
+(every §2.2 component), `overlays` (Dialog, Sheet, Popover, Tooltip, Menu), plus
+`actions/CopyButton` and `feedback/Announcer` and `SaveStatus`. `LanguageSelector` is a
+`Menu` with `nojs`. Left over: Phase 5 places `Announcer` in `CatalogueLayout` as an island.
 
 Phase 2 departures from §2.2: `RangeField` takes `separator` and `inputmode` instead of
 `bounds` and `step`, which a text input cannot enforce; `UnitField` submits the typed number
@@ -70,7 +71,7 @@ Conventions to follow:
   `https://media.fixture.invalid/broken.png`; a real 404 fails the console check. Navigation
   landmarks on one page need distinct names.
 - **Styles.** No `variants.ts`. A style shared by a folder goes in that folder's `styles.ts`
-  (`forms/styles.ts` exists; recreate `overlays/styles.ts` with `Menu`). Code that wants a
+  (`forms/styles.ts`, `overlays/styles.ts`). Code that wants a
   button's look renders `Button`, through bits-ui's `child` snippet for triggers.
 - **Types from `.svelte` files.** ESLint resolves types imported from a `.svelte` module as
   `any`, so shared prop types belong in a `.ts` file beside the component.
