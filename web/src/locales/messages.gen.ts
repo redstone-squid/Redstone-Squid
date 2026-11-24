@@ -451,6 +451,22 @@ export function workbenchUnavailable(locale: Locale = getLocale()): string {
   }
 }
 
+/** Examples show their initial state. Interaction needs JavaScript. */
+export function workbenchNeedsJavascript(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Examples show their initial state. Interaction needs JavaScript.";
+    case "zh-CN":
+      return "示例仅显示初始状态，交互需要启用 JavaScript。";
+    case "en-XA":
+      return (
+        "[" +
+        "Éẋåɱþļéš šĥöŵ ţĥéîŕ îñîţîåļ šţåţé. Îñţéŕåçţîöñ ñééđš ĴåṽåŠçŕîþţ." +
+        "··························]"
+      );
+  }
+}
+
 /** Create a draft */
 export function workbenchCreateADraft(locale: Locale = getLocale()): string {
   switch (locale) {

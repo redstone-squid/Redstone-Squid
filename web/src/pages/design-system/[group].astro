@@ -1,4 +1,6 @@
 ---
+import * as m from "@/locales/messages.gen";
+import Notice from "@/ui/feedback/Notice.svelte";
 import PageHeader from "@/ui/patterns/PageHeader.svelte";
 import { parseTheme } from "@/ui/themes";
 import { GROUPS, isGroup } from "@/workbench/groups";
@@ -21,6 +23,9 @@ const { title, description } = GROUPS[group];
 
 <WorkbenchLayout {title} {theme}>
   <PageHeader {title} {description} />
+  <noscript>
+    <Notice>{m.workbenchNeedsJavascript()}</Notice>
+  </noscript>
   {/* Each group hydrates, so stories exercise server rendering and hydration together. */}
   {group === "layout" && <LayoutStories client:load />}
   {group === "content" && <ContentStories client:load />}

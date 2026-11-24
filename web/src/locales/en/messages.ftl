@@ -35,6 +35,7 @@ workbench-light-theme = Light theme
 workbench-foundations-description = Semantic colours, spacing, and type used in the catalogue.
 workbench-components-description = Shared controls with accessible behavior built in.
 workbench-unavailable = Unavailable
+workbench-needs-javascript = Examples show their initial state. Interaction needs JavaScript.
 workbench-create-a-draft = Create a draft
 workbench-draft-description = Workbench example. Nothing is sent to the server.
 workbench-close-dialog = Close dialog

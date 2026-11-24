@@ -32,6 +32,7 @@ workbench-light-theme = 浅色主题
 workbench-foundations-description = 构建目录使用的语义颜色、间距和字体。
 workbench-components-description = 内置无障碍交互的共享控件。
 workbench-unavailable = 暂不可用
+workbench-needs-javascript = 示例仅显示初始状态，交互需要启用 JavaScript。
 workbench-create-a-draft = 创建草稿
 workbench-draft-description = 工作台示例。不会向服务器发送任何内容。
 workbench-close-dialog = 关闭对话框

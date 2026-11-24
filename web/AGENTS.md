@@ -85,6 +85,14 @@ classes and arbitrary colors. Classes are joined with `cn`, never merged at runt
 cva variant sole ownership of the properties it sets. A style shared by a family of components
 lives in that folder's `styles.ts`, which only `src/ui` imports. See `src/ui/README.md`.
 
+## Without JavaScript
+
+Public pages must work without JavaScript; scripts only enhance them. Build components from
+native elements (`<a>`, `<form>`, `<details>`) so their server-rendered output stays usable.
+Never put `<noscript>` in `src/ui` or feature components, which cannot know whether they will
+hydrate. A page that hydrates an island with no fallback may add one `<noscript>` notice
+beside it, as the workbench pages do.
+
 ## Routes that move
 
 Never delete a public URL. When a page moves, add `old → new` to `src/server/redirects.ts`;

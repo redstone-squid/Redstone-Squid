@@ -33,6 +33,7 @@
   "workbench-foundations-description": "275a58125b137d946922624eadbcf173a7750628b090c845b63521854bb884da",
   "workbench-components-description": "2e2dee631088b8a1e7ae5171e58315bc3678a49303c9098ec6d282d007aa75af",
   "workbench-unavailable": "a15440e0dc6b3d54dbf075a4da70541a5918e57b2478a2ec4113e8d041403f04",
+  "workbench-needs-javascript": "20c0c856e5cc2d85e5cfa1887f364ac83c570873780d88ffd5365cfd8df38d5c",
   "workbench-create-a-draft": "7e5e08dd09d529a05f8deb017d42f6c03d335f73cde9d7dc1be99470f62c971b",
   "workbench-draft-description": "cd032a94d2b90fe169c621c7a32625faee10e22e25ae643230f219226e7d7c26",
   "workbench-close-dialog": "ac823009ba3be601e7d4846185bfb90ef7d0c2fe8fd020a8750c54a0d34a8db3",
