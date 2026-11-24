@@ -10,16 +10,16 @@
 
   /**
    * A public build as a card linking to its page. `category` is the label for its kind;
-   * `eager` loads the preview immediately, for the first card above the fold.
+   * `priority` loads the preview first, for the first card above the fold.
    */
   type Props = {
     build: PublicBuildSummary;
     category: string;
     as?: "article" | "li";
     headingLevel?: 2 | 3;
-    eager?: boolean;
+    priority?: boolean;
   };
-  let { build, category, as = "article", headingLevel = 3, eager = false }: Props = $props();
+  let { build, category, as = "article", headingLevel = 3, priority = false }: Props = $props();
   const title = $derived(build.display_name ?? build.title);
   const unknown = m.buildDimensionUnknown();
   const { width, height, depth } = $derived(build.dimensions);
@@ -40,7 +40,7 @@
       alt={m.buildPreviewAlt({ title })}
       width={640}
       height={400}
-      loading={eager ? "eager" : "lazy"}
+      {priority}
       fallbackLabel={preview === null ? m.buildNoPreview() : m.buildImageUnavailable()}
     />
   {/snippet}

@@ -57,7 +57,7 @@
     {:else}
       <Layout as="ul" pattern="grid">
         {#each record.holder_builds as build, index (build.id)}
-          <BuildCard {build} category={kind} as="li" eager={index === 0} />
+          <BuildCard {build} category={kind} as="li" priority={index === 0} />
         {/each}
       </Layout>
     {/if}

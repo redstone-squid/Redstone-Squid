@@ -7,7 +7,9 @@
    * An image in a fixed frame, so the page does not shift while it loads. When `src` is
    * missing or fails to load, the frame shows `fallbackLabel`. Callers decide which URLs are
    * safe to show; pass only HTTPS URLs from untrusted data. `width` and `height` are the
-   * image's intrinsic size and set the frame's ratio when `aspect` is `natural`.
+   * image's intrinsic size and set the frame's ratio when `aspect` is `natural`. Set `priority`
+   * on the page's main image above the fold (at most one or two per page): it loads immediately
+   * at high priority instead of lazily.
    */
   type Props = {
     src: string | null;
@@ -16,7 +18,7 @@
     height: number;
     aspect?: "wide" | "square" | "video" | "natural";
     fit?: "cover" | "contain";
-    loading?: "lazy" | "eager";
+    priority?: boolean;
     sizes?: string;
     srcset?: string;
     fallbackLabel: string;
@@ -30,7 +32,7 @@
     height,
     aspect = "wide",
     fit = "cover",
-    loading = "lazy",
+    priority = false,
     sizes,
     srcset,
     fallbackLabel,
@@ -68,7 +70,8 @@
       {width}
       {height}
       {alt}
-      {loading}
+      loading={priority ? "eager" : "lazy"}
+      fetchpriority={priority ? "high" : undefined}
       decoding="async"
       referrerpolicy="no-referrer"
       data-fallback
