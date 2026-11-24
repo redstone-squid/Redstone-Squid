@@ -143,6 +143,11 @@ export default tseslint.config(
   ...tseslint.configs.strictTypeChecked.map((config) => ({ ...config, files: ["**/*.ts"] })),
   ...tseslint.configs.stylisticTypeChecked.map((config) => ({ ...config, files: ["**/*.ts"] })),
   ...svelte.configs.recommended,
+  // The Svelte preset parses rune modules with its own parser; hand their TypeScript back.
+  {
+    files: ["**/*.svelte.ts"],
+    languageOptions: { parserOptions: { parser: tseslint.parser } },
+  },
   {
     files: ["**/*.svelte"],
     languageOptions: {
