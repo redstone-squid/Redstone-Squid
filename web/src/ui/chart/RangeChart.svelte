@@ -117,6 +117,7 @@
 </script>
 
 <Chart
+  measurePlot
   {title}
   {description}
   table={derivedTable}

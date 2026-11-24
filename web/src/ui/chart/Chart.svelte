@@ -10,8 +10,8 @@
    * The frame every chart uses: a figure captioned by `title` and `description`, an optional
    * legend, the plot, and `table` under a "Show data" disclosure as the accessible version.
    *
-   * The plot is drawn at its measured width once hydrated; the server draws it at
-   * `serverWidth` and the SVG scales until then. `group` exposes the plot's content, such as
+   * Hydrated SVG plots reserve their height until their width is measured. Static plots
+   * scale the server-rendered SVG to fit. `group` exposes the plot's content, such as
    * links or text, instead of presenting it as one image. While `status` is not `ready`, `statusText` replaces
    * the plot and the table.
    */
@@ -22,6 +22,7 @@
     legend?: { label: string; tone: ChartTone }[];
     height?: "sm" | "md" | "lg";
     group?: boolean;
+    measurePlot?: boolean;
     status?: ChartStatus;
     statusText?: string;
     labels?: { showData: string };
@@ -35,6 +36,7 @@
     legend = [],
     height = "md",
     group = false,
+    measurePlot = false,
     status = "ready",
     statusText,
     labels,
@@ -66,8 +68,11 @@
     </ul>
   {/if}
   {#if status === "ready"}
+    <!-- eslint-disable svelte/no-inline-styles -- reserve the same height passed to the plot -->
     <div
+      style:--plot-height={`${heights[height]}px`}
       bind:clientWidth={measured}
+      data-awaiting-width={measurePlot && !hasSize ? "" : undefined}
       role={group ? "group" : "img"}
       aria-labelledby={`${id}-title`}
       aria-describedby={`${id}-description`}
@@ -79,6 +84,7 @@
           "[&_.lc-layout-svg]:h-auto! [&_.lc-layout-svg]:w-full! [&_.lc-tooltip-context]:static! [&_.lc-tooltip-context-container]:static! [&_.lc-tooltip-context-container]:size-auto!",
       )}
     >
+      <!-- eslint-enable svelte/no-inline-styles -->
       <!-- A hidden container measures 0; keep the server width until it has a size. -->
       {@render plot({
         width: hasSize && measured !== undefined ? measured : serverWidth,
@@ -132,3 +138,13 @@
     </Disclosure>
   {/if}
 </figure>
+
+<style>
+  /* Static Astro components and readers without JavaScript use the server-rendered plot. */
+  @media (scripting: enabled) {
+    :global(astro-island[client]) [data-awaiting-width] {
+      height: var(--plot-height);
+      visibility: hidden;
+    }
+  }
+</style>
