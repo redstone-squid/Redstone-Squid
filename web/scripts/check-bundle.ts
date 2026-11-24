@@ -6,6 +6,9 @@ import { evaluateBudgets, type BundleManifest, type EntryBudget } from "./bundle
 
 // Shared ceilings give interactive workflows room to grow and catch large regressions.
 const interactiveBudget = { initialKiB: 96, completeKiB: 160 };
+// A workbench page hydrates every story in its group as one island, with its localized
+// fixtures, so it carries a folder's worth of components that no public page combines.
+const workbenchBudget = { initialKiB: 144, completeKiB: 200 };
 
 // Each workflow includes all of its independently hydrated islands. Keep this
 // inventory in sync with page composition; locale routes share the same code.
@@ -33,7 +36,7 @@ const budgets: EntryBudget[] = [
       `src/workbench/stories/${slug.charAt(0).toUpperCase() + slug.slice(1)}Stories.svelte`,
     ],
     label: `Design workbench: ${slug}`,
-    ...interactiveBudget,
+    ...workbenchBudget,
   })),
   {
     entries: ["src/workbench/DraftTrial.svelte"],
