@@ -43,3 +43,10 @@ test("the pseudo-locale formats interface text and stays out of search and menus
     "简体中文",
   ]);
 });
+
+// Error pages are rewrites, so Astro.url there is /404 rather than the requested address.
+test("an error page links other languages to the requested address", async ({ request }) => {
+  const response = await request.get("/zh-cn/records/unknown?ref=x");
+  expect(response.status()).toBe(404);
+  expect(await response.text()).toMatch(/href="\/records\/unknown\?ref=x"[^>]*hreflang="en"/);
+});

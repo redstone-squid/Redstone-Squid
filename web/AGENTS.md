@@ -26,7 +26,7 @@ move the code to the right layer rather than working around the rule.
 
 ## Requests
 
-Middleware (`src/middleware.ts`) runs first and sets three request locals:
+Middleware (`src/middleware.ts`) runs first and sets four request locals:
 
 - `Astro.locals.locale`: `en` or `zh-CN`. Every route exists once, without a locale prefix.
   Middleware rewrites `/zh-cn/records` to `/records`, so never add a `zh-cn` directory or read
@@ -34,6 +34,8 @@ Middleware (`src/middleware.ts`) runs first and sets three request locals:
   page's locale (the request on the server, `<html lang>` in the browser), so code passes a
   locale only to render another one, such as language links or tests. `Astro.url` is the
   unprefixed route, so a link built from it must go through `localizePath`.
+- `Astro.locals.requestedPath`: the prefixed path and query the visitor asked for, kept through
+  rewrites to error pages. Links back to the current page, such as language links, use it.
 - `Astro.locals.config`: validated runtime URLs.
 - `Astro.locals.api`: a generated SDK client that sends the request locale.
 

@@ -48,9 +48,10 @@ const catalogueRequest = defineMiddleware(async (context, next) => {
   const prefixed = localeFromPath(pathname);
   // Astro.rewrite() in a page runs middleware again with an unprefixed URL, such as /404.
   // Locals are only partly set on the first pass, so read them as partial.
-  const inherited = (context.locals as Partial<App.Locals>).locale;
-  const locale = prefixed ?? inherited ?? DEFAULT_LOCALE;
+  const inherited = context.locals as Partial<App.Locals>;
+  const locale = prefixed ?? inherited.locale ?? DEFAULT_LOCALE;
   context.locals.locale = locale;
+  context.locals.requestedPath = inherited.requestedPath ?? `${pathname}${search}`;
   const log = (event: string, fields: Record<string, unknown>) =>
     JSON.stringify({
       event,

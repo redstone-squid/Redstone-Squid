@@ -7,8 +7,7 @@ import { LOCALES, PUBLIC_LOCALES, localizePath } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
 type Props = { align?: "start" | "end" };
 const { align = "end" } = Astro.props;
-const { locale } = Astro.locals;
-const path = `${Astro.url.pathname}${Astro.url.search}`;
+const { locale, requestedPath: path } = Astro.locals;
 // Each page renders one selector.
 const menuId = "language-menu";
 ---
