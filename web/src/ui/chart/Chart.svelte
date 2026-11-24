@@ -46,6 +46,7 @@
   const serverWidth = 640;
   const heights = { sm: 160, md: 240, lg: 320 };
   let measured = $state<number>();
+  const hasSize = $derived(measured !== undefined && measured > 0);
 </script>
 
 <figure class={cn("grid min-w-0 gap-3", className)} aria-labelledby={`${id}-title`}>
@@ -70,11 +71,17 @@
       role={group ? "group" : "img"}
       aria-labelledby={`${id}-title`}
       aria-describedby={`${id}-description`}
-      class="relative min-w-0"
+      class={cn(
+        "relative min-w-0",
+        // LayerChart sizes its layers in pixels. Until the plot has a measured width, as on the
+        // server, they flow instead so the SVG scales to the frame through its viewBox.
+        !hasSize &&
+          "[&_.lc-layout-svg]:h-auto! [&_.lc-layout-svg]:w-full! [&_.lc-tooltip-context]:static! [&_.lc-tooltip-context-container]:static! [&_.lc-tooltip-context-container]:size-auto!",
+      )}
     >
       <!-- A hidden container measures 0; keep the server width until it has a size. -->
       {@render plot({
-        width: measured !== undefined && measured > 0 ? measured : serverWidth,
+        width: hasSize && measured !== undefined ? measured : serverWidth,
         height: heights[height],
       })}
     </div>

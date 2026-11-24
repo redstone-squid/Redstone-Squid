@@ -61,6 +61,8 @@ async function overflowing(page: Page): Promise<string[]> {
         if (kind === "clip") ({ left, right } = parent.getBoundingClientRect());
         if (kind !== null) break;
       }
+      // A zero-width clip shows nothing, as in LayerChart's offscreen text measurer.
+      if (right - left < 1) continue;
       if (!scrolls && (box.left < left - 1 || box.right > right + 1)) found.push(describe(element));
     }
     return found;
