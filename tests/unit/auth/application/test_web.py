@@ -167,3 +167,23 @@ def test_a_deployment_with_no_providers_reports_itself_unconfigured() -> None:
     )
 
     assert web.configured is False
+
+
+@pytest.mark.parametrize("returning_account", [None, 51, 42])
+async def test_link_requires_the_account_that_started_it(returning_account: int | None) -> None:
+    repository = SessionRepository()
+    web = service(repository, discord_provider())
+    await web.authorize_url("discord", "/account", link_account_id=42)
+    assert repository.state is not None
+    attempt = web.callback(
+        "discord", "code", repository.state.state, user_agent=None, current_account_id=returning_account
+    )
+    if returning_account == 42:
+        _, destination = await attempt
+        assert destination == "/account"
+        assert repository.account_id == 42
+    else:
+        with pytest.raises(AuthenticationError):
+            await attempt
+        assert repository.account_id is None
+    assert repository.state is None

@@ -2,25 +2,39 @@
 
 import secrets
 from typing import Annotated
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 
 from litestar import Request, Response, Router, get, post
 from litestar.di import NamedDependency, Provide
 from litestar.params import PathParameter, QueryParameter, SkipValidation
 from litestar.response import Redirect
+from pydantic import BaseModel
 
 from squid.api.contract import ANONYMOUS, WEB, WEB_WRITE, browser_only, contract
 from squid.api.dependencies import CurrentCaller, WebAuth, get_web_auth
 from squid.api.errors import responses
 from squid.api.idempotency import reserve_idempotent_request
 from squid.api.private_responses import private_response
+from squid.api.security import requires
 from squid.api.v1.schemas.auth import CsrfTokenResponse
+from squid.core.auth.application.web import CallbackFailure
 from squid.core.errors import AuthenticationError, ValidationError
+from squid.core.permissions.domain.catalogue import ACCOUNT_SELF_MANAGE
 
 ProviderSlug = Annotated[str, PathParameter(pattern="^[a-z][a-z0-9_-]{0,31}$")]
 """One provider's URL segment. An unknown or unconfigured one is a 404 about the
 resource, not a credential failure: "this deployment has no GitHub login" is a fact.
 """
+
+
+class BrowserProvider(BaseModel):
+    id: str
+
+
+@get("/providers", operation_id="browser_providers_list", security=[ANONYMOUS], opt=contract(cli=browser_only()))
+async def providers(web_auth: WebAuth) -> list[BrowserProvider]:
+    """List enabled browser sign-in providers in display order."""
+    return [BrowserProvider(id=slug) for slug in web_auth.provider_ids] if web_auth else []
 
 
 @get(
@@ -87,6 +101,36 @@ async def browser_authorization_start(
     return Redirect(await web_auth.authorize_url(provider, redirect_to), status_code=307)
 
 
+class LinkAuthorization(BaseModel):
+    authorization_url: str
+
+
+@post(
+    "/{provider:str}/link",
+    security=[WEB_WRITE],
+    opt=contract(cli=browser_only()),
+    guards=[requires(ACCOUNT_SELF_MANAGE)],
+    dependencies={"_reservation": Provide(reserve_idempotent_request)},
+    operation_id="browser_provider_link",
+    status_code=200,
+)
+async def link_provider(
+    request: Request,
+    web_auth: WebAuth,
+    provider: ProviderSlug,
+    caller: CurrentCaller,
+    _reservation: NamedDependency[SkipValidation[None]],
+    redirect_to: Annotated[str | None, QueryParameter(max_length=2048)] = None,
+) -> LinkAuthorization:
+    """Start identity linking for the consenting browser account."""
+    if web_auth is None or caller.kind != "account":
+        raise AuthenticationError
+    account_id = caller.require_consented_account()
+    _validate_redirect(request, redirect_to)
+    url = await web_auth.authorize_url(provider, redirect_to, link_account_id=account_id)
+    return LinkAuthorization(authorization_url=url)
+
+
 @get(
     "/{provider:str}/callback",
     responses=responses(400, 401, 404, 422, 503),
@@ -99,15 +143,31 @@ async def browser_authorization_callback(
     request: Request,
     web_auth: WebAuth,
     provider: ProviderSlug,
-    code: Annotated[str, QueryParameter(min_length=1, max_length=2048)],
-    oauth_state: Annotated[str, QueryParameter(name="state", min_length=1, max_length=512)],
+    caller: CurrentCaller,
+    code: Annotated[str | None, QueryParameter(max_length=2048)] = None,
+    oauth_state: Annotated[str | None, QueryParameter(name="state", max_length=512)] = None,
+    error: Annotated[str | None, QueryParameter(max_length=256)] = None,
 ) -> Redirect:
     """Exchange an authorization code and set a revocable opaque session cookie."""
-    if web_auth is None:
-        raise AuthenticationError
-    token, redirect_to = await web_auth.callback(
-        provider, code, oauth_state, user_agent=request.headers.get("User-Agent")
-    )
+    public_site = request.app.state.config.notification.public_site_url
+    sign_in = f"{str(public_site).rstrip('/')}/sign-in" if public_site else "/sign-in"
+    if not oauth_state or web_auth is None or provider not in web_auth.provider_ids:
+        return Redirect(f"{sign_in}?auth_error=invalid_state", status_code=307)
+    try:
+        token, redirect_to = await web_auth.callback(
+            provider,
+            code,
+            oauth_state,
+            user_agent=request.headers.get("User-Agent"),
+            error=error,
+            current_account_id=caller.account_id if caller.kind == "account" and not caller.consent_pending else None,
+        )
+    except CallbackFailure as failure:
+        params = {"auth_error": failure.callback_code}
+        if failure.redirect_to:
+            _validate_redirect(request, failure.redirect_to)
+            params["redirect_to"] = failure.redirect_to
+        return Redirect(f"{sign_in}?{urlencode(params)}", status_code=307)
     destination = redirect_to or "/"
     _validate_redirect(request, destination)
     response = Redirect(destination, status_code=307)
@@ -128,6 +188,9 @@ def _validate_redirect(request: Request, redirect_to: str | None) -> None:
     """Reject redirects outside local paths and configured CORS origins."""
     if redirect_to is None:
         return
+    if "\\" in redirect_to or any(ord(char) < 32 for char in redirect_to):
+        msg = "redirect_to contains invalid URL characters"
+        raise ValidationError(msg, public_context={"field": "redirect_to"})
     if redirect_to.startswith("/") and not redirect_to.startswith("//"):
         return
     parsed = urlparse(redirect_to)
@@ -141,5 +204,12 @@ router = Router(
     dependencies={"web_auth": Provide(get_web_auth, sync_to_thread=False)},
     path="/auth",
     tags=["authentication"],
-    route_handlers=[csrf_token, logout, browser_authorization_start, browser_authorization_callback],
+    route_handlers=[
+        providers,
+        link_provider,
+        csrf_token,
+        logout,
+        browser_authorization_start,
+        browser_authorization_callback,
+    ],
 )

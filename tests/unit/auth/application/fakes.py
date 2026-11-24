@@ -21,6 +21,10 @@ class AccountServiceRecorder(AccountService):
     account_id: int = 42
     identities: list[tuple[IdentityProvider, str]] = field(default_factory=list)
 
+    async def link_browser_identity(self, account_id: int, provider: IdentityProvider, subject: str) -> bool:
+        self.identities.append((provider, subject))
+        return account_id == self.account_id
+
     @override
     async def get_or_create_identity(
         self, provider: IdentityProvider, subject: str, *, consent: AccountConsent | None = None

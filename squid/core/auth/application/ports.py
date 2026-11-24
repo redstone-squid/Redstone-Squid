@@ -75,6 +75,8 @@ class ApiKeyUnitOfWork(PermissionUnitOfWork, Protocol):
 
 
 class BrowserAccountRepository(Protocol):
+    async def link_browser_identity(self, account_id: int, provider: IdentityProvider, subject: str) -> bool: ...
+
     async def get_or_create_identity(
         self, provider: IdentityProvider, subject: str, *, consent: AccountConsent | None = None
     ) -> Account: ...

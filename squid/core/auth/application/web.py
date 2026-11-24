@@ -23,7 +23,7 @@ from whenever import Instant
 from squid.core.auth.application.ports import WebSessionUnitOfWork
 from squid.core.auth.application.providers import OAuthProvider
 from squid.core.auth.models.sessions import OAuthState
-from squid.core.errors import AuthenticationError, NotFoundError, ValidationError
+from squid.core.errors import AuthenticationError, NotFoundError, ServiceUnavailableError, ValidationError
 from squid.core.unit_of_work import UnitOfWorkFactory
 
 
@@ -35,6 +35,15 @@ def hash_web_session_token(pepper: bytes, token: str) -> bytes:
     """
     # codeql[py/weak-sensitive-data-hashing]
     return hmac.digest(pepper, token.encode(), hashlib.sha256)  # 256-bit random session token
+
+
+class CallbackFailure(AuthenticationError):
+    """A public callback error with an optional validated retry destination."""
+
+    def __init__(self, code: str, redirect_to: str | None = None):
+        super().__init__(code)
+        self.callback_code = code
+        self.redirect_to = redirect_to
 
 
 class WebSessionService:
@@ -60,7 +69,11 @@ class WebSessionService:
         """Return whether at least one login provider is configured."""
         return bool(self._providers)
 
-    async def authorize_url(self, slug: str, redirect_to: str | None) -> str:
+    @property
+    def provider_ids(self) -> tuple[str, ...]:
+        return tuple(self._providers)
+
+    async def authorize_url(self, slug: str, redirect_to: str | None, *, link_account_id: int | None = None) -> str:
         """Store a ten-minute login attempt and return the provider's authorization URL.
 
         `redirect_to` is retained for the callback. The API route must validate it
@@ -69,6 +82,9 @@ class WebSessionService:
         async with self._uow_factory() as uow:
             provider = self._provider(slug)
             state = secrets.token_urlsafe(24)
+            if link_account_id is not None:
+                binding = self._link_binding(link_account_id, state)
+                state = f"link.{state}.{binding}"
             verifier = secrets.token_urlsafe(48)
             challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
             await uow.web_sessions.save_state(
@@ -84,7 +100,16 @@ class WebSessionService:
             await uow.commit()
             return result
 
-    async def callback(self, slug: str, code: str, state: str, *, user_agent: str | None) -> tuple[str, str | None]:
+    async def callback(
+        self,
+        slug: str,
+        code: str | None,
+        state: str,
+        *,
+        user_agent: str | None,
+        error: str | None = None,
+        current_account_id: int | None = None,
+    ) -> tuple[str, str | None]:
         """Consume OAuth state, exchange the code, and return a session token and redirect.
 
         State consumption commits before contacting the provider. A provider mismatch
@@ -95,21 +120,41 @@ class WebSessionService:
         async with self._uow_factory() as uow:
             saved = await uow.web_sessions.consume_state(state, now=self._now())
             await uow.commit()
-        if saved is None:
-            msg = "OAuth state is invalid or expired."
-            raise AuthenticationError(msg)
-        if saved.provider is not provider.provider:
-            # Bind the callback to the provider chosen when login started.
-            msg = "OAuth state was issued for a different provider."
-            raise AuthenticationError(msg)
-        identity = await provider.fetch_identity(code=code, code_verifier=saved.code_verifier)
+        if saved is None or saved.provider is not provider.provider:
+            msg = "invalid_state"
+            raise CallbackFailure(msg)
+        linking = saved.state.startswith("link.")
+        if linking:
+            _, nonce, binding = saved.state.split(".")
+            if current_account_id is None or not hmac.compare_digest(
+                binding, self._link_binding(current_account_id, nonce)
+            ):
+                msg = "invalid_state"
+                raise CallbackFailure(msg)
+        if error or not code:
+            raise CallbackFailure(
+                "cancelled" if error == "access_denied" else "provider_unavailable", saved.redirect_to
+            )
+        try:
+            identity = await provider.fetch_identity(code=code, code_verifier=saved.code_verifier)
+        except ServiceUnavailableError as exc:
+            msg = "provider_unavailable"
+            raise CallbackFailure(msg, saved.redirect_to) from exc
         async with self._uow_factory() as uow:
-            account = await uow.accounts.get_or_create_identity(identity.provider, identity.subject)
-            assert account.id is not None
+            if linking and current_account_id is not None:
+                if not await uow.accounts.link_browser_identity(
+                    current_account_id, identity.provider, identity.subject
+                ):
+                    msg = "identity_in_use"
+                    raise CallbackFailure(msg, saved.redirect_to)
+                account_id = current_account_id
+            else:
+                account = await uow.accounts.get_or_create_identity(identity.provider, identity.subject)
+                account_id = account.id
             token = secrets.token_urlsafe(32)
             await uow.web_sessions.create_session(
                 token_hash=self.hash_token(token),
-                account_id=account.id,
+                account_id=account_id,
                 expires_at=self._now().add(hours=self._session_ttl_hours),
                 user_agent=user_agent,
             )
@@ -131,6 +176,9 @@ class WebSessionService:
 
     def hash_token(self, token: str) -> bytes:
         return hash_web_session_token(self._pepper, token)
+
+    def _link_binding(self, account_id: int, nonce: str) -> str:
+        return hmac.digest(self._pepper, f"link:{account_id}:{nonce}".encode(), hashlib.sha256).hex()
 
     def _provider(self, slug: str) -> OAuthProvider:
         """Return a configured provider by URL slug.

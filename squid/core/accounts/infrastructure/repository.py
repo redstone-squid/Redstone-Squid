@@ -179,6 +179,23 @@ class AccountRepository:
         )
         return None if model is None else await self._load_account(session, model)
 
+    async def link_browser_identity(self, account_id: int, provider: IdentityProvider, subject: str) -> bool:
+        """Attach a verified identity unless another account owns it."""
+        session = self._session()
+        account = await self.lock_for_edit(account_id)
+        identity = AccountIdentity.for_provider(provider, subject)
+        inserted = await session.scalar(
+            insert(AccountIdentity)
+            .values(account_id=account_id, provider=provider, subject=identity.subject, verified_at=Instant.now())
+            .on_conflict_do_nothing(index_elements=[AccountIdentity.provider, AccountIdentity.subject])
+            .returning(AccountIdentity.id)
+        )
+        if inserted is not None:
+            account.revision += 1
+            return True
+        holder = await self._find_account(session, provider, identity.subject)
+        return holder is not None and holder.id == account_id
+
     async def get_or_create_identity(
         self, provider: IdentityProvider, subject: str, *, consent: AccountConsent | None = None
     ) -> Account:
