@@ -62,6 +62,8 @@ export default defineConfig({
         "base-uri 'none'",
         "form-action 'self'",
         "frame-ancestors 'none'",
+        // The endpoint is named in the Reporting-Endpoints header set by src/middleware.ts.
+        "report-to csp",
       ],
       styleDirective: {
         resources: [

@@ -101,7 +101,8 @@ lives in that folder's `styles.ts`, which only `src/ui` imports. See `src/ui/REA
 bundles, plus images from any HTTPS host. Inline `style` attributes are allowed. Inline event
 attributes are not, and Svelte renders `onload` and `onerror` on an element as one, so use an
 attachment instead. The policy is skipped under `bun run dev`. Browser tests fail on any
-violation, because each one logs a console error.
+violation, because each one logs a console error; in production, browsers report violations to
+`/telemetry/csp`, which logs them.
 
 ## Without JavaScript
 

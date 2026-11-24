@@ -10,7 +10,7 @@ import { traceHttp } from "@/server/telemetry";
 import { parseContrast, parseTheme } from "@/ui/themes";
 
 const traceRequest = defineMiddleware((context, next) => {
-  if (context.routePattern === "/telemetry/browser") return next();
+  if (context.routePattern.startsWith("/telemetry/")) return next();
   return traceHttp(
     "catalogue request",
     SpanKind.SERVER,
@@ -44,7 +44,7 @@ const traceRequest = defineMiddleware((context, next) => {
  * streaming, rather than truncating a 200 response.
  */
 const catalogueRequest = defineMiddleware(async (context, next) => {
-  if (context.routePattern === "/telemetry/browser") return next();
+  if (context.routePattern.startsWith("/telemetry/")) return next();
   const startedAt = performance.now();
   const { pathname, search } = context.url;
   const prefixed = localeFromPath(pathname);
@@ -91,8 +91,11 @@ const catalogueRequest = defineMiddleware(async (context, next) => {
 /** Headers that complement the content security policy in `astro.config.ts`. */
 const securityHeaders = defineMiddleware(async (_context, next) => {
   const response = await next();
-  response.headers.set("X-Content-Type-Options", "nosniff");
-  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  const headers = response.headers;
+  headers.set("X-Content-Type-Options", "nosniff");
+  headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  // The policy's `report-to csp` posts violations here; see src/pages/telemetry/csp.ts.
+  headers.set("Reporting-Endpoints", 'csp="/telemetry/csp"');
   return response;
 });
 

@@ -27,5 +27,28 @@ test("pages forbid framing and scripts that Astro did not emit", async ({ reques
   const policy = headers["content-security-policy"] ?? "";
   expect(policy).toContain("frame-ancestors 'none'");
   expect(policy).toMatch(/script-src 'self'( 'sha256-[^']+')*;/);
+  expect(policy).toContain("report-to csp");
+  expect(headers["reporting-endpoints"]).toBe('csp="/telemetry/csp"');
   expect(headers["x-content-type-options"]).toBe("nosniff");
+});
+
+test("policy violation reports are accepted and other bodies refused", async ({ request }) => {
+  const report = {
+    type: "csp-violation",
+    age: 0,
+    url: "https://catalogue.redstone-squid.org/builds?secret=1",
+    body: {
+      documentURL: "https://catalogue.redstone-squid.org/builds?secret=1",
+      blockedURL: "inline",
+      effectiveDirective: "script-src-elem",
+      disposition: "enforce",
+    },
+  };
+  const accepted = await request.post("/telemetry/csp", {
+    headers: { "Content-Type": "application/reports+json" },
+    data: JSON.stringify([report, { type: "deprecation", body: {} }]),
+  });
+  expect(accepted.status()).toBe(204);
+  const wrongType = await request.post("/telemetry/csp", { data: [report] });
+  expect(wrongType.status()).toBe(415);
 });
