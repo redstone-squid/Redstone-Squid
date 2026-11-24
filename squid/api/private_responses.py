@@ -3,6 +3,7 @@
 from collections.abc import Callable
 
 from litestar import Router
+from litestar.datastructures import Headers
 from litestar.routes import HTTPRoute
 from litestar.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -44,7 +45,10 @@ class PrivateResponseHeadersMiddleware:
                             prefix = path if isinstance(layer, Router) else route.path_format.split("{", 1)[0]
                             prefixes.add(prefix.rstrip("/"))
             self._path_prefixes = tuple(sorted(prefixes))
-        if scope["type"] != "http" or not self._is_private_path(scope.get("path", "")):
+        if scope["type"] != "http" or (
+            not self._is_private_path(scope.get("path", ""))
+            and "Squid-Impersonation-Session" not in Headers.from_scope(scope)
+        ):
             await self._app(scope, receive, send)
             return
 

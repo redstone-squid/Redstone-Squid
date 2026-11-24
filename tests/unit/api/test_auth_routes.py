@@ -5,19 +5,24 @@ from dataclasses import dataclass, field
 from http.cookies import SimpleCookie
 from typing import override
 from urllib.parse import parse_qs, urlsplit
+from uuid import uuid4
 
 import httpx
 import pytest
+from litestar import get
 from litestar.testing import TestClient
 from pydantic import AnyHttpUrl, SecretStr
 
+from squid.api.dependencies import CurrentCaller
 from squid.config import OAuthClientCredentials
-from squid.core.accounts.domain import IdentityProvider
+from squid.core.accounts.domain import AccountConsent, IdentityProvider
+from squid.core.accounts.models import Account
 from squid.core.auth.application.providers import DiscordOAuthProvider
 from squid.core.auth.application.web import WebSessionService
+from squid.core.auth.impersonation import AuthorizedImpersonation
 from squid.core.idempotency import IdempotencyService, PendingRequest, StoredResponse, UnsafeHttpMethod
 from tests.support.identity_uow import WebScope
-from tests.unit.api.fakes import TEST_CONFIG, build_app
+from tests.unit.api.fakes import TEST_CONFIG, TEST_SYNERGY_SECRET, build_app
 from tests.unit.auth.application.fakes import AccountServiceRecorder, SessionRepository
 
 
@@ -207,3 +212,32 @@ def test_expired_session_returns_anonymous_snapshot(login: BrowserLogin) -> None
         "consent_pending": False,
         "counts": {"unread_notifications": 0, "drafts": 0, "drafts_needing_attention": 0, "review_queue": None},
     }
+
+
+def test_impersonation_header_is_request_scoped_and_bound_to_browser_login(login: BrowserLogin) -> None:
+    login.sign_in()
+    assert login.sessions.account_id is not None
+    session_id = uuid4()
+    use_id = uuid4()
+    service = login.client.app.state.runtime.services.impersonation
+    service.use.return_value = AuthorizedImpersonation(
+        Account(id=77, consent=AccountConsent.grant_current()), None, use_id
+    )
+
+    @get("/v1/acting-probe")
+    async def probe(caller: CurrentCaller) -> int:
+        return caller.to_actor().require_account_id()
+
+    login.client.app.register(probe)
+    headers = {"Squid-Impersonation-Session": str(session_id)}
+    response = login.client.get("/v1/acting-probe", headers=headers)
+    assert response.status_code == 200
+    assert response.json() == 77
+    assert response.headers["cache-control"] == "no-store"
+    operator, binding, handle, _ = service.use.await_args.args
+    assert (operator.account_id, binding, handle) == (login.sessions.account_id, "browser:session-id", session_id)
+    assert login.client.get("/v1/acting-probe").json() == login.sessions.account_id
+    assert (
+        login.client.get("/v1/acting-probe", headers=headers | {"Authorization": TEST_SYNERGY_SECRET}).status_code
+        == 403
+    )

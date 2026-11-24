@@ -203,6 +203,7 @@ def create_api_app(
                 "Idempotency-Key",
                 "If-Match",
                 "CSRF-Token",
+                "Squid-Impersonation-Session",
                 "Squid-Installation-ID",
                 "Squid-Installation-Secret",
             ],

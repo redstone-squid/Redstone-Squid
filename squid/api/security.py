@@ -2,7 +2,7 @@
 
 import hmac
 from collections.abc import Awaitable, Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any, Literal
 from uuid import UUID
 
@@ -13,7 +13,7 @@ from litestar.handlers import BaseRouteHandler
 from litestar.params import SkipValidation
 
 from squid.core.accounts.errors import ConsentRequiredError
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.cli_auth.application import CLI_SESSION_TOKEN_PREFIX
 from squid.core.cli_auth.errors import CliAuthorizationError
 from squid.core.errors import AuthenticationError, AuthorizationError, DomainError
@@ -38,7 +38,7 @@ class Caller:
     nodes: frozenset[Pattern] = field(default_factory=frozenset)
     """Parsed patterns, so authorization matches rather than re-parses per check."""
     account_id: int | None = None
-    """Account that owns the credential, or None for anonymous and ownerless service callers.
+    """Effective account, or None for anonymous and ownerless service callers.
 
     Resolve linked provider identities through the account service when needed.
     HTTP permission checks use the account ID and do not use a Discord guild.
@@ -50,6 +50,14 @@ class Caller:
     grant_id: UUID | None = None
     cli_device_id: UUID | None = None
     cli_session_id: UUID | None = None
+
+    browser_session_id: str | None = None
+    acting_context: ActingContext | None = None
+
+    def browser_binding(self) -> str:
+        if self.kind != "account" or self.browser_session_id is None or self.acting_context is not None:
+            raise AuthorizationError
+        return f"browser:{self.browser_session_id}"
 
     async def allows(
         self,
@@ -91,7 +99,7 @@ class Caller:
         No guild is supplied: a permission granted in one Discord server must not
         authorize an HTTP request outside that server.
         """
-        return Actor(account_id=self.account_id, guild_id=None)
+        return self.acting_context.effective if self.acting_context else Actor(account_id=self.account_id)
 
     def require_consented_account(self) -> int:
         """Return the caller's account ID after checking privacy consent.
@@ -138,10 +146,40 @@ async def current_caller(request: Request) -> Caller:
     cached = request.scope.get("user")
     if isinstance(cached, Caller):
         return cached
-    caller = await _authenticate_caller(request)
+    caller = await authenticated_caller(request)
+    handle = request.headers.get("Squid-Impersonation-Session")
+    if handle is not None:
+        try:
+            session_id = UUID(handle)
+        except ValueError:
+            raise AuthorizationError from None
+        binding = caller.browser_binding()
+        operator = caller.to_actor()
+        operation = getattr(request.scope.get("route_handler"), "operation_id", None) or request.method
+        resource_ids = [f"{key}={value}" for key, value in request.path_params.items() if isinstance(value, int | UUID)]
+        operation = " ".join((operation, *resource_ids))
+        resolved = await request.app.state.runtime.services.impersonation.use(operator, binding, session_id, operation)
+        target = resolved.target
+        effective = Actor(account_id=target.id, audit_use_id=resolved.use_id)
+        caller = replace(
+            caller,
+            account_id=target.id,
+            consent_pending=target.needs_consent_refresh,
+            subject=f"impersonation:{session_id}",
+            acting_context=ActingContext(operator, effective, session_id),
+        )
     request.scope["user"] = caller
     request.scope["auth"] = caller.kind
     return caller
+
+
+async def authenticated_caller(request: Request) -> Caller:
+    credential = request.state.get("authenticated_caller")
+    if isinstance(credential, Caller):
+        return credential
+    credential = await _authenticate_caller(request)
+    request.state.authenticated_caller = credential
+    return credential
 
 
 async def _authenticate_caller(request: Request) -> Caller:
@@ -177,6 +215,7 @@ async def _authenticate_caller(request: Request) -> Caller:
         return Caller(
             kind="account",
             subject=f"account:{identity.account_id}",
+            browser_session_id=identity.session_id,
             nodes=UNBOUNDED,
             account_id=identity.account_id,
             consent_pending=identity.consent_pending,

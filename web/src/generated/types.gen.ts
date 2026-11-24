@@ -1133,6 +1133,16 @@ export type IdentityVisibilityRequest = {
 };
 
 /**
+ * ImpersonationDetails
+ */
+export type ImpersonationDetails = {
+    target_id: number;
+    reason: string;
+    expires_at: string;
+    revoked_at: string | null;
+};
+
+/**
  * InboxNotificationDetail
  */
 export type InboxNotificationDetail = {
@@ -2323,6 +2333,14 @@ export type SmallestRegionAnalysis = {
  * How a source produces candidates.
  */
 export type SourceKind = 'enumerable' | 'queried';
+
+/**
+ * StartImpersonation
+ */
+export type StartImpersonation = {
+    account_id: number;
+    reason: string;
+};
 
 /**
  * StoredDraftResponse
@@ -6887,6 +6905,109 @@ export type BrowserSessionGetResponses = {
 };
 
 export type BrowserSessionGetResponse = BrowserSessionGetResponses[keyof BrowserSessionGetResponses];
+
+export type BrowserImpersonationStartData = {
+    body: StartImpersonation;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/impersonation';
+};
+
+export type BrowserImpersonationStartErrors = {
+    /**
+     * Unprocessable Entity
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type BrowserImpersonationStartError = BrowserImpersonationStartErrors[keyof BrowserImpersonationStartErrors];
+
+export type BrowserImpersonationStartResponses = {
+    /**
+     * Document created, URL follows
+     */
+    201: string;
+};
+
+export type BrowserImpersonationStartResponse = BrowserImpersonationStartResponses[keyof BrowserImpersonationStartResponses];
+
+export type BrowserImpersonationStopData = {
+    body?: never;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        session_id: string;
+    };
+    query?: never;
+    url: '/v1/impersonation/{session_id}';
+};
+
+export type BrowserImpersonationStopErrors = {
+    /**
+     * Unprocessable Entity
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type BrowserImpersonationStopError = BrowserImpersonationStopErrors[keyof BrowserImpersonationStopErrors];
+
+export type BrowserImpersonationStopResponses = {
+    /**
+     * Request fulfilled, nothing follows
+     */
+    204: void;
+};
+
+export type BrowserImpersonationStopResponse = BrowserImpersonationStopResponses[keyof BrowserImpersonationStopResponses];
+
+export type BrowserImpersonationGetData = {
+    body?: never;
+    path: {
+        session_id: string;
+    };
+    query?: never;
+    url: '/v1/impersonation/{session_id}';
+};
+
+export type BrowserImpersonationGetErrors = {
+    /**
+     * Unprocessable Entity
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type BrowserImpersonationGetError = BrowserImpersonationGetErrors[keyof BrowserImpersonationGetErrors];
+
+export type BrowserImpersonationGetResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: ImpersonationDetails;
+};
+
+export type BrowserImpersonationGetResponse = BrowserImpersonationGetResponses[keyof BrowserImpersonationGetResponses];
 
 export type SubmissionCorrectionInboxData = {
     body?: never;
