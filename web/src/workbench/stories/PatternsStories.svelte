@@ -50,12 +50,12 @@
   description={m.storyCatalogueCardsDescription()}
 >
   <Layout as="ul" pattern="grid">
-    {#each buildFixtures as build, index (build.id)}
+    {#each buildFixtures() as build, index (build.id)}
       <BuildCard {build} category={categories[index] ?? ""} as="li" />
     {/each}
   </Layout>
   <Layout as="ul" pattern="grid" min="card-wide">
-    {#each recordFixtures as record (record.record_id)}
+    {#each recordFixtures() as record (record.record_id)}
       <RecordCard {record} as="li" />
     {/each}
   </Layout>

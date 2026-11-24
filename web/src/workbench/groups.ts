@@ -1,4 +1,4 @@
-import * as m from "../locales/messages.gen";
+import * as m from "@/locales/messages.gen";
 
 /**
  * The workbench pages, one per folder of `src/ui`. Each has a stories component in

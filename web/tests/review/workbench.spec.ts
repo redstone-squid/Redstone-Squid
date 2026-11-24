@@ -96,7 +96,11 @@ test("keeps the theme and query when changing language", async ({ page }) => {
   await page.getByLabel(`${LOCALES.en.label} · ${m.navLanguage("en")}`).click();
   await page.getByRole("link", { name: LOCALES["zh-CN"].label }).click();
   await expect(page).toHaveURL(/\/zh-cn\/design-system\/data\?theme=dark$/);
-  await expect(page.locator("html")).toHaveAttribute("lang", "zh-CN");
+  await expect(
+    page.getByRole("heading", { level: 1, name: GROUPS.data.title("zh-CN") }),
+  ).toBeVisible();
+  await page.getByText(m.storyDoorEvidence("zh-CN"), { exact: true }).click();
+  await expect(page.getByText(m.storyMeasuredWithATickCounterOnJava1("zh-CN"))).toBeVisible();
 });
 
 test("redirects the old media story to the data stories", async ({ page }) => {

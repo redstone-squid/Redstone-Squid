@@ -713,5 +713,10 @@
   "story-copper": "994469edc3e81ada00fb0c4755f91ccee01afa0c3740cf113c2e8bcd93a3a612",
   "story-iris": "675919179f2243737c38322885771fdff91a4e0b996598bc1ae5584fb0aeecd2",
   "story-catalogue-cards": "07bb521c6320d8735f62a273fb4bc31d90a16704be51fe17cc9566fd44b75d3e",
-  "story-bedrock-version": "6d7824eafc25b18f5f6d7d33865bbe85fd8f4cf2ade4c959ebfbdedb962c9e54"
+  "story-bedrock-version": "6d7824eafc25b18f5f6d7d33865bbe85fd8f4cf2ade4c959ebfbdedb962c9e54",
+  "story-slim-extender": "fd0ba91b3af226937677ed6ec69f0476c17639865eb7eac38c23848468b4d2ae",
+  "story-fastest-flush-door": "e34f2309bac98e447e41d4b0ec950d5a287dc285b25be9f2d19f09a22328ca79",
+  "story-full-flush-seamless": "1a76eb78eb742d06b81dd164639e97396c5f9161c1fa3f053a1eea6b51f97281",
+  "story-smallest-iris": "153671483f80fcb93185f37cb1c4fa37c71d6fe1249b120df24c2cb0d036d2fa",
+  "story-observerless-iris": "b841b593bb924c9f0f09a93f46b206c3bc0fa840d925e0d6626b76aa2ff34b01"
 }

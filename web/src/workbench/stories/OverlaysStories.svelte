@@ -24,6 +24,8 @@
   let confirmOpen = $state(false);
   let controlledOpen = $state(false);
   let saving = $state(false);
+  const columnLabels = { creator: m.storyCreator, version: m.storyVersion, date: m.storyDate };
+  const columnKeys = ["creator", "version", "date"] as const;
   let columns = $state({ creator: true, version: true, date: false });
   let lastAction = $state("");
 
@@ -173,10 +175,10 @@
       label={m.storyColumns()}
       align="start"
       trigger={{ label: m.storyColumns(), icon: Columns3, size: "sm" }}
-      items={Object.entries(columns).map(([column, checked]) => ({
+      items={columnKeys.map((column) => ({
         kind: "checkbox",
-        label: column,
-        checked,
+        label: columnLabels[column](),
+        checked: columns[column],
         onCheckedChange: (next: boolean) => (columns = { ...columns, [column]: next }),
       }))}
     />

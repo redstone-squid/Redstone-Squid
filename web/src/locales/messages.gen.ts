@@ -8945,3 +8945,63 @@ export function storyBedrockVersion(locale: Locale = getLocale()): string {
       return "[" + "Ɓéđŕöçķ 1.20" + "·····]";
   }
 }
+
+/** Slim Piston Extender */
+export function storySlimExtender(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Slim Piston Extender";
+    case "zh-CN":
+      return "薄型活塞延伸器";
+    case "en-XA":
+      return "[" + "Šļîɱ Þîšţöñ Éẋţéñđéŕ" + "········]";
+  }
+}
+
+/** Fastest 3×3 flush piston door */
+export function storyFastestFlushDoor(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Fastest 3×3 flush piston door";
+    case "zh-CN":
+      return "最快的 3×3 平墙活塞门";
+    case "en-XA":
+      return "[" + "Ƒåšţéšţ 3×3 ƒļûšĥ þîšţöñ đööŕ" + "············]";
+  }
+}
+
+/** Full-flush, seamless */
+export function storyFullFlushSeamless(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Full-flush, seamless";
+    case "zh-CN":
+      return "双面平墙，无痕";
+    case "en-XA":
+      return "[" + "Ƒûļļ-ƒļûšĥ, šéåɱļéšš" + "········]";
+  }
+}
+
+/** Smallest iris door */
+export function storySmallestIris(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Smallest iris door";
+    case "zh-CN":
+      return "最小的虹膜门";
+    case "en-XA":
+      return "[" + "Šɱåļļéšţ îŕîš đööŕ" + "········]";
+  }
+}
+
+/** Observerless Iris / 无侦测器全隐藏虹膜门 */
+export function storyObserverlessIris(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Observerless Iris / 无侦测器全隐藏虹膜门";
+    case "zh-CN":
+      return "无侦测器全隐藏虹膜门";
+    case "en-XA":
+      return "[" + "Öƀšéŕṽéŕļéšš Îŕîš / 无侦测器全隐藏虹膜门" + "············]";
+  }
+}

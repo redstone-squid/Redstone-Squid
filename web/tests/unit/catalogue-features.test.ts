@@ -5,9 +5,6 @@ import RecordList from "@/features/catalogue/RecordList.svelte";
 import * as m from "@/locales/messages.gen";
 import { buildFixtures, recordFixtures } from "@/workbench/fixtures";
 
-const [fastest, smallest] = recordFixtures;
-if (!fastest || !smallest) throw new Error("The workbench needs two record fixtures.");
-
 describe("catalogue", () => {
   it("explains an empty record list and links to the next page", () => {
     render(RecordList, { records: [], prevHref: null, nextHref: "/records?after_id=4" });
@@ -20,19 +17,23 @@ describe("catalogue", () => {
   });
 
   it("lists records as linked cards under the page title", () => {
-    render(RecordList, { records: recordFixtures, prevHref: null, nextHref: null });
-    const heading = screen.getByRole("heading", { level: 2, name: smallest.title });
+    const records = recordFixtures();
+    render(RecordList, { records, prevHref: null, nextHref: null });
+    const heading = screen.getByRole("heading", { level: 2, name: m.storySmallestIris() });
     expect(within(heading).getByRole("link")).toHaveAttribute("href", "/records/smallest-iris");
     expect(screen.getByText(m.recordRefreshPending(), { exact: false })).toBeVisible();
   });
 
   it("shows a record's holders, or says there are none", () => {
+    const [fastest, smallest] = recordFixtures();
+    if (!fastest || !smallest) throw new Error("The workbench needs two record fixtures.");
+    const builds = buildFixtures();
     const { unmount } = render(RecordDetail, {
-      record: { ...fastest, holder_builds: buildFixtures },
+      record: { ...fastest, holder_builds: builds },
     });
     expect(screen.getByRole("heading", { level: 1, name: fastest.title })).toBeVisible();
     const holders = screen.getByRole("region", { name: m.recordHolders() });
-    expect(within(holders).getAllByRole("listitem")).toHaveLength(buildFixtures.length);
+    expect(within(holders).getAllByRole("listitem")).toHaveLength(builds.length);
     expect(within(holders).getByText(m.buildTimingUnknown())).toBeVisible();
     unmount();
 
