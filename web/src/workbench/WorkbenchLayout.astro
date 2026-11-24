@@ -11,15 +11,43 @@ import "@fontsource/noto-sans-sc/600.css";
 import "@/ui/app.css";
 import SkipLink from "@/ui/content/SkipLink.svelte";
 import NavList from "@/ui/navigation/NavList.svelte";
-import type { Theme } from "@/ui/themes";
+import { workbenchAppearance } from "./appearance";
 import { GROUPS } from "./groups";
-type Props = { title: string; theme: Theme };
-const { title, theme } = Astro.props;
+type Props = { title: string };
+const { title } = Astro.props;
+const preview = workbenchAppearance(Astro.url, Astro.locals);
+const controls = [
+  {
+    key: "theme",
+    label: m.footerTheme(),
+    current: preview.theme,
+    options: [
+      ["light", m.workbenchLightTheme()],
+      ["dark", m.workbenchDarkTheme()],
+    ],
+  },
+  {
+    key: "contrast",
+    label: m.footerContrast(),
+    current: preview.contrast ?? "",
+    options: [
+      ["", m.workbenchDefaultContrast()],
+      ["standard", m.footerContrastStandard()],
+      ["more", m.footerContrastMore()],
+    ],
+  },
+] as const;
+function choiceHref(key: string, value: string) {
+  const target = new URL(Astro.url);
+  target.searchParams.set("theme", preview.theme);
+  if (value === "") target.searchParams.delete(key);
+  else target.searchParams.set(key, value);
+  return localizePath(target.pathname + target.search);
+}
 const { locale } = Astro.locals;
 const path = unprefixedPath(Astro.url.pathname).replace(/\/$/, "");
-// Every workbench link keeps the chosen theme.
 const link = (route: string) => ({
-  href: localizePath(`${route}?theme=${theme}`),
+  href: preview.href(route),
   current: path === route,
 });
 const groups = [
@@ -37,7 +65,7 @@ const groups = [
 ---
 
 <!doctype html>
-<html lang={locale} data-theme={theme} data-contrast={Astro.locals.contrast}>
+<html lang={locale} data-theme={preview.theme} data-contrast={preview.effectiveContrast}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width" />
@@ -60,6 +88,26 @@ const groups = [
     </header>
     <div class="mx-auto grid max-w-wide md:grid-cols-[minmax(0,13rem)_minmax(0,1fr)]">
       <aside class="border-b border-line bg-surface px-gutter py-4 md:sticky md:top-0 md:self-start md:border-e md:border-b-0 md:px-4 md:py-10">
+        <div class="mb-5 grid gap-3">
+          {controls.map(({ key, label, current, options }) => (
+            <div role="group" aria-labelledby={`preview-${key}`}>
+              <span id={`preview-${key}`} class="text-sm text-fg-muted">
+                {label}
+              </span>
+              <div class="mt-1 flex w-fit flex-wrap rounded-sm border border-line-strong bg-surface p-0.5">
+                {options.map(([value, text]) => (
+                  <a
+                    href={choiceHref(key, value)}
+                    aria-current={value === current ? "true" : undefined}
+                    class="inline-flex min-h-control-sm items-center rounded-xs px-2 text-sm font-semibold text-fg-muted no-underline hover:text-fg aria-current:forced-highlight aria-current:bg-accent-soft aria-current:text-fg aria-current:underline"
+                  >
+                    {text}
+                  </a>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
         <NavList label={m.workbenchWorkbench()} {groups} />
       </aside>
       <main id="main" class="grid w-full min-w-0 content-start gap-10 px-gutter py-10">

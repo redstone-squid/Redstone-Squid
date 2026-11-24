@@ -75,6 +75,19 @@ test.describe("with JavaScript disabled", () => {
     await page.getByRole("link", { name: m.workbenchLightTheme("en") }).click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
     await expect(page).toHaveURL(/\?theme=light$/);
+    const contrast = page.getByRole("group", { name: m.footerContrast("en"), exact: true });
+    await contrast.getByRole("link", { name: m.footerContrastMore("en") }).click();
+    await expect(page.locator("html")).toHaveAttribute("data-contrast", "more");
+    await page
+      .getByRole("navigation")
+      .getByRole("link", { name: m.trialTitle("en") })
+      .click();
+    await expect(page).toHaveURL(/design-system-trial\?theme=light&contrast=more$/);
+    await contrast.getByRole("link", { name: m.workbenchDefaultContrast("en") }).click();
+    await expect(page).toHaveURL(/design-system-trial\?theme=light$/);
+    expect(
+      (await page.context().cookies()).filter(({ name }) => /theme|contrast/.test(name)),
+    ).toEqual([]);
   });
 });
 

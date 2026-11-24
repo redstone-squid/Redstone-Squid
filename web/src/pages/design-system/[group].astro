@@ -2,7 +2,6 @@
 import * as m from "@/locales/messages.gen";
 import Notice from "@/ui/feedback/Notice.svelte";
 import PageHeader from "@/ui/patterns/PageHeader.svelte";
-import { parseTheme } from "@/ui/themes";
 import { GROUPS, isGroup } from "@/workbench/groups";
 import ActionsStories from "@/workbench/stories/ActionsStories.svelte";
 import ContentStories from "@/workbench/stories/ContentStories.svelte";
@@ -19,12 +18,10 @@ import WorkbenchLayout from "@/workbench/WorkbenchLayout.astro";
 
 const group = Astro.params.group;
 if (!isGroup(group)) return Astro.rewrite("/404");
-// The query wins so screenshots are repeatable; the workbench has no device default.
-const theme = parseTheme(Astro.url.searchParams.get("theme")) ?? Astro.locals.theme ?? "light";
 const { title, description } = GROUPS[group];
 ---
 
-<WorkbenchLayout {title} {theme}>
+<WorkbenchLayout {title}>
   <PageHeader {title} {description} />
   <noscript>
     <Notice>{m.workbenchNeedsJavascript()}</Notice>

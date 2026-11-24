@@ -1,17 +1,5 @@
 ---
-import Moon from "@lucide/svelte/icons/moon";
-import Sun from "@lucide/svelte/icons/sun";
 import * as m from "@/locales/messages.gen";
-import { localizePath } from "@/locales/locale";
-import Button from "@/ui/actions/Button.svelte";
-import type { Theme } from "@/ui/themes";
-
-type Props = { theme: Theme };
-const { theme } = Astro.props;
-// The theme lives in the URL, so switching is a link and the rest of the query is kept.
-const next: Theme = theme === "dark" ? "light" : "dark";
-const target = new URL(Astro.url);
-target.searchParams.set("theme", next);
 ---
 
 <header class="grid grid-cols-[minmax(0,1fr)] overflow-hidden rounded-lg bg-cover text-cover-fg md:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
@@ -20,14 +8,6 @@ target.searchParams.set("theme", next);
       {m.workbenchPageTitle()}
     </h1>
     <p class="max-w-prose text-lg text-cover-fg-muted">{m.workbenchLibraryDescription()}</p>
-    <div>
-      <Button
-        href={localizePath(`${target.pathname}${target.search}`)}
-        icon={next === "dark" ? Moon : Sun}
-      >
-        {next === "dark" ? m.workbenchDarkTheme() : m.workbenchLightTheme()}
-      </Button>
-    </div>
   </div>
   <div aria-hidden="true" class="grid h-36 place-items-center bg-cover-art md:h-auto">
     <img

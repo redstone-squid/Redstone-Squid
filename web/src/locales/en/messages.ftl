@@ -37,6 +37,7 @@ error-not-found-body = The link may be old, or the item may no longer be public.
 error-service-title = The catalogue service is unavailable
 error-service-body = The catalogue API did not answer in time. Please try again shortly.
 meta-default-description = Explore approved Minecraft redstone builds and active records from the Redstone Squid community.
+workbench-default-contrast = Default
 workbench-dark-theme = Dark theme
 workbench-light-theme = Light theme
 workbench-foundations-description = Semantic colours, spacing, and type used in the catalogue.

@@ -34,6 +34,7 @@ error-not-found-body = 链接可能已过期，或该条目已不再公开。
 error-service-title = 目录服务暂时不可用
 error-service-body = 目录 API 未及时响应，请稍后重试。
 meta-default-description = 浏览 Redstone Squid 社区已确认的 Minecraft 红石作品和当前纪录。
+workbench-default-contrast = 默认
 workbench-dark-theme = 深色主题
 workbench-light-theme = 浅色主题
 workbench-foundations-description = 构建目录使用的语义颜色、间距和字体。

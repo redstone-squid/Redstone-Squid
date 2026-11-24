@@ -1,31 +1,25 @@
 ---
-import { localizePath } from "@/locales/locale";
+import { workbenchAppearance } from "@/workbench/appearance";
 import * as m from "@/locales/messages.gen";
 import Card from "@/ui/data/Card.svelte";
 import Text from "@/ui/content/Text.svelte";
 import Layout from "@/ui/layout/Layout.svelte";
 import Section from "@/ui/patterns/Section.svelte";
-import { parseTheme } from "@/ui/themes";
 import Cover from "@/workbench/Cover.astro";
 import Foundations from "@/workbench/Foundations.svelte";
 import { GROUPS } from "@/workbench/groups";
 import WorkbenchLayout from "@/workbench/WorkbenchLayout.astro";
 
-// The query wins so screenshots are repeatable; the workbench has no device default.
-const theme = parseTheme(Astro.url.searchParams.get("theme")) ?? Astro.locals.theme ?? "light";
+const preview = workbenchAppearance(Astro.url, Astro.locals);
 ---
 
-<WorkbenchLayout title={m.workbenchPageTitle()} {theme}>
-  <Cover {theme} />
+<WorkbenchLayout title={m.workbenchPageTitle()}>
+  <Cover />
   <Foundations />
   <Section title={m.workbenchComponents()} description={m.workbenchComponentsDescription()}>
     <Layout as="ul" pattern="grid" min="tile">
       {Object.entries(GROUPS).map(([slug, group]) => (
-        <Card
-          as="li"
-          title={group.title}
-          href={localizePath(`/design-system/${slug}?theme=${theme}`)}
-        >
+        <Card as="li" title={group.title} href={preview.href(`/design-system/${slug}`)}>
           <Text size="sm" tone="muted">
             {group.description}
           </Text>

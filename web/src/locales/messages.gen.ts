@@ -471,6 +471,18 @@ export function metaDefaultDescription(locale: Locale = getLocale()): string {
   }
 }
 
+/** Default */
+export function workbenchDefaultContrast(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Default";
+    case "zh-CN":
+      return "默认";
+    case "en-XA":
+      return "[" + "Đéƒåûļţ" + "···]";
+  }
+}
+
 /** Dark theme */
 export function workbenchDarkTheme(locale: Locale = getLocale()): string {
   switch (locale) {
