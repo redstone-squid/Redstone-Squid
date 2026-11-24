@@ -34,16 +34,22 @@ squid/core, so screens are composed from `web/src/ui` instead of one-off markup.
 
 ## Status and resuming
 
-Paused after Phase 1 (commits `960679e9a` to `01cf8de84`). Phases 0 and 1 are done; start
-at Phase 2.
+Phases 0 and 1 are done (commits `960679e9a` to `01cf8de84`), and Phase 2 (from
+`27440a843`).
 
 What exists in `web/src/ui`, by folder: `layout` (Layout, Container), `content` (Heading,
 Text, Link, Icon, Code, Prose, Timestamp, VisuallyHidden, SkipLink), `actions` (Button),
 `feedback` (Badge, Chip, Notice, Progress, Skeleton, Spinner, EmptyState, ErrorState),
 `data` (Card, Image, Avatar, DescriptionList, StatGroup, Disclosure, List, ListItem,
 Timeline, Diff), `navigation` (Breadcrumbs, Pagination, NavList, Tabs and SegmentedControl in
-link mode), `patterns` (PageHeader, Section). `forms` and `overlays` hold the pre-existing
-components, moved but not yet reworked; Phases 2 and 3 replace them.
+link mode), `patterns` (PageHeader, Section), and `forms` (every §2.2 component, plus
+`SaveStatus`). `overlays` holds the pre-existing Dialog until Phase 3 replaces it.
+
+Phase 2 departures from §2.2: `RangeField` takes `separator` and `inputmode` instead of
+`bounds` and `step`, which a text input cannot enforce; `UnitField` submits the typed number
+and unit id (`name`, `unitName`); `FileDrop` passes skipped files as a second `onFiles`
+argument; `Autocomplete`, `Combobox` and `ListField` take label functions such as
+`labels.count(n)`, so only Svelte features can render them.
 
 Conventions to follow:
 
@@ -99,7 +105,7 @@ Each phase ends with workbench stories, unit tests (keyboard and focus), axe on 
 **Phase 1: static primitives and migration.** Done. `PageHeader`, `Section` and `Spinner`
 were built here, ahead of their phases.
 
-**Phase 2: form primitives.**
+**Phase 2: form primitives.** Done.
 
 - `FieldFrame` fix, `TextField`, `TextareaField`, `SelectField`, `CheckField`, `Switch`, `ChoiceGroup`, `FieldGroup`, `RangeField`, `UnitField`, `CodeEntry`, `ErrorSummary`, `FormActions`, `SaveStatus`, `FileDrop`.
 - Then `Autocomplete` (refit), `Combobox` (bits-ui), `ListField`.
