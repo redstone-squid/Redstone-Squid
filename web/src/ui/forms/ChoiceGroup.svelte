@@ -67,9 +67,7 @@
       variant === "inline" && "flex flex-wrap gap-x-6 gap-y-3",
       variant === "list" && "grid gap-3",
       variant === "cards" && "grid gap-3",
-      variant === "cards" &&
-        columns === undefined &&
-        "grid-cols-[repeat(auto-fill,minmax(min(100%,var(--container-tile)),1fr))]",
+      variant === "cards" && columns === undefined && "grid-cols-fill-tile",
       variant === "cards" && columns !== undefined && columnClass[columns],
     )}
   >

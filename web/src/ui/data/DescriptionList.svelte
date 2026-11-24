@@ -25,7 +25,7 @@
   const layouts = {
     stacked: "grid gap-3",
     inline: "flex flex-wrap gap-x-6 gap-y-3",
-    grid: "grid grid-cols-[repeat(auto-fill,minmax(min(100%,var(--container-tile)),1fr))] gap-4",
+    grid: "grid grid-cols-fill-tile gap-4",
   };
 </script>
 

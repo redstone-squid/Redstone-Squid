@@ -58,7 +58,7 @@
   )}
   {role}
 >
-  <style.icon class={cn("mt-0.5 size-[1.125rem] shrink-0", style.iconClass)} aria-hidden="true" />
+  <style.icon class={cn("mt-0.5 size-4.5 shrink-0", style.iconClass)} aria-hidden="true" />
   <div class="grid min-w-0 flex-1 gap-1 wrap-break-word">
     {#if title}<strong class="font-semibold">{title}</strong>{/if}
     {@render children?.()}

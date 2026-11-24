@@ -116,6 +116,11 @@
   }
 }
 
+/* Columns at least one container width wide, as many as fit: `grid-cols-fill-card`. */
+@utility grid-cols-fill-* {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, --value(--container-*)), 1fr));
+}
+
 /* One stacking ladder, so overlays never fight over arbitrary numbers. */
 @utility z-sticky {
   z-index: 10;

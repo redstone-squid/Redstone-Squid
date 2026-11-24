@@ -9,6 +9,7 @@ import svelte from "eslint-plugin-svelte";
 import unicorn from "eslint-plugin-unicorn";
 import globals from "globals";
 import tseslint from "typescript-eslint";
+import { arbitraryValue, uiArbitraryValue } from "./scripts/lint/arbitrary-values.ts";
 import { importBoundaries } from "./scripts/lint/import-boundaries.ts";
 import { noRawText } from "./scripts/lint/no-raw-text.ts";
 
@@ -17,6 +18,18 @@ const arbitraryColor = {
     "^(?:.*:)?(?:bg|text|border|outline|ring|fill|stroke|accent|caret|decoration|shadow|from|via|to)-\\[(?:#|rgb|hsl|oklch|color)",
   message: "Use a theme color from src/ui/themes.css instead of an arbitrary color.",
 };
+
+const viewportBreakpoint = {
+  pattern: "^(?:.*:)?(?:max-)?(?:sm|md|lg|xl|2xl|min-\\[.*\\]|max-\\[.*\\]):",
+  message:
+    "Use a container query (@container with @md: and similar) or a fluid layout instead of a viewport breakpoint.",
+};
+const restrictClasses = (...restrict) => ({
+  "better-tailwindcss/no-restricted-classes": [
+    "error",
+    { restrict: [arbitraryColor, ...restrict] },
+  ],
+});
 
 // Shared so blocks that add restrictions keep these.
 const restrictedSyntax = [
@@ -239,29 +252,18 @@ export default tseslint.config(
       "better-tailwindcss/no-duplicate-classes": "error",
       "better-tailwindcss/no-deprecated-classes": "error",
       "better-tailwindcss/no-unnecessary-whitespace": "error",
-      "better-tailwindcss/no-restricted-classes": ["error", { restrict: [arbitraryColor] }],
+      ...restrictClasses(arbitraryValue),
     },
   },
+  // Arbitrary values stay inside the design system, and there only where no token fits.
+  { files: ["src/ui/**"], rules: restrictClasses(uiArbitraryValue) },
   {
     // Components adapt to the space they are given, not to the window: one component can sit
     // in a page, a card, or a dialog. Only page layouts may use viewport breakpoints.
-    files: ["src/ui/**/*.svelte", "src/features/**/*.{astro,svelte}"],
-    rules: {
-      "better-tailwindcss/no-restricted-classes": [
-        "error",
-        {
-          restrict: [
-            arbitraryColor,
-            {
-              pattern: "^(?:.*:)?(?:max-)?(?:sm|md|lg|xl|2xl|min-\\[.*\\]|max-\\[.*\\]):",
-              message:
-                "Use a container query (@container with @md: and similar) or a fluid layout instead of a viewport breakpoint.",
-            },
-          ],
-        },
-      ],
-    },
+    files: ["src/features/**/*.{astro,svelte}"],
+    rules: restrictClasses(arbitraryValue, viewportBreakpoint),
   },
+  { files: ["src/ui/**/*.svelte"], rules: restrictClasses(uiArbitraryValue, viewportBreakpoint) },
   {
     // prettier-plugin-tailwindcss sorts classes in Svelte and TypeScript but not in Astro files
     // with prettier-plugin-astro 1.x, so ESLint sorts them there (fixable with --fix).

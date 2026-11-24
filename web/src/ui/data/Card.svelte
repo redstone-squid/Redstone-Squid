@@ -68,7 +68,7 @@
         {#if href !== undefined}<a
             {href}
             data-card-link
-            class="no-underline after:absolute after:inset-0 after:content-[''] hover:underline focus-visible:outline-none"
+            class="no-underline after:absolute after:inset-0 hover:underline focus-visible:outline-none"
             >{title}</a
           >{:else}{title}{/if}
       </Heading>

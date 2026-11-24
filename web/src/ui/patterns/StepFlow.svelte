@@ -52,7 +52,7 @@
       {@const isCurrent = step.id === current}
       <li
         aria-current={isCurrent ? "step" : undefined}
-        class="flex min-w-0 items-center gap-3 @2xl:flex-1 @2xl:not-last:after:mx-3 @2xl:not-last:after:h-px @2xl:not-last:after:min-w-4 @2xl:not-last:after:flex-1 @2xl:not-last:after:bg-line-strong @2xl:not-last:after:content-['']"
+        class="flex min-w-0 items-center gap-3 @2xl:flex-1 @2xl:not-last:after:mx-3 @2xl:not-last:after:h-px @2xl:not-last:after:min-w-4 @2xl:not-last:after:flex-1 @2xl:not-last:after:bg-line-strong"
       >
         <span
           class={cn(

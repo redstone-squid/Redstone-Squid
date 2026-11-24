@@ -60,7 +60,7 @@
   description={m.workbenchFoundationsDescription()}
   surface
 >
-  <ul class="grid grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] gap-3">
+  <ul class="grid grid-cols-fill-tile gap-3">
     {#each Object.entries(swatches) as [token, background] (token)}
       <li class="grid gap-1">
         <span class={["h-12 rounded-sm border border-line", background]}></span>
@@ -71,8 +71,8 @@
   <div class="grid gap-3 border-t border-line pt-4">
     <h3 class="font-bold">{m.workbenchTypography()}</h3>
     {#each type as [token, sample] (token)}
-      <div class="grid gap-1 md:grid-cols-[8rem_minmax(0,1fr)] md:items-baseline">
-        <code class="font-mono text-xs text-fg-muted">{token}</code>
+      <div class="grid gap-1 md:flex md:items-baseline md:gap-4">
+        <code class="font-mono text-xs text-fg-muted md:w-32 md:shrink-0">{token}</code>
         <p class={sample}>{m.workbenchPistonDoor()} 5 × 5 × 3</p>
       </div>
     {/each}

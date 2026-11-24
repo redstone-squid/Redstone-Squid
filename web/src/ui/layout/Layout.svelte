@@ -12,10 +12,9 @@
       },
       min: {
         none: "",
-        tile: "grid-cols-[repeat(auto-fill,minmax(min(100%,var(--container-tile)),1fr))]",
-        card: "grid-cols-[repeat(auto-fill,minmax(min(100%,var(--container-card)),1fr))]",
-        "card-wide":
-          "grid-cols-[repeat(auto-fill,minmax(min(100%,var(--container-card-wide)),1fr))]",
+        tile: "grid-cols-fill-tile",
+        card: "grid-cols-fill-card",
+        "card-wide": "grid-cols-fill-card-wide",
       },
       gap: {
         none: "",

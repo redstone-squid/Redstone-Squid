@@ -8,12 +8,7 @@
   let { items, size = "md", class: className }: Props = $props();
 </script>
 
-<dl
-  class={cn(
-    "grid min-w-0 grid-cols-[repeat(auto-fill,minmax(min(100%,var(--container-tile)),1fr))] gap-4",
-    className,
-  )}
->
+<dl class={cn("grid min-w-0 grid-cols-fill-tile gap-4", className)}>
   {#each items as stat (stat.label)}
     <div class="grid min-w-0 content-start gap-1 rounded-sm border border-line bg-surface p-4">
       <dt class="text-sm text-fg-muted">{stat.label}</dt>

@@ -86,8 +86,8 @@ const groups = [
         <LanguageSelector />
       </div>
     </header>
-    <div class="mx-auto grid max-w-wide md:grid-cols-[minmax(0,13rem)_minmax(0,1fr)]">
-      <aside class="border-b border-line bg-surface px-gutter py-4 md:sticky md:top-0 md:self-start md:border-e md:border-b-0 md:px-4 md:py-10">
+    <div class="mx-auto grid max-w-wide md:flex">
+      <aside class="border-b border-line bg-surface px-gutter py-4 md:sticky md:top-0 md:w-52 md:shrink-0 md:self-start md:border-e md:border-b-0 md:px-4 md:py-10">
         <div class="mb-5 grid gap-3">
           {controls.map(({ key, label, current, options }) => (
             <div role="group" aria-labelledby={`preview-${key}`}>

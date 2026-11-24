@@ -31,7 +31,7 @@
   {#each items as entry, index (entry.id)}
     <li class="relative grid grid-cols-[1rem_minmax(0,1fr)] gap-x-4 pb-6 last:pb-0">
       {#if index < items.length - 1}<span
-          class="absolute start-[0.4375rem] top-4 bottom-0 w-0.5 bg-line"
+          class="absolute start-1.75 top-4 bottom-0 w-0.5 bg-line"
           aria-hidden="true"
         ></span>{/if}
       <span
