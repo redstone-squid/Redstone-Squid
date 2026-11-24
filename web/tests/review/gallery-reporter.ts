@@ -4,7 +4,7 @@ import type { Reporter, TestCase, TestResult } from "@playwright/test/reporter";
 import { VISUAL_CHANGE } from "@tests/support/review-screenshot";
 
 const escapeHtml = (value: string): string =>
-  value.replace(/[&<>"']/g, (character) => `&#${character.charCodeAt(0)};`);
+  value.replaceAll(/[&<>"']/g, (character) => `&#${character.charCodeAt(0)};`);
 
 /**
  * Collect screenshots, recordings, and failures into a portable review artifact. Screenshots

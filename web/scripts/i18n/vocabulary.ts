@@ -31,8 +31,8 @@ export function compileVocabulary(
   const groups = Object.keys(english);
   for (const locale of locales) {
     for (const group of groups) {
-      const expected = Object.keys(english[group] ?? {}).sort();
-      const actual = Object.keys(vocabulary[locale]?.[group] ?? {}).sort();
+      const expected = Object.keys(english[group] ?? {}).toSorted();
+      const actual = Object.keys(vocabulary[locale]?.[group] ?? {}).toSorted();
       if (JSON.stringify(expected) !== JSON.stringify(actual))
         throw new Error(`${locale}/${group} must label exactly: ${expected.join(", ")}`);
     }
@@ -63,7 +63,7 @@ export function compileVocabulary(
     "// Edit squid/core/vocabulary.py and run `just export-vocabulary` instead.",
     `import type { ${types
       .map(([, type]) => type)
-      .sort()
+      .toSorted()
       .join(", ")} } from "../generated/types.gen";`,
     'import { getLocale, type Locale } from "./locale";',
     "",

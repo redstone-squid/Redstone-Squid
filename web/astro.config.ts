@@ -56,8 +56,7 @@ export default defineConfig({
       {
         name: "squid:client-budget-manifest",
         configEnvironment(name) {
-          if (name === "client") return { build: { manifest: true } };
-          return undefined;
+          return name === "client" ? { build: { manifest: true } } : undefined;
         },
       },
     ],

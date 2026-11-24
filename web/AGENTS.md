@@ -215,6 +215,8 @@ from `web/` before committing web work.
   the catalogs (both in `scripts/lint/`).
 - `strict-boolean-expressions` requires explicit checks such as `items.length > 0` or
   `value !== ""`, so `0` and `""` are never mistaken for missing values.
+- `eslint.config.js` enables chosen unicorn and SonarJS rules rather than their presets,
+  plus `eslint-plugin-regexp`. Add a rule there when it catches something real.
 - stylelint requires colors to come from tokens in `src/ui/tokens.css`.
 - knip fails on unused files, exports, and dependencies. Delete dead code instead of
   exporting it for later.

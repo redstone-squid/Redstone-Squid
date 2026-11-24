@@ -7,9 +7,9 @@ const routes = globSync("src/pages/**/*.{astro,ts}")
   .map((file) =>
     file
       .replace(/^src\/pages/, "")
-      .replace(/\.(astro|ts)$/, "")
+      .replace(/\.(?:astro|ts)$/, "")
       .replace(/\/index$/, "")
-      .replace(/\[([a-z][a-zA-Z0-9]*)\]/g, ":$1"),
+      .replaceAll(/\[([a-z][a-zA-Z0-9]*)\]/g, ":$1"),
   )
   .map((route) => (route === "" ? "/" : route));
 

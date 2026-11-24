@@ -70,14 +70,14 @@ export function catalogContract(source: string): Record<string, string[]> {
       if (reference.inheritVariables)
         for (const variable of variables) dependencies.variables.add(variable);
     }
-    const variables = [...dependencies.variables].sort();
+    const variables = [...dependencies.variables].toSorted();
     resolved.set(id, variables);
     return variables;
   }
   // Validate even unused terms and attributes so broken references cannot hide in a catalog.
   for (const id of patterns.keys()) resolve(id);
   return Object.fromEntries(
-    messages.sort((a, b) => a.localeCompare(b, "en")).map((id) => [id, resolve(id)]),
+    messages.toSorted((a, b) => a.localeCompare(b, "en")).map((id) => [id, resolve(id)]),
   );
 }
 

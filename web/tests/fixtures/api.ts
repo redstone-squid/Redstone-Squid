@@ -161,7 +161,7 @@ const expandableRecord: PublicRecordDetail = {
 };
 
 function json(body: unknown, status = 200, contentType = "application/json"): Response {
-  return new Response(JSON.stringify(body), {
+  return Response.json(body, {
     status,
     headers: { "Content-Type": contentType, "Cache-Control": "no-store" },
   });
@@ -176,7 +176,7 @@ function problem(request: Request, status: number, code: string): Response {
     detail: chinese ? "请检查搜索语法后重试。" : "Check the search syntax and try again.",
     code: code as ProblemDetail["code"],
   };
-  return new Response(JSON.stringify(body), {
+  return Response.json(body, {
     status,
     headers: {
       "Content-Type": "application/problem+json",

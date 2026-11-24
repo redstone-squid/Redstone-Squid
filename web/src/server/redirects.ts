@@ -18,7 +18,7 @@ const SEGMENT = /:([a-z][a-zA-Z0-9]*)/g;
 export function compileRedirects(table: Readonly<Record<string, string>>): CompiledRedirect[] {
   return Object.entries(table).map(([source, target]) => ({
     pattern: new RegExp(
-      `^${source.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replace(SEGMENT, "(?<$1>[^/]+)")}/?$`,
+      `^${source.replace(/[.*+?^${}()|[\]\\]/g, "\\$&").replaceAll(SEGMENT, "(?<$1>[^/]+)")}/?$`,
     ),
     target,
   }));
@@ -34,7 +34,7 @@ export function findRedirect(
   for (const { pattern, target } of table) {
     const match = pattern.exec(path);
     if (match)
-      return target.replace(SEGMENT, (_segment, name: string) => match.groups?.[name] ?? "");
+      return target.replaceAll(SEGMENT, (_segment, name: string) => match.groups?.[name] ?? "");
   }
   return undefined;
 }
@@ -48,14 +48,18 @@ export function redirectProblems(
   table: Readonly<Record<string, string>>,
   routes: readonly string[],
 ): string[] {
-  const shape = (path: string) => path.replace(SEGMENT, ":");
+  const shape = (path: string) => path.replaceAll(SEGMENT, ":");
   const routeShapes = new Set(routes.map(shape));
   // A literal target such as /design-system/data is served by a route like /design-system/:group.
   const routePatterns = compileRedirects(Object.fromEntries(routes.map((route) => [route, route])));
   const isRoute = (target: string) =>
     routeShapes.has(shape(target)) || routePatterns.some(({ pattern }) => pattern.test(target));
   const sources = new Set(Object.keys(table).map(shape));
-  const parameters = (path: string) => [...path.matchAll(SEGMENT)].map((match) => match[1]);
+  const parameters = (path: string) =>
+    path
+      .matchAll(SEGMENT)
+      .toArray()
+      .map((match) => match[1]);
   return Object.entries(table).flatMap(([source, target]) => [
     ...(isRoute(target) ? [] : [`${source}: target ${target} is not a route`]),
     ...(sources.has(shape(target)) ? [`${source}: target ${target} redirects again`] : []),

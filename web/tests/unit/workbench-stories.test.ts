@@ -28,7 +28,7 @@ describe("workbench", () => {
     const stories = globSync("src/workbench/stories/*.svelte")
       .map((path) => readFileSync(path, "utf8"))
       .join("\n");
-    const covered = new Set([...stories.matchAll(/source="([^"]+)"/g)].map(([, source]) => source));
+    const covered = new Set(stories.matchAll(/source="([^"]+)"/g).map(([, source]) => source));
     expect(components.filter((source) => !covered.has(source))).toEqual([]);
   });
 
@@ -39,7 +39,7 @@ describe("workbench", () => {
         .replace(/Stories\.svelte$/, "")
         .toLowerCase(),
     );
-    expect(files.sort()).toEqual(Object.keys(GROUPS).sort());
+    expect(files.toSorted()).toEqual(Object.keys(GROUPS).toSorted());
     expect(isGroup("forms")).toBe(true);
     expect(isGroup("media")).toBe(false);
     expect(isGroup(undefined)).toBe(false);

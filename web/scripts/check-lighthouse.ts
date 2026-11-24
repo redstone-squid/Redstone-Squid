@@ -87,7 +87,7 @@ function readMetrics(report: Report, name: string): Metrics {
 function medianMetrics(samples: Metrics[]): Metrics {
   const metrics = {} as Metrics;
   for (const metric of Object.keys(metricAudits) as Metric[]) {
-    const values = samples.map((sample) => sample[metric]).sort((a, b) => a - b);
+    const values = samples.map((sample) => sample[metric]).toSorted((a, b) => a - b);
     const middle = values[Math.floor(values.length / 2)];
     if (middle === undefined) throw new Error("No Lighthouse samples.");
     metrics[metric] = middle;

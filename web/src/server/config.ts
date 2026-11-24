@@ -39,7 +39,7 @@ function checkedUrl(
   ) {
     throw new Error(`${name} contains a development or placeholder host.`);
   }
-  return parsed.toString().replace(/\/$/, "");
+  return parsed.href.replace(/\/$/, "");
 }
 
 /**

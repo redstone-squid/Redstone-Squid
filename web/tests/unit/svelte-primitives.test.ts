@@ -115,7 +115,7 @@ describe("images", () => {
     expect(screen.getByText("SB")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "红石猫" })).toHaveTextContent("红");
     const picture = document.querySelector("img[data-fallback]");
-    if (!(picture instanceof HTMLImageElement)) throw new Error("Avatar rendered no image");
+    if (!(picture instanceof HTMLImageElement)) throw new TypeError("Avatar rendered no image");
     await fireEvent.error(picture);
     expect(picture.hidden).toBe(true);
   });

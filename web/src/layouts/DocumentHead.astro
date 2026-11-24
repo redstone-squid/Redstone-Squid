@@ -17,12 +17,12 @@ const { locale, config } = Astro.locals;
 const title = `${Astro.props.title} · ${m.siteName()}`;
 const description = Astro.props.description ?? m.metaDefaultDescription();
 const canonicalPath = Astro.props.canonicalPath ?? Astro.url.pathname;
-const canonical = new URL(localizePath(canonicalPath), config.siteUrl).toString();
-const defaultUrl = new URL(localizePath(canonicalPath, DEFAULT_LOCALE), config.siteUrl).toString();
+const canonical = new URL(localizePath(canonicalPath), config.siteUrl).href;
+const defaultUrl = new URL(localizePath(canonicalPath, DEFAULT_LOCALE), config.siteUrl).href;
 // The pseudo-locale exists for development and review only.
 const noindex = Astro.props.noindex === true || LOCALES[locale].pseudo;
 const image = Astro.props.image && {
-  src: new URL(Astro.props.image.src, config.siteUrl).toString(),
+  src: new URL(Astro.props.image.src, config.siteUrl).href,
   alt: Astro.props.image.alt,
 };
 // Escape HTML script delimiters without changing the parsed JSON-LD value.
@@ -31,7 +31,7 @@ const jsonLd = Astro.props.structuredData
   : undefined;
 ---
 
-<meta charset="UTF-8" />
+<meta charset="utf-8" />
 <meta name="viewport" content="width=device-width" />
 <meta name="description" content={description} />
 <meta name="theme-color" content={THEME_COLORS.light} />
@@ -41,7 +41,7 @@ const jsonLd = Astro.props.structuredData
   <link
     rel="alternate"
     hreflang={language}
-    href={new URL(localizePath(canonicalPath, language), config.siteUrl).toString()}
+    href={new URL(localizePath(canonicalPath, language), config.siteUrl).href}
   />
 ))}
 <link rel="alternate" hreflang="x-default" href={defaultUrl} />

@@ -3,7 +3,10 @@ import vitest from "@vitest/eslint-plugin";
 import astro from "eslint-plugin-astro";
 import betterTailwind from "eslint-plugin-better-tailwindcss";
 import playwright from "eslint-plugin-playwright";
+import regexp from "eslint-plugin-regexp";
+import sonarjs from "eslint-plugin-sonarjs";
 import svelte from "eslint-plugin-svelte";
+import unicorn from "eslint-plugin-unicorn";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 import { importBoundaries } from "./scripts/lint/import-boundaries.ts";
@@ -68,6 +71,73 @@ export default tseslint.config(
       "object-shorthand": "error",
       "prefer-template": "error",
       "no-restricted-syntax": ["error", ...restrictedSyntax],
+    },
+  },
+  // Chosen rules, not the presets: unicorn's modern-API rules and SonarJS's bug patterns.
+  // The presets mostly restate typescript-eslint or fight local conventions such as null
+  // from the API and PascalCase component files.
+  {
+    files: ["**/*.{js,ts,svelte,astro}"],
+    plugins: { regexp, sonarjs, unicorn },
+    rules: {
+      ...regexp.configs["flat/recommended"].rules,
+      "unicorn/error-message": "error",
+      "unicorn/new-for-builtins": "error",
+      "unicorn/no-array-push-push": "error",
+      "unicorn/no-array-sort": "error",
+      "unicorn/no-instanceof-builtins": "error",
+      "unicorn/no-lonely-if": "error",
+      "unicorn/no-new-array": "error",
+      "unicorn/no-typeof-undefined": "error",
+      "unicorn/no-useless-fallback-in-spread": "error",
+      "unicorn/no-useless-spread": "error",
+      "unicorn/prefer-array-find": "error",
+      "unicorn/prefer-array-flat-map": "error",
+      "unicorn/prefer-array-some": "error",
+      "unicorn/prefer-at": "error",
+      "unicorn/prefer-date-now": "error",
+      "unicorn/prefer-dom-node-text-content": "error",
+      "unicorn/prefer-includes": "error",
+      "unicorn/prefer-iterator-to-array": "error",
+      "unicorn/prefer-keyboard-event-key": "error",
+      "unicorn/prefer-logical-operator-over-ternary": "error",
+      "unicorn/prefer-modern-dom-apis": "error",
+      "unicorn/prefer-negative-index": "error",
+      "unicorn/prefer-node-protocol": "error",
+      "unicorn/prefer-number-properties": "error",
+      "unicorn/prefer-optional-catch-binding": "error",
+      "unicorn/prefer-regexp-test": "error",
+      "unicorn/prefer-response-static-json": "error",
+      "unicorn/prefer-set-has": "error",
+      "unicorn/prefer-string-replace-all": "error",
+      "unicorn/prefer-string-slice": "error",
+      "unicorn/prefer-string-starts-ends-with": "error",
+      "unicorn/prefer-structured-clone": "error",
+      "unicorn/prefer-type-error": "error",
+      "unicorn/prefer-url-href": "error",
+      "unicorn/switch-case-braces": "error",
+      "unicorn/text-encoding-identifier-case": "error",
+      "unicorn/throw-new-error": "error",
+      "sonarjs/no-all-duplicated-branches": "error",
+      "sonarjs/no-collapsible-if": "error",
+      "sonarjs/no-collection-size-mischeck": "error",
+      "sonarjs/no-duplicated-branches": "error",
+      "sonarjs/no-element-overwrite": "error",
+      "sonarjs/no-empty-collection": "error",
+      "sonarjs/no-gratuitous-expressions": "error",
+      "sonarjs/no-identical-conditions": "error",
+      "sonarjs/no-identical-expressions": "error",
+      "sonarjs/no-identical-functions": "error",
+      "sonarjs/no-ignored-return": "error",
+      "sonarjs/no-inverted-boolean-check": "error",
+      "sonarjs/no-misleading-array-reverse": "error",
+      "sonarjs/no-redundant-boolean": "error",
+      "sonarjs/no-redundant-jump": "error",
+      "sonarjs/no-same-line-conditional": "error",
+      "sonarjs/no-unused-collection": "error",
+      "sonarjs/no-useless-catch": "error",
+      "sonarjs/non-existent-operator": "error",
+      "sonarjs/prefer-single-boolean-return": "error",
     },
   },
   ...tseslint.configs.strictTypeChecked.map((config) => ({ ...config, files: ["**/*.ts"] })),

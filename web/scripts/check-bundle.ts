@@ -44,7 +44,7 @@ const manifest = JSON.parse(
 ) as BundleManifest;
 const assets = (await readdir(path.join(clientDirectory, "_astro"), { recursive: true }))
   .filter((file) => file.endsWith(".js"))
-  .sort();
+  .toSorted();
 if (assets.length === 0)
   throw new Error("No emitted client JavaScript; run the production build first.");
 const sizes = new Map(
@@ -74,7 +74,10 @@ for (const result of results) {
   if (result.completeBytes > result.completeKiB * 1024)
     failures.push(`${result.label}: complete workflow budget exceeded`);
 }
-const total = [...sizes.values()].reduce((sum, size) => sum + size, 0);
+const total = sizes
+  .values()
+  .toArray()
+  .reduce((sum, size) => sum + size, 0);
 console.info(
   `All emitted JavaScript: ${(total / 1024).toFixed(1)} KiB gzip (informational; unrelated workflows are not combined).`,
 );

@@ -5,7 +5,7 @@ const ACCENTED = "åƀçđéƒĝĥîĵķļɱñöþǫŕšţûṽŵẋýžÅƁÇĐ
 
 /** Replace ASCII letters with accented look-alikes. */
 export function accent(text: string): string {
-  return text.replace(/[A-Za-z]/g, (letter) => ACCENTED.charAt(PLAIN.indexOf(letter)));
+  return text.replaceAll(/[A-Z]/gi, (letter) => ACCENTED.charAt(PLAIN.indexOf(letter)));
 }
 
 /**
