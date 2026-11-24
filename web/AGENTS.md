@@ -32,7 +32,8 @@ Middleware (`src/middleware.ts`) runs first and sets three request locals:
   Middleware rewrites `/zh-cn/records` to `/records`, so never add a `zh-cn` directory or read
   the locale from the URL. Messages, labels, and `localizePath(path)` default to the current
   page's locale (the request on the server, `<html lang>` in the browser), so code passes a
-  locale only to render another one, such as language links or tests.
+  locale only to render another one, such as language links or tests. `Astro.url` is the
+  unprefixed route, so a link built from it must go through `localizePath`.
 - `Astro.locals.config`: validated runtime URLs.
 - `Astro.locals.api`: a generated SDK client that sends the request locale.
 

@@ -2,6 +2,7 @@
 import Moon from "@lucide/svelte/icons/moon";
 import Sun from "@lucide/svelte/icons/sun";
 import * as m from "@/locales/messages.gen";
+import { localizePath } from "@/locales/locale";
 import Button from "@/ui/actions/Button.svelte";
 import type { Theme } from "@/ui/themes";
 
@@ -20,7 +21,10 @@ target.searchParams.set("theme", next);
     </h1>
     <p class="max-w-prose text-lg text-cover-fg-muted">{m.workbenchLibraryDescription()}</p>
     <div>
-      <Button href={`${target.pathname}${target.search}`} icon={next === "dark" ? Moon : Sun}>
+      <Button
+        href={localizePath(`${target.pathname}${target.search}`)}
+        icon={next === "dark" ? Moon : Sun}
+      >
         {next === "dark" ? m.workbenchDarkTheme() : m.workbenchLightTheme()}
       </Button>
     </div>

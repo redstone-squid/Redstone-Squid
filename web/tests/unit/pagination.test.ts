@@ -19,9 +19,18 @@ describe("page addresses", () => {
   );
 
   it("links to an anchor, replacing the current address and keeping other parameters", () => {
-    const url = new URL("https://catalogue.test/zh-cn/records?sort=new&after_id=3");
+    const url = new URL("https://catalogue.test/records?sort=new&after_id=3");
     expect(pageHref(url, { offset: null, after_id: null, before_id: 9 })).toBe(
-      "/zh-cn/records?sort=new&before_id=9",
+      "/records?sort=new&before_id=9",
+    );
+  });
+
+  // Middleware rewrites /zh-cn/records to /records, so pages see the unprefixed URL.
+  it("keeps the page's locale", () => {
+    document.documentElement.lang = "zh-CN";
+    const url = new URL("https://catalogue.test/records?after_id=3");
+    expect(pageHref(url, { offset: null, after_id: 4, before_id: null })).toBe(
+      "/zh-cn/records?after_id=4",
     );
   });
 });
