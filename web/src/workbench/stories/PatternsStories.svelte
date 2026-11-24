@@ -21,6 +21,8 @@
   import ConfirmDialog from "@/ui/patterns/ConfirmDialog.svelte";
   import Switch from "@/ui/forms/Switch.svelte";
   import type { SaveState } from "@/ui/feedback/save-state";
+  import type { MediaItem, MediaStatus } from "@/ui/patterns/media";
+  import MediaUploader from "@/ui/patterns/MediaUploader.svelte";
   import NavBar from "@/ui/patterns/NavBar.svelte";
   import SettingsList from "@/ui/patterns/SettingsList.svelte";
   import ResultsToolbar from "@/ui/patterns/ResultsToolbar.svelte";
@@ -56,6 +58,30 @@
     await wait();
     settingStates[id] = id === "mentions" ? "error" : "saved";
   }
+  let media = $state<MediaItem[]>([
+    {
+      id: "front",
+      name: "front-view.png",
+      status: "ready",
+      primary: true,
+      thumb: { src: "/favicon.svg", width: 32, height: 32 },
+    },
+    { id: "open", name: "door-opening.mp4", status: "processing" },
+    { id: "wiring", name: "wiring-closeup.png", status: "uploading", progress: 40 },
+    { id: "huge", name: "full-build-render.png", status: "failed", error: "Larger than 8 MB." },
+    { id: "old", name: "old-screenshot.png", status: "removed" },
+  ]);
+  function setMedia(id: string, change: Partial<MediaItem>): void {
+    media = media.map((item) => (item.id === id ? { ...item, ...change } : item));
+  }
+  const mediaStatus: Record<MediaStatus, string> = {
+    queued: "Waiting to upload",
+    uploading: "Uploading",
+    processing: "Processing",
+    ready: "Ready",
+    failed: "Upload failed",
+    removed: "Removed",
+  };
   let resultsStatus = $state<(typeof statuses)[number]>("ready");
 </script>
 
@@ -403,6 +429,47 @@
       { id: "digest", control: digestSwitch, state: settingStates.digest ?? "idle" },
       { id: "mentions", control: mentionsSwitch, state: settingStates.mentions ?? "idle" },
     ]}
+  />
+</Story>
+
+<Story
+  name="MediaUploader"
+  source="patterns/MediaUploader"
+  description="Files with status, progress, retry, primary and an inline undo for removal."
+>
+  <MediaUploader
+    items={media}
+    label="Images and videos"
+    hint="Show the door closed and open."
+    limitsLabel="Up to 10 files, 8 MB each."
+    accept="image/*,video/*"
+    labels={{
+      drop: "Drop files here, or",
+      browse: "Choose files",
+      status: mediaStatus,
+      primary: "Cover",
+      remove: (name) => `Remove ${name}`,
+      undo: "Undo",
+      retry: "Retry",
+      setPrimary: (name) => `Use ${name} as the cover`,
+      summary: ({ ready, failed }) => `${ready} files ready, ${failed} failed`,
+    }}
+    onFiles={(files) => {
+      media = [
+        ...media,
+        ...files.map((file) => ({
+          id: crypto.randomUUID(),
+          name: file.name,
+          status: "queued" as const,
+        })),
+      ];
+    }}
+    onRetry={(id) => setMedia(id, { status: "uploading", progress: 10, error: undefined })}
+    onRemove={(id) => setMedia(id, { status: "removed" })}
+    onUndoRemove={(id) => setMedia(id, { status: "ready" })}
+    onSetPrimary={(id) => {
+      media = media.map((item) => ({ ...item, primary: item.id === id }));
+    }}
   />
 </Story>
 
