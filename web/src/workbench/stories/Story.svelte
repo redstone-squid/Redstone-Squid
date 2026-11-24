@@ -17,7 +17,7 @@
 >
   <header class="grid gap-1">
     <h2 id={`${name.toLowerCase()}-title`} class="text-xl font-bold tracking-tight">{name}</h2>
-    <code class="font-mono text-xs text-fg-muted"
+    <code class="font-mono text-xs wrap-anywhere text-fg-muted"
       >{source.startsWith("features/") ? `src/${source}` : `src/ui/${source}.svelte`}</code
     >
     {#if description}<p class="max-w-prose text-sm text-fg-muted">{description}</p>{/if}
