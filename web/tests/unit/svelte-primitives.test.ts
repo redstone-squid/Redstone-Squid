@@ -109,6 +109,19 @@ describe("images", () => {
     expect(image).not.toBeVisible();
   });
 
+  it("sizes lazy images from their layout and priority images from the fallback", () => {
+    const sources = { srcset: "/a-640.png 640w, /a-1280.png 1280w", sizes: "20rem" };
+    const props = { src: "/a-640.png", width: 640, height: 400, fallbackLabel: "", sources };
+    render(Image, { ...props, alt: "Lazy" });
+    render(Image, { ...props, alt: "Priority", priority: true });
+    const lazy = screen.getByRole("img", { name: "Lazy" });
+    expect(lazy).toHaveAttribute("loading", "lazy");
+    expect(lazy).toHaveAttribute("sizes", "auto, 20rem");
+    const priority = screen.getByRole("img", { name: "Priority" });
+    expect(priority).toHaveAttribute("fetchpriority", "high");
+    expect(priority).toHaveAttribute("sizes", "20rem");
+  });
+
   it("falls back to initials and is decorative unless given alt text", async () => {
     render(Avatar, { name: "Space Builder", src: "/broken.png" });
     render(Avatar, { name: "红石猫", alt: "红石猫" });

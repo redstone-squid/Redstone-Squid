@@ -10,6 +10,10 @@
    * image's intrinsic size and set the frame's ratio when `aspect` is `natural`. Set `priority`
    * on the page's main image above the fold (at most one or two per page): it loads immediately
    * at high priority instead of lazily.
+   *
+   * `sources` offers the image at several widths. Lazy images let the browser pick from the
+   * width the frame actually renders at (`sizes="auto"`), so `sources.sizes` only matters for a
+   * `priority` image, which loads before layout, and for browsers without `sizes="auto"`.
    */
   type Props = {
     src: string | null;
@@ -19,8 +23,7 @@
     aspect?: "wide" | "square" | "video" | "natural";
     fit?: "cover" | "contain";
     priority?: boolean;
-    sizes?: string;
-    srcset?: string;
+    sources?: { srcset: string; sizes: string };
     fallbackLabel: string;
     fallbackIcon?: LucideIcon;
     class?: string;
@@ -33,8 +36,7 @@
     aspect = "wide",
     fit = "cover",
     priority = false,
-    sizes,
-    srcset,
+    sources,
     fallbackLabel,
     fallbackIcon: Glyph = ImageOff,
     class: className,
@@ -63,17 +65,18 @@
   </div>
   <!-- eslint-enable svelte/no-inline-styles -->
   {#if src !== null}
+    <!-- The browser fetches when src is set, so the attributes that choose the request come first. -->
     <img
-      {src}
-      {srcset}
-      {sizes}
-      {width}
-      {height}
-      {alt}
       loading={priority ? "eager" : "lazy"}
       fetchpriority={priority ? "high" : undefined}
       decoding="async"
       referrerpolicy="no-referrer"
+      sizes={sources && (priority ? sources.sizes : `auto, ${sources.sizes}`)}
+      srcset={sources?.srcset}
+      {src}
+      {width}
+      {height}
+      {alt}
       data-fallback
       class={cn("absolute inset-0 size-full", fit === "cover" ? "object-cover" : "object-contain")}
       onerror={(event) => {
