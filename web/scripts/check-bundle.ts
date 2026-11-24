@@ -1,6 +1,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { gzipSync } from "node:zlib";
+import { GROUPS } from "../src/workbench/groups";
 import { evaluateBudgets, type BundleManifest, type EntryBudget } from "./bundle-budgets";
 
 // Shared ceilings give interactive workflows room to grow and catch large regressions.
@@ -14,26 +15,21 @@ const budgets: EntryBudget[] = [
     entries: [
       "src/layouts/DocumentHead.astro?astro&type=script&index=0&lang.ts",
       "src/layouts/DocumentHead.astro?astro&type=script&index=1&lang.ts",
+      "src/layouts/DocumentHead.astro?astro&type=script&index=2&lang.ts",
     ],
     label: "Shared page scripts",
     initialKiB: 1,
     completeKiB: 1,
     renderer: false,
   },
-  {
-    entries: [
-      "src/workbench/BrowsingPreview.svelte",
-      "src/workbench/ButtonStory.svelte",
-      "src/workbench/FieldStory.svelte",
-      "src/workbench/LayoutStory.svelte",
-      "src/workbench/ThemeToggle.svelte",
-    ],
-    deferredEntries: ["src/workbench/Controls.svelte"],
-    label: "Design workbench (Svelte)",
+  // Each workbench page hydrates its group's stories as one island.
+  ...Object.values(GROUPS).map(({ title }) => ({
+    entries: [`src/workbench/stories/${title}Stories.svelte`],
+    label: `Design workbench: ${title}`,
     ...interactiveBudget,
-  },
+  })),
   {
-    entries: ["src/workbench/DraftScenarioToggle.svelte", "src/workbench/DraftTrialStory.svelte"],
+    entries: ["src/workbench/DraftTrial.svelte"],
     label: "Svelte draft trial",
     ...interactiveBudget,
   },
