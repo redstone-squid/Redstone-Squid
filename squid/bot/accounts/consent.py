@@ -22,6 +22,8 @@ from squid.core.accounts.domain import (
     IdentityProvider,
     LinkPreview,
 )
+from squid.core.actors import Actor
+from squid.core.errors import AuthorizationError
 from squid.core.sentinel import NOT_ASKED
 from squid_i18n import md_tr
 from squid_ui.ext.discord.target_types import ComponentsV2Target
@@ -317,14 +319,16 @@ async def ensure_consented_account(
     *,
     timeout: float = 120.0,
     parent: sd.MessageRoot | None = None,
+    resolve_actor: Callable[[], Awaitable[Actor]] | None = None,
 ) -> int | None:
     """Return the user's account id after current consent has been granted.
 
     Awaits the answer, so it belongs to a command rather than to a mounted action handler;
     `with_consented_account` is the form for the latter.
     """
-    user = request.user
-    account = await accounts.get_account_by_identity(IdentityProvider.DISCORD, str(user.id))
+    actor = await resolve_actor() if resolve_actor else Actor(discord_user_id=request.user.id)
+    user_id = actor.require_discord_user_id()
+    account = await accounts.get_account_by_identity(IdentityProvider.DISCORD, str(user_id))
     if (
         account is not None
         and account.id is not None  # pyright: ignore[reportUnnecessaryComparison]
@@ -332,7 +336,7 @@ async def ensure_consented_account(
     ):
         return account.id
 
-    consent = await prompt_for_consent(request, user_id=user.id, timeout=timeout, parent=parent)
+    consent = await prompt_for_consent(request, user_id=user_id, timeout=timeout, parent=parent)
     if consent is NOT_ASKED or consent is None:
         if consent is None:
             await request.respond(
@@ -341,6 +345,12 @@ async def ensure_consented_account(
             )
         return None
 
-    granted = await accounts.get_or_create_identity(IdentityProvider.DISCORD, str(user.id), consent=consent)
+    if resolve_actor is not None:
+        current = await resolve_actor()
+        if current.discord_user_id != user_id or current.account_id != actor.account_id:
+            raise AuthorizationError
+        actor = current
+    with actor.audit_scope():
+        granted = await accounts.get_or_create_identity(IdentityProvider.DISCORD, str(user_id), consent=consent)
     assert granted.id is not None, "get_or_create_identity always returns a persisted account"
     return granted.id

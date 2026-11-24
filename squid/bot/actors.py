@@ -1,6 +1,8 @@
 """Resolve Discord identities and membership into application actors."""
 
+from dataclasses import replace
 from typing import TYPE_CHECKING, Any
+from uuid import UUID
 
 import discord
 from discord.ext.commands import Context
@@ -9,7 +11,7 @@ from whenever import Instant
 import squid_ui.ext.discord as sd
 from squid.core.accounts.application import AccountService
 from squid.core.accounts.domain import IdentityProvider
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.errors import AuthorizationError
 
 if TYPE_CHECKING:
@@ -65,6 +67,40 @@ class DiscordActorResolver:
 
     def __init__(self, bot: RedstoneSquid) -> None:
         self._bot = bot
+
+    async def request_actor(
+        self, request: sd.Request[Any, RedstoneSquid], session_id: UUID | None, operation: str
+    ) -> Actor:
+        return (await self.acting_context(request, session_id, operation)).effective
+
+    async def acting_context(
+        self, request: sd.Request[Any, RedstoneSquid], session_id: UUID | None, operation: str
+    ) -> ActingContext:
+        """Resolve a private workspace callback against the session it opened with."""
+        operator = await self.resolve(request, refresh=True)
+        if session_id is None:
+            return ActingContext(operator, operator)
+        guild = request.guild
+        channel = request.channel
+        if guild is None or not isinstance(channel, discord.abc.GuildChannel | discord.Thread):
+            raise AuthorizationError
+        resolved = await self._bot.services.impersonation.use(
+            operator, f"discord:{guild.id}:{operator.discord_user_id}", session_id, operation
+        )
+        account = resolved.target
+        if resolved.discord_id is None:
+            raise AuthorizationError
+        try:
+            member = await guild.fetch_member(resolved.discord_id)
+            permissions = channel.permissions_for(member)
+            if not permissions.view_channel:
+                raise AuthorizationError
+            if isinstance(channel, discord.Thread) and channel.is_private() and not permissions.manage_threads:
+                await channel.fetch_member(member.id)
+        except (discord.NotFound, discord.Forbidden) as error:
+            raise AuthorizationError from error
+        effective = replace(await self.resolve(member, account_id=account.id), audit_use_id=resolved.use_id)
+        return ActingContext(operator, effective, session_id)
 
     async def resolve(
         self,

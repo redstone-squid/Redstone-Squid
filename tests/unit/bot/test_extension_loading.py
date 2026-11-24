@@ -80,6 +80,13 @@ async def test_every_extension_loads_onto_one_bot(loaded_bot: commands.Bot) -> N
     }
 
 
+async def test_impersonation_controls_are_registered_and_localized(loaded_bot: commands.Bot) -> None:
+    group = loaded_bot.tree.get_command("impersonate")
+    assert isinstance(group, discord.app_commands.Group)
+    assert {command.name for command in group.commands} == {"start", "inspect", "stop", "draft", "build"}
+    _assert_localized(group)
+
+
 async def test_submission_extension_reloads_with_its_own_command_group() -> None:
     """Loading after an ordinary import and repeated reloads must preserve every build command."""
     imported_group = BuildCommands.build_group
@@ -89,7 +96,13 @@ async def test_submission_extension_reloads_with_its_own_command_group() -> None
         for _ in range(2):
             group = bot.tree.get_command("build")
             assert isinstance(group, discord.app_commands.Group)
-            assert {command.name for command in group.commands} == {"browse", "submit", "drafts", "issues"}
+            assert {command.name for command in group.commands} == {
+                "browse",
+                "submit",
+                "drafts",
+                "issues",
+                "change-category",
+            }
             assert all(
                 isinstance(command, discord.app_commands.Command) and command.binding is bot.get_cog("BuildCommands")
                 for command in group.commands

@@ -484,6 +484,7 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
     )
 
     def __init__(self, workspace: DraftWorkspace) -> None:
+        self.session_id: UUID | None = None
         self.workspace = workspace
 
     @classmethod
@@ -526,17 +527,18 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
 
     @router.route("/drafts/{draft_id}")
     @classmethod
-    async def open_draft(cls, request: AppRequest, draft_id: UUID) -> Self | None:
+    async def open_draft(cls, request: AppRequest, draft_id: UUID, session: UUID | None = None) -> Self | None:
         """Open one of the opener's drafts, after the account has consented."""
         services = request.client.services
-        if await ensure_consented_account(request, services.accounts) is None:
+        resolve_actor = partial(request.client.actors.request_actor, request, session, f"draft:{draft_id}")
+        if await ensure_consented_account(request, services.accounts, resolve_actor=resolve_actor) is None:
             return None
         try:
             screen = await cls.load(
                 services,
                 draft_id,
                 changes=request.client.topic_bus.topic("submission_draft", str(draft_id)),
-                resolve_actor=partial(request.client.actors.resolve, request, refresh=True),
+                resolve_actor=resolve_actor,
                 render_card=lambda build: render_build_card(
                     build,
                     request.client.media_previews,
@@ -546,7 +548,9 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
             )
         except DraftNotFoundError, DraftAccessDeniedError:
             raise ScreenUnavailable(tr(t"navigation-draft-unavailable = That draft is unavailable.")) from None
-        screen.session_key = sd.SessionKey.custom("draft", (request.user.id, str(draft_id)))
+        screen.session_id = session
+        key = (request.user.id, str(draft_id))
+        screen.session_key = sd.SessionKey.custom("draft", key if session is None else (*key, str(session)))
         return screen
 
     @override
@@ -559,7 +563,7 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
                 sl.action_controls(
                     sl.routed_action_control(
                         tr(t"draft-editor-reopen = Reopen draft"),
-                        DraftEditorScreen.open_draft.custom_id(draft_id=ws.draft.snapshot.id),
+                        DraftEditorScreen.open_draft.custom_id(draft_id=ws.draft.snapshot.id, session=self.session_id),
                         key="reopen",
                     ),
                     key="draft-reopen",
@@ -687,7 +691,9 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
                     sl.action_controls(
                         sl.routed_action_control(
                             tr(t"draft-editor-edit-build = Edit build"),
-                            build_controls.edit_build.custom_id(build_id=ws.result.result.build_id),
+                            build_controls.edit_build.custom_id(
+                                build_id=ws.result.result.build_id, session=self.session_id
+                            ),
                             key="edit_build",
                         ),
                         key="draft-done-actions",
@@ -724,6 +730,7 @@ class FilesEditorScreen(sd.Screen[None]):
     selected_file: str | None = sl.state(None)
 
     def __init__(self, workspace: DraftWorkspace) -> None:
+        self.session_id: UUID | None = None
         self.workspace = workspace
 
     @override
@@ -858,6 +865,7 @@ class BuildPreviewScreen(sd.Screen[None]):
     )
 
     def __init__(self, workspace: DraftWorkspace) -> None:
+        self.session_id: UUID | None = None
         self.workspace = workspace
 
     @sl.resource

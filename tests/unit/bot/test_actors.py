@@ -2,6 +2,7 @@
 
 from typing import cast
 from unittest.mock import AsyncMock, Mock
+from uuid import uuid4
 
 import discord
 import pytest
@@ -10,7 +11,9 @@ from discord.ext.commands import Context
 import squid_ui.ext.discord as sd
 from squid.bot.actors import AccountIdCache, DiscordActorResolver
 from squid.bot.app import RedstoneSquid
-from squid.core.accounts.models import Account
+from squid.core.accounts.domain import AccountConsent
+from squid.core.accounts.models import Account, AccountIdentity
+from squid.core.auth.impersonation import AuthorizedImpersonation
 from squid.core.errors import AuthorizationError
 
 
@@ -140,3 +143,29 @@ async def test_dm_discards_carried_membership_but_preserves_owner(bot: Mock, mem
     assert not actor.discord_role_ids
     assert not actor.discord_guild_admin
     assert actor.is_bot_owner
+
+
+async def test_debugger_uses_target_membership_for_every_callback(bot: Mock, member: Mock) -> None:
+    target = Mock(spec=discord.Member, id=8, guild=member.guild)
+    target.guild_permissions = discord.Permissions.none()
+    target.roles = [discord.Object(55)]
+    member.guild.fetch_member.side_effect = [member, target, member]
+    bot.is_owner.side_effect = lambda user: user.id == member.id
+    account = Account(id=100, consent=AccountConsent.grant_current(), identities=(AccountIdentity.discord(target.id),))
+    use_id = uuid4()
+    bot.services.impersonation.use = AsyncMock(
+        side_effect=[AuthorizedImpersonation(account, target.id, use_id), AuthorizationError()]
+    )
+    channel = Mock(spec=discord.TextChannel)
+    channel.permissions_for.return_value = discord.Permissions(view_channel=True)
+    request = Mock(spec=sd.Request, user=member, guild=member.guild, channel=channel)
+    session_id = uuid4()
+    context = await bot.actors.acting_context(request, session_id, "draft:example")
+    assert context.operator.is_bot_owner
+    assert context.effective.account_id == account.id
+    assert context.effective.discord_role_ids == {55}
+    assert not context.effective.is_bot_owner
+    assert not context.effective.discord_guild_admin
+    assert context.effective.audit_use_id == use_id
+    with pytest.raises(AuthorizationError):
+        await bot.actors.request_actor(request, session_id, "draft:example")

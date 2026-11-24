@@ -1,6 +1,7 @@
 """Discord transport boundary for opening build-edit screens."""
 
 from typing import TYPE_CHECKING, Any
+from uuid import UUID
 
 import squid_ui.ext.discord as sd
 from squid.bot.submission.build_card import render_build_card
@@ -23,6 +24,7 @@ async def prepare_build_editor(
     builds: BuildService | None = None,
     *,
     recovered: bool = False,
+    session: UUID | None = None,
 ) -> BuildEditScreen:
     """Construct an editor and its callbacks without presenting or authorizing it yet.
 
@@ -32,7 +34,7 @@ async def prepare_build_editor(
     prepared: BuildEditScreen | None = None
 
     async def actor() -> Actor:
-        return await request.client.actors.resolve(request, refresh=True)
+        return await request.client.actors.request_actor(request, session, f"build:{build.id}")
 
     async def access(current: Build) -> EditAccess:
         current_actor = await actor()
@@ -87,6 +89,7 @@ async def prepare_build_editor(
         refresh_posts=refresh_posts,
         changes=client.topic_bus.topic("build", str(build.id)),
         recovered=recovered,
+        session_id=session,
     )
     return prepared
 
@@ -105,7 +108,10 @@ async def show_build_editor(request: sd.Request[Any, RedstoneSquid], screen: Bui
             audience="personal",
         )
         return None
-    key = sd.SessionKey.custom("build-edit", (request.user.id, screen.build.id))
+    identity = (request.user.id, screen.build.id)
+    key = sd.SessionKey.custom(
+        "build-edit", identity if screen.session_id is None else (*identity, str(screen.session_id))
+    )
     outcome = await request.respond(screen, session_key=key)
     return screen if isinstance(outcome, sd.Presented) else None
 
@@ -115,11 +121,12 @@ async def open_build_editor(
     build: Build,
     *,
     recovered: bool = False,
+    session: UUID | None = None,
 ) -> BuildEditScreen | None:
     """Prepare and show a build editor in one call."""
     return await show_build_editor(
         request,
-        await prepare_build_editor(request, build, recovered=recovered),
+        await prepare_build_editor(request, build, recovered=recovered, session=session),
     )
 
 

@@ -21,6 +21,7 @@ from copy import deepcopy
 from dataclasses import replace
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, ClassVar, override
+from uuid import UUID
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
@@ -288,6 +289,7 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
         refresh_posts: Callable[[int], Awaitable[None]],
         changes: Topic | None = None,
         recovered: bool = False,
+        session_id: UUID | None = None,
     ) -> None:
         # ORM identity columns may still be None before flush.
         if build.id is None:  # pyright: ignore[reportUnnecessaryComparison]
@@ -304,6 +306,7 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
         self._render_build = render_build
         self._refresh_posts = refresh_posts
         self._recovered = recovered
+        self.session_id = session_id
 
     @sl.resource(pending=sl.resources.PendingMode.ATOMIC)
     async def projection(self) -> tuple[Build, sl.LayoutNode[ComponentsV2Target, sd.Request] | None]:
@@ -418,7 +421,7 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
             sl.action_controls(
                 sl.routed_action_control(
                     tr(t"build-editor-open-new-editor = Open new editor"),
-                    build_controls.recover_build_editor.custom_id(build_id=self._build_id),
+                    build_controls.recover_build_editor.custom_id(build_id=self._build_id, session=self.session_id),
                     key="restart",
                 ),
                 key="build-edit-recovery",

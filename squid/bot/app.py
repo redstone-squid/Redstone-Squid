@@ -84,6 +84,7 @@ EXTENSIONS: tuple[Extension, ...] = (
     "squid.bot.settings.cog",
     "squid.bot.guild_state_cog",
     "squid.bot.submission.cog",
+    "squid.bot.impersonation",
     "squid.bot.log_cog",
     "squid.bot.help_cog",
     "squid.bot.feedback_cog",

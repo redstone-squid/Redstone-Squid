@@ -128,6 +128,7 @@ def _bot(build: Any, *, allowed: bool = True, account_id: int | None = 1) -> Any
             permissions=PermissionRecorder(allowed),
             builds=StubBuilds(build),
             submission_forms=Forms(),
+            published_build_media=None,
         ),
         account_ids=AccountIdResolver(account_id),
         is_owner=OwnerCheck(),
@@ -224,7 +225,7 @@ async def test_recovery_route_reloads_current_state_before_authorizing() -> None
     assert "Unsaved changes from the previous editor were discarded" in str(component.render())
 
 
-async def test_recovery_route_limits_a_confirmed_builds_submitter_to_its_tags() -> None:
+async def test_recovery_route_opens_the_creator_editor_for_a_confirmed_build() -> None:
     latest = DoorBuild(id=1, revision=4, submission_status=BuildStatus.APPROVED, submitter_account_id=1)
     bot = _bot(latest, allowed=False, account_id=1)
     interaction = _interaction(bot)
@@ -233,13 +234,14 @@ async def test_recovery_route_limits_a_confirmed_builds_submitter_to_its_tags() 
 
     component = _component(_sent_view(interaction))
     assert component is not None
-    assert component.workspace.showcase_only
+    assert not component.workspace.showcase_only
+    assert not component.workspace.is_moderator
     assert cast(StubBuilds, bot.services.builds).gets == 1
 
 
-async def test_in_session_reload_reauthorizes_the_reloaded_non_pending_build() -> None:
+async def test_in_session_reload_reauthorizes_after_ownership_changes() -> None:
     original = _door()
-    latest = DoorBuild(id=1, revision=2, submission_status=BuildStatus.APPROVED, submitter_account_id=1)
+    latest = DoorBuild(id=1, revision=2, submission_status=BuildStatus.APPROVED, submitter_account_id=2)
     bot = _bot(latest, allowed=False, account_id=1)
     interaction = _interaction(bot)
     request = await sd.request(interaction)
