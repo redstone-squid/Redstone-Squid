@@ -84,6 +84,7 @@ Grouped by area. Each entry names the screen that needs it and why.
     - `GET /v1/claims?status`, `POST /v1/claims/{id}/{approve|reject}` (X4).
 27. **Account lookup.** `GET /v1/accounts?q=` returns `{id, display_name, identities}` for staff. Needed by X5 and X6.
 28. **Product decision: account deletion and data export.** `DELETE /v1/users/me` and `GET /v1/users/me/export`. Needed for A2 if the privacy notice promises them.
+53. **Merge code normalization.** `POST /v1/users/me/merge` and `/merge/preview` compare the code exactly, while CLI and Minecraft codes go through `normalize_user_code`. Normalize merge codes the same way (case, spaces, hyphens), since `CodeEntry` submits the grouped text. Needed by A3's merge flow.
 
 ## Notifications
 
