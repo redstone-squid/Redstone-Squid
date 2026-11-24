@@ -5,10 +5,11 @@ from litestar import Router, get
 from litestar.di import Provide
 from litestar.params import FromPath
 
-from squid.api.contract import ANONYMOUS, contract, transport_only
-from squid.api.dependencies import Tags, get_tags
+from squid.api.contract import ANONYMOUS, WEB, contract, transport_only
+from squid.api.dependencies import CurrentCaller, Services, Tags, get_tags
 from squid.api.errors import responses
 from squid.api.pagination import OffsetParam, Page, PageSizeParam
+from squid.api.v1.browser_views import BrowserViews, TagDetail
 from squid.core.pagination import offset_page
 from squid.core.tags.errors import TagNotFoundError
 from squid.core.tags.models import TagDefinition
@@ -17,7 +18,7 @@ from squid.core.tags.models import TagDefinition
 class PublicTagDTO(SQLAlchemyDTO[TagDefinition]):
     """Publish tag vocabulary without moderation, ownership, or relationship fields."""
 
-    __schema_name__ = "TagDetail"
+    __schema_name__ = "TagSummary"
     config = SQLAlchemyDTOConfig(
         include={
             "id",
@@ -66,32 +67,32 @@ async def list_tags(
     "/{tag_id:int}",
     responses=responses(404, 422, 503),
     operation_id="tags_get",
-    return_dto=PublicTagDTO,
-    security=[ANONYMOUS],
+    response_headers={"Cache-Control": "private, no-store"},
+    security=[ANONYMOUS, WEB],
     opt=contract(cli=transport_only()),
 )
-async def get_tag(tag_id: FromPath[int], tags: Tags) -> TagDefinition:
+async def get_tag(tag_id: FromPath[int], tags: Tags, caller: CurrentCaller, services: Services) -> TagDetail:
     """Return one published tag definition."""
     definition = await tags.public_definition(tag_id)
     if definition is None:
         raise TagNotFoundError(tag_id)
-    return definition
+    return await BrowserViews(services, caller).tag(definition)
 
 
 @get(
     "/by-slug/{slug:str}",
     responses=responses(404, 422, 503),
     operation_id="tags_get_by_slug",
-    return_dto=PublicTagDTO,
-    security=[ANONYMOUS],
+    response_headers={"Cache-Control": "private, no-store"},
+    security=[ANONYMOUS, WEB],
     opt=contract(cli=transport_only()),
 )
-async def get_tag_by_slug(slug: FromPath[str], tags: Tags) -> TagDefinition:
+async def get_tag_by_slug(slug: FromPath[str], tags: Tags, caller: CurrentCaller, services: Services) -> TagDetail:
     """Resolve a current or former slug to its published tag."""
     definition = await tags.public_definition(slug)
     if definition is None:
         raise TagNotFoundError(slug)
-    return definition
+    return await BrowserViews(services, caller).tag(definition)
 
 
 router = Router(

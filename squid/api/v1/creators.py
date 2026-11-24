@@ -9,9 +9,10 @@ from litestar.dto import DataclassDTO, DTOConfig
 from litestar.params import FromPath, PathParameter
 from litestar.typing import FieldDefinition
 
-from squid.api.contract import ANONYMOUS, contract, transport_only
-from squid.api.dependencies import Accounts, get_accounts
+from squid.api.contract import ANONYMOUS, WEB, contract, transport_only
+from squid.api.dependencies import Accounts, CurrentCaller, Services, get_accounts
 from squid.api.errors import responses
+from squid.api.v1.browser_views import BrowserViews
 from squid.api.v1.schemas.creators import CreatorAliasDetail
 from squid.core.accounts.domain import PublicCreatorProfile
 from squid.core.accounts.errors import CreatorAliasNotFoundError, CreatorNotFoundError
@@ -26,6 +27,7 @@ class PublicCreatorDTO(DataclassDTO[PublicCreatorProfile]):
         rename_fields={"public_id": "id", "canonical_public_id": "canonical_id"},
         include={
             "public_id",
+            "viewer",
             "canonical_public_id",
             "hidden",
             "display_name",
@@ -68,11 +70,14 @@ async def get_creator_alias(
     "/{creator_id:uuid}",
     responses=responses(404, 422, 503),
     operation_id="creator_profile_get",
+    response_headers={"Cache-Control": "private, no-store"},
     return_dto=PublicCreatorDTO,
-    security=[ANONYMOUS],
+    security=[ANONYMOUS, WEB],
     opt=contract(cli=transport_only()),
 )
-async def get_creator_profile(creator_id: FromPath[UUID], accounts: Accounts) -> PublicCreatorProfile:
+async def get_creator_profile(
+    creator_id: FromPath[UUID], accounts: Accounts, services: Services, caller: CurrentCaller
+) -> PublicCreatorProfile:
     """Return a creator's public profile, following account-merge redirects.
 
     The account service applies profile and identity visibility before this route
@@ -81,7 +86,7 @@ async def get_creator_profile(creator_id: FromPath[UUID], accounts: Accounts) ->
     profile = await accounts.get_public_profile(creator_id)
     if profile is None:
         raise CreatorNotFoundError(creator_id)
-    return profile
+    return await BrowserViews(services, caller).creator(profile)
 
 
 router = Router(

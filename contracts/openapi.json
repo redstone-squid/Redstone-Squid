@@ -468,6 +468,177 @@
         ]
       }
     },
+    "/v1/auth/providers": {
+      "get": {
+        "tags": [
+          "authentication"
+        ],
+        "summary": "Providers",
+        "description": "List enabled browser sign-in providers in display order.",
+        "operationId": "browser_providers_list",
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/BrowserProvider"
+                  },
+                  "type": "array"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {}
+        ],
+        "x-squid-cli": {
+          "classification": "browser-only"
+        }
+      }
+    },
+    "/v1/auth/{provider}/link": {
+      "post": {
+        "tags": [
+          "authentication"
+        ],
+        "summary": "LinkProvider",
+        "description": "Start identity linking for the consenting browser account.",
+        "operationId": "browser_provider_link",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9_-]{0,31}$"
+            },
+            "required": true,
+            "deprecated": false
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maxLength": 255,
+              "minLength": 1,
+              "pattern": "^[\\x21-\\x7e]+$",
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+            "required": false,
+            "deprecated": false
+          },
+          {
+            "name": "redirect_to",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maxLength": 2048
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkAuthorization"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "WebSession": [],
+            "CsrfToken": []
+          }
+        ],
+        "x-squid-cli": {
+          "classification": "browser-only"
+        }
+      }
+    },
     "/v1/auth/csrf": {
       "get": {
         "tags": [
@@ -863,11 +1034,17 @@
             "name": "code",
             "in": "query",
             "schema": {
-              "type": "string",
-              "maxLength": 2048,
-              "minLength": 1
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maxLength": 2048
             },
-            "required": true,
+            "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
             "allowReserved": false
@@ -876,11 +1053,36 @@
             "name": "state",
             "in": "query",
             "schema": {
-              "type": "string",
-              "maxLength": 512,
-              "minLength": 1
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maxLength": 512
             },
-            "required": true,
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "error",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maxLength": 256
+            },
+            "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
             "allowReserved": false
@@ -1026,6 +1228,13 @@
           "200": {
             "description": "Request fulfilled, document follows",
             "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "required": false,
+                "deprecated": false
+              },
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
               }
@@ -1101,7 +1310,10 @@
         },
         "deprecated": false,
         "security": [
-          {}
+          {},
+          {
+            "WebSession": []
+          }
         ],
         "x-squid-cli": {
           "classification": "transport-only"
@@ -9353,6 +9565,13 @@
           "200": {
             "description": "Request fulfilled, document follows",
             "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "required": false,
+                "deprecated": false
+              },
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
               }
@@ -9443,7 +9662,10 @@
         },
         "deprecated": false,
         "security": [
-          {}
+          {},
+          {
+            "WebSession": []
+          }
         ],
         "x-squid-cli": {
           "classification": "transport-only"
@@ -12208,6 +12430,55 @@
         "x-required-api-scopes": [
           "settings.runtime.edit"
         ]
+      }
+    },
+    "/v1/session": {
+      "get": {
+        "summary": "SessionSnapshot",
+        "description": "Return user, global permissions and header counts for the current browser.",
+        "operationId": "browser_session_get",
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionSnapshot"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {},
+          {
+            "WebSession": []
+          }
+        ],
+        "x-squid-cli": {
+          "classification": "browser-only"
+        }
       }
     },
     "/v1/submissions/inbox": {
@@ -17210,7 +17481,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Page_litestar.dto._backend.TagDetail_"
+                  "$ref": "#/components/schemas/Page_litestar.dto._backend.TagSummary_"
                 }
               }
             }
@@ -17308,6 +17579,13 @@
           "200": {
             "description": "Request fulfilled, document follows",
             "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "required": false,
+                "deprecated": false
+              },
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
               }
@@ -17383,7 +17661,10 @@
         },
         "deprecated": false,
         "security": [
-          {}
+          {},
+          {
+            "WebSession": []
+          }
         ],
         "x-squid-cli": {
           "classification": "transport-only"
@@ -17413,6 +17694,13 @@
           "200": {
             "description": "Request fulfilled, document follows",
             "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "required": false,
+                "deprecated": false
+              },
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
               }
@@ -17488,7 +17776,10 @@
         },
         "deprecated": false,
         "security": [
-          {}
+          {},
+          {
+            "WebSession": []
+          }
         ],
         "x-squid-cli": {
           "classification": "transport-only"
@@ -17626,6 +17917,13 @@
           "200": {
             "description": "Request fulfilled, document follows",
             "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "required": false,
+                "deprecated": false
+              },
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"
               }
@@ -17701,7 +17999,10 @@
         },
         "deprecated": false,
         "security": [
-          {}
+          {},
+          {
+            "WebSession": []
+          }
         ],
         "x-squid-cli": {
           "classification": "transport-only"
@@ -18463,6 +18764,18 @@
         ],
         "title": "AvatarDetail"
       },
+      "BrowserProvider": {
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id"
+        ],
+        "title": "BrowserProvider"
+      },
       "BuildCategory": {
         "type": "string",
         "enum": [
@@ -18626,6 +18939,16 @@
           },
           "links": {
             "$ref": "#/components/schemas/BuildLinks"
+          },
+          "viewer": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/BuildViewer"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "sponsor": {
             "oneOf": [
@@ -19175,6 +19498,44 @@
         ],
         "title": "BuildStatusFilter",
         "description": "Moderation state selectable on the authoritative build collection."
+      },
+      "BuildViewer": {
+        "properties": {
+          "can_edit": {
+            "type": "boolean"
+          },
+          "can_review": {
+            "type": "boolean"
+          },
+          "can_download_private_schematics": {
+            "type": "boolean"
+          },
+          "followed_creator_subscription_ids": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object"
+          },
+          "ballot": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ViewerBallot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "ballot",
+          "can_download_private_schematics",
+          "can_edit",
+          "can_review",
+          "followed_creator_subscription_ids"
+        ],
+        "title": "BuildViewer"
       },
       "CandidateGap": {
         "properties": {
@@ -19753,6 +20114,16 @@
             },
             "type": "array",
             "default": []
+          },
+          "viewer": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CreatorViewer"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -19761,6 +20132,33 @@
           "id"
         ],
         "title": "CreatorProfileDetail"
+      },
+      "CreatorViewer": {
+        "properties": {
+          "subscription_id": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "is_self": {
+            "type": "boolean"
+          },
+          "can_claim": {
+            "type": "boolean"
+          }
+        },
+        "type": "object",
+        "required": [
+          "can_claim",
+          "is_self",
+          "subscription_id"
+        ],
+        "title": "CreatorViewer"
       },
       "Credit": {
         "properties": {
@@ -22459,6 +22857,18 @@
           }
         ]
       },
+      "LinkAuthorization": {
+        "properties": {
+          "authorization_url": {
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "required": [
+          "authorization_url"
+        ],
+        "title": "LinkAuthorization"
+      },
       "LinkedIdentityDetail": {
         "properties": {
           "id": {
@@ -23229,11 +23639,11 @@
         ],
         "title": "Page[PublishedRecordResult]"
       },
-      "Page_litestar.dto._backend.TagDetail_": {
+      "Page_litestar.dto._backend.TagSummary_": {
         "properties": {
           "items": {
             "items": {
-              "$ref": "#/components/schemas/TagDetail"
+              "$ref": "#/components/schemas/TagSummary"
             },
             "type": "array"
           },
@@ -23268,7 +23678,7 @@
           "prev",
           "total"
         ],
-        "title": "Page[TagDetail]"
+        "title": "Page[TagSummary]"
       },
       "Page_squid.api.v1.schemas.diagnostics.ErrorReportSummary_": {
         "properties": {
@@ -24188,6 +24598,16 @@
               "$ref": "#/components/schemas/PublicBuildSummary"
             },
             "type": "array"
+          },
+          "viewer": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RecordViewer"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -25181,6 +25601,25 @@
         ],
         "title": "RecordSearchResult"
       },
+      "RecordViewer": {
+        "properties": {
+          "subscription_id": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "subscription_id"
+        ],
+        "title": "RecordViewer"
+      },
       "RegionAnalysisStatus": {
         "type": "string",
         "enum": [
@@ -26056,6 +26495,110 @@
         "required": [],
         "title": "ServerProfileSchema"
       },
+      "SessionCounts": {
+        "properties": {
+          "unread_notifications": {
+            "type": "integer"
+          },
+          "drafts": {
+            "type": "integer"
+          },
+          "drafts_needing_attention": {
+            "type": "integer"
+          },
+          "review_queue": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "drafts",
+          "drafts_needing_attention",
+          "review_queue",
+          "unread_notifications"
+        ],
+        "title": "SessionCounts"
+      },
+      "SessionSnapshot": {
+        "properties": {
+          "user": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SessionUser"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "consent_pending": {
+            "type": "boolean"
+          },
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/SessionCounts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "consent_pending",
+          "counts",
+          "permissions",
+          "user"
+        ],
+        "title": "SessionSnapshot"
+      },
+      "SessionUser": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "creator_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "display_name": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "avatar_url": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "avatar_url",
+          "creator_id",
+          "display_name",
+          "id"
+        ],
+        "title": "SessionUser"
+      },
       "ShowcaseTag": {
         "properties": {
           "key": {
@@ -26545,6 +27088,168 @@
           "id": {
             "type": "integer"
           },
+          "slug": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "query_name": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "authority": {
+            "$ref": "#/components/schemas/TagAuthority"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/TagSemanticKind"
+          },
+          "value_type": {
+            "$ref": "#/components/schemas/TagValueType"
+          },
+          "restriction_type": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "record_operator": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RecordOperator"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "canonical_unit": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "display_unit": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "numeric_step": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "viewer": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/TagViewer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "authority",
+          "canonical_unit",
+          "display_unit",
+          "id",
+          "key",
+          "kind",
+          "name",
+          "numeric_step",
+          "query_name",
+          "record_operator",
+          "restriction_type",
+          "slug",
+          "value_type"
+        ],
+        "title": "TagDetail"
+      },
+      "TagPredicateInput": {
+        "properties": {
+          "tag_id": {
+            "type": "integer",
+            "minimum": 1.0
+          },
+          "operator": {
+            "type": "string",
+            "enum": [
+              "present",
+              "exact"
+            ],
+            "default": "present"
+          },
+          "value": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "tag_id"
+        ],
+        "title": "TagPredicateInput"
+      },
+      "TagSemanticKind": {
+        "type": "string",
+        "enum": [
+          "restriction",
+          "pattern",
+          "showcase"
+        ],
+        "title": "TagSemanticKind",
+        "description": "The behavior associated with a tag definition."
+      },
+      "TagSummary": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
           "query_name": {
             "oneOf": [
               {
@@ -26634,57 +27339,7 @@
           "slug",
           "value_type"
         ],
-        "title": "TagDetail"
-      },
-      "TagPredicateInput": {
-        "properties": {
-          "tag_id": {
-            "type": "integer",
-            "minimum": 1.0
-          },
-          "operator": {
-            "type": "string",
-            "enum": [
-              "present",
-              "exact"
-            ],
-            "default": "present"
-          },
-          "value": {
-            "oneOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "integer"
-              },
-              {
-                "type": "number"
-              },
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "type": "object",
-        "required": [
-          "tag_id"
-        ],
-        "title": "TagPredicateInput"
-      },
-      "TagSemanticKind": {
-        "type": "string",
-        "enum": [
-          "restriction",
-          "pattern",
-          "showcase"
-        ],
-        "title": "TagSemanticKind",
-        "description": "The behavior associated with a tag definition."
+        "title": "TagSummary"
       },
       "TagValueType": {
         "type": "string",
@@ -26696,6 +27351,25 @@
         ],
         "title": "TagValueType",
         "description": "The scalar value attached to a tag."
+      },
+      "TagViewer": {
+        "properties": {
+          "filter_subscription_id": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "filter_subscription_id"
+        ],
+        "title": "TagViewer"
       },
       "UploadCapabilities": {
         "properties": {
@@ -27076,6 +27750,22 @@
         "type": "object",
         "required": [],
         "title": "VideoSimulation"
+      },
+      "ViewerBallot": {
+        "properties": {
+          "vote_session_id": {
+            "type": "integer"
+          },
+          "option_alias_id": {
+            "type": "integer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "option_alias_id",
+          "vote_session_id"
+        ],
+        "title": "ViewerBallot"
       },
       "VisibilityOperator": {
         "type": "string",

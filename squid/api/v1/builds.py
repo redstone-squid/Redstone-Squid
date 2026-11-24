@@ -3,7 +3,6 @@
 import re
 import shutil
 import tempfile
-from dataclasses import replace
 from pathlib import Path
 from typing import Annotated, cast
 from uuid import UUID
@@ -39,6 +38,7 @@ from squid.api.pagination import (
     resolve_selector,
 )
 from squid.api.security import Caller, requires
+from squid.api.v1.browser_views import BrowserViews
 from squid.api.v1.schemas.builds import BuildDetail, BuildPatch, BuildStatusFilter
 from squid.api.v1.search import PUBLIC_SEARCH_STATUSES, build_hit_id, hydrate_builds
 from squid.core.builds.application import (
@@ -58,7 +58,10 @@ from squid.core.builds.models import Build
 from squid.core.edits.domain import EditCommand, LatestRevision, Revision
 from squid.core.errors import ValidationError
 from squid.core.permissions.application import PermissionService
-from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_CREATE, BUILD_SUBMISSION_VIEW_PENDING
+from squid.core.permissions.domain.catalogue import (
+    BUILD_SUBMISSION_CREATE,
+    BUILD_SUBMISSION_VIEW_PENDING,
+)
 from squid.core.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
 
 UserWriter = CurrentCaller
@@ -123,25 +126,20 @@ async def edit_build(
         describe={404: "No approved build with this identifier. A pending build answers 404 as well."},
     ),
     operation_id="builds_get",
-    security=[ANONYMOUS],
+    response_headers={"Cache-Control": "private, no-store"},
+    security=[ANONYMOUS, WEB],
     opt=contract(cli=transport_only()),
 )
-async def get_build(build_id: FromPath[int], build_queries: BuildQueries, services: Services) -> Response[BuildDetail]:
+async def get_build(
+    build_id: FromPath[int], build_queries: BuildQueries, services: Services, caller: CurrentCaller
+) -> Response[BuildDetail]:
     """Return one approved public build.
 
     Pending and rejected builds return 404, as do missing builds. This endpoint does
     not expose unpublished submissions, even to callers who can view them elsewhere.
     """
     build = await build_queries.get_public(build_id)
-    detail = BuildDetail.from_domain(build)
-    if media := services.published_build_media:
-        images, videos = await media.urls(build_id)
-        detail = replace(
-            detail,
-            links=detail.links.model_copy(
-                update={"images": [*images, *detail.links.images], "videos": [*videos, *detail.links.videos]}
-            ),
-        )
+    detail = await BrowserViews(services, caller).build(build)
     return Response(detail, headers={"ETag": build_etag(build)})
 
 

@@ -160,6 +160,14 @@ async def _authenticate_caller(request: Request) -> Caller:
             return ANONYMOUS
         identity = await web_auth.authenticate(session_token)
         if identity is None:
+            operation = getattr(request.scope.get("route_handler"), "operation_id", None)
+            if operation in {
+                "browser_session_get",
+                "browser_providers_list",
+                "browser_authorization_start",
+                "browser_authorization_callback",
+            }:
+                return ANONYMOUS
             raise AuthenticationError
         if request.method not in {"GET", "HEAD", "OPTIONS"}:
             csrf_cookie = request.cookies.get("squid_csrf")

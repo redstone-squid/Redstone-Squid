@@ -9,6 +9,7 @@ import uuid
 from collections.abc import Sequence
 from pathlib import Path
 from typing import cast, override
+from unittest.mock import create_autospec
 from uuid import UUID
 
 from litestar import Litestar
@@ -22,6 +23,7 @@ from squid.core.accounts.errors import MinecraftAccountNotFoundError
 from squid.core.accounts.models import AccountIdentity, AccountProfile, CreatorAlias
 from squid.core.actors import Actor
 from squid.core.auth.application.web import WebSessionService
+from squid.core.auth.infrastructure.viewer import ViewerQueries
 from squid.core.builds.application import BuildQueryService, BuildService
 from squid.core.builds.application.editing import BuildEditPatch
 from squid.core.builds.application.queries import DEFAULT_BUILD_LIST_SORT, BuildListSort
@@ -806,6 +808,7 @@ def build_services(
     rejects unknown sources. Other services use the transport fakes above.
     """
     return ApiServices(
+        viewer_queries=create_autospec(ViewerQueries, instance=True),
         settings=RuntimeSettingsStub(),
         edits=MockEditRunner(),
         api_keys=None,

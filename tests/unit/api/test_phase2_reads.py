@@ -312,6 +312,7 @@ def test_creator_profile_groups_public_aliases(app_factory: tuple[Litestar, Mock
     assert response.json() == {
         "id": "22222222-2222-2222-2222-222222222222",
         "canonical_id": None,
+        "viewer": None,
         "hidden": False,
         "aliases": [
             {"name": "Builder", "build_count": 2},

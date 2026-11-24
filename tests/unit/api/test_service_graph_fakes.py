@@ -64,4 +64,4 @@ def test_optional_collaborators_are_the_only_ones_left_empty() -> None:
     """Only fields the API itself treats as optional may be `None` in a transport app."""
     services = build_services()
     empty = {field for field in ApiServices.__dataclass_fields__ if getattr(services, field) is None}
-    assert empty == {"api_keys", "web_auth", "vote_members"}
+    assert empty == {"api_keys", "web_auth", "vote_members", "published_build_media"}

@@ -55,6 +55,13 @@ export type AvatarDetail = {
 };
 
 /**
+ * BrowserProvider
+ */
+export type BrowserProvider = {
+    id: string;
+};
+
+/**
  * BuildCategory
  *
  * The categories of the builds.
@@ -88,6 +95,7 @@ export type BuildDetail = {
     };
     description: string | null;
     links: BuildLinks;
+    viewer?: BuildViewer | null;
     sponsor?: BuildSponsor | null;
 };
 
@@ -174,6 +182,19 @@ export type BuildSponsor = {
  * Moderation state selectable on the authoritative build collection.
  */
 export type BuildStatusFilter = 'pending' | 'approved' | 'rejected';
+
+/**
+ * BuildViewer
+ */
+export type BuildViewer = {
+    can_edit: boolean;
+    can_review: boolean;
+    can_download_private_schematics: boolean;
+    followed_creator_subscription_ids: {
+        [key: string]: number;
+    };
+    ballot: ViewerBallot | null;
+};
 
 /**
  * CandidateGap
@@ -366,6 +387,16 @@ export type CreatorProfileDetail = {
     avatar_url?: string | null;
     joined_at?: string | null;
     identities?: Array<IdentityDetails>;
+    viewer?: CreatorViewer | null;
+};
+
+/**
+ * CreatorViewer
+ */
+export type CreatorViewer = {
+    subscription_id: number | null;
+    is_self: boolean;
+    can_claim: boolean;
 };
 
 /**
@@ -1130,6 +1161,13 @@ export type JsonValue = null | boolean | number | string | Array<JsonValue> | {
 };
 
 /**
+ * LinkAuthorization
+ */
+export type LinkAuthorization = {
+    authorization_url: string;
+};
+
+/**
  * LinkedIdentityDetail
  */
 export type LinkedIdentityDetail = {
@@ -1358,10 +1396,10 @@ export type PageLitestarDtoBackendPublishedRecordResult = {
 };
 
 /**
- * Page[TagDetail]
+ * Page[TagSummary]
  */
-export type PageLitestarDtoBackendTagDetail = {
-    items: Array<TagDetail>;
+export type PageLitestarDtoBackendTagSummary = {
+    items: Array<TagSummary>;
     total: number;
     next: PageAnchor | null;
     prev: PageAnchor | null;
@@ -1619,6 +1657,7 @@ export type PublicRecordDetail = {
     version_id?: number | null;
     door_evidence?: DoorRecordEvidence | null;
     holder_builds: Array<PublicBuildSummary>;
+    viewer?: RecordViewer | null;
 };
 
 /**
@@ -1837,6 +1876,13 @@ export type RecordSearchResult = {
     resource_kind?: 'record';
     score: number | null;
     record: RecordSearchEntry;
+};
+
+/**
+ * RecordViewer
+ */
+export type RecordViewer = {
+    subscription_id: number | null;
 };
 
 /**
@@ -2084,6 +2130,36 @@ export type ServerProfileSchema = {
 };
 
 /**
+ * SessionCounts
+ */
+export type SessionCounts = {
+    unread_notifications: number;
+    drafts: number;
+    drafts_needing_attention: number;
+    review_queue: number | null;
+};
+
+/**
+ * SessionSnapshot
+ */
+export type SessionSnapshot = {
+    user: SessionUser | null;
+    consent_pending: boolean;
+    permissions: Array<string>;
+    counts: SessionCounts;
+};
+
+/**
+ * SessionUser
+ */
+export type SessionUser = {
+    id: number;
+    creator_id: string;
+    display_name: string | null;
+    avatar_url: string | null;
+};
+
+/**
  * ShowcaseTag
  */
 export type ShowcaseTag = {
@@ -2246,18 +2322,19 @@ export type TagAuthority = 'official' | 'user';
  */
 export type TagDetail = {
     id: number;
-    query_name?: string | null;
-    restriction_type?: string | null;
-    record_operator?: RecordOperator | null;
-    canonical_unit?: string | null;
-    display_unit?: string | null;
-    numeric_step?: string | null;
+    slug: string;
     key: string;
     name: string;
+    query_name: string | null;
     authority: TagAuthority;
     kind: TagSemanticKind;
     value_type: TagValueType;
-    slug: string;
+    restriction_type: string | null;
+    record_operator: RecordOperator | null;
+    canonical_unit: string | null;
+    display_unit: string | null;
+    numeric_step: string | null;
+    viewer?: TagViewer | null;
 };
 
 /**
@@ -2277,11 +2354,37 @@ export type TagPredicateInput = {
 export type TagSemanticKind = 'restriction' | 'pattern' | 'showcase';
 
 /**
+ * TagSummary
+ */
+export type TagSummary = {
+    id: number;
+    query_name?: string | null;
+    restriction_type?: string | null;
+    record_operator?: RecordOperator | null;
+    canonical_unit?: string | null;
+    display_unit?: string | null;
+    numeric_step?: string | null;
+    key: string;
+    name: string;
+    authority: TagAuthority;
+    kind: TagSemanticKind;
+    value_type: TagValueType;
+    slug: string;
+};
+
+/**
  * TagValueType
  *
  * The scalar value attached to a tag.
  */
 export type TagValueType = 'none' | 'numeric' | 'text' | 'boolean';
+
+/**
+ * TagViewer
+ */
+export type TagViewer = {
+    filter_subscription_id: number | null;
+};
 
 /**
  * UploadCapabilities
@@ -2406,6 +2509,14 @@ export type VideoResponse = {
 export type VideoSimulation = {
     enabled?: boolean;
     interactions?: Array<VideoInteraction>;
+};
+
+/**
+ * ViewerBallot
+ */
+export type ViewerBallot = {
+    vote_session_id: number;
+    option_alias_id: number;
 };
 
 /**
@@ -2679,6 +2790,70 @@ export type VerificationCreateCompatibilityResponses = {
 
 export type VerificationCreateCompatibilityResponse = VerificationCreateCompatibilityResponses[keyof VerificationCreateCompatibilityResponses];
 
+export type BrowserProvidersListData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/auth/providers';
+};
+
+export type BrowserProvidersListErrors = {
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type BrowserProvidersListError = BrowserProvidersListErrors[keyof BrowserProvidersListErrors];
+
+export type BrowserProvidersListResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: Array<BrowserProvider>;
+};
+
+export type BrowserProvidersListResponse = BrowserProvidersListResponses[keyof BrowserProvidersListResponses];
+
+export type BrowserProviderLinkData = {
+    body?: never;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        provider: string;
+    };
+    query?: {
+        redirect_to?: string | null;
+    };
+    url: '/v1/auth/{provider}/link';
+};
+
+export type BrowserProviderLinkErrors = {
+    /**
+     * Unprocessable Entity
+     */
+    422: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type BrowserProviderLinkError = BrowserProviderLinkErrors[keyof BrowserProviderLinkErrors];
+
+export type BrowserProviderLinkResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: LinkAuthorization;
+};
+
+export type BrowserProviderLinkResponse = BrowserProviderLinkResponses[keyof BrowserProviderLinkResponses];
+
 export type BrowserCsrfGetData = {
     body?: never;
     path?: never;
@@ -2804,9 +2979,10 @@ export type BrowserAuthorizationCallbackData = {
     path: {
         provider: string;
     };
-    query: {
-        code: string;
-        state: string;
+    query?: {
+        code?: string | null;
+        state?: string | null;
+        error?: string | null;
     };
     url: '/v1/auth/{provider}/callback';
 };
@@ -6386,6 +6562,31 @@ export type RuntimeSettingsUpdateResponses = {
 
 export type RuntimeSettingsUpdateResponse = RuntimeSettingsUpdateResponses[keyof RuntimeSettingsUpdateResponses];
 
+export type BrowserSessionGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/session';
+};
+
+export type BrowserSessionGetErrors = {
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type BrowserSessionGetError = BrowserSessionGetErrors[keyof BrowserSessionGetErrors];
+
+export type BrowserSessionGetResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: SessionSnapshot;
+};
+
+export type BrowserSessionGetResponse = BrowserSessionGetResponses[keyof BrowserSessionGetResponses];
+
 export type SubmissionCorrectionInboxData = {
     body?: never;
     path?: never;
@@ -7923,7 +8124,7 @@ export type TagsListResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: PageLitestarDtoBackendTagDetail;
+    200: PageLitestarDtoBackendTagSummary;
 };
 
 export type TagsListResponse = TagsListResponses[keyof TagsListResponses];

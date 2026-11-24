@@ -6,6 +6,7 @@ from uuid import UUID
 
 import pytest
 
+from squid.api.security import ANONYMOUS
 from squid.api.v1.records import get_record
 from squid.api.v1.schemas.builds import BuildDetail, DoorDetails, ExtenderDetails, GeneralDetails
 from squid.core.builds.application import PublicBuildPreview, PublicBuildSummary
@@ -17,6 +18,7 @@ from squid.core.records.domain import BuildKind, RecordCriterion, ResolutionStat
 from squid.core.sponsors import PublicSponsor
 from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.core.tags.models import TagAssignment, TagDefinition
+from tests.unit.api.fakes import build_services
 
 
 def catalogue_build(build_id: int, **changes: Any) -> Build:
@@ -172,7 +174,7 @@ async def test_record_detail_hydrates_holders_in_record_order() -> None:
     record = published_record(41, 42)
     records = PublicRecordFake(record, [catalogue_build(41), catalogue_build(42)])
 
-    detail = await get_record.fn(record.record_id, records)
+    detail = await get_record.fn(record.record_id, records, build_services(), ANONYMOUS)
 
     assert detail.holder_build_ids == (41, 42)
     assert [build.id for build in detail.holder_builds] == [41, 42]

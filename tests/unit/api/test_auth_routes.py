@@ -123,7 +123,8 @@ def test_discord_login_consumes_state_and_sets_session_cookies(login: BrowserLog
     assert not cookies["squid_csrf"]["httponly"]
 
     replay = login.client.get("/v1/auth/discord/callback", params={"code": "c", "state": state})
-    assert replay.status_code == 401
+    assert replay.status_code == 307
+    assert replay.headers["location"] == "/sign-in?auth_error=invalid_state"
     assert login.accounts.identities == [(IdentityProvider.DISCORD, "123")]
 
 
@@ -177,3 +178,32 @@ def test_malformed_slug_cannot_create_authorization_state(login: BrowserLogin, s
 
     assert response.status_code == 422
     assert login.sessions.state is None
+
+
+def test_provider_discovery_and_cancelled_login(login: BrowserLogin) -> None:
+    assert login.client.get("/v1/auth/providers").json() == [{"id": "discord"}]
+    login.client.get("/v1/auth/discord", params={"redirect_to": "/account?tab=providers"})
+    assert login.sessions.state is not None
+    denied = login.client.get(
+        "/v1/auth/discord/callback", params={"state": login.sessions.state.state, "error": "access_denied"}
+    )
+    assert parse_qs(urlsplit(denied.headers["location"]).query) == {
+        "auth_error": ["cancelled"],
+        "redirect_to": ["/account?tab=providers"],
+    }
+    assert login.sessions.state is None
+    assert not login.accounts.identities
+
+
+def test_expired_session_returns_anonymous_snapshot(login: BrowserLogin) -> None:
+    login.client.cookies.set("__Host-squid_session", "expired")
+    assert login.client.get("/v1/auth/providers").status_code == 200
+    response = login.client.get("/v1/session")
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    assert response.json() == {
+        "user": None,
+        "permissions": [],
+        "consent_pending": False,
+        "counts": {"unread_notifications": 0, "drafts": 0, "drafts_needing_attention": 0, "review_queue": None},
+    }

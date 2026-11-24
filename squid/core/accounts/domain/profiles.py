@@ -216,6 +216,13 @@ class CreatorProfileRecord:
 
 
 @dataclass(frozen=True, slots=True)
+class CreatorViewer:
+    subscription_id: int | None
+    is_self: bool
+    can_claim: bool
+
+
+@dataclass(frozen=True, slots=True)
 class PublicCreatorProfile:
     """What a stranger sees. Fields absent from a hidden profile are `None` or empty."""
 
@@ -230,6 +237,8 @@ class PublicCreatorProfile:
     avatar_url: str | None = None
     joined_at: Instant | None = None
     identities: tuple[IdentityDetails, ...] = ()
+
+    viewer: CreatorViewer | None = None
 
     @property
     def was_redirected(self) -> bool:

@@ -9,11 +9,13 @@ from litestar.di import Provide
 from litestar.dto import DataclassDTO, DTOConfig
 from litestar.params import FromPath, JSONBody, PathParameter, QueryParameter
 
-from squid.api.contract import ANONYMOUS, DEVICE, SERVICE, WEB_WRITE, contract, transport_only
+from squid.api.contract import ANONYMOUS, DEVICE, SERVICE, WEB, WEB_WRITE, contract, transport_only
 from squid.api.dependencies import (
+    CurrentCaller,
     PublicRecords,
     RangePublications,
     Records,
+    Services,
     get_public_records,
     get_range_publication,
     get_records,
@@ -30,6 +32,7 @@ from squid.api.pagination import (
     resolve_selector,
 )
 from squid.api.security import requires
+from squid.api.v1.browser_views import BrowserViews
 from squid.core.permissions.domain.catalogue import RECORD_ENTRY_REBUILD
 from squid.core.records.application.expansion_regions import DoorRangeQuery, DoorRangeResult
 from squid.core.records.application.live import DoorRecordLookup, LiveDoorRecord
@@ -72,16 +75,19 @@ _SORT_FIELDS = frozenset({"result_id"})
     "/{record_id:uuid}",
     responses=responses(404, 422, 500, 503),
     operation_id="records_get",
+    response_headers={"Cache-Control": "private, no-store"},
     dependencies={"records": Provide(get_public_records, sync_to_thread=False)},
-    security=[ANONYMOUS],
+    security=[ANONYMOUS, WEB],
     opt=contract(cli=transport_only()),
 )
-async def get_record(record_id: FromPath[UUID], records: PublicRecords) -> PublicRecordDetail:
+async def get_record(
+    record_id: FromPath[UUID], records: PublicRecords, services: Services, caller: CurrentCaller
+) -> PublicRecordDetail:
     """Return the latest published result for a record."""
     detail = await records.get(record_id)
     if detail is None:
         raise RecordNotFoundError(record_id)
-    return detail
+    return await BrowserViews(services, caller).record(detail)
 
 
 @get(

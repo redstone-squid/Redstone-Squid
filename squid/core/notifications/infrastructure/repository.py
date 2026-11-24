@@ -197,7 +197,7 @@ class PostgresNotificationRepository:
         return (
             await self._session().scalars(
                 select(InboxNotification)
-                .where(InboxNotification.id.in_(ids), *_inbox_predicates(account_id, visibility))
+                .where(InboxNotification.id.in_(ids), *inbox_predicates(account_id, visibility))
                 .order_by(InboxNotification.id)
                 .with_for_update()
             )
@@ -941,7 +941,7 @@ def _preferences(
     )
 
 
-def _inbox_predicates(account_id: int, visibility: InboxVisibility) -> tuple[ColumnElement[bool], ...]:
+def inbox_predicates(account_id: int, visibility: InboxVisibility) -> tuple[ColumnElement[bool], ...]:
     predicates = (
         InboxNotification.account_id == account_id,
         InboxNotification.web_visible.is_(True),
@@ -959,7 +959,7 @@ def _inbox_predicates(account_id: int, visibility: InboxVisibility) -> tuple[Col
 
 def _inbox_filter[S: Select[Any]](statement: S, *, account_id: int, visibility: InboxVisibility) -> S:
     """Apply the visibility rules shared by inbox reads and state transitions."""
-    return statement.where(*_inbox_predicates(account_id, visibility))
+    return statement.where(*inbox_predicates(account_id, visibility))
 
 
 def _filter_matches(

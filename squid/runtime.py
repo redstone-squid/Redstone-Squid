@@ -24,6 +24,7 @@ from squid.core.accounts.application import AccountService
 from squid.core.artifacts import ArtifactStore
 from squid.core.auth.application import ApiKeyService
 from squid.core.auth.application.web import WebSessionService
+from squid.core.auth.infrastructure.viewer import ViewerQueries
 from squid.core.builds.application import BuildInferenceService, BuildQueryService, BuildService, RestrictionService
 from squid.core.builds.application.ports import BuildSchematicSummaryProvider
 from squid.core.cli_auth import CliAuthorizationService
@@ -140,6 +141,7 @@ class ApiServices:
     versions: VersionService
     votes: VoteService
     vote_members: InteractiveVoteActorResolver | None
+    viewer_queries: ViewerQueries
     published_build_media: PublishedBuildMedia | None = None
 
 

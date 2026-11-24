@@ -216,6 +216,11 @@ class PublishedRecordResult:
 
 
 @dataclass(frozen=True, slots=True)
+class RecordViewer:
+    subscription_id: int | None
+
+
+@dataclass(frozen=True, slots=True)
 class PublicRecordDetail(PublishedRecordResult):
     """One published result with its complete ordered public holders.
 
@@ -224,6 +229,7 @@ class PublicRecordDetail(PublishedRecordResult):
     """
 
     holder_builds: tuple[PublicBuildSummary, ...]
+    viewer: RecordViewer | None = None
 
     @classmethod
     def with_holders(cls, result: PublishedRecordResult, holder_builds: Sequence[PublicBuildSummary]) -> Self:

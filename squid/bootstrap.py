@@ -37,6 +37,7 @@ from squid.core.artifacts.infrastructure import create_artifact_store
 from squid.core.auth.application import ApiKeyService
 from squid.core.auth.application.providers import PROVIDER_FACTORIES, OAuthProvider
 from squid.core.auth.application.web import WebSessionService
+from squid.core.auth.infrastructure.viewer import ViewerQueries
 from squid.core.builds.application import (
     BuildEmbeddingService,
     BuildInferenceService,
@@ -642,6 +643,7 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         msg = "The API runtime requires an idempotency response-encryption keyring."
         raise RuntimeError(msg)
     return ApiServices(
+        viewer_queries=ViewerQueries(db.async_session),
         settings=graph.settings,
         edits=graph.edits,
         builds=graph.builds,

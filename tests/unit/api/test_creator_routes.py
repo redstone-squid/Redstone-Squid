@@ -10,6 +10,7 @@ from litestar.di import Provide
 from whenever import Instant
 
 from squid.api.openapi import ApplicationValueSchemaPlugin
+from squid.api.security import ANONYMOUS
 from squid.api.v1.creators import PublicCreatorDTO, get_creator_profile
 from squid.core.accounts.application import AccountService
 from squid.core.accounts.domain import (
@@ -57,7 +58,11 @@ async def test_creator_dto_preserves_public_json_and_excludes_unpublished_proper
     handler = get(
         "/creators/{creator_id:uuid}",
         return_dto=PublicCreatorDTO,
-        dependencies={"accounts": Provide(lambda: accounts, sync_to_thread=False)},
+        dependencies={
+            "accounts": Provide(lambda: accounts, sync_to_thread=False),
+            "caller": Provide(lambda: ANONYMOUS, sync_to_thread=False),
+            "services": Provide(lambda: None, sync_to_thread=False),
+        },
     )(get_creator_profile.fn)
     app = Litestar([handler], plugins=[ApplicationValueSchemaPlugin()], type_encoders={Instant: Instant.format_iso})
     # HTTPX and Litestar describe compatible ASGI interfaces with different scope types.
@@ -69,6 +74,7 @@ async def test_creator_dto_preserves_public_json_and_excludes_unpublished_proper
     assert response.json() == {
         "id": str(CREATOR_ID),
         "canonical_id": str(CANONICAL_ID),
+        "viewer": None,
         "hidden": hidden,
         "aliases": [{"name": "Notch", "build_count": 3}],
         "display_name": None if hidden else "Notch",

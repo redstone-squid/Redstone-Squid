@@ -11,6 +11,7 @@ import pytest
 from litestar import Litestar, get, post
 from litestar.di import Provide
 
+from squid.api.security import ANONYMOUS
 from squid.api.v1.records import (
     PublicRecordDTO,
     get_door_ranges,
@@ -157,7 +158,11 @@ async def test_record_detail_serializes_the_application_read_model(expanded: boo
     records.get.return_value = PublicRecordDetail.with_holders(replace(_RECORD, door_evidence=evidence), [holder])
     handler = get(
         "/records/{record_id:uuid}",
-        dependencies={"records": Provide(lambda: records, sync_to_thread=False)},
+        dependencies={
+            "records": Provide(lambda: records, sync_to_thread=False),
+            "caller": Provide(lambda: ANONYMOUS, sync_to_thread=False),
+            "services": Provide(lambda: None, sync_to_thread=False),
+        },
     )(get_record.fn)
     app = Litestar([handler])
 
@@ -169,6 +174,7 @@ async def test_record_detail_serializes_the_application_read_model(expanded: boo
     assert response.json() == {
         **_RECORD_JSON,
         "door_evidence": evidence.model_dump(mode="json") if evidence is not None else None,
+        "viewer": None,
         "holder_builds": [
             {
                 "id": 42,

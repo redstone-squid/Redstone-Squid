@@ -7,6 +7,7 @@ import httpx
 from litestar import Litestar, get
 from litestar.di import Provide
 
+from squid.api.security import ANONYMOUS
 from squid.api.v1.search import PublicSearchFieldDTO, list_search_fields
 from squid.api.v1.tags import PublicTagDTO, get_tag, list_tags
 from squid.core.search.application import SearchService
@@ -40,7 +41,14 @@ async def test_tag_dto_preserves_public_fields_and_decimal_precision() -> None:
     app = Litestar(
         [
             get("/tags", return_dto=PublicTagDTO, dependencies=dependencies)(list_tags.fn),
-            get("/tags/{tag_id:int}", return_dto=PublicTagDTO, dependencies=dependencies)(get_tag.fn),
+            get(
+                "/tags/{tag_id:int}",
+                dependencies={
+                    **dependencies,
+                    "caller": Provide(lambda: ANONYMOUS, sync_to_thread=False),
+                    "services": Provide(lambda: None, sync_to_thread=False),
+                },
+            )(get_tag.fn),
         ]
     )
     async with httpx.AsyncClient(transport=asgi_transport(app), base_url="https://test") as client:
@@ -63,10 +71,10 @@ async def test_tag_dto_preserves_public_fields_and_decimal_precision() -> None:
         "numeric_step": "1E-19",
     }
     assert detail.status_code == listing.status_code == 200
-    assert detail.json() == expected
+    assert detail.json() == {**expected, "viewer": None}
     assert listing.json() == {"items": [expected], "total": 1, "next": None, "prev": None}
     schema = app.openapi_schema.to_schema()["components"]["schemas"]["TagDetail"]
-    assert set(schema["properties"]) == set(expected)
+    assert set(schema["properties"]) == {*expected, "viewer"}
 
 
 async def test_search_field_dto_exposes_syntax_without_storage_or_coercion_details() -> None:

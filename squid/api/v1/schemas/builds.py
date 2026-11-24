@@ -7,6 +7,7 @@ from uuid import UUID
 
 from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field
 
+from squid.core.auth.infrastructure.viewer import ViewerBallot
 from squid.core.builds.application.edit_schema import BuildPatch as BuildPatch
 from squid.core.builds.application.edit_schema import DoorPatch as DoorPatch
 from squid.core.builds.application.edit_schema import ExtenderPatch as ExtenderPatch
@@ -121,6 +122,15 @@ def _details(build: Build) -> BuildDetails:
             return GeneralDetails(category=cast(Literal["Utility", "Entrance", "Other"], build.category.value))
 
 
+@dataclass(frozen=True, slots=True)
+class BuildViewer:
+    can_edit: bool
+    can_review: bool
+    can_download_private_schematics: bool
+    followed_creator_subscription_ids: dict[UUID, int]
+    ballot: ViewerBallot | None
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class BuildDetail(PublicBuildSummary):
     """A build summary with category-specific details, restrictions, and media links.
@@ -133,6 +143,7 @@ class BuildDetail(PublicBuildSummary):
     restrictions: dict[str, list[str]]
     description: str | None
     links: BuildLinks
+    viewer: BuildViewer | None = None
     sponsor: BuildSponsor | None = None
 
     @classmethod

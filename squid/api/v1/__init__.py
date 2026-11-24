@@ -18,6 +18,7 @@ from squid.api.v1.notifications import router as notifications_router
 from squid.api.v1.records import router as records_router
 from squid.api.v1.schematics import router as schematics_router
 from squid.api.v1.search import router as search_router
+from squid.api.v1.session import session_snapshot
 from squid.api.v1.settings import router as settings_router
 from squid.api.v1.submission_intake import router as submission_intake_router
 from squid.api.v1.submission_media import router as submission_media_router
@@ -47,6 +48,7 @@ router = Router(
         schematics_router,
         search_router,
         settings_router,
+        session_snapshot,
         submissions_router,
         submission_media_router,
         submission_schematics_router,
