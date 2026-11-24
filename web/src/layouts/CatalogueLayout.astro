@@ -47,7 +47,7 @@ const nav = [
         >
           {nav.map(([label, href]) => (
             <a
-              class="border-b-2 border-transparent py-2 text-fg-muted no-underline hover:text-fg aria-[current=page]:border-accent aria-[current=page]:text-fg"
+              class="border-b-2 border-transparent py-2 text-fg-muted no-underline hover:text-fg aria-[current=page]:border-accent aria-[current=page]:forced-highlight aria-[current=page]:text-fg"
               href={localizePath(href)}
               aria-current={
                 activePath === href || activePath.startsWith(`${href}/`) ? "page" : undefined

@@ -28,6 +28,8 @@
 <span
   class={cn(
     "inline-flex w-fit items-center gap-1.5 rounded-xs font-semibold whitespace-nowrap",
+    // Forced colors drop the tinted background; an outline keeps the badge's shape.
+    "forced-colors:outline",
     size === "sm" ? "px-2 py-0.5 text-xs" : "px-2.5 py-1 text-sm",
     tones[tone],
     className,

@@ -54,7 +54,7 @@ const groups = [
       >
         {options.map((option) => (
           <button
-            class="flex min-h-control-sm cursor-pointer items-center gap-2 rounded-xs px-3 font-semibold text-fg-muted hover:text-fg aria-pressed:bg-accent-soft aria-pressed:text-fg"
+            class="flex min-h-control-sm cursor-pointer items-center gap-2 rounded-xs px-3 font-semibold text-fg-muted hover:text-fg aria-pressed:forced-highlight aria-pressed:bg-accent-soft aria-pressed:text-fg"
             {name}
             value={option.value}
             aria-pressed={option.value === current ? "true" : "false"}

@@ -46,8 +46,8 @@
             )}
           >
             {#if row.before === null}<span class="text-fg-muted">{labels.empty}</span
-              >{:else if row.kind === "unchanged"}{row.before}{:else}<del class="no-underline"
-                >{row.before}</del
+              >{:else if row.kind === "unchanged"}{row.before}{:else}<del
+                class="no-underline forced-colors:line-through">{row.before}</del
               >{/if}
           </td>
           <td
@@ -57,8 +57,8 @@
             )}
           >
             {#if row.after === null}<span class="text-fg-muted">{labels.empty}</span
-              >{:else if row.kind === "unchanged"}{row.after}{:else}<ins class="no-underline"
-                >{row.after}</ins
+              >{:else if row.kind === "unchanged"}{row.after}{:else}<ins
+                class="no-underline forced-colors:underline">{row.after}</ins
               >{/if}
           </td>
         </tr>

@@ -58,8 +58,11 @@
   {#if href !== undefined}
     <a {href} class={cn(body, interactive)}>{@render label()}</a>
   {:else if onclick}
-    <button type="button" class={cn(body, interactive)} aria-pressed={pressed} {onclick}
-      >{@render label()}</button
+    <button
+      type="button"
+      class={cn(body, interactive, "aria-pressed:forced-highlight")}
+      aria-pressed={pressed}
+      {onclick}>{@render label()}</button
     >
   {:else}
     <span class={body}>{@render label()}</span>

@@ -43,6 +43,7 @@ export default {
           "CanvasText",
           "ButtonText",
           "Highlight",
+          "HighlightText",
           "LinkText",
           "GrayText",
         ],

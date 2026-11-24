@@ -43,7 +43,9 @@
     unread && "bg-accent-soft/40",
   )}
 >
-  {#if unread}<span class="mt-2 size-2 shrink-0 rounded-full bg-accent" aria-hidden="true"
+  {#if unread}<span
+      class="mt-2 size-2 shrink-0 rounded-full forced-highlight bg-accent"
+      aria-hidden="true"
     ></span>{/if}
   {#if leading}<div class="shrink-0">{@render leading()}</div>{/if}
   <div class="grid min-w-0 flex-1 gap-1">

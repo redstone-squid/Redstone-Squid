@@ -20,7 +20,7 @@
           href={item.href}
           aria-current={item.current === true ? "true" : undefined}
           class={cn(
-            "flex items-center gap-2 rounded-xs px-3 font-semibold whitespace-nowrap text-fg-muted no-underline hover:text-fg aria-[current=true]:bg-accent-soft aria-[current=true]:text-fg",
+            "flex items-center gap-2 rounded-xs px-3 font-semibold whitespace-nowrap text-fg-muted no-underline hover:text-fg aria-[current=true]:forced-highlight aria-[current=true]:bg-accent-soft aria-[current=true]:text-fg",
             size === "sm" ? "min-h-control-sm text-sm" : "min-h-control text-sm",
           )}
           >{#if item.icon}<item.icon class="size-4" aria-hidden="true" />{/if}{item.label}</a

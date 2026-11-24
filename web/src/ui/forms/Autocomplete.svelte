@@ -179,7 +179,7 @@
         <li role="presentation">
           <button
             type="button"
-            class="grid w-full cursor-pointer rounded-sm border-0 bg-surface p-3 text-left wrap-anywhere text-fg hover:bg-surface-muted aria-selected:bg-surface-muted"
+            class="grid w-full cursor-pointer rounded-sm border-0 bg-surface p-3 text-left wrap-anywhere text-fg hover:bg-surface-muted aria-selected:forced-highlight aria-selected:bg-surface-muted"
             role="option"
             aria-label={item.label}
             tabindex="-1"

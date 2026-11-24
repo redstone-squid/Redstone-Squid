@@ -66,12 +66,12 @@
     >
       <!-- eslint-disable svelte/no-inline-styles -- the fill width is data -->
       <div
-        class={cn("h-full origin-left rounded-full", fills[tone])}
+        class={cn("h-full origin-left rounded-full forced-highlight", fills[tone])}
         style:width={`${fraction * 100}%`}
       ></div>
       {#each thresholds as threshold (threshold.value)}
         <span
-          class="absolute -top-1 h-4 w-0.5 -translate-x-1/2 bg-fg"
+          class="absolute -top-1 h-4 -translate-x-1/2 border-s-2 border-fg"
           style:left={`${Math.min(Math.max(threshold.value / max, 0), 1) * 100}%`}
           title={threshold.label}
         ></span>

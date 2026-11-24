@@ -31,7 +31,7 @@
             <a
               href={item.href}
               aria-current={item.current === true ? "page" : undefined}
-              class="flex min-h-control-sm items-center gap-3 rounded-sm px-3 py-1.5 text-fg no-underline hover:bg-surface-muted aria-[current=page]:bg-accent-soft aria-[current=page]:font-semibold"
+              class="flex min-h-control-sm items-center gap-3 rounded-sm px-3 py-1.5 text-fg no-underline hover:bg-surface-muted aria-[current=page]:forced-highlight aria-[current=page]:bg-accent-soft aria-[current=page]:font-semibold"
             >
               {#if item.icon}<item.icon
                   class="size-4 shrink-0 text-fg-muted"

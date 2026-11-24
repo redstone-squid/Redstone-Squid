@@ -88,7 +88,9 @@ Components style themselves with Tailwind utilities; pages only compose componen
 rejects `class` attributes in `src/pages`. Colors exist only as theme tokens: `light-dark()`
 pairs of `oklch()` values in `src/ui/themes.css`, mapped to utilities such as `bg-surface` and
 `text-fg-muted` in `src/ui/app.css`. High contrast swaps text, border, and focus tokens for
-their `-more` values, so components get it without changes. Lint rejects unknown
+their `-more` values, so components get it without changes. Forced colors (Windows
+contrast themes) erase backgrounds and draw every border, so a state shown only by a
+background or border color, such as the current tab, also adds `forced-highlight`. Lint rejects unknown
 classes and arbitrary colors. Classes are joined with `cn`, never merged at runtime, so give each
 cva variant sole ownership of the properties it sets. A style shared by a family of components
 lives in that folder's `styles.ts`, which only `src/ui` imports. See `src/ui/README.md`.

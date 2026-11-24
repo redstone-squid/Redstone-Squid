@@ -19,7 +19,7 @@
         <a
           href={tab.href}
           aria-current={tab.current === true ? "page" : undefined}
-          class="flex min-h-control items-center gap-2 border-b-2 border-transparent px-3 text-sm font-semibold whitespace-nowrap text-fg-muted no-underline hover:text-fg aria-[current=page]:border-accent aria-[current=page]:text-fg"
+          class="flex min-h-control items-center gap-2 border-b-2 border-transparent px-3 text-sm font-semibold whitespace-nowrap text-fg-muted no-underline hover:text-fg aria-[current=page]:border-accent aria-[current=page]:forced-highlight aria-[current=page]:text-fg"
         >
           {tab.label}
           {#if tab.count !== undefined}<span

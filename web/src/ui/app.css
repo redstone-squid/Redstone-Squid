@@ -135,6 +135,22 @@
 }
 
 /*
+ * Forced colors (Windows contrast themes) paint backgrounds with the system canvas and draw
+ * every border, transparent ones included, in the text color. A state shown only by a
+ * background or a border color, such as the current tab or a meter's fill, takes the system
+ * highlight instead. Important, so it beats the state's own colors whatever their order.
+ */
+/* stylelint-disable declaration-no-important */
+@utility forced-highlight {
+  @media (forced-colors: active) {
+    forced-color-adjust: none;
+    background-color: Highlight !important;
+    color: HighlightText !important;
+  }
+}
+/* stylelint-enable declaration-no-important */
+
+/*
  * A popover hanging below its invoker, flipping when it would overflow the viewport.
  * `dropdown-start` lines up with the invoker's start edge, `dropdown-end` with its end edge.
  * Browsers without anchor positioning skip these rules and center the popover in the viewport,
