@@ -8,16 +8,17 @@ for every command.
 
 ## Layout
 
-| Directory        | Owns                                                                     | May import                                      |
-| ---------------- | ------------------------------------------------------------------------ | ----------------------------------------------- |
-| `src/pages`      | Routes: read the request, load data, set the status, choose what to show | anything                                        |
-| `src/layouts`    | Document shells (`CatalogueLayout`, `DocumentHead`, `PlaceholderPage`)   | `ui`, `locales`, `generated`                    |
-| `src/features/x` | Components and browser logic for one area, such as `builds` or `records` | its own directory, `ui`, `locales`, `generated` |
-| `src/workbench`  | The `/design-system` playground, its stories, and fixtures               | everything except `server` and `pages`          |
-| `src/server`     | Runtime config and the API client. Server only                           | `locales`, `generated`                          |
-| `src/locales`    | Locales, URL prefixes, catalogs, and the compiled message functions      | `locales`, `generated`                          |
-| `src/ui`         | The design system. Knows nothing about the application                   | `ui` only                                       |
-| `src/generated`  | The OpenAPI SDK. Run `bun run sdk:generate` after the contract changes   |                                                 |
+| Directory        | Owns                                                                     | May import                                                    |
+| ---------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------- |
+| `src/pages`      | Routes: read the request, load data, set the status, choose what to show | anything                                                      |
+| `src/layouts`    | Document shells (`CatalogueLayout`, `DocumentHead`, `PlaceholderPage`)   | `ui`, `locales`, `generated`                                  |
+| `src/features/x` | Components and browser logic for one area, such as `builds` or `records` | its own directory, `api-client`, `ui`, `locales`, `generated` |
+| `src/workbench`  | The `/design-system` playground, its stories, and fixtures               | everything except `server` and `pages`                        |
+| `src/server`     | Runtime config and the page API client. Server only                      | `api-client`, `locales`, `generated`                          |
+| `src/api-client` | API errors for both sides, and the islands' write client                 | `locales`, `generated`                                        |
+| `src/locales`    | Locales, URL prefixes, catalogs, and the compiled message functions      | `locales`, `generated`                                        |
+| `src/ui`         | The design system. Knows nothing about the application                   | `ui` only                                                     |
+| `src/generated`  | The OpenAPI SDK. Run `bun run sdk:generate` after the contract changes   |                                                               |
 
 Import across directories with `@/` (`@/server/api`); only same-directory imports stay
 relative. Generated files end in `.gen.ts`, are rebuilt by a script, and are never edited by

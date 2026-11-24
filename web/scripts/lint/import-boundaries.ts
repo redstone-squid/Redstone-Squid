@@ -8,11 +8,22 @@ import type { Rule } from "eslint";
  * directory but not another feature.
  */
 const LAYERS = {
-  pages: ["pages", "layouts", "features", "workbench", "server", "ui", "locales", "generated"],
+  pages: [
+    "pages",
+    "layouts",
+    "features",
+    "workbench",
+    "server",
+    "api-client",
+    "ui",
+    "locales",
+    "generated",
+  ],
   layouts: ["layouts", "ui", "locales", "generated"],
-  features: ["ui", "locales", "generated"],
-  workbench: ["workbench", "layouts", "features", "ui", "locales", "generated"],
-  server: ["server", "locales", "generated"],
+  features: ["api-client", "ui", "locales", "generated"],
+  workbench: ["workbench", "layouts", "features", "api-client", "ui", "locales", "generated"],
+  server: ["server", "api-client", "locales", "generated"],
+  "api-client": ["api-client", "locales", "generated"],
   locales: ["locales", "generated"],
   ui: ["ui"],
 } as const satisfies Record<string, readonly string[]>;

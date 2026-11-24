@@ -18,6 +18,7 @@ tester.run("frontend import boundaries", importBoundaries, {
     { filename: feature, code: 'import { Button } from "../../ui/svelte/Button.svelte";' },
     { filename: feature, code: 'import { draft } from "./draft";' },
     { filename: featureModule, code: 'import * as m from "@/locales/messages.gen";' },
+    { filename: featureModule, code: 'import { BrowserApi } from "@/api-client/mutation";' },
     { filename: page, code: 'import { unwrap } from "../../server/api";' },
     { filename: page, code: 'import { unwrap } from "@/server/api";' },
     { filename: page, code: 'import Editor from "../../features/builds/Editor.svelte";' },
@@ -73,6 +74,11 @@ tester.run("frontend import boundaries", importBoundaries, {
       filename: featureModule,
       code: 'import { fixtures } from "../../workbench/fixtures";',
       errors: [{ messageId: "workbenchLayer", data: { from: "features", to: "workbench" } }],
+    },
+    {
+      filename: `${src}/api-client/mutation.ts`,
+      code: 'import { getRuntimeConfig } from "@/server/config";',
+      errors: [{ messageId: "serverLayer", data: { from: "api-client", to: "server" } }],
     },
     {
       filename: `${src}/layouts/Shell.astro`,

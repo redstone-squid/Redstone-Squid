@@ -4,7 +4,8 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 
 import { buildsGet, buildsList } from "@/generated/sdk.gen";
 import type { BuildsListResponse } from "@/generated/types.gen";
-import { ApiError, createApiClient, load, unwrap } from "@/server/api";
+import { ApiError, unwrap } from "@/api-client/api-error";
+import { createApiClient, load } from "@/server/api";
 import type { RuntimeConfig } from "@/server/config";
 
 const API = "https://api.catalogue.test";
@@ -116,6 +117,26 @@ describe("API errors", () => {
     expect(() => unwrap(result)).toThrow(
       expect.objectContaining({ status: 400, problem: undefined }),
     );
+  });
+
+  it("keeps typed field issues and drops ones with a code this build cannot format", () => {
+    const tooLong = { field: "/body/bio", code: "too_long", params: { maximum: 280 } };
+    const error = new ApiError(422, {
+      title: "Invalid request",
+      status: 422,
+      context: {
+        fields: [tooLong, { field: "title", code: "a_future_code" }, { code: "required" }],
+      },
+    });
+    expect(error.fieldErrors).toEqual([tooLong]);
+  });
+
+  it.each([
+    [412, undefined, true],
+    [409, { actual_revision: 4 }, true],
+    [409, { expected: 3 }, false],
+  ])("treats %i with context %j as a revision conflict: %s", (status, context, conflict) => {
+    expect(new ApiError(status, { title: "x", status, context }).conflict).toBe(conflict);
   });
 
   it("wraps unknown failures as a service error and keeps known failures", () => {
