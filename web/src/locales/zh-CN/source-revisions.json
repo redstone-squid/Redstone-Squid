@@ -855,5 +855,6 @@
   "story-frame-always-narrow": "e73b5f2a797c4f9df0cea2a824c87d7c6add7cb1bdcb5121493fc9a87d0d6618",
   "story-remove-file": "d0caf069923e443c19c1fb2858b99e3ecf9a67037b0b34136d31814f003080cb",
   "story-use-as-cover": "97adb55b65b1ab3381db568c3e63cee69c08fb7d554a821fd4bb798708df8a3b",
-  "story-files-summary": "7390b4bda21f648823b7d4958d7e4fe4d3692b04ece4b4b857250b38e76503c4"
+  "story-files-summary": "7390b4bda21f648823b7d4958d7e4fe4d3692b04ece4b4b857250b38e76503c4",
+  "story-build-filters": "2f9645da3e19393d79e94ca1c7226762498538e4086df9804b989ef587bd3ab4"
 }

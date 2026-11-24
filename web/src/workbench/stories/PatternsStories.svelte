@@ -17,7 +17,6 @@
   import Table from "@lucide/svelte/icons/table";
   import EmptyState from "@/ui/feedback/EmptyState.svelte";
   import ErrorState from "@/ui/feedback/ErrorState.svelte";
-  import SegmentedControl from "@/ui/navigation/SegmentedControl.svelte";
   import ConfirmDialog from "@/ui/patterns/ConfirmDialog.svelte";
   import Switch from "@/ui/forms/Switch.svelte";
   import type { SaveState } from "@/ui/feedback/save-state";
@@ -325,12 +324,11 @@
   source="patterns/ResultsView"
   description={m.storyResultsviewDescription()}
 >
-  <SegmentedControl
-    mode="radio"
-    name="results-status"
+  <SelectField
     label={m.storyResultsState()}
+    width="md"
     bind:value={resultsStatus}
-    items={statuses.map((status) => ({ label: statusLabels[status], value: status }))}
+    options={statuses.map((status) => ({ value: status, label: statusLabels[status] }))}
   />
   <ResultsView
     view="cards"
@@ -603,7 +601,7 @@
   </Variant>
   <Variant label={m.storySheetEndSticky()}>
     <SplitLayout
-      sidebarLabel={m.storyFilters()}
+      sidebarLabel={m.storyBuildFilters()}
       triggerLabel={m.storyFiltersTwo()}
       closeLabel={m.storyCloseFilters()}
       collapse="sheet"

@@ -5,7 +5,7 @@
   import { onDestroy, tick } from "svelte";
   import Button from "@/ui/actions/Button.svelte";
   import { cn } from "@/ui/cn";
-  import Image from "@/ui/data/Image.svelte";
+  import { hideWhenBroken } from "@/ui/data/hide-when-broken";
   import Badge from "@/ui/feedback/Badge.svelte";
   import Progress from "@/ui/feedback/Progress.svelte";
   import FileDrop from "@/ui/forms/FileDrop.svelte";
@@ -117,21 +117,20 @@
               onclick={() => act(item.id, onUndoRemove, "remove")}>{labels.undo}</Button
             >
           {:else}
-            <div class="size-12 shrink-0 overflow-hidden rounded-sm bg-surface-muted">
-              {#if item.thumb}
-                <Image
+            <!-- The file icon sits under the thumbnail, so it shows when the image is missing or broken. -->
+            <div
+              class="grid size-12 shrink-0 place-items-center overflow-hidden rounded-sm bg-surface-muted text-fg-muted *:col-start-1 *:row-start-1"
+            >
+              <FileIcon class="size-5" aria-hidden="true" />
+              {#if item.thumb}<img
+                  class="size-full object-cover"
                   src={item.thumb.src}
                   width={item.thumb.width}
                   height={item.thumb.height}
                   alt=""
-                  aspect="square"
-                  fallbackLabel={item.name}
-                />
-              {:else}
-                <div class="grid size-full place-items-center text-fg-muted">
-                  <FileIcon class="size-5" aria-hidden="true" />
-                </div>
-              {/if}
+                  loading="lazy"
+                  {@attach hideWhenBroken}
+                />{/if}
             </div>
             <div class="grid min-w-0 flex-1 gap-1 text-sm">
               <p class="flex min-w-0 flex-wrap items-center gap-2">

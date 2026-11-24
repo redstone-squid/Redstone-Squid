@@ -866,3 +866,4 @@ story-frame-always-narrow = This frame is always narrow, so the sidebar stays be
 story-remove-file = Remove { $name }
 story-use-as-cover = Use { $name } as the cover
 story-files-summary = { $ready } files ready, { $failed } failed
+story-build-filters = Build filters

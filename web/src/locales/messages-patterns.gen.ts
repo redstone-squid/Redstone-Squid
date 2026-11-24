@@ -1748,6 +1748,18 @@ export function storyFilesSummary(
   }
 }
 
+/** Build filters */
+export function storyBuildFilters(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Build filters";
+    case "zh-CN":
+      return "作品筛选";
+    case "en-XA":
+      return "[" + "Ɓûîļđ ƒîļţéŕš" + "······]";
+  }
+}
+
 export {
   navAbout,
   navBuilds,

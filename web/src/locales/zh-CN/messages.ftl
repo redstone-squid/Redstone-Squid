@@ -863,3 +863,4 @@ story-frame-always-narrow = 这个框架始终很窄，所以侧栏一直收在�
 story-remove-file = 移除 { $name }
 story-use-as-cover = 将 { $name } 设为封面
 story-files-summary = { $ready } 个文件就绪，{ $failed } 个失败
+story-build-filters = 作品筛选
