@@ -128,6 +128,22 @@
   class={className}
 >
   {#snippet plot({ width, height: plotHeight })}
+    {#if onselect !== undefined && mounted.current}
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+      <div
+        tabindex="0"
+        role="application"
+        aria-label={title}
+        class="pointer-events-none absolute inset-0 z-sticky rounded-sm"
+        {onkeydown}
+      ></div>
+      <p class="sr-only" role="status">
+        {#if selected !== undefined}{labels.selected}
+          {formatX(selected)}{#if selectedSegment !== undefined}: {selectedSegment.label}, {formatY(
+              selectedSegment.value,
+            )}{/if}{/if}
+      </p>
+    {/if}
     <ChartCore
       ssr
       {width}
@@ -260,21 +276,5 @@
         </Svg>
       {/snippet}
     </ChartCore>
-    {#if onselect !== undefined && mounted.current}
-      <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
-      <div
-        tabindex="0"
-        role="application"
-        aria-label={title}
-        class="pointer-events-none absolute inset-0 rounded-sm"
-        {onkeydown}
-      ></div>
-      <p class="sr-only" role="status">
-        {#if selected !== undefined}{labels.selected}
-          {formatX(selected)}{#if selectedSegment !== undefined}: {selectedSegment.label}, {formatY(
-              selectedSegment.value,
-            )}{/if}{/if}
-      </p>
-    {/if}
   {/snippet}
 </Chart>

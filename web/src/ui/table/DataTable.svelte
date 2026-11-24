@@ -115,7 +115,8 @@
   );
   const rowModel = $derived(table.getRowModel().rows);
 
-  const widths = { xs: "min-w-20", sm: "min-w-32", md: "min-w-48", lg: "min-w-72", auto: "" };
+  // On phones the pinned column stays narrow enough to leave room for the scrolling ones.
+  const widths = { xs: "min-w-20", sm: "min-w-32", md: "min-w-48", lg: "sm:min-w-72", auto: "" };
   const pad = $derived(density === "compact" ? "px-3 py-1.5" : "px-3 py-2.5");
 
   function nextOpen(rowId: string) {
@@ -145,6 +146,10 @@
   {@render empty?.()}
 {:else}
   <div class={cn("grid min-w-0 gap-3", className)}>
+    {#if !captionHidden}
+      <!-- The caption itself scrolls with the table, so its visible copy sits outside. -->
+      <p class="font-semibold" aria-hidden="true">{caption}</p>
+    {/if}
     <!-- Keyboard users scroll the region, so it takes focus. -->
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
     <div
@@ -157,12 +162,7 @@
         class="w-full border-separate border-spacing-0 text-sm"
         aria-busy={loading > 0 ? "true" : undefined}
       >
-        <caption
-          id={`${id}-caption`}
-          class={captionHidden
-            ? "sr-only"
-            : "border-b border-line px-3 py-2.5 text-start text-base font-semibold"}
-        >
+        <caption id={`${id}-caption`} class="sr-only">
           {caption}{#if loading > 0 && labels.loading !== undefined}<span class="sr-only"
               >, {labels.loading}</span
             >{/if}
@@ -236,7 +236,7 @@
                       scope="row"
                       data-pinned
                       class={cn(
-                        "border-b border-line bg-surface text-start font-semibold group-hover/row:bg-surface-muted",
+                        "border-b border-line bg-surface text-start font-semibold group-hover/row:bg-surface-muted max-sm:max-w-44",
                         row.depth > 0 && "bg-canvas font-normal",
                         pad,
                       )}
@@ -286,9 +286,9 @@
                       class={cn(
                         "border-b border-line",
                         pad,
-                        column.numeric === true && "text-end tabular-nums",
+                        column.numeric === true && "text-end whitespace-nowrap tabular-nums",
                         column.align === "end" && "text-end",
-                        column.mono === true && "font-mono text-xs",
+                        column.mono === true && "font-mono text-xs whitespace-nowrap",
                         column.truncate === true ? "max-w-64 truncate" : "",
                       )}
                     >

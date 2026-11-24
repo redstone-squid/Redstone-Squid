@@ -170,6 +170,24 @@
   class={className}
 >
   {#snippet plot({ width, height: plotHeight })}
+    {#if interactive && mounted.current}
+      <!-- The plot takes focus over the drawing; the live region says what is focused. -->
+      <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
+      <div
+        tabindex="0"
+        role="application"
+        aria-label={title}
+        class="pointer-events-none absolute inset-0 z-sticky rounded-sm"
+        {onkeydown}
+        onfocus={() => (active ??= 0)}
+        onblur={() => (active = undefined)}
+      ></div>
+      <p class="sr-only" role="status">
+        {#if tooltip !== undefined}{tooltip.heading}: {tooltip.rows
+            .map((row) => `${row.line.label} ${row.value}`)
+            .join(", ")}{/if}
+      </p>
+    {/if}
     <ChartCore
       ssr
       {width}
@@ -382,23 +400,5 @@
         {/if}
       {/snippet}
     </ChartCore>
-    {#if interactive && mounted.current}
-      <!-- The plot takes focus over the drawing; the live region says what is focused. -->
-      <!-- svelte-ignore a11y_no_noninteractive_tabindex, a11y_no_noninteractive_element_interactions -->
-      <div
-        tabindex="0"
-        role="application"
-        aria-label={title}
-        class="pointer-events-none absolute inset-0 rounded-sm"
-        {onkeydown}
-        onfocus={() => (active ??= 0)}
-        onblur={() => (active = undefined)}
-      ></div>
-      <p class="sr-only" role="status">
-        {#if tooltip !== undefined}{tooltip.heading}: {tooltip.rows
-            .map((row) => `${row.line.label} ${row.value}`)
-            .join(", ")}{/if}
-      </p>
-    {/if}
   {/snippet}
 </Chart>

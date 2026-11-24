@@ -72,7 +72,11 @@
       aria-describedby={`${id}-description`}
       class="relative min-w-0"
     >
-      {@render plot({ width: measured ?? serverWidth, height: heights[height] })}
+      <!-- A hidden container measures 0; keep the server width until it has a size. -->
+      {@render plot({
+        width: measured !== undefined && measured > 0 ? measured : serverWidth,
+        height: heights[height],
+      })}
     </div>
   {:else}
     <div
