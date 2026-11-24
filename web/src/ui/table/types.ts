@@ -14,6 +14,8 @@ export type DataTableColumn<Row> = {
   width?: "xs" | "sm" | "md" | "lg" | "auto";
   /** Clip long text to one line; the full text stays in the cell's title. */
   truncate?: boolean;
+  /** List the column in the table's column menu, so people can hide or show it. */
+  hideable?: boolean;
 };
 
 export type SortDirection = "asc" | "desc";

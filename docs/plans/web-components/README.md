@@ -35,9 +35,7 @@ squid/core, so screens are composed from `web/src/ui` instead of one-off markup.
 ## Status and resuming
 
 Phases 0 to 4 are done: 0 and 1 in commits `960679e9a` to `01cf8de84`, then 2, 3 and 4,
-built in parallel and joined on one branch. Phase 5 is next. Left from Phase 4: the
-`DataTable` column menu, a `Menu` of `hide=` links above the table (a `visibilityHref(hidden)`
-prop, with a GET-form fallback) that feeds `hidden`; columns gain `hideable`.
+built in parallel and joined on one branch. Phase 5 is next.
 
 What exists in `web/src/ui`, by folder: `layout` (Layout, Container), `content` (Heading,
 Text, Link, Icon, Code, Prose, Timestamp, VisuallyHidden, SkipLink), `actions` (Button),

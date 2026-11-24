@@ -99,6 +99,33 @@ describe("DataTable", () => {
     });
   });
 
+  it("links each hideable column to the page with it hidden or shown", () => {
+    const hideable = columns.map((column) => ({ ...column, hideable: column.id !== "title" }));
+    render(DataTable<Row>, {
+      caption: "Builds",
+      columns: [...hideable, { id: "notes", header: "Notes", value: () => "", hideable: true }],
+      rows,
+      getRowId: (row: Row) => row.id,
+      hidden: ["notes"],
+      visibilityHref: (hidden: string[]) => `?hide=${hidden.join(",")}`,
+      labels: {
+        ...tableLabels,
+        visibility: {
+          menu: "Columns",
+          show: (h: string) => `Show ${h}`,
+          hide: (h: string) => `Hide ${h}`,
+        },
+      },
+    });
+    const toggle = screen.getByRole("button", { name: "Columns" });
+    const menu = document.getElementById(toggle.getAttribute("popovertarget") ?? "");
+    const links = within(menu ?? document.body).getAllByRole("link", { hidden: true });
+    expect(links.map((link) => [link.textContent?.trim(), link.getAttribute("href")])).toEqual([
+      ["Hide Opening", "?hide=notes,opening"],
+      ["Show Notes", "?hide="],
+    ]);
+  });
+
   it("marks the table busy with skeleton rows while loading", () => {
     render(DataTable<Row>, {
       caption: "Builds",

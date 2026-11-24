@@ -3,6 +3,7 @@
   import ArrowUp from "@lucide/svelte/icons/arrow-up";
   import ArrowUpDown from "@lucide/svelte/icons/arrow-up-down";
   import ChevronRight from "@lucide/svelte/icons/chevron-right";
+  import Columns from "@lucide/svelte/icons/columns-3";
   import {
     columnVisibilityFeature,
     createExpandedRowModel,
@@ -15,6 +16,7 @@
   import { SvelteSet } from "svelte/reactivity";
   import { cn } from "@/ui/cn";
   import Skeleton from "@/ui/feedback/Skeleton.svelte";
+  import Menu from "@/ui/overlays/Menu.svelte";
   import type { DataTableColumn, DataTableSort, SortDirection } from "./types";
 
   /**
@@ -24,8 +26,10 @@
    * pinned while the table scrolls sideways.
    *
    * `cell` renders a cell when given; otherwise the column's `value` is shown. `hidden`
-   * lists column ids to leave out, as read from the URL's `hide=`. Without rows the table
-   * renders `empty` instead of a header-only table.
+   * lists column ids to leave out, as read from the URL's `hide=`. With `visibilityHref` and
+   * `labels.visibility`, a column menu above the table links to the page with a `hideable`
+   * column hidden or shown; it is a native popover, so it works without JavaScript. Without
+   * rows the table renders `empty` instead of a header-only table.
    */
   type Props = {
     caption: string;
@@ -37,6 +41,8 @@
     sort?: DataTableSort;
     sortHref?: (key: string, direction: SortDirection) => string;
     hidden?: string[];
+    /** The page with these column ids hidden, as the URL's `hide=`. */
+    visibilityHref?: (hidden: string[]) => string;
     /**
      * Grouped rows. `open` holds the expanded row ids and `href` addresses another set, as the
      * URL's `open=`. `groupLabel` is hidden text read before a sub-row, such as "In Copper Bolt".
@@ -52,7 +58,17 @@
     density?: "comfortable" | "compact";
     /** Skeleton rows to show while an island fetches; `labels.loading` names the busy table. */
     loading?: number;
-    labels: { expand: string; collapse: string; loading?: string };
+    labels: {
+      expand: string;
+      collapse: string;
+      loading?: string;
+      /** The column menu's button, and its items by column header. */
+      visibility?: {
+        menu: string;
+        show: (header: string) => string;
+        hide: (header: string) => string;
+      };
+    };
     empty?: Snippet;
     footer?: Snippet;
     class?: string;
@@ -66,6 +82,7 @@
     sort = null,
     sortHref,
     hidden = [],
+    visibilityHref,
     expansion,
     rowHref,
     cell,
@@ -119,6 +136,23 @@
   const widths = { xs: "min-w-20", sm: "min-w-32", md: "min-w-48", lg: "sm:min-w-72", auto: "" };
   const pad = $derived(density === "compact" ? "px-3 py-1.5" : "px-3 py-2.5");
 
+  const columnMenu = $derived.by(() => {
+    const text = labels.visibility;
+    const hideable = columns.filter((column) => column.hideable === true);
+    if (visibilityHref === undefined || text === undefined || hideable.length === 0) return;
+    return {
+      label: text.menu,
+      items: hideable.map((column) =>
+        hidden.includes(column.id)
+          ? {
+              label: text.show(column.header),
+              href: visibilityHref(hidden.filter((columnId) => columnId !== column.id)),
+            }
+          : { label: text.hide(column.header), href: visibilityHref([...hidden, column.id]) },
+      ),
+    };
+  });
+
   function nextOpen(rowId: string) {
     const next = new SvelteSet(open);
     if (!next.delete(rowId)) next.add(rowId);
@@ -146,9 +180,22 @@
   {@render empty?.()}
 {:else}
   <div class={cn("grid min-w-0 gap-3", className)}>
-    {#if !captionHidden}
-      <!-- The caption itself scrolls with the table, so its visible copy sits outside. -->
-      <p class="font-semibold" aria-hidden="true">{caption}</p>
+    {#if !captionHidden || columnMenu !== undefined}
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        {#if !captionHidden}
+          <!-- The caption itself scrolls with the table, so its visible copy sits outside. -->
+          <p class="font-semibold" aria-hidden="true">{caption}</p>
+        {/if}
+        {#if columnMenu !== undefined}
+          <Menu
+            nojs
+            class="ms-auto"
+            label={columnMenu.label}
+            trigger={{ label: columnMenu.label, icon: Columns, variant: "quiet", size: "sm" }}
+            items={columnMenu.items}
+          />
+        {/if}
+      </div>
     {/if}
     <!-- Keyboard users scroll the region, so it takes focus. -->
     <!-- svelte-ignore a11y_no_noninteractive_tabindex -->

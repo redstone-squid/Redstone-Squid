@@ -49,8 +49,15 @@
   ];
   const columns: DataTableColumn<Build>[] = [
     { id: "title", header: "Build", value: (row) => row.title, width: "lg", truncate: true },
-    { id: "status", header: "Status", value: (row) => row.status },
-    { id: "size", header: "Size", value: (row) => row.size, mono: true, sortKey: "volume" },
+    { id: "status", header: "Status", value: (row) => row.status, hideable: true },
+    {
+      id: "size",
+      header: "Size",
+      value: (row) => row.size,
+      mono: true,
+      sortKey: "volume",
+      hideable: true,
+    },
     {
       id: "opening",
       header: "Opening",
@@ -58,11 +65,28 @@
       numeric: true,
       sortKey: "opening",
     },
-    { id: "creators", header: "Creators", value: (row) => row.creators, width: "md" },
+    {
+      id: "creators",
+      header: "Creators",
+      value: (row) => row.creators,
+      width: "md",
+      hideable: true,
+    },
   ];
   const sortHref = (key: string, direction: string) =>
     `?sort=${direction === "desc" ? "-" : ""}${key}#datatable`;
-  const labels = { expand: "Show builds", collapse: "Hide builds", loading: "loading" };
+  const labels = {
+    expand: "Show builds",
+    collapse: "Hide builds",
+    loading: "loading",
+    visibility: {
+      menu: "Columns",
+      show: (header: string) => `Show ${header}`,
+      hide: (header: string) => `Hide ${header}`,
+    },
+  };
+  const visibilityHref = (hidden: string[]) =>
+    hidden.length > 0 ? `?hide=${hidden.join(",")}#datatable` : "#datatable";
 
   const records: Build[] = [
     {
@@ -121,13 +145,14 @@
       {/snippet}
     </DataTable>
   </Variant>
-  <Variant label="grouped rows, one group open, compact, creators hidden">
+  <Variant label="grouped rows, one group open, compact, column menu with two hidden">
     <DataTable
       caption="Door records"
       {columns}
       rows={records}
       getRowId={(row) => row.id}
       hidden={["creators", "size"]}
+      {visibilityHref}
       density="compact"
       expansion={{
         getSubRows: (row) => row.builds,
