@@ -9,6 +9,10 @@
   import Notice from "@/ui/feedback/Notice.svelte";
   import Layout from "@/ui/layout/Layout.svelte";
   import PageHeader from "@/ui/patterns/PageHeader.svelte";
+  import CheckField from "@/ui/forms/CheckField.svelte";
+  import SelectField from "@/ui/forms/SelectField.svelte";
+  import ActiveFilters from "@/ui/patterns/ActiveFilters.svelte";
+  import FilterPanel from "@/ui/patterns/FilterPanel.svelte";
   import NavBar from "@/ui/patterns/NavBar.svelte";
   import SearchBox from "@/ui/patterns/SearchBox.svelte";
   import Section from "@/ui/patterns/Section.svelte";
@@ -117,6 +121,81 @@
       />
     </Variant>
   </Layout>
+</Story>
+
+{#snippet filterFields()}
+  <SelectField
+    label="Category"
+    name="category"
+    value="door"
+    options={[
+      { value: "", label: "Any category" },
+      { value: "door", label: "Piston door" },
+      { value: "extender", label: "Extender" },
+    ]}
+  />
+  <CheckField label="Record holders only" name="holders" value="1" checked />
+{/snippet}
+
+<Story
+  name="FilterPanel"
+  source="patterns/FilterPanel"
+  description="Filters in a GET form; auto-apply navigates after a change once hydrated."
+>
+  <Layout pattern="grid" min="card-wide">
+    <Variant label="apply button, two active">
+      <FilterPanel
+        action="/design-system/patterns"
+        title="Filters"
+        activeLabel="2 active"
+        applyLabel="Apply filters"
+        resetHref="/design-system/patterns"
+        resetLabel="Reset"
+        hidden={{ q: "door" }}
+        children={filterFields}
+      />
+    </Variant>
+    <Variant label="in a SplitLayout sheet">
+      <SplitLayout
+        sidebarLabel="Filters"
+        triggerLabel="Filters · 2"
+        closeLabel="Close filters"
+        collapse="sheet"
+      >
+        {#snippet sidebar()}
+          <FilterPanel
+            action="/design-system/patterns"
+            title="Filters"
+            applyLabel="Apply filters"
+            resetHref="/design-system/patterns"
+            resetLabel="Reset"
+            children={filterFields}
+          />
+        {/snippet}
+        <p class="text-sm">Results.</p>
+      </SplitLayout>
+    </Variant>
+  </Layout>
+</Story>
+
+<Story
+  name="ActiveFilters"
+  source="patterns/ActiveFilters"
+  description="Removable chips for applied filters, each a link to the URL without it."
+>
+  <ActiveFilters
+    items={[
+      { label: "Piston door", removeLabel: "Remove Piston door", removeHref: "#activefilters-1" },
+      { label: "Width ≥ 5", removeLabel: "Remove width ≥ 5", removeHref: "#activefilters-2" },
+      {
+        label: "Record holders",
+        removeLabel: "Remove Record holders",
+        removeHref: "#activefilters-3",
+      },
+    ]}
+    clearHref="#activefilters"
+    labels={{ region: "Active filters", clear: "Clear all filters" }}
+  />
 </Story>
 
 {#snippet sideNav()}
