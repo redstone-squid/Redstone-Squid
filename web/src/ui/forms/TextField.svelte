@@ -2,6 +2,7 @@
   import X from "@lucide/svelte/icons/x";
   import type { LucideIcon } from "@lucide/svelte";
   import type { HTMLInputAttributes } from "svelte/elements";
+  import { cn } from "@/ui/cn";
   import type { FieldMessages } from "@/ui/forms/field";
   import FieldFrame from "./FieldFrame.svelte";
   import CharacterCount from "./CharacterCount.svelte";
@@ -79,10 +80,17 @@
   class={className}
 >
   {#snippet children(attributes)}
-    <div class={boxClass}>
-      {#if Glyph}<span class={adornmentClass}><Glyph class="size-4" aria-hidden="true" /></span
+    <div
+      class={boxClass}
+      data-disabled={disabled === true ? "" : undefined}
+      data-readonly={readonly === true ? "" : undefined}
+    >
+      {#if Glyph}<span class={cn(adornmentClass, "ps-3")}
+          ><Glyph class="size-4" aria-hidden="true" /></span
         >{/if}
-      {#if prefix !== undefined}<span class={adornmentClass} aria-hidden="true">{prefix}</span>{/if}
+      {#if prefix !== undefined}<span class={cn(adornmentClass, "ps-3")} aria-hidden="true"
+          >{prefix}</span
+        >{/if}
       <input
         {...props}
         {...attributes}
@@ -93,7 +101,9 @@
         bind:this={input}
         class={boxInputClass}
       />
-      {#if suffix !== undefined}<span id={suffixId} class={adornmentClass}>{suffix}</span>{/if}
+      {#if suffix !== undefined}<span id={suffixId} class={cn(adornmentClass, "pe-3")}
+          >{suffix}</span
+        >{/if}
       {#if clearable && text !== "" && disabled !== true && readonly !== true}<button
           type="button"
           class="grid w-control shrink-0 cursor-pointer place-items-center text-fg-muted hover:text-fg focus-visible:-outline-offset-3"

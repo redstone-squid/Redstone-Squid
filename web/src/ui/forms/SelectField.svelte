@@ -51,7 +51,7 @@
         bind:value
         class={cn(
           inputClass,
-          "w-full cursor-pointer appearance-none pe-10 disabled:cursor-not-allowed",
+          "min-h-control w-full cursor-pointer appearance-none ps-3 pe-10 disabled:cursor-not-allowed",
         )}
       >
         {#if placeholder !== undefined}<option value="">{placeholder}</option>{/if}

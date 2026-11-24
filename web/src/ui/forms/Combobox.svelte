@@ -60,7 +60,7 @@
     debounceMs = 250,
     labels,
     onchange,
-    width = "md",
+    width = multiple ? "full" : "md",
     ...frame
   }: Props = $props();
 
@@ -189,7 +189,7 @@
         {multiple}
         {required}
         {disabled}
-        class={cn(inputClass, "w-full", multiple && "min-h-24")}
+        class={cn(inputClass, "w-full", "px-3", multiple ? "min-h-24" : "min-h-control")}
       >
         {#if !multiple && placeholder !== undefined}<option value="">{placeholder}</option>{/if}
         {#each options ?? [] as option (option.value)}<option
@@ -206,7 +206,7 @@
         {disabled}
         {placeholder}
         value={values.map(labelOf).join(", ")}
-        class={cn(inputClass, "w-full")}
+        class={cn(inputClass, "min-h-control w-full px-3")}
       />
     {:else if multiple}
       <Combobox.Root
@@ -222,7 +222,10 @@
           if (!next) filtering = false;
         }}
       >
-        <div class={cn(boxClass, "flex-wrap items-center gap-1.5 p-1.5")}>
+        <div
+          class={cn(boxClass, "flex-wrap items-center gap-1.5 p-1.5")}
+          data-disabled={disabled === true ? "" : undefined}
+        >
           {#each values as item (item)}
             <Chip removeLabel={labels.remove(labelOf(item))} onRemove={() => remove(item)}
               >{labelOf(item)}</Chip
@@ -263,7 +266,7 @@
           if (!next) filtering = false;
         }}
       >
-        <div class={boxClass}>
+        <div class={boxClass} data-disabled={disabled === true ? "" : undefined}>
           <Combobox.Input
             {...attributes}
             {placeholder}

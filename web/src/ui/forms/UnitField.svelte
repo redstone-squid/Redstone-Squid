@@ -80,7 +80,7 @@
   aside={conversions.length > 0 ? converted : undefined}
 >
   {#snippet children(attributes)}
-    <div class={boxClass}>
+    <div class={boxClass} data-disabled={disabled === true ? "" : undefined}>
       <input
         {...attributes}
         {name}

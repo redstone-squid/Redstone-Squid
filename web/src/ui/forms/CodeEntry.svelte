@@ -82,7 +82,7 @@
       autocapitalize="characters"
       spellcheck="false"
       inputmode={charset === "digits" ? "numeric" : "text"}
-      class={cn(inputClass, "font-mono text-lg tracking-widest uppercase")}
+      class={cn(inputClass, "min-h-control px-3 font-mono text-lg tracking-widest uppercase")}
       size={length + groups.length}
     />{/snippet}
 </FieldFrame>

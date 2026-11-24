@@ -197,12 +197,12 @@
     <div class="relative">
       {#if multiline}<textarea
           {...attributes}
-          class={cn(inputClass, "block min-h-24 w-full resize-y")}
+          class={cn(inputClass, "block min-h-24 w-full resize-y px-3")}
           bind:value
           bind:this={input}
           rows="3"></textarea>{:else}<input
           {...attributes}
-          class={cn(inputClass, "w-full")}
+          class={cn(inputClass, "min-h-control w-full px-3")}
           bind:value
           bind:this={input}
         />{/if}

@@ -57,7 +57,7 @@
       bind:value
       class={cn(
         inputClass,
-        "block min-h-24 w-full resize-y",
+        "block min-h-24 w-full resize-y px-3",
         autosize && "field-sizing-content max-h-96",
       )}></textarea>{/snippet}
 </FieldFrame>

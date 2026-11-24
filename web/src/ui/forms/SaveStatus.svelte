@@ -69,7 +69,8 @@
       />{/if}
     <span class={saveState === "error" || saveState === "conflict" ? "text-fg" : "text-fg-muted"}
       >{labels[saveState]}{#if saveState === "saved" && savedAt}
-        · <Timestamp datetime={savedAt.datetime} label={savedAt.label} />{/if}</span
+        <span class="ms-1">· <Timestamp datetime={savedAt.datetime} label={savedAt.label} /></span
+        >{/if}</span
     >
   </span>
   {#if saveState === "error" && onRetry}<Button size="sm" variant="quiet" onclick={onRetry}

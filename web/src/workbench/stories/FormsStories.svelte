@@ -427,7 +427,7 @@
     </FormActions>
   </Variant>
   <Variant label="sticky">
-    <div class="grid max-h-48 gap-4 overflow-y-auto rounded-sm border border-line p-4">
+    <div class="grid max-h-48 gap-4 overflow-y-auto rounded-sm border border-line px-4 pt-4">
       <TextField label="Title" />
       <TextareaField label="Description" />
       <FormActions sticky>
@@ -536,7 +536,7 @@
   <Layout pattern="grid" min="card-wide">
     <Variant label="single">
       <Combobox
-        label="Minecraft version"
+        label="Game version"
         name="story-combobox-version"
         options={versions}
         bind:value={version}

@@ -41,7 +41,7 @@
 </script>
 
 {#snippet caption()}{label}{#if detail !== undefined}
-    <span class="font-normal text-fg-muted">({detail})</span>{/if}{/snippet}
+    <span class="ms-1 font-normal text-fg-muted">({detail})</span>{/if}{/snippet}
 <div class={cn(fieldClass, className)}>
   {#if inline}
     <label class="flex items-start gap-2.5" for={control.id}
@@ -54,7 +54,12 @@
     <div class={cn("min-w-0", widthClass[width])}>{@render children(control)}</div>
   {/if}
   {#if hasHint || aside}
-    <div class={cn("flex items-start justify-between gap-3", inline && "ps-7")}>
+    <div
+      class={cn(
+        "flex items-start justify-between gap-3",
+        inline ? "ps-7" : width !== "full" && "max-w-field-md",
+      )}
+    >
       {#if hasHint}<p id={`${control.id}-hint`} class={fieldMessageClass}>{hint}</p>{/if}
       {#if aside}<div class="ms-auto shrink-0">{@render aside()}</div>{/if}
     </div>

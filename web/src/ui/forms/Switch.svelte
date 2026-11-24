@@ -44,7 +44,7 @@
   <div class="grid min-w-0 gap-1">
     <label class={labelClass} for={control.id}
       >{label}{#if detail !== undefined}
-        <span class="font-normal text-fg-muted">({detail})</span>{/if}</label
+        <span class="ms-1 font-normal text-fg-muted">({detail})</span>{/if}</label
     >
     {#if hint != null && hint !== ""}<p id={`${control.id}-hint`} class={fieldMessageClass}>
         {hint}

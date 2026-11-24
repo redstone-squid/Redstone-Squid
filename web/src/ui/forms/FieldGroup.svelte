@@ -36,7 +36,7 @@
 >
   <legend class={cn(labelClass, "mb-1.5", labelVisibility === "hidden" && "sr-only")}
     >{label}{#if detail !== undefined}
-      <span class="font-normal text-fg-muted">({detail})</span>{/if}</legend
+      <span class="ms-1 font-normal text-fg-muted">({detail})</span>{/if}</legend
   >
   {#if hint != null && hint !== ""}<p id={`${attributes.id}-hint`} class={fieldMessageClass}>
       {hint}

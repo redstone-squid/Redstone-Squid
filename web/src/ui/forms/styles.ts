@@ -10,10 +10,10 @@ const controlBorder = cn(
   "rounded-sm border border-line-strong bg-surface text-fg",
   "transition-[border-color] duration-150 ease-standard",
 );
-/** A native input, select or textarea. */
+/** A native input, select or textarea. Callers add the inline padding and `min-h-control`. */
 export const inputClass = cn(
   controlBorder,
-  "min-h-control min-w-0 px-3 py-2 placeholder:text-fg-muted",
+  "min-w-0 py-2 placeholder:text-fg-muted",
   "hover:not-disabled:not-read-only:not-aria-invalid:border-fg-muted aria-invalid:border-danger",
   "disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-fg-muted",
   "read-only:bg-surface-muted",
@@ -25,9 +25,9 @@ export const inputClass = cn(
 export const boxClass = cn(
   controlBorder,
   "flex min-h-control w-full min-w-0 items-stretch overflow-hidden",
-  "hover:not-has-disabled:not-has-aria-invalid:border-fg-muted has-aria-invalid:border-danger",
+  "hover:not-data-disabled:not-has-aria-invalid:border-fg-muted has-aria-invalid:border-danger",
   "has-focus-visible:outline-3 has-focus-visible:outline-offset-3 has-focus-visible:outline-focus",
-  "has-read-only:bg-surface-muted has-disabled:bg-surface-muted has-disabled:text-fg-muted",
+  "data-disabled:bg-surface-muted data-disabled:text-fg-muted data-readonly:bg-surface-muted",
 );
 /** The input inside `boxClass`. */
 export const boxInputClass = cn(
@@ -35,7 +35,7 @@ export const boxInputClass = cn(
   "disabled:cursor-not-allowed",
 );
 /** Text beside a boxed input, such as a unit. */
-export const adornmentClass = cn("flex shrink-0 items-center px-3 text-fg-muted select-none");
+export const adornmentClass = cn("flex shrink-0 items-center text-fg-muted select-none");
 
 export const widthClass = {
   full: "",
