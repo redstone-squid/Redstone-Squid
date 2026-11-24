@@ -13,7 +13,14 @@
   import SelectField from "@/ui/forms/SelectField.svelte";
   import ActiveFilters from "@/ui/patterns/ActiveFilters.svelte";
   import FilterPanel from "@/ui/patterns/FilterPanel.svelte";
+  import LayoutGrid from "@lucide/svelte/icons/layout-grid";
+  import Table from "@lucide/svelte/icons/table";
+  import EmptyState from "@/ui/feedback/EmptyState.svelte";
+  import ErrorState from "@/ui/feedback/ErrorState.svelte";
+  import SegmentedControl from "@/ui/navigation/SegmentedControl.svelte";
   import NavBar from "@/ui/patterns/NavBar.svelte";
+  import ResultsToolbar from "@/ui/patterns/ResultsToolbar.svelte";
+  import ResultsView from "@/ui/patterns/ResultsView.svelte";
   import SearchBox from "@/ui/patterns/SearchBox.svelte";
   import Section from "@/ui/patterns/Section.svelte";
   import SplitLayout from "@/ui/patterns/SplitLayout.svelte";
@@ -22,6 +29,8 @@
   import Story from "./Story.svelte";
 
   const categories = [m.trialDoor(), m.storySeamlessDoor(), m.storyExtender()];
+  const statuses = ["ready", "refreshing", "loading", "empty", "error"] as const;
+  let resultsStatus = $state<(typeof statuses)[number]>("ready");
 </script>
 
 <Story name="PageHeader" source="patterns/PageHeader" description={m.storyPageHeaderDescription()}>
@@ -196,6 +205,81 @@
     clearHref="#activefilters"
     labels={{ region: "Active filters", clear: "Clear all filters" }}
   />
+</Story>
+
+<Story
+  name="ResultsToolbar"
+  source="patterns/ResultsToolbar"
+  description="Count, sort menu, view switch and extra actions, all links."
+>
+  <ResultsToolbar
+    count="312 builds"
+    sort={{
+      label: "Sort order",
+      current: "Sort: Newest",
+      options: [
+        { label: "Newest", href: "#resultstoolbar-newest", current: true },
+        { label: "Fastest opening", href: "#resultstoolbar-fastest" },
+        { label: "Smallest volume", href: "#resultstoolbar-smallest" },
+      ],
+    }}
+    view={{
+      label: "Results view",
+      items: [
+        { label: "Cards", href: "#resultstoolbar-cards", current: true, icon: LayoutGrid },
+        { label: "Table", href: "#resultstoolbar-table", icon: Table },
+      ],
+    }}
+  >
+    {#snippet extra()}<Button size="sm" variant="quiet">Follow this search</Button>{/snippet}
+  </ResultsToolbar>
+  <Variant label="count only, live">
+    <ResultsToolbar count="1 record" live />
+  </Variant>
+</Story>
+
+<Story
+  name="ResultsView"
+  source="patterns/ResultsView"
+  description="Cards or table by view, with loading, refreshing, empty and error states."
+>
+  <SegmentedControl
+    mode="radio"
+    name="results-status"
+    label="Results state"
+    bind:value={resultsStatus}
+    items={statuses.map((status) => ({ label: status, value: status }))}
+  />
+  <ResultsView view="cards" status={resultsStatus} busyLabel="Loading builds" id="story-results">
+    {#snippet cards()}
+      <Layout as="ul" pattern="grid">
+        {#each buildFixtures() as build, index (build.id)}
+          <BuildCard {build} category={categories[index] ?? ""} as="li" />
+        {/each}
+      </Layout>
+    {/snippet}
+    {#snippet empty()}
+      <EmptyState
+        title="No builds match “flush 9×9”"
+        description="Remove a filter or search all builds."
+      />
+    {/snippet}
+    {#snippet error()}
+      <ErrorState
+        title="Builds could not load"
+        retryLabel="Try again"
+        onRetry={() => (resultsStatus = "ready")}
+      />
+    {/snippet}
+  </ResultsView>
+  <Variant label="table view, loading">
+    <ResultsView
+      view="table"
+      status="loading"
+      busyLabel="Loading records"
+      id="story-table-results"
+    />
+  </Variant>
 </Story>
 
 {#snippet sideNav()}
