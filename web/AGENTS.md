@@ -203,7 +203,8 @@ declaration and explain surprising decisions beside the code that depends on the
 - Use `@tests/` for imports of shared test support. Browser specs import `test` and
   `expect` from `@tests/support/test`. A test fails on any console error, and
   `await expect(page).toPassAxe()` runs axe. Server ports and environment live in
-  `tests/support/servers.ts`.
+  `tests/support/servers.ts`. Local runs reuse servers already on those ports, which may be
+  another worktree's stale build; set `TEST_APP_PORT` and `TEST_API_PORT` to run apart.
 
 - Name the regression each test catches. Prefer one case at the cheapest layer that can
   observe it. Add a second layer when it covers a distinct risk such as hydration, browser

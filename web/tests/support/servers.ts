@@ -1,6 +1,10 @@
-/** The fixture API and built site that Playwright and Lighthouse run against. */
-export const API_PORT = 8787;
-const APP_PORT = 4321;
+/**
+ * The fixture API and built site that Playwright and Lighthouse run against. Set
+ * `TEST_API_PORT` and `TEST_APP_PORT` to give each checkout its own servers, since local runs
+ * reuse whatever already listens on these ports.
+ */
+export const API_PORT = Number(process.env.TEST_API_PORT ?? 8787);
+const APP_PORT = Number(process.env.TEST_APP_PORT ?? 4321);
 export const APP_URL = `http://127.0.0.1:${APP_PORT}`;
 
 export const FIXTURE_API_COMMAND = ["bun", "tests/fixtures/api.ts"] as const;
