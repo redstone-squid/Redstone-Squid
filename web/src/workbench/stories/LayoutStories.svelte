@@ -1,5 +1,5 @@
 <script lang="ts">
-  import * as m from "@/locales/messages.gen";
+  import * as m from "@/locales/messages-layout.gen";
   import Container from "@/ui/layout/Container.svelte";
   import Layout from "@/ui/layout/Layout.svelte";
   import Story from "./Story.svelte";

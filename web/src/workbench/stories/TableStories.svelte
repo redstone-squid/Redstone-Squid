@@ -1,5 +1,5 @@
 <script lang="ts">
-  import * as m from "@/locales/messages.gen";
+  import * as m from "@/locales/messages-table.gen";
   import Badge from "@/ui/feedback/Badge.svelte";
   import EmptyState from "@/ui/feedback/EmptyState.svelte";
   import Pagination from "@/ui/navigation/Pagination.svelte";

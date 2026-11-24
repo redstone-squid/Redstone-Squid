@@ -3,7 +3,7 @@
   import DoorOpen from "@lucide/svelte/icons/door-open";
   import Search from "@lucide/svelte/icons/search";
   import Zap from "@lucide/svelte/icons/zap";
-  import * as m from "@/locales/messages.gen";
+  import * as m from "@/locales/messages-forms.gen";
   import Button from "@/ui/actions/Button.svelte";
   import Autocomplete from "@/ui/forms/Autocomplete.svelte";
   import CheckField from "@/ui/forms/CheckField.svelte";

@@ -55,18 +55,54 @@ for (const locale of catalogLocales.slice(1)) {
     );
 }
 
-// Lint requires `import * as m from "@/locales/messages.gen"`, so calls always read `m.name`.
-const called = new Set<string>();
+// Catalog imports use the namespace m, so each call names its message statically.
+// The bundler shares modules between hydrated islands. Emit story-only functions in
+// their own modules so a page does not download the entire workbench catalog.
+const usedByStory = new Map<string, Set<string>>();
+const owners = new Map<string, string>();
 for (const file of globSync("src/**/*.{ts,svelte,astro}")) {
   if (file.endsWith(".gen.ts")) continue;
-  for (const match of readFileSync(file, "utf8").matchAll(/\bm\.([A-Za-z0-9]+)/g))
-    if (match[1] !== undefined) called.add(match[1]);
+  const story = /\/workbench\/stories\/(\w+)Stories\.svelte$/.exec(file)?.[1]?.toLowerCase() ?? "";
+  for (const match of readFileSync(file, "utf8").matchAll(/\bm\.([A-Za-z0-9]+)/g)) {
+    const name = match[1];
+    if (name === undefined) continue;
+    if (story !== "") {
+      const uses = usedByStory.get(story) ?? new Set<string>();
+      uses.add(name);
+      usedByStory.set(story, uses);
+    }
+    const owner = owners.get(name);
+    owners.set(name, owner === undefined || owner === story ? story : "");
+  }
 }
-const unused = Object.keys(english).filter((id) => !called.has(functionName(id)));
+const unused = Object.keys(english).filter((id) => !owners.has(functionName(id)));
 if (unused.length > 0)
   throw new Error(`Delete these messages or use them in src/:\n${unused.join("\n")}`);
 
-await emit(target, compileCatalogs(catalogs, pseudoLocales));
+function messageModule(name: string): string {
+  const owner = owners.get(name);
+  return owner !== undefined && owner !== "" ? `messages-${owner}.gen` : "messages.gen";
+}
+await emit(
+  target,
+  compileCatalogs(catalogs, pseudoLocales, (name) => owners.get(name) === "", messageModule),
+);
+for (const [story, uses] of usedByStory) {
+  const shared = [...uses].filter((name) => owners.get(name) === "").toSorted();
+  const source = compileCatalogs(
+    catalogs,
+    pseudoLocales,
+    (name) => owners.get(name) === story,
+    messageModule,
+  );
+  await emit(
+    `src/locales/messages-${story}.gen.ts`,
+    [
+      source,
+      ...(shared.length > 0 ? [`export { ${shared.join(", ")} } from "./messages.gen";`] : []),
+    ].join("\n"),
+  );
+}
 const vocabulary = JSON.parse(readFileSync("../contracts/vocabulary.json", "utf8")) as Vocabulary;
 await emit(
   "src/locales/vocabulary.gen.ts",

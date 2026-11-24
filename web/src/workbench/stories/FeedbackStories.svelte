@@ -1,5 +1,5 @@
 <script lang="ts">
-  import * as m from "@/locales/messages.gen";
+  import * as m from "@/locales/messages-feedback.gen";
   import Tag from "@lucide/svelte/icons/tag";
   import Button from "@/ui/actions/Button.svelte";
   import Layout from "@/ui/layout/Layout.svelte";

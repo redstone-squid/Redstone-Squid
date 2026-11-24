@@ -160,7 +160,8 @@ rejects `Astro.cookies` and `document.cookie` elsewhere. The API sets its own se
 
 Every visible string lives in the Fluent catalogs `src/locales/<locale>/messages.ftl`, with the
 same IDs in every locale. `bun run i18n:generate` compiles them into `src/locales/messages.gen.ts`,
-one typed function per message, so an island ships only the messages it calls:
+one typed function per message. Workbench stories import their own generated module
+(e.g. `messages-forms.gen`) so each island downloads only its examples and shared labels:
 
 ```ts
 import * as m from "@/locales/messages.gen";

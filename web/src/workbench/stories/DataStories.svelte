@@ -1,5 +1,5 @@
 <script lang="ts">
-  import * as m from "@/locales/messages.gen";
+  import * as m from "@/locales/messages-data.gen";
   import Bell from "@lucide/svelte/icons/bell";
   import Button from "@/ui/actions/Button.svelte";
   import Avatar from "@/ui/data/Avatar.svelte";

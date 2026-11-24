@@ -1,5 +1,5 @@
 <script lang="ts">
-  import * as m from "@/locales/messages.gen";
+  import * as m from "@/locales/messages-chart.gen";
   import Chart from "@/ui/chart/Chart.svelte";
   import DistributionBar from "@/ui/chart/DistributionBar.svelte";
   import RangeChart from "@/ui/chart/RangeChart.svelte";

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import * as m from "@/locales/messages.gen";
+  import * as m from "@/locales/messages-patterns.gen";
   import Pencil from "@lucide/svelte/icons/pencil";
   import BuildCard from "@/features/catalogue/BuildCard.svelte";
   import RecordCard from "@/features/catalogue/RecordCard.svelte";

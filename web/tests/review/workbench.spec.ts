@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 import { LOCALES, localizePath } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
+import * as data from "@/locales/messages-data.gen";
 import { GROUPS } from "@/workbench/groups";
 import { expect, test } from "@tests/support/test";
 import { captureForReview } from "@tests/support/review-screenshot";
@@ -99,8 +100,8 @@ test("keeps the theme and query when changing language", async ({ page }) => {
   await expect(
     page.getByRole("heading", { level: 1, name: GROUPS.data.title("zh-CN") }),
   ).toBeVisible();
-  await page.getByText(m.storyDoorEvidence("zh-CN"), { exact: true }).click();
-  await expect(page.getByText(m.storyMeasuredWithATickCounterOnJava1("zh-CN"))).toBeVisible();
+  await page.getByText(data.storyDoorEvidence("zh-CN"), { exact: true }).click();
+  await expect(page.getByText(data.storyMeasuredWithATickCounterOnJava1("zh-CN"))).toBeVisible();
 });
 
 test("redirects the old media story to the data stories", async ({ page }) => {

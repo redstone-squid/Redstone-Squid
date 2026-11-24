@@ -3,7 +3,7 @@
   import Table from "@lucide/svelte/icons/table";
   import Bell from "@lucide/svelte/icons/bell";
   import User from "@lucide/svelte/icons/user";
-  import * as m from "@/locales/messages.gen";
+  import * as m from "@/locales/messages-navigation.gen";
   import Breadcrumbs from "@/ui/navigation/Breadcrumbs.svelte";
   import NavList from "@/ui/navigation/NavList.svelte";
   import Pagination from "@/ui/navigation/Pagination.svelte";

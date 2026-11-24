@@ -1,5 +1,5 @@
 <script lang="ts">
-  import * as m from "@/locales/messages.gen";
+  import * as m from "@/locales/messages-overlays.gen";
   import ArrowDownUp from "@lucide/svelte/icons/arrow-down-up";
   import Columns3 from "@lucide/svelte/icons/columns-3";
   import Copy from "@lucide/svelte/icons/copy";

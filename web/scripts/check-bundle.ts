@@ -16,6 +16,8 @@ const budgets: EntryBudget[] = [
       "src/layouts/DocumentHead.astro?astro&type=script&index=0&lang.ts",
       "src/layouts/DocumentHead.astro?astro&type=script&index=1&lang.ts",
       "src/layouts/DocumentHead.astro?astro&type=script&index=2&lang.ts",
+      "src/layouts/DocumentHead.astro?astro&type=script&index=3&lang.ts",
+      "src/layouts/AppearanceSwitch.astro?astro&type=script&index=0&lang.ts",
     ],
     label: "Shared page scripts",
     initialKiB: 1,
