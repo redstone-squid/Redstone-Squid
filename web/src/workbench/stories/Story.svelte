@@ -26,7 +26,9 @@
     <code class="font-mono text-xs wrap-anywhere text-fg-muted"
       >{source.startsWith("features/") ? `src/${source}` : `src/ui/${source}.svelte`}</code
     >
-    {#if description}<p class="max-w-prose text-sm text-fg-muted">{description}</p>{/if}
+    {#if description}<p class="max-w-prose text-sm wrap-anywhere text-fg-muted">
+        {description}
+      </p>{/if}
   </header>
   <div class="grid min-w-0 gap-6">{@render children()}</div>
 </section>
