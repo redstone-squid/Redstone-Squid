@@ -231,7 +231,6 @@ export default tseslint.config(
     settings: {
       "better-tailwindcss": {
         entryPoint: "src/ui/app.css",
-        callees: ["cva", "cn", "cx"],
       },
     },
     rules: {

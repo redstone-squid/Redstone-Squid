@@ -35,7 +35,10 @@
           aria-hidden="true"
         ></span>{/if}
       <span
-        class={cn("relative mt-1 size-4 rounded-full border-2", dots[entry.tone ?? "default"])}
+        class={cn(
+          "relative mt-1 size-4 rounded-full border-2",
+          entry.tone === undefined ? dots.default : dots[entry.tone],
+        )}
         aria-hidden="true"
       ></span>
       <div class="grid min-w-0 gap-1">

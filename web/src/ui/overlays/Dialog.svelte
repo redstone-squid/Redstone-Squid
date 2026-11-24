@@ -25,6 +25,7 @@
     (size === "md" || size === "full-mobile") && "max-w-dialog-md",
     size === "lg" && "max-w-dialog-lg",
     size === "full-mobile" &&
+      // eslint-disable-next-line better-tailwindcss/no-restricted-classes -- a modal sits in the top layer, so the viewport is its container
       "max-sm:mb-0 max-sm:max-h-[calc(100dvh-1rem)] max-sm:w-full max-sm:max-w-none max-sm:rounded-b-none max-sm:motion-safe:starting:translate-y-full",
   )}
 />

@@ -227,7 +227,7 @@
                   "border-b border-line font-semibold whitespace-nowrap",
                   column.sortKey === undefined || sortHref === undefined ? pad : "p-0",
                   column.numeric === true || column.align === "end" ? "text-end" : "text-start",
-                  widths[column.width ?? "auto"],
+                  column.width !== undefined && widths[column.width],
                   index === 0 && "bg-surface-muted",
                 )}
               >
