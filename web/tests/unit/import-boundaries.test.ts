@@ -15,6 +15,7 @@ tester.run("frontend import boundaries", importBoundaries, {
   valid: [
     { filename: `${src}/ui/svelte/Dialog.svelte`, code: 'import { Dialog } from "bits-ui";' },
     { filename: ui, code: 'import { Field } from "./Field";' },
+    { filename: ui, code: 'import { fieldStyles } from "@/ui/forms/styles";' },
     { filename: feature, code: 'import { Button } from "../../ui/svelte/Button.svelte";' },
     { filename: feature, code: 'import { draft } from "./draft";' },
     { filename: featureModule, code: 'import * as m from "@/locales/messages.gen";' },
@@ -33,6 +34,16 @@ tester.run("frontend import boundaries", importBoundaries, {
     },
   ],
   invalid: [
+    {
+      filename: feature,
+      code: 'import { fieldStyles } from "@/ui/forms/styles";',
+      errors: [{ messageId: "uiStyles" }],
+    },
+    {
+      filename: `${src}/workbench/Story.svelte`,
+      code: 'import { toneFill } from "../ui/chart/styles.ts";',
+      errors: [{ messageId: "uiStyles" }],
+    },
     {
       filename: feature,
       code: 'import { Dialog } from "bits-ui";',

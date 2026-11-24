@@ -53,7 +53,10 @@ function locate(file: string): { src: string; segments: string[] } | undefined {
 // Libraries that only src/ui wraps, so features get one accessible, themed version of each.
 const UI_ONLY = /^(?:bits-ui|layerchart|@tanstack\/svelte-table)(?:\/|$)/;
 
-/** Enforce the `LAYERS` table, keep `UI_ONLY` libraries inside src/ui, and keep server code out of the browser. */
+/**
+ * Enforce the `LAYERS` table, keep `UI_ONLY` libraries and the shared `styles.ts` of each
+ * src/ui folder inside src/ui, and keep server code out of the browser.
+ */
 export const importBoundaries: Rule.RuleModule = {
   meta: {
     type: "problem",
@@ -68,6 +71,8 @@ export const importBoundaries: Rule.RuleModule = {
       primitives:
         "Import the src/ui component that wraps this library; only src/ui uses it directly.",
       server: "Browser code cannot import server modules or Node built-ins.",
+      uiStyles:
+        "src/ui styles are internal to its components. Use the component, or ask it for a variant.",
     },
   },
   create(context) {
@@ -102,6 +107,10 @@ export const importBoundaries: Rule.RuleModule = {
       const target = locate(absolute);
       if (target?.src !== self.src) return;
       const to = target.segments[0];
+      if (to === "ui" && from !== "ui" && /^styles(?:\.ts)?$/.test(target.segments.at(-1) ?? "")) {
+        context.report({ node, messageId: "uiStyles" });
+        return;
+      }
       if (isBrowser && to === "server") {
         context.report({ node, messageId: "server" });
         return;
