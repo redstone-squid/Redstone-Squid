@@ -1,4 +1,5 @@
 <script lang="ts">
+  import * as m from "@/locales/messages.gen";
   import ArrowDownUp from "@lucide/svelte/icons/arrow-down-up";
   import Columns3 from "@lucide/svelte/icons/columns-3";
   import Copy from "@lucide/svelte/icons/copy";
@@ -35,140 +36,143 @@
   }
 </script>
 
-<Story
-  name="Dialog"
-  source="overlays/Dialog"
-  description="Modal task with a focus trap; focus returns to the trigger on close. Before hydration a trigger with fallbackHref is a link."
->
-  <Variant label="form, focus on the first field">
+<Story name="Dialog" source="overlays/Dialog" description={m.storyDialogDescription()}>
+  <Variant label={m.storyFormFocusOnTheFirstField()}>
     <DraftDialog />
   </Variant>
-  <Variant label="sizes">
+  <Variant label={m.storySizes()}>
     <div class="flex flex-wrap gap-3">
       {#each ["sm", "md", "lg", "full-mobile"] as const as size (size)}
         <Dialog
           {size}
-          title={`Size ${size}`}
-          description="Width follows the content's needs."
-          closeLabel="Close"
+          title={m.storyDialogSize({ size })}
+          description={m.storyWidthFollowsTheContentSNeeds()}
+          closeLabel={m.storyClose()}
           trigger={{ label: size }}
         >
           <p>
-            Small dialogs suit confirmations, large ones suit pickers. full-mobile rises from the
-            bottom of narrow screens.
+            {m.storySmallDialogsSuitConfirmationsLargeOnesSuitPickers()}
           </p>
         </Dialog>
       {/each}
     </div>
   </Variant>
-  <Variant label="destructive confirmation, focus on the safe action">
+  <Variant label={m.storyDestructiveConfirmationFocusOnTheSafeAction()}>
     <Dialog
       bind:open={confirmOpen}
       size="sm"
-      title="Revoke Laptop CLI?"
-      description="The device signs out at once. You can link it again later."
-      closeLabel="Close"
+      title={m.storyRevokeLaptopCli()}
+      description={m.storyTheDeviceSignsOutAtOnceYouCan()}
+      closeLabel={m.storyClose()}
       initialFocus="[data-cancel]"
-      trigger={{ label: "Revoke", variant: "danger", icon: Trash }}
+      trigger={{ label: m.storyRevoke(), variant: "danger", icon: Trash }}
       fallbackHref="#dialog"
     >
-      <p>Tokens issued to this device stop working.</p>
+      <p>{m.storyTokensIssuedToThisDeviceStopWorking()}</p>
       {#snippet footer()}
-        <Button variant="danger" onclick={() => (confirmOpen = false)}>Revoke device</Button>
-        <Button data-cancel onclick={() => (confirmOpen = false)}>Keep device</Button>
+        <Button variant="danger" onclick={() => (confirmOpen = false)}
+          >{m.storyRevokeDevice()}</Button
+        >
+        <Button data-cancel onclick={() => (confirmOpen = false)}>{m.storyKeepDevice()}</Button>
       {/snippet}
     </Dialog>
   </Variant>
-  <Variant label="controlled, not dismissible while saving">
+  <Variant label={m.storyControlledNotDismissibleWhileSaving()}>
     <div class="flex flex-wrap gap-3">
-      <Button onclick={() => (controlledOpen = true)}>Rename from code</Button>
+      <Button onclick={() => (controlledOpen = true)}>{m.storyRenameFromCode()}</Button>
       <Dialog
         bind:open={controlledOpen}
-        title="Rename build"
-        closeLabel="Close"
+        title={m.storyRenameBuild()}
+        closeLabel={m.storyClose()}
         dismissible={!saving}
       >
-        <TextField label="Title" value="Copper Bolt 5×5" />
+        <TextField label={m.storyTitle()} value={m.storyCopperBolt55()} />
         {#snippet footer()}
-          <Button variant="primary" pending={saving} pendingLabel="Saving" onclick={save}
-            >Save</Button
+          <Button variant="primary" pending={saving} pendingLabel={m.storySaving()} onclick={save}
+            >{m.storySave()}</Button
           >
         {/snippet}
       </Dialog>
     </div>
   </Variant>
-  <Variant label="long content scrolls between header and footer">
-    <Dialog title="Changelog" closeLabel="Close" trigger={{ label: "Show changelog" }} size="lg">
+  <Variant label={m.storyLongContentScrollsBetweenHeaderAndFooter()}>
+    <Dialog
+      title={m.storyChangelog()}
+      closeLabel={m.storyClose()}
+      trigger={{ label: m.storyShowChangelog() }}
+      size="lg"
+    >
       {#each { length: 24 }, index (index)}
-        <p class="mb-3">Version {24 - index}: tightened the piston timing on the third layer.</p>
+        <p class="mb-3">{m.storyChangelogEntry({ version: 24 - index })}</p>
       {/each}
-      {#snippet footer()}<Button variant="primary">Done</Button>{/snippet}
+      {#snippet footer()}<Button variant="primary">{m.storyDone()}</Button>{/snippet}
     </Dialog>
   </Variant>
 </Story>
 
-<Story
-  name="Sheet"
-  source="overlays/Sheet"
-  description="A dialog attached to a screen edge, for filters and navigation."
->
+<Story name="Sheet" source="overlays/Sheet" description={m.storySheetDescription()}>
   <div class="flex flex-wrap gap-3">
     {#each ["start", "end", "bottom"] as const as side (side)}
       <Sheet
         {side}
-        title="Filters"
-        description={`Slides in from the ${side} edge.`}
-        closeLabel="Close"
-        trigger={{ label: `Filters (${side})`, icon: SlidersHorizontal }}
+        title={m.storyFilters()}
+        description={m.storySheetEdge({ side })}
+        closeLabel={m.storyClose()}
+        trigger={{ label: m.storySheetTrigger({ side }), icon: SlidersHorizontal }}
       >
         <div class="grid gap-3">
-          <CheckField label="Has a world download" />
-          <CheckField label="Survival friendly" />
-          <CheckField label="Silent" />
+          <CheckField label={m.storyHasAWorldDownload()} />
+          <CheckField label={m.storySurvivalFriendlyLabel()} />
+          <CheckField label={m.storySilent()} />
         </div>
-        {#snippet footer()}<Button variant="primary">Show 42 builds</Button>{/snippet}
+        {#snippet footer()}<Button variant="primary">{m.storyShow42Builds()}</Button>{/snippet}
       </Sheet>
     {/each}
   </div>
 </Story>
 
-<Story
-  name="Menu"
-  source="overlays/Menu"
-  description="Actions or links behind a button. nojs is a native popover of links and forms."
->
-  <Variant label="actions with icons, a separator, and a danger item">
+<Story name="Menu" source="overlays/Menu" description={m.storyMenuDescription()}>
+  <Variant label={m.storyActionsWithIconsASeparatorAndADanger()}>
     <div class="flex flex-wrap items-center gap-3">
       <Menu
-        label="Build actions"
+        label={m.storyBuildActions()}
         align="start"
-        trigger={{ label: "Actions" }}
+        trigger={{ label: m.storyActions() }}
         items={[
-          { label: "Edit", icon: Pencil, onSelect: () => (lastAction = "Edit") },
-          { label: "Copy link", icon: Copy, onSelect: () => (lastAction = "Copy link") },
-          { label: "Report", icon: Flag, disabled: true },
+          { label: m.storyEdit(), icon: Pencil, onSelect: () => (lastAction = m.storyEdit()) },
+          {
+            label: m.storyCopyLink(),
+            icon: Copy,
+            onSelect: () => (lastAction = m.storyCopyLink()),
+          },
+          { label: m.storyReport(), icon: Flag, disabled: true },
           { kind: "separator" },
-          { label: "Delete", icon: Trash, danger: true, onSelect: () => (lastAction = "Delete") },
+          {
+            label: m.storyDelete(),
+            icon: Trash,
+            danger: true,
+            onSelect: () => (lastAction = m.storyDelete()),
+          },
         ]}
       />
       <Menu
-        label="Row actions"
-        trigger={{ label: "More actions", iconOnly: true, icon: Ellipsis, variant: "quiet" }}
+        label={m.storyRowActions()}
+        trigger={{ label: m.storyMoreActions(), iconOnly: true, icon: Ellipsis, variant: "quiet" }}
         items={[
-          { label: "Open", href: "#menu" },
-          { label: "Archive", action: "#menu" },
+          { label: m.storyOpen(), href: "#menu" },
+          { label: m.storyArchive(), action: "#menu" },
         ]}
       />
       <p role="status" class="text-sm text-fg-muted">
-        {lastAction === "" ? "" : `Chose ${lastAction}`}
+        {lastAction === "" ? "" : m.storyChoseAction({ lastAction })}
       </p>
     </div>
   </Variant>
-  <Variant label="checkbox items stay open">
+  <Variant label={m.storyCheckboxItemsStayOpen()}>
     <Menu
-      label="Columns"
+      label={m.storyColumns()}
       align="start"
-      trigger={{ label: "Columns", icon: Columns3, size: "sm" }}
+      trigger={{ label: m.storyColumns(), icon: Columns3, size: "sm" }}
       items={Object.entries(columns).map(([column, checked]) => ({
         kind: "checkbox",
         label: column,
@@ -177,59 +181,61 @@
       }))}
     />
   </Variant>
-  <Variant label="nojs: links with the current choice">
+  <Variant label={m.storyNojsLinksWithTheCurrentChoice()}>
     <Menu
       nojs
-      label="Sort order"
+      label={m.storySortOrder()}
       align="start"
-      trigger={{ label: "Newest", name: "Sort: Newest", icon: ArrowDownUp, size: "sm" }}
+      trigger={{ label: m.storyNewest(), name: m.storySortNewest(), icon: ArrowDownUp, size: "sm" }}
       items={[
-        { label: "Newest", href: "#menu-newest", current: true },
-        { label: "Most votes", href: "#menu-votes" },
-        { label: "Fastest", href: "#menu-fastest" },
+        { label: m.storyNewest(), href: "#menu-newest", current: true },
+        { label: m.storyMostVotes(), href: "#menu-votes" },
+        { label: m.storyFastest(), href: "#menu-fastest" },
       ]}
     />
   </Variant>
 </Story>
 
-<Story
-  name="Popover"
-  source="overlays/Popover"
-  description="Non-modal help beside its trigger; the page stays usable."
->
+<Story name="Popover" source="overlays/Popover" description={m.storyPopoverDescription()}>
   <div class="flex flex-wrap gap-3">
     {#each ["bottom", "top", "end"] as const as placement (placement)}
       <Popover
         {placement}
-        label="What pending means"
-        closeLabel="Close"
-        trigger={{ label: `Status help (${placement})`, icon: Info, variant: "quiet", size: "sm" }}
+        label={m.storyWhatPendingMeans()}
+        closeLabel={m.storyClose()}
+        trigger={{
+          label: m.storyStatusHelp({ placement }),
+          icon: Info,
+          variant: "quiet",
+          size: "sm",
+        }}
       >
-        <p class="font-semibold">Pending review</p>
+        <p class="font-semibold">{m.storyPendingReview()}</p>
         <p class="text-fg-muted">
-          A moderator checks the evidence before the record appears in listings.
+          {m.storyAModeratorChecksTheEvidenceBeforeTheRecord()}
         </p>
       </Popover>
     {/each}
   </div>
 </Story>
 
-<Story
-  name="Tooltip"
-  source="overlays/Tooltip"
-  description="Shown on hover or focus. It repeats the trigger's name, never adds to it."
->
+<Story name="Tooltip" source="overlays/Tooltip" description={m.storyTooltipDescription()}>
   <div class="flex flex-wrap gap-3">
-    <Tooltip content="Edit">
-      {#snippet children(props)}<Button {...props} iconOnly icon={Pencil} label="Edit" />{/snippet}
+    <Tooltip content={m.storyEdit()}>
+      {#snippet children(props)}<Button
+          {...props}
+          iconOnly
+          icon={Pencil}
+          label={m.storyEdit()}
+        />{/snippet}
     </Tooltip>
-    <Tooltip content="Delete" placement="bottom">
+    <Tooltip content={m.storyDelete()} placement="bottom">
       {#snippet children(props)}<Button
           {...props}
           iconOnly
           variant="danger"
           icon={Trash}
-          label="Delete"
+          label={m.storyDelete()}
         />{/snippet}
     </Tooltip>
   </div>

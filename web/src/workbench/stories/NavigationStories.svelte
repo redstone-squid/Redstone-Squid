@@ -22,77 +22,77 @@
 
 <Story name="Breadcrumbs" source="navigation/Breadcrumbs">
   <Breadcrumbs
-    label="Breadcrumb"
+    label={m.storyBreadcrumb()}
     items={[
-      { label: "Builds", href: "#breadcrumbs" },
-      { label: "Doors", href: "#breadcrumbs" },
-      { label: "Copper Bolt 5×5" },
+      { label: m.navBuilds(), href: "#breadcrumbs" },
+      { label: m.storyDoors(), href: "#breadcrumbs" },
+      { label: m.storyCopperBolt55() },
     ]}
   />
 </Story>
 
-<Story name="Tabs" source="navigation/Tabs" description="Views of one listing or of one item.">
-  <Variant label="link mode, for views kept in the URL">
+<Story name="Tabs" source="navigation/Tabs" description={m.storyTabsDescription()}>
+  <Variant label={m.storyLinkModeForViewsKeptInTheUrl()}>
     <Tabs
-      label="Search scope"
+      label={m.storySearchScope()}
       items={[
-        { label: "All", href: "#tabs", current: true, count: "312" },
-        { label: "Builds", href: "#tabs-builds", count: "280" },
-        { label: "Records", href: "#tabs-records", count: "32" },
+        { label: m.storyAll(), href: "#tabs", current: true, count: "312" },
+        { label: m.navBuilds(), href: "#tabs-builds", count: "280" },
+        { label: m.navRecords(), href: "#tabs-records", count: "32" },
       ]}
     />
   </Variant>
-  <Variant label="panel mode, arrow keys switch panels">
+  <Variant label={m.storyPanelModeArrowKeysSwitchPanels()}>
     <Tabs
       mode="panel"
-      label="Preview"
+      label={m.storyPreview()}
       bind:value={preview}
       items={[
-        { id: "render", label: "Render" },
-        { id: "schematic", label: "Schematic", count: "3" },
-        { id: "video", label: "Video", disabled: true },
+        { id: "render", label: m.storyRender() },
+        { id: "schematic", label: m.storySchematic(), count: "3" },
+        { id: "video", label: m.storyVideo(), disabled: true },
       ]}
     >
       {#snippet panel(tab)}
-        <p class="text-sm text-fg-muted">The {tab.label.toLowerCase()} of Copper Bolt 5×5.</p>
+        <p class="text-sm text-fg-muted">{m.storyTabPreview({ tab: tab.label.toLowerCase() })}</p>
       {/snippet}
     </Tabs>
   </Variant>
 </Story>
 
 <Story name="SegmentedControl" source="navigation/SegmentedControl">
-  <Variant label="link mode">
+  <Variant label={m.storyLinkMode()}>
     <SegmentedControl
-      label="View"
+      label={m.storyView()}
       items={[
-        { label: "Cards", href: "#segmentedcontrol", current: true, icon: LayoutGrid },
-        { label: "Table", href: "#segmentedcontrol-table", icon: Table },
+        { label: m.storyCards(), href: "#segmentedcontrol", current: true, icon: LayoutGrid },
+        { label: m.storyTable(), href: "#segmentedcontrol-table", icon: Table },
       ]}
     />
   </Variant>
-  <Variant label="radio mode, size md">
+  <Variant label={m.storyRadioModeSizeMd()}>
     <SegmentedControl
       mode="radio"
-      label="Duration unit"
+      label={m.storyDurationUnit()}
       name="unit"
       size="md"
       bind:value={unit}
       items={[
-        { label: "Ticks", value: "ticks" },
-        { label: "Seconds", value: "seconds" },
-        { label: "Minutes", value: "minutes", disabled: true },
+        { label: m.storyTicks(), value: "ticks" },
+        { label: m.storySeconds(), value: "seconds" },
+        { label: m.storyMinutes(), value: "minutes", disabled: true },
       ]}
     />
   </Variant>
-  <Variant label="radio mode, nothing chosen yet">
+  <Variant label={m.storyRadioModeNothingChosenYet()}>
     <SegmentedControl
       mode="radio"
-      label="Your vote"
+      label={m.storyYourVote()}
       name="vote"
       bind:value={vote}
       items={[
-        { label: "Approve", value: "approve" },
-        { label: "Reject", value: "reject" },
+        { label: m.storyApprove(), value: "approve" },
+        { label: m.storyReject(), value: "reject" },
       ]}
     />
   </Variant>
@@ -100,14 +100,14 @@
 
 <Story name="NavList" source="navigation/NavList">
   <NavList
-    label="Account"
+    label={m.storyAccount()}
     class="max-w-64"
     groups={[
       {
-        heading: "Account",
+        heading: m.storyAccount(),
         items: [
-          { label: "Profile", href: "#navlist", current: true, icon: User },
-          { label: "Notifications", href: "#navlist-notifications", count: "3", icon: Bell },
+          { label: m.storyProfile(), href: "#navlist", current: true, icon: User },
+          { label: m.storyNotifications(), href: "#navlist-notifications", count: "3", icon: Bell },
         ],
       },
     ]}
@@ -117,29 +117,29 @@
 <Story
   name="Pagination"
   source="navigation/Pagination"
-  description="Hidden when there is one page."
+  description={m.storyPaginationDescription()}
 >
-  <Variant label="previous and next">
+  <Variant label={m.storyPreviousAndNext()}>
     <Pagination
       prevHref="#pagination-prev"
       nextHref="#pagination-next"
-      range="21–40 of 312"
+      range={m.story2140Of312()}
       labels={labels(m.navPagination())}
     />
   </Variant>
-  <Variant label="first page">
-    <Pagination nextHref="#pagination-next" labels={labels("First page")} />
+  <Variant label={m.storyFirstPage()}>
+    <Pagination nextHref="#pagination-next" labels={labels(m.storyFirstPage())} />
   </Variant>
-  <Variant label="numbered">
+  <Variant label={m.storyNumbered()}>
     <Pagination
       prevHref="#pagination-1"
       nextHref="#pagination-3"
-      range="21–40 of 60"
-      labels={labels("Numbered pages")}
+      range={m.story2140Of60()}
+      labels={labels(m.storyNumberedPages())}
       pages={[
-        { label: "1", href: "#pagination-1", name: "Page 1" },
-        { label: "2", href: "#pagination-2", name: "Page 2", current: true },
-        { label: "3", href: "#pagination-3", name: "Page 3" },
+        { label: "1", href: "#pagination-1", name: m.storyPage1() },
+        { label: "2", href: "#pagination-2", name: m.storyPage2(), current: true },
+        { label: "3", href: "#pagination-3", name: m.storyPage3() },
       ]}
     />
   </Variant>

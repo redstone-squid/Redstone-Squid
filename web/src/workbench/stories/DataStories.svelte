@@ -1,4 +1,5 @@
 <script lang="ts">
+  import * as m from "@/locales/messages.gen";
   import Bell from "@lucide/svelte/icons/bell";
   import Button from "@/ui/actions/Button.svelte";
   import Avatar from "@/ui/data/Avatar.svelte";
@@ -18,90 +19,86 @@
   import Variant from "./Variant.svelte";
 
   const specs = [
-    { term: "Dimensions", value: "9 × 7 × 4", numeric: true },
-    { term: "Opening", value: "8 gt", numeric: true },
-    { term: "Version", value: "Java 1.21.4" },
-    { term: "Creator", value: "CircuitSage", href: "#descriptionlist" },
+    { term: m.buildDimensions(), value: "9 × 7 × 4", numeric: true },
+    { term: m.buildOpening(), value: m.story8Gt(), numeric: true },
+    { term: m.storyVersion(), value: m.storyJava1214() },
+    { term: m.storyCreator(), value: "CircuitSage", href: "#descriptionlist" },
   ];
 </script>
 
-<Story
-  name="Card"
-  source="data/Card"
-  description="With a title and href, the whole card links; inner controls stay clickable."
->
+<Story name="Card" source="data/Card" description={m.storyCardDescription()}>
   <Layout as="ul" pattern="grid">
-    <Card as="li" title="Linked card" href="#card" eyebrow="Fastest">
-      <Text size="sm" tone="muted">The title link covers the card.</Text>
-      <div><Button size="sm">Inner action</Button></div>
+    <Card as="li" title={m.storyLinkedCard()} href="#card" eyebrow={m.storyFastest()}>
+      <Text size="sm" tone="muted">{m.storyTheTitleLinkCoversTheCard()}</Text>
+      <div><Button size="sm">{m.storyInnerAction()}</Button></div>
     </Card>
-    <Card as="li" title="With media" href="#card">
+    <Card as="li" title={m.storyWithMedia()} href="#card">
       {#snippet media()}<Image
           src="/fixtures/iris-door.svg"
-          alt="Iris door illustration"
+          alt={m.storyIrisDoorIllustration()}
           width={640}
           height={400}
-          fallbackLabel="No preview"
+          fallbackLabel={m.storyNoPreview()}
         />{/snippet}
       <Text size="sm" tone="muted">Space Builder</Text>
     </Card>
-    <Card as="li" title="Plain surface" tone="muted" padding="lg">
-      <Text size="sm">No link.</Text>
-      {#snippet footer()}<Text size="xs" tone="muted">Footer</Text>{/snippet}
+    <Card as="li" title={m.storyPlainSurface()} tone="muted" padding="lg">
+      <Text size="sm">{m.storyNoLink()}</Text>
+      {#snippet footer()}<Text size="xs" tone="muted">{m.storyFooter()}</Text>{/snippet}
     </Card>
-    <Card as="li" title="Selected" tone="selected" padding="sm" />
-    <Card as="li" title="Needs attention" tone="warning" padding="sm" />
+    <Card as="li" title={m.storySelected()} tone="selected" padding="sm" />
+    <Card as="li" title={m.storyNeedsAttention()} tone="warning" padding="sm" />
   </Layout>
 </Story>
 
-<Story name="Image" source="data/Image" description="A fixed frame with a fallback.">
+<Story name="Image" source="data/Image" description={m.storyImageDescription()}>
   <Layout pattern="grid" min="tile">
-    <Variant label="wide">
+    <Variant label={m.storyWide()}>
       <Image
         src="/fixtures/copper-door.svg"
-        alt="Copper door"
+        alt={m.storyCopperDoor()}
         width={640}
         height={400}
-        fallbackLabel="No preview"
+        fallbackLabel={m.storyNoPreview()}
       />
     </Variant>
-    <Variant label="square, contain">
+    <Variant label={m.storySquareContain()}>
       <Image
         src="/fixtures/iris-door.svg"
-        alt="Iris door"
+        alt={m.storyIrisDoor()}
         width={640}
         height={400}
         aspect="square"
         fit="contain"
-        fallbackLabel="No preview"
+        fallbackLabel={m.storyNoPreview()}
       />
     </Variant>
-    <Variant label="missing">
-      <Image src={null} alt="" width={640} height={400} fallbackLabel="No preview available" />
+    <Variant label={m.storyMissing()}>
+      <Image src={null} alt="" width={640} height={400} fallbackLabel={m.buildNoPreview()} />
     </Variant>
-    <Variant label="failed to load">
+    <Variant label={m.storyFailedToLoad()}>
       <Image
         src="https://media.fixture.invalid/broken.png"
-        alt="Missing preview"
+        alt={m.storyMissingPreview()}
         width={640}
         height={400}
-        fallbackLabel="Preview could not be loaded"
+        fallbackLabel={m.buildImageUnavailable()}
       />
     </Variant>
   </Layout>
 </Story>
 
-<Story
-  name="Gallery"
-  source="data/Gallery"
-  description="Thumbnails link to the full files without JavaScript; hydrated, they switch the viewer and the lightbox pages with arrow keys."
->
+<Story name="Gallery" source="data/Gallery" description={m.storyGalleryDescription()}>
   <Gallery
     class="max-w-form"
     items={[
-      { file: "copper-door", alt: "Copper door, front", caption: "Closed, from the front." },
-      { file: "iris-door", alt: "Iris door, open" },
-      { file: "copper-door", alt: "Copper door, wiring", caption: "The wiring behind the door." },
+      { file: "copper-door", alt: m.storyCopperDoorFront(), caption: m.storyClosedFromTheFront() },
+      { file: "iris-door", alt: m.storyIrisDoorOpen() },
+      {
+        file: "copper-door",
+        alt: m.storyCopperDoorWiring(),
+        caption: m.storyTheWiringBehindTheDoor(),
+      },
     ].map(({ file, alt, caption }, index) => ({
       kind: "image" as const,
       src: `/fixtures/${file}.svg?view=${index}`,
@@ -112,17 +109,17 @@
       caption,
     }))}
     labels={{
-      previous: "Previous",
-      next: "Next",
-      close: "Close",
-      openItem: "View full size",
-      fallback: "Image could not be loaded",
-      position: (current, total) => `Image ${current} of ${total}`,
+      previous: m.commonPrevious(),
+      next: m.commonNext(),
+      close: m.storyClose(),
+      openItem: m.storyViewFullSize(),
+      fallback: m.storyImageCouldNotBeLoaded(),
+      position: (current, total) => m.storyImagePosition({ current, total }),
     }}
   />
 </Story>
 
-<Story name="Avatar" source="data/Avatar" description="Initials when there is no picture.">
+<Story name="Avatar" source="data/Avatar" description={m.storyAvatarDescription()}>
   <div class="flex items-center gap-3">
     <Avatar name="CircuitSage" size="sm" />
     <Avatar name="Space Builder" />
@@ -142,74 +139,75 @@
 <Story name="StatGroup" source="data/StatGroup">
   <StatGroup
     items={[
-      { label: "Builds", value: "1,284" },
-      { label: "Records held", value: "12", href: "#statgroup" },
-      { label: "Opening", value: "8", unit: "gt", hint: "3 gt faster than the last holder" },
+      { label: m.navBuilds(), value: "1,284" },
+      { label: m.storyRecordsHeld(), value: "12", href: "#statgroup" },
+      {
+        label: m.buildOpening(),
+        value: "8",
+        unit: "gt",
+        hint: m.story3GtFasterThanTheLastHolder(),
+      },
     ]}
   />
 </Story>
 
-<Story
-  name="Disclosure"
-  source="data/Disclosure"
-  description="Native details; works without JavaScript."
->
-  <Disclosure summary="Door evidence">
-    <Text size="sm">Measured with a tick counter on Java 1.21.4.</Text>
+<Story name="Disclosure" source="data/Disclosure" description={m.storyDisclosureDescription()}>
+  <Disclosure summary={m.storyDoorEvidence()}>
+    <Text size="sm">{m.storyMeasuredWithATickCounterOnJava1()}</Text>
   </Disclosure>
-  <Disclosure summary="Expansion parameters" variant="card" open>
+  <Disclosure summary={m.storyExpansionParameters()} variant="card" open>
     <DescriptionList layout="inline" items={specs.slice(0, 2)} />
   </Disclosure>
 </Story>
 
 <Story name="List" source="data/List">
-  <List label="Notifications">
+  <List label={m.storyNotifications()}>
     <ListItem
-      title="Your door Copper Bolt now holds 2 records"
+      title={m.storyYourDoorCopperBoltNowHolds2Records()}
       href="#list"
       unread
-      unreadLabel="Unread"
+      unreadLabel={m.storyUnread()}
     >
       {#snippet leading()}<Bell class="mt-0.5 size-5 text-fg-muted" aria-hidden="true" />{/snippet}
-      {#snippet meta()}<time datetime="2026-01-12">3 days ago</time>{/snippet}
+      {#snippet meta()}<time datetime="2026-01-12">{m.story3DaysAgo()}</time>{/snippet}
     </ListItem>
-    <ListItem title="Laptop CLI" description="Last used yesterday">
+    <ListItem title={m.storyLaptopCli()} description={m.storyLastUsedYesterday()}>
       {#snippet leading()}<Avatar name="Laptop CLI" size="sm" />{/snippet}
-      {#snippet trailing()}<Button size="sm" variant="danger">Revoke</Button>{/snippet}
+      {#snippet trailing()}<Button size="sm" variant="danger">{m.storyRevoke()}</Button>{/snippet}
     </ListItem>
-    <ListItem title="Compact row" density="compact" />
+    <ListItem title={m.storyCompactRow()} density="compact" />
   </List>
 </Story>
 
-<Story name="ListItem" source="data/ListItem" description="Rows of a List; see the List story.">
-  <Text size="sm" tone="muted">Shown above: unread, leading, meta, trailing, and compact.</Text>
+<Story name="ListItem" source="data/ListItem" description={m.storyListItemDescription()}>
+  <Text size="sm" tone="muted">{m.storyShownAboveUnreadLeadingMetaTrailingAndCompact()}</Text>
 </Story>
 
 <Story name="Timeline" source="data/Timeline">
   <Timeline
-    label="Record holders"
+    label={m.storyRecordHolders()}
     items={[
       {
         id: 1,
         datetime: "2026-01-12",
-        dateLabel: "12 Jan 2026",
-        title: "Copper Bolt 5×5",
+        dateLabel: m.story12Jan2026(),
+        title: m.storyCopperBolt55(),
         href: "#timeline",
         tone: "accent",
-        description: "8 gt, 3 gt faster",
+        description: m.story8Gt3GtFaster(),
       },
       {
         id: 2,
         datetime: "2025-08-02",
-        dateLabel: "2 Aug 2025",
-        title: "Iris door",
+        dateLabel: m.story2Aug2025(),
+        title: m.storyIrisDoor(),
         tone: "default",
       },
       {
         id: 3,
         datetime: "2024-03-19",
-        dateLabel: "19 Mar 2024",
-        title: "First holder",
+        dateLabel: m.story19Mar2024(),
+        title: m.storyFirstHolder(),
         tone: "success",
       },
     ]}
@@ -218,23 +216,23 @@
 
 <Story name="Diff" source="data/Diff">
   <Diff
-    caption="Changes to Copper Bolt 5×5"
+    caption={m.storyChangesToCopperBolt55()}
     labels={{
-      field: "Field",
-      before: "Before",
-      after: "After",
-      empty: "Empty",
-      added: "Added",
-      removed: "Removed",
-      changed: "Changed",
-      unchanged: "Unchanged",
+      field: m.storyField(),
+      before: m.storyBefore(),
+      after: m.storyAfter(),
+      empty: m.storyEmpty(),
+      added: m.storyAdded(),
+      removed: m.storyRemoved(),
+      changed: m.storyChanged(),
+      unchanged: m.storyUnchanged(),
     }}
     showUnchanged
     rows={[
-      { label: "Opening time", before: "9 gt", after: "8 gt", kind: "changed" },
-      { label: "Video", before: null, after: "https://youtu.be/…", kind: "added" },
-      { label: "Notes", before: "Old notes", after: null, kind: "removed" },
-      { label: "Width", before: "5", after: "5", kind: "unchanged" },
+      { label: m.storyOpeningTime(), before: m.story9Gt(), after: m.story8Gt(), kind: "changed" },
+      { label: m.storyVideo(), before: null, after: "https://youtu.be/…", kind: "added" },
+      { label: m.storyNotes(), before: m.storyOldNotes(), after: null, kind: "removed" },
+      { label: m.storyWidth(), before: "5", after: "5", kind: "unchanged" },
     ]}
   />
 </Story>

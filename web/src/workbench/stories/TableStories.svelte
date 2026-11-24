@@ -1,4 +1,5 @@
 <script lang="ts">
+  import * as m from "@/locales/messages.gen";
   import Badge from "@/ui/feedback/Badge.svelte";
   import EmptyState from "@/ui/feedback/EmptyState.svelte";
   import Pagination from "@/ui/navigation/Pagination.svelte";
@@ -21,7 +22,7 @@
   const builds: Build[] = [
     {
       id: "copper",
-      title: "Copper Bolt 5×5",
+      title: m.storyCopperBolt55(),
       size: "9 × 7 × 4",
       volume: 252,
       opening: 8,
@@ -30,7 +31,7 @@
     },
     {
       id: "iris",
-      title: "Iris door with a much longer name than the column",
+      title: m.storyIrisDoorWithAMuchLongerNameThan(),
       size: "11 × 11 × 5",
       volume: 605,
       opening: 12,
@@ -39,7 +40,7 @@
     },
     {
       id: "flush",
-      title: "Flush piston door",
+      title: m.storyFlushPistonDoor(),
       size: "6 × 5 × 3",
       volume: 90,
       opening: 4,
@@ -48,11 +49,16 @@
     },
   ];
   const columns: DataTableColumn<Build>[] = [
-    { id: "title", header: "Build", value: (row) => row.title, width: "lg", truncate: true },
-    { id: "status", header: "Status", value: (row) => row.status, hideable: true },
+    { id: "title", header: m.storyBuild(), value: (row) => row.title, width: "lg", truncate: true },
+    {
+      id: "status",
+      header: m.storyStatus(),
+      value: (row) => (row.status === "Confirmed" ? m.storyConfirmed() : m.storyPendingLabel()),
+      hideable: true,
+    },
     {
       id: "size",
-      header: "Size",
+      header: m.storySize(),
       value: (row) => row.size,
       mono: true,
       sortKey: "volume",
@@ -60,14 +66,14 @@
     },
     {
       id: "opening",
-      header: "Opening",
-      value: (row) => `${row.opening} gt`,
+      header: m.buildOpening(),
+      value: (row) => m.buildTicks({ ticks: row.opening }),
       numeric: true,
       sortKey: "opening",
     },
     {
       id: "creators",
-      header: "Creators",
+      header: m.buildCreators(),
       value: (row) => row.creators,
       width: "md",
       hideable: true,
@@ -76,13 +82,13 @@
   const sortHref = (key: string, direction: string) =>
     `?sort=${direction === "desc" ? "-" : ""}${key}#datatable`;
   const labels = {
-    expand: "Show builds",
-    collapse: "Hide builds",
-    loading: "loading",
+    expand: m.storyShowBuilds(),
+    collapse: m.storyHideBuilds(),
+    loading: m.storyLoadingLabel(),
     visibility: {
-      menu: "Columns",
-      show: (header: string) => `Show ${header}`,
-      hide: (header: string) => `Hide ${header}`,
+      menu: m.storyColumns(),
+      show: (header: string) => m.storyShowColumn({ header }),
+      hide: (header: string) => m.storyHideColumn({ header }),
     },
   };
   const visibilityHref = (hidden: string[]) =>
@@ -91,35 +97,31 @@
   const records: Build[] = [
     {
       id: "smallest-5x5",
-      title: "Smallest 5×5 piston door",
+      title: m.storySmallest55PistonDoor(),
       size: "—",
       volume: 252,
       opening: 8,
       status: "Confirmed",
-      creators: "2 holders",
+      creators: m.story2Holders(),
       builds: builds.slice(0, 2),
     },
     {
       id: "fastest-3x3",
-      title: "Fastest 3×3 piston door",
+      title: m.storyFastest33PistonDoor(),
       size: "—",
       volume: 90,
       opening: 4,
       status: "Confirmed",
-      creators: "1 holder",
+      creators: m.story1Holder(),
       builds: builds.slice(2),
     },
   ];
 </script>
 
-<Story
-  name="DataTable"
-  source="table/DataTable"
-  description="The server sorts: headers are links, and aria-sort marks the sorted column. The first column stays pinned when the table scrolls."
->
-  <Variant label="sorted by opening, linked rows, custom cells">
+<Story name="DataTable" source="table/DataTable" description={m.storyDataTableDescription()}>
+  <Variant label={m.storySortedByOpeningLinkedRowsCustomCells()}>
     <DataTable
-      caption="Door builds"
+      caption={m.storyDoorBuilds()}
       {columns}
       rows={builds}
       getRowId={(row) => row.id}
@@ -130,7 +132,9 @@
     >
       {#snippet cell(row, column)}
         {#if column.id === "status"}
-          <Badge tone={row.status === "Confirmed" ? "success" : "warning"}>{row.status}</Badge>
+          <Badge tone={row.status === "Confirmed" ? "success" : "warning"}
+            >{column.value(row)}</Badge
+          >
         {:else}
           {column.value(row)}
         {/if}
@@ -139,15 +143,19 @@
         <Pagination
           prevHref={null}
           nextHref="#datatable"
-          range="1–3 of 42"
-          labels={{ nav: "Door build pages", previous: "Previous", next: "Next" }}
+          range={m.story13Of42()}
+          labels={{
+            nav: m.storyDoorBuildPages(),
+            previous: m.commonPrevious(),
+            next: m.commonNext(),
+          }}
         />
       {/snippet}
     </DataTable>
   </Variant>
-  <Variant label="grouped rows, one group open, compact, column menu with two hidden">
+  <Variant label={m.storyGroupedRowsOneGroupOpenCompactColumnMenu()}>
     <DataTable
-      caption="Door records"
+      caption={m.storyDoorRecords()}
       {columns}
       rows={records}
       getRowId={(row) => row.id}
@@ -158,14 +166,14 @@
         getSubRows: (row) => row.builds,
         open: ["smallest-5x5"],
         href: (open) => (open.length > 0 ? `?open=${open.join(",")}#datatable` : "#datatable"),
-        groupLabel: (parent) => `In ${parent.title}`,
+        groupLabel: (parent) => m.storyInGroup({ title: parent.title }),
       }}
       {labels}
     />
   </Variant>
-  <Variant label="loading">
+  <Variant label={m.storyLoadingLabel()}>
     <DataTable
-      caption="Door builds"
+      caption={m.storyDoorBuilds()}
       captionHidden
       {columns}
       rows={[]}
@@ -174,10 +182,19 @@
       {labels}
     />
   </Variant>
-  <Variant label="no rows">
-    <DataTable caption="Door builds" {columns} rows={[]} getRowId={(row) => row.id} {labels}>
+  <Variant label={m.storyNoRows()}>
+    <DataTable
+      caption={m.storyDoorBuilds()}
+      {columns}
+      rows={[]}
+      getRowId={(row) => row.id}
+      {labels}
+    >
       {#snippet empty()}
-        <EmptyState title="No builds match" description="Remove a filter to see more builds." />
+        <EmptyState
+          title={m.storyNoBuildsMatch()}
+          description={m.storyRemoveAFilterToSeeMoreBuilds()}
+        />
       {/snippet}
     </DataTable>
   </Variant>

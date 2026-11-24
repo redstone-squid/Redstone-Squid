@@ -1,4 +1,5 @@
 <script lang="ts">
+  import * as m from "@/locales/messages.gen";
   import Hammer from "@lucide/svelte/icons/hammer";
   import Code from "@/ui/content/Code.svelte";
   import Heading from "@/ui/content/Heading.svelte";
@@ -20,116 +21,114 @@
   ].join("\n");
 </script>
 
-<Story
-  name="Heading"
-  source="content/Heading"
-  description="The level sets the outline; the size sets the look."
->
+<Story name="Heading" source="content/Heading" description={m.storyHeadingDescription()}>
   {#each ["display", "xl", "lg", "md", "sm"] as const as size (size)}
-    <Variant label={`level 3, size ${size}`}>
-      <Heading level={3} {size}>Fastest 3×3 flush door</Heading>
+    <Variant label={m.storyHeadingSize({ size })}>
+      <Heading level={3} {size}>{m.storyFastest33FlushDoor()}</Heading>
     </Variant>
   {/each}
-  <Variant label="eyebrow">
-    <Heading level={3} eyebrow="Fastest">Copper Bolt 5×5</Heading>
+  <Variant label={m.storyEyebrow()}>
+    <Heading level={3} eyebrow={m.storyFastest()}>{m.storyCopperBolt55()}</Heading>
   </Variant>
 </Story>
 
-<Story
-  name="MetaList"
-  source="content/MetaList"
-  description="Two or three facts of the same kind, separated by dots."
->
-  <Variant label="sm">
-    <MetaList items={["2 holders", "Current version"]} />
+<Story name="MetaList" source="content/MetaList" description={m.storyMetaListDescription()}>
+  <Variant label={m.storySm()}>
+    <MetaList items={[m.story2Holders(), m.storyCurrentVersion()]} />
   </Variant>
-  <Variant label="xs">
-    <MetaList size="xs" items={["Java 1.21", "Bedrock 1.20"]} />
+  <Variant label={m.storyXs()}>
+    <MetaList size="xs" items={[m.storyJava121(), m.storyBedrockVersion()]} />
   </Variant>
 </Story>
 
 <Story name="Text" source="content/Text">
-  <Variant label="tones">
+  <Variant label={m.storyTones()}>
     {#each ["default", "muted", "success", "warning", "danger"] as const as tone (tone)}
-      <Text {tone}>A {tone} line of body text.</Text>
+      <Text {tone}>{m.storyToneExample({ tone })}</Text>
     {/each}
   </Variant>
-  <Variant label="sizes, numeric, semibold">
-    <Text size="xs">Extra small hint text</Text>
-    <Text size="sm" weight="semibold">Small semibold</Text>
-    <Text numeric>9 × 7 × 4, 8 gt</Text>
+  <Variant label={m.storySizesNumericSemibold()}>
+    <Text size="xs">{m.storyExtraSmallHintText()}</Text>
+    <Text size="sm" weight="semibold">{m.storySmallSemibold()}</Text>
+    <Text numeric>{m.story9748Gt()}</Text>
   </Variant>
-  <Variant label="clamped to one line">
-    <Text lines={1} class="max-w-64"
-      >A very long creator list that does not fit: CircuitSage, Space Builder, 红石猫</Text
-    >
+  <Variant label={m.storyClampedToOneLine()}>
+    <Text lines={1} class="max-w-64">{m.storyAVeryLongCreatorListThatDoesNot()}</Text>
   </Variant>
 </Story>
 
 <Story name="Link" source="content/Link">
-  <Variant label="inline">
-    <Text>Read the <Link href="#link">door rules</Link> before submitting.</Text>
+  <Variant label={m.storyInline()}>
+    <Text
+      >{m.storyReadThe()}
+      <Link href="#link">{m.storyDoorRules()}</Link>
+      {m.storyBeforeSubmitting()}</Text
+    >
   </Variant>
-  <Variant label="standalone, subtle, current, external">
-    <Link href="#link" variant="standalone">View all records</Link>
-    <Link href="#link" variant="subtle">Edited 3 days ago</Link>
-    <Link href="#link" variant="standalone" current>Current page</Link>
-    <Link href="https://example.com" externalLabel="opens another site">Discord</Link>
+  <Variant label={m.storyStandaloneSubtleCurrentExternal()}>
+    <Link href="#link" variant="standalone">{m.storyViewAllRecords()}</Link>
+    <Link href="#link" variant="subtle">{m.storyEdited3DaysAgo()}</Link>
+    <Link href="#link" variant="standalone" current>{m.storyCurrentPage()}</Link>
+    <Link href="https://example.com" externalLabel={m.storyOpensAnotherSite()}>Discord</Link>
   </Variant>
 </Story>
 
-<Story name="Icon" source="content/Icon" description="Decorative unless given a label.">
+<Story name="Icon" source="content/Icon" description={m.storyIconDescription()}>
   <div class="flex items-center gap-4">
     <Icon icon={Hammer} />
     <Icon icon={Hammer} size="md" />
-    <Icon icon={Hammer} size="lg" label="Builder" />
+    <Icon icon={Hammer} size="lg" label={m.storyBuilder()} />
   </div>
 </Story>
 
 <Story name="Code" source="content/Code">
-  <Variant label="inline and key">
-    <Text>Search with <Code>width:5..8</Code>, then press <Code variant="key">Enter</Code>.</Text>
+  <Variant label={m.storyInlineAndKey()}>
+    <Text
+      >{m.storySearchWith()}
+      <Code>width:5..8</Code>{m.storyThenPress()}
+      <Code variant="key">{m.storyEnter()}</Code>.</Text
+    >
   </Variant>
-  <Variant label="block">
-    <Code variant="block" label="Traceback">{traceback}</Code>
+  <Variant label={m.storyBlock()}>
+    <Code variant="block" label={m.storyTraceback()}>{traceback}</Code>
   </Variant>
 </Story>
 
 <Story name="Timestamp" source="content/Timestamp">
   <Text
-    >Approved <Timestamp
+    >{m.storyApproved()}
+    <Timestamp
       datetime="2026-01-12T00:00:00Z"
-      label="3 days ago"
-      title="12 January 2026"
+      label={m.story3DaysAgo()}
+      title={m.story12January2026()}
     /></Text
   >
 </Story>
 
-<Story name="Prose" source="content/Prose" description="Styles rendered Markdown.">
+<Story name="Prose" source="content/Prose" description={m.storyProseDescription()}>
   <Prose>
-    <h2>Door rules</h2>
-    <p>A <strong>flush</strong> door leaves no blocks protruding when closed.</p>
+    <h2>{m.storyDoorRulesLabel()}</h2>
+    <p>
+      {m.storyA()} <strong>{m.storyFlush()}</strong>
+      {m.storyDoorLeavesNoBlocksProtrudingWhenClosed()}
+    </p>
     <ul>
-      <li>Opening time is measured in game ticks.</li>
-      <li>Closing time starts when the input turns off.</li>
+      <li>{m.storyOpeningTimeIsMeasuredInGameTicks()}</li>
+      <li>{m.storyClosingTimeStartsWhenTheInputTurnsOff()}</li>
     </ul>
-    <blockquote>Record checks compare the true opening time.</blockquote>
+    <blockquote>{m.storyRecordChecksCompareTheTrueOpeningTime()}</blockquote>
   </Prose>
 </Story>
 
 <Story
   name="VisuallyHidden"
   source="content/VisuallyHidden"
-  description="Text for screen readers only."
+  description={m.storyVisuallyHiddenDescription()}
 >
-  <Text>3 records <VisuallyHidden>held by this build</VisuallyHidden></Text>
+  <Text>{m.story3Records()} <VisuallyHidden>{m.storyHeldByThisBuild()}</VisuallyHidden></Text>
 </Story>
 
-<Story
-  name="SkipLink"
-  source="content/SkipLink"
-  description="Hidden until focused; the page layouts render one first."
->
-  <SkipLink href="#heading" label="Skip to the heading story" />
-  <Text tone="muted">Press Tab from the top of the page to reveal it.</Text>
+<Story name="SkipLink" source="content/SkipLink" description={m.storySkipLinkDescription()}>
+  <SkipLink href="#heading" label={m.storySkipToTheHeadingStory()} />
+  <Text tone="muted">{m.storyPressTabFromTheTopOfThePage()}</Text>
 </Story>

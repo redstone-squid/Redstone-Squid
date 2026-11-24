@@ -1,4 +1,5 @@
 <script lang="ts">
+  import * as m from "@/locales/messages.gen";
   import ArrowUpRight from "@lucide/svelte/icons/arrow-up-right";
   import Plus from "@lucide/svelte/icons/plus";
   import Trash from "@lucide/svelte/icons/trash-2";
@@ -11,72 +12,66 @@
   let pending = $state(false);
 </script>
 
-<Story
-  name="Button"
-  source="actions/Button"
-  description="A command, or with href a link styled as one."
->
+<Story name="Button" source="actions/Button" description={m.storyButtonDescription()}>
   {#each ["md", "sm"] as const as size (size)}
-    <Variant label={`variants, size ${size}`}>
+    <Variant label={m.storyButtonVariants({ size })}>
       <div class="flex flex-wrap items-center gap-3">
-        <Button variant="primary" {size} icon={Plus}>New draft</Button>
-        <Button {size}>Secondary</Button>
-        <Button variant="quiet" {size}>Quiet</Button>
-        <Button variant="danger" {size} icon={Trash}>Revoke</Button>
-        <Button {size} iconOnly icon={Plus} label="Add" />
+        <Button variant="primary" {size} icon={Plus}>{m.workbenchNewDraft()}</Button>
+        <Button {size}>{m.storySecondary()}</Button>
+        <Button variant="quiet" {size}>{m.storyQuiet()}</Button>
+        <Button variant="danger" {size} icon={Trash}>{m.storyRevoke()}</Button>
+        <Button {size} iconOnly icon={Plus} label={m.storyAdd()} />
       </div>
     </Variant>
   {/each}
-  <Variant label="link, disabled link, disabled">
+  <Variant label={m.storyLinkDisabledLinkDisabled()}>
     <div class="flex flex-wrap items-center gap-3">
-      <Button href="#button" variant="primary" iconEnd={ArrowUpRight}>Submit a build</Button>
-      <Button href="#button" disabled>No next page</Button>
-      <Button disabled>Unavailable</Button>
+      <Button href="#button" variant="primary" iconEnd={ArrowUpRight}
+        >{m.submissionPageTitle()}</Button
+      >
+      <Button href="#button" disabled>{m.storyNoNextPage()}</Button>
+      <Button disabled>{m.workbenchUnavailable()}</Button>
     </div>
   </Variant>
-  <Variant label="pending">
+  <Variant label={m.storyPending()}>
     <div class="flex flex-wrap items-center gap-3">
-      <Button variant="primary" pending pendingLabel="Saving">Save</Button>
+      <Button variant="primary" pending pendingLabel={m.storySaving()}>{m.storySave()}</Button>
       <Button
         icon={Plus}
         {pending}
-        pendingLabel="Saving"
+        pendingLabel={m.storySaving()}
         onclick={() => {
           pending = true;
           setTimeout(() => (pending = false), 1500);
-        }}>Click to save</Button
+        }}>{m.storyClickToSave()}</Button
       >
-      <Button variant="primary" fullWidth>Full width</Button>
+      <Button variant="primary" fullWidth>{m.storyFullWidth()}</Button>
     </div>
   </Variant>
 </Story>
 
-<Story
-  name="CopyButton"
-  source="actions/CopyButton"
-  description="Shows and announces the outcome for two seconds. Hidden until hydrated, so keep the value selectable beside it."
->
-  <Variant label="with text, icon only, size md">
+<Story name="CopyButton" source="actions/CopyButton" description={m.storyCopyButtonDescription()}>
+  <Variant label={m.storyWithTextIconOnlySizeMd()}>
     <div class="flex flex-wrap items-center gap-3">
       <Code>mc.example.net:25565</Code>
       <CopyButton
         value="mc.example.net:25565"
-        label="Copy address"
-        copiedLabel="Copied"
-        failedLabel="Copy failed"
+        label={m.storyCopyAddress()}
+        copiedLabel={m.storyCopied()}
+        failedLabel={m.storyCopyFailed()}
       />
       <CopyButton
         value="mc.example.net:25565"
-        label="Copy address"
-        copiedLabel="Copied"
-        failedLabel="Copy failed"
+        label={m.storyCopyAddress()}
+        copiedLabel={m.storyCopied()}
+        failedLabel={m.storyCopyFailed()}
         iconOnly
       />
       <CopyButton
         value="mc.example.net:25565"
-        label="Copy address"
-        copiedLabel="Copied"
-        failedLabel="Copy failed"
+        label={m.storyCopyAddress()}
+        copiedLabel={m.storyCopied()}
+        failedLabel={m.storyCopyFailed()}
         size="md"
       />
     </div>

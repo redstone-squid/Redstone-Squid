@@ -19,9 +19,9 @@ const preview = workbenchAppearance(Astro.url, Astro.locals);
   <Section title={m.workbenchComponents()} description={m.workbenchComponentsDescription()}>
     <Layout as="ul" pattern="grid" min="tile">
       {Object.entries(GROUPS).map(([slug, group]) => (
-        <Card as="li" title={group.title} href={preview.href(`/design-system/${slug}`)}>
+        <Card as="li" title={group.title()} href={preview.href(`/design-system/${slug}`)}>
           <Text size="sm" tone="muted">
-            {group.description}
+            {group.description()}
           </Text>
         </Card>
       ))}

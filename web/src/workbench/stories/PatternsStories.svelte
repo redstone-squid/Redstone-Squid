@@ -1,4 +1,5 @@
 <script lang="ts">
+  import * as m from "@/locales/messages.gen";
   import Pencil from "@lucide/svelte/icons/pencil";
   import BuildCard from "@/features/catalogue/BuildCard.svelte";
   import RecordCard from "@/features/catalogue/RecordCard.svelte";
@@ -12,44 +13,41 @@
   import { buildFixtures, recordFixtures } from "@/workbench/fixtures";
   import Story from "./Story.svelte";
 
-  const categories = ["Piston door", "Seamless door", "Extender"];
+  const categories = [m.trialDoor(), m.storySeamlessDoor(), m.storyExtender()];
 </script>
 
-<Story
-  name="PageHeader"
-  source="patterns/PageHeader"
-  description="Breadcrumbs, the page's h1, media, meta, actions, and a notice."
->
+<Story name="PageHeader" source="patterns/PageHeader" description={m.storyPageHeaderDescription()}>
   <PageHeader
-    title="Copper Bolt 5×5"
-    eyebrow="Piston door"
-    description="A fast flush 5×5 door."
+    title={m.storyCopperBolt55()}
+    eyebrow={m.trialDoor()}
+    description={m.storyAFastFlush55Door()}
     breadcrumbs={{
-      label: "Breadcrumb",
-      items: [{ label: "Builds", href: "#pageheader" }, { label: "Copper Bolt 5×5" }],
+      label: m.storyBreadcrumb(),
+      items: [{ label: m.navBuilds(), href: "#pageheader" }, { label: m.storyCopperBolt55() }],
     }}
   >
     {#snippet media()}<Avatar name="CircuitSage" size="lg" />{/snippet}
-    {#snippet meta()}<Badge tone="success" dot>Approved</Badge>{/snippet}
-    {#snippet actions()}<Button icon={Pencil}>Edit</Button>{/snippet}
-    {#snippet notice()}<Notice tone="warning">Pending review by staff.</Notice>{/snippet}
+    {#snippet meta()}<Badge tone="success" dot>{m.storyApproved()}</Badge>{/snippet}
+    {#snippet actions()}<Button icon={Pencil}>{m.storyEdit()}</Button>{/snippet}
+    {#snippet notice()}<Notice tone="warning">{m.storyPendingReviewByStaff()}</Notice>{/snippet}
   </PageHeader>
 </Story>
 
 <Story name="Section" source="patterns/Section">
-  <Section title="Holders" description="Builds that hold this record.">
-    {#snippet actions()}<Button size="sm" variant="quiet">View all</Button>{/snippet}
-    <p class="text-sm">Section content.</p>
+  <Section title={m.recordHolders()} description={m.storyBuildsThatHoldThisRecord()}>
+    {#snippet actions()}<Button size="sm" variant="quiet">{m.storyViewAll()}</Button>{/snippet}
+    <p class="text-sm">{m.storySectionContent()}</p>
   </Section>
-  <Section title="Surface section" surface level={3}>
-    <p class="text-sm">Drawn as a panel.</p>
+  <Section title={m.storySurfaceSection()} surface level={3}>
+    <p class="text-sm">{m.storyDrawnAsAPanel()}</p>
   </Section>
 </Story>
 
 <Story
   name="Catalogue cards"
+  heading={m.storyCatalogueCards()}
   source="features/catalogue"
-  description="The production BuildCard and RecordCard with fixtures."
+  description={m.storyCatalogueCardsDescription()}
 >
   <Layout as="ul" pattern="grid">
     {#each buildFixtures as build, index (build.id)}

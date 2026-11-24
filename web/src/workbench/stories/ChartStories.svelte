@@ -1,4 +1,5 @@
 <script lang="ts">
+  import * as m from "@/locales/messages.gen";
   import Chart from "@/ui/chart/Chart.svelte";
   import DistributionBar from "@/ui/chart/DistributionBar.svelte";
   import RangeChart from "@/ui/chart/RangeChart.svelte";
@@ -8,23 +9,8 @@
   import Story from "./Story.svelte";
   import Variant from "./Variant.svelte";
 
-  const labels = { showData: "Show data" };
+  const labels = { showData: m.storyShowData() };
   const day = (date: string) => new Date(`${date}T00:00:00Z`);
-  const months = [
-    "Jan",
-    "Feb",
-    "Mar",
-    "Apr",
-    "May",
-    "Jun",
-    "Jul",
-    "Aug",
-    "Sep",
-    "Oct",
-    "Nov",
-    "Dec",
-  ];
-  const shortDate = (date: Date) => `${months[date.getUTCMonth()] ?? ""} ${date.getUTCFullYear()}`;
   const progression = [
     { x: day("2023-02-11"), y: 18, href: "#serieschart" },
     { x: day("2023-08-02"), y: 14, href: "#serieschart" },
@@ -35,21 +21,36 @@
   const years = ["2021", "2022", "2023", "2024", "2025", "2026"];
   const perYear = [3, 7, 12, 9, 15, 6];
   const errors = [
-    { id: "web", label: "Website", tone: 1 as const, counts: [4, 2, 6, 3, 1, 5, 2] },
-    { id: "bot", label: "Discord bot", tone: 2 as const, counts: [2, 3, 1, 4, 2, 1, 3] },
-    { id: "jobs", label: "Background jobs", tone: 3 as const, counts: [1, 0, 2, 1, 0, 3, 1] },
+    { id: "web", label: m.storyWebsite(), tone: 1 as const, counts: [4, 2, 6, 3, 1, 5, 2] },
+    { id: "bot", label: m.storyDiscordBot(), tone: 2 as const, counts: [2, 3, 1, 4, 2, 1, 3] },
+    { id: "jobs", label: m.storyBackgroundJobs(), tone: 3 as const, counts: [1, 0, 2, 1, 0, 3, 1] },
   ];
-  const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const days = [
+    m.storyMon(),
+    m.storyTue(),
+    m.storyWed(),
+    m.storyThu(),
+    m.storyFri(),
+    m.storySat(),
+    m.storySun(),
+  ];
   let width = $state(13);
   const segments = [
-    { from: 3, to: 6, value: 120, label: "Copper Bolt", tone: 1 as const, href: "#rangechart" },
+    {
+      from: 3,
+      to: 6,
+      value: 120,
+      label: m.storyCopperBolt(),
+      tone: 1 as const,
+      href: "#rangechart",
+    },
     {
       from: 7,
       to: 15,
       step: 2,
       residue: 1,
       value: 260,
-      label: "Iris door",
+      label: m.storyIrisDoor(),
       tone: 2 as const,
       href: "#rangechart",
     },
@@ -57,61 +58,68 @@
       from: 16,
       to: 24,
       value: 410,
-      label: "Flush piston door",
+      label: m.storyFlushPistonDoor(),
       tone: 3 as const,
       href: "#rangechart",
     },
-    { from: 25, to: null, value: 640, label: "Spiral door", tone: 4 as const, href: "#rangechart" },
+    {
+      from: 25,
+      to: null,
+      value: 640,
+      label: m.storySpiralDoor(),
+      tone: 4 as const,
+      href: "#rangechart",
+    },
   ];
   const blocks = [
-    ["Sticky piston", 48],
-    ["Redstone dust", 120],
-    ["Observer", 36],
-    ["Smooth stone", 210],
-    ["Repeater", 24],
-    ["Slime block", 30],
-    ["Honey block", 12],
-    ["Redstone torch", 18],
-    ["Target block", 4],
-    ["Comparator", 6],
-    ["Glass", 9],
-    ["Lever", 1],
-    ["Note block", 2],
-    ["Hopper", 3],
+    [m.storyStickyPiston(), 48],
+    [m.storyRedstoneDust(), 120],
+    [m.storyObserver(), 36],
+    [m.storySmoothStone(), 210],
+    [m.storyRepeater(), 24],
+    [m.storySlimeBlock(), 30],
+    [m.storyHoneyBlock(), 12],
+    [m.storyRedstoneTorch(), 18],
+    [m.storyTargetBlock(), 4],
+    [m.storyComparator(), 6],
+    [m.storyGlass(), 9],
+    [m.storyLever(), 1],
+    [m.storyNoteBlock(), 2],
+    [m.storyHopper(), 3],
   ] as const;
 </script>
 
-<Story
-  name="SeriesChart"
-  source="chart/SeriesChart"
-  description="Lines, steps and bars from one baseline. Every chart ships its data as a table; interactive plots add a tooltip and arrow-key navigation once hydrated."
->
-  <Variant label="step, linked points, interactive">
+<Story name="SeriesChart" source="chart/SeriesChart" description={m.storySeriesChartDescription()}>
+  <Variant label={m.storyStepLinkedPointsInteractive()}>
     <SeriesChart
-      title="Record progression"
-      description="Opening time of the fastest 3×3 piston door, in game ticks."
+      title={m.storyRecordProgression()}
+      description={m.storyOpeningTimeOfTheFastest33Piston()}
       kind="step"
-      x={{ type: "time", label: "Date", format: (value) => shortDate(value as Date) }}
-      y={{ label: "Ticks" }}
-      series={[{ id: "record", label: "Opening time", tone: 1, points: progression }]}
-      annotations={[{ value: 10, label: "Instant (10 gt)" }]}
+      x={{
+        type: "time",
+        label: m.storyDate(),
+        format: (value) => m.storyChartDate({ date: value as Date }),
+      }}
+      y={{ label: m.storyTicks() }}
+      series={[{ id: "record", label: m.storyOpeningTime(), tone: 1, points: progression }]}
+      annotations={[{ value: 10, label: m.storyInstant10Gt() }]}
       interactive
       {labels}
     />
   </Variant>
   <Layout pattern="grid" min="card-wide">
-    <Variant label="bar, small">
+    <Variant label={m.storyBarSmall()}>
       <SeriesChart
-        title="Builds per year"
-        description="Builds CircuitSage submitted each year."
+        title={m.storyBuildsPerYear()}
+        description={m.storyBuildsCircuitsageSubmittedEachYear()}
         kind="bar"
         height="sm"
-        x={{ type: "band", label: "Year" }}
-        y={{ label: "Builds" }}
+        x={{ type: "band", label: m.storyYear() }}
+        y={{ label: m.navBuilds() }}
         series={[
           {
             id: "builds",
-            label: "Builds",
+            label: m.navBuilds(),
             tone: 1,
             points: years.map((year, index) => ({ x: year, y: perYear[index] ?? 0 })),
           },
@@ -119,14 +127,14 @@
         {labels}
       />
     </Variant>
-    <Variant label="stacked bar, interactive">
+    <Variant label={m.storyStackedBarInteractive()}>
       <SeriesChart
-        title="Errors per day"
-        description="Error reports by surface over the last week."
+        title={m.storyErrorsPerDay()}
+        description={m.storyErrorReportsBySurfaceOverTheLastWeek()}
         kind="stacked-bar"
         height="sm"
-        x={{ type: "band", label: "Day" }}
-        y={{ label: "Reports" }}
+        x={{ type: "band", label: m.storyDay() }}
+        y={{ label: m.storyReports() }}
         series={errors.map((surface) => ({
           ...surface,
           points: days.map((name, index) => ({ x: name, y: surface.counts[index] ?? 0 })),
@@ -136,23 +144,27 @@
       />
     </Variant>
   </Layout>
-  <Variant label="line, two series">
+  <Variant label={m.storyLineTwoSeries()}>
     <SeriesChart
-      title="Submissions"
-      description="Builds submitted and confirmed each month."
+      title={m.storySubmissions()}
+      description={m.storyBuildsSubmittedAndConfirmedEachMonth()}
       kind="line"
-      x={{ type: "linear", label: "Month", format: (value) => `M${String(value)}` }}
-      y={{ label: "Builds" }}
+      x={{
+        type: "linear",
+        label: m.storyMonth(),
+        format: (value) => m.storyMonthNumber({ month: String(value) }),
+      }}
+      y={{ label: m.navBuilds() }}
       series={[
         {
           id: "submitted",
-          label: "Submitted",
+          label: m.storySubmitted(),
           tone: 1,
           points: [12, 18, 15, 22, 30, 26].map((y, index) => ({ x: index + 1, y })),
         },
         {
           id: "confirmed",
-          label: "Confirmed",
+          label: m.storyConfirmed(),
           tone: 2,
           points: [8, 11, 13, 15, 21, 24].map((y, index) => ({ x: index + 1, y })),
         },
@@ -163,46 +175,42 @@
   </Variant>
 </Story>
 
-<Story
-  name="RangeChart"
-  source="chart/RangeChart"
-  description="Runs of widths, each held by one build. Odd-only runs draw only the widths that count; the last run is unbounded."
->
+<Story name="RangeChart" source="chart/RangeChart" description={m.storyRangeChartDescription()}>
   <RangeChart
-    title="Smallest door by width"
-    description="Volume of the smallest record door at each width, in blocks."
+    title={m.storySmallestDoorByWidth()}
+    description={m.storyVolumeOfTheSmallestRecordDoorAtEach()}
     {segments}
-    x={{ label: "Width" }}
-    y={{ label: "Volume" }}
-    unboundedLabel="and wider"
+    x={{ label: m.storyWidth() }}
+    y={{ label: m.storyVolume() }}
+    unboundedLabel={m.storyAndWider()}
     selected={width}
     onselect={(next) => (width = next)}
-    labels={{ ...labels, selected: "Width" }}
+    labels={{ ...labels, selected: m.storyWidth() }}
   />
 </Story>
 
 <Story name="DistributionBar" source="chart/DistributionBar">
   <DistributionBar
-    title="Block composition"
-    description="The most common blocks in the schematic."
+    title={m.storyBlockComposition()}
+    description={m.storyTheMostCommonBlocksInTheSchematic()}
     items={blocks.map(([label, value]) => ({ label, value }))}
     limit={8}
-    otherLabel="Other blocks"
+    otherLabel={m.storyOtherBlocks()}
   />
 </Story>
 
-<Story name="Chart" source="chart/Chart" description="The frame, in its waiting states.">
+<Story name="Chart" source="chart/Chart" description={m.storyChartDescription()}>
   <Layout pattern="grid" min="card">
-    {#each [["loading", "Loading the chart"], ["empty", "No records were broken this year."], ["error", "The chart could not be loaded."]] as const as [status, text] (status)}
+    {#each [["loading", m.storyLoadingTheChart()], ["empty", m.storyNoRecordsWereBrokenThisYear()], ["error", m.storyTheChartCouldNotBeLoaded()]] as const as [status, text] (status)}
       <Variant label={status}>
         <Chart
-          title="Records broken"
-          description="Per month."
+          title={m.storyRecordsBroken()}
+          description={m.storyPerMonth()}
           {status}
           statusText={text}
           height="sm"
         >
-          {#snippet plot()}<Text>Unused</Text>{/snippet}
+          {#snippet plot()}<Text>{m.storyUnused()}</Text>{/snippet}
         </Chart>
       </Variant>
     {/each}

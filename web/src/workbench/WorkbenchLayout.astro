@@ -55,7 +55,7 @@ const groups = [
     items: [
       { label: m.workbenchFoundations(), ...link("/design-system") },
       ...Object.entries(GROUPS).map(([slug, group]) => ({
-        label: group.title,
+        label: group.title(),
         ...link(`/design-system/${slug}`),
       })),
       { label: m.trialTitle(), ...link("/design-system-trial") },

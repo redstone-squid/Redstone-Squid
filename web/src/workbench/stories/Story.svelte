@@ -6,8 +6,14 @@
    * "feedback/Badge"), and a preview of its variants and states. The workbench coverage test
    * reads `source` to check that every component has a story.
    */
-  type Props = { name: string; source: string; description?: string; children: Snippet };
-  let { name, source, description, children }: Props = $props();
+  type Props = {
+    name: string;
+    source: string;
+    heading?: string;
+    description?: string;
+    children: Snippet;
+  };
+  let { name, source, heading = name, description, children }: Props = $props();
 </script>
 
 <section
@@ -16,7 +22,7 @@
   class="grid min-w-0 gap-4 rounded-md border border-line bg-surface p-panel shadow-card"
 >
   <header class="grid gap-1">
-    <h2 id={`${name.toLowerCase()}-title`} class="text-xl font-bold tracking-tight">{name}</h2>
+    <h2 id={`${name.toLowerCase()}-title`} class="text-xl font-bold tracking-tight">{heading}</h2>
     <code class="font-mono text-xs wrap-anywhere text-fg-muted"
       >{source.startsWith("features/") ? `src/${source}` : `src/ui/${source}.svelte`}</code
     >

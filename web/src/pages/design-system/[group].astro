@@ -18,7 +18,8 @@ import WorkbenchLayout from "@/workbench/WorkbenchLayout.astro";
 
 const group = Astro.params.group;
 if (!isGroup(group)) return Astro.rewrite("/404");
-const { title, description } = GROUPS[group];
+const title = GROUPS[group].title();
+const description = GROUPS[group].description();
 ---
 
 <WorkbenchLayout {title}>

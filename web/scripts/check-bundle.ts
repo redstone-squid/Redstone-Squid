@@ -23,9 +23,11 @@ const budgets: EntryBudget[] = [
     renderer: false,
   },
   // Each workbench page hydrates its group's stories as one island.
-  ...Object.values(GROUPS).map(({ title }) => ({
-    entries: [`src/workbench/stories/${title}Stories.svelte`],
-    label: `Design workbench: ${title}`,
+  ...Object.keys(GROUPS).map((slug) => ({
+    entries: [
+      `src/workbench/stories/${slug.charAt(0).toUpperCase() + slug.slice(1)}Stories.svelte`,
+    ],
+    label: `Design workbench: ${slug}`,
     ...interactiveBudget,
   })),
   {

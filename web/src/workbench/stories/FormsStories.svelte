@@ -27,24 +27,29 @@
   import Variant from "./Variant.svelte";
 
   const versions = versionOptions.map((version) => ({ value: version, label: version }));
-  const tags = ["flush", "seamless", "tileable", "silent", "compact", "survival friendly"].map(
-    (tag) => ({ value: tag, label: tag }),
-  );
+  const tags = [
+    { value: "flush", label: m.storyFlush() },
+    { value: "seamless", label: m.storySeamless() },
+    { value: "tileable", label: m.storyTileable() },
+    { value: "silent", label: m.storySilent() },
+    { value: "compact", label: m.storyCompactTag() },
+    { value: "survival friendly", label: m.storySurvivalFriendly() },
+  ];
   const comboboxLabels = {
-    toggle: "Show options",
-    noResults: "No matches",
-    loading: "Loading",
-    error: "Options are unavailable.",
-    remove: (label: string) => `Remove ${label}`,
-    create: (text: string) => `Add “${text}”`,
+    toggle: m.storyShowOptions(),
+    noResults: m.storyNoMatches(),
+    loading: m.storyLoading(),
+    error: m.storyOptionsAreUnavailable(),
+    remove: (label: string) => m.storyRemoveOption({ label }),
+    create: (text: string) => m.storyAddOption({ text }),
   };
   const delayUnits = [
-    { id: "gt", label: "game ticks", factor: 1 },
-    { id: "rt", label: "redstone ticks", factor: 2 },
+    { id: "gt", label: m.storyGameTicks(), factor: 1 },
+    { id: "rt", label: m.storyRedstoneTicks(), factor: 2 },
     { id: "s", label: "s", factor: 20 },
   ];
 
-  let note = $state("Opens in 0.6 s with no visible pistons.");
+  let note = $state(m.storyOpensIn06SWithNoVisible());
   let notifications = $state(true);
   let syncing = $state(false);
   let edition = $state<string | string[]>("java");
@@ -52,23 +57,23 @@
   let category = $state<string | string[]>("door");
   let delay = $state<number | null>(25);
   let code = $state("");
-  let version = $state<string | string[]>("Java 1.21.4");
+  let version = $state<string | string[]>(versionOptions[0]);
   let chosenTags = $state<string | string[]>(["flush", "seamless"]);
   let links = $state([{ url: "https://youtube.com/@circuitsage" }]);
   let files = $state<string[]>([]);
   let rejected = $state<string[]>([]);
-  let width = $state({ name: "width-min", value: "3", label: "Minimum width" });
-  let widthMax = $state({ name: "width-max", value: "", label: "Maximum width" });
-  let badMin = $state({ name: "bad-min", value: "9", label: "Minimum height" });
+  let width = $state({ name: "width-min", value: "3", label: m.storyMinimumWidth() });
+  let widthMax = $state({ name: "width-max", value: "", label: m.storyMaximumWidth() });
+  let badMin = $state({ name: "bad-min", value: "9", label: m.storyMinimumHeight() });
   let badMax = $state({
     name: "bad-max",
     value: "4",
-    label: "Maximum height",
-    error: "Use a maximum of at least 9.",
+    label: m.storyMaximumHeight(),
+    error: m.storyUseAMaximumOfAtLeast9(),
   });
   const problems = () => [
-    { fieldId: "story-summary-title", message: "Enter a title for your build." },
-    { fieldId: "story-summary-width", message: "Enter the opening width." },
+    { fieldId: "story-summary-title", message: m.workbenchEnterATitleForYourBuild() },
+    { fieldId: "story-summary-width", message: m.storyEnterTheOpeningWidth() },
   ];
   let summaryErrors = $state(problems());
   let submitted = $state(false);
@@ -79,288 +84,350 @@
   }
 </script>
 
-<Story name="TextField" source="forms/TextField" description="Single-line text and numbers.">
+<Story name="TextField" source="forms/TextField" description={m.storyTextFieldDescription()}>
   <Layout pattern="grid" min="card">
-    <Variant label="hint and placeholder">
-      <TextField label="Creator" hint="Public name shown on the build." placeholder="CircuitSage" />
-    </Variant>
-    <Variant label="optional">
-      <TextField label="Video link" detail="optional" type="url" />
-    </Variant>
-    <Variant label="error">
-      <TextField label="Build title" error="Enter a title for your build." required />
-    </Variant>
-    <Variant label="number with unit, narrow">
-      <TextField label="Opening width" inputmode="numeric" value="5" suffix="blocks" width="sm" />
-    </Variant>
-    <Variant label="prefix">
-      <TextField label="Channel" prefix="#" value="door-records" width="md" />
-    </Variant>
-    <Variant label="icon and clear button">
+    <Variant label={m.storyHintAndPlaceholder()}>
       <TextField
-        label="Search builds"
-        type="search"
-        icon={Search}
-        value="piston door"
-        clearable
-        clearLabel="Clear search"
+        label={m.storyCreator()}
+        hint={m.storyPublicNameShownOnTheBuild()}
+        placeholder="CircuitSage"
       />
     </Variant>
-    <Variant label="counter">
-      <TextField label="Short title" maxlength={24} counter value="Seamless 3×3 flush door" />
+    <Variant label={m.storyOptional()}>
+      <TextField label={m.storyVideoLink()} detail={m.storyOptional()} type="url" />
     </Variant>
-    <Variant label="disabled">
-      <TextField label="Build id" value="b_01HZ8Q" disabled />
+    <Variant label={m.storyError()}>
+      <TextField
+        label={m.workbenchBuildTitle()}
+        error={m.workbenchEnterATitleForYourBuild()}
+        required
+      />
     </Variant>
-    <Variant label="read-only">
-      <TextField label="Submitted by" value="CircuitSage" readonly />
+    <Variant label={m.storyNumberWithUnitNarrow()}>
+      <TextField
+        label={m.trialWidth()}
+        inputmode="numeric"
+        value="5"
+        suffix={m.storyBlocks()}
+        width="sm"
+      />
     </Variant>
-    <Variant label="hidden label (toolbar)">
-      <TextField label="Filter tags" labelVisibility="hidden" placeholder="Filter tags" />
+    <Variant label={m.storyPrefix()}>
+      <TextField label={m.storyChannel()} prefix="#" value="door-records" width="md" />
+    </Variant>
+    <Variant label={m.storyIconAndClearButton()}>
+      <TextField
+        label={m.storySearchBuilds()}
+        type="search"
+        icon={Search}
+        value={m.storyPistonDoor()}
+        clearable
+        clearLabel={m.storyClearSearch()}
+      />
+    </Variant>
+    <Variant label={m.storyCounter()}>
+      <TextField
+        label={m.storyShortTitle()}
+        maxlength={24}
+        counter
+        value={m.storySeamless33FlushDoor()}
+      />
+    </Variant>
+    <Variant label={m.storyDisabled()}>
+      <TextField label={m.storyBuildId()} value="b_01HZ8Q" disabled />
+    </Variant>
+    <Variant label={m.storyReadOnly()}>
+      <TextField label={m.storySubmittedBy()} value="CircuitSage" readonly />
+    </Variant>
+    <Variant label={m.storyHiddenLabelToolbar()}>
+      <TextField
+        label={m.storyFilterTags()}
+        labelVisibility="hidden"
+        placeholder={m.storyFilterTags()}
+      />
     </Variant>
   </Layout>
 </Story>
 
 <Story name="TextareaField" source="forms/TextareaField">
   <Layout pattern="grid" min="card-wide">
-    <Variant label="counter and autosize">
+    <Variant label={m.storyCounterAndAutosize()}>
       <TextareaField
-        label="Builder notes"
-        hint="Describe the opening sequence or timing."
+        label={m.storyBuilderNotes()}
+        hint={m.storyDescribeTheOpeningSequenceOrTiming()}
         maxlength={200}
         counter
         autosize
         bind:value={note}
       />
     </Variant>
-    <Variant label="error">
-      <TextareaField label="Change summary" error="Say what changed for reviewers." />
+    <Variant label={m.storyError()}>
+      <TextareaField label={m.storyChangeSummary()} error={m.storySayWhatChangedForReviewers()} />
     </Variant>
-    <Variant label="disabled">
-      <TextareaField label="Moderator notes" value="Locked while voting." disabled />
+    <Variant label={m.storyDisabled()}>
+      <TextareaField label={m.storyModeratorNotes()} value={m.storyLockedWhileVoting()} disabled />
     </Variant>
   </Layout>
 </Story>
 
-<Story name="SelectField" source="forms/SelectField" description="A native select.">
+<Story name="SelectField" source="forms/SelectField" description={m.storySelectFieldDescription()}>
   <Layout pattern="grid" min="card">
-    <Variant label="options and placeholder">
+    <Variant label={m.storyOptionsAndPlaceholder()}>
       <SelectField
-        label="Category"
-        hint="Choose the closest category."
-        placeholder="Choose a category"
+        label={m.trialCategory()}
+        hint={m.storyChooseTheClosestCategory()}
+        placeholder={m.storyChooseACategory()}
         options={[
-          { value: "door", label: "Piston door" },
-          { value: "utility", label: "Utility" },
-          { value: "farm", label: "Farm", disabled: true },
+          { value: "door", label: m.trialDoor() },
+          { value: "utility", label: m.trialUtility() },
+          { value: "farm", label: m.storyFarm(), disabled: true },
         ]}
       />
     </Variant>
-    <Variant label="option children, narrow">
-      <SelectField label="Sort" width="sm" value="new">
-        <option value="new">Newest</option>
-        <option value="fast">Fastest</option>
+    <Variant label={m.storyOptionChildrenNarrow()}>
+      <SelectField label={m.storySort()} width="sm" value="new">
+        <option value="new">{m.storyNewest()}</option>
+        <option value="fast">{m.storyFastest()}</option>
       </SelectField>
     </Variant>
-    <Variant label="error">
+    <Variant label={m.storyError()}>
       <SelectField
-        label="Edition"
-        placeholder="Choose an edition"
-        error="Choose the edition you tested on."
-        options={[{ value: "java", label: "Java" }]}
+        label={m.storyEdition()}
+        placeholder={m.storyChooseAnEdition()}
+        error={m.storyChooseTheEditionYouTestedOn()}
+        options={[{ value: "java", label: m.storyJava() }]}
       />
     </Variant>
-    <Variant label="disabled">
-      <SelectField label="Server" disabled options={[{ value: "main", label: "Main" }]} />
+    <Variant label={m.storyDisabled()}>
+      <SelectField
+        label={m.storyServer()}
+        disabled
+        options={[{ value: "main", label: m.storyMain() }]}
+      />
     </Variant>
   </Layout>
 </Story>
 
-<Story name="CheckField" source="forms/CheckField" description="One checkbox saved with a form.">
+<Story name="CheckField" source="forms/CheckField" description={m.storyCheckFieldDescription()}>
   <Layout pattern="grid" min="card">
-    <Variant label="checked">
-      <CheckField label="Include build dimensions" checked />
+    <Variant label={m.storyChecked()}>
+      <CheckField label={m.storyIncludeBuildDimensions()} checked />
     </Variant>
-    <Variant label="hint">
-      <CheckField label="Hide my profile" hint="Only your builds stay public." />
+    <Variant label={m.storyHint()}>
+      <CheckField label={m.storyHideMyProfile()} hint={m.storyOnlyYourBuildsStayPublic()} />
     </Variant>
-    <Variant label="error">
-      <CheckField label="I agree to the submission rules" error="Agree to the rules to submit." />
+    <Variant label={m.storyError()}>
+      <CheckField
+        label={m.storyIAgreeToTheSubmissionRules()}
+        error={m.storyAgreeToTheRulesToSubmit()}
+      />
     </Variant>
-    <Variant label="disabled">
-      <CheckField label="Verified by staff" checked disabled />
+    <Variant label={m.storyDisabled()}>
+      <CheckField label={m.storyVerifiedByStaff()} checked disabled />
     </Variant>
   </Layout>
 </Story>
 
-<Story name="Switch" source="forms/Switch" description="A setting that applies immediately.">
+<Story name="Switch" source="forms/Switch" description={m.storySwitchDescription()}>
   <Layout pattern="grid" min="card-wide">
-    <Variant label="off">
-      <Switch label="Show my identity" hint="Your Discord name appears on credits." />
+    <Variant label={m.storyOff()}>
+      <Switch label={m.storyShowMyIdentity()} hint={m.storyYourDiscordNameAppearsOnCredits()} />
     </Variant>
-    <Variant label="on, saving after a click">
+    <Variant label={m.storyOnSavingAfterAClick()}>
       <Switch
-        label="Record notifications"
+        label={m.storyRecordNotifications()}
         bind:checked={notifications}
         pending={syncing}
         onchange={startSync}
       />
     </Variant>
-    <Variant label="pending">
-      <Switch label="Hide my profile" checked pending />
+    <Variant label={m.storyPending()}>
+      <Switch label={m.storyHideMyProfile()} checked pending />
     </Variant>
-    <Variant label="error">
-      <Switch label="Email digests" error="Add an email address first." />
+    <Variant label={m.storyError()}>
+      <Switch label={m.storyEmailDigests()} error={m.storyAddAnEmailAddressFirst()} />
     </Variant>
-    <Variant label="disabled">
-      <Switch label="Staff mode" checked disabled />
+    <Variant label={m.storyDisabled()}>
+      <Switch label={m.storyStaffMode()} checked disabled />
     </Variant>
   </Layout>
 </Story>
 
-<Story name="ChoiceGroup" source="forms/ChoiceGroup" description="Radios or checkboxes.">
+<Story name="ChoiceGroup" source="forms/ChoiceGroup" description={m.storyChoiceGroupDescription()}>
   <Layout pattern="grid" min="card-wide">
-    <Variant label="radio list with descriptions">
+    <Variant label={m.storyRadioListWithDescriptions()}>
       <ChoiceGroup
-        label="Minecraft edition"
+        label={m.storyMinecraftEdition()}
         name="story-edition"
         bind:value={edition}
         options={[
-          { value: "java", label: "Java", description: "Tested on a Java server or client." },
-          { value: "bedrock", label: "Bedrock", description: "Tested on Bedrock Edition." },
-          { value: "both", label: "Both", disabled: true },
+          {
+            value: "java",
+            label: m.storyJava(),
+            description: m.storyTestedOnAJavaServerOrClient(),
+          },
+          {
+            value: "bedrock",
+            label: m.storyBedrock(),
+            description: m.storyTestedOnBedrockEdition(),
+          },
+          { value: "both", label: m.storyBoth(), disabled: true },
         ]}
       />
     </Variant>
-    <Variant label="checkboxes inline">
+    <Variant label={m.storyCheckboxesInline()}>
       <ChoiceGroup
         type="checkbox"
         variant="inline"
-        label="Features"
-        detail="optional"
+        label={m.storyFeatures()}
+        detail={m.storyOptional()}
         name="story-features"
         bind:value={features}
         options={[
-          { value: "flush", label: "Flush" },
-          { value: "seamless", label: "Seamless" },
-          { value: "silent", label: "Silent" },
+          { value: "flush", label: m.storyFlushLabel() },
+          { value: "seamless", label: m.storySeamless() },
+          { value: "silent", label: m.storySilent() },
         ]}
       />
     </Variant>
-    <Variant label="error">
+    <Variant label={m.storyError()}>
       <ChoiceGroup
-        label="Direction"
+        label={m.storyDirection()}
         name="story-direction"
-        error="Choose which way the door opens."
+        error={m.storyChooseWhichWayTheDoorOpens()}
         options={[
-          { value: "in", label: "Inward" },
-          { value: "out", label: "Outward" },
+          { value: "in", label: m.storyInward() },
+          { value: "out", label: m.storyOutward() },
         ]}
       />
     </Variant>
   </Layout>
-  <Variant label="cards in three columns">
+  <Variant label={m.storyCardsInThreeColumns()}>
     <ChoiceGroup
       variant="cards"
       columns={3}
-      label="What are you submitting?"
+      label={m.storyWhatAreYouSubmitting()}
       name="story-category"
       bind:value={category}
       options={[
-        { value: "door", label: "Door", description: "Piston doors of any size.", icon: DoorOpen },
-        { value: "utility", label: "Utility", description: "Machines and farms.", icon: Zap },
-        { value: "other", label: "Other", description: "Anything else.", icon: Box },
+        {
+          value: "door",
+          label: m.storyDoor(),
+          description: m.storyPistonDoorsOfAnySize(),
+          icon: DoorOpen,
+        },
+        {
+          value: "utility",
+          label: m.trialUtility(),
+          description: m.storyMachinesAndFarms(),
+          icon: Zap,
+        },
+        { value: "other", label: m.storyOther(), description: m.storyAnythingElse(), icon: Box },
       ]}
     />
   </Variant>
 </Story>
 
-<Story name="FieldGroup" source="forms/FieldGroup" description="Related fields in a fieldset.">
+<Story name="FieldGroup" source="forms/FieldGroup" description={m.storyFieldGroupDescription()}>
   <Layout pattern="grid" min="card-wide">
-    <Variant label="row">
-      <FieldGroup label="Door size" hint="In blocks, measured from the opening." layout="row">
-        <TextField label="Width" inputmode="numeric" value="3" width="xs" />
-        <TextField label="Height" inputmode="numeric" value="3" width="xs" />
-        <TextField label="Depth" detail="optional" inputmode="numeric" width="xs" />
+    <Variant label={m.storyRow()}>
+      <FieldGroup
+        label={m.storyDoorSize()}
+        hint={m.storyInBlocksMeasuredFromTheOpening()}
+        layout="row"
+      >
+        <TextField label={m.storyWidth()} inputmode="numeric" value="3" width="xs" />
+        <TextField label={m.storyHeight()} inputmode="numeric" value="3" width="xs" />
+        <TextField
+          label={m.storyDepth()}
+          detail={m.storyOptional()}
+          inputmode="numeric"
+          width="xs"
+        />
       </FieldGroup>
     </Variant>
-    <Variant label="error">
-      <FieldGroup label="Contact" error="Give at least one way to reach you.">
+    <Variant label={m.storyError()}>
+      <FieldGroup label={m.storyContact()} error={m.storyGiveAtLeastOneWayToReachYou()}>
         <TextField label="Discord" />
-        <TextField label="Email" type="email" />
+        <TextField label={m.storyEmail()} type="email" />
       </FieldGroup>
     </Variant>
   </Layout>
 </Story>
 
-<Story name="RangeField" source="forms/RangeField" description="A minimum and maximum.">
+<Story name="RangeField" source="forms/RangeField" description={m.storyRangeFieldDescription()}>
   <Layout pattern="grid" min="card-wide">
-    <Variant label="with unit">
+    <Variant label={m.storyWithUnit()}>
       <RangeField
-        label="Width"
-        hint="Leave either end empty for no limit."
-        separator="to"
-        unit="blocks"
+        label={m.storyWidth()}
+        hint={m.storyLeaveEitherEndEmptyForNoLimit()}
+        separator={m.storyTo()}
+        unit={m.storyBlocks()}
         bind:min={width}
         bind:max={widthMax}
       />
     </Variant>
-    <Variant label="error on one bound">
-      <RangeField label="Height" separator="to" bind:min={badMin} bind:max={badMax} />
+    <Variant label={m.storyErrorOnOneBound()}>
+      <RangeField
+        label={m.storyHeight()}
+        separator={m.storyTo()}
+        bind:min={badMin}
+        bind:max={badMax}
+      />
     </Variant>
   </Layout>
 </Story>
 
-<Story name="UnitField" source="forms/UnitField" description="A quantity in a chosen unit.">
+<Story name="UnitField" source="forms/UnitField" description={m.storyUnitFieldDescription()}>
   <Layout pattern="grid" min="card-wide">
-    <Variant label="converted">
+    <Variant label={m.storyConverted()}>
       <UnitField
-        label="Opening time"
-        hint="How long the door takes to open."
+        label={m.storyOpeningTime()}
+        hint={m.storyHowLongTheDoorTakesToOpen()}
         name="story-delay"
         unitName="story-delay-unit"
         units={delayUnits}
-        labels={{ unit: "Unit" }}
+        labels={{ unit: m.storyUnit() }}
         bind:value={delay}
       />
     </Variant>
-    <Variant label="error">
+    <Variant label={m.storyError()}>
       <UnitField
-        label="Closing time"
+        label={m.storyClosingTime()}
         name="story-close"
         unitName="story-close-unit"
         units={delayUnits}
-        labels={{ unit: "Unit" }}
+        labels={{ unit: m.storyUnit() }}
         value={null}
-        error="Enter a time."
+        error={m.storyEnterATime()}
       />
     </Variant>
   </Layout>
 </Story>
 
-<Story name="CodeEntry" source="forms/CodeEntry" description="A one-time code in one input.">
+<Story name="CodeEntry" source="forms/CodeEntry" description={m.storyCodeEntryDescription()}>
   <Layout pattern="grid" min="card">
-    <Variant label="grouped letters and digits">
+    <Variant label={m.storyGroupedLettersAndDigits()}>
       <CodeEntry
-        label="Merge code"
-        hint="Shown on your other account."
+        label={m.storyMergeCode()}
+        hint={m.storyShownOnYourOtherAccount()}
         name="story-merge"
         length={8}
         groups={[4, 4]}
         bind:value={code}
       />
     </Variant>
-    <Variant label="digits">
-      <CodeEntry label="Sign-in code" name="story-login" length={6} charset="digits" />
+    <Variant label={m.storyDigits()}>
+      <CodeEntry label={m.storySignInCode()} name="story-login" length={6} charset="digits" />
     </Variant>
-    <Variant label="error">
+    <Variant label={m.storyError()}>
       <CodeEntry
-        label="Link code"
+        label={m.storyLinkCode()}
         name="story-link"
         length={8}
         groups={[4, 4]}
         value="K7Q2"
-        error="This code has expired. Ask for a new one."
+        error={m.storyThisCodeHasExpiredAskForANew()}
       />
     </Variant>
   </Layout>
@@ -369,7 +436,7 @@
 <Story
   name="ErrorSummary"
   source="forms/ErrorSummary"
-  description="Lists submission errors and focuses the first invalid field."
+  description={m.storyErrorSummaryDescription()}
 >
   <form
     class="grid max-w-form gap-4"
@@ -382,114 +449,126 @@
   >
     <!-- Focus moves only after a submit, so loading the workbench doesn't jump here. -->
     <ErrorSummary
-      title="Fix 2 problems to submit"
+      title={m.storyFix2ProblemsToSubmit()}
       errors={summaryErrors}
       focusOnMount={submitted}
     />
-    <TextField id="story-summary-title" label="Build title" error="Enter a title for your build." />
+    <TextField
+      id="story-summary-title"
+      label={m.workbenchBuildTitle()}
+      error={m.workbenchEnterATitleForYourBuild()}
+    />
     <TextField
       id="story-summary-width"
-      label="Opening width"
+      label={m.trialWidth()}
       inputmode="numeric"
       width="xs"
-      error="Enter the opening width."
+      error={m.storyEnterTheOpeningWidth()}
     />
-    <div><Button type="submit" variant="primary">Submit for review</Button></div>
+    <div><Button type="submit" variant="primary">{m.storySubmitForReview()}</Button></div>
   </form>
 </Story>
 
-<Story name="FormActions" source="forms/FormActions" description="The buttons that end a form.">
-  <Variant label="primary, secondary, destructive and note">
-    <FormActions note="Publishing is final; you can still edit the description later.">
-      {#snippet destructive()}<Button variant="quiet">Discard draft</Button>{/snippet}
-      {#snippet secondary()}<Button>Save draft</Button>{/snippet}
-      {#snippet primary()}<Button variant="primary">Publish</Button>{/snippet}
+<Story name="FormActions" source="forms/FormActions" description={m.storyFormActionsDescription()}>
+  <Variant label={m.storyPrimarySecondaryDestructiveAndNote()}>
+    <FormActions note={m.storyPublishingIsFinalYouCanStillEditThe()}>
+      {#snippet destructive()}<Button variant="quiet">{m.storyDiscardDraft()}</Button>{/snippet}
+      {#snippet secondary()}<Button>{m.workbenchSaveDraft()}</Button>{/snippet}
+      {#snippet primary()}<Button variant="primary">{m.storyPublish()}</Button>{/snippet}
     </FormActions>
   </Variant>
-  <Variant label="sticky">
+  <Variant label={m.storySticky()}>
     <div class="grid max-h-48 gap-4 overflow-y-auto rounded-sm border border-line px-4 pt-4">
-      <TextField label="Title" />
-      <TextareaField label="Description" />
+      <TextField label={m.storyTitle()} />
+      <TextareaField label={m.storyDescription()} />
       <FormActions sticky>
-        {#snippet primary()}<Button variant="primary">Save</Button>{/snippet}
+        {#snippet primary()}<Button variant="primary">{m.storySave()}</Button>{/snippet}
       </FormActions>
     </div>
   </Variant>
 </Story>
 
-<Story name="FileDrop" source="forms/FileDrop" description="Pick or drop files.">
+<Story name="FileDrop" source="forms/FileDrop" description={m.storyFileDropDescription()}>
   <Layout pattern="grid" min="card-wide">
-    <Variant label="multiple, size limit">
+    <Variant label={m.storyMultipleSizeLimit()}>
       <FileDrop
-        label="Schematics"
-        hint="Litematic or schem files, up to 1 MB each."
+        label={m.storySchematics()}
+        hint={m.storyLitematicOrSchemFilesUpTo1Mb()}
         accept=".litematic,.schem"
         multiple
         maxBytes={1_000_000}
-        labels={{ drop: "Drop files here, or", browse: "Choose files" }}
+        labels={{ drop: m.storyDropFilesHereOr(), browse: m.storyChooseFiles() }}
         onFiles={(accepted, skipped) => {
           files = accepted.map((file) => file.name);
           rejected = skipped.map((file) => file.name);
         }}
       />
-      {#if files.length > 0}<p class="text-sm">Chosen: {files.join(", ")}</p>{/if}
-      {#if rejected.length > 0}<p class="text-sm">Skipped: {rejected.join(", ")}</p>{/if}
+      {#if files.length > 0}<p class="text-sm">
+          {m.storyChosenFiles({ files: files.join(", ") })}
+        </p>{/if}
+      {#if rejected.length > 0}<p class="text-sm">
+          {m.storySkippedFiles({ files: rejected.join(", ") })}
+        </p>{/if}
     </Variant>
-    <Variant label="error">
+    <Variant label={m.storyError()}>
       <FileDrop
-        label="Cover image"
+        label={m.storyCoverImage()}
         accept="image/*"
-        error="The image could not be read. Choose another."
-        labels={{ drop: "Drop an image here, or", browse: "Choose image" }}
+        error={m.storyTheImageCouldNotBeReadChooseAnother()}
+        labels={{ drop: m.storyDropAnImageHereOr(), browse: m.storyChooseImage() }}
         onFiles={() => undefined}
       />
     </Variant>
-    <Variant label="disabled">
+    <Variant label={m.storyDisabled()}>
       <FileDrop
-        label="Video"
+        label={m.storyVideo()}
         disabled
-        hint="Uploads open once the draft has a title."
-        labels={{ drop: "Drop a video here, or", browse: "Choose video" }}
+        hint={m.storyUploadsOpenOnceTheDraftHasATitle()}
+        labels={{ drop: m.storyDropAVideoHereOr(), browse: m.storyChooseVideo() }}
         onFiles={() => undefined}
       />
     </Variant>
   </Layout>
 </Story>
 
-<Story name="Autocomplete" source="forms/Autocomplete" description="Free text with suggestions.">
+<Story
+  name="Autocomplete"
+  source="forms/Autocomplete"
+  description={m.storyAutocompleteDescription()}
+>
   <Layout pattern="grid" min="card-wide">
-    <Variant label="suggestions with descriptions">
+    <Variant label={m.storySuggestionsWithDescriptions()}>
       <Autocomplete
         name="story-version"
         label={m.workbenchMinecraftVersion()}
-        hint="Type to see versions."
+        hint={m.storyTypeToSeeVersions()}
         minQueryLength={0}
         labels={{
           suggestions: m.searchSuggestions(),
-          loading: "Loading",
+          loading: m.storyLoading(),
           error: m.searchSuggestionError(),
-          noResults: "No matching versions",
-          count: (count) => `${count} suggestions`,
+          noResults: m.storyNoMatchingVersions(),
+          count: (count) => m.storySuggestionCount({ count }),
         }}
         load={(query) =>
           Promise.resolve({
             items: versionOptions
               .filter((value) => value.toLowerCase().includes(query.trim().toLowerCase()))
-              .map((value) => ({ value, label: value, description: "Release" })),
+              .map((value) => ({ value, label: value, description: m.storyRelease() })),
           })}
       />
     </Variant>
-    <Variant label="error">
+    <Variant label={m.storyError()}>
       <Autocomplete
         name="story-credit"
-        label="Credited builder"
-        error="Enter a builder name."
+        label={m.storyCreditedBuilder()}
+        error={m.storyEnterABuilderName()}
         labels={{
-          suggestions: "Builders",
-          loading: "Loading",
-          error: "Suggestions are unavailable.",
-          noResults: "No builders found",
-          count: (count) => `${count} suggestions`,
+          suggestions: m.storyBuilders(),
+          loading: m.storyLoading(),
+          error: m.storySuggestionsAreUnavailable(),
+          noResults: m.storyNoBuildersFound(),
+          count: (count) => m.storySuggestionCount({ count }),
         }}
         load={() => Promise.resolve({ items: [] })}
       />
@@ -497,22 +576,22 @@
   </Layout>
 </Story>
 
-<Story name="Combobox" source="forms/Combobox" description="Choose values from a set.">
+<Story name="Combobox" source="forms/Combobox" description={m.storyComboboxDescription()}>
   <Layout pattern="grid" min="card-wide">
-    <Variant label="single">
+    <Variant label={m.storySingle()}>
       <Combobox
-        label="Game version"
+        label={m.storyGameVersion()}
         name="story-combobox-version"
         options={versions}
         bind:value={version}
         labels={comboboxLabels}
       />
     </Variant>
-    <Variant label="multiple, can add new">
+    <Variant label={m.storyMultipleCanAddNew()}>
       <Combobox
-        label="Tags"
+        label={m.storyTags()}
         name="story-combobox-tags"
-        hint="Pick tags or add your own."
+        hint={m.storyPickTagsOrAddYourOwn()}
         options={tags}
         multiple
         allowCreate
@@ -520,53 +599,53 @@
         labels={comboboxLabels}
       />
     </Variant>
-    <Variant label="loaded from the server">
+    <Variant label={m.storyLoadedFromTheServer()}>
       <Combobox
-        label="Build to match"
+        label={m.storyBuildToMatch()}
         name="story-combobox-build"
-        placeholder="Search builds"
+        placeholder={m.storySearchBuilds()}
         labels={comboboxLabels}
         load={(query) =>
           Promise.resolve(
-            ["Copper Bolt", "Seamless Vault", "Tiny Flush"]
+            [m.storyCopperBolt(), "Seamless Vault", "Tiny Flush"]
               .filter((title) => title.toLowerCase().includes(query.toLowerCase()))
-              .map((title) => ({ value: title, label: title, description: "3×3 door" })),
+              .map((title) => ({ value: title, label: title, description: m.story33Door() })),
           )}
       />
     </Variant>
-    <Variant label="error">
+    <Variant label={m.storyError()}>
       <Combobox
-        label="Channel"
+        label={m.storyChannel()}
         name="story-combobox-channel"
         options={[{ value: "records", label: "#records" }]}
-        error="Choose a channel."
+        error={m.storyChooseAChannel()}
         labels={comboboxLabels}
       />
     </Variant>
   </Layout>
 </Story>
 
-<Story name="ListField" source="forms/ListField" description="Repeatable rows of fields.">
+<Story name="ListField" source="forms/ListField" description={m.storyListFieldDescription()}>
   <div class="max-w-form">
     <ListField
-      label="Profile links"
-      hint="Up to four links."
+      label={m.storyProfileLinks()}
+      hint={m.storyUpToFourLinks()}
       bind:items={links}
       newItem={() => ({ url: "" })}
       max={4}
       reorderable
       labels={{
-        add: "Add link",
-        remove: (row) => `Remove ${row}`,
-        moveUp: (row) => `Move ${row} up`,
-        moveDown: (row) => `Move ${row} down`,
-        rowLabel: (n) => `Link ${n}`,
-        removed: (n) => `Link ${n} removed`,
+        add: m.storyAddLink(),
+        remove: (row) => m.storyRemoveRow({ row }),
+        moveUp: (row) => m.storyMoveRowUp({ row }),
+        moveDown: (row) => m.storyMoveRowDown({ row }),
+        rowLabel: (n) => m.storyLinkNumber({ n }),
+        removed: (n) => m.storyLinkRemoved({ n }),
       }}
     >
       {#snippet row(link)}
         <TextField
-          label="Address"
+          label={m.storyAddress()}
           type="url"
           value={link.url}
           oninput={(event) => (link.url = event.currentTarget.value)}

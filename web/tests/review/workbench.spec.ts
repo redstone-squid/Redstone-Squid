@@ -39,7 +39,7 @@ for (const theme of ["light", "dark"] as const) {
     test(`${theme} / ${group}`, async ({ page }, testInfo) => {
       await page.goto(`/design-system/${group}?theme=${theme}`);
       await settle(page);
-      const title = GROUPS[group as keyof typeof GROUPS].title;
+      const title = GROUPS[group as keyof typeof GROUPS].title("en");
       await expect(page.getByRole("heading", { level: 1, name: title, exact: true })).toBeVisible();
       expect(await fitsViewport(page)).toBe(true);
       await expect(page).toPassAxe();
