@@ -7,6 +7,8 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
+from squid.core.actors import impersonation_use
+from squid.core.auth.models.sessions import ImpersonatedEdit
 from squid.core.edits.domain import EditOutcome, EditTarget, Revision
 from squid.core.edits.models import EditOperation
 from squid.core.replay import REPLAY_RETENTION_HOURS
@@ -42,15 +44,18 @@ class PostgresEditRepository:
 
     async def record(self, outcome: EditOutcome) -> None:
         now = Instant.now()
+        revisions: list[dict[str, str | int]] = [
+            {"kind": version.target.kind, "key": version.target.key, "revision": version.value}
+            for version in outcome.revisions
+        ]
+        if use_id := impersonation_use.get():
+            self._session().add(ImpersonatedEdit(operation_id=outcome.operation_id, use_id=use_id, revisions=revisions))
         self._session().add(
             EditOperation(
                 id=outcome.operation_id,
                 actor=outcome.actor,
                 fingerprint=outcome.fingerprint,
-                revisions=[
-                    {"kind": version.target.kind, "key": version.target.key, "revision": version.value}
-                    for version in outcome.revisions
-                ],
+                revisions=revisions,
                 changed=outcome.changed,
                 final=outcome.final,
                 review_vote_id=outcome.review_vote_id,

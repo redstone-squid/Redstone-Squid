@@ -10,7 +10,7 @@ depends_on = None
 
 def upgrade() -> None:
     op.execute("""CREATE TABLE impersonation_sessions (
-        id uuid PRIMARY KEY, operator_id integer NOT NULL, target_id integer NOT NULL,
+        id uuid PRIMARY KEY, operator_id integer NOT NULL, target_id integer NOT NULL, target_discord_id bigint,
         binding text NOT NULL, reason text NOT NULL, created_at timestamptz NOT NULL,
         expires_at timestamptz NOT NULL, revoked_at timestamptz
     )""")
@@ -18,6 +18,13 @@ def upgrade() -> None:
         id uuid PRIMARY KEY, session_id uuid NOT NULL REFERENCES impersonation_sessions(id),
         operation text NOT NULL, created_at timestamptz NOT NULL, commits integer NOT NULL
     )""")
+    op.execute("""CREATE TABLE impersonated_edits (
+        operation_id uuid PRIMARY KEY, use_id uuid NOT NULL REFERENCES impersonation_uses(id),
+        revisions jsonb NOT NULL
+    )""")
+    op.execute(
+        "COMMENT ON TABLE impersonated_edits IS 'Committed edit and resource revisions retained with the operator audit.'"
+    )
     op.execute(
         "COMMENT ON TABLE impersonation_sessions IS 'A debugging session bound to its operator''s authenticated entry point.'"
     )
@@ -27,5 +34,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.drop_table("impersonated_edits")
     op.drop_table("impersonation_uses")
     op.drop_table("impersonation_sessions")

@@ -22,9 +22,10 @@ class DraftAttachmentUploads:
         self._factory = factory
 
     async def stage(self, draft_id: UUID, actor: Actor, revision: int, files: tuple[FileMembership, ...]) -> None:
-        async with self._factory() as uow:
-            draft = await self._drafts.get_accessible_in(uow, draft_id, actor)
-            if draft.snapshot.revision != revision:
-                raise RevisionConflictError(Revision(draft_target(draft_id), revision), draft.snapshot.revision)
-            await uow.attachment_edits.stage(draft, files)
-            await uow.commit()
+        with actor.audit_scope():
+            async with self._factory() as uow:
+                draft = await self._drafts.get_accessible_in(uow, draft_id, actor)
+                if draft.snapshot.revision != revision:
+                    raise RevisionConflictError(Revision(draft_target(draft_id), revision), draft.snapshot.revision)
+                await uow.attachment_edits.stage(draft, files)
+                await uow.commit()

@@ -8,8 +8,8 @@ The session UUID identifies the database row and is not the browser credential.
 
 import uuid
 
-from sqlalchemy import ForeignKey, Index, LargeBinary, Text, UniqueConstraint, func, text
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy import BigInteger, ForeignKey, Index, LargeBinary, Text, UniqueConstraint, func, text
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 from whenever import Instant
 
@@ -64,6 +64,7 @@ class ImpersonationSession(Base, kw_only=True):
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default_factory=uuid.uuid4)
     operator_id: Mapped[int]
     target_id: Mapped[int]
+    target_discord_id: Mapped[int | None] = mapped_column(BigInteger, default=None)
     binding: Mapped[str] = mapped_column(Text)
     reason: Mapped[str] = mapped_column(Text)
     created_at: Mapped[Instant] = mapped_column(InstantUTC(), default_factory=Instant.now)
@@ -81,3 +82,13 @@ class ImpersonationUse(Base, kw_only=True):
     operation: Mapped[str] = mapped_column(Text)
     created_at: Mapped[Instant] = mapped_column(InstantUTC(), default_factory=Instant.now)
     commits: Mapped[int] = mapped_column(default=0)
+
+
+class ImpersonatedEdit(Base, kw_only=True):
+    """Committed edit and resource revisions retained with the operator audit."""
+
+    __tablename__ = "impersonated_edits"
+
+    operation_id: Mapped[uuid.UUID] = mapped_column(primary_key=True)
+    use_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("impersonation_uses.id"))
+    revisions: Mapped[list[dict[str, str | int]]] = mapped_column(JSONB)

@@ -80,38 +80,42 @@ class SubmissionAttachmentIntake:
         self, draft_id: UUID, actor: Actor, source_id: UUID, filename: str, content_type: str | None
     ) -> SuppliedAttachment:
         """Record the supplied file before the client adapter downloads it."""
-        async with self._uow_factory() as uow:
-            if source_id.int == 0 or not filename.strip() or len(filename) > 255:
-                message = "A supplied attachment needs a valid identifier and filename."
-                raise ValidationError(message)
-            kind = classify_supplied_file(filename, content_type)
-            attachment = SuppliedAttachment(source_id, filename, kind, IntakeStatus.PENDING)
-            await uow.attachment_intake.reserve(await self._drafts.get_accessible_in(uow, draft_id, actor), attachment)
-            await uow.commit()
-            return attachment
+        with actor.audit_scope():
+            async with self._uow_factory() as uow:
+                if source_id.int == 0 or not filename.strip() or len(filename) > 255:
+                    message = "A supplied attachment needs a valid identifier and filename."
+                    raise ValidationError(message)
+                kind = classify_supplied_file(filename, content_type)
+                attachment = SuppliedAttachment(source_id, filename, kind, IntakeStatus.PENDING)
+                await uow.attachment_intake.reserve(
+                    await self._drafts.get_accessible_in(uow, draft_id, actor), attachment
+                )
+                await uow.commit()
+                return attachment
 
     async def register_file(
         self, draft_id: UUID, actor: Actor, source_id: UUID, path: Path, content_type: str | None
     ) -> None:
         """Pass downloaded bytes to the media or schematic service and record the outcome."""
-        async with self._uow_factory() as uow:
-            draft = await self._drafts.get_accessible_in(uow, draft_id, actor)
-            attachment = next(
-                (item for item in await uow.attachment_intake.list(draft_id) if item.id == source_id), None
-            )
-        if attachment is None:
-            raise NotFoundError
-        if attachment.status is IntakeStatus.DISCARDED and not attachment.history_managed:
-            message = "This supplied file was discarded; supply a new file identifier."
-            raise ConflictError(message)
-        if content_type in {None, "application/octet-stream"}:
-            content_type = mimetypes.guess_type(attachment.filename)[0]
-        try:
-            await self._register(draft, actor, attachment, path, content_type)
-        except Exception:
-            await self._set_status(draft_id, source_id, IntakeStatus.FAILED)
-            raise
-        await self._set_status(draft_id, source_id, IntakeStatus.READY)
+        with actor.audit_scope():
+            async with self._uow_factory() as uow:
+                draft = await self._drafts.get_accessible_in(uow, draft_id, actor)
+                attachment = next(
+                    (item for item in await uow.attachment_intake.list(draft_id) if item.id == source_id), None
+                )
+            if attachment is None:
+                raise NotFoundError
+            if attachment.status is IntakeStatus.DISCARDED and not attachment.history_managed:
+                message = "This supplied file was discarded; supply a new file identifier."
+                raise ConflictError(message)
+            if content_type in {None, "application/octet-stream"}:
+                content_type = mimetypes.guess_type(attachment.filename)[0]
+            try:
+                await self._register(draft, actor, attachment, path, content_type)
+            except Exception:
+                await self._set_status(draft_id, source_id, IntakeStatus.FAILED)
+                raise
+            await self._set_status(draft_id, source_id, IntakeStatus.READY)
 
     async def _register(
         self,
@@ -155,10 +159,11 @@ class SubmissionAttachmentIntake:
 
     async def fail(self, draft_id: UUID, actor: Actor, source_id: UUID) -> None:
         """Retain a download failure for explicit retry or discard."""
-        async with self._uow_factory() as uow:
-            await self._drafts.get_accessible_in(uow, draft_id, actor)
-            await uow.attachment_intake.set_status(draft_id, source_id, IntakeStatus.FAILED)
-            await uow.commit()
+        with actor.audit_scope():
+            async with self._uow_factory() as uow:
+                await self._drafts.get_accessible_in(uow, draft_id, actor)
+                await uow.attachment_intake.set_status(draft_id, source_id, IntakeStatus.FAILED)
+                await uow.commit()
 
     async def list(self, draft_id: UUID, actor: Actor) -> tuple[SuppliedAttachment, ...]:
         async with self._uow_factory() as uow:

@@ -3227,6 +3227,68 @@ COMMENT ON COLUMN public.idempotency_requests.caller IS 'The server-derived call
 
 
 --
+-- Name: impersonated_edits; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.impersonated_edits (
+    operation_id uuid NOT NULL,
+    use_id uuid NOT NULL,
+    revisions jsonb NOT NULL
+);
+
+
+--
+-- Name: TABLE impersonated_edits; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.impersonated_edits IS 'Committed edit and resource revisions retained with the operator audit.';
+
+
+--
+-- Name: impersonation_sessions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.impersonation_sessions (
+    id uuid NOT NULL,
+    operator_id integer NOT NULL,
+    target_id integer NOT NULL,
+    target_discord_id bigint,
+    binding text NOT NULL,
+    reason text NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    revoked_at timestamp with time zone
+);
+
+
+--
+-- Name: TABLE impersonation_sessions; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.impersonation_sessions IS 'A debugging session bound to its operator''s authenticated entry point.';
+
+
+--
+-- Name: impersonation_uses; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.impersonation_uses (
+    id uuid NOT NULL,
+    session_id uuid NOT NULL,
+    operation text NOT NULL,
+    created_at timestamp with time zone NOT NULL,
+    commits integer NOT NULL
+);
+
+
+--
+-- Name: TABLE impersonation_uses; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.impersonation_uses IS 'An authorized impersonated operation tied to its originating session.';
+
+
+--
 -- Name: media_artifact_objects; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -6753,6 +6815,30 @@ ALTER TABLE ONLY public.idempotency_requests
 
 
 --
+-- Name: impersonated_edits impersonated_edits_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.impersonated_edits
+    ADD CONSTRAINT impersonated_edits_pkey PRIMARY KEY (operation_id);
+
+
+--
+-- Name: impersonation_sessions impersonation_sessions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.impersonation_sessions
+    ADD CONSTRAINT impersonation_sessions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: impersonation_uses impersonation_uses_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.impersonation_uses
+    ADD CONSTRAINT impersonation_uses_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: media_artifact_objects media_artifact_objects_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -9982,6 +10068,22 @@ ALTER TABLE ONLY public.guild_vote_emojis
 
 ALTER TABLE ONLY public.guild_vote_role_weights
     ADD CONSTRAINT guild_vote_role_weights_guild_id_fkey FOREIGN KEY (guild_id) REFERENCES public.server_settings(server_id) ON DELETE CASCADE;
+
+
+--
+-- Name: impersonated_edits impersonated_edits_use_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.impersonated_edits
+    ADD CONSTRAINT impersonated_edits_use_id_fkey FOREIGN KEY (use_id) REFERENCES public.impersonation_uses(id);
+
+
+--
+-- Name: impersonation_uses impersonation_uses_session_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.impersonation_uses
+    ADD CONSTRAINT impersonation_uses_session_id_fkey FOREIGN KEY (session_id) REFERENCES public.impersonation_sessions(id);
 
 
 --

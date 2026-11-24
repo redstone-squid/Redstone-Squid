@@ -101,6 +101,9 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/TABLES/guild_vote_emojis.sql
 \ir public/TABLES/guild_vote_role_weights.sql
 \ir public/TABLES/idempotency_requests.sql
+\ir public/TABLES/impersonated_edits.sql
+\ir public/TABLES/impersonation_sessions.sql
+\ir public/TABLES/impersonation_uses.sql
 \ir public/TABLES/media_artifact_objects.sql
 \ir public/TABLES/media_artifact_publications.sql
 \ir public/TABLES/media_artifacts.sql
