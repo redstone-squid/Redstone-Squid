@@ -113,6 +113,7 @@
     data-disabled={disabled ? "" : undefined}
     aria-label={iconOnly ? label : undefined}
     class={classes}
+    onclick={onclick as HTMLAnchorAttributes["onclick"]}
     {...rest as HTMLAnchorAttributes}>{@render content()}</a
   >
 {:else}

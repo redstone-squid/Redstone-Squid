@@ -23,7 +23,10 @@
   import type { SaveState } from "@/ui/feedback/save-state";
   import type { MediaItem, MediaStatus } from "@/ui/patterns/media";
   import MediaUploader from "@/ui/patterns/MediaUploader.svelte";
+  import FlashNotice from "@/ui/patterns/FlashNotice.svelte";
   import NavBar from "@/ui/patterns/NavBar.svelte";
+  import OneTimeSecret from "@/ui/patterns/OneTimeSecret.svelte";
+  import StepFlow from "@/ui/patterns/StepFlow.svelte";
   import SettingsList from "@/ui/patterns/SettingsList.svelte";
   import ResultsToolbar from "@/ui/patterns/ResultsToolbar.svelte";
   import ResultsView from "@/ui/patterns/ResultsView.svelte";
@@ -81,6 +84,14 @@
     ready: "Ready",
     failed: "Upload failed",
     removed: "Removed",
+  };
+  const mergeSteps = ["code", "preview", "confirm"];
+  let mergeStep = $state("code");
+  const stepLabels = {
+    pending: "Not started",
+    current: "Current step",
+    done: "Done",
+    error: "Needs attention",
   };
   let resultsStatus = $state<(typeof statuses)[number]>("ready");
 </script>
@@ -471,6 +482,81 @@
       media = media.map((item) => ({ ...item, primary: item.id === id }));
     }}
   />
+</Story>
+
+<Story
+  name="OneTimeSecret"
+  source="patterns/OneTimeSecret"
+  description="A secret shown once, with copy and an acknowledgement; leaving early asks first."
+>
+  <OneTimeSecret
+    value="sqd_inst_7f3a9c2e41b84d0f9a6e5c1b2d3f4a5b"
+    label="Installation secret"
+    warning="Copy this secret now. It will not be shown again."
+    detail="Paste it into the plugin's config.yml."
+    copyLabels={{ label: "Copy", copied: "Copied", failed: "Copy failed" }}
+    acknowledgeLabel="I saved the secret"
+    guardUnload={false}
+  />
+</Story>
+
+<Story
+  name="StepFlow"
+  source="patterns/StepFlow"
+  description="Steps with the current one marked; moving between steps focuses the step heading."
+>
+  <StepFlow
+    label="Merge progress"
+    current={mergeStep}
+    labels={stepLabels}
+    steps={[
+      { id: "code", label: "Enter the code", status: mergeStep === "code" ? "pending" : "done" },
+      {
+        id: "preview",
+        label: "Review the merge",
+        status: mergeStep === "confirm" ? "done" : "pending",
+      },
+      { id: "confirm", label: "Confirm", status: "pending" },
+    ]}
+  >
+    <Layout pattern="cluster">
+      <Button
+        disabled={mergeStep === "code"}
+        onclick={() => (mergeStep = mergeSteps[mergeSteps.indexOf(mergeStep) - 1] ?? "code")}
+        >Back</Button
+      >
+      <Button
+        variant="primary"
+        disabled={mergeStep === "confirm"}
+        onclick={() => (mergeStep = mergeSteps[mergeSteps.indexOf(mergeStep) + 1] ?? "confirm")}
+        >Continue</Button
+      >
+    </Layout>
+  </StepFlow>
+  <Variant label="a failed phase">
+    <StepFlow
+      label="Finalization"
+      current="render"
+      labels={stepLabels}
+      headingLevel={3}
+      steps={[
+        { id: "check", label: "Check the draft", status: "done" },
+        { id: "render", label: "Render previews", status: "error" },
+        { id: "publish", label: "Publish", status: "pending" },
+      ]}
+    >
+      <Notice tone="danger">The schematic could not be rendered.</Notice>
+    </StepFlow>
+  </Variant>
+</Story>
+
+<Story
+  name="FlashNotice"
+  source="patterns/FlashNotice"
+  description="The outcome of a server-handled form after its redirect, announced once hydrated."
+>
+  <FlashNotice message="Profile saved." />
+  <FlashNotice tone="info" message="The draft was discarded." />
 </Story>
 
 {#snippet sideNav()}
