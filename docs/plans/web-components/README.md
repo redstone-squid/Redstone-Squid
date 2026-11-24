@@ -66,9 +66,9 @@ Tabs and SegmentedControl in both modes), `forms` (every §2.2 component), `over
 
 Left over from Phase 5:
 
-- The `UserMenu` island. `/v1/session` exists and Phase 6 supplies the query client; it
-  needs the browser read through the same-origin proxy (API item 52). Its place is marked in
-  `CatalogueLayout`'s actions.
+- The `UserMenu` island, built with the header screen in Phase 8. Nothing blocks it:
+  `/v1/session` exists, Phase 6 supplies the query client, and islands call the API directly
+  (API item 52). Its place is marked in `CatalogueLayout`'s actions.
 - `FlashNotice` takes text; the one-shot flash cookie in `src/server/cookies.ts` waits for
   the first POST-redirect-GET endpoint.
 - `WorkbenchLayout` still has its own sidebar (§0 item 22); `SplitLayout` would make its
@@ -169,7 +169,7 @@ were built here, ahead of their phases.
 **Phase 5: patterns.**
 
 - `SplitLayout`, `NavBar`, `SearchBox`, `FilterPanel`, `ActiveFilters`, `ResultsToolbar`, `ResultsView`, `ConfirmDialog`, `SettingsList`, `MediaUploader`, `OneTimeSecret`, `StepFlow`, `FlashNotice`.
-- Then rebuild `CatalogueLayout` and the header with `NavBar` and the `UserMenu` island once `/v1/session` exists.
+- Then rebuild `CatalogueLayout` and the header with `NavBar`; the `UserMenu` island follows in Phase 8.
 
 **Phase 6: application infrastructure.** Done.
 
