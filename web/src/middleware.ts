@@ -2,12 +2,12 @@ import { SpanKind, TraceFlags, trace } from "@opentelemetry/api";
 import { defineMiddleware, sequence } from "astro:middleware";
 import { DEFAULT_LOCALE, localeFromPath, localizePath, unprefixedPath } from "@/locales/locale";
 import { createApiClient } from "@/server/api";
-import { readThemeCookie } from "@/server/cookies";
+import { readPreference } from "@/server/cookies";
 import { getRuntimeConfig } from "@/server/config";
 import { findRedirect } from "@/server/redirects";
 import { withRequestLocale } from "@/server/request-locale";
 import { traceHttp } from "@/server/telemetry";
-import { parseTheme } from "@/ui/themes";
+import { parseContrast, parseTheme } from "@/ui/themes";
 
 const traceRequest = defineMiddleware((context, next) => {
   if (context.routePattern === "/telemetry/browser") return next();
@@ -55,9 +55,12 @@ const catalogueRequest = defineMiddleware(async (context, next) => {
   context.locals.locale = locale;
   context.locals.requestedPath = inherited.requestedPath ?? `${pathname}${search}`;
   // The service worker precaches /offline once, so it follows the device rather than
-  // keeping whichever theme was pinned at install time.
-  context.locals.theme =
-    unprefixedPath(pathname) === "/offline" ? undefined : parseTheme(readThemeCookie(context));
+  // keeping whatever was pinned at install time.
+  const followDevice = unprefixedPath(pathname) === "/offline";
+  context.locals.theme = followDevice ? undefined : parseTheme(readPreference(context, "theme"));
+  context.locals.contrast = followDevice
+    ? undefined
+    : parseContrast(readPreference(context, "contrast"));
   const log = (event: string, fields: Record<string, unknown>) =>
     JSON.stringify({
       event,
@@ -85,4 +88,12 @@ const catalogueRequest = defineMiddleware(async (context, next) => {
   }
 });
 
-export const onRequest = sequence(traceRequest, catalogueRequest);
+/** Headers that complement the content security policy in `astro.config.ts`. */
+const securityHeaders = defineMiddleware(async (_context, next) => {
+  const response = await next();
+  response.headers.set("X-Content-Type-Options", "nosniff");
+  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  return response;
+});
+
+export const onRequest = sequence(securityHeaders, traceRequest, catalogueRequest);

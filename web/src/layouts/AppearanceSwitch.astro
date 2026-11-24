@@ -1,0 +1,71 @@
+---
+import Monitor from "@lucide/svelte/icons/monitor";
+import Moon from "@lucide/svelte/icons/moon";
+import Sun from "@lucide/svelte/icons/sun";
+import * as m from "@/locales/messages.gen";
+import Icon from "@/ui/content/Icon.svelte";
+
+/**
+ * The footer's theme and contrast choices. Each option is a submit button, so without
+ * JavaScript the form posts to /appearance, which saves the cookie and redirects back. With
+ * JavaScript the page switches in place and the post only saves the choice.
+ */
+const { theme, contrast, requestedPath } = Astro.locals;
+const groups = [
+  {
+    name: "theme",
+    label: m.footerTheme(),
+    current: theme ?? "system",
+    options: [
+      { value: "system", icon: Monitor, label: m.footerSystem() },
+      { value: "light", icon: Sun, label: m.footerThemeLight() },
+      { value: "dark", icon: Moon, label: m.footerThemeDark() },
+    ],
+  },
+  {
+    name: "contrast",
+    label: m.footerContrast(),
+    current: contrast ?? "system",
+    options: [
+      { value: "system", icon: Monitor, label: m.footerSystem() },
+      { value: "more", label: m.footerContrastMore() },
+      { value: "standard", label: m.footerContrastStandard() },
+    ],
+  },
+];
+---
+
+<form
+  class="grid w-fit grid-cols-[auto_auto] items-center gap-x-3 gap-y-2 text-sm max-sm:grid-cols-1"
+  method="post"
+  action="/appearance"
+  data-appearance-switch
+>
+  <input type="hidden" name="return" value={requestedPath} />
+  {groups.map(({ name, label, current, options }) => (
+    <>
+      <span id={`appearance-${name}`} class="text-fg-muted">
+        {label}
+      </span>
+      <div
+        role="group"
+        aria-labelledby={`appearance-${name}`}
+        class="flex w-fit rounded-sm border border-line-strong bg-surface p-0.5"
+      >
+        {options.map((option) => (
+          <button
+            class="flex min-h-control-sm cursor-pointer items-center gap-2 rounded-xs px-3 font-semibold text-fg-muted hover:text-fg aria-pressed:bg-accent-soft aria-pressed:text-fg"
+            {name}
+            value={option.value}
+            aria-pressed={option.value === current ? "true" : "false"}
+          >
+            {option.icon && <Icon icon={option.icon} />}
+            {option.label}
+          </button>
+        ))}
+      </div>
+    </>
+  ))}
+</form>
+
+<script src="./appearance-switch.ts"></script>

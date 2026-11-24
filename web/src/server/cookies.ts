@@ -2,21 +2,27 @@ import type { APIContext } from "astro";
 
 type Cookies = Pick<APIContext, "cookies">;
 
-/** The visitor's pinned theme name. No cookie means the page follows the device. */
-const THEME_COOKIE = "theme";
+/**
+ * Display preferences, each stored in a cookie of the same name. No cookie means the page
+ * follows the device. Values are raw strings; parse them with `parseTheme` or `parseContrast`.
+ */
+type Preference = "theme" | "contrast";
 
-/** The theme cookie's raw value; parse it with `parseTheme`. */
-export function readThemeCookie({ cookies }: Cookies): string | undefined {
-  return cookies.get(THEME_COOKIE)?.value;
+export function readPreference({ cookies }: Cookies, name: Preference): string | undefined {
+  return cookies.get(name)?.value;
 }
 
-/** Pin `theme`, or delete the cookie for `undefined` so the page follows the device again. */
-export function writeThemeCookie({ cookies }: Cookies, theme: string | undefined): void {
-  if (theme === undefined) {
-    cookies.delete(THEME_COOKIE, { path: "/" });
+/** Store `value`, or delete the cookie for `undefined` so the page follows the device again. */
+export function writePreference(
+  { cookies }: Cookies,
+  name: Preference,
+  value: string | undefined,
+): void {
+  if (value === undefined) {
+    cookies.delete(name, { path: "/" });
     return;
   }
-  cookies.set(THEME_COOKIE, theme, {
+  cookies.set(name, value, {
     path: "/",
     // Browsers cap cookie lifetimes at 400 days.
     maxAge: 400 * 24 * 60 * 60,

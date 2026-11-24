@@ -147,7 +147,7 @@ export function footerTheme(locale: Locale = getLocale()): string {
 }
 
 /** System */
-export function footerThemeSystem(locale: Locale = getLocale()): string {
+export function footerSystem(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
       return "System";
@@ -179,6 +179,42 @@ export function footerThemeDark(locale: Locale = getLocale()): string {
       return "深色";
     case "en-XA":
       return "[" + "Đåŕķ" + "··]";
+  }
+}
+
+/** Contrast */
+export function footerContrast(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Contrast";
+    case "zh-CN":
+      return "对比度";
+    case "en-XA":
+      return "[" + "Çöñţŕåšţ" + "····]";
+  }
+}
+
+/** High */
+export function footerContrastMore(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "High";
+    case "zh-CN":
+      return "高";
+    case "en-XA":
+      return "[" + "Ĥîĝĥ" + "··]";
+  }
+}
+
+/** Standard */
+export function footerContrastStandard(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Standard";
+    case "zh-CN":
+      return "标准";
+    case "en-XA":
+      return "[" + "Šţåñđåŕđ" + "····]";
   }
 }
 

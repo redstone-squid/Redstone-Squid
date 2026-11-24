@@ -3,7 +3,7 @@ import ArrowUpRight from "@lucide/svelte/icons/arrow-up-right";
 import type { ComponentProps } from "astro/types";
 import LanguageSelector from "./LanguageSelector.astro";
 import DocumentHead from "./DocumentHead.astro";
-import ThemeSwitch from "./ThemeSwitch.astro";
+import AppearanceSwitch from "./AppearanceSwitch.astro";
 import { localizePath, unprefixedPath } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
 import "@/ui/app.css";
@@ -22,7 +22,11 @@ const nav = [
 ---
 
 <!doctype html>
-<html lang={Astro.locals.locale} data-theme={Astro.locals.theme}>
+<html
+  lang={Astro.locals.locale}
+  data-theme={Astro.locals.theme}
+  data-contrast={Astro.locals.contrast}
+>
   <head>
     <DocumentHead {...Astro.props} />
   </head>
@@ -76,7 +80,7 @@ const nav = [
           </a>
           <p class="mt-4 max-w-prose text-sm text-fg-muted">{m.footerNote()}</p>
           <div class="mt-6">
-            <ThemeSwitch />
+            <AppearanceSwitch />
           </div>
         </div>
         <nav aria-label={m.navCommunity()} class="flex flex-wrap items-start gap-6">

@@ -49,6 +49,21 @@ for (const theme of ["light", "dark"] as const) {
   }
 }
 
+test.describe("with high contrast", () => {
+  test.use({ contrast: "more" });
+
+  for (const theme of ["light", "dark"] as const) {
+    for (const group of ["data", "feedback", "forms"] as const) {
+      test(`${theme} / ${group}`, async ({ page }, testInfo) => {
+        await page.goto(`/design-system/${group}?theme=${theme}`);
+        await settle(page);
+        await expect(page).toPassAxe();
+        await captureForReview(page, testInfo, `${group}-${theme}-high-contrast`, "disabled");
+      });
+    }
+  }
+});
+
 test.describe("with JavaScript disabled", () => {
   test.use({ javaScriptEnabled: false });
 

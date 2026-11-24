@@ -26,7 +26,7 @@ move the code to the right layer rather than working around the rule.
 
 ## Requests
 
-Middleware (`src/middleware.ts`) runs first and sets five request locals:
+Middleware (`src/middleware.ts`) runs first and sets six request locals:
 
 - `Astro.locals.locale`: `en` or `zh-CN`. Every route exists once, without a locale prefix.
   Middleware rewrites `/zh-cn/records` to `/records`, so never add a `zh-cn` directory or read
@@ -36,8 +36,9 @@ Middleware (`src/middleware.ts`) runs first and sets five request locals:
   unprefixed route, so a link built from it must go through `localizePath`.
 - `Astro.locals.requestedPath`: the prefixed path and query the visitor asked for, kept through
   rewrites to error pages. Links back to the current page, such as language links, use it.
-- `Astro.locals.theme`: `light` or `dark` when the visitor pinned one with the footer's theme
-  switch, which posts to `/theme`; otherwise undefined and the page follows the device. The
+- `Astro.locals.theme` and `Astro.locals.contrast`: what the visitor pinned in the footer,
+  which posts to `/appearance`; undefined follows the device. Theme is `light` or `dark`;
+  contrast is `more` or `standard`, so a visitor can turn off a device's high contrast. The
   workbench also takes `?theme=`, which wins so screenshots are repeatable.
 - `Astro.locals.config`: validated runtime URLs.
 - `Astro.locals.api`: a generated SDK client that sends the request locale.
@@ -86,7 +87,8 @@ and `prev` anchors into links with `pageHref`, and pass those to the feature, wh
 Components style themselves with Tailwind utilities; pages only compose components, and lint
 rejects `class` attributes in `src/pages`. Colors exist only as theme tokens: `light-dark()`
 pairs of `oklch()` values in `src/ui/themes.css`, mapped to utilities such as `bg-surface` and
-`text-fg-muted` in `src/ui/app.css`. Lint rejects unknown
+`text-fg-muted` in `src/ui/app.css`. High contrast swaps text, border, and focus tokens for
+their `-more` values, so components get it without changes. Lint rejects unknown
 classes and arbitrary colors. Classes are joined with `cn`, never merged at runtime, so give each
 cva variant sole ownership of the properties it sets. A style shared by a family of components
 lives in that folder's `styles.ts`, which only `src/ui` imports. See `src/ui/README.md`.
