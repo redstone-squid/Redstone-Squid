@@ -16,6 +16,7 @@ export const GROUPS = {
     description: "Breadcrumbs, tabs, segmented controls, navigation lists, and pagination.",
   },
   forms: { title: "Forms", description: "Fields, choices, suggestions, and file selection." },
+  table: { title: "Table", description: "Server-sorted data tables with grouped rows." },
   overlays: {
     title: "Overlays",
     description: "Dialogs, sheets, menus, popovers, and tooltips.",

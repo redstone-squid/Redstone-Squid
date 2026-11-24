@@ -16,6 +16,7 @@ import LayoutStories from "@/workbench/stories/LayoutStories.svelte";
 import NavigationStories from "@/workbench/stories/NavigationStories.svelte";
 import OverlaysStories from "@/workbench/stories/OverlaysStories.svelte";
 import PatternsStories from "@/workbench/stories/PatternsStories.svelte";
+import TableStories from "@/workbench/stories/TableStories.svelte";
 
 // Building blocks of other components, with no use on their own.
 const INTERNAL = new Set(["forms/FieldFrame", "forms/CharacterCount", "overlays/ModalFrame"]);
@@ -53,6 +54,7 @@ describe("workbench", () => {
     ["data", DataStories],
     ["navigation", NavigationStories],
     ["forms", FormsStories],
+    ["table", TableStories],
     ["overlays", OverlaysStories],
     ["patterns", PatternsStories],
   ])("renders the %s stories", (_group, Stories) => {
