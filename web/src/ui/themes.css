@@ -79,6 +79,13 @@
   }
 }
 
+/* A backdrop that lets the page show through only faintly. */
+@media (prefers-reduced-transparency: reduce) {
+  :root {
+    --overlay: oklch(23.03% 0.0195 166.98 / 0.94);
+  }
+}
+
 /* Keep these two blocks identical; tests/unit/themes.test.ts checks them. */
 :root[data-contrast="more"] {
   --fg: var(--fg-more);

@@ -186,6 +186,8 @@
     background: var(--color-canvas);
     color: var(--color-fg);
     font-family: var(--font-sans);
+    /* Reserve the scrollbar's space so pages do not shift sideways when they start to scroll. */
+    scrollbar-gutter: stable;
   }
   body {
     line-height: 1.55;
@@ -212,6 +214,17 @@
   h3 {
     font-size: 1rem;
     font-weight: 700;
+  }
+  h1,
+  h2,
+  h3 {
+    text-wrap: balance;
+  }
+  p,
+  li,
+  dd,
+  blockquote {
+    text-wrap: pretty;
   }
   /* Preflight removes link underlines; prose links keep them, controls opt out. */
   a {
