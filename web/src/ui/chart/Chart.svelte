@@ -144,7 +144,7 @@
   @media (scripting: enabled) {
     :global(astro-island[client]) [data-awaiting-width] {
       height: var(--plot-height);
-      visibility: hidden;
+      content-visibility: hidden;
     }
   }
 </style>
