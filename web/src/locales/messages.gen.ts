@@ -2297,3 +2297,143 @@ export function storyObserverlessIris(locale: Locale = getLocale()): string {
       return "[" + "Öƀšéŕṽéŕļéšš Îŕîš / 无侦测器全隐藏虹膜门" + "············]";
   }
 }
+
+/** Something went wrong. Try again, and quote the reference if it keeps happening. */
+export function errorGeneric(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Something went wrong. Try again, and quote the reference if it keeps happening.";
+    case "zh-CN":
+      return "出了点问题。请重试；如果反复出现，请提供参考编号。";
+    case "en-XA":
+      return (
+        "[" +
+        "Šöɱéţĥîñĝ ŵéñţ ŵŕöñĝ. Ţŕý åĝåîñ, åñđ ǫûöţé ţĥé ŕéƒéŕéñçé îƒ îţ ķééþš ĥåþþéñîñĝ." +
+        "································]"
+      );
+  }
+}
+
+/** Couldn’t reach Redstone Squid. Check your connection and try again. */
+export function errorOffline(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Couldn’t reach Redstone Squid. Check your connection and try again.";
+    case "zh-CN":
+      return "无法连接到红石鱿鱼。请检查网络后重试。";
+    case "en-XA":
+      return (
+        "[" +
+        "Çöûļđñ’ţ ŕéåçĥ Ŕéđšţöñé Šǫûîđ. Çĥéçķ ýöûŕ çöññéçţîöñ åñđ ţŕý åĝåîñ." +
+        "···························]"
+      );
+  }
+}
+
+/** Your session has ended. Sign in again to continue. */
+export function errorSignedOut(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Your session has ended. Sign in again to continue.";
+    case "zh-CN":
+      return "你的登录已过期。请重新登录后继续。";
+    case "en-XA":
+      return "[" + "Ýöûŕ šéššîöñ ĥåš éñđéđ. Šîĝñ îñ åĝåîñ ţö çöñţîñûé." + "····················]";
+  }
+}
+
+/** This item no longer exists. */
+export function errorGone(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "This item no longer exists.";
+    case "zh-CN":
+      return "此内容已不存在。";
+    case "en-XA":
+      return "[" + "Ţĥîš îţéɱ ñö ļöñĝéŕ éẋîšţš." + "···········]";
+  }
+}
+
+/** This changed somewhere else since you opened it. Reload to see the latest version. */
+export function errorConflict(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "This changed somewhere else since you opened it. Reload to see the latest version.";
+    case "zh-CN":
+      return "自你打开后，此内容已在别处被修改。请重新加载以查看最新版本。";
+    case "en-XA":
+      return (
+        "[" +
+        "Ţĥîš çĥåñĝéđ šöɱéŵĥéŕé éļšé šîñçé ýöû öþéñéđ îţ. Ŕéļöåđ ţö šéé ţĥé ļåţéšţ ṽéŕšîöñ." +
+        "·································]"
+      );
+  }
+}
+
+/** Some fields need attention. */
+export function errorInvalid(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Some fields need attention.";
+    case "zh-CN":
+      return "部分字段需要修改。";
+    case "en-XA":
+      return "[" + "Šöɱé ƒîéļđš ñééđ åţţéñţîöñ." + "···········]";
+  }
+}
+
+/** An earlier request for this is still running. Try again in a moment. */
+export function errorBusy(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "An earlier request for this is still running. Try again in a moment.";
+    case "zh-CN":
+      return "之前的请求仍在处理中。请稍后再试。";
+    case "en-XA":
+      return (
+        "[" +
+        "Åñ éåŕļîéŕ ŕéǫûéšţ ƒöŕ ţĥîš îš šţîļļ ŕûññîñĝ. Ţŕý åĝåîñ îñ å ɱöɱéñţ." +
+        "····························]"
+      );
+  }
+}
+
+/** Too many attempts. Wait a moment and try again. */
+export function errorRateLimited(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Too many attempts. Wait a moment and try again.";
+    case "zh-CN":
+      return "尝试次数过多。请稍候再试。";
+    case "en-XA":
+      return "[" + "Ţöö ɱåñý åţţéɱþţš. Ŵåîţ å ɱöɱéñţ åñđ ţŕý åĝåîñ." + "···················]";
+  }
+}
+
+/** Accept the current terms to continue. */
+export function errorConsent(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Accept the current terms to continue.";
+    case "zh-CN":
+      return "请先接受最新条款再继续。";
+    case "en-XA":
+      return "[" + "Åççéþţ ţĥé çûŕŕéñţ ţéŕɱš ţö çöñţîñûé." + "···············]";
+  }
+}
+
+/** This service is temporarily unavailable. Try again shortly. */
+export function errorUnavailable(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "This service is temporarily unavailable. Try again shortly.";
+    case "zh-CN":
+      return "此服务暂时不可用。请稍后再试。";
+    case "en-XA":
+      return (
+        "[" +
+        "Ţĥîš šéŕṽîçé îš ţéɱþöŕåŕîļý ûñåṽåîļåƀļé. Ţŕý åĝåîñ šĥöŕţļý." +
+        "························]"
+      );
+  }
+}

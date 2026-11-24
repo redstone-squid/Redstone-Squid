@@ -718,5 +718,15 @@
   "story-fastest-flush-door": "e34f2309bac98e447e41d4b0ec950d5a287dc285b25be9f2d19f09a22328ca79",
   "story-full-flush-seamless": "1a76eb78eb742d06b81dd164639e97396c5f9161c1fa3f053a1eea6b51f97281",
   "story-smallest-iris": "153671483f80fcb93185f37cb1c4fa37c71d6fe1249b120df24c2cb0d036d2fa",
-  "story-observerless-iris": "b841b593bb924c9f0f09a93f46b206c3bc0fa840d925e0d6626b76aa2ff34b01"
+  "story-observerless-iris": "b841b593bb924c9f0f09a93f46b206c3bc0fa840d925e0d6626b76aa2ff34b01",
+  "error-generic": "4722675efc33e2d9b5618518601b9ef5e338a9ab1d8f389cc9ad741ac9e0f4e0",
+  "error-offline": "4381e616b690d45c31ceb354c8d55067cb53a9dfcbf331cdda1a45498ded6a8d",
+  "error-signed-out": "446b2c63364721baa760a2d05b8fc255b8f83d97e6c4b6ad991946ea10ed30ee",
+  "error-gone": "45db41baab80dc5409c8cc0073cf951ad80c93155fc74f100362638bb37e764d",
+  "error-conflict": "b9d1a9fd37e8a256a37d3a6e8b7eec690681ee7236e5869514e66e498e3ea1f6",
+  "error-invalid": "7a6594e4f6ad5f69c3f26de187a274dac95d815289765ed2d43990f15aeca67c",
+  "error-busy": "6527de8feb14ca1aadd77dd4288502b97c6cde4fdd199a179913ffabe68c20dd",
+  "error-rate-limited": "56c22c01e041cb9979d8e0e4eef452487aa1511a8dfd8b98858d37d638bb7a93",
+  "error-consent": "b5b70e96879f47bf21b0acafddcc5917ac17e4b90c3d05fa12d65dc68d42e69d",
+  "error-unavailable": "182a061ae183042bab36735ab3364fdaf404a0d9f36c1d8b844dd47e4d944a58"
 }
