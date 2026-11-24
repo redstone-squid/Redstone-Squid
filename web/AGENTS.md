@@ -102,7 +102,8 @@ bundles, plus images from any HTTPS host. Inline `style` attributes are allowed.
 attributes are not, and Svelte renders `onload` and `onerror` on an element as one, so use an
 attachment instead. The policy is skipped under `bun run dev`. Browser tests fail on any
 violation, because each one logs a console error; in production, browsers report violations to
-`/telemetry/csp`, which logs them.
+`/telemetry/csp`, which logs them. The speculation rules that prefetch pages on hover live in
+`src/layouts/speculation-rules.ts`, which the config hashes into the policy.
 
 ## Without JavaScript
 

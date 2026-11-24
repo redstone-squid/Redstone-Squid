@@ -1,3 +1,5 @@
+import { z } from "zod";
+import * as m from "@/locales/messages.gen";
 import { expect, test } from "@tests/support/test";
 
 for (const [route, status] of [
@@ -65,4 +67,24 @@ test("security.txt names a contact and expires within a year", async ({ request 
   const expires = Date.parse(/^Expires: (.+)$/m.exec(text)?.[1] ?? "");
   expect(expires).toBeGreaterThan(Date.now());
   expect(expires).toBeLessThan(Date.now() + 365 * 24 * 60 * 60 * 1000);
+});
+
+test("hovering a link prefetches its page", async ({ page, browserName }) => {
+  test.skip(browserName !== "chromium", "Only Chromium supports speculation rules.");
+  await page.goto("/about");
+  const link = page
+    .getByRole("navigation", { name: m.navPrimary("en") })
+    .getByRole("link", { name: m.navRecords("en") });
+  await link.hover();
+  // Moderate eagerness fetches after about 200 ms of hovering, and the page cannot observe it.
+  // eslint-disable-next-line playwright/no-wait-for-timeout
+  await page.waitForTimeout(1000);
+  await link.click();
+  await expect(page).toHaveURL("/records");
+  // TypeScript's DOM types do not have deliveryType yet, so read it from the entry's JSON.
+  const entry: unknown = await page.evaluate((): unknown =>
+    performance.getEntriesByType("navigation")[0]?.toJSON(),
+  );
+  const delivery = z.object({ deliveryType: z.string() }).parse(entry).deliveryType;
+  expect(delivery).toBe("navigational-prefetch");
 });

@@ -211,7 +211,11 @@ export default tseslint.config(
     rules: {
       "astro/no-exports-from-components": "error",
       "astro/no-set-html-directive": "error",
-      "astro/no-unsafe-inline-scripts": "error",
+      "astro/no-unsafe-inline-scripts": [
+        "error",
+        // Speculation rules are JSON the browser reads, not script it runs.
+        { allowNonExecutingTypes: ["application/ld+json", "speculationrules"] },
+      ],
     },
   },
   {

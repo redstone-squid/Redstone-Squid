@@ -3,6 +3,8 @@ import svelte from "@astrojs/svelte";
 import tailwindcss from "@tailwindcss/vite";
 import { AstroPWAIntegration } from "@vite-pwa/astro";
 import { defineConfig } from "astro/config";
+import { createHash } from "node:crypto";
+import { SPECULATION_RULES } from "./src/layouts/speculation-rules";
 import { PUBLIC_LOCALES, localizePath } from "./src/locales/locale";
 import { THEME_COLORS } from "./src/ui/themes";
 
@@ -65,6 +67,10 @@ export default defineConfig({
         // The endpoint is named in the Reporting-Endpoints header set by src/middleware.ts.
         "report-to csp",
       ],
+      scriptDirective: {
+        // Chrome ignores 'inline-speculation-rules' once a policy lists hashes, as Astro's does.
+        hashes: [`sha256-${createHash("sha256").update(SPECULATION_RULES).digest("base64")}`],
+      },
       styleDirective: {
         resources: [
           "'self'",
