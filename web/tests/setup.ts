@@ -11,3 +11,25 @@ beforeEach(() => {
 
 // jsdom does not implement layout, so scrolling an option into view is a no-op.
 Element.prototype.scrollIntoView = () => undefined;
+
+// jsdom has no layout or media queries. LayerChart observes its size and reads
+// prefers-reduced-motion when it loads.
+window.ResizeObserver = class {
+  observe = () => undefined;
+  unobserve = () => undefined;
+  disconnect = () => undefined;
+};
+window.matchMedia = (query: string) =>
+  ({
+    matches: false,
+    media: query,
+    onchange: null,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+    dispatchEvent: () => false,
+    // The type still requires the legacy listener methods.
+    // eslint-disable-next-line @typescript-eslint/no-deprecated
+    addListener: () => undefined,
+    // eslint-disable-next-line @typescript-eslint/no-deprecated
+    removeListener: () => undefined,
+  }) satisfies MediaQueryList;

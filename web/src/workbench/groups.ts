@@ -17,6 +17,10 @@ export const GROUPS = {
   },
   forms: { title: "Forms", description: "Fields, choices, suggestions, and file selection." },
   table: { title: "Table", description: "Server-sorted data tables with grouped rows." },
+  chart: {
+    title: "Chart",
+    description: "Series, ranges, and distributions, each with a data table.",
+  },
   overlays: {
     title: "Overlays",
     description: "Dialogs, sheets, menus, popovers, and tooltips.",
