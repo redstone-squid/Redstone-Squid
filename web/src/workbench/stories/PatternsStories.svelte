@@ -9,6 +9,7 @@
   import Notice from "@/ui/feedback/Notice.svelte";
   import Layout from "@/ui/layout/Layout.svelte";
   import PageHeader from "@/ui/patterns/PageHeader.svelte";
+  import NavBar from "@/ui/patterns/NavBar.svelte";
   import Section from "@/ui/patterns/Section.svelte";
   import SplitLayout from "@/ui/patterns/SplitLayout.svelte";
   import Variant from "./Variant.svelte";
@@ -43,6 +44,34 @@
   <Section title={m.storySurfaceSection()} surface level={3}>
     <p class="text-sm">{m.storyDrawnAsAPanel()}</p>
   </Section>
+</Story>
+
+{#snippet brand()}
+  <a href="#navbar" class="inline-flex items-center gap-3 rounded-sm font-bold no-underline">
+    <img class="size-8" src="/favicon.svg" width="32" height="32" alt="" />Redstone Squid
+  </a>
+{/snippet}
+{#snippet navActions()}<Button size="sm" variant="primary">Submit</Button>{/snippet}
+
+<Story
+  name="NavBar"
+  source="patterns/NavBar"
+  description="The site header body. The links collapse into a popover when the bar is narrow."
+>
+  {@const links = [
+    { label: "Builds", href: "#navbar-builds", current: true },
+    { label: "Records", href: "#navbar-records" },
+    { label: "Search", href: "#navbar-search" },
+    { label: "About", href: "#navbar-about" },
+  ]}
+  <Variant label="as wide as the page">
+    <NavBar label="Story navigation" menuLabel="Menu" {brand} {links} actions={navActions} />
+  </Variant>
+  <Variant label="narrow frame, links collapsed">
+    <div class="max-w-dialog-sm">
+      <NavBar label="Narrow story navigation" menuLabel="Menu" {brand} {links} />
+    </div>
+  </Variant>
 </Story>
 
 {#snippet sideNav()}
