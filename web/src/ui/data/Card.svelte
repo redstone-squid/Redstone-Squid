@@ -48,7 +48,7 @@
 <svelte:element
   this={as}
   class={cn(
-    "@container relative isolate flex min-w-0 flex-col overflow-hidden rounded-md border shadow-card",
+    "@container relative isolate flex min-w-0 flex-col overflow-hidden rounded-md border shadow-card print:break-inside-avoid",
     href !== undefined &&
       "transition-[border-color] duration-150 hover:border-line-strong has-[[data-card-link]:focus-visible]:outline-3 has-[[data-card-link]:focus-visible]:outline-offset-3 has-[[data-card-link]:focus-visible]:outline-focus",
     tones[tone],

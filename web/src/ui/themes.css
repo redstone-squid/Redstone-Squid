@@ -71,6 +71,14 @@
   color-scheme: dark;
 }
 
+/* Paper is light whatever the screen shows. */
+@media print {
+  :root,
+  :root[data-theme] {
+    color-scheme: light;
+  }
+}
+
 /* Keep these two blocks identical; tests/unit/themes.test.ts checks them. */
 :root[data-contrast="more"] {
   --fg: var(--fg-more);

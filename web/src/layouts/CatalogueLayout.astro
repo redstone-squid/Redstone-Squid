@@ -43,7 +43,7 @@ const nav = [
         </a>
         <nav
           aria-label={m.navPrimary()}
-          class="flex items-center gap-6 max-lg:order-3 max-lg:w-full max-sm:justify-between max-sm:gap-2 max-sm:text-sm"
+          class="flex items-center gap-6 max-lg:order-3 max-lg:w-full max-sm:justify-between max-sm:gap-2 max-sm:text-sm print:hidden"
         >
           {nav.map(([label, href]) => (
             <a
@@ -57,7 +57,7 @@ const nav = [
             </a>
           ))}
         </nav>
-        <div class="ms-auto flex items-center gap-2 max-sm:ms-0 max-sm:w-full max-sm:justify-between">
+        <div class="ms-auto flex items-center gap-2 max-sm:ms-0 max-sm:w-full max-sm:justify-between print:hidden">
           <LanguageSelector align="start" />
           <Button variant="primary" href={localizePath("/submit")} iconEnd={ArrowUpRight}>
             {m.navSubmit()}
@@ -68,7 +68,7 @@ const nav = [
     <Container as="main" id="main-content" class="grid content-start gap-8 py-12">
       <slot />
     </Container>
-    <footer class="border-t border-line">
+    <footer class="border-t border-line print:hidden">
       <Container class="flex justify-between gap-8 py-12 max-sm:flex-col">
         <div>
           <a

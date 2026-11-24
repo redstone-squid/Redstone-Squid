@@ -240,4 +240,15 @@
     }
   }
   /* stylelint-enable declaration-no-important */
+  @media print {
+    /* Print links leave the page, so show where external ones go. */
+    main a[href^="http"]:not(:has(img))::after {
+      content: " (" attr(href) ")";
+      font-size: var(--text-xs);
+      word-break: break-all;
+    }
+    * {
+      box-shadow: none;
+    }
+  }
 }

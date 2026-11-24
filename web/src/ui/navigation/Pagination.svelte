@@ -33,7 +33,7 @@
 </script>
 
 {#if visible}
-  <nav aria-label={labels.nav} class={cn("@container grid min-w-0 gap-3", className)}>
+  <nav aria-label={labels.nav} class={cn("@container grid min-w-0 gap-3 print:hidden", className)}>
     <div class="flex flex-wrap items-center justify-between gap-3">
       <Button
         size="sm"
