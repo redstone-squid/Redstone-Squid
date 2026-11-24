@@ -48,7 +48,7 @@
       <CircleAlert class="size-4.5 shrink-0 text-danger" aria-hidden="true" />{title}
     </p>
     <ul class="grid list-disc gap-1 ps-6.5 marker:text-danger">
-      {#each errors as error (error.fieldId)}
+      {#each errors as error, index (index)}
         <li>
           <a
             href={`#${error.fieldId}`}

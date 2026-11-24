@@ -198,11 +198,15 @@ describe("ErrorSummary", () => {
     document.body.append(field);
     try {
       render(ErrorSummary, {
-        title: "Fix 1 problem",
-        errors: [{ fieldId: "title", message: "Enter a title." }],
+        title: "Fix 2 problems",
+        errors: [
+          { fieldId: "title", message: "Enter a title." },
+          { fieldId: "title", message: "Use a descriptive title." },
+        ],
       });
-      const summary = screen.getByRole("alert", { name: "Fix 1 problem" });
+      const summary = screen.getByRole("alert", { name: "Fix 2 problems" });
       expect(summary).toHaveFocus();
+      expect(within(summary).getAllByRole("link")).toHaveLength(2);
       await user.click(within(summary).getByRole("link", { name: "Enter a title." }));
       expect(field).toHaveFocus();
     } finally {
