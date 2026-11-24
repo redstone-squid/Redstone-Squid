@@ -1,18 +1,12 @@
 <script lang="ts">
   import ArrowRight from "@lucide/svelte/icons/arrow-right";
   import Plus from "@lucide/svelte/icons/plus";
-  import { onMount } from "svelte";
   import * as m from "@/locales/messages.gen";
   import Button from "@/ui/actions/Button.svelte";
   import TextField from "@/ui/forms/TextField.svelte";
   import Layout from "@/ui/layout/Layout.svelte";
   import Dialog from "@/ui/overlays/Dialog.svelte";
 
-  // The trigger stays disabled until hydration so a click never lands on a dead button.
-  let ready = $state(false);
-  onMount(() => {
-    ready = true;
-  });
   let title = $state("");
   let submitted = $state(false);
   let saved = $state(false);
@@ -24,9 +18,8 @@
     title={m.workbenchCreateADraft()}
     description={m.workbenchDraftDescription()}
     closeLabel={m.workbenchCloseDialog()}
-    triggerProps={{ disabled: !ready }}
+    trigger={{ label: m.workbenchNewDraft(), variant: "primary", icon: Plus }}
   >
-    {#snippet trigger()}<Plus class="size-4" aria-hidden="true" />{m.workbenchNewDraft()}{/snippet}
     <form
       novalidate
       onsubmit={(event) => {

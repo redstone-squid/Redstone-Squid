@@ -16,7 +16,10 @@ export const GROUPS = {
     description: "Breadcrumbs, tabs, segmented controls, navigation lists, and pagination.",
   },
   forms: { title: "Forms", description: "Fields, choices, suggestions, and file selection." },
-  overlays: { title: "Overlays", description: "Dialogs that interrupt the page." },
+  overlays: {
+    title: "Overlays",
+    description: "Dialogs, sheets, menus, popovers, and tooltips.",
+  },
   patterns: { title: "Patterns", description: "Page headers, sections, and catalogue cards." },
 } as const;
 export type Group = keyof typeof GROUPS;

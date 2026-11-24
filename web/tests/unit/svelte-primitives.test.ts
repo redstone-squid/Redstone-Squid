@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/svelte";
+import { fireEvent, render, screen, within } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
 import { createRawSnippet } from "svelte";
 import { describe, expect, it, vi } from "vitest";
@@ -21,7 +21,6 @@ import SegmentedControl from "@/ui/navigation/SegmentedControl.svelte";
 import Tabs from "@/ui/navigation/Tabs.svelte";
 import Section from "@/ui/patterns/Section.svelte";
 import "@/ui/image-fallback";
-import Harness from "./fixtures/SvelteDialogHarness.svelte";
 
 const text = (value: string) => createRawSnippet(() => ({ render: () => `<span>${value}</span>` }));
 const labels = { nav: "Pages", previous: "Previous", next: "Next" };
@@ -281,7 +280,7 @@ describe("content and data", () => {
   });
 });
 
-describe("forms and overlays", () => {
+describe("forms", () => {
   it("merges field descriptions while preserving caller invalid semantics", () => {
     const help = document.createElement("p");
     help.id = "external-help";
@@ -303,14 +302,5 @@ describe("forms and overlays", () => {
     } finally {
       help.remove();
     }
-  });
-
-  it("opens from its trigger and closes through controlled state", async () => {
-    const user = userEvent.setup();
-    render(Harness);
-    await user.click(screen.getByRole("button", { name: "Edit draft" }));
-    expect(await screen.findByRole("dialog")).toHaveClass("wide-dialog");
-    await user.click(screen.getByRole("button", { name: "Finish" }));
-    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 });

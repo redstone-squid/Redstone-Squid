@@ -76,6 +76,10 @@ for (const locale of ["en", "zh-CN"] as const) {
     const close = dialog.getByRole("button", { name: m.workbenchCloseDialog(locale) });
     const save = dialog.getByRole("button", { name: m.workbenchSaveDraft(locale) });
     await expect(dialog).toBeVisible();
+    await expect(
+      dialog.getByRole("textbox", { name: m.workbenchBuildTitle(locale) }),
+    ).toBeFocused();
+    await page.keyboard.press("Shift+Tab");
     await expect(close).toBeFocused();
     await page.keyboard.press("Shift+Tab");
     await expect(save).toBeFocused();

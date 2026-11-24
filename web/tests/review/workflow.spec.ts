@@ -14,7 +14,6 @@ test.describe("workflow recording", () => {
     const save = dialog.getByRole("button", { name: m.workbenchSaveDraft("en") });
     const title = dialog.getByRole("textbox", { name: m.workbenchBuildTitle("en") });
     await expect(dialog).toBeVisible();
-    await page.keyboard.press("Tab");
     await expect(title).toBeFocused();
     await page.keyboard.press("Enter");
     await expect(title).toHaveAttribute("aria-invalid", "true");

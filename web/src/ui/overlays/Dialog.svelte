@@ -1,71 +1,30 @@
 <script lang="ts">
-  import { Dialog as Primitive } from "bits-ui";
-  import X from "@lucide/svelte/icons/x";
-  import type { ComponentProps, Snippet } from "svelte";
   import { cn } from "@/ui/cn";
-  import Button from "@/ui/actions/Button.svelte";
-  type Props = Omit<ComponentProps<typeof Primitive.Root>, "children"> & {
-    title: string;
-    description: string;
-    closeLabel: string;
-    trigger: Snippet;
-    children: Snippet;
-    triggerProps?: Omit<ComponentProps<typeof Primitive.Trigger>, "children" | "child"> & {
-      variant?: "primary" | "secondary" | "quiet" | "danger";
-      size?: "md" | "sm";
-    };
-    contentProps?: Omit<ComponentProps<typeof Primitive.Content>, "children" | "child">;
-  };
-  let {
-    title,
-    description,
-    closeLabel,
-    trigger,
-    children,
-    open = $bindable(false),
-    contentProps,
-    triggerProps,
-    ...rootProps
-  }: Props = $props();
-  const {
-    variant = "primary",
-    size,
-    class: triggerClass,
-    ...nativeTriggerProps
-  } = $derived(triggerProps ?? {});
+  import ModalFrame from "./ModalFrame.svelte";
+  import type { ModalProps } from "./props";
+
+  /**
+   * A modal task, such as a confirmation or a short form. Focus moves to the first field (or
+   * `initialFocus`), stays inside until the dialog closes, then returns to the trigger or to
+   * `returnFocus`.
+   *
+   * With `trigger`, the dialog renders its own button; without it, open it through `open`.
+   * Give a trigger `fallbackHref` so the page works before and without hydration. `full-mobile`
+   * turns the dialog into a sheet rising from the bottom on narrow screens.
+   */
+  type Props = ModalProps & { size?: "sm" | "md" | "lg" | "full-mobile" };
+  let { open = $bindable(false), size = "md", ...rest }: Props = $props();
 </script>
 
-<Primitive.Root bind:open {...rootProps}>
-  <Primitive.Trigger {...nativeTriggerProps}>
-    {#snippet child({ props })}<Button {...props} {variant} {size} class={triggerClass}
-        >{@render trigger()}</Button
-      >{/snippet}
-  </Primitive.Trigger>
-  <Primitive.Portal>
-    <Primitive.Overlay class="fixed inset-0 z-overlay bg-overlay" />
-    <Primitive.Content
-      {...contentProps}
-      class={cn(
-        "fixed top-1/2 left-1/2 z-modal grid max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-dialog-md -translate-1/2 gap-6 overflow-auto rounded-lg border border-line bg-surface-raised p-6 text-fg shadow-overlay",
-        contentProps?.class,
-      )}
-    >
-      <div class="flex flex-wrap items-center justify-between gap-4">
-        <Primitive.Title>
-          {#snippet child({ props })}<h2 {...props}>{title}</h2>{/snippet}
-        </Primitive.Title>
-        <Primitive.Close>
-          {#snippet child({ props })}<Button
-              {...props}
-              variant="quiet"
-              iconOnly
-              icon={X}
-              label={closeLabel}
-            />{/snippet}
-        </Primitive.Close>
-      </div>
-      <Primitive.Description class="text-fg-muted">{description}</Primitive.Description>
-      {@render children()}
-    </Primitive.Content>
-  </Primitive.Portal>
-</Primitive.Root>
+<ModalFrame
+  bind:open
+  {...rest}
+  panelClass={cn(
+    "inset-0 m-auto h-fit max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] rounded-lg motion-safe:starting:translate-y-2",
+    size === "sm" && "max-w-dialog-sm",
+    (size === "md" || size === "full-mobile") && "max-w-dialog-md",
+    size === "lg" && "max-w-dialog-lg",
+    size === "full-mobile" &&
+      "max-sm:mb-0 max-sm:max-h-[calc(100dvh-1rem)] max-sm:w-full max-sm:max-w-none max-sm:rounded-b-none max-sm:motion-safe:starting:translate-y-full",
+  )}
+/>
