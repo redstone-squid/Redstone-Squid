@@ -28,8 +28,12 @@ stories per folder; `/zh-cn/design-system` shows them in Simplified Chinese.
 | Events and changes                                        | `data/Timeline`, `data/Diff`                                                  |
 | Hidden detail                                             | `data/Disclosure`                                                             |
 | Moving between pages and views                            | `navigation/Breadcrumbs`, `Tabs`, `SegmentedControl`, `NavList`, `Pagination` |
-| User input                                                | `forms/Field`, `SelectField`, `TextareaField`, `CheckField`, `FieldGroup`     |
-| Suggestions, files, modal forms                           | `forms/Autocomplete`, `forms/FilePicker`, `overlays/Dialog`                   |
+| Text, numbers, choices from a short list                  | `forms/TextField`, `TextareaField`, `SelectField`, `ChoiceGroup`              |
+| Booleans                                                  | `forms/CheckField` saved with the form, `Switch` applied at once              |
+| Related fields, ranges, units, one-time codes             | `forms/FieldGroup`, `RangeField`, `UnitField`, `CodeEntry`                    |
+| Suggestions or picking from a long set                    | `forms/Autocomplete` for free text, `Combobox` for values from a set          |
+| Repeatable rows and files                                 | `forms/ListField`, `FileDrop`                                                 |
+| Ending a form and reporting its state                     | `forms/FormActions`, `ErrorSummary` after a failed submit, `SaveStatus`       |
 
 Shared components take their text through props, from `@/locales/messages.gen`. Keep API
 calls, validation rules, and translations in the feature. When several features need the
