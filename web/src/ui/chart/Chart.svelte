@@ -69,6 +69,8 @@
   {/if}
   {#if status === "ready"}
     <!-- eslint-disable svelte/no-inline-styles -- reserve the same height passed to the plot -->
+    <!-- Inline-size containment keeps the drawn plot from holding its track at an older, wider
+         measurement, so the plot follows the width it is given. -->
     <div
       style:--plot-height={`${heights[height]}px`}
       bind:clientWidth={measured}
@@ -77,7 +79,7 @@
       aria-labelledby={`${id}-title`}
       aria-describedby={`${id}-description`}
       class={cn(
-        "relative min-w-0",
+        "relative min-w-0 contain-inline-size",
         // LayerChart sizes its layers in pixels. Until the plot has a measured width, as on the
         // server, they flow instead so the SVG scales to the frame through its viewBox.
         !hasSize &&
