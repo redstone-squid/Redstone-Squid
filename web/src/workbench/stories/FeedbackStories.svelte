@@ -1,6 +1,8 @@
 <script lang="ts">
   import Tag from "@lucide/svelte/icons/tag";
   import Button from "@/ui/actions/Button.svelte";
+  import Announcer from "@/ui/feedback/Announcer.svelte";
+  import { announce } from "@/ui/feedback/announcer.svelte";
   import Badge from "@/ui/feedback/Badge.svelte";
   import Chip from "@/ui/feedback/Chip.svelte";
   import EmptyState from "@/ui/feedback/EmptyState.svelte";
@@ -15,6 +17,7 @@
   const tones = ["neutral", "info", "success", "warning", "danger", "accent"] as const;
   let flush = $state(true);
   let chips = $state(["width ≥ 5", "flush"]);
+  let results = $state(312);
 </script>
 
 <Story
@@ -123,4 +126,21 @@
     retryHref="#errorstate"
     reference={{ label: "Reference", value: "ERR-7F3A" }}
   />
+</Story>
+
+<Story
+  name="Announcer"
+  source="feedback/Announcer"
+  description="The page's one polite live region, for island messages with no visible home. It is visually hidden; this demo echoes what it reads."
+>
+  <div class="flex flex-wrap items-center gap-3">
+    <Button
+      onclick={() => {
+        results = results === 312 ? 48 : 312;
+        announce(`${results} builds`);
+      }}>Refetch results</Button
+    >
+    <p class="text-sm text-fg-muted" aria-hidden="true">Reads “{results} builds”</p>
+  </div>
+  <Announcer />
 </Story>
