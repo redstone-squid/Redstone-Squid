@@ -10,6 +10,8 @@
   import Layout from "@/ui/layout/Layout.svelte";
   import PageHeader from "@/ui/patterns/PageHeader.svelte";
   import Section from "@/ui/patterns/Section.svelte";
+  import SplitLayout from "@/ui/patterns/SplitLayout.svelte";
+  import Variant from "./Variant.svelte";
   import { buildFixtures, recordFixtures } from "@/workbench/fixtures";
   import Story from "./Story.svelte";
 
@@ -41,6 +43,51 @@
   <Section title={m.storySurfaceSection()} surface level={3}>
     <p class="text-sm">{m.storyDrawnAsAPanel()}</p>
   </Section>
+</Story>
+
+{#snippet sideNav()}
+  <ul class="grid gap-2 text-sm">
+    <li><a href="#splitlayout">General</a></li>
+    <li><a href="#splitlayout">Media</a></li>
+    <li><a href="#splitlayout">Credits</a></li>
+  </ul>
+{/snippet}
+
+<Story
+  name="SplitLayout"
+  source="patterns/SplitLayout"
+  description="A sidebar beside the content, sized by its own width. Narrow it to see the collapse."
+>
+  <Variant label="stack, sidebar at the start">
+    <SplitLayout sidebarLabel="Sections" sidebar={sideNav}>
+      <p class="text-sm">Main content flows beside the sidebar when there is room.</p>
+    </SplitLayout>
+  </Variant>
+  <Variant label="sheet, sidebar at the end, sticky">
+    <SplitLayout
+      sidebarLabel="Filters"
+      triggerLabel="Filters · 2"
+      closeLabel="Close filters"
+      collapse="sheet"
+      side="end"
+      sticky
+      sidebar={sideNav}
+    >
+      <p class="text-sm">On a narrow layout the sidebar opens as a sheet from the end edge.</p>
+    </SplitLayout>
+  </Variant>
+  <Variant label="sheet in a narrow frame">
+    <div class="max-w-dialog-sm">
+      <SplitLayout
+        sidebarLabel="Account"
+        closeLabel="Close account navigation"
+        collapse="sheet"
+        sidebar={sideNav}
+      >
+        <p class="text-sm">This frame is always narrow, so the sidebar stays behind a button.</p>
+      </SplitLayout>
+    </div>
+  </Variant>
 </Story>
 
 <Story

@@ -90,6 +90,8 @@
   --container-tile: 12rem;
   --container-card: 18rem;
   --container-card-wide: 22rem;
+  /* A SplitLayout sidebar, such as filters or section navigation. */
+  --container-sidebar: 17rem;
   /* Widths for fields whose values are short, such as numbers and codes. */
   --container-field-xs: 8ch;
   --container-field-sm: 16ch;
@@ -149,6 +151,28 @@
   }
 }
 /* stylelint-enable declaration-no-important */
+
+/*
+ * Shows a closed popover in the page flow, undoing the browser's popover styles. Under a
+ * container query it turns a collapsed menu or sheet back into inline content where it fits,
+ * so one copy of the content serves both layouts without JavaScript. Pair it with a display.
+ */
+@utility popover-inline {
+  position: static;
+  inset: auto;
+  inline-size: auto;
+  max-inline-size: none;
+  block-size: auto;
+  max-block-size: none;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  color: inherit;
+}
 
 /*
  * A popover hanging below its invoker, flipping when it would overflow the viewport.
