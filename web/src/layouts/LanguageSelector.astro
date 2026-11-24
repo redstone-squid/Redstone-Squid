@@ -1,53 +1,25 @@
 ---
-import Check from "@lucide/svelte/icons/check";
-import ChevronDown from "@lucide/svelte/icons/chevron-down";
-import Icon from "@/ui/content/Icon.svelte";
-import { cn } from "@/ui/cn";
+import Menu from "@/ui/overlays/Menu.svelte";
 import { LOCALES, PUBLIC_LOCALES, localizePath } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
 type Props = { align?: "start" | "end" };
 const { align = "end" } = Astro.props;
 const { locale, requestedPath: path } = Astro.locals;
-// Each page renders one selector.
-const menuId = "language-menu";
 ---
 
-<div class="group text-sm text-fg">
-  <button
-    type="button"
-    popovertarget={menuId}
-    class="flex min-h-control cursor-pointer items-center gap-2 rounded-sm border border-line-strong bg-surface px-3 py-2"
-    aria-label={`${LOCALES[locale].label} · ${m.navLanguage()}`}
-  >
-    <span lang={locale}>{LOCALES[locale].label}</span>
-    <Icon icon={ChevronDown} class="transition-transform group-has-[:popover-open]:rotate-180" />
-  </button>
-  {/* The popover follows its button directly, so browsers add no implicit aria-details. */}
-  <ul
-    id={menuId}
-    popover="auto"
-    class={cn(
-      "max-h-[60vh] max-w-[calc(100vw-2rem)] min-w-44 overflow-auto rounded-sm border border-line bg-surface-raised p-1 text-sm text-fg shadow-overlay",
-      align === "start" ? "dropdown-start" : "dropdown-end",
-    )}
-    aria-label={m.navLanguage()}
-    data-align={align}
-  >
-    {PUBLIC_LOCALES.map((language) => (
-      <li>
-        <a
-          class="flex justify-between gap-4 rounded-xs px-3 py-2.5 no-underline hover:bg-surface-muted aria-[current=true]:bg-surface-muted"
-          href={localizePath(path, language)}
-          lang={language}
-          hreflang={language}
-          aria-current={language === locale ? "true" : undefined}
-        >
-          {LOCALES[language].label}
-          {language === locale && <Icon icon={Check} />}
-        </a>
-      </li>
-    ))}
-  </ul>
-</div>
-
-<script src="./language-menu-position.ts"></script>
+<Menu
+  nojs
+  {align}
+  label={m.navLanguage()}
+  trigger={{
+    label: LOCALES[locale].label,
+    name: `${LOCALES[locale].label} · ${m.navLanguage()}`,
+    lang: locale,
+  }}
+  items={PUBLIC_LOCALES.map((language) => ({
+    label: LOCALES[language].label,
+    href: localizePath(path, language),
+    lang: language,
+    current: language === locale,
+  }))}
+/>

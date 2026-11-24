@@ -1,6 +1,7 @@
-// Without anchor positioning the popover opens centered in the viewport, detached from its
-// button. Place it below the button instead, flipping above and clamping to the viewport as
-// the dropdown utilities do.
+// Places Menu's `nojs` popovers in browsers without anchor positioning, where a popover opens
+// centered in the viewport, detached from its button. It goes below the button instead,
+// flipping above and clamping to the viewport as the dropdown utilities do. DocumentHead loads
+// it on every page.
 const gap = 6;
 function place(menu: HTMLElement): void {
   const button = menu.previousElementSibling?.getBoundingClientRect();
@@ -13,9 +14,19 @@ function place(menu: HTMLElement): void {
   menu.style.inset = `${Math.max(0, top)}px auto auto ${Math.min(Math.max(0, left), innerWidth - width)}px`;
 }
 if (!CSS.supports("position-area", "block-end")) {
-  for (const menu of document.querySelectorAll<HTMLElement>("[popover][data-align]")) {
-    menu.addEventListener("toggle", (event) => {
-      if (event.newState === "open") place(menu);
-    });
-  }
+  // `toggle` does not bubble, so listen in the capture phase; this also reaches menus that
+  // islands render after the script runs.
+  document.addEventListener(
+    "toggle",
+    (event) => {
+      const menu = event.target;
+      if (
+        menu instanceof HTMLElement &&
+        menu.matches("[popover][data-align]") &&
+        event.newState === "open"
+      )
+        place(menu);
+    },
+    true,
+  );
 }

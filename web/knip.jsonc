@@ -5,7 +5,7 @@
     "src/sw.ts",
     "src/layouts/register-service-worker.ts",
     "src/layouts/browser-telemetry.ts",
-    "src/layouts/language-menu-position.ts",
+    "src/ui/overlays/dropdown-position.ts",
     "src/layouts/appearance-switch.ts",
   ],
   "ignore": ["src/generated/**", "**/*.gen.ts"],
