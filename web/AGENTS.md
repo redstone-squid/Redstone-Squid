@@ -77,7 +77,8 @@ and `prev` anchors into links with `pageHref`, and pass those to the feature, wh
 
 1. Add `src/pages/<route>.astro`. Load data there and wrap the content in `CatalogueLayout`.
 2. Put the components under `src/features/<area>/`. Compose them from `src/ui` first;
-   see `src/ui/README.md`.
+   see `src/ui/README.md`. A new `src/ui` component needs two real users and a story;
+   anything that knows about builds, records, or the API stays in `features/`.
 3. Add its text to the catalogs; see [Text](#text).
 4. Cover the route's public behavior in Playwright. Exercise both locales when localization
    affects the URL, rendered content, or workflow. Use Vitest for independent logic and
@@ -233,13 +234,15 @@ from `web/` before committing web work.
 
 `bun run lint` runs ESLint, stylelint, and knip. Beyond the TypeScript and Svelte presets:
 
-- `squid/import-boundaries` enforces the layer table and `squid/no-raw-text` keeps text in
-  the catalogs (both in `scripts/lint/`).
+- `scripts/lint/` holds the custom rules: `squid/import-boundaries` enforces the layer table,
+  `squid/no-raw-text` keeps text in the catalogs, and `squid/no-raw-elements` makes features
+  and layouts use `src/ui` controls. `arbitrary-values.ts` limits arbitrary Tailwind values to
+  `src/ui`. Disable a rule on one line only with a reason after `--`.
 - `strict-boolean-expressions` requires explicit checks such as `items.length > 0` or
   `value !== ""`, so `0` and `""` are never mistaken for missing values.
 - `eslint.config.js` enables chosen unicorn and SonarJS rules rather than their presets,
   plus `eslint-plugin-regexp`. Add a rule there when it catches something real.
-- stylelint requires colors to come from tokens in `src/ui/tokens.css`.
+- stylelint requires colors, z-indexes, and durations to come from tokens in `src/ui`.
 - knip fails on unused files, exports, and dependencies. Delete dead code instead of
   exporting it for later.
 

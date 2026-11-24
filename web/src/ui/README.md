@@ -8,7 +8,7 @@ stories per folder; `/zh-cn/design-system` shows them in Simplified Chinese.
 
 | Need                                                      | Use                                                                              |
 | --------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Page width and gutter                                     | `layout/Container`                                                               |
+| Page width and gutter, a skip link                        | `layout/Container`, `content/SkipLink`                                           |
 | Vertical rhythm, wrapping rows, title and actions, grids  | `layout/Layout` with `stack`, `cluster`, `split`, `grid` (`min`), `center`       |
 | Page title, breadcrumbs, meta, actions                    | `patterns/PageHeader` (the page's only `h1`)                                     |
 | A titled part of a page                                   | `patterns/Section`, with `surface` for a panel                                   |
@@ -21,6 +21,7 @@ stories per folder; `/zh-cn/design-system` shows them in Simplified Chinese.
 | Draft files, secrets shown once, multi-step flows         | `patterns/MediaUploader`, `OneTimeSecret`, `StepFlow`                            |
 | The outcome after a POST redirect                         | `patterns/FlashNotice` in the `PageHeader` notice slot                           |
 | Headings, body text, links, code                          | `content/Heading`, `Text`, `Link`, `Code`, `Prose` for rendered Markdown         |
+| Text only screen readers need                             | `content/VisuallyHidden`                                                         |
 | Dates                                                     | `content/Timestamp`; format the label in a message                               |
 | Two or three facts of one kind, such as count and version | `content/MetaList`; facts with other roles go elsewhere                          |
 | Icons                                                     | `content/Icon` wrapping a lucide icon; decorative unless labelled                |
@@ -40,11 +41,12 @@ stories per folder; `/zh-cn/design-system` shows them in Simplified Chinese.
 | Values over time or categories                            | `chart/SeriesChart` (line, step, bar, stacked bar)                               |
 | Values over runs of widths                                | `chart/RangeChart`                                                               |
 | Ranked shares, top N plus other                           | `chart/DistributionBar`                                                          |
+| Another kind of chart                                     | `chart/Chart`, the frame with caption, legend, and data table                    |
 | Events and changes                                        | `data/Timeline`, `data/Diff`                                                     |
 | Hidden detail                                             | `data/Disclosure`                                                                |
 | Moving between pages and views                            | `navigation/Breadcrumbs`, `Tabs`, `SegmentedControl`, `NavList`, `Pagination`    |
 | In-page alternatives without a URL                        | `navigation/Tabs` with `mode="panel"`                                            |
-| A choice among a few options in a form                    | `navigation/SegmentedControl` with `mode="radio"`                                |
+| A choice among a few options in a form, or saved at once  | `navigation/SegmentedControl` with `mode="radio"` or `mode="submit"`             |
 | Text, numbers, choices from a short list                  | `forms/TextField`, `TextareaField`, `SelectField`, `ChoiceGroup`                 |
 | Booleans                                                  | `forms/CheckField` saved with the form, `Switch` applied at once                 |
 | Related fields, ranges, units, one-time codes             | `forms/FieldGroup`, `RangeField`, `UnitField`, `CodeEntry`                       |
@@ -54,19 +56,23 @@ stories per folder; `/zh-cn/design-system` shows them in Simplified Chinese.
 | A modal task, or a panel from a screen edge               | `overlays/Dialog`, `overlays/Sheet`; give triggers a `fallbackHref`              |
 | Actions or links behind a button                          | `overlays/Menu`; `nojs` for links and forms that work without JavaScript         |
 | Help beside a control, names of icon buttons              | `overlays/Popover`, `overlays/Tooltip` (never the only source of information)    |
+| Filters in the URL, focus after a change, island fetching | `lib/url-state`, `lib/focus`, `lib/query-client`                                 |
 
-Shared components take their text through props, from `@/locales/messages.gen`. Keep API
-calls, validation rules, and translations in the feature. When several features need the
-same presentation, add a component here with a story; anything that knows about builds,
-records, or the API belongs in `src/features`.
+Features and layouts build on these: lint rejects raw `<button>`, `<input>`, `<select>`,
+`<textarea>`, `<table>`, `<dialog>` and `<img>` there, and imports of `bits-ui`, `layerchart`,
+`@tanstack/svelte-table` or a folder's `styles.ts`. Components take their text through props
+and know nothing about builds, records, or the API. Add one here only when two features need
+it; see `web/AGENTS.md`.
 
 ## Styles
 
 Components style themselves with Tailwind utilities from `app.css`, which exposes the theme
 tokens in `themes.css`. Merge a caller's `class` with `cn`, and accept it only for properties
 the component leaves open, such as margins. A style used by one component lives in it; a
-style shared by a folder lives in that folder's `styles.ts`, which nothing outside `src/ui`
-imports. Use sentence case for headings, labels, and badges. Numbers and measurements stay in the
+style shared by a folder lives in that folder's `styles.ts`. Durations (`duration-fast`,
+`-normal`, `-slow`) and stacking (`z-sticky` up to `z-skiplink`) come from `app.css`. Arbitrary
+values are allowed only here, and only for grid tracks, transition properties, em sizes, and
+viewport-bounded sizes; `scripts/lint/arbitrary-values.ts` holds the list. Use sentence case for headings, labels, and badges. Numbers and measurements stay in the
 sans face (`numeric` for tabular figures); monospace is only for `Code`. A badge marks one
 state. Give every other fact a place by its role (eyebrow, `DescriptionList`, the detail page)
 and keep `MetaList` for two or three facts of one kind.
