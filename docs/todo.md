@@ -95,6 +95,15 @@
   - Add inviting and removing editors in the bot and the API, and decide which actions stay owner-only,
     such as finalizing, discarding, and managing editors.
 
+## Website
+
+- [ ] Serve the catalogue's content-hashed assets (`/_astro/*`) with
+  `Cache-Control: public, max-age=31536000, immutable`, so repeat visits skip revalidating them.
+  - Decide whether the shared Caddy gateway or the Astro Node server sets it; check what Caddy sends today.
+  - Leave HTML, `sw.js`, the manifest, and unhashed files in `public/` on short or revalidated caching.
+- [ ] Check whether the shared Caddy gateway already sends `Strict-Transport-Security`, so it is not set twice
+  with different values; the web server sends `max-age=31536000` since `3a42b8cc8`.
+
 ## Migration and cleanup
 
 - [ ] Remove legacy smallest-door tables, columns, functions, and triggers after the new projections have run in production.
