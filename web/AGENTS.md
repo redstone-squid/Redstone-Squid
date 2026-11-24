@@ -93,6 +93,14 @@ classes and arbitrary colors. Classes are joined with `cn`, never merged at runt
 cva variant sole ownership of the properties it sets. A style shared by a family of components
 lives in that folder's `styles.ts`, which only `src/ui` imports. See `src/ui/README.md`.
 
+## Content security policy
+
+`security.csp` in `astro.config.ts` allows only the scripts and `<style>` elements Astro
+bundles, plus images from any HTTPS host. Inline `style` attributes are allowed. Inline event
+attributes are not, and Svelte renders `onload` and `onerror` on an element as one, so use an
+attachment instead. The policy is skipped under `bun run dev`. Browser tests fail on any
+violation, because each one logs a console error.
+
 ## Without JavaScript
 
 Public pages must work without JavaScript; scripts only enhance them. Build components from

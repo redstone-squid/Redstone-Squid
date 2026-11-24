@@ -49,6 +49,29 @@ export default defineConfig({
   output: "server",
   security: {
     checkOrigin: true,
+    // Astro hashes the scripts and styles it emits and sends the policy as a header on
+    // server-rendered pages. Not applied under `astro dev`.
+    csp: {
+      directives: [
+        "default-src 'self'",
+        // Build previews and avatars are user-submitted HTTPS URLs on any host.
+        "img-src 'self' https:",
+        // The workbench's specimen fonts are inlined into its stylesheet.
+        "font-src 'self' data:",
+        "object-src 'none'",
+        "base-uri 'none'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
+      ],
+      styleDirective: {
+        resources: [
+          "'self'",
+          // Components put data-driven sizes in style attributes, such as a meter's fill.
+          // An attribute cannot hold selectors, so this only lets injected markup restyle itself.
+          { resource: "'unsafe-inline'", kind: "attribute" },
+        ],
+      },
+    },
   },
   vite: {
     plugins: [

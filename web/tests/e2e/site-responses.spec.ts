@@ -20,3 +20,12 @@ test("the sitemap lists the indexable home pages during the rebuild", async ({ r
     "<loc>https://catalogue.redstone-squid.org/zh-cn</loc>",
   ]);
 });
+
+test("pages forbid framing and scripts that Astro did not emit", async ({ request }) => {
+  const response = await request.get("/zh-cn/builds");
+  const headers = response.headers();
+  const policy = headers["content-security-policy"] ?? "";
+  expect(policy).toContain("frame-ancestors 'none'");
+  expect(policy).toMatch(/script-src 'self'( 'sha256-[^']+')*;/);
+  expect(headers["x-content-type-options"]).toBe("nosniff");
+});
