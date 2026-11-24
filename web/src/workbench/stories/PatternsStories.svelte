@@ -18,6 +18,7 @@
   import EmptyState from "@/ui/feedback/EmptyState.svelte";
   import ErrorState from "@/ui/feedback/ErrorState.svelte";
   import SegmentedControl from "@/ui/navigation/SegmentedControl.svelte";
+  import ConfirmDialog from "@/ui/patterns/ConfirmDialog.svelte";
   import NavBar from "@/ui/patterns/NavBar.svelte";
   import ResultsToolbar from "@/ui/patterns/ResultsToolbar.svelte";
   import ResultsView from "@/ui/patterns/ResultsView.svelte";
@@ -30,6 +31,8 @@
 
   const categories = [m.trialDoor(), m.storySeamlessDoor(), m.storyExtender()];
   const statuses = ["ready", "refreshing", "loading", "empty", "error"] as const;
+  let revokeError = $state<string>();
+  const wait = () => new Promise<void>((resolve) => setTimeout(resolve, 800));
   let resultsStatus = $state<(typeof statuses)[number]>("ready");
 </script>
 
@@ -280,6 +283,67 @@
       id="story-table-results"
     />
   </Variant>
+</Story>
+
+<Story
+  name="ConfirmDialog"
+  source="patterns/ConfirmDialog"
+  description="Confirms an irreversible action; danger starts focus on Cancel."
+>
+  <Layout pattern="cluster">
+    <ConfirmDialog
+      title="Revoke Laptop CLI?"
+      description="The device signs out at once and must enroll again."
+      confirmLabel="Revoke"
+      cancelLabel="Cancel"
+      closeLabel="Close"
+      pendingLabel="Revoking"
+      trigger={{ label: "Revoke device", variant: "danger" }}
+      fallbackHref="#confirmdialog"
+      onConfirm={wait}
+    />
+    <ConfirmDialog
+      title="Merge accounts?"
+      consequences={[
+        "Builds and records move to CircuitSage.",
+        "The other account's sign-in links are removed.",
+        "This cannot be undone.",
+      ]}
+      requireText={{
+        label: "Type CircuitSage to confirm",
+        expected: "CircuitSage",
+        error: "Type the account name exactly.",
+      }}
+      confirmLabel="Merge accounts"
+      cancelLabel="Cancel"
+      closeLabel="Close"
+      trigger={{ label: "Merge accounts" }}
+      onConfirm={wait}
+    />
+    <ConfirmDialog
+      title="Reject this proposal?"
+      confirmLabel="Reject"
+      cancelLabel="Cancel"
+      closeLabel="Close"
+      error={revokeError}
+      trigger={{ label: "Reject, failing" }}
+      onConfirm={async () => {
+        await wait();
+        revokeError = "The proposal changed since you opened it. Reload and try again.";
+        throw new Error("conflict");
+      }}
+    />
+    <ConfirmDialog
+      tone="default"
+      title="Publish the draft?"
+      description="Staff will review it before it appears in the catalogue."
+      confirmLabel="Publish"
+      cancelLabel="Not yet"
+      closeLabel="Close"
+      trigger={{ label: "Publish", variant: "primary" }}
+      onConfirm={wait}
+    />
+  </Layout>
 </Story>
 
 {#snippet sideNav()}
