@@ -19,7 +19,10 @@
   import ErrorState from "@/ui/feedback/ErrorState.svelte";
   import SegmentedControl from "@/ui/navigation/SegmentedControl.svelte";
   import ConfirmDialog from "@/ui/patterns/ConfirmDialog.svelte";
+  import Switch from "@/ui/forms/Switch.svelte";
+  import type { SaveState } from "@/ui/feedback/save-state";
   import NavBar from "@/ui/patterns/NavBar.svelte";
+  import SettingsList from "@/ui/patterns/SettingsList.svelte";
   import ResultsToolbar from "@/ui/patterns/ResultsToolbar.svelte";
   import ResultsView from "@/ui/patterns/ResultsView.svelte";
   import SearchBox from "@/ui/patterns/SearchBox.svelte";
@@ -33,6 +36,26 @@
   const statuses = ["ready", "refreshing", "loading", "empty", "error"] as const;
   let revokeError = $state<string>();
   const wait = () => new Promise<void>((resolve) => setTimeout(resolve, 800));
+  const saveLabels = {
+    idle: "",
+    dirty: "Unsaved",
+    saving: "Saving",
+    saved: "Saved",
+    offline: "Offline",
+    error: "Could not save",
+    conflict: "Changed elsewhere",
+    retry: "Retry",
+  };
+  const settingStates = $state<Record<string, SaveState>>({
+    dm: "idle",
+    digest: "saved",
+    mentions: "error",
+  });
+  async function saveSetting(id: string): Promise<void> {
+    settingStates[id] = "saving";
+    await wait();
+    settingStates[id] = id === "mentions" ? "error" : "saved";
+  }
   let resultsStatus = $state<(typeof statuses)[number]>("ready");
 </script>
 
@@ -344,6 +367,43 @@
       onConfirm={wait}
     />
   </Layout>
+</Story>
+
+{#snippet dmSwitch()}
+  <Switch
+    label="Direct messages"
+    hint="Messages from the bot about your builds."
+    checked
+    onchange={() => saveSetting("dm")}
+  />
+{/snippet}
+{#snippet digestSwitch()}
+  <Switch label="Weekly digest" onchange={() => saveSetting("digest")} />
+{/snippet}
+{#snippet mentionsSwitch()}
+  <Switch
+    label="Mentions"
+    error="Your Discord DMs are closed."
+    onchange={() => saveSetting("mentions")}
+  />
+{/snippet}
+
+<Story
+  name="SettingsList"
+  source="patterns/SettingsList"
+  description="Settings that save on change, each with its own status. Toggle them to see saving."
+>
+  <SettingsList
+    title="Notifications"
+    description="Changes save as you make them."
+    labels={saveLabels}
+    onRetry={saveSetting}
+    items={[
+      { id: "dm", control: dmSwitch, state: settingStates.dm ?? "idle" },
+      { id: "digest", control: digestSwitch, state: settingStates.digest ?? "idle" },
+      { id: "mentions", control: mentionsSwitch, state: settingStates.mentions ?? "idle" },
+    ]}
+  />
 </Story>
 
 {#snippet sideNav()}

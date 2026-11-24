@@ -11,7 +11,8 @@
   import ErrorState from "@/ui/feedback/ErrorState.svelte";
   import Notice from "@/ui/feedback/Notice.svelte";
   import Progress from "@/ui/feedback/Progress.svelte";
-  import SaveStatus, { type SaveState } from "@/ui/feedback/SaveStatus.svelte";
+  import type { SaveState } from "@/ui/feedback/save-state";
+  import SaveStatus from "@/ui/feedback/SaveStatus.svelte";
   import Skeleton from "@/ui/feedback/Skeleton.svelte";
   import Spinner from "@/ui/feedback/Spinner.svelte";
   import Story from "./Story.svelte";

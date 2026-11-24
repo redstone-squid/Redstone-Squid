@@ -1,7 +1,3 @@
-<script lang="ts" module>
-  export type SaveState = "idle" | "dirty" | "saving" | "saved" | "offline" | "error" | "conflict";
-</script>
-
 <script lang="ts">
   import Check from "@lucide/svelte/icons/check";
   import CircleAlert from "@lucide/svelte/icons/circle-alert";
@@ -12,6 +8,7 @@
   import { cn } from "@/ui/cn";
   import Button from "@/ui/actions/Button.svelte";
   import Timestamp from "@/ui/content/Timestamp.svelte";
+  import type { SaveState } from "./save-state";
   import Spinner from "./Spinner.svelte";
 
   /**
