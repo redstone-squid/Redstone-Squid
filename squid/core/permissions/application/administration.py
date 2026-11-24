@@ -57,6 +57,10 @@ from squid.core.permissions.models import (
     PermissionRoleAssignment,
 )
 from squid.core.unit_of_work import UnitOfWorkFactory
+from squid.core.validation import (
+    FieldErrorCode,
+    SimpleIssue,
+)
 
 MAX_ROLE_RANK = 999
 """Below `owner`, so no created role can ever be unmanageable by the owner."""
@@ -262,7 +266,7 @@ class PermissionAdministrationService:
                 raise PermissionAuthorityError(msg)
             if not reason:
                 msg = "A forbid rule requires a reason."
-                raise ValidationError(msg, public_context={"field": "reason"})
+                raise ValidationError(msg, issues=(SimpleIssue(field="reason", code=FieldErrorCode.INVALID_VALUE),))
         self._require_scope(actor, pattern, scope_guild_id)
         self._require_authority(actor, (pattern,))
 
@@ -283,7 +287,7 @@ class PermissionAdministrationService:
     def check_rank(self, actor: Actor, role: PermissionRole, rank: int) -> None:
         if not 0 <= rank <= MAX_ROLE_RANK:
             msg = f"Role rank must be between 0 and {MAX_ROLE_RANK}."
-            raise ValidationError(msg, public_context={"field": "rank"})
+            raise ValidationError(msg, issues=(SimpleIssue(field="rank", code=FieldErrorCode.INVALID_VALUE),))
         self._require_role_management(actor, role)
         if not actor.is_bot_owner and rank >= actor.require_permission_rank():
             msg = f"You cannot set a rank at or above your own highest ({actor.require_permission_rank()})."
@@ -529,7 +533,7 @@ class PermissionAdministrationService:
     def check_role_creation(self, actor: Actor, *, rank: int, guild_id: int | None) -> None:
         if not 0 <= rank <= MAX_ROLE_RANK:
             msg = f"Role rank must be between 0 and {MAX_ROLE_RANK}."
-            raise ValidationError(msg, public_context={"field": "rank"})
+            raise ValidationError(msg, issues=(SimpleIssue(field="rank", code=FieldErrorCode.INVALID_VALUE),))
         node = ROLE_DEFINITION_MANAGE if guild_id is None else ROLE_DEFINITION_MANAGE_GUILD
         if not actor.is_bot_owner and node.name not in actor.capabilities:
             msg = f"You need {node.name} to create this role."

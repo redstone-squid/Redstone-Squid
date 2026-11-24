@@ -15,6 +15,7 @@ from squid.core.actors import Actor
 from squid.core.edits.application import EditUnitOfWork
 from squid.core.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit, Revision, require_revision
 from squid.core.errors import ValidationError
+from squid.core.validation import FieldErrorCode, SimpleIssue
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,8 +79,10 @@ class FieldCommand[UowT: EditUnitOfWork, RootT, ValuesT: BaseModel]:
 
     async def prepare(self, uow: UowT, actor: Actor, command: EditCommand) -> PreparedFields[RootT, ValuesT]:
         changes = command.values.unpack()
-        if changes.keys() - self.values.model_fields.keys():
-            raise ValidationError
+        if unknown := changes.keys() - self.values.model_fields.keys():
+            raise ValidationError(
+                issues=tuple(SimpleIssue(field=name, code=FieldErrorCode.UNKNOWN_FIELD) for name in sorted(unknown))
+            )
         root = await self.aggregate.lock(uow, command)
         await self.authorize(uow, actor, root)
         previous = await self.capture(uow, root, command)

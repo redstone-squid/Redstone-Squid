@@ -5,6 +5,7 @@ from typing import Protocol
 
 from squid.core.errors import ValidationError
 from squid.core.tags.domain.models import TagValue, TagValueType
+from squid.core.validation import FieldErrorCode, SimpleIssue
 from squid_i18n import md_tr
 
 
@@ -31,11 +32,17 @@ def coerce_assignment_value(definition: ValuedTag, raw_value: str | None) -> Tag
     display_name = definition.display_name
     if definition.value_type is TagValueType.NONE:
         if raw_value not in {None, ""}:
-            raise ValidationError(md_tr(t"tags-does-not-accept-value = {display_name} does not accept a value."))
+            raise ValidationError(
+                md_tr(t"tags-does-not-accept-value = {display_name} does not accept a value."),
+                issues=(SimpleIssue(field="value", code=FieldErrorCode.INVALID_VALUE),),
+            )
         return None
     if raw_value is None or not raw_value.strip():
         value_type = definition.value_type.value
-        raise ValidationError(md_tr(t"tags-requires-value = {display_name} requires a {value_type} value."))
+        raise ValidationError(
+            md_tr(t"tags-requires-value = {display_name} requires a {value_type} value."),
+            issues=(SimpleIssue(field="value", code=FieldErrorCode.REQUIRED),),
+        )
     value = raw_value.strip()
     if definition.value_type is TagValueType.TEXT:
         return value
@@ -45,17 +52,24 @@ def coerce_assignment_value(definition: ValuedTag, raw_value: str | None) -> Tag
             return True
         if normalized in {"false", "no", "0"}:
             return False
-        raise ValidationError(md_tr(t"tags-expects-true-false = {display_name} expects true or false."))
+        raise ValidationError(
+            md_tr(t"tags-expects-true-false = {display_name} expects true or false."),
+            issues=(SimpleIssue(field="value", code=FieldErrorCode.WRONG_TYPE),),
+        )
     try:
         numeric = Decimal(value)
     except InvalidOperation as error:
         raise ValidationError(
             md_tr(
                 t"tags-expects-number-canonical = {display_name} expects a number in its canonical unit.",
-            )
+            ),
+            issues=(SimpleIssue(field="value", code=FieldErrorCode.WRONG_TYPE),),
         ) from error
     if not numeric.is_finite():
-        raise ValidationError(md_tr(t"tags-expects-finite-number = {display_name} expects a finite number."))
+        raise ValidationError(
+            md_tr(t"tags-expects-finite-number = {display_name} expects a finite number."),
+            issues=(SimpleIssue(field="value", code=FieldErrorCode.INVALID_VALUE),),
+        )
     return numeric
 
 

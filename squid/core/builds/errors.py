@@ -2,7 +2,7 @@
 
 from squid.core.errors import ConflictError, DomainError, ErrorCode, NotFoundError, ValidationError
 from squid.core.i18n import tr
-from squid.core.validation import ValidationIssue
+from squid.core.validation import RuleIssue, ValidationIssue
 from squid_i18n import md_tr
 
 
@@ -21,7 +21,9 @@ class BuildEditValidationError(InvalidBuildError):
         super().__init__(issues=issues)
         self.issues: dict[str, str] = {}
         for issue in issues:
-            self.issues.setdefault(issue.field, issue.code.value)
+            self.issues.setdefault(
+                issue.field, issue.params.reason if isinstance(issue, RuleIssue) else issue.code.value
+            )
 
 
 class BuildNotFoundError(NotFoundError):

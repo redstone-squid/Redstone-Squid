@@ -17,6 +17,7 @@ from squid.core.accounts.domain.models import IdentityDetails, IdentityProvider
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
 from squid.core.sentinel import UNSET
+from squid.core.validation import FieldErrorCode, SimpleIssue, TooLong, TooLongParams, TooManyItems, TooManyItemsParams
 from squid_i18n import Text, md_tr
 
 MAX_PROFILE_LINKS: Final = 10
@@ -39,7 +40,9 @@ DISCORD_AVATAR_URL_TEMPLATE: Final = "https://cdn.discordapp.com/avatars/{subjec
 """Discord needs the avatar hash, which only the gateway knows: see `AccountIdentity.avatar_key`."""
 
 
-def _reject_control_characters(value: str, *, field_name: str | Text, allow_newlines: bool = False) -> None:
+def _reject_control_characters(
+    value: str, *, field_id: str, field_name: str | Text, allow_newlines: bool = False
+) -> None:
     """Reject Unicode control and format characters, optionally allowing line breaks."""
     for character in value:
         if character in "\n\r" and allow_newlines:
@@ -49,12 +52,13 @@ def _reject_control_characters(value: str, *, field_name: str | Text, allow_newl
             raise ValidationError(
                 md_tr(
                     t"accounts-profile-control-characters = {field} may not contain control characters.",
-                )
+                ),
+                issues=(SimpleIssue(field=field_id, code=FieldErrorCode.INVALID_VALUE),),
             )
 
 
 def _normalize_text(
-    value: str | None, *, field_name: str | Text, limit: int, allow_newlines: bool = False
+    value: str | None, *, field_id: str, field_name: str | Text, limit: int, allow_newlines: bool = False
 ) -> str | None:
     """Normalize Unicode and trim a profile field; return None for blank or missing text."""
     if value is None:
@@ -68,9 +72,10 @@ def _normalize_text(
         raise ValidationError(
             md_tr(
                 t"accounts-profile-field-too-long = {field} may be at most {limit} characters, got {length}.",
-            )
+            ),
+            issues=(TooLong(field=field_id, params=TooLongParams(max_length=limit)),),
         )
-    _reject_control_characters(normalized, field_name=field_name, allow_newlines=allow_newlines)
+    _reject_control_characters(normalized, field_id=field_id, field_name=field_name, allow_newlines=allow_newlines)
     return normalized
 
 
@@ -82,34 +87,57 @@ class ProfileLink:
     url: str
 
     @classmethod
-    def parse(cls, label: str, url: str) -> ProfileLink:
+    def parse(cls, label: str, url: str, *, index: int | None = None) -> ProfileLink:
         """Build a validated link, or raise `ValidationError` explaining which half is wrong."""
+        label_field = "label" if index is None else f"links/{index}/label"
+        url_field = "url" if index is None else f"links/{index}/url"
         clean_label = _normalize_text(
-            label, field_name=tr(t"accounts-domain-profiles-link-label = Link label"), limit=MAX_LINK_LABEL_LENGTH
+            label,
+            field_id=label_field,
+            field_name=tr(t"accounts-domain-profiles-link-label = Link label"),
+            limit=MAX_LINK_LABEL_LENGTH,
         )
         if clean_label is None:
-            raise ValidationError(tr(t"accounts-link-label-required = Every link needs a label."))
+            raise ValidationError(
+                tr(t"accounts-link-label-required = Every link needs a label."),
+                issues=(SimpleIssue(field=label_field, code=FieldErrorCode.REQUIRED),),
+            )
         clean_url = url.strip()
         if not clean_url:
-            raise ValidationError(tr(t"accounts-link-url-required = Every link needs a URL."))
+            raise ValidationError(
+                tr(t"accounts-link-url-required = Every link needs a URL."),
+                issues=(SimpleIssue(field=url_field, code=FieldErrorCode.REQUIRED),),
+            )
         if len(clean_url) > MAX_LINK_URL_LENGTH:
             limit = MAX_LINK_URL_LENGTH
-            raise ValidationError(md_tr(t"accounts-link-url-too-long = Link URLs may be at most {limit} characters."))
-        _reject_control_characters(clean_url, field_name=tr(t"accounts-domain-profiles-link-url = Link URL"))
+            raise ValidationError(
+                md_tr(t"accounts-link-url-too-long = Link URLs may be at most {limit} characters."),
+                issues=(TooLong(field=url_field, params=TooLongParams(max_length=limit)),),
+            )
+        _reject_control_characters(
+            clean_url, field_id=url_field, field_name=tr(t"accounts-domain-profiles-link-url = Link URL")
+        )
         parts = urlsplit(clean_url)
         if parts.scheme not in PROFILE_LINK_SCHEMES:
             scheme = parts.scheme or ""
             raise ValidationError(
                 md_tr(
                     t"accounts-link-invalid-scheme = Links must be https URLs, got {scheme!r}.",
-                )
+                ),
+                issues=(SimpleIssue(field=url_field, code=FieldErrorCode.INVALID_VALUE),),
             )
         if not parts.hostname:
-            raise ValidationError(tr(t"accounts-links-include-hostname = Links must include a hostname."))
+            raise ValidationError(
+                tr(t"accounts-links-include-hostname = Links must include a hostname."),
+                issues=(SimpleIssue(field=url_field, code=FieldErrorCode.INVALID_VALUE),),
+            )
         if "@" in parts.netloc:
             # Credentials in the authority are the classic way to make a link read as one host
             # while resolving to another.
-            raise ValidationError(tr(t"accounts-link-credentials-forbidden = Links may not carry credentials."))
+            raise ValidationError(
+                tr(t"accounts-link-credentials-forbidden = Links may not carry credentials."),
+                issues=(SimpleIssue(field=url_field, code=FieldErrorCode.INVALID_VALUE),),
+            )
         return cls(label=clean_label, url=clean_url)
 
 
@@ -145,19 +173,24 @@ class ProfileUpdate:
         if self.display_name is not UNSET:
             changes["display_name"] = _normalize_text(
                 self.display_name,
+                field_id="display_name",
                 field_name=tr(t"accounts-domain-profiles-display-name = Display name"),
                 limit=MAX_DISPLAY_NAME_LENGTH,
             )
         if self.bio is not UNSET:
             changes["bio"] = _normalize_text(
                 self.bio,
+                field_id="bio",
                 field_name=tr(t"accounts-domain-profiles-bio = Bio"),
                 limit=MAX_BIO_LENGTH,
                 allow_newlines=True,
             )
         if self.pronouns is not UNSET:
             changes["pronouns"] = _normalize_text(
-                self.pronouns, field_name=tr(t"accounts-domain-profiles-pronouns = Pronouns"), limit=MAX_PRONOUNS_LENGTH
+                self.pronouns,
+                field_id="pronouns",
+                field_name=tr(t"accounts-domain-profiles-pronouns = Pronouns"),
+                limit=MAX_PRONOUNS_LENGTH,
             )
         if self.links is not UNSET:
             links = tuple(self.links)
@@ -167,9 +200,10 @@ class ProfileUpdate:
                 raise ValidationError(
                     md_tr(
                         t"accounts-profile-link-limit = A profile may have at most {limit} links, got {count}.",
-                    )
+                    ),
+                    issues=(TooManyItems(field="links", params=TooManyItemsParams(max_items=limit)),),
                 )
-            changes["links"] = tuple(ProfileLink.parse(link.label, link.url) for link in links)
+            changes["links"] = tuple(ProfileLink.parse(link.label, link.url, index=i) for i, link in enumerate(links))
         return replace(self, **changes)  # type: ignore[arg-type]
 
     def apply(self, profile: AccountProfile) -> AccountProfile:

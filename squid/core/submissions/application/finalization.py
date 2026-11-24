@@ -48,6 +48,7 @@ from squid.core.submissions.errors import (
     DraftValidationError,
 )
 from squid.core.unit_of_work import UnitOfWorkFactory
+from squid.core.validation import RuleIssue
 from squid_i18n import md_tr
 
 MAX_FINALIZATION_JOB_CLAIM = 32
@@ -472,7 +473,10 @@ def _manifest_issues(error: DraftValidationError) -> tuple[SubmissionAttentionIs
     issues: list[SubmissionAttentionIssue] = []
     for issue in error.field_issues:
         try:
-            attention = SubmissionAttentionIssue(issue.field, SubmissionAttentionReason(issue.code.value))
+            attention = SubmissionAttentionIssue(
+                issue.field,
+                SubmissionAttentionReason(issue.params.reason if isinstance(issue, RuleIssue) else issue.code.value),
+            )
         except ValueError:
             attention = SubmissionAttentionIssue("submission", SubmissionAttentionReason.TARGET_REJECTED)
         if attention not in issues:

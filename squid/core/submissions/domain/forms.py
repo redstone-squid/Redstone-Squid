@@ -12,8 +12,6 @@ from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from typing import TYPE_CHECKING, Self
 
-from pydantic import TypeAdapter
-
 from squid.core.builds.domain.credits import read_credits
 from squid.core.builds.domain.showcase import read_showcase_tags
 from squid.core.errors import JSONValue, ValidationError
@@ -24,6 +22,9 @@ from squid.core.validation import (
     BelowMinimum,
     BelowMinimumParams,
     FieldErrorCode,
+    RequiredValue,
+    RequiredValueParams,
+    RuleIssue,
     RuleParams,
     SimpleIssue,
     TooFewItems,
@@ -41,7 +42,6 @@ from squid_i18n import md_tr
 if TYPE_CHECKING:
     from squid.core.submissions.domain.finalization import SubmissionAttentionReason
 
-_ISSUE = TypeAdapter[ValidationIssue](ValidationIssue)
 
 _STABLE_ID = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 _OPTION_VALUE_TYPES = frozenset({None, "text", "numeric", "boolean"})
@@ -327,7 +327,9 @@ class FormField:
             return SimpleIssue(field=self.id, code=FieldErrorCode.WRONG_TYPE)
         constraints = self.constraints
         if constraints.must_equal is not None and value != constraints.must_equal:
-            return SimpleIssue(field=self.id, code=FieldErrorCode.REQUIRED_VALUE)
+            return RequiredValue(
+                field=self.id, params=RequiredValueParams.model_validate({"expected": constraints.must_equal})
+            )
         if self.value_kind in {ValueKind.INTEGER, ValueKind.NUMBER, ValueKind.GAME_TICKS}:
             assert isinstance(value, int | float) and not isinstance(value, bool)
             if constraints.minimum is not None and value < constraints.minimum:
@@ -530,7 +532,7 @@ class FormManifest:
     def _first_reasons(issues: tuple[ValidationIssue, ...]) -> dict[str, str]:
         errors: dict[str, str] = {}
         for issue in issues:
-            errors.setdefault(issue.field, issue.code.value)
+            errors.setdefault(issue.field, issue.params.reason if isinstance(issue, RuleIssue) else issue.code.value)
         return errors
 
     def answer_issues(
@@ -591,12 +593,9 @@ class FormManifest:
                         rule_inputs = inputs.union(
                             rule.depends_on, (visibility[key] for key in rule.depends_on if key in visibility)
                         )
-                        public = _ISSUE.validate_python(
-                            {
-                                "field": field_id,
-                                "code": rule.reason.value,
-                                "params": RuleParams(rule=rule.id, depends_on=rule.depends_on),
-                            }
+                        public = RuleIssue(
+                            field=field_id,
+                            params=RuleParams(rule=rule.id, reason=rule.reason.value, depends_on=rule.depends_on),
                         )
                         yield _ValidationIssue(public, rule_inputs, rule.id)
             reason = reasons.get(field_id)
@@ -627,11 +626,15 @@ class FormManifest:
         before = self.apply_defaults(category, before, origin=origin)
         after = self.apply_defaults(category, after, origin=origin)
         fields = self.fields_for(category)
-        existing = set(self._validation_issues(fields, before, origin=origin))
+        existing = {
+            (issue.public.field, issue.public.code, issue.rule_id)
+            for issue in self._validation_issues(fields, before, origin=origin)
+        }
         return tuple(
             issue.public
             for issue in self._validation_issues(fields, after, origin=origin)
-            if issue not in existing or any(before.get(key) != after.get(key) for key in issue.inputs)
+            if (issue.public.field, issue.public.code, issue.rule_id) not in existing
+            or any(before.get(key) != after.get(key) for key in issue.inputs)
         )
 
     def apply_defaults(

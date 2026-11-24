@@ -23,6 +23,7 @@ from squid.core.search.domain.query import (
     TextExpression,
 )
 from squid.core.search.domain.scope import SearchScope
+from squid.core.validation import FieldErrorCode, SimpleIssue
 
 
 class QuerySyntaxError(ValidationError):
@@ -32,6 +33,7 @@ class QuerySyntaxError(ValidationError):
         super().__init__(
             message,
             code=ErrorCode.INVALID_QUERY,
+            issues=(SimpleIssue(field="q", code=FieldErrorCode.INVALID_VALUE),),
             public_context={"position": position, "suggestions": suggestions},
         )
         self.message = message

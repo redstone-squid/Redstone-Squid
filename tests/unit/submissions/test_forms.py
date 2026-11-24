@@ -148,6 +148,15 @@ def test_transition_uses_all_inputs_and_distinguishes_rules_on_the_same_field() 
     before: dict[str, JSONValue] = {"opening_time": 4, "visible_opening_time": 6, "closing_time": 8}
     origin = SubmissionOrigin.DISCORD
 
+    violations = manifest.answer_issues("door", before | {"closing_time": 5}, origin=origin)
+    assert [issue.model_dump(mode="json") for issue in violations] == [
+        {
+            "field": "visible_opening_time",
+            "code": "rule_failed",
+            "params": {"rule": rule, "reason": "above_maximum", "depends_on": [dependency]},
+        }
+        for rule, dependency in (("opening_limit", "opening_time"), ("closing_limit", "closing_time"))
+    ]
     assert manifest.validate_answers("door", before, origin=origin) == {"visible_opening_time": "above_maximum"}
     assert manifest.validate_transition("door", before, before | {"display_name": "New name"}, origin=origin) == {}
     assert manifest.validate_transition("door", before, before | {"opening_time": 5}, origin=origin) == {

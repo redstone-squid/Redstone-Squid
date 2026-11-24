@@ -18,6 +18,16 @@ from uuid import UUID
 
 from squid.core.errors import ConflictError, JSONValue, ValidationError
 from squid.core.i18n import tr
+from squid.core.validation import (
+    BelowMinimum,
+    BelowMinimumParams,
+    FieldErrorCode,
+    SimpleIssue,
+    TooFewItems,
+    TooFewItemsParams,
+    TooManyItems,
+    TooManyItemsParams,
+)
 from squid_i18n import md_tr
 
 _FIELD_ID = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
@@ -56,7 +66,9 @@ class DraftChangeKey(str):
     def __new__(cls, value: str) -> DraftChangeKey:
         if not isinstance(value, str) or _IDEMPOTENCY_KEY.fullmatch(value) is None:
             msg = tr(t"submissions-draft-change-keys = draft change keys must be 8-255 visible ASCII characters")
-            raise ValidationError(msg)
+            raise ValidationError(
+                msg, issues=(SimpleIssue(field="idempotency_key", code=FieldErrorCode.INVALID_VALUE),)
+            )
         return super().__new__(cls, value)
 
 
@@ -89,11 +101,14 @@ class FieldOperation:
             raise ValidationError(
                 md_tr(
                     t"submissions-invalid-draft-field-id = invalid draft field ID: {field_id!s}",
-                )
+                ),
+                issues=(SimpleIssue(field="field_id", code=FieldErrorCode.INVALID_VALUE),),
             )
         if self.kind is FieldOperationKind.UNSET and self.value is not None:
             msg = tr(t"submissions-unset-operations-carry = unset operations cannot carry a value")
-            raise ValidationError(msg)
+            raise ValidationError(
+                msg, issues=(SimpleIssue(field=self.field_id, code=FieldErrorCode.INCOMPATIBLE_FIELDS),)
+            )
         if self.kind is FieldOperationKind.SET:
             _require_json_budget(
                 self.value,
@@ -119,28 +134,33 @@ class DraftChange:
         object.__setattr__(self, "idempotency_key", DraftChangeKey(self.idempotency_key))
         if self.base_revision < 0:
             msg = tr(t"submissions-base-revision-negative = base_revision cannot be negative")
-            raise ValidationError(msg)
+            raise ValidationError(
+                msg, issues=(BelowMinimum(field="base_revision", params=BelowMinimumParams(minimum=0)),)
+            )
         if _CLIENT_ID.fullmatch(self.client_instance_id) is None:
             msg = tr(t"submissions-client-instance-id = client_instance_id has an invalid format")
-            raise ValidationError(msg)
+            raise ValidationError(
+                msg, issues=(SimpleIssue(field="client_instance_id", code=FieldErrorCode.INVALID_VALUE),)
+            )
         if not self.operations:
             msg = tr(t"submissions-draft-operation-required = draft changes require at least one operation")
-            raise ValidationError(msg)
+            raise ValidationError(msg, issues=(TooFewItems(field="operations", params=TooFewItemsParams(min_items=1)),))
         if len(self.operations) > MAX_DRAFT_OPERATIONS:
             limit = MAX_DRAFT_OPERATIONS
             raise ValidationError(
                 md_tr(
                     t"submissions-draft-changes-exceed = draft changes cannot exceed {limit} operations",
-                )
+                ),
+                issues=(TooManyItems(field="operations", params=TooManyItemsParams(max_items=limit)),),
             )
         operation_ids = [operation.operation_id for operation in self.operations]
         if len(operation_ids) != len(set(operation_ids)):
             msg = tr(t"submissions-operation-ids-unique = operation IDs must be unique within a draft change")
-            raise ValidationError(msg)
+            raise ValidationError(msg, issues=(SimpleIssue(field="operations", code=FieldErrorCode.INVALID_VALUE),))
         field_ids = [operation.field_id for operation in self.operations]
         if len(field_ids) != len(set(field_ids)):
             msg = tr(t"submissions-draft-change-duplicate-field = a draft change may mutate each field at most once")
-            raise ValidationError(msg)
+            raise ValidationError(msg, issues=(SimpleIssue(field="operations", code=FieldErrorCode.INVALID_VALUE),))
 
 
 @dataclass(frozen=True, slots=True)

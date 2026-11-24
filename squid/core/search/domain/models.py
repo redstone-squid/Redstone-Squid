@@ -8,6 +8,12 @@ from squid.core.errors import ErrorCode, ValidationError
 from squid.core.pagination import MAX_PAGE_OFFSET, PageAnchor
 from squid.core.search.domain.query import BuildQuery, RecordQuery
 from squid.core.search.domain.scope import SearchScope as SearchScope
+from squid.core.validation import (
+    AboveMaximum,
+    AboveMaximumParams,
+    BelowMinimum,
+    BelowMinimumParams,
+)
 
 
 class SearchMode(StrEnum):
@@ -77,12 +83,26 @@ class SearchRequest:
             raise ValidationError(msg, code=ErrorCode.INVALID_QUERY)
         if not 1 <= self.page_size <= 50:
             msg = "page_size must be between 1 and 50"
-            raise ValidationError(msg, public_context={"field": "page_size", "minimum": 1, "maximum": 50})
+            raise ValidationError(
+                msg,
+                issues=(
+                    BelowMinimum(field="page_size", params=BelowMinimumParams(minimum=1))
+                    if self.page_size < 1
+                    else AboveMaximum(field="page_size", params=AboveMaximumParams(maximum=50)),
+                ),
+            )
         # The REST layer rejects out-of-range offsets as 422 before reaching here; this guards the
         # Discord bot and any other in-process caller.
         if not 0 <= self.offset <= MAX_PAGE_OFFSET:
             msg = f"offset must be between 0 and {MAX_PAGE_OFFSET}"
-            raise ValidationError(msg, public_context={"field": "offset", "minimum": 0, "maximum": MAX_PAGE_OFFSET})
+            raise ValidationError(
+                msg,
+                issues=(
+                    BelowMinimum(field="offset", params=BelowMinimumParams(minimum=0))
+                    if self.offset < 0
+                    else AboveMaximum(field="offset", params=AboveMaximumParams(maximum=MAX_PAGE_OFFSET)),
+                ),
+            )
 
 
 @dataclass(frozen=True, slots=True)

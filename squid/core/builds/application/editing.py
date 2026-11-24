@@ -21,6 +21,10 @@ from squid.core.builds.errors import InvalidBuildError
 from squid.core.builds.models import Build, DoorBuild, ExtenderBuild
 from squid.core.errors import JSONValue
 from squid.core.sentinel import UNSET
+from squid.core.validation import (
+    FieldErrorCode,
+    SimpleIssue,
+)
 
 type PatchValue[T] = T | UNSET
 
@@ -147,7 +151,7 @@ class BuildEditPatch:
             raise InvalidBuildError(
                 msg,
                 context={"fields": sorted(unknown)},
-                public_context={"fields": sorted(unknown)},
+                issues=tuple(SimpleIssue(field=key, code=FieldErrorCode.UNKNOWN_FIELD) for key in sorted(unknown)),
             )
         patch = cls()
         for name, value in changes.items():
@@ -240,7 +244,9 @@ class BuildEditPatch:
                 raise InvalidBuildError(
                     msg,
                     context={"build_id": build.id, "category": build.category, "fields": patched_door_fields},
-                    public_context={"fields": patched_door_fields},
+                    issues=tuple(
+                        SimpleIssue(field=key, code=FieldErrorCode.INCOMPATIBLE_FIELDS) for key in patched_door_fields
+                    ),
                 )
             if self.door_expansion is not UNSET:
                 build.expansion = self.door_expansion
@@ -269,7 +275,10 @@ class BuildEditPatch:
                 raise InvalidBuildError(
                     msg_0,
                     context={"fields": patched_extender_fields},
-                    public_context={"fields": patched_extender_fields},
+                    issues=tuple(
+                        SimpleIssue(field=key, code=FieldErrorCode.INCOMPATIBLE_FIELDS)
+                        for key in patched_extender_fields
+                    ),
                 )
             try:
                 if self.extender_orientation is not UNSET and self.extender_orientation != build.orientation:

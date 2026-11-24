@@ -12,6 +12,14 @@ from squid.core.search.application.ports import QueryEmbedding, SearchBackend
 from squid.core.search.application.query_analysis import is_filter_only
 from squid.core.search.domain import SearchMode, SearchPage, SearchQuery, SearchRequest
 from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
+from squid.core.validation import (
+    AboveMaximum,
+    AboveMaximumParams,
+    BelowMinimum,
+    BelowMinimumParams,
+    FieldErrorCode,
+    SimpleIssue,
+)
 from squid_i18n import md_tr
 
 logger = logging.getLogger(__name__)
@@ -70,7 +78,7 @@ class SearchService:
                 raise ValidationError(
                     md_tr(t"search-search-results-sorted = Search results cannot be sorted by {field_name}."),
                     code=ErrorCode.INVALID_QUERY,
-                    public_context={"field": "sort", "value": field_name},
+                    issues=(SimpleIssue(field="sort", code=FieldErrorCode.UNKNOWN_OPTION),),
                 )
         query_embedding = None
         if (
@@ -102,7 +110,14 @@ class SearchService:
         """Suggest indexed titles; limit must be between 1 and 25."""
         if not 1 <= limit <= 25:
             msg = "suggestion limit must be between 1 and 25"
-            raise ValidationError(msg, public_context={"field": "limit", "minimum": 1, "maximum": 25})
+            raise ValidationError(
+                msg,
+                issues=(
+                    BelowMinimum(field="limit", params=BelowMinimumParams(minimum=1))
+                    if limit < 1
+                    else AboveMaximum(field="limit", params=AboveMaximumParams(maximum=25)),
+                ),
+            )
         async with self._uow_factory() as uow:
             parsed = (
                 SearchQueryParser(await uow.search_fields.registry()).parse(query) if isinstance(query, str) else query
