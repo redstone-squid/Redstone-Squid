@@ -142,6 +142,7 @@ export function storyCatalogueCards(locale: Locale = getLocale()): string {
 export {
   navBuilds,
   recordHolders,
+  siteName,
   storyApproved,
   storyBreadcrumb,
   storyCopperBolt55,

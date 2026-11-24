@@ -123,11 +123,6 @@
   </Section>
 </Story>
 
-{#snippet brand()}
-  <a href="#navbar" class="inline-flex items-center gap-3 rounded-sm font-bold no-underline">
-    <img class="size-8" src="/favicon.svg" width="32" height="32" alt="" />Redstone Squid
-  </a>
-{/snippet}
 {#snippet navActions()}<Button size="sm" variant="primary">Submit</Button>{/snippet}
 
 <Story
@@ -142,11 +137,22 @@
     { label: "About", href: "#navbar-about" },
   ]}
   <Variant label="as wide as the page">
-    <NavBar label="Story navigation" menuLabel="Menu" {brand} {links} actions={navActions} />
+    <NavBar
+      label="Story navigation"
+      menuLabel="Menu"
+      home={{ label: m.siteName(), href: "#navbar", logo: "/favicon.svg" }}
+      {links}
+      actions={navActions}
+    />
   </Variant>
   <Variant label="narrow frame, links collapsed">
     <div class="max-w-dialog-sm">
-      <NavBar label="Narrow story navigation" menuLabel="Menu" {brand} {links} />
+      <NavBar
+        label="Narrow story navigation"
+        menuLabel="Menu"
+        home={{ label: m.siteName(), href: "#navbar", logo: "/favicon.svg" }}
+        {links}
+      />
     </div>
   </Variant>
 </Story>

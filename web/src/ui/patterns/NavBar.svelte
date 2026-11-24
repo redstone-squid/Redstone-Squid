@@ -6,7 +6,7 @@
   import { floatingPanelClass } from "@/ui/overlays/styles";
 
   /**
-   * The body of a site header: the `brand` link, the primary `links`, and `actions` such as
+   * The body of a site header: the `home` link with the site's logo, the primary `links`, and `actions` such as
    * the language menu and the user menu. `current` marks the page's section.
    *
    * When the bar is too narrow for the links (measured on the bar, not the window), they
@@ -15,7 +15,7 @@
    * JavaScript; links stay in the Tab order, with no menu roles or arrow keys.
    */
   type Props = {
-    brand: Snippet;
+    home: { label: string; href: string; logo?: string };
     links: { label: string; href: string; current?: boolean }[];
     actions?: Snippet;
     /** Names the navigation landmark. */
@@ -23,13 +23,24 @@
     menuLabel: string;
     class?: string;
   };
-  let { brand, links, actions, label, menuLabel, class: className }: Props = $props();
+  let { home, links, actions, label, menuLabel, class: className }: Props = $props();
   const id = $props.id();
 </script>
 
 <div class={cn("@container min-w-0", className)}>
   <div class="flex min-h-header flex-wrap items-center gap-x-6 gap-y-3 py-3">
-    <div class="shrink-0">{@render brand()}</div>
+    <a
+      href={home.href}
+      class="inline-flex shrink-0 items-center gap-3 rounded-sm font-bold whitespace-nowrap no-underline"
+    >
+      {#if home.logo !== undefined}<img
+          class="size-8"
+          src={home.logo}
+          width="32"
+          height="32"
+          alt=""
+        />{/if}{home.label}
+    </a>
     <nav aria-label={label} class="min-w-0 @4xl:flex-1 print:hidden">
       <Button
         class="@4xl:hidden"

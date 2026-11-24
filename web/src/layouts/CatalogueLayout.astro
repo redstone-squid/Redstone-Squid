@@ -10,7 +10,9 @@ import * as m from "@/locales/messages.gen";
 import "@/ui/app.css";
 import Button from "@/ui/actions/Button.svelte";
 import SkipLink from "@/ui/content/SkipLink.svelte";
+import Announcer from "@/ui/feedback/Announcer.svelte";
 import Container from "@/ui/layout/Container.svelte";
+import NavBar from "@/ui/patterns/NavBar.svelte";
 type Props = ComponentProps<typeof DocumentHead>;
 const { config } = Astro.locals;
 const activePath = unprefixedPath(Astro.url.pathname);
@@ -34,36 +36,25 @@ const nav = [
   <body>
     <SkipLink href="#main-content" label={m.navSkip()} />
     <header class="border-b border-line bg-surface">
-      <Container class="flex min-h-header flex-wrap items-center gap-x-8 gap-y-3 py-3">
-        <a
-          class="inline-flex items-center gap-3 rounded-sm font-bold whitespace-nowrap no-underline"
-          href={localizePath("/")}
+      {/* A UserMenu island fed by /v1/session joins the actions; see the plan README. */}
+      <Container>
+        <NavBar
+          label={m.navPrimary()}
+          menuLabel={m.navMenu()}
+          home={{ label: m.siteName(), href: localizePath("/"), logo: faviconUrl }}
+          links={nav.map(([label, href]) => ({
+            label: label(),
+            href: localizePath(href),
+            current: activePath === href || activePath.startsWith(`${href}/`),
+          }))}
         >
-          <img class="size-8" src={faviconUrl} width="32" height="32" alt="" />
-          {m.siteName()}
-        </a>
-        <nav
-          aria-label={m.navPrimary()}
-          class="flex items-center gap-6 max-lg:order-3 max-lg:w-full max-sm:justify-between max-sm:gap-2 max-sm:text-sm print:hidden"
-        >
-          {nav.map(([label, href]) => (
-            <a
-              class="border-b-2 border-transparent py-2 text-fg-muted no-underline hover:text-fg aria-[current=page]:border-accent aria-[current=page]:forced-highlight aria-[current=page]:text-fg"
-              href={localizePath(href)}
-              aria-current={
-                activePath === href || activePath.startsWith(`${href}/`) ? "page" : undefined
-              }
-            >
-              {label()}
-            </a>
-          ))}
-        </nav>
-        <div class="ms-auto flex items-center gap-2 max-sm:ms-0 max-sm:w-full max-sm:justify-between print:hidden">
-          <LanguageSelector align="start" />
-          <Button variant="primary" href={localizePath("/submit")} iconEnd={ArrowUpRight}>
-            {m.navSubmit()}
-          </Button>
-        </div>
+          <Fragment slot="actions">
+            <LanguageSelector />
+            <Button variant="primary" href={localizePath("/submit")} iconEnd={ArrowUpRight}>
+              {m.navSubmit()}
+            </Button>
+          </Fragment>
+        </NavBar>
       </Container>
     </header>
     <Container as="main" id="main-content" class="grid content-start gap-8 py-12">
@@ -94,5 +85,6 @@ const nav = [
         </nav>
       </Container>
     </footer>
+    <Announcer />
   </body>
 </html>

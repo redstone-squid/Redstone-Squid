@@ -89,6 +89,7 @@ trial-positive = Enter a positive whole number.
 trial-reserved = This title is already taken.
 trial-attachment = Attached: { $filename }
 
+nav-menu = Menu
 nav-primary = Main navigation
 nav-community = Community
 nav-pagination = Catalogue pages

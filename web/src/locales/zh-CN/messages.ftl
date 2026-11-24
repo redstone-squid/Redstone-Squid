@@ -86,6 +86,7 @@ trial-positive = 请输入正整数。
 trial-reserved = 此标题已被使用。
 trial-attachment = 已附加：{ $filename }
 
+nav-menu = 菜单
 nav-primary = 主导航
 nav-community = 社区
 nav-pagination = 目录分页

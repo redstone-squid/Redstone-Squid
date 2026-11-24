@@ -1078,6 +1078,18 @@ export function trialAttachment(
   }
 }
 
+/** Menu */
+export function navMenu(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Menu";
+    case "zh-CN":
+      return "菜单";
+    case "en-XA":
+      return "[" + "Ṁéñû" + "··]";
+  }
+}
+
 /** Main navigation */
 export function navPrimary(locale: Locale = getLocale()): string {
   switch (locale) {
