@@ -104,6 +104,16 @@
   --tracking-display: 0;
 }
 
+/*
+ * Cross-fade between pages. Opting in only without a reduced-motion preference, because the
+ * reduced-motion reset below does not reach ::view-transition-* pseudo-elements.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  @view-transition {
+    navigation: auto;
+  }
+}
+
 /* One stacking ladder, so overlays never fight over arbitrary numbers. */
 @utility z-sticky {
   z-index: 10;
