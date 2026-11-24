@@ -30,7 +30,7 @@
     }}
   >
     {#snippet media()}<Avatar name="CircuitSage" size="lg" />{/snippet}
-    {#snippet meta()}<Badge tone="success" dot>Approved</Badge><Badge>Java 1.21</Badge>{/snippet}
+    {#snippet meta()}<Badge tone="success" dot>Approved</Badge>{/snippet}
     {#snippet actions()}<Button icon={Pencil}>Edit</Button>{/snippet}
     {#snippet notice()}<Notice tone="warning">Pending review by staff.</Notice>{/snippet}
   </PageHeader>

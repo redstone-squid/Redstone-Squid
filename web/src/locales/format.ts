@@ -1,9 +1,10 @@
-import type { Locale } from "./locale";
+import { getLocale, type Locale } from "./locale";
 
 // Generated message functions call these. Formatters are cached per locale and options.
 const numberFormats = new Map<string, Intl.NumberFormat>();
 const dateFormats = new Map<string, Intl.DateTimeFormat>();
 const pluralRules = new Map<string, Intl.PluralRules>();
+const listFormats = new Map<string, Intl.ListFormat>();
 
 function cached<T>(cache: Map<string, T>, key: string, create: () => T): T {
   let value = cache.get(key);
@@ -34,6 +35,11 @@ export function formatDateTime(
   return cached(dateFormats, key, () => new Intl.DateTimeFormat(locale, resolved)).format(
     new Date(value),
   );
+}
+
+/** Join names or other items the way the locale writes a list: "A, B and C", "A、B和C". */
+export function formatList(items: string[], locale: Locale = getLocale()): string {
+  return cached(listFormats, locale, () => new Intl.ListFormat(locale)).format(items);
 }
 
 /** Format a variable used as plain text: numbers get locale grouping, strings pass through. */

@@ -85,7 +85,7 @@ The `src/ui` primitives and patterns, the feature components built from them, an
 
 **`Text`**
 - *Purpose:* body text with a tone.
-- *API:* `as` (p, span, div), `size` (`sm | md`), `tone` (`default | muted | danger | success`), `mono?`, `truncate?` (`lines: 1 | 2 | 3`).
+- *API:* `as` (p, span, div), `size` (`sm | md`), `tone` (`default | muted | danger | success`), `numeric?` (tabular figures for numbers that line up or update), `truncate?` (`lines: 1 | 2 | 3`).
 - *Users:* everywhere. Replaces `mutedClass`.
 
 **`Link`**
@@ -170,9 +170,10 @@ The `src/ui` primitives and patterns, the feature components built from them, an
 #### Feedback and status
 
 **`Badge`**
-- *API:* `tone` (`neutral | info | success | warning | danger | accent`), `dot?`, `icon?`, `size` (`sm | md`).
-- *Rule:* never color-only. The text carries the meaning.
-- *Users:* status, category, version scope, unread count, "up to date", "pending", and table cells.
+- *API:* `tone` (`neutral | info | success | warning | danger | accent`), `dot?`, `size` (`sm | md`).
+- *Rule:* state only: something that changes and the reader acts on, such as "pending", "approved", "outdated" or an unread count. At most one per item. Never color-only; the text carries the meaning.
+- *Not for:* categories, kinds, versions, version scopes or any other classification. Those are plain text: in the eyebrow, or in a muted meta line joined with " · ". Tags people can follow are `Chip`s.
+- *Users:* build and draft status, record status, unread count, review state in table cells.
 
 **`Chip`**
 - *Purpose:* an interactive tag. Badge is the static one.
@@ -227,7 +228,7 @@ The `src/ui` primitives and patterns, the feature components built from them, an
 - *Decision:* merged into `Card` without `href`, and into `Section` with `surface` (pattern). No separate component.
 
 **`DescriptionList`**
-- *API:* `items` of `{term, value?, mono?, href?}` or `children` (`DescriptionItem` subcomponent with a value snippet); `layout` (`stacked | inline | grid`, where grid gives 2–4 columns responsively); `size`; `divided?`.
+- *API:* `items` of `{term, value?, numeric?, href?}` or `children` (`DescriptionItem` subcomponent with a value snippet); `layout` (`stacked | inline | grid`, where grid gives 2–4 columns responsively); `size`; `divided?`.
 - *Renders:* `<dl>`, with each pair in a `<div>`.
 - *Users:* P5 specs, P8 metrics, P9 point, P13 stats, A3, A4 device details, L1, L2, X2 detail, schematic metrics, M3.
 
@@ -474,7 +475,7 @@ The `src/ui` primitives and patterns, the feature components built from them, an
 **`DataTable`** (`@tanstack/svelte-table` v9, which supports Svelte 5 directly)
 - *API:*
   - `caption` (required; can be visually hidden).
-  - `columns`: `[{id, header, accessor | cell snippet, align: start | end, numeric?, mono?, sortKey?, pinned?: "start", hideable?, defaultHidden?, width: xs | sm | md | lg | auto, truncate?}]`.
+  - `columns`: `[{id, header, accessor | cell snippet, align: start | end, numeric?, sortKey?, pinned?: "start", hideable?, defaultHidden?, width: xs | sm | md | lg | auto, truncate?}]`.
   - `rows`, `getRowId`.
   - `sort` (`{key, direction} | null`) and `sortHref(key, direction)`: the server sorts and the headers are links.
   - `visibility` (`{hidden: string[]}`) and `visibilityHref(hidden)`, from the URL `hide=`.
@@ -562,6 +563,8 @@ The `src/ui` primitives and patterns, the feature components built from them, an
 
 **Weights**: 400, 600, 700 only. Remove 650 and 750.
 
+**Families**: one sans face for all interface text, numbers and measurements included; use tabular figures (`numeric`) where digits must line up. Monospace is only for text a reader copies or types exactly: code, commands, keys, tokens and error references, all through `Code`.
+
 **Tracking**: `--tracking-tight` (-0.02em) and `--tracking-display` (-0.04em), both reset to 0 under `:lang(zh)`.
 
 **Spacing and sizes**
@@ -599,15 +602,15 @@ The primitives each one composes are listed after the arrow.
 - `DocumentHead`: unchanged, plus a theme color derived from the token.
 
 **`features/builds`**
-- `BuildCard`: Card, Image, Badge, DescriptionList, Text.
+- `BuildCard`: Card, Image, DescriptionList, Text.
 - `buildColumns`: DataTable column specs.
 - `BuildHeader`: PageHeader, Badge, Breadcrumbs, Button, Menu.
 - `BuildStats`: StatGroup, DescriptionList.
 - `BuildMedia`: Gallery.
 - `CreditList`: List, Avatar, Link.
-- `VersionSupport`: Badge, Text.
+- `VersionSupport`: Text.
 - `BuildTags`: Chip, grouped by kind.
-- `RecordsHeld`: List, Badge.
+- `RecordsHeld`: List.
 - `SchematicPanel`: Section, DescriptionList, Button, DistributionBar, Disclosure.
 - `RenderRequest` and `VideoRequest`: Dialog, ChoiceGroup, Progress, Notice.
 - `SponsorCard`: Card, CopyButton.
@@ -617,7 +620,7 @@ The primitives each one composes are listed after the arrow.
 - `BuildStatusBadge`: Badge.
 
 **`features/records`**
-- `RecordCard` (replaces `RecordSummary` and `SummaryCard`): Card, Badge, Text.
+- `RecordCard` (replaces `RecordSummary` and `SummaryCard`): Card, Text.
 - `recordColumns`: DataTable column specs.
 - `RecordHeader`: PageHeader, Badge, SegmentedControl for siblings.
 - `RecordFreshness`: Text, Timestamp.
@@ -641,7 +644,7 @@ The primitives each one composes are listed after the arrow.
 - `SubscribeToQuery`: Button, ConfirmDialog.
 
 **`features/tags`**
-- `TagHeader`: PageHeader, Badge, DescriptionList.
+- `TagHeader`: PageHeader, DescriptionList.
 - `TagGlossary`: SearchBox, List, Section per kind.
 - `TagChip`: Chip.
 

@@ -14,9 +14,10 @@ stories per folder; `/zh-cn/design-system` shows them in Simplified Chinese.
 | A titled part of a page                                  | `patterns/Section`, with `surface` for a panel                                |
 | Headings, body text, links, code                         | `content/Heading`, `Text`, `Link`, `Code`, `Prose` for rendered Markdown      |
 | Dates                                                    | `content/Timestamp`; format the label in a message                            |
+| Facts about an item: version, count, date                | `content/MetaList`, separated by space, not punctuation                       |
 | Icons                                                    | `content/Icon` wrapping a lucide icon; decorative unless labelled             |
 | Commands and links that look like them                   | `actions/Button`, with `href` for a link and `pending` while saving           |
-| Metadata and tags                                        | `feedback/Badge` for static labels, `feedback/Chip` for clickable tags        |
+| State and tags                                           | `feedback/Badge` for a state such as pending, `feedback/Chip` for tags        |
 | Messages, outcomes, failures                             | `feedback/Notice`; choose its `role` by how it should be announced            |
 | Loading, empty, failed regions                           | `feedback/Skeleton`, `EmptyState`, `ErrorState`; `Spinner` beside one line    |
 | Progress and levels                                      | `feedback/Progress`, with `kind="meter"` for votes or completeness            |
@@ -41,8 +42,9 @@ Components style themselves with Tailwind utilities from `app.css`, which expose
 tokens in `themes.css`. Merge a caller's `class` with `cn`, and accept it only for properties
 the component leaves open, such as margins. A style used by one component lives in it; a
 style shared by a folder lives in that folder's `styles.ts`, which nothing outside `src/ui`
-imports. Use sentence case for headings, labels, and badges, and monospace only for
-technical values.
+imports. Use sentence case for headings, labels, and badges. Numbers and measurements stay in the
+sans face (`numeric` for tabular figures); monospace is only for `Code`. A badge marks one
+state; categories and versions are plain text in the eyebrow or a muted meta line.
 
 Astro wraps slot content passed to a Svelte component in an `astro-static-slot` element,
 which `app.css` displays as `contents`. The wrapper still breaks list and table structure,

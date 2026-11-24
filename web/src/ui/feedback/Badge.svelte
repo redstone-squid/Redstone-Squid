@@ -1,5 +1,4 @@
 <script lang="ts">
-  import type { LucideIcon } from "@lucide/svelte";
   import type { Snippet } from "svelte";
   import { cn } from "@/ui/cn";
 
@@ -12,25 +11,18 @@
     accent: "bg-accent-soft text-accent",
   };
   /**
-   * Short static metadata such as a category or status. The text carries the meaning; tone
-   * and `dot` only reinforce it. Use `Chip` for tags people can click or remove.
+   * A state the reader acts on, such as pending, approved, or an unread count; at most one per
+   * item. The text carries the meaning; tone and `dot` only reinforce it. Categories and
+   * versions are plain text, and tags people can click are `Chip`s.
    */
   type Props = {
     tone?: keyof typeof tones;
     dot?: boolean;
-    icon?: LucideIcon;
     size?: "sm" | "md";
     class?: string;
     children: Snippet;
   };
-  let {
-    tone = "neutral",
-    dot = false,
-    icon: Glyph,
-    size = "sm",
-    class: className,
-    children,
-  }: Props = $props();
+  let { tone = "neutral", dot = false, size = "sm", class: className, children }: Props = $props();
 </script>
 
 <span
@@ -41,8 +33,6 @@
     className,
   )}
 >
-  {#if Glyph}<Glyph class="size-[1em] shrink-0" aria-hidden="true" />{:else if dot}<span
-      class="size-[0.45em] shrink-0 rounded-full bg-current"
-      aria-hidden="true"
+  {#if dot}<span class="size-[0.45em] shrink-0 rounded-full bg-current" aria-hidden="true"
     ></span>{/if}{@render children()}
 </span>

@@ -1,12 +1,12 @@
 <script lang="ts">
   import { cn } from "@/ui/cn";
 
-  type Item = { term: string; value: string; mono?: boolean; href?: string };
+  type Item = { term: string; value: string; numeric?: boolean; href?: string };
 
   /**
    * Labelled values, such as a build's specifications. `stacked` puts each term above its
    * value, `inline` puts pairs side by side in a wrapping row, and `grid` lays pairs out in
-   * responsive columns. Use `mono` for measurements and identifiers.
+   * responsive columns. `numeric` uses tabular figures for measurements.
    */
   type Props = {
     items: Item[];
@@ -41,7 +41,7 @@
   {#each items as item (item.term)}
     <div class="min-w-0">
       <dt class="text-fg-muted">{item.term}</dt>
-      <dd class={cn("mt-0.5 wrap-break-word text-fg", item.mono === true && "font-mono")}>
+      <dd class={cn("mt-0.5 wrap-break-word text-fg", item.numeric === true && "tabular-nums")}>
         {#if item.href !== undefined}<a href={item.href}>{item.value}</a>{:else}{item.value}{/if}
       </dd>
     </div>

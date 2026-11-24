@@ -7,11 +7,10 @@
     recordCriterionLabel,
     versionScopeLabel,
   } from "@/locales/vocabulary.gen";
+  import MetaList from "@/ui/content/MetaList.svelte";
   import Text from "@/ui/content/Text.svelte";
   import Card from "@/ui/data/Card.svelte";
-  import Badge from "@/ui/feedback/Badge.svelte";
-  import Layout from "@/ui/layout/Layout.svelte";
-  import RecordFreshness from "./RecordFreshness.svelte";
+  import { recordFreshness } from "./freshness";
 
   /** A record as a card linking to its page. `headingLevel` is 2 directly under a page title. */
   type Props = {
@@ -30,12 +29,12 @@
   eyebrow={recordCriterionLabel(record.criterion)}
 >
   {#if record.subtitle}<Text size="sm" tone="muted">{record.subtitle}</Text>{/if}
-  <Layout pattern="cluster" gap="xs">
-    <Badge>{buildKindLabel(record.build_kind)}</Badge>
-    <Badge>{versionScopeLabel(record.version_scope)}</Badge>
-  </Layout>
-  <Text size="sm" tone="muted">
-    {m.recordHolderCount({ count: record.holder_build_ids.length })} ·
-    <RecordFreshness {record} />
-  </Text>
+  <MetaList
+    items={[
+      buildKindLabel(record.build_kind),
+      versionScopeLabel(record.version_scope),
+      m.recordHolderCount({ count: record.holder_build_ids.length }),
+      ...recordFreshness(record),
+    ]}
+  />
 </Card>

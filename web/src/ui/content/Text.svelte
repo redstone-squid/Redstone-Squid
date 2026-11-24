@@ -2,13 +2,13 @@
   import type { Snippet } from "svelte";
   import { cn } from "@/ui/cn";
 
-  /** Body text. Use `mono` only for technical values such as IDs, sizes, and timings. */
+  /** Body text. `numeric` uses tabular figures, for numbers that line up in columns or update. */
   type Props = {
     as?: "p" | "span" | "div";
     size?: "xs" | "sm" | "md";
     tone?: "default" | "muted" | "danger" | "success" | "warning";
     weight?: "normal" | "semibold";
-    mono?: boolean;
+    numeric?: boolean;
     /** Clamp to this many lines with an ellipsis. */
     lines?: 1 | 2 | 3;
     class?: string;
@@ -19,7 +19,7 @@
     size = "md",
     tone = "default",
     weight = "normal",
-    mono = false,
+    numeric = false,
     lines,
     class: className,
     children,
@@ -42,7 +42,7 @@
     sizes[size],
     tones[tone],
     weight === "semibold" && "font-semibold",
-    mono && "font-mono",
+    numeric && "tabular-nums",
     lines !== undefined && clamps[lines],
     className,
   )}

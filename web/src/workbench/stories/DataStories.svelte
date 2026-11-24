@@ -12,14 +12,13 @@
   import StatGroup from "@/ui/data/StatGroup.svelte";
   import Timeline from "@/ui/data/Timeline.svelte";
   import Text from "@/ui/content/Text.svelte";
-  import Badge from "@/ui/feedback/Badge.svelte";
   import Layout from "@/ui/layout/Layout.svelte";
   import Story from "./Story.svelte";
   import Variant from "./Variant.svelte";
 
   const specs = [
-    { term: "Dimensions", value: "9 × 7 × 4", mono: true },
-    { term: "Opening", value: "8 gt", mono: true },
+    { term: "Dimensions", value: "9 × 7 × 4", numeric: true },
+    { term: "Opening", value: "8 gt", numeric: true },
     { term: "Version", value: "Java 1.21.4" },
     { term: "Creator", value: "CircuitSage", href: "#descriptionlist" },
   ];
@@ -140,9 +139,7 @@
       unreadLabel="Unread"
     >
       {#snippet leading()}<Bell class="mt-0.5 size-5 text-fg-muted" aria-hidden="true" />{/snippet}
-      {#snippet meta()}<time datetime="2026-01-12">3 days ago</time><Badge tone="success"
-          >Record</Badge
-        >{/snippet}
+      {#snippet meta()}<time datetime="2026-01-12">3 days ago</time>{/snippet}
     </ListItem>
     <ListItem title="Laptop CLI" description="Last used yesterday">
       {#snippet leading()}<Avatar name="Laptop CLI" size="sm" />{/snippet}

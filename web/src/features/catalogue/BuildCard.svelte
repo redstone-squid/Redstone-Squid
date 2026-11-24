@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { PublicBuildSummary } from "@/generated/types.gen";
+  import { formatList } from "@/locales/format";
   import { localizePath } from "@/locales/locale";
   import * as m from "@/locales/messages.gen";
   import Text from "@/ui/content/Text.svelte";
@@ -43,7 +44,7 @@
       fallbackLabel={preview === null ? m.buildNoPreview() : m.buildImageUnavailable()}
     />
   {/snippet}
-  <Text size="sm" tone="muted">{build.creators.join(" · ")}</Text>
+  <Text size="sm" tone="muted">{formatList(build.creators)}</Text>
   <DescriptionList
     layout="inline"
     size="sm"
@@ -56,7 +57,7 @@
           height: height ?? unknown,
           depth: depth ?? unknown,
         }),
-        mono: true,
+        numeric: true,
       },
       {
         term: m.buildOpening(),
@@ -64,7 +65,7 @@
           build.opening_time === null
             ? m.buildTimingUnknown()
             : m.buildTicks({ ticks: build.opening_time }),
-        mono: build.opening_time !== null,
+        numeric: true,
       },
     ]}
   />

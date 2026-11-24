@@ -7,14 +7,14 @@
     resolutionStatusLabel,
     versionScopeLabel,
   } from "@/locales/vocabulary.gen";
-  import Text from "@/ui/content/Text.svelte";
+  import MetaList from "@/ui/content/MetaList.svelte";
   import Badge from "@/ui/feedback/Badge.svelte";
   import EmptyState from "@/ui/feedback/EmptyState.svelte";
   import Layout from "@/ui/layout/Layout.svelte";
   import PageHeader from "@/ui/patterns/PageHeader.svelte";
   import Section from "@/ui/patterns/Section.svelte";
   import BuildCard from "./BuildCard.svelte";
-  import RecordFreshness from "./RecordFreshness.svelte";
+  import { recordFreshness } from "./freshness";
 
   /** A record with its classification, freshness, and holders in the API's order. */
   let { record }: { record: PublicRecordDetail } = $props();
@@ -28,12 +28,12 @@
     description={record.subtitle ?? undefined}
   >
     {#snippet meta()}
-      <Badge>{kind}</Badge>
-      <Badge>{versionScopeLabel(record.version_scope)}</Badge>
       <Badge tone={record.status === "resolved" ? "success" : "warning"} dot>
         {m.recordStatus({ status: resolutionStatusLabel(record.status) })}
       </Badge>
-      <Text as="span" size="sm" tone="muted"><RecordFreshness {record} /></Text>
+      <MetaList
+        items={[kind, versionScopeLabel(record.version_scope), ...recordFreshness(record)]}
+      />
     {/snippet}
   </PageHeader>
   <Section title={m.recordHolders()}>

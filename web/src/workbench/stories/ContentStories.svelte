@@ -4,6 +4,7 @@
   import Heading from "@/ui/content/Heading.svelte";
   import Icon from "@/ui/content/Icon.svelte";
   import Link from "@/ui/content/Link.svelte";
+  import MetaList from "@/ui/content/MetaList.svelte";
   import Prose from "@/ui/content/Prose.svelte";
   import SkipLink from "@/ui/content/SkipLink.svelte";
   import Text from "@/ui/content/Text.svelte";
@@ -34,16 +35,32 @@
   </Variant>
 </Story>
 
+<Story
+  name="MetaList"
+  source="content/MetaList"
+  description="Facts about one item, separated by space rather than punctuation."
+>
+  <Variant label="sm">
+    <MetaList items={["Door", "All time", "2 holders", "Computed Jan 12, 2026"]} />
+  </Variant>
+  <Variant label="xs, wrapping">
+    <MetaList
+      size="xs"
+      items={["Java 1.21", "Bedrock 1.20", "12 × 12 × 5", "8 gt opening", "Updated 3 days ago"]}
+    />
+  </Variant>
+</Story>
+
 <Story name="Text" source="content/Text">
   <Variant label="tones">
     {#each ["default", "muted", "success", "warning", "danger"] as const as tone (tone)}
       <Text {tone}>A {tone} line of body text.</Text>
     {/each}
   </Variant>
-  <Variant label="sizes, mono, semibold">
+  <Variant label="sizes, numeric, semibold">
     <Text size="xs">Extra small hint text</Text>
     <Text size="sm" weight="semibold">Small semibold</Text>
-    <Text mono>9 × 7 × 4 · 8 gt</Text>
+    <Text numeric>9 × 7 × 4, 8 gt</Text>
   </Variant>
   <Variant label="clamped to one line">
     <Text lines={1} class="max-w-64"

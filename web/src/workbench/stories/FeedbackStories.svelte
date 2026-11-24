@@ -1,5 +1,4 @@
 <script lang="ts">
-  import Hammer from "@lucide/svelte/icons/hammer";
   import Tag from "@lucide/svelte/icons/tag";
   import Button from "@/ui/actions/Button.svelte";
   import Badge from "@/ui/feedback/Badge.svelte";
@@ -32,7 +31,6 @@
     <div class="flex flex-wrap gap-2">
       <Badge tone="success" dot>Approved</Badge>
       <Badge tone="warning" dot>Pending</Badge>
-      <Badge icon={Hammer}>Door</Badge>
       <Badge size="md" tone="accent">Record holder</Badge>
     </div>
   </Variant>
