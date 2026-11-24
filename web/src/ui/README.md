@@ -55,8 +55,9 @@ so components that render list items or rows take data, not slotted rows.
 Each folder has a stories page, `src/workbench/stories/<Folder>Stories.svelte`, that shows
 every variant and state through `Story` (`source` is the component's path, such as
 `feedback/Badge`). `tests/unit/workbench-stories.test.ts` fails when a component has no story.
-`tests/review/workbench.spec.ts` captures every page in both themes on desktop and mobile
-and runs axe; `/design-system-trial` exercises a complete draft. After an intentional visual
-change, run `bun run test:review:update`, inspect the screenshots, and rerun
-`bun run test:review` against them. `bun run test:compatibility` runs the trial in Firefox
-and WebKit.
+To see a change, run `bun run dev` and open its folder's page under `/design-system`.
+`tests/review/workbench.spec.ts` checks every page in both themes on desktop and mobile with
+axe and an overflow check; `/design-system-trial` exercises a complete draft. Screenshots are
+not committed: CI compares each pull request's with master's and lists the differences in the
+job summary and the gallery artifact, without failing. `bun run test:compatibility` runs the
+trial in Firefox and WebKit.

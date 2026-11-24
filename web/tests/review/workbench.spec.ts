@@ -3,7 +3,7 @@ import { LOCALES, localizePath } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
 import { GROUPS } from "@/workbench/groups";
 import { expect, test } from "@tests/support/test";
-import { attachReviewScreenshot } from "@tests/support/review-screenshot";
+import { captureForReview } from "@tests/support/review-screenshot";
 
 async function settle(page: Page): Promise<void> {
   await page.evaluate(async () => {
@@ -31,8 +31,7 @@ for (const theme of ["light", "dark"] as const) {
       expect(await fitsViewport(page)).toBe(true);
       await expect(page).toPassAxe();
       const name = `foundations-${locale}-${theme}`;
-      await attachReviewScreenshot(page, testInfo, name, "disabled");
-      await expect(page).toHaveScreenshot(`${name}.png`, { fullPage: true });
+      await captureForReview(page, testInfo, name, "disabled");
     });
   }
 
@@ -45,8 +44,7 @@ for (const theme of ["light", "dark"] as const) {
       expect(await fitsViewport(page)).toBe(true);
       await expect(page).toPassAxe();
       const name = `${group}-${theme}`;
-      await attachReviewScreenshot(page, testInfo, name, "disabled");
-      await expect(page).toHaveScreenshot(`${name}.png`, { fullPage: true });
+      await captureForReview(page, testInfo, name, "disabled");
     });
   }
 }

@@ -56,11 +56,12 @@ Conventions to follow:
 - **Coverage.** `tests/unit/workbench-stories.test.ts` fails when a `src/ui/**/*.svelte` has
   no story, except its `INTERNAL` set. Vitest coverage for `src/ui` must stay at 90% lines,
   functions, statements and 85% branches.
-- **Review.** `tests/review/workbench.spec.ts` screenshots every group page in both themes on
-  desktop and mobile, with axe and an overflow check. After a visual change, run
-  `bun run test:review:update`, inspect the images, then `bun run test:review`. Broken-image
-  demos use `https://media.fixture.invalid/broken.png`; a real 404 fails the console check.
-  Navigation landmarks on one page need distinct names.
+- **Review.** Look at changes on the workbench page in `bun run dev`.
+  `tests/review/workbench.spec.ts` runs axe and an overflow check on every group page in both
+  themes on desktop and mobile; CI compares their screenshots with master's and reports
+  differences without failing. Broken-image demos use
+  `https://media.fixture.invalid/broken.png`; a real 404 fails the console check. Navigation
+  landmarks on one page need distinct names.
 - **Styles.** No `variants.ts`. A style shared by a folder goes in that folder's `styles.ts`
   (`forms/styles.ts` exists; recreate `overlays/styles.ts` with `Menu`). Code that wants a
   button's look renders `Button`, through bits-ui's `child` snippet for triggers.
@@ -84,13 +85,13 @@ How to resume:
 3. Then Phase 5 (patterns) and Phase 6 (infrastructure), then Phase 7 (lint enforcement),
    which must leave zero violations behind.
 4. Each phase ends the way Phase 1 did: stories, unit tests for keyboard and focus contracts,
-   refreshed review screenshots, `src/ui/README.md` updated, and small commits.
+   a passing `test:review`, `src/ui/README.md` updated, and small commits.
 
 Not yet run: `bun run test:compatibility` (Firefox and WebKit).
 
 ## Build order
 
-Each phase ends with workbench stories, unit tests (keyboard and focus), review screenshots and axe for every new component, and the README table updated.
+Each phase ends with workbench stories, unit tests (keyboard and focus), axe on every new component, and the README table updated.
 
 **Phase 0: foundations.** Done.
 
@@ -98,36 +99,42 @@ Each phase ends with workbench stories, unit tests (keyboard and focus), review 
 were built here, ahead of their phases.
 
 **Phase 2: form primitives.**
+
 - `FieldFrame` fix, `TextField`, `TextareaField`, `SelectField`, `CheckField`, `Switch`, `ChoiceGroup`, `FieldGroup`, `RangeField`, `UnitField`, `CodeEntry`, `ErrorSummary`, `FormActions`, `SaveStatus`, `FileDrop`.
 - Then `Autocomplete` (refit), `Combobox` (bits-ui), `ListField`.
-- *Depends on:* Phase 1 (`Text`, `Icon`, `Chip`).
+- _Depends on:_ Phase 1 (`Text`, `Icon`, `Chip`).
 
 **Phase 3: overlays and interactive navigation.**
+
 - `Dialog` (rewritten), `Sheet`, `Popover`, `Tooltip`, `Menu` (with the `details` fallback, then replace `LanguageSelector`'s hand-built menu), `Tabs` panel mode, `SegmentedControl` radio mode, `CopyButton`, `Announcer`.
-- *Depends on:* Phase 2 for the dialog contents.
+- _Depends on:_ Phase 2 for the dialog contents.
 
 **Phase 4: data and charts.**
+
 - `DataTable`: `@tanstack/svelte-table`, server-driven sort, visibility, expansion, pinned column and the no-JS link model. It needs Phase 3 `Menu` for columns.
 - `Gallery`: needs Phase 3 `Dialog`.
 - `Chart` frame, `SeriesChart`, `RangeChart`, `DistributionBar` on LayerChart: static server rendering first, then interactive tooltips and keyboard.
 
 **Phase 5: patterns.**
+
 - `SplitLayout`, `NavBar`, `SearchBox`, `FilterPanel`, `ActiveFilters`, `ResultsToolbar`, `ResultsView`, `ConfirmDialog`, `SettingsList`, `MediaUploader`, `OneTimeSecret`, `StepFlow`, `FlashNotice`.
 - Then rebuild `CatalogueLayout` and the header with `NavBar` and the `UserMenu` island once `/v1/session` exists.
 
 **Phase 6: application infrastructure.** Parallel with Phase 5.
+
 - `src/ui/lib/url-state.ts`, `focus.ts`, `query-client.ts` (one QueryClient per page).
 - `src/features/api-client/mutation.ts`: CSRF, Idempotency-Key, If-Match, ProblemDetail parsing with zod, the error-code map, and the same-origin proxy decision (API item 52).
 - `features/submissions/draft-sync.ts`: the operation queue, with Vitest coverage for rebase, conflict, offline and replay.
 
 **Phase 7: enforcement.**
+
 - ESLint bans:
   - arbitrary Tailwind values outside `src/ui`, and inside it except in an allowlist;
   - importing any `src/ui/**/styles.ts` outside `src/ui`;
   - `layerchart`, `bits-ui` and `@tanstack/svelte-table` imports outside `src/ui`;
   - raw `<button>`, `<input>`, `<select>`, `<textarea>`, `<table>`, `<dialog>` and `<img>` elements in `src/features` and `src/layouts`, which must use the `ui` components (escape hatch: a lint-disable with a reason).
 - Stylelint: the z-index ladder only, no raw durations.
-- A story test asserting every `src/ui` component has a workbench story and an axe-checked review screenshot in both themes, at desktop and mobile.
+- A story test asserting every `src/ui` component has a workbench story, checked by axe in both themes, at desktop and mobile.
 - Rewrite `src/ui/README.md` as the "Need → Use" table for this spec.
 - Add an AGENTS.md rule: a new `src/ui` component needs two real users and a story; anything domain-aware goes in `features/`.
 

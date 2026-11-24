@@ -171,7 +171,8 @@ declaration and explain surprising decisions beside the code that depends on the
 - `tests/e2e`: Playwright against the built site and the fixture API in `tests/fixtures/api.ts`.
   Follow [tag pages](tests/e2e/tag-slugs.spec.ts) for visible page content and HTTP contracts.
   Remove a route from the placeholder matrix when its page ships.
-- `tests/review`: screenshots, axe, and recorded workflows of the design-system workbench.
+- `tests/review`: axe, overflow, and recorded workflows of the design-system workbench. CI
+  also compares its screenshots with master's and reports differences without failing.
 - Use `@tests/` for imports of shared test support. Browser specs import `test` and
   `expect` from `@tests/support/test`. A test fails on any console error, and
   `await expect(page).toPassAxe()` runs axe. Server ports and environment live in
@@ -213,5 +214,6 @@ from `web/` before committing web work.
 From `web/`, format touched files with Prettier and run `bun run lint`, `bun run check`,
 and `bun run test` as applicable. Vitest checks coverage for locale, UI, feature, and
 workbench code. Run `bun run build` before the relevant Playwright tests, such as
-`bunx playwright test tests/e2e --project=chromium-desktop`. Run `bun run test:review`
-after visual changes. CI runs all of these.
+`bunx playwright test tests/e2e --project=chromium-desktop`. Check visual changes on the
+workbench page in `bun run dev`; run `bun run test:review -- --grep <group>` when a change
+could break accessibility or layout. CI runs all of these.

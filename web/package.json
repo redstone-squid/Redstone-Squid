@@ -23,7 +23,6 @@
     "check:bundle": "bun scripts/check-bundle.ts",
     "test:review": "playwright test --config playwright.review.config.ts",
     "test:compatibility": "playwright test --config playwright.compatibility.config.ts",
-    "test:review:update": "bun run test:review --update-snapshots=all",
     "i18n:check": "bun scripts/i18n/build.ts",
     "i18n:generate": "bun scripts/i18n/build.ts --write",
     "i18n:review": "bun scripts/i18n/build.ts --review --write",

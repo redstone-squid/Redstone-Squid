@@ -1,7 +1,7 @@
 import { localizePath } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
 import { test, expect } from "@tests/support/test";
-import { attachReviewScreenshot } from "@tests/support/review-screenshot";
+import { captureForReview } from "@tests/support/review-screenshot";
 
 test.use({ video: "on" });
 
@@ -56,8 +56,7 @@ for (const locale of ["en", "zh-CN"] as const) {
     }
     await page.evaluate(() => document.fonts.ready);
     await title.focus();
-    await attachReviewScreenshot(page, testInfo, `svelte-${locale}`, "allow");
-    await expect(page).toHaveScreenshot(`trial-svelte-${locale}.png`, { fullPage: true });
+    await captureForReview(page, testInfo, `trial-svelte-${locale}`, "allow");
     await page.getByRole("combobox", { name: m.trialCategory(locale) }).selectOption("utility");
     await expect(width).toHaveCount(0);
     await title.fill("Reserved");
