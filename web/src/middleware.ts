@@ -94,9 +94,33 @@ const securityHeaders = defineMiddleware(async (_context, next) => {
   const headers = response.headers;
   headers.set("X-Content-Type-Options", "nosniff");
   headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  // Browsers ignore this over plain HTTP, so development is unaffected. Subdomains are left
+  // out because the host is shared with other services.
+  headers.set("Strict-Transport-Security", "max-age=31536000");
+  // Nothing on the site opens or is opened by another origin's window, or embeds our files.
+  headers.set("Cross-Origin-Opener-Policy", "same-origin");
+  headers.set("Cross-Origin-Resource-Policy", "same-origin");
+  headers.set("Permissions-Policy", DENIED_FEATURES.map((feature) => `${feature}=()`).join(", "));
   // The policy's `report-to csp` posts violations here; see src/pages/telemetry/csp.ts.
   headers.set("Reporting-Endpoints", 'csp="/telemetry/csp"');
   return response;
 });
+
+/** Powerful browser features the site never uses, denied so injected code cannot ask. */
+const DENIED_FEATURES = [
+  "accelerometer",
+  "browsing-topics",
+  "camera",
+  "display-capture",
+  "geolocation",
+  "gyroscope",
+  "hid",
+  "magnetometer",
+  "microphone",
+  "midi",
+  "payment",
+  "serial",
+  "usb",
+];
 
 export const onRequest = sequence(securityHeaders, traceRequest, catalogueRequest);

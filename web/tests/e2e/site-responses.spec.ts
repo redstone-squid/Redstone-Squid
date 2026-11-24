@@ -30,6 +30,8 @@ test("pages forbid framing and scripts that Astro did not emit", async ({ reques
   expect(policy).toContain("report-to csp");
   expect(headers["reporting-endpoints"]).toBe('csp="/telemetry/csp"');
   expect(headers["x-content-type-options"]).toBe("nosniff");
+  expect(headers["cross-origin-opener-policy"]).toBe("same-origin");
+  expect(headers["permissions-policy"]).toContain("camera=()");
 });
 
 test("policy violation reports are accepted and other bodies refused", async ({ request }) => {
