@@ -134,6 +134,54 @@ export function footerInvite(locale: Locale = getLocale()): string {
   }
 }
 
+/** Theme */
+export function footerTheme(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Theme";
+    case "zh-CN":
+      return "主题";
+    case "en-XA":
+      return "[" + "Ţĥéɱé" + "··]";
+  }
+}
+
+/** System */
+export function footerThemeSystem(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "System";
+    case "zh-CN":
+      return "跟随系统";
+    case "en-XA":
+      return "[" + "Šýšţéɱ" + "···]";
+  }
+}
+
+/** Light */
+export function footerThemeLight(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Light";
+    case "zh-CN":
+      return "浅色";
+    case "en-XA":
+      return "[" + "Ļîĝĥţ" + "··]";
+  }
+}
+
+/** Dark */
+export function footerThemeDark(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Dark";
+    case "zh-CN":
+      return "深色";
+    case "en-XA":
+      return "[" + "Đåŕķ" + "··]";
+  }
+}
+
 /** Minecraft redstone builds */
 export function homeTitle(locale: Locale = getLocale()): string {
   switch (locale) {

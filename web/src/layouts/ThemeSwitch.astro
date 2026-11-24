@@ -1,0 +1,50 @@
+---
+import Monitor from "@lucide/svelte/icons/monitor";
+import Moon from "@lucide/svelte/icons/moon";
+import Sun from "@lucide/svelte/icons/sun";
+import * as m from "@/locales/messages.gen";
+import Icon from "@/ui/content/Icon.svelte";
+
+/**
+ * The footer's theme choice. Each option is a submit button, so without JavaScript the form
+ * posts to /theme, which saves the cookie and redirects back. With JavaScript the page
+ * switches in place and the post only saves the choice.
+ */
+const current = Astro.locals.theme ?? "system";
+const options = [
+  { value: "system", icon: Monitor, label: m.footerThemeSystem() },
+  { value: "light", icon: Sun, label: m.footerThemeLight() },
+  { value: "dark", icon: Moon, label: m.footerThemeDark() },
+] as const;
+---
+
+<form
+  class="flex flex-wrap items-center gap-3 text-sm"
+  method="post"
+  action="/theme"
+  data-theme-switch
+>
+  <input type="hidden" name="return" value={Astro.locals.requestedPath} />
+  <span id="theme-switch-label" class="text-fg-muted">
+    {m.footerTheme()}
+  </span>
+  <div
+    role="group"
+    aria-labelledby="theme-switch-label"
+    class="flex rounded-sm border border-line-strong bg-surface p-0.5"
+  >
+    {options.map(({ value, icon, label }) => (
+      <button
+        class="flex min-h-control-sm cursor-pointer items-center gap-2 rounded-xs px-3 font-semibold text-fg-muted hover:text-fg aria-pressed:bg-accent-soft aria-pressed:text-fg"
+        name="theme"
+        value={value}
+        aria-pressed={value === current ? "true" : "false"}
+      >
+        <Icon {icon} />
+        {label}
+      </button>
+    ))}
+  </div>
+</form>
+
+<script src="./theme-switch.ts"></script>

@@ -2,10 +2,12 @@ import { SpanKind, TraceFlags, trace } from "@opentelemetry/api";
 import { defineMiddleware, sequence } from "astro:middleware";
 import { DEFAULT_LOCALE, localeFromPath, localizePath, unprefixedPath } from "@/locales/locale";
 import { createApiClient } from "@/server/api";
+import { readThemeCookie } from "@/server/cookies";
 import { getRuntimeConfig } from "@/server/config";
 import { findRedirect } from "@/server/redirects";
 import { withRequestLocale } from "@/server/request-locale";
 import { traceHttp } from "@/server/telemetry";
+import { parseTheme } from "@/ui/themes";
 
 const traceRequest = defineMiddleware((context, next) => {
   if (context.routePattern === "/telemetry/browser") return next();
@@ -52,6 +54,10 @@ const catalogueRequest = defineMiddleware(async (context, next) => {
   const locale = prefixed ?? inherited.locale ?? DEFAULT_LOCALE;
   context.locals.locale = locale;
   context.locals.requestedPath = inherited.requestedPath ?? `${pathname}${search}`;
+  // The service worker precaches /offline once, so it follows the device rather than
+  // keeping whichever theme was pinned at install time.
+  context.locals.theme =
+    unprefixedPath(pathname) === "/offline" ? undefined : parseTheme(readThemeCookie(context));
   const log = (event: string, fields: Record<string, unknown>) =>
     JSON.stringify({
       event,

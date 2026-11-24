@@ -13,7 +13,7 @@ type Props = {
   structuredData?: Record<string, unknown> | Record<string, unknown>[];
 };
 
-const { locale, config } = Astro.locals;
+const { locale, config, theme } = Astro.locals;
 const title = `${Astro.props.title} · ${m.siteName()}`;
 const description = Astro.props.description ?? m.metaDefaultDescription();
 const canonicalPath = Astro.props.canonicalPath ?? Astro.url.pathname;
@@ -34,7 +34,16 @@ const jsonLd = Astro.props.structuredData
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width" />
 <meta name="description" content={description} />
-<meta name="theme-color" content={THEME_COLORS.light} />
+<meta name="color-scheme" content={theme ?? "light dark"} />
+{/* One per device scheme; a pinned theme gives both its color. ThemeSwitch updates them. */}
+{(["light", "dark"] as const).map((scheme) => (
+  <meta
+    name="theme-color"
+    media={`(prefers-color-scheme: ${scheme})`}
+    content={THEME_COLORS[theme ?? scheme]}
+    data-scheme={scheme}
+  />
+))}
 <meta name="robots" content={noindex ? "noindex,follow" : "index,follow"} />
 <link rel="canonical" href={canonical} />
 {PUBLIC_LOCALES.map((language) => (

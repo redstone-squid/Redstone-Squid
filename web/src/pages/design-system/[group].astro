@@ -17,7 +17,8 @@ import WorkbenchLayout from "@/workbench/WorkbenchLayout.astro";
 
 const group = Astro.params.group;
 if (!isGroup(group)) return Astro.rewrite("/404");
-const theme = parseTheme(Astro.url.searchParams.get("theme"));
+// The query wins so screenshots are repeatable; the workbench has no device default.
+const theme = parseTheme(Astro.url.searchParams.get("theme")) ?? Astro.locals.theme ?? "light";
 const { title, description } = GROUPS[group];
 ---
 

@@ -11,7 +11,8 @@ import DraftTrial from "@/workbench/DraftTrial.svelte";
 import WorkbenchLayout from "@/workbench/WorkbenchLayout.astro";
 
 const params = Astro.url.searchParams;
-const theme = parseTheme(params.get("theme"));
+// The query wins so screenshots are repeatable; the workbench has no device default.
+const theme = parseTheme(params.get("theme")) ?? Astro.locals.theme ?? "light";
 const selected = params.get("scenario");
 const scenario = selected === "retry" || selected === "upload-retry" ? selected : undefined;
 // The scenario is a fixture choice kept in the URL; toggling it reloads the trial.

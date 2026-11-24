@@ -11,7 +11,8 @@ import Foundations from "@/workbench/Foundations.svelte";
 import { GROUPS } from "@/workbench/groups";
 import WorkbenchLayout from "@/workbench/WorkbenchLayout.astro";
 
-const theme = parseTheme(Astro.url.searchParams.get("theme"));
+// The query wins so screenshots are repeatable; the workbench has no device default.
+const theme = parseTheme(Astro.url.searchParams.get("theme")) ?? Astro.locals.theme ?? "light";
 ---
 
 <WorkbenchLayout title={m.workbenchPageTitle()} {theme}>
