@@ -71,7 +71,7 @@ docker run --detach --name "$API_CONTAINER" --network host "${COMMON_ENV[@]}" \
     "$APP_IMAGE" python -m squid.api.app >/dev/null
 wait_for_command "API readiness" curl --fail --silent --show-error "http://127.0.0.1:${API_PORT}/readyz"
 rate_limit_headers=$(curl --fail --silent --show-error --dump-header - --output /dev/null \
-    "http://127.0.0.1:${API_PORT}/openapi.json")
+    "http://127.0.0.1:${API_PORT}/schema/openapi.json")
 if ! grep -qi '^ratelimit:' <<< "$rate_limit_headers"; then
     printf 'API response did not include rate-limit quota headers.\n' >&2
     exit 1
