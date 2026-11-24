@@ -1,48 +1,80 @@
-<script lang="ts">
-  import { onMount, tick } from "svelte";
-  import { cn } from "@/ui/cn";
-  import { fieldClass, fieldMessageClass, inputClass } from "./styles";
+<script lang="ts" module>
   export type Suggestion = { value: string; label: string; description?: string | null };
   export type Suggestions = {
     items: Suggestion[];
+    /** The span of the value that a chosen suggestion replaces; the whole value when absent. */
     replacement?: { start: number; end: number } | null;
   };
-  type Props = {
-    id?: string;
+</script>
+
+<script lang="ts">
+  import { onMount, tick } from "svelte";
+  import { cn } from "@/ui/cn";
+  import Spinner from "@/ui/feedback/Spinner.svelte";
+  import type { FieldMessages } from "@/ui/forms/field";
+  import FieldFrame from "./FieldFrame.svelte";
+  import { inputClass, popupClass, popupOptionClass } from "./styles";
+
+  /**
+   * Free text with suggestions, such as a search query or a credit name. The typed text is
+   * the value; suggestions only help write it. Use `Combobox` to choose from a fixed set.
+   *
+   * After `minQueryLength` characters and `debounceMs` of quiet, `load(value, cursor, signal)`
+   * fetches suggestions; a newer keystroke aborts the older request. A suggestion with a
+   * `replacement` span replaces only that part of the value, such as the word at the cursor.
+   *
+   * Arrow keys move through suggestions, Enter takes the active one (otherwise it submits the
+   * form), and Escape closes the list. Nothing loads while an input method is composing. The
+   * number of suggestions is announced politely. Without JavaScript it is a plain input.
+   */
+  type Props = Omit<FieldMessages, "width"> & {
     name: string;
-    label: string;
-    suggestionsLabel: string;
-    errorLabel: string;
+    id?: string;
     value?: string;
     multiline?: boolean;
-    maxLength?: number;
-    minLength?: number;
+    maxlength?: number;
+    placeholder?: string;
+    required?: boolean;
+    disabled?: boolean;
+    minQueryLength?: number;
+    debounceMs?: number;
+    labels: {
+      suggestions: string;
+      loading: string;
+      error: string;
+      noResults: string;
+      count: (count: number) => string;
+    };
     load: (value: string, cursor: number | null, signal: AbortSignal) => Promise<Suggestions>;
+    width?: FieldMessages["width"];
+    class?: string;
   };
   let {
-    id: suppliedId,
     name,
-    label,
-    suggestionsLabel,
-    errorLabel,
     value = $bindable(""),
     multiline = false,
-    maxLength,
-    minLength = 2,
+    maxlength,
+    placeholder,
+    required,
+    disabled,
+    minQueryLength = 2,
+    debounceMs = 250,
+    labels,
     load,
+    ...frame
   }: Props = $props();
-  const generatedId = $props.id();
-  const id = $derived(suppliedId ?? generatedId);
-  const listId = `${generatedId}-suggestions`;
+  const fieldId = $props.id();
+  const listId = `${fieldId}-suggestions`;
   let input: HTMLInputElement | HTMLTextAreaElement | undefined = $state();
   let result = $state<Suggestions>({ items: [] });
+  let phase = $state<"idle" | "loading" | "ready" | "failed">("idle");
   let active = $state(-1);
   let focused = $state(false);
   let dismissed = $state(false);
   let composing = $state(false);
-  let failed = $state(false);
   let cursor = $state<number | null>(null);
-  const visible = $derived(focused && !dismissed && !composing ? result.items : []);
+  const open = $derived(focused && !dismissed && !composing && phase !== "idle");
+  const visible = $derived(open ? result.items : []);
 
   onMount(() => {
     // A visitor can start typing into the server-rendered field before hydration.
@@ -56,20 +88,26 @@
     const query = value;
     const caret = cursor;
     const request = load;
-    result = { items: [] };
     active = -1;
-    failed = false;
-    if (!focused || dismissed || composing || query.trim().length < minLength) return;
+    if (!focused || dismissed || composing || query.trim().length < minQueryLength) {
+      result = { items: [] };
+      phase = "idle";
+      return;
+    }
+    // Earlier suggestions stay visible until the new ones arrive, so the list doesn't flicker.
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      void request(query, caret, controller.signal)
+      if (result.items.length === 0) phase = "loading";
+      request(query, caret, controller.signal)
         .then((response) => {
-          if (!controller.signal.aborted) result = response;
+          if (controller.signal.aborted) return;
+          result = response;
+          phase = "ready";
         })
         .catch(() => {
-          if (!controller.signal.aborted) failed = true;
+          if (!controller.signal.aborted) phase = "failed";
         });
-    }, 250);
+    }, debounceMs);
     return () => {
       window.clearTimeout(timer);
       controller.abort();
@@ -90,7 +128,6 @@
     const caret = (span?.start ?? 0) + item.value.length;
     value = span ? value.slice(0, span.start) + item.value + value.slice(span.end) : item.value;
     dismissed = true;
-    active = -1;
     await tick();
     input?.focus();
     input?.setSelectionRange(caret, caret);
@@ -103,9 +140,9 @@
   }
   async function keydown(event: KeyboardEvent): Promise<void> {
     if (event.isComposing || composing) return;
-    if (event.key === "Escape") {
+    if (event.key === "Escape" && open) {
+      event.preventDefault();
       dismissed = true;
-      active = -1;
       return;
     }
     if (visible.length === 0) return;
@@ -124,78 +161,95 @@
       await choose(active);
     }
   }
-  const attributes = $derived({
-    id,
-    name,
-    maxlength: maxLength,
-    role: "combobox" as const,
-    autocomplete: "off" as const,
-    "aria-autocomplete": "list" as const,
-    "aria-controls": visible.length > 0 ? listId : undefined,
-    "aria-expanded": visible.length > 0,
-    "aria-activedescendant": active >= 0 && visible[active] ? `${listId}-${active}` : undefined,
+  const handlers = {
     oninput: changed,
     onkeydown: keydown,
-    onfocus: () => {
-      focused = true;
-    },
-    onblur: () => {
-      focused = false;
-    },
+    onfocus: () => (focused = true),
+    onblur: () => (focused = false),
     onselect: () => {
       if (multiline) cursor = input?.selectionStart ?? null;
     },
-    oncompositionstart: () => {
-      composing = true;
-    },
+    oncompositionstart: () => (composing = true),
     oncompositionend: (event: CompositionEvent) => {
       composing = false;
       changed(event);
     },
-  });
+  };
 </script>
 
-<div class={cn(fieldClass, "relative")}>
-  <label for={id}>{label}</label>
-  {#if multiline}<textarea
-      class={cn(inputClass, "resize-y")}
-      {...attributes}
-      bind:value
-      bind:this={input}
-      rows="3"></textarea>{:else}<input
-      class={inputClass}
-      {...attributes}
-      bind:value
-      bind:this={input}
-    />{/if}
-  {#if visible.length}
-    <ul
-      class="absolute inset-x-0 top-full z-10 mt-1 max-h-64 list-none overflow-y-auto rounded-sm border border-line bg-surface p-1 shadow-card"
-      id={listId}
-      role="listbox"
-      aria-label={suggestionsLabel}
+<FieldFrame {...frame} class={cn("relative", frame.class)}>
+  {#snippet children(field)}
+    {@const attributes = {
+      ...field,
+      ...handlers,
+      name,
+      maxlength,
+      placeholder,
+      required,
+      disabled,
+      role: "combobox" as const,
+      autocomplete: "off" as const,
+      "aria-autocomplete": "list" as const,
+      "aria-controls": visible.length > 0 ? listId : undefined,
+      "aria-expanded": visible.length > 0,
+      "aria-activedescendant": active >= 0 && visible[active] ? `${listId}-${active}` : undefined,
+    }}
+    <div class="relative">
+      {#if multiline}<textarea
+          {...attributes}
+          class={cn(inputClass, "block min-h-24 w-full resize-y")}
+          bind:value
+          bind:this={input}
+          rows="3"></textarea>{:else}<input
+          {...attributes}
+          class={cn(inputClass, "w-full")}
+          bind:value
+          bind:this={input}
+        />{/if}
+      {#if open}
+        <div class={popupClass}>
+          {#if visible.length > 0}
+            <ul class="grid list-none" id={listId} role="listbox" aria-label={labels.suggestions}>
+              {#each visible as item, index (index)}
+                <!-- Keyboard users choose through the input (aria-activedescendant). -->
+                <!-- svelte-ignore a11y_click_events_have_key_events -->
+                <li
+                  id={`${listId}-${index}`}
+                  role="option"
+                  aria-selected={active === index}
+                  aria-labelledby={`${listId}-${index}-label`}
+                  aria-describedby={item.description != null
+                    ? `${listId}-${index}-description`
+                    : undefined}
+                  class={popupOptionClass}
+                  onpointerdown={(event) => event.preventDefault()}
+                  onclick={() => choose(index)}
+                >
+                  <span id={`${listId}-${index}-label`}>{item.label}</span>
+                  {#if item.description != null}<span
+                      id={`${listId}-${index}-description`}
+                      class="text-xs text-fg-muted">{item.description}</span
+                    >{/if}
+                </li>
+              {/each}
+            </ul>
+          {:else}
+            <p class="flex items-center gap-2 px-3 py-2.5 text-sm text-fg-muted">
+              {#if phase === "loading"}<Spinner
+                />{labels.loading}{:else if phase === "failed"}{labels.error}{:else}{labels.noResults}{/if}
+            </p>
+          {/if}
+        </div>
+      {/if}
+    </div>
+    <span class="sr-only" role="status"
+      >{open && phase === "ready"
+        ? result.items.length > 0
+          ? labels.count(result.items.length)
+          : labels.noResults
+        : open && phase === "failed"
+          ? labels.error
+          : ""}</span
     >
-      {#each visible as item, index (index)}
-        <li role="presentation">
-          <button
-            type="button"
-            class="grid w-full cursor-pointer rounded-sm border-0 bg-surface p-3 text-left wrap-anywhere text-fg hover:bg-surface-muted aria-selected:forced-highlight aria-selected:bg-surface-muted"
-            role="option"
-            aria-label={item.label}
-            tabindex="-1"
-            id={`${listId}-${index}`}
-            aria-selected={active === index}
-            onpointerdown={(event) => event.preventDefault()}
-            onclick={() => choose(index)}
-            >{item.label}{#if item.description}<span class={fieldMessageClass}
-                >{item.description}</span
-              >{/if}</button
-          >
-        </li>
-      {/each}
-    </ul>
-  {/if}
-  {#if failed && focused && !dismissed}<p class={fieldMessageClass} role="status">
-      {errorLabel}
-    </p>{/if}
-</div>
+  {/snippet}
+</FieldFrame>

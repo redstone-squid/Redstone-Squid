@@ -19,14 +19,19 @@ function setup(
         .filter((version) => version.toLowerCase().includes(value.toLowerCase()))
         .map((version) => ({ value: version, label: version })),
     }),
-  props: Partial<{ multiline: boolean; minLength: number }> = {},
+  props: Partial<{ multiline: boolean; minQueryLength: number }> = {},
 ) {
   const user = userEvent.setup();
   render(Autocomplete, {
     name: "version",
     label: "Version",
-    suggestionsLabel: "Suggestions",
-    errorLabel: "Suggestions are unavailable.",
+    labels: {
+      suggestions: "Suggestions",
+      loading: "Loading",
+      error: "Suggestions are unavailable.",
+      noResults: "No matches",
+      count: (count: number) => `${count} suggestions`,
+    },
     load,
     ...props,
   });
@@ -63,6 +68,7 @@ describe("Autocomplete", () => {
     );
     await user.keyboard("{Enter}");
     expect(input).toHaveValue("Java 1.21");
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
     expect(input).toHaveAttribute("aria-expanded", "false");
     expect(input).toHaveFocus();
   });
@@ -90,7 +96,8 @@ describe("Autocomplete", () => {
     const input = screen.getByRole("combobox", { name: "Version" });
     expect(input.tagName).toBe("TEXTAREA");
     await user.type(input, "door cre");
-    expect(await screen.findByText("Filter by creator")).toBeInTheDocument();
+    const option = await screen.findByRole("option", { name: "creator:" });
+    expect(option).toHaveAccessibleDescription("Filter by creator");
     await user.keyboard("{ArrowDown}{Enter}");
     expect(input).toHaveValue("door creator:");
   });
@@ -107,6 +114,23 @@ describe("Autocomplete", () => {
     expect(input).toHaveValue("Java 1.21");
   });
 
+  it("announces how many suggestions arrived, or that none match", async () => {
+    const { user, input } = setup();
+    await user.type(input, "java");
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("3 suggestions"));
+    await user.type(input, "x");
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("No matches"));
+  });
+
+  it("lets Enter submit the form when no option is active", async () => {
+    const { user, input } = setup();
+    await user.type(input, "java");
+    await screen.findAllByRole("option");
+    const enter = new KeyboardEvent("keydown", { key: "Enter", cancelable: true, bubbles: true });
+    input.dispatchEvent(enter);
+    expect(enter.defaultPrevented).toBe(false);
+  });
+
   it("reports a failed load and aborts the request it replaces", async () => {
     const signals: AbortSignal[] = [];
     const { user, input } = setup((_value, _cursor, signal) => {
@@ -114,7 +138,9 @@ describe("Autocomplete", () => {
       return Promise.reject(new Error("offline"));
     });
     await user.type(input, "java");
-    expect(await screen.findByRole("status")).toHaveTextContent("Suggestions are unavailable.");
+    await waitFor(() =>
+      expect(screen.getByRole("status")).toHaveTextContent("Suggestions are unavailable."),
+    );
     await user.type(input, " 1");
     await waitFor(() => expect(signals).toHaveLength(2));
     expect(signals[0]?.aborted).toBe(true);

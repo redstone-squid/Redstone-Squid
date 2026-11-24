@@ -59,5 +59,5 @@ export const popupClass = cn(
 );
 export const popupOptionClass = cn(
   "grid cursor-pointer gap-0.5 rounded-xs px-3 py-2 text-sm wrap-anywhere text-fg",
-  "hover:bg-surface-muted aria-selected:bg-accent-soft data-highlighted:bg-accent-soft",
+  "hover:bg-surface-muted aria-selected:bg-accent-soft aria-selected:forced-highlight data-highlighted:bg-accent-soft data-highlighted:forced-highlight",
 );
