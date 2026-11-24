@@ -1,6 +1,5 @@
-// Hides images that fail to load so `Image` and `Avatar` show their fallback. Svelte only
-// replays an image's error event when a component hydrates, and most pages render images
-// statically, so the layouts load this script instead of relying on component handlers.
+// Hides images that fail to load so `Image` and `Avatar` show their fallback. Most pages render
+// images statically, so the layouts load this script; hydrated islands use `hideWhenBroken`.
 
 function hide(target: EventTarget | null): void {
   if (target instanceof HTMLImageElement && target.dataset.fallback !== undefined) {

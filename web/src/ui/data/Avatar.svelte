@@ -1,5 +1,6 @@
 <script lang="ts">
   import { cn } from "@/ui/cn";
+  import { hideWhenBroken } from "./hide-when-broken";
 
   /**
    * A person's picture, falling back to their initials when there is none or it fails to
@@ -48,10 +49,8 @@
       decoding="async"
       referrerpolicy="no-referrer"
       data-fallback
+      {@attach hideWhenBroken}
       class="absolute inset-0 size-full object-cover"
-      onerror={(event) => {
-        (event.currentTarget as HTMLImageElement).hidden = true;
-      }}
     />
   {/if}
 </span>

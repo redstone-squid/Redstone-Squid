@@ -2,6 +2,7 @@
   import ImageOff from "@lucide/svelte/icons/image-off";
   import type { LucideIcon } from "@lucide/svelte";
   import { cn } from "@/ui/cn";
+  import { hideWhenBroken } from "./hide-when-broken";
 
   /**
    * An image in a fixed frame, so the page does not shift while it loads. When `src` is
@@ -78,10 +79,8 @@
       {height}
       {alt}
       data-fallback
+      {@attach hideWhenBroken}
       class={cn("absolute inset-0 size-full", fit === "cover" ? "object-cover" : "object-contain")}
-      onerror={(event) => {
-        (event.currentTarget as HTMLImageElement).hidden = true;
-      }}
     />
   {/if}
 </div>
