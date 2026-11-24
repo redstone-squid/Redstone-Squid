@@ -369,7 +369,7 @@
 <Story
   name="ErrorSummary"
   source="forms/ErrorSummary"
-  description="What stopped a submit; it takes focus after each failed submit."
+  description="Lists submission errors and focuses the first invalid field."
 >
   <form
     class="grid max-w-form gap-4"

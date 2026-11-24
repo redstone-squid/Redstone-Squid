@@ -7,8 +7,7 @@
   /**
    * The problems that stopped a submit, at the top of the form. Each links to its field, and
    * following a link focuses the field so its own error is read. Pass a new `errors` array
-   * on each failed submit: with `focusOnMount`, the summary takes focus whenever it changes,
-   * which also announces it. Renders nothing when `errors` is empty.
+   * in form order on each failed submit to focus the first available invalid field. Renders nothing when `errors` is empty.
    */
   type Props = {
     title: string;
@@ -18,10 +17,14 @@
   };
   let { title, errors, focusOnMount = true, class: className }: Props = $props();
   const titleId = $props.id();
-  let summary: HTMLElement | undefined = $state();
 
   $effect(() => {
-    if (focusOnMount && errors.length > 0) summary?.focus();
+    if (!focusOnMount) return;
+    for (const { fieldId } of errors) {
+      const field = document.getElementById(fieldId);
+      field?.focus();
+      if (field && document.activeElement === field) break;
+    }
   });
 
   function jump(event: MouseEvent, fieldId: string): void {
@@ -35,9 +38,7 @@
 
 {#if errors.length > 0}
   <div
-    bind:this={summary}
     role="alert"
-    tabindex="-1"
     aria-labelledby={titleId}
     class={cn(
       "grid min-w-0 gap-2 rounded-sm border-s-4 border-danger bg-danger-soft px-4 py-3 text-sm text-fg",

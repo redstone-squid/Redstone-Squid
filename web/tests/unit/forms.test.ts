@@ -191,26 +191,30 @@ describe("CodeEntry", () => {
 });
 
 describe("ErrorSummary", () => {
-  it("takes focus, and its links focus their fields", async () => {
+  it("focuses the first invalid field and lets links focus later fields", async () => {
     const user = userEvent.setup();
     const field = document.createElement("input");
     field.id = "title";
-    document.body.append(field);
+    const width = document.createElement("input");
+    width.id = "width";
+    document.body.append(field, width);
     try {
       render(ErrorSummary, {
-        title: "Fix 2 problems",
+        title: "Fix 3 problems",
         errors: [
           { fieldId: "title", message: "Enter a title." },
           { fieldId: "title", message: "Use a descriptive title." },
+          { fieldId: "width", message: "Enter a width." },
         ],
       });
-      const summary = screen.getByRole("alert", { name: "Fix 2 problems" });
-      expect(summary).toHaveFocus();
-      expect(within(summary).getAllByRole("link")).toHaveLength(2);
-      await user.click(within(summary).getByRole("link", { name: "Enter a title." }));
+      const summary = screen.getByRole("alert", { name: "Fix 3 problems" });
       expect(field).toHaveFocus();
+      expect(within(summary).getAllByRole("link")).toHaveLength(3);
+      await user.click(within(summary).getByRole("link", { name: "Enter a width." }));
+      expect(width).toHaveFocus();
     } finally {
       field.remove();
+      width.remove();
     }
   });
 
