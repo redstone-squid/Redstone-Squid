@@ -120,7 +120,7 @@ describe("DataTable", () => {
     const toggle = screen.getByRole("button", { name: "Columns" });
     const menu = document.getElementById(toggle.getAttribute("popovertarget") ?? "");
     const links = within(menu ?? document.body).getAllByRole("link", { hidden: true });
-    expect(links.map((link) => [link.textContent?.trim(), link.getAttribute("href")])).toEqual([
+    expect(links.map((link) => [link.textContent.trim(), link.getAttribute("href")])).toEqual([
       ["Hide Opening", "?hide=notes,opening"],
       ["Show Notes", "?hide="],
     ]);
@@ -286,7 +286,9 @@ describe("DistributionBar", () => {
       otherLabel: "Other",
     });
     expect(
-      screen.getAllByRole("listitem").map((item) => item.textContent.replace(/\s+/g, " ").trim()),
+      screen
+        .getAllByRole("listitem")
+        .map((item) => item.textContent.replaceAll(/\s+/g, " ").trim()),
     ).toEqual(["Stone 9", "Dust 5", "Other 3"]);
     expect(screen.getByRole("link", { name: "Stone" })).toHaveAttribute("href", "/stone");
   });

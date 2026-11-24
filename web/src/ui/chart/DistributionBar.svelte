@@ -44,16 +44,16 @@
 
 <Chart {title} {description} group class={className}>
   {#snippet plot()}
-    <ol class="grid gap-2 text-sm">
+    <ol class="@container grid gap-2 text-sm">
       {#each shown as item (item.label)}
         <li
-          class="grid grid-cols-[minmax(0,10rem)_1fr_auto] items-center gap-3 max-sm:grid-cols-[1fr_auto]"
+          class="grid grid-cols-[minmax(0,10rem)_1fr_auto] items-center gap-3 @max-lg:grid-cols-[1fr_auto]"
         >
           <span class={cn("truncate", item.other && "text-fg-muted")} title={item.label}>
             {#if item.href !== undefined}<a href={item.href} class="text-fg">{item.label}</a
               >{:else}{item.label}{/if}
           </span>
-          <span class="h-3 rounded-e-xs bg-surface-muted max-sm:col-span-2 max-sm:row-start-2">
+          <span class="h-3 rounded-e-xs bg-surface-muted @max-lg:col-span-2 @max-lg:row-start-2">
             <!-- eslint-disable svelte/no-inline-styles -- bar length is the data -->
             <span
               class={cn(
@@ -64,7 +64,7 @@
             ></span>
             <!-- eslint-enable svelte/no-inline-styles -->
           </span>
-          <span class="text-end font-semibold tabular-nums max-sm:col-start-2 max-sm:row-start-1"
+          <span class="text-end font-semibold tabular-nums @max-lg:col-start-2 @max-lg:row-start-1"
             >{valueFormat(item.value)}</span
           >
         </li>

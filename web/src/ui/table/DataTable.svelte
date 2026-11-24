@@ -203,7 +203,7 @@
       role="region"
       aria-labelledby={`${id}-caption`}
       tabindex="0"
-      class="min-w-0 overflow-x-auto rounded-md border border-line bg-surface"
+      class="@container min-w-0 overflow-x-auto rounded-md border border-line bg-surface"
     >
       <table
         class="w-full border-separate border-spacing-0 text-sm"
@@ -283,7 +283,7 @@
                       scope="row"
                       data-pinned
                       class={cn(
-                        "border-b border-line bg-surface text-start font-semibold group-hover/row:bg-surface-muted max-sm:max-w-44",
+                        "border-b border-line bg-surface text-start font-semibold group-hover/row:bg-surface-muted @max-xl:max-w-44",
                         row.depth > 0 && "bg-canvas font-normal",
                         pad,
                       )}

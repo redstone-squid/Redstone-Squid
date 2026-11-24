@@ -68,7 +68,7 @@
         byKey.set(key(point.x), entry);
       }
     });
-    const entries = [...byKey.values()];
+    const entries = byKey.values().toArray();
     if (x.type !== "band") entries.sort((a, b) => Number(key(a.x)) - Number(key(b.x)));
     return entries;
   });
