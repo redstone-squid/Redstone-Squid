@@ -229,7 +229,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -388,7 +388,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -616,7 +616,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -847,7 +847,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -976,7 +976,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -1170,7 +1170,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -1282,7 +1282,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -1504,7 +1504,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -1678,7 +1678,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -1924,7 +1924,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -2124,7 +2124,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -2272,7 +2272,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -2425,7 +2425,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -2598,7 +2598,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -2759,7 +2759,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -2917,7 +2917,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -3195,7 +3195,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -3339,7 +3339,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -3552,7 +3552,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -3673,7 +3673,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -3803,7 +3803,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -4100,7 +4100,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -4292,7 +4292,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -4608,7 +4608,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -4814,7 +4814,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -4986,7 +4986,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -5153,7 +5153,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -5335,7 +5335,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -5522,7 +5522,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -5734,7 +5734,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -5923,7 +5923,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -6062,7 +6062,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -6235,7 +6235,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -6521,7 +6521,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -6697,7 +6697,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -6883,7 +6883,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -7052,7 +7052,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -7249,7 +7249,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -7446,7 +7446,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -7592,7 +7592,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -7735,7 +7735,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -7908,7 +7908,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -8077,7 +8077,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -8363,7 +8363,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -8681,7 +8681,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -8901,7 +8901,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -9094,7 +9094,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -9313,7 +9313,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -9518,7 +9518,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -9619,7 +9619,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -9831,7 +9831,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -9935,7 +9935,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -10039,7 +10039,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -10144,7 +10144,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -10293,7 +10293,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -10502,7 +10502,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -10630,7 +10630,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -10802,7 +10802,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -10917,7 +10917,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -11136,7 +11136,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -11242,7 +11242,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -11426,7 +11426,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -11555,7 +11555,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -11698,7 +11698,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -11895,7 +11895,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -12085,7 +12085,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -12373,7 +12373,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -12590,7 +12590,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -12901,7 +12901,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -13095,7 +13095,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -13228,7 +13228,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -13364,7 +13364,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -13541,7 +13541,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -13797,7 +13797,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -14008,7 +14008,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -14209,7 +14209,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -14423,7 +14423,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -14580,7 +14580,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -14754,7 +14754,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -14959,7 +14959,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -15141,7 +15141,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -15315,7 +15315,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -15524,7 +15524,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -15672,7 +15672,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -15772,7 +15772,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -15859,7 +15859,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -15966,7 +15966,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -16110,7 +16110,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -16245,7 +16245,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -16374,7 +16374,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -16482,7 +16482,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -16584,7 +16584,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -16696,7 +16696,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -16799,7 +16799,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -16884,7 +16884,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -17013,7 +17013,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -17157,7 +17157,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -17388,7 +17388,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -17521,7 +17521,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -17633,7 +17633,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -17748,7 +17748,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -17858,7 +17858,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -17971,7 +17971,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -18107,7 +18107,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -18212,7 +18212,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -18427,7 +18427,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -18620,7 +18620,7 @@
             "content": {
               "application/problem+json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -18647,6 +18647,58 @@
   },
   "components": {
     "schemas": {
+      "AboveMaximum": {
+        "additionalProperties": false,
+        "properties": {
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "code": {
+            "const": "above_maximum",
+            "default": "above_maximum",
+            "title": "Code",
+            "type": "string"
+          },
+          "params": {
+            "$ref": "#/components/schemas/AboveMaximumParams"
+          }
+        },
+        "required": [
+          "field",
+          "code",
+          "params"
+        ],
+        "title": "AboveMaximum",
+        "type": "object"
+      },
+      "AboveMaximumParams": {
+        "additionalProperties": false,
+        "properties": {
+          "maximum": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Maximum"
+          },
+          "exclusive": {
+            "default": false,
+            "title": "Exclusive",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "maximum",
+          "exclusive"
+        ],
+        "title": "AboveMaximumParams",
+        "type": "object"
+      },
       "AccountMergeDetail": {
         "properties": {
           "surviving_creator_id": {
@@ -18763,6 +18815,58 @@
           "url"
         ],
         "title": "AvatarDetail"
+      },
+      "BelowMinimum": {
+        "additionalProperties": false,
+        "properties": {
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "code": {
+            "const": "below_minimum",
+            "default": "below_minimum",
+            "title": "Code",
+            "type": "string"
+          },
+          "params": {
+            "$ref": "#/components/schemas/BelowMinimumParams"
+          }
+        },
+        "required": [
+          "field",
+          "code",
+          "params"
+        ],
+        "title": "BelowMinimum",
+        "type": "object"
+      },
+      "BelowMinimumParams": {
+        "additionalProperties": false,
+        "properties": {
+          "minimum": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Minimum"
+          },
+          "exclusive": {
+            "default": false,
+            "title": "Exclusive",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "minimum",
+          "exclusive"
+        ],
+        "title": "BelowMinimumParams",
+        "type": "object"
       },
       "BrowserProvider": {
         "properties": {
@@ -21430,6 +21534,12 @@
         ],
         "title": "DraftSummaryResponse"
       },
+      "EmptyParams": {
+        "additionalProperties": false,
+        "properties": {},
+        "title": "EmptyParams",
+        "type": "object"
+      },
       "ErrorCode": {
         "type": "string",
         "enum": [
@@ -24015,6 +24125,9 @@
           "context": {
             "oneOf": [
               {
+                "$ref": "#/components/schemas/ValidationContext"
+              },
+              {
                 "additionalProperties": {
                   "allOf": [
                     {
@@ -25662,6 +25775,44 @@
         ],
         "title": "RendererCapabilities"
       },
+      "RequiredValue": {
+        "additionalProperties": false,
+        "properties": {
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "code": {
+            "const": "required_value",
+            "default": "required_value",
+            "title": "Code",
+            "type": "string"
+          },
+          "params": {
+            "$ref": "#/components/schemas/RequiredValueParams"
+          }
+        },
+        "required": [
+          "field",
+          "code",
+          "params"
+        ],
+        "title": "RequiredValue",
+        "type": "object"
+      },
+      "RequiredValueParams": {
+        "additionalProperties": false,
+        "properties": {
+          "expected": {
+            "$ref": "#/components/schemas/JsonValue"
+          }
+        },
+        "required": [
+          "expected"
+        ],
+        "title": "RequiredValueParams",
+        "type": "object"
+      },
       "ResolutionStatus": {
         "type": "string",
         "enum": [
@@ -25671,6 +25822,50 @@
         ],
         "title": "ResolutionStatus",
         "description": "Whether a category produced an official result."
+      },
+      "RuleIssue": {
+        "additionalProperties": false,
+        "properties": {
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "code": {
+            "const": "rule_failed",
+            "default": "rule_failed",
+            "title": "Code",
+            "type": "string"
+          },
+          "params": {
+            "$ref": "#/components/schemas/RuleParams"
+          }
+        },
+        "required": [
+          "field",
+          "code",
+          "params"
+        ],
+        "title": "RuleIssue",
+        "type": "object"
+      },
+      "RuleParams": {
+        "additionalProperties": false,
+        "properties": {
+          "rule": {
+            "title": "Rule",
+            "type": "string"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "rule",
+          "reason"
+        ],
+        "title": "RuleParams",
+        "type": "object"
       },
       "RuntimeSettingsDetail": {
         "properties": {
@@ -26621,6 +26816,39 @@
         ],
         "title": "ShowcaseTag"
       },
+      "SimpleIssue": {
+        "additionalProperties": false,
+        "properties": {
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "code": {
+            "enum": [
+              "invalid_value",
+              "required",
+              "wrong_type",
+              "unknown_field",
+              "removed_field",
+              "unknown_option",
+              "incompatible_fields"
+            ],
+            "title": "Code",
+            "type": "string"
+          },
+          "params": {
+            "$ref": "#/components/schemas/EmptyParams",
+            "default": {}
+          }
+        },
+        "required": [
+          "field",
+          "code",
+          "params"
+        ],
+        "title": "SimpleIssue",
+        "type": "object"
+      },
       "SmallestRecordRegion": {
         "properties": {
           "domain": {
@@ -27371,6 +27599,162 @@
         ],
         "title": "TagViewer"
       },
+      "TooFewItems": {
+        "additionalProperties": false,
+        "properties": {
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "code": {
+            "const": "too_few_items",
+            "default": "too_few_items",
+            "title": "Code",
+            "type": "string"
+          },
+          "params": {
+            "$ref": "#/components/schemas/TooFewItemsParams"
+          }
+        },
+        "required": [
+          "field",
+          "code",
+          "params"
+        ],
+        "title": "TooFewItems",
+        "type": "object"
+      },
+      "TooFewItemsParams": {
+        "additionalProperties": false,
+        "properties": {
+          "min_items": {
+            "title": "Min Items",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "min_items"
+        ],
+        "title": "TooFewItemsParams",
+        "type": "object"
+      },
+      "TooLong": {
+        "additionalProperties": false,
+        "properties": {
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "code": {
+            "const": "too_long",
+            "default": "too_long",
+            "title": "Code",
+            "type": "string"
+          },
+          "params": {
+            "$ref": "#/components/schemas/TooLongParams"
+          }
+        },
+        "required": [
+          "field",
+          "code",
+          "params"
+        ],
+        "title": "TooLong",
+        "type": "object"
+      },
+      "TooLongParams": {
+        "additionalProperties": false,
+        "properties": {
+          "max_length": {
+            "title": "Max Length",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "max_length"
+        ],
+        "title": "TooLongParams",
+        "type": "object"
+      },
+      "TooManyItems": {
+        "additionalProperties": false,
+        "properties": {
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "code": {
+            "const": "too_many_items",
+            "default": "too_many_items",
+            "title": "Code",
+            "type": "string"
+          },
+          "params": {
+            "$ref": "#/components/schemas/TooManyItemsParams"
+          }
+        },
+        "required": [
+          "field",
+          "code",
+          "params"
+        ],
+        "title": "TooManyItems",
+        "type": "object"
+      },
+      "TooManyItemsParams": {
+        "additionalProperties": false,
+        "properties": {
+          "max_items": {
+            "title": "Max Items",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "max_items"
+        ],
+        "title": "TooManyItemsParams",
+        "type": "object"
+      },
+      "TooShort": {
+        "additionalProperties": false,
+        "properties": {
+          "field": {
+            "title": "Field",
+            "type": "string"
+          },
+          "code": {
+            "const": "too_short",
+            "default": "too_short",
+            "title": "Code",
+            "type": "string"
+          },
+          "params": {
+            "$ref": "#/components/schemas/TooShortParams"
+          }
+        },
+        "required": [
+          "field",
+          "code",
+          "params"
+        ],
+        "title": "TooShort",
+        "type": "object"
+      },
+      "TooShortParams": {
+        "additionalProperties": false,
+        "properties": {
+          "min_length": {
+            "title": "Min Length",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "min_length"
+        ],
+        "title": "TooShortParams",
+        "type": "object"
+      },
       "UploadCapabilities": {
         "properties": {
           "max_images": {
@@ -27470,6 +27854,98 @@
           "revision"
         ],
         "title": "UserMe"
+      },
+      "ValidationContext": {
+        "additionalProperties": true,
+        "properties": {
+          "fields": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationIssue"
+            },
+            "title": "Fields",
+            "type": "array"
+          }
+        },
+        "required": [
+          "fields"
+        ],
+        "title": "ValidationContext",
+        "type": "object"
+      },
+      "ValidationProblemDetail": {
+        "additionalProperties": false,
+        "properties": {
+          "type": {
+            "default": "about:blank",
+            "title": "Type",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "status": {
+            "title": "Status",
+            "type": "integer"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Detail"
+          },
+          "instance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Instance"
+          },
+          "code": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ErrorCode"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "resource": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Resource"
+          },
+          "context": {
+            "$ref": "#/components/schemas/ValidationContext"
+          }
+        },
+        "required": [
+          "title",
+          "status",
+          "context"
+        ],
+        "title": "ValidationProblemDetail",
+        "type": "object"
       },
       "ValueKind": {
         "type": "string",
@@ -28082,6 +28558,79 @@
         ],
         "title": "VoteVisibility",
         "description": "How much of a generic poll's state is disclosed while it is open."
+      },
+      "JsonValue": {},
+      "ValidationIssue": {
+        "discriminator": {
+          "mapping": {
+            "above_maximum": "#/components/schemas/AboveMaximum",
+            "below_minimum": "#/components/schemas/BelowMinimum",
+            "incompatible_fields": "#/components/schemas/SimpleIssue",
+            "invalid_value": "#/components/schemas/SimpleIssue",
+            "removed_field": "#/components/schemas/SimpleIssue",
+            "required": "#/components/schemas/SimpleIssue",
+            "required_value": "#/components/schemas/RequiredValue",
+            "rule_failed": "#/components/schemas/RuleIssue",
+            "too_few_items": "#/components/schemas/TooFewItems",
+            "too_long": "#/components/schemas/TooLong",
+            "too_many_items": "#/components/schemas/TooManyItems",
+            "too_short": "#/components/schemas/TooShort",
+            "unknown_field": "#/components/schemas/SimpleIssue",
+            "unknown_option": "#/components/schemas/SimpleIssue",
+            "wrong_type": "#/components/schemas/SimpleIssue"
+          },
+          "propertyName": "code"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/RuleIssue"
+          },
+          {
+            "$ref": "#/components/schemas/SimpleIssue"
+          },
+          {
+            "$ref": "#/components/schemas/RequiredValue"
+          },
+          {
+            "$ref": "#/components/schemas/BelowMinimum"
+          },
+          {
+            "$ref": "#/components/schemas/AboveMaximum"
+          },
+          {
+            "$ref": "#/components/schemas/TooShort"
+          },
+          {
+            "$ref": "#/components/schemas/TooLong"
+          },
+          {
+            "$ref": "#/components/schemas/TooFewItems"
+          },
+          {
+            "$ref": "#/components/schemas/TooManyItems"
+          }
+        ]
+      },
+      "FieldErrorCode": {
+        "enum": [
+          "rule_failed",
+          "invalid_value",
+          "required",
+          "wrong_type",
+          "unknown_field",
+          "removed_field",
+          "unknown_option",
+          "required_value",
+          "incompatible_fields",
+          "below_minimum",
+          "above_maximum",
+          "too_short",
+          "too_long",
+          "too_few_items",
+          "too_many_items"
+        ],
+        "title": "FieldErrorCode",
+        "type": "string"
       }
     },
     "securitySchemes": {

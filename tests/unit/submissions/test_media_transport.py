@@ -202,6 +202,7 @@ async def test_unbounded_content_length_returns_structured_limit_error_without_i
 
     assert response.status_code == 400
     assert response.json()["context"] == {
+        "fields": [],
         "reason": "limit_exceeded",
         "violations": [{"measure": "source_bytes", "limit": 8}],
     }

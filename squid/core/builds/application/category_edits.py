@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from functools import cache
-from typing import Protocol, Self
+from typing import Protocol, Self, override
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
@@ -69,6 +69,7 @@ class BuildCategoryRepository(BuildRepository, Protocol):
 
 class BuildCategoryUnitOfWork(BuildUnitOfWork, EditUnitOfWork, Protocol):
     @property
+    @override
     def builds(self) -> BuildCategoryRepository: ...
 
 

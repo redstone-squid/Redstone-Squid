@@ -14,12 +14,14 @@ from litestar.openapi.plugins import JsonRenderPlugin, SwaggerRenderPlugin
 from litestar.openapi.spec import OpenAPIFormat, OpenAPIType, Schema
 from litestar.plugins import OpenAPISchemaPlugin
 from litestar.typing import FieldDefinition
+from pydantic import TypeAdapter
 from pydantic_core import to_jsonable_python
 from whenever import Instant
 
 from squid.api.contract import iter_contract_routes, validate_contract
-from squid.api.errors import ProblemDetail, responses
+from squid.api.errors import ProblemDetail, ValidationProblemDetail, responses
 from squid.api.v1.schemas.submissions import StoredDraftResponse
+from squid.api.validation import ValidationContext
 from squid.core.errors import JSONValue
 from squid.core.submissions.domain import (
     DRAFT_CHANGE_KEY_MAX_LENGTH,
@@ -27,6 +29,7 @@ from squid.core.submissions.domain import (
     DRAFT_CHANGE_KEY_PATTERN,
     DraftChangeKey,
 )
+from squid.core.validation import FieldErrorCode
 
 _HTTP_METHODS = ("get", "post", "put", "patch", "delete")
 
@@ -102,6 +105,17 @@ def _postprocess(document: dict[str, Any]) -> None:
         }
     }
     _install_validation_errors(document)
+    schemas = components.setdefault("schemas", {})
+    # Use the response schema so defaulted discriminators are required on the wire.
+    context = ValidationContext.model_json_schema(mode="serialization", ref_template="#/components/schemas/{model}")
+    schemas.update(context.pop("$defs", {}))
+    validation_problem = ValidationProblemDetail.model_json_schema(
+        mode="serialization", ref_template="#/components/schemas/{model}"
+    )
+    validation_problem.pop("$defs", None)
+    schemas["ValidationProblemDetail"] = validation_problem
+    schemas["ValidationContext"] = context
+    schemas["FieldErrorCode"] = TypeAdapter(FieldErrorCode).json_schema()
     _install_request_id_headers(document)
 
 
@@ -132,7 +146,9 @@ def _install_validation_errors(document: dict[str, Any]) -> None:
                 "422",
                 {
                     "description": "Unprocessable Entity",
-                    "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/ProblemDetail"}}},
+                    "content": {
+                        "application/problem+json": {"schema": {"$ref": "#/components/schemas/ValidationProblemDetail"}}
+                    },
                 },
             )
             components = document.setdefault("components", {}).setdefault("schemas", {})

@@ -4,8 +4,10 @@ from collections.abc import Mapping, Sequence
 from enum import StrEnum
 from typing import ClassVar, Self, override
 
+from pydantic import ValidationError as SchemaError
+
 from squid.core.i18n import tr
-from squid.core.validation import ValidationIssue
+from squid.core.validation import ValidationIssue, decoder_issue
 from squid_i18n import Text, source_text
 
 type JSONValue = bool | int | float | str | Sequence[JSONValue] | Mapping[str, JSONValue] | None
@@ -204,6 +206,21 @@ class ValidationError(DomainError, ValueError):
             end_user_action=end_user_action,
             title=title,
         )
+
+    @staticmethod
+    def from_schema(error: SchemaError, *, prefix: str = "") -> ValidationError:
+        """Retain nested domain issues and safe parameter values from a schema check."""
+        issues: list[ValidationIssue] = []
+        for entry in error.errors(include_input=False, include_url=False):
+            path = "/".join(str(part).replace("~", "~0").replace("/", "~1") for part in entry["loc"])
+            ctx = entry.get("ctx", {})
+            nested = ctx.get("error")
+            if isinstance(nested, ValidationError) and nested.field_issues:
+                parent = prefix + (path + "/" if path else "")
+                issues.extend(issue.model_copy(update={"field": parent + issue.field}) for issue in nested.field_issues)
+            elif path:
+                issues.append(decoder_issue(prefix + path, entry["type"], ctx))
+        return ValidationError(issues=issues)
 
     default_message = tr(t"core-supplied-value-invalid = The supplied value is invalid.")
     default_title = tr(t"core-errors-invalid-value = Invalid value")

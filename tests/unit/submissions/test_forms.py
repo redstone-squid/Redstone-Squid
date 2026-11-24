@@ -153,9 +153,9 @@ def test_transition_uses_all_inputs_and_distinguishes_rules_on_the_same_field() 
         {
             "field": "visible_opening_time",
             "code": "rule_failed",
-            "params": {"rule": rule, "reason": "above_maximum", "depends_on": [dependency]},
+            "params": {"rule": rule, "reason": "above_maximum"},
         }
-        for rule, dependency in (("opening_limit", "opening_time"), ("closing_limit", "closing_time"))
+        for rule in ("opening_limit", "closing_limit")
     ]
     assert manifest.validate_answers("door", before, origin=origin) == {"visible_opening_time": "above_maximum"}
     assert manifest.validate_transition("door", before, before | {"display_name": "New name"}, origin=origin) == {}

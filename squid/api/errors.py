@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from squid.api.i18n import locale_for_request
 from squid.api.request_context import resolve_request_id
 from squid.api.revisions import InvalidRevisionError, RevisionRequiredError
+from squid.api.validation import ValidationContext
 from squid.core.builds.errors import BuildRevisionMismatchError, BuildRevisionRequiredError
 from squid.core.diagnostics.log_capture import captured
 from squid.core.edits.domain import ConcurrentEditError, RevisionConflictError
@@ -82,7 +83,7 @@ async def _capture(request: Request, error: Exception, request_id: str) -> None:
         logger.exception("Could not capture an HTTP failure [request_id=%s]", request_id)
 
 
-class ProblemDetail(BaseModel):
+class _ProblemBase(BaseModel):
     """RFC 9457 problem detail response with application extensions."""
 
     model_config = ConfigDict(extra="forbid")
@@ -94,7 +95,14 @@ class ProblemDetail(BaseModel):
     instance: str | None = None
     code: ErrorCode | None = None
     resource: str | None = None
-    context: dict[str, JSONValue] | None = None
+
+
+class ProblemDetail(_ProblemBase):
+    context: ValidationContext | dict[str, JSONValue] | None = None
+
+
+class ValidationProblemDetail(_ProblemBase):
+    context: ValidationContext
 
 
 _PINNED_REASON_PHRASES = {
@@ -110,7 +118,7 @@ def responses(*statuses: int, describe: Mapping[int, str] | None = None) -> dict
     return {
         status: ResponseSpec(
             generate_examples=False,
-            data_container=ProblemDetail,
+            data_container=ValidationProblemDetail if status == 422 else ProblemDetail,
             media_type=PROBLEM_DETAIL_MEDIA_TYPE,
             description=described.get(
                 status, _PINNED_REASON_PHRASES.get(HTTPStatus(status), HTTPStatus(status).phrase)
@@ -121,7 +129,7 @@ def responses(*statuses: int, describe: Mapping[int, str] | None = None) -> dict
 
 
 def _problem_response(
-    problem: ProblemDetail,
+    problem: _ProblemBase,
     locale: str,
     *,
     extra_headers: Mapping[str, str] | None = None,
@@ -179,7 +187,9 @@ def handle_squid_error(request: Request, exc: Exception) -> Response:
                 instance=str(request.url),
                 code=exc.code,
                 resource=exc.resource,
-                context=exc.public_context or None,
+                context=ValidationContext(fields=exc.field_issues, **exc.public_context)
+                if isinstance(exc, ValidationError)
+                else exc.public_context or None,
             ),
             locale,
             extra_headers={"Retry-After": str(exc.retry_after)} if isinstance(exc, RateLimitedError) else None,
@@ -221,33 +231,19 @@ def handle_squid_error(request: Request, exc: Exception) -> Response:
 def handle_request_validation_error(request: Request, exc: Exception) -> Response:
     """Render request validation failures without submitted values."""
     locale = locale_for_request(request)
-    errors: list[JSONValue] = []
-    if isinstance(exc, ValidationException):
-        for error in exc.extra or []:
-            if not isinstance(error, dict):
-                continue
-            key = str(error.get("key", ""))
-            # Framework messages can embed submitted enum values, including credentials.
-            errors.append(
-                {
-                    "location": [getattr(error.get("source"), "value", error.get("source", "body")), *key.split(".")],
-                    "type": str(error.get("type", "validation_error")),
-                    "message": "Invalid value",
-                }
-            )
-    else:
+    if not isinstance(exc, ValidationException):
         return handle_unexpected_error(request, exc)
     with localization_scope(localization_for(locale)):
         title = tr(t"api-errors-invalid-request = Invalid request").resolve()
         detail = tr(t"api-request-validation-failed = The request did not pass validation.").resolve()
     return _problem_response(
-        ProblemDetail(
+        ValidationProblemDetail(
             title=title,
             status=HTTPStatus.UNPROCESSABLE_ENTITY,
             detail=detail,
             instance=str(request.url),
             code=ErrorCode.INVALID_REQUEST,
-            context={"errors": errors},
+            context=ValidationContext.from_request_error(exc),
         ),
         locale,
     )
@@ -269,6 +265,7 @@ def handle_http_error(request: Request, exc: Exception) -> Response:
             title=title,
             status=exc.status_code,
             detail=str(exc.detail),
+            context=ValidationContext(fields=()) if exc.status_code in {400, 422} else None,
             instance=str(request.url),
             code=ErrorCode.NOT_FOUND if exc.status_code == HTTPStatus.NOT_FOUND else ErrorCode.INVALID_REQUEST,
         ),

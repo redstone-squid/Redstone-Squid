@@ -5,6 +5,35 @@ export type ClientOptions = {
 };
 
 /**
+ * AboveMaximum
+ */
+export type AboveMaximum = {
+    /**
+     * Field
+     */
+    field: string;
+    /**
+     * Code
+     */
+    code: 'above_maximum';
+    params: AboveMaximumParams;
+};
+
+/**
+ * AboveMaximumParams
+ */
+export type AboveMaximumParams = {
+    /**
+     * Maximum
+     */
+    maximum: number | number;
+    /**
+     * Exclusive
+     */
+    exclusive: boolean;
+};
+
+/**
  * AccountMergeDetail
  */
 export type AccountMergeDetail = {
@@ -52,6 +81,35 @@ export type AvatarDetail = {
     identity_id: number;
     provider: IdentityProvider;
     url: string | null;
+};
+
+/**
+ * BelowMinimum
+ */
+export type BelowMinimum = {
+    /**
+     * Field
+     */
+    field: string;
+    /**
+     * Code
+     */
+    code: 'below_minimum';
+    params: BelowMinimumParams;
+};
+
+/**
+ * BelowMinimumParams
+ */
+export type BelowMinimumParams = {
+    /**
+     * Minimum
+     */
+    minimum: number | number;
+    /**
+     * Exclusive
+     */
+    exclusive: boolean;
 };
 
 /**
@@ -788,6 +846,13 @@ export type DraftSummaryResponse = {
 };
 
 /**
+ * EmptyParams
+ */
+export type EmptyParams = {
+    [key: string]: never;
+};
+
+/**
  * ErrorCode
  *
  * Stable machine-readable application error codes.
@@ -1516,7 +1581,7 @@ export type ProblemDetail = {
     instance?: string | null;
     code?: ErrorCode | null;
     resource?: string | null;
-    context?: {
+    context?: ValidationContext | {
         [key: string]: JsonValue;
     } | null;
 };
@@ -1899,11 +1964,62 @@ export type RendererCapabilities = {
 };
 
 /**
+ * RequiredValue
+ */
+export type RequiredValue = {
+    /**
+     * Field
+     */
+    field: string;
+    /**
+     * Code
+     */
+    code: 'required_value';
+    params: RequiredValueParams;
+};
+
+/**
+ * RequiredValueParams
+ */
+export type RequiredValueParams = {
+    expected: JsonValue2;
+};
+
+/**
  * ResolutionStatus
  *
  * Whether a category produced an official result.
  */
 export type ResolutionStatus = 'resolved' | 'unresolved' | 'no_candidate';
+
+/**
+ * RuleIssue
+ */
+export type RuleIssue = {
+    /**
+     * Field
+     */
+    field: string;
+    /**
+     * Code
+     */
+    code: 'rule_failed';
+    params: RuleParams;
+};
+
+/**
+ * RuleParams
+ */
+export type RuleParams = {
+    /**
+     * Rule
+     */
+    rule: string;
+    /**
+     * Reason
+     */
+    reason: string;
+};
 
 /**
  * RuntimeSettingsDetail
@@ -2168,6 +2284,21 @@ export type ShowcaseTag = {
 };
 
 /**
+ * SimpleIssue
+ */
+export type SimpleIssue = {
+    /**
+     * Field
+     */
+    field: string;
+    /**
+     * Code
+     */
+    code: 'invalid_value' | 'required' | 'wrong_type' | 'unknown_field' | 'removed_field' | 'unknown_option' | 'incompatible_fields';
+    params: EmptyParams;
+};
+
+/**
  * SmallestRecordRegion
  */
 export type SmallestRecordRegion = {
@@ -2387,6 +2518,106 @@ export type TagViewer = {
 };
 
 /**
+ * TooFewItems
+ */
+export type TooFewItems = {
+    /**
+     * Field
+     */
+    field: string;
+    /**
+     * Code
+     */
+    code: 'too_few_items';
+    params: TooFewItemsParams;
+};
+
+/**
+ * TooFewItemsParams
+ */
+export type TooFewItemsParams = {
+    /**
+     * Min Items
+     */
+    min_items: number;
+};
+
+/**
+ * TooLong
+ */
+export type TooLong = {
+    /**
+     * Field
+     */
+    field: string;
+    /**
+     * Code
+     */
+    code: 'too_long';
+    params: TooLongParams;
+};
+
+/**
+ * TooLongParams
+ */
+export type TooLongParams = {
+    /**
+     * Max Length
+     */
+    max_length: number;
+};
+
+/**
+ * TooManyItems
+ */
+export type TooManyItems = {
+    /**
+     * Field
+     */
+    field: string;
+    /**
+     * Code
+     */
+    code: 'too_many_items';
+    params: TooManyItemsParams;
+};
+
+/**
+ * TooManyItemsParams
+ */
+export type TooManyItemsParams = {
+    /**
+     * Max Items
+     */
+    max_items: number;
+};
+
+/**
+ * TooShort
+ */
+export type TooShort = {
+    /**
+     * Field
+     */
+    field: string;
+    /**
+     * Code
+     */
+    code: 'too_short';
+    params: TooShortParams;
+};
+
+/**
+ * TooShortParams
+ */
+export type TooShortParams = {
+    /**
+     * Min Length
+     */
+    min_length: number;
+};
+
+/**
  * UploadCapabilities
  */
 export type UploadCapabilities = {
@@ -2415,6 +2646,49 @@ export type UserMe = {
     consent_pending: boolean;
     identities: Array<IdentityDetail>;
     profile: ProfileDetail;
+};
+
+/**
+ * ValidationContext
+ */
+export type ValidationContext = {
+    /**
+     * Fields
+     */
+    fields: Array<ValidationIssue>;
+    [key: string]: unknown;
+};
+
+/**
+ * ValidationProblemDetail
+ */
+export type ValidationProblemDetail = {
+    /**
+     * Type
+     */
+    type?: string;
+    /**
+     * Title
+     */
+    title: string;
+    /**
+     * Status
+     */
+    status: number;
+    /**
+     * Detail
+     */
+    detail?: string | null;
+    /**
+     * Instance
+     */
+    instance?: string | null;
+    code?: ErrorCode | null;
+    /**
+     * Resource
+     */
+    resource?: string | null;
+    context: ValidationContext;
 };
 
 /**
@@ -2626,6 +2900,33 @@ export type VoteTallies = {
  */
 export type VoteVisibility = 'anonymous_live' | 'visible_live' | 'anonymous_hidden';
 
+export type JsonValue2 = unknown;
+
+export type ValidationIssue = ({
+    code: 'rule_failed';
+} & RuleIssue) | ({
+    code: 'incompatible_fields' | 'invalid_value' | 'removed_field' | 'required' | 'unknown_field' | 'unknown_option' | 'wrong_type';
+} & SimpleIssue) | ({
+    code: 'required_value';
+} & RequiredValue) | ({
+    code: 'below_minimum';
+} & BelowMinimum) | ({
+    code: 'above_maximum';
+} & AboveMaximum) | ({
+    code: 'too_short';
+} & TooShort) | ({
+    code: 'too_long';
+} & TooLong) | ({
+    code: 'too_few_items';
+} & TooFewItems) | ({
+    code: 'too_many_items';
+} & TooManyItems);
+
+/**
+ * FieldErrorCode
+ */
+export type FieldErrorCode = 'rule_failed' | 'invalid_value' | 'required' | 'wrong_type' | 'unknown_field' | 'removed_field' | 'unknown_option' | 'required_value' | 'incompatible_fields' | 'below_minimum' | 'above_maximum' | 'too_short' | 'too_long' | 'too_few_items' | 'too_many_items';
+
 export type HealthLiveData = {
     body?: never;
     path?: never;
@@ -2713,7 +3014,7 @@ export type VerificationCreateErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -2768,7 +3069,7 @@ export type VerificationCreateCompatibilityErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -2836,7 +3137,7 @@ export type BrowserProviderLinkErrors = {
     /**
      * Unprocessable Entity
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -2916,7 +3217,7 @@ export type BrowserSessionRevokeErrors = {
     /**
      * Unprocessable Entity
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -2961,7 +3262,7 @@ export type BrowserAuthorizationStartErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -3003,7 +3304,7 @@ export type BrowserAuthorizationCallbackErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -3033,7 +3334,7 @@ export type BuildsGetErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -3099,7 +3400,7 @@ export type BuildsUpdateErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -3143,7 +3444,7 @@ export type BuildMediaContentGetErrors = {
     /**
      * Unprocessable Entity
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -3208,7 +3509,7 @@ export type BuildsListErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -3280,7 +3581,7 @@ export type CliEnrollmentStartErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -3327,7 +3628,7 @@ export type CliEnrollmentExchangeErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -3378,7 +3679,7 @@ export type CliEnrollmentPreviewErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -3433,7 +3734,7 @@ export type CliEnrollmentApproveErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -3484,7 +3785,7 @@ export type CliSessionChallengeStartErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -3535,7 +3836,7 @@ export type CliSessionExchangeErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -3633,7 +3934,7 @@ export type CliDeviceRevokeErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -3684,7 +3985,7 @@ export type CliSessionRevokeErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -3760,7 +4061,7 @@ export type DiagnosticsErrorsClearErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -3806,7 +4107,7 @@ export type DiagnosticsErrorsListErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -3852,7 +4153,7 @@ export type DiagnosticsErrorGetErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -3944,7 +4245,7 @@ export type AccountConsentGrantErrors = {
     /**
      * Unprocessable Entity
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -4004,7 +4305,7 @@ export type AccountProfileUpdateErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -4103,7 +4404,7 @@ export type AccountIdentityVisibilitySetErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -4165,7 +4466,7 @@ export type AccountIdentityUnlinkErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -4216,7 +4517,7 @@ export type AccountMergeCodeCreateErrors = {
     /**
      * Unprocessable Entity
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -4271,7 +4572,7 @@ export type AccountMergePreviewErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -4326,7 +4627,7 @@ export type AccountMergeCompleteErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -4381,7 +4682,7 @@ export type AccountMinecraftRefreshErrors = {
     /**
      * Unprocessable Entity
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -4444,7 +4745,7 @@ export type AccountBuildsListErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -4501,7 +4802,7 @@ export type AccountMinecraftRefreshForErrors = {
     /**
      * Unprocessable Entity
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -4559,7 +4860,7 @@ export type AccountProfileClearErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Precondition Required
      */
@@ -4610,7 +4911,7 @@ export type AccountProfileReviewErrors = {
     /**
      * Unprocessable Entity
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -4702,7 +5003,7 @@ export type PaperInstallationCreateErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -4759,7 +5060,7 @@ export type PaperInstallationRotateErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -4816,7 +5117,7 @@ export type PaperInstallationProfileUpdateErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -4873,7 +5174,7 @@ export type PaperInstallationRevokeErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -4926,7 +5227,7 @@ export type PaperChallengeStartErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -4979,7 +5280,7 @@ export type PaperChallengeExchangeErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -5026,7 +5327,7 @@ export type FabricChallengeStartErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -5073,7 +5374,7 @@ export type FabricChallengeExchangeErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -5128,7 +5429,7 @@ export type MinecraftChallengeApproveErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -5185,7 +5486,7 @@ export type MinecraftGrantRevokeErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -5278,7 +5579,7 @@ export type NotificationPreferencesUpdateErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -5379,7 +5680,7 @@ export type NotificationSubscriptionCreateErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -5441,7 +5742,7 @@ export type NotificationSubscriptionDeleteErrors = {
     /**
      * Unprocessable Entity
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -5503,7 +5804,7 @@ export type NotificationInboxListErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -5565,7 +5866,7 @@ export type NotificationInboxMarkReadErrors = {
     /**
      * Unprocessable Entity
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -5627,7 +5928,7 @@ export type NotificationInboxMarkUnreadErrors = {
     /**
      * Unprocessable Entity
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -5666,7 +5967,7 @@ export type RecordsGetErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -5725,7 +6026,7 @@ export type RecordsListErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -5762,7 +6063,7 @@ export type RecordsLookupDoorErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -5799,7 +6100,7 @@ export type RecordsLookupDoorRangesErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -5838,7 +6139,7 @@ export type RecordsGetDoorRangesErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -5893,7 +6194,7 @@ export type RecordsRegisterDoorRangesErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -5954,7 +6255,7 @@ export type RecordsRefreshDoorRangesErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -5994,7 +6295,7 @@ export type RecordsGetDoorRangePointErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -6050,7 +6351,7 @@ export type BuildSchematicsListErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -6090,7 +6391,7 @@ export type BuildSchematicContentGetErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -6139,7 +6440,7 @@ export type BuildSchematicRenderGetErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -6178,7 +6479,7 @@ export type SchematicRenderContentGetErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -6236,7 +6537,7 @@ export type SchematicVideoCreateErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -6279,7 +6580,7 @@ export type SchematicVideoStatusErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -6326,7 +6627,7 @@ export type SchematicVideoContentErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -6395,7 +6696,7 @@ export type SearchTermsSuggestErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -6451,7 +6752,7 @@ export type SearchExecuteErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -6540,7 +6841,7 @@ export type RuntimeSettingsUpdateErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -6609,7 +6910,7 @@ export type SubmissionCorrectionInboxErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -6701,7 +7002,7 @@ export type SubmissionDraftCreateErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -6770,7 +7071,7 @@ export type SubmissionFormRevisionGetErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -6815,7 +7116,7 @@ export type SubmissionFormOptionsGetErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -6868,7 +7169,7 @@ export type SubmissionDraftDeleteErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -6915,7 +7216,7 @@ export type SubmissionDraftGetErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -6981,7 +7282,7 @@ export type SubmissionDraftChangeErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -7042,7 +7343,7 @@ export type SubmissionDraftManifestUpgradeErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -7096,7 +7397,7 @@ export type SubmissionAttemptsListErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -7157,7 +7458,7 @@ export type SubmissionFinalizationStartErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -7204,7 +7505,7 @@ export type SubmissionFinalizationGetErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -7256,7 +7557,7 @@ export type SubmissionAttemptGetErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -7320,7 +7621,7 @@ export type SubmissionMediaUploadErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -7371,7 +7672,7 @@ export type SubmissionMediaListErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -7430,7 +7731,7 @@ export type SubmissionMediaDiscardErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -7482,7 +7783,7 @@ export type SubmissionMediaGetErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -7526,7 +7827,7 @@ export type SubmissionMediaAttachErrors = {
     /**
      * Unprocessable Entity
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -7558,7 +7859,7 @@ export type SubmissionSchematicSuggestionsErrors = {
     /**
      * Unprocessable Entity
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -7589,7 +7890,7 @@ export type SubmissionSchematicListErrors = {
     /**
      * Unprocessable Entity
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -7628,7 +7929,7 @@ export type SubmissionSchematicDiscardErrors = {
     /**
      * Unprocessable Entity
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -7662,7 +7963,7 @@ export type SubmissionSchematicUploadErrors = {
     /**
      * Unprocessable Entity
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -7701,7 +8002,7 @@ export type SubmissionSchematicPrimaryErrors = {
     /**
      * Unprocessable Entity
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -7739,7 +8040,7 @@ export type SubmissionSchematicAttachErrors = {
     /**
      * Unprocessable Entity
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -7776,7 +8077,7 @@ export type SubmissionRevisionHistoryErrors = {
     /**
      * Unprocessable Entity
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -7813,7 +8114,7 @@ export type SubmissionRevisionGetErrors = {
     /**
      * Unprocessable Entity
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -7850,7 +8151,7 @@ export type SubmissionRevisionMatchErrors = {
     /**
      * Unprocessable Entity
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -7887,7 +8188,7 @@ export type SubmissionRevisionApproveErrors = {
     /**
      * Unprocessable Entity
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -7918,7 +8219,7 @@ export type SubmissionSuppliedFileListErrors = {
     /**
      * Unprocessable Entity
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -7957,7 +8258,7 @@ export type SubmissionSuppliedFileDiscardErrors = {
     /**
      * Unprocessable Entity
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -7992,7 +8293,7 @@ export type SubmissionSuppliedFileUploadErrors = {
     /**
      * Unprocessable Entity
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -8061,7 +8362,7 @@ export type SuggestionsGetErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -8107,7 +8408,7 @@ export type TagsListErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -8146,7 +8447,7 @@ export type TagsGetErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -8185,7 +8486,7 @@ export type TagsGetBySlugErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -8224,7 +8525,7 @@ export type CreatorAliasGetErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -8263,7 +8564,7 @@ export type CreatorProfileGetErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -8309,7 +8610,7 @@ export type MinecraftVersionsListErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -8348,7 +8649,7 @@ export type VoteSessionGetErrors = {
     /**
      * Unprocessable Content
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -8411,7 +8712,7 @@ export type VoteClearErrors = {
     /**
      * Unprocessable Entity
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -8472,7 +8773,7 @@ export type VoteCastErrors = {
     /**
      * Unprocessable Entity
      */
-    422: ProblemDetail;
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */

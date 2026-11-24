@@ -15,6 +15,10 @@ from squid.core.errors import ErrorCode, ValidationError
 from squid.core.pagination import MAX_PAGE_OFFSET, PageSelector
 from squid.core.pagination import Page as ResultPage
 from squid.core.pagination import PageAnchor as ResultPageAnchor
+from squid.core.validation import (
+    FieldErrorCode,
+    SimpleIssue,
+)
 
 PageSizeParam = Annotated[int, QueryParameter(ge=1, le=50, description="Maximum number of items to return.")]
 OffsetParam = Annotated[
@@ -100,10 +104,20 @@ def resolve_selector(
     ]
     if len(provided) > 1:
         msg = f"{', '.join(provided)} cannot be combined"
-        raise ValidationError(msg, code=ErrorCode.INVALID_QUERY, public_context={"fields": provided})
+        raise ValidationError(
+            msg,
+            code=ErrorCode.INVALID_QUERY,
+            issues=tuple(
+                SimpleIssue(field=f"/query/{key}", code=FieldErrorCode.INCOMPATIBLE_FIELDS) for key in provided
+            ),
+        )
     if not keyset_allowed and (after_id is not None or before_id is not None):
         msg = "after_id and before_id require ordering by id"
-        raise ValidationError(msg, code=ErrorCode.INVALID_QUERY, public_context={"field": "sort"})
+        raise ValidationError(
+            msg,
+            code=ErrorCode.INVALID_QUERY,
+            issues=(SimpleIssue(field="/query/sort", code=FieldErrorCode.INVALID_VALUE),),
+        )
     return PageSelector(offset=offset or 0, after_id=after_id, before_id=before_id)
 
 
@@ -120,6 +134,7 @@ def parse_page_sort(value: str | None, *, allowed: frozenset[str], default: str)
         raise ValidationError(
             msg,
             code=ErrorCode.INVALID_QUERY,
-            public_context={"field": "sort", "allowed": sorted(allowed)},
+            issues=(SimpleIssue(field="/query/sort", code=FieldErrorCode.UNKNOWN_OPTION),),
+            public_context={"allowed": sorted(allowed)},
         )
     return field, raw.startswith("-")

@@ -63,6 +63,10 @@ from squid.core.permissions.domain.catalogue import (
     BUILD_SUBMISSION_VIEW_PENDING,
 )
 from squid.core.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
+from squid.core.validation import (
+    FieldErrorCode,
+    SimpleIssue,
+)
 
 UserWriter = CurrentCaller
 _BUILD_ETAG = re.compile(r'^"build-(?P<build_id>[1-9][0-9]*)-r(?P<revision>[1-9][0-9]*)"$')
@@ -206,7 +210,7 @@ async def list_builds(
     if q is not None:
         if status is not None:
             msg = "status cannot be combined with q"
-            raise ValidationError(msg, public_context={"field": "status"})
+            raise ValidationError(msg, issues=(SimpleIssue(field="/query/status", code=FieldErrorCode.INVALID_VALUE),))
         # Relevance order has no identifier sequence to anchor to, so ranked pages are offset-only.
         selector = resolve_selector(offset=offset, after_id=after_id, before_id=before_id, keyset_allowed=False)
         result = await search_service.search(

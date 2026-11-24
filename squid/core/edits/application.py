@@ -29,7 +29,6 @@ from squid.core.edits.domain import (
 from squid.core.errors import ConflictError, InvalidStateError, ValidationError
 from squid.core.replay import REPLAY_RETENTION_HOURS
 from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
-from squid.core.validation import schema_issues
 
 logger = logging.getLogger(__name__)
 
@@ -110,7 +109,7 @@ class EditExecutor[UowT: EditUnitOfWork]:
         try:
             prepared = await handler.prepare(uow, actor, command)
         except SchemaValidationError as error:
-            raise ValidationError(issues=schema_issues(error)) from error
+            raise ValidationError.from_schema(error) from error
         base = self._current_revisions(command, prepared.revisions)
         versions = (await handler.apply(uow, actor, command, prepared)) if prepared.changed else base
         if len(versions) != len(command.expected) or {v.target for v in versions} != {

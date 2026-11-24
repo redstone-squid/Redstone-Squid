@@ -595,7 +595,7 @@ class FormManifest:
                         )
                         public = RuleIssue(
                             field=field_id,
-                            params=RuleParams(rule=rule.id, reason=rule.reason.value, depends_on=rule.depends_on),
+                            params=RuleParams(rule=rule.id, reason=rule.reason.value),
                         )
                         yield _ValidationIssue(public, rule_inputs, rule.id)
             reason = reasons.get(field_id)

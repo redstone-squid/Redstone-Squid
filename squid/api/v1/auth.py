@@ -20,6 +20,10 @@ from squid.api.v1.schemas.auth import CsrfTokenResponse
 from squid.core.auth.application.web import CallbackFailure
 from squid.core.errors import AuthenticationError, ValidationError
 from squid.core.permissions.domain.catalogue import ACCOUNT_SELF_MANAGE
+from squid.core.validation import (
+    FieldErrorCode,
+    SimpleIssue,
+)
 
 ProviderSlug = Annotated[str, PathParameter(pattern="^[a-z][a-z0-9_-]{0,31}$")]
 """One provider's URL segment. An unknown or unconfigured one is a 404 about the
@@ -190,14 +194,14 @@ def _validate_redirect(request: Request, redirect_to: str | None) -> None:
         return
     if "\\" in redirect_to or any(ord(char) < 32 for char in redirect_to):
         msg = "redirect_to contains invalid URL characters"
-        raise ValidationError(msg, public_context={"field": "redirect_to"})
+        raise ValidationError(msg, issues=(SimpleIssue(field="/query/redirect_to", code=FieldErrorCode.INVALID_VALUE),))
     if redirect_to.startswith("/") and not redirect_to.startswith("//"):
         return
     parsed = urlparse(redirect_to)
     origin = f"{parsed.scheme}://{parsed.netloc}"
     if origin not in request.app.state.config.api.cors_origins:
         msg = "redirect_to must be local or use an allowed CORS origin"
-        raise ValidationError(msg, public_context={"field": "redirect_to"})
+        raise ValidationError(msg, issues=(SimpleIssue(field="/query/redirect_to", code=FieldErrorCode.INVALID_VALUE),))
 
 
 router = Router(

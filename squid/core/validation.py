@@ -4,7 +4,6 @@ from enum import StrEnum
 from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
-from pydantic import ValidationError as PydanticValidationError
 
 
 class FieldErrorCode(StrEnum):
@@ -36,7 +35,6 @@ class EmptyParams(IssueModel):
 class RuleParams(IssueModel):
     rule: str
     reason: str
-    depends_on: tuple[str, ...]
 
 
 class FieldIssue(IssueModel):
@@ -140,17 +138,7 @@ type ValidationIssue = Annotated[
 ]
 
 
-def schema_issues(error: PydanticValidationError, *, prefix: str = "") -> tuple[ValidationIssue, ...]:
-    """Keep structured locations and allowlisted parameters from a failed schema check."""
-    issues = []
-    for entry in error.errors(include_input=False, include_url=False):
-        path = "/".join(str(part).replace("~", "~0").replace("/", "~1") for part in entry["loc"])
-        if path:
-            issues.append(_decoder_issue(prefix + path, entry["type"], entry.get("ctx", {})))
-    return tuple(issues)
-
-
-def _decoder_issue(field: str, kind: str, ctx: dict[str, Any]) -> ValidationIssue:
+def decoder_issue(field: str, kind: str, ctx: dict[str, Any]) -> ValidationIssue:
     match kind:
         case "greater_than":
             return BelowMinimum(field=field, params=BelowMinimumParams(minimum=ctx["gt"], exclusive=True))

@@ -131,7 +131,7 @@ Items 1–4 are implemented in the API.
 
 ## Cross-cutting
 
-50. **ProblemDetail field errors.** Every validation ProblemDetail should carry `context.fields: [{field, code, params}]` so `ErrorSummary` can map errors to fields. Codes must be stable enums so the client can use a `satisfies` map.
+50. **ProblemDetail field errors (implemented).** Validation failures include `context.fields: [{field, code, params}]`. Core reports domain field IDs, including fields on saved drafts. Request decoding reports JSON Pointers rooted at the request location. Request-wide failures have an empty list. Use the SDK’s `ValidationIssue` union and `FieldErrorCode` for exhaustive formatters. Multiple issues can target one control.
 51. **ETags.** Expose `ETag` through CORS, or a body `etag`, on every editable resource. Include `revision` everywhere, as builds already do.
 52. **Cookie and origin strategy.** Decide whether islands call the API directly (cross-site cookies, CORS, CSRF header) or through a same-origin `/api` proxy on the Astro server. Recommendation: the proxy, which keeps the session cookie first-party, uses one CSRF helper, and needs no CORS for credentials.
 

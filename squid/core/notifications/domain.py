@@ -15,7 +15,7 @@ result without overwriting a newer claim.
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import cast
+from typing import cast, override
 from uuid import UUID
 
 from pydantic import JsonValue
@@ -23,6 +23,7 @@ from whenever import Instant
 
 from squid.core.errors import DataIntegrityError, ValidationError
 from squid.core.i18n import tr
+from squid.core.validation import BelowMinimum, BelowMinimumParams, FieldErrorCode, SimpleIssue
 from squid_i18n import md_tr
 
 _BUILD_KINDS = frozenset({"door", "entrance", "extender", "utility"})
@@ -153,20 +154,27 @@ class TagPredicate:
 
     def __post_init__(self) -> None:
         if self.tag_id < 1:
-            raise ValidationError(tr(t"notifications-tag-id-positive = tag_id must be positive"))
+            raise ValidationError(
+                tr(t"notifications-tag-id-positive = tag_id must be positive"),
+                issues=(BelowMinimum(field="tag_id", params=BelowMinimumParams(minimum=1)),),
+            )
         if self.operator not in {"present", "exact"}:
             raise ValidationError(
-                tr(t"notifications-tag-predicate-operator = tag predicate operator must be 'present' or 'exact'")
+                tr(t"notifications-tag-predicate-operator = tag predicate operator must be 'present' or 'exact'"),
+                issues=(SimpleIssue(field="operator", code=FieldErrorCode.UNKNOWN_OPTION),),
             )
         if self.operator == "present" and self.value is not None:
             raise ValidationError(
-                tr(t"notifications-presence-predicates-include = presence predicates cannot include a value")
+                tr(t"notifications-presence-predicates-include = presence predicates cannot include a value"),
+                issues=(SimpleIssue(field="value", code=FieldErrorCode.INCOMPATIBLE_FIELDS),),
             )
         if self.operator == "exact" and self.value is None:
             raise ValidationError(
-                tr(t"notifications-exact-predicate-value-required = exact predicates require a value")
+                tr(t"notifications-exact-predicate-value-required = exact predicates require a value"),
+                issues=(SimpleIssue(field="value", code=FieldErrorCode.REQUIRED),),
             )
 
+    @override
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, TagPredicate):
             return NotImplemented
