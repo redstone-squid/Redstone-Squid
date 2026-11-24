@@ -592,7 +592,7 @@ accounts-bedrock-xuids-unsigned = Bedrock XUIDs must be unsigned 64-bit integers
 # squid/core/accounts/errors.py:370
 accounts-check-uuid-try-again = Check the UUID and try again.
 
-# squid/core/accounts/infrastructure/repository.py:669
+# squid/core/accounts/infrastructure/repository.py:686
 accounts-claim-reassign-required = Approve with `reassign: True` to move the name to the claimant.
 
 # squid/core/accounts/errors.py:330

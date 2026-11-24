@@ -2018,7 +2018,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/accounts/infrastructure/repository.py:669"
+      "squid/core/accounts/infrastructure/repository.py:686"
     ]
   },
   "accounts-creator-already-credited": {
