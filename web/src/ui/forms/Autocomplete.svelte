@@ -1,17 +1,8 @@
-<script lang="ts" module>
-  export type Suggestion = { value: string; label: string; description?: string | null };
-  export type Suggestions = {
-    items: Suggestion[];
-    /** The span of the value that a chosen suggestion replaces; the whole value when absent. */
-    replacement?: { start: number; end: number } | null;
-  };
-</script>
-
 <script lang="ts">
   import { onMount, tick } from "svelte";
   import { cn } from "@/ui/cn";
   import Spinner from "@/ui/feedback/Spinner.svelte";
-  import type { FieldMessages } from "@/ui/forms/field";
+  import type { FieldMessages, SuggestionSource, Suggestions } from "@/ui/forms/field";
   import FieldFrame from "./FieldFrame.svelte";
   import { inputClass, popupClass, popupOptionClass } from "./styles";
 
@@ -38,14 +29,8 @@
     disabled?: boolean;
     minQueryLength?: number;
     debounceMs?: number;
-    labels: {
-      suggestions: string;
-      loading: string;
-      error: string;
-      noResults: string;
-      count: (count: number) => string;
-    };
-    load: (value: string, cursor: number | null, signal: AbortSignal) => Promise<Suggestions>;
+    labels: SuggestionSource["labels"];
+    load: SuggestionSource["load"];
     width?: FieldMessages["width"];
     class?: string;
   };

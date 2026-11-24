@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/svelte";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import Autocomplete from "@/ui/forms/Autocomplete.svelte";
-import type { Suggestions } from "@/ui/forms/Autocomplete.svelte";
+import type { Suggestions } from "@/ui/forms/field";
 
 afterEach(() => {
   vi.useRealTimers();

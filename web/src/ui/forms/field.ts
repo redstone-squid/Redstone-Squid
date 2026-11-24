@@ -37,3 +37,21 @@ export function fieldAttributes(
 export type SelectOption = { value: string; label: string; disabled?: boolean };
 export type ComboboxOption = SelectOption & { description?: string };
 export type ChoiceOption = ComboboxOption & { icon?: LucideIcon };
+
+type Suggestion = { value: string; label: string; description?: string | null };
+export type Suggestions = {
+  items: Suggestion[];
+  /** The span of the value that a chosen suggestion replaces; the whole value when absent. */
+  replacement?: { start: number; end: number } | null;
+};
+/** What `Autocomplete` needs to suggest values: the loader and its status text. */
+export type SuggestionSource = {
+  load: (value: string, cursor: number | null, signal: AbortSignal) => Promise<Suggestions>;
+  labels: {
+    suggestions: string;
+    loading: string;
+    error: string;
+    noResults: string;
+    count: (count: number) => string;
+  };
+};

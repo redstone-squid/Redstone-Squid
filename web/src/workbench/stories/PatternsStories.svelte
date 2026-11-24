@@ -10,6 +10,7 @@
   import Layout from "@/ui/layout/Layout.svelte";
   import PageHeader from "@/ui/patterns/PageHeader.svelte";
   import NavBar from "@/ui/patterns/NavBar.svelte";
+  import SearchBox from "@/ui/patterns/SearchBox.svelte";
   import Section from "@/ui/patterns/Section.svelte";
   import SplitLayout from "@/ui/patterns/SplitLayout.svelte";
   import Variant from "./Variant.svelte";
@@ -72,6 +73,50 @@
       <NavBar label="Narrow story navigation" menuLabel="Menu" {brand} {links} />
     </div>
   </Variant>
+</Story>
+
+<Story
+  name="SearchBox"
+  source="patterns/SearchBox"
+  description="A GET search form that keeps other query parameters."
+>
+  <Layout pattern="grid" min="card-wide">
+    <Variant label="page search, keeping scope">
+      <SearchBox
+        action="/design-system/patterns"
+        label="Search builds and records"
+        placeholder="Piston door, 3×3, CircuitSage"
+        submitLabel="Search"
+        hidden={{ scope: "builds" }}
+        value="flush"
+      />
+    </Variant>
+    <Variant label="compact, for the header">
+      <SearchBox action="/design-system/patterns" label="Search" submitLabel="Search" compact />
+    </Variant>
+    <Variant label="with suggestions">
+      <SearchBox
+        action="/design-system/patterns"
+        label="Search records"
+        submitLabel="Search"
+        suggestions={{
+          labels: {
+            suggestions: "Suggested searches",
+            loading: "Loading",
+            error: "Suggestions are unavailable.",
+            noResults: "No suggestions",
+            count: (count) => `${count} suggestions`,
+          },
+          load: (query) =>
+            Promise.resolve({
+              items: ["piston door", "piston extender", "pulse circuit"]
+                .filter((term) => term.includes(query.trim().toLowerCase()))
+                .map((term) => ({ value: term, label: term })),
+            }),
+        }}
+      />
+    </Variant>
+  </Layout>
 </Story>
 
 {#snippet sideNav()}
