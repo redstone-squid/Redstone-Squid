@@ -3,12 +3,12 @@
   import * as m from "@/locales/messages.gen";
   import Button from "@/ui/actions/Button.svelte";
   import SelectField from "@/ui/forms/SelectField.svelte";
-  import FilePicker from "@/ui/forms/FilePicker.svelte";
+  import FileDrop from "@/ui/forms/FileDrop.svelte";
   import Progress from "@/ui/feedback/Progress.svelte";
   import Notice from "@/ui/feedback/Notice.svelte";
   import Layout from "@/ui/layout/Layout.svelte";
   import Text from "@/ui/content/Text.svelte";
-  import Field from "@/ui/forms/Field.svelte";
+  import TextField from "@/ui/forms/TextField.svelte";
   import {
     createDraftFixture,
     draftErrorMessages,
@@ -99,7 +99,7 @@
   <Text tone="muted">{m.trialDisclaimer()}</Text>
   <fieldset class="grid min-w-0 gap-6" disabled={!ready || busy}>
     <legend class="mb-3 text-sm font-semibold text-fg-muted">{m.trialDetails()}</legend>
-    <Field
+    <TextField
       label={m.workbenchBuildTitle()}
       bind:value={input.title}
       required
@@ -110,15 +110,16 @@
       <option value="door">{m.trialDoor()}</option>
       <option value="utility">{m.trialUtility()}</option>
     </SelectField>
-    {#if input.category === "door"}<Field
+    {#if input.category === "door"}<TextField
         label={m.trialWidth()}
         inputmode="numeric"
+        width="xs"
         bind:value={input.width}
         required
         oninput={edited}
         error={errors.width !== undefined ? draftErrorMessages[errors.width]() : undefined}
       />{/if}
-    <Field
+    <TextField
       label={m.trialFindVersion()}
       type="search"
       bind:value={search}
@@ -137,7 +138,11 @@
       <option value="">{m.trialChooseVersion()}</option>
       {#each versions as version (version)}<option value={version}>{version}</option>{/each}
     </SelectField>
-    <FilePicker label={m.trialUpload()} onFiles={([file]) => void upload(file)} />
+    <FileDrop
+      label={m.trialUpload()}
+      labels={{ drop: m.trialUploadDrop(), browse: m.trialUploadBrowse() }}
+      onFiles={([file]) => void upload(file)}
+    />
   </fieldset>
   {#if phase === "uploading"}<Progress label={m.trialUploading()} value={progress} />{/if}
   {#if retryFile}

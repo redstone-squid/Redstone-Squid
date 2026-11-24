@@ -915,6 +915,30 @@ export function trialUpload(locale: Locale = getLocale()): string {
   }
 }
 
+/** Drop a schematic here, or */
+export function trialUploadDrop(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Drop a schematic here, or";
+    case "zh-CN":
+      return "将原理图拖放到此处，或";
+    case "en-XA":
+      return "[" + "Đŕöþ å šçĥéɱåţîç ĥéŕé, öŕ" + "··········]";
+  }
+}
+
+/** Choose a file */
+export function trialUploadBrowse(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Choose a file";
+    case "zh-CN":
+      return "选择文件";
+    case "en-XA":
+      return "[" + "Çĥööšé å ƒîļé" + "······]";
+  }
+}
+
 /** Uploading fixture */
 export function trialUploading(locale: Locale = getLocale()): string {
   switch (locale) {
