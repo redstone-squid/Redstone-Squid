@@ -13,6 +13,10 @@
   import Variant from "./Variant.svelte";
 
   // Each specimen needs its own name: several navigation landmarks share this page.
+  let preview = $state("render");
+  let unit = $state("ticks");
+  let vote = $state<string>();
+
   const labels = (nav: string) => ({ nav, previous: m.commonPrevious(), next: m.commonNext() });
 </script>
 
@@ -27,25 +31,71 @@
   />
 </Story>
 
-<Story name="Tabs" source="navigation/Tabs" description="Links between views kept in the URL.">
-  <Tabs
-    label="Search scope"
-    items={[
-      { label: "All", href: "#tabs", current: true, count: "312" },
-      { label: "Builds", href: "#tabs-builds", count: "280" },
-      { label: "Records", href: "#tabs-records", count: "32" },
-    ]}
-  />
+<Story name="Tabs" source="navigation/Tabs" description="Views of one listing or of one item.">
+  <Variant label="link mode, for views kept in the URL">
+    <Tabs
+      label="Search scope"
+      items={[
+        { label: "All", href: "#tabs", current: true, count: "312" },
+        { label: "Builds", href: "#tabs-builds", count: "280" },
+        { label: "Records", href: "#tabs-records", count: "32" },
+      ]}
+    />
+  </Variant>
+  <Variant label="panel mode, arrow keys switch panels">
+    <Tabs
+      mode="panel"
+      label="Preview"
+      bind:value={preview}
+      items={[
+        { id: "render", label: "Render" },
+        { id: "schematic", label: "Schematic", count: "3" },
+        { id: "video", label: "Video", disabled: true },
+      ]}
+    >
+      {#snippet panel(tab)}
+        <p class="text-sm text-fg-muted">The {tab.label.toLowerCase()} of Copper Bolt 5×5.</p>
+      {/snippet}
+    </Tabs>
+  </Variant>
 </Story>
 
 <Story name="SegmentedControl" source="navigation/SegmentedControl">
-  <SegmentedControl
-    label="View"
-    items={[
-      { label: "Cards", href: "#segmentedcontrol", current: true, icon: LayoutGrid },
-      { label: "Table", href: "#segmentedcontrol-table", icon: Table },
-    ]}
-  />
+  <Variant label="link mode">
+    <SegmentedControl
+      label="View"
+      items={[
+        { label: "Cards", href: "#segmentedcontrol", current: true, icon: LayoutGrid },
+        { label: "Table", href: "#segmentedcontrol-table", icon: Table },
+      ]}
+    />
+  </Variant>
+  <Variant label="radio mode, size md">
+    <SegmentedControl
+      mode="radio"
+      label="Duration unit"
+      name="unit"
+      size="md"
+      bind:value={unit}
+      items={[
+        { label: "Ticks", value: "ticks" },
+        { label: "Seconds", value: "seconds" },
+        { label: "Minutes", value: "minutes", disabled: true },
+      ]}
+    />
+  </Variant>
+  <Variant label="radio mode, nothing chosen yet">
+    <SegmentedControl
+      mode="radio"
+      label="Your vote"
+      name="vote"
+      bind:value={vote}
+      items={[
+        { label: "Approve", value: "approve" },
+        { label: "Reject", value: "reject" },
+      ]}
+    />
+  </Variant>
 </Story>
 
 <Story name="NavList" source="navigation/NavList">
