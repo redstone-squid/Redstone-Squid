@@ -96,6 +96,20 @@
       ]}
     />
   </Variant>
+  <Variant label={m.storySubmitMode()}>
+    <form method="get" action="#segmentedcontrol">
+      <SegmentedControl
+        mode="submit"
+        label={m.storyView()}
+        name="view"
+        value="cards"
+        items={[
+          { label: m.storyCards(), value: "cards", icon: LayoutGrid },
+          { label: m.storyTable(), value: "table", icon: Table },
+        ]}
+      />
+    </form>
+  </Variant>
 </Story>
 
 <Story name="NavList" source="navigation/NavList">

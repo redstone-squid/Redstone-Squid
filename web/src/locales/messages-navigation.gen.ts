@@ -122,6 +122,18 @@ export function storyRadioModeNothingChosenYet(locale: Locale = getLocale()): st
   }
 }
 
+/** submit mode, saved when picked */
+export function storySubmitMode(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "submit mode, saved when picked";
+    case "zh-CN":
+      return "提交模式，选中即保存";
+    case "en-XA":
+      return "[" + "šûƀɱîţ ɱöđé, šåṽéđ ŵĥéñ þîçķéđ" + "············]";
+  }
+}
+
 /** Your vote */
 export function storyYourVote(locale: Locale = getLocale()): string {
   switch (locale) {

@@ -11,6 +11,8 @@
    * In `link` mode (the default) each segment is a link, for views kept in the URL such as
    * cards or table. `radio` mode is a native radio group named `name`, for a choice inside a
    * form such as a vote or a unit; it submits without JavaScript and arrow keys move the choice.
+   * In `submit` mode each segment is a submit button named `name`, pressed when it is `value`,
+   * for a preference saved as soon as it is picked, such as the theme.
    */
   type Props = { label: string; size?: "sm" | "md"; class?: string } & (
     | { mode?: "link"; items: LinkSegment[] }
@@ -22,6 +24,7 @@
         disabled?: boolean;
         onchange?: (value: string) => void;
       }
+    | { mode: "submit"; items: RadioSegment[]; name: string; value?: string }
   );
   let {
     label,
@@ -71,6 +74,23 @@
       {/each}
     </div>
   </fieldset>
+{:else if props.mode === "submit"}
+  {@const submit = props}
+  <div role="group" aria-label={label} class={cn("w-fit max-w-full", trackClass, className)}>
+    {#each submit.items as item (item.value)}
+      <button
+        type="submit"
+        name={submit.name}
+        value={item.value}
+        disabled={item.disabled}
+        aria-pressed={item.value === value ? "true" : "false"}
+        class={cn(
+          segmentClass,
+          "cursor-pointer aria-pressed:forced-highlight aria-pressed:bg-accent-soft aria-pressed:text-fg",
+        )}>{@render segment(item)}</button
+      >
+    {/each}
+  </div>
 {:else}
   <nav aria-label={label} class={cn("w-fit max-w-full", className)}>
     <ul class={trackClass}>

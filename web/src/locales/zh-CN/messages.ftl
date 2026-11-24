@@ -568,6 +568,7 @@ story-view = 视图
 story-radio-mode-size-md = 单选模式，中号
 story-duration-unit = 时长单位
 story-radio-mode-nothing-chosen-yet = 单选模式，尚未选择
+story-submit-mode = 提交模式，选中即保存
 story-your-vote = 你的投票
 story-account = 账号
 story-pagination-description = 仅有一页时隐藏。

@@ -571,6 +571,7 @@ story-view = View
 story-radio-mode-size-md = radio mode, size md
 story-duration-unit = Duration unit
 story-radio-mode-nothing-chosen-yet = radio mode, nothing chosen yet
+story-submit-mode = submit mode, saved when picked
 story-your-vote = Your vote
 story-account = Account
 story-pagination-description = Hidden when there is one page.
