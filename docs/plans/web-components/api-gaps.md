@@ -6,17 +6,15 @@ Grouped by area. Each entry names the screen that needs it and why.
 
 ## Identity, session and permissions
 
-1. **`GET /v1/session`.** It is cheap and called on every server render that has a session cookie, and in the header island.
-   - *Response:* `{signed_in: bool, user: {id, creator_id, display_name, avatar_url} | null, consent_pending: bool, permissions: string[] (effective global node names), counts: {unread_notifications: int, drafts: int, drafts_needing_attention: int, review_queue: int | null}}`.
-   - *Why:* the header badge, menu, staff links, consent redirect, and every permission-gated button. Today `UserMe` has no permissions and no counts.
-2. **`viewer` block on detail responses.** Avoids N extra calls for per-user state.
-   - `BuildDetail.viewer`: `{can_edit, can_review, can_download_private_schematics, followed_creator_subscription_ids: {creator_id: subscription_id}, vote: VoteSessionSummary | null}`.
-   - `PublicRecordDetail.viewer`: `{subscription_id: int | null}`.
-   - `CreatorProfileDetail.viewer`: `{subscription_id, is_self, can_claim}`.
-   - `TagDetail.viewer`: `{filter_subscription_id}`.
-   - Null for anonymous users.
-3. **`GET /v1/auth/providers`** returns `[{id, label_key}]`. Needed by the A1 sign-in buttons, and to link additional providers on A3.
-4. **Callback errors.** `GET /v1/auth/{provider}/callback` should redirect to `redirect_to` with `?auth_error=<code>` on failure, so A1 can show an inline error.
+1. **`GET /v1/session`** supplies one snapshot for the server render and header island. The island reuses the snapshot on hydration.
+   - Return `{user: {id, creator_id, display_name, avatar_url} | null, consent_pending: bool, permissions: string[], counts: {unread_notifications: int, drafts: int, drafts_needing_attention: int, review_queue: int | null}}`. Permissions are effective global node names.
+   - A missing or expired cookie returns 200 with a null user, false consent flag, empty permissions, zero personal counts and a null review queue. The queue count is null whenever the viewer lacks access and zero when a visible queue is empty.
+   - Measure the signed-in request against the server-render latency budget with representative queue and draft volumes.
+2. **Detail responses include a nullable `viewer`** so one request supplies the controls for the resource. Anonymous callers get null. Keep personalized responses out of shared caches and enforce each permission on the action itself.
+   - `BuildDetail.viewer` includes `can_edit`, `can_review`, `can_download_private_schematics`, a map of followed creator IDs to subscription IDs, and the caller’s nullable `ballot`. The vote session belongs to the build (item 6).
+   - `PublicRecordDetail.viewer` includes a nullable `subscription_id`. `CreatorProfileDetail.viewer` includes a nullable `subscription_id`, `is_self` and `can_claim`. `TagDetail.viewer` includes a nullable `filter_subscription_id`.
+3. **`GET /v1/auth/providers`** returns configured providers as `[{id}]` in display order. A1 uses the stable provider slug for its localized sign-in button. A3 combines discovery with `/me` identities and starts a distinct authenticated linking flow bound to the current account.
+4. **Callback failures return to A1** with a stable `auth_error` query parameter. Use `cancelled` for provider denial, `invalid_state` for missing, expired or mismatched state, and `provider_unavailable` for provider failures. Consume and validate state even on denial. Only a validated attempt can carry its saved return destination into a retry. Successful sign-in retains the existing return redirect.
 
 ## Builds
 
