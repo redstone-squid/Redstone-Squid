@@ -316,8 +316,10 @@
                           {#if rowHref !== undefined}
                             <a
                               href={rowHref(row.original)}
-                              class="text-fg underline-offset-2 hover:underline"
-                              >{@render value(row.original, column)}</a
+                              class={cn(
+                                "text-fg underline-offset-2 hover:underline",
+                                column.truncate === true && "block truncate",
+                              )}>{@render value(row.original, column)}</a
                             >
                           {:else}
                             {@render value(row.original, column)}
