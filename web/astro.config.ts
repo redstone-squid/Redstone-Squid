@@ -45,7 +45,7 @@ export default defineConfig({
         ],
       },
       // The offline page needs its styles and the logo in the header.
-      buildSW: { swSrc: "src/sw.ts", globPatterns: ["_astro/*.css", "favicon.svg"] },
+      buildSW: { swSrc: "src/sw.ts", globPatterns: ["_astro/*.css", "_astro/favicon.*.svg"] },
     }),
   ],
   output: "server",

@@ -1,4 +1,5 @@
 ---
+import faviconUrl from "@/ui/favicon.svg?url&no-inline";
 import LanguageSelector from "@/layouts/LanguageSelector.astro";
 import { localizePath, unprefixedPath } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
@@ -42,14 +43,14 @@ const groups = [
     <meta name="viewport" content="width=device-width" />
     <meta name="robots" content="noindex,nofollow" />
     <title>{title} · {m.siteName()}</title>
-    <link rel="icon" href="/favicon.svg" />
+    <link rel="icon" href={faviconUrl} />
     <link rel="preload" href={interLatin} as="font" type="font/woff2" crossorigin="anonymous" />
   </head>
   <body>
     <SkipLink href="#main" label={m.workbenchSkipToContent()} />
     <header class="flex items-center justify-between gap-4 border-b border-line bg-surface px-gutter py-4">
       <a class="flex items-center gap-3 rounded-sm font-bold no-underline" href={localizePath("/")}>
-        <img class="size-8 shrink-0" src="/favicon.svg" width="32" height="32" alt="" />
+        <img class="size-8 shrink-0" src={faviconUrl} width="32" height="32" alt="" />
         {m.siteName()}
       </a>
       <div class="flex flex-wrap items-center gap-3">
