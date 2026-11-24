@@ -831,7 +831,7 @@ The primitives each one composes are listed after the arrow.
 - `url-state.ts`: `withParams`, `toggleListParam`.
 - `focus.ts`: `focusHeading`, `focusAfterRemoval`.
 - `query-client.ts`: one QueryClient per page, shared by all islands.
-- `mutation.ts`: CSRF token cache, idempotency keys, If-Match, ProblemDetail parsing with zod. This one knows about the API, so it lives in `src/features/api-client/` (new), not in `src/ui`.
+- `mutation.ts`: CSRF token cache, idempotency keys, If-Match, ProblemDetail parsing with zod. This one knows about the API, so it lives in the `src/api-client` layer, which features may import, not in `src/ui`.
 
 ---
 

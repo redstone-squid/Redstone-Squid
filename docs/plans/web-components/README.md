@@ -31,11 +31,30 @@ squid/core, so screens are composed from `web/src/ui` instead of one-off markup.
   button's look renders `Button` (bits-ui triggers through their `child` snippet).
 - Builds and records share `features/catalogue`, since a record shows its holders as build
   cards and features cannot import each other.
+- API errors and the islands' write client live in `src/api-client`, a layer that server,
+  features and the workbench import, rather than `features/api-client`, which no other
+  feature could have used.
+
+### Same-origin API (API item 52)
+
+Islands call the API on the site's own origin; there is no Astro proxy. The gateway already
+routes `/v1` on `SITE_URL` to the API and `API_BASE_URL` defaults to `SITE_URL`
+(`docs/docker.md`), so the session cookie is first-party, and the CSP's `default-src 'self'`
+already permits the calls. A proxy would add a hop, a second place to forward cookies, locale
+and request ids, and a second failure mode for every write, for no security gain. `BrowserApi`
+takes the base URL from the page (`config.apiBaseUrl`), so development, with the API on
+another port of the same host, works through the API's CORS settings. Only `src/server` may
+read cookies, so islands fetch the CSRF token once per page from `GET /v1/auth/csrf`. If the
+API ever moves to another site, the CSP needs a `connect-src` and its cookies become
+third-party; revisit this then.
 
 ## Status and resuming
 
 Phases 0 to 4 are done: 0 and 1 in commits `960679e9a` to `01cf8de84`, then 2, 3 and 4,
-built in parallel and joined on one branch. Phase 5 is next.
+built in parallel and joined on one branch. Phase 6 is done: `src/ui/lib` (`url-state`,
+`focus`, `query-client`), `src/api-client` (`api-error`, `mutation`) and
+`features/submissions/draft-sync.ts`. Its users arrive with the screens; `ListField` should
+switch to `focusAfterRemoval` once Phase 5 has merged. Phase 5 is next.
 
 What exists in `web/src/ui`, by folder: `layout` (Layout, Container), `content` (Heading,
 Text, Link, Icon, Code, Prose, Timestamp, VisuallyHidden, SkipLink), `actions` (Button),
@@ -94,8 +113,8 @@ How to resume:
      column visibility first, or wait for `Menu`.
    - Merge conflicts are limited to the catalogs, `groups.ts`, the `[group].astro` page and
      the coverage test's group list.
-3. Then Phase 5 (patterns) and Phase 6 (infrastructure), then Phase 7 (lint enforcement),
-   which must leave zero violations behind.
+3. Then Phase 5 (patterns), then Phase 7 (lint enforcement), which must leave zero
+   violations behind.
 4. Each phase ends the way Phase 1 did: stories, unit tests for keyboard and focus contracts,
    `test:review --grep` passing for the touched groups, `src/ui/README.md` updated, and small commits.
 
@@ -132,10 +151,10 @@ were built here, ahead of their phases.
 - `SplitLayout`, `NavBar`, `SearchBox`, `FilterPanel`, `ActiveFilters`, `ResultsToolbar`, `ResultsView`, `ConfirmDialog`, `SettingsList`, `MediaUploader`, `OneTimeSecret`, `StepFlow`, `FlashNotice`.
 - Then rebuild `CatalogueLayout` and the header with `NavBar` and the `UserMenu` island once `/v1/session` exists.
 
-**Phase 6: application infrastructure.** Parallel with Phase 5.
+**Phase 6: application infrastructure.** Done.
 
 - `src/ui/lib/url-state.ts`, `focus.ts`, `query-client.ts` (one QueryClient per page).
-- `src/features/api-client/mutation.ts`: CSRF, Idempotency-Key, If-Match, ProblemDetail parsing with zod, the error-code map, and the same-origin proxy decision (API item 52).
+- `src/api-client/mutation.ts`: CSRF, Idempotency-Key, If-Match, ProblemDetail parsing with zod, the error-code map, and the same-origin proxy decision (API item 52).
 - `features/submissions/draft-sync.ts`: the operation queue, with Vitest coverage for rebase, conflict, offline and replay.
 
 **Phase 7: enforcement.**

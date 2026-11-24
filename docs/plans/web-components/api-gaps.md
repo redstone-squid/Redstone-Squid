@@ -132,7 +132,8 @@ Items 1–4 are implemented in the API.
 ## Cross-cutting
 
 50. **ProblemDetail field errors (implemented).** Validation failures include `context.fields: [{field, code, params}]`. Core reports domain field IDs, including fields on saved drafts. Request decoding reports JSON Pointers rooted at the request location. Request-wide failures have an empty list. Use the SDK’s `ValidationIssue` union and `FieldErrorCode` for exhaustive formatters. Multiple issues can target one control.
-51. **ETags.** Expose `ETag` through CORS, or a body `etag`, on every editable resource. Include `revision` everywhere, as builds already do.
-52. **Cookie and origin strategy.** Decide whether islands call the API directly (cross-site cookies, CORS, CSRF header) or through a same-origin `/api` proxy on the Astro server. Recommendation: the proxy, which keeps the session cookie first-party, uses one CSRF helper, and needs no CORS for credentials.
+51. **ETags.** `ETag` is already exposed through CORS, and accounts, drafts, builds, settings and notification preferences send it. Include `revision` in every editable body, as builds already do, and send `ETag` from the remaining editors.
+52. **Cookie and origin strategy.** Decided: islands call the API on the site's own origin, where the gateway already routes `/v1`, and take the CSRF token from `GET /v1/auth/csrf`. No Astro proxy. See "Same-origin API" in [README.md](README.md). No API change needed.
+54. **A stable revision-conflict code.** A stale `If-Match` or `base_revision` answers 412 with code `DOMAIN_ERROR` and no public context (`RevisionConflictError` keeps `expected` and `current` private); a draft whose row moved under a change answers 409, also `DOMAIN_ERROR`, with `actual_revision`. Give both one code, such as `REVISION_CONFLICT`, with `{expected, current}` in public context, so clients stop recognizing conflicts by status. Needed by `draft-sync.ts`, the conflict `Notice` and M4.
 
 ---
