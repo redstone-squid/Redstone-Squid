@@ -5,7 +5,7 @@
 
   /**
    * Counts of a page's related records, such as a build's versions or a creator's records
-   * held, as a row of links under the `PageHeader`. A screen shows the same items in the same
+   * held, as a strip of links under the `PageHeader`. A screen shows the same items in the same
    * order whatever the data, so a zero count still renders; leave an item out only on pages
    * where it can never apply. Verbs belong in the `PageHeader` actions instead.
    */
@@ -18,23 +18,32 @@
   let { items, label, class: className }: Props = $props();
 </script>
 
+<!--
+  One bordered strip whose dividers are 1px gaps showing the border color, so they stay right
+  however the items wrap. Narrow, it is a full-width list; wide, a row. Never a mix of both.
+-->
 <nav aria-label={label} class={cn("@container min-w-0 print:hidden", className)}>
-  <ul class="flex flex-wrap gap-2">
+  <ul
+    class="flex w-full flex-col gap-px overflow-hidden rounded-sm border border-line-strong bg-line @2xl:w-fit @2xl:max-w-full @2xl:flex-row @2xl:flex-wrap"
+  >
     {#each items as item (item.href)}
-      <!-- Narrow, the links share each row evenly; wider, they keep their width up to a cap. -->
-      <li class="flex min-w-0 grow basis-32 @lg:max-w-64 @lg:grow-0 @lg:basis-auto">
-        <!-- The space between the spans keeps "3 records" apart in the link's name. -->
+      <li class="flex grow bg-surface">
         <a
           href={item.href}
-          class="group grid min-h-control min-w-28 grow content-start gap-0.5 rounded-sm border border-line bg-surface px-4 py-2 text-fg no-underline transition-[background-color,border-color] duration-fast ease-standard hover:border-line-strong hover:bg-surface-muted"
+          class="group flex min-h-control-sm grow items-start gap-2 px-3 py-2 text-sm font-semibold text-fg no-underline transition-colors duration-fast ease-standard hover:bg-surface-muted focus-visible:-outline-offset-3"
         >
-          <span class="text-xl leading-tight font-bold tracking-tight tabular-nums"
+          {#if item.icon}
+            <!-- Top-aligned on the first line; the padding makes one line exactly the control height. -->
+            <span class="flex h-lh items-center text-fg-muted group-hover:text-fg">
+              <Icon icon={item.icon} />
+            </span>
+          {/if}
+          <span class="min-w-0 wrap-break-word">{item.label}</span>
+          <!-- The whitespace before the count keeps "versions 3" apart in the link's name. -->
+          <span
+            class="ms-auto shrink-0 rounded-xs bg-surface-muted px-1.5 tabular-nums group-hover:bg-surface"
             >{item.count}</span
           >
-          <span class="flex min-w-0 items-center gap-1.5 text-sm text-fg-muted group-hover:text-fg">
-            {#if item.icon}<Icon icon={item.icon} />{/if}
-            <span class="min-w-0 wrap-break-word">{item.label}</span>
-          </span>
         </a>
       </li>
     {/each}

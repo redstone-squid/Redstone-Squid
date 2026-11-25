@@ -513,7 +513,7 @@ The `src/ui` primitives and patterns, the feature components built from them, an
 **`RelatedLinks`** (smart buttons: counts of related records, in a fixed place)
 
 - _API:_ `items` of `{label, count, href, icon?}` and a `label` for the navigation landmark. `label` is the plural-aware text from the catalog, so the caller formats the count.
-- _Renders:_ a `nav` with a wrapping row of links under the `PageHeader`, each a count above its label.
+- _Renders:_ a `nav` with one bordered strip of links under the `PageHeader`, each a label with its count in a chip. It is a row when the container is wide and a full-width list when narrow, never a mix; dividers are 1px gaps so they survive wrapping.
 - _Behavior:_ order and presence are fixed per screen, never by data. A zero count still renders ("0 records") so the row never reshuffles; an item is left out only on pages where it can never apply. Plain links, so no JS and no extra keyboard handling.
 - _Users:_ P5, P8, P12, P13.
 

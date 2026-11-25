@@ -197,8 +197,8 @@ describe("RelatedLinks", () => {
     const nav = screen.getByRole("navigation", { name: "Related to this build" });
     // The order is the contract: it stays fixed whatever the counts.
     const [held, versions] = within(nav).getAllByRole("link");
-    expect(held).toHaveAccessibleName("2 records held");
-    expect(versions).toHaveAccessibleName("0 versions");
+    expect(held).toHaveAccessibleName("records held 2");
+    expect(versions).toHaveAccessibleName("versions 0");
     expect(versions).toHaveAttribute("href", "/builds/1/versions");
   });
 });
