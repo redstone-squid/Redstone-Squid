@@ -72,11 +72,13 @@ Choose overflow behavior where you compose the screen:
   Navigation consumes budget too. Shared root pages can contain local pagers with independent
   positions. Layouts still using a legacy fitter cannot combine root and local pages.
 - Set `ResponseSpec(max_messages=2)` when a screen's parts should all stay visible and no
-  single message holds them. The screen is cut between top-level nodes and continued in a
-  follow-up message; it stays one message while it fits. Wrap a node in `sl.keep_with_next`
-  to keep it in the same message as the node after it, such as a Back button and the
-  content it closes. Prefer this to paging for short interactive sessions, and keep the
-  default of 1 for durable sessions, which restore only the first message.
+  single message holds them. The screen is continued in a follow-up message, preferably
+  between top-level nodes, otherwise inside stacks, components, and fixed-group lists; it
+  stays one message while it fits. Spreading comes before shortening or omitting content.
+  Wrap a node in `sl.keep_with_next` to keep it in the same message as the node after it,
+  such as a Back button and the content it closes. Prefer this to paging for short
+  interactive sessions, and keep the default of 1 for durable sessions, which restore only
+  the first message.
 
 Search help demonstrates a structured reference with a compact text alternative. Test that
 both representations preserve the content, that the preferred form wins when it fits, and

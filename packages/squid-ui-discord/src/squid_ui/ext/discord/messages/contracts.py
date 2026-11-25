@@ -260,7 +260,8 @@ class MessageRootConfig[
     retain_routed_on_timeout: bool = False
     max_messages: int = 1
     """The most messages this root may occupy. Above 1, a document too large for one
-    message is cut between its top-level children and continued in follow-up messages.
+    message, or that would fit only by losing content, continues in follow-up messages.
+    See `squid_ui.planning.spread` for where it may be cut.
 
     All messages show one component tree, and a press on any of them reaches it. A message
     the root cannot currently edit, such as an ephemeral one nobody has pressed for 15

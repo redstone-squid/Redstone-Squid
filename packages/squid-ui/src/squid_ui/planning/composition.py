@@ -13,7 +13,7 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any, Protocol
 
 from squid_ui.authoring.document import Document
-from squid_ui.authoring.presentations import AtomicNode, Budget, FidelityEffect, SemanticRef
+from squid_ui.authoring.presentations import AtomicNode, Budget, FidelityEffect, Omission, SemanticRef, Shortening
 from squid_ui.authoring.semantic import Budgeted, ComponentPlacement, Contextual
 from squid_ui.chrome import DEFAULT_CHROME, Chrome
 from squid_ui.content.assets import Asset
@@ -400,6 +400,14 @@ class PlanningContext:
     local_view: bool = False
     page_overrides: Mapping[OccurrenceId, int] = field(default_factory=dict)
     positions: Mapping[str, PagePosition] = field(default_factory=dict)
+    preserve_content: bool = False
+    """Reject omissions and shortenings while still allowing other fidelity effects."""
+
+    def forbids(self, effects: Iterable[FidelityEffect]) -> bool:
+        """Whether a realization with these fidelity effects is out of bounds for this plan."""
+        if self.strict:
+            return any(True for _ in effects)
+        return self.preserve_content and any(isinstance(effect, Omission | Shortening) for effect in effects)
 
 
 @dataclass(frozen=True, slots=True)
@@ -653,7 +661,7 @@ def evaluate_composition[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Pr
     ):
         message = "target evaluation lost declared effects or visible interaction references"
         raise DrawInvariantError(message)
-    if context.strict and evaluation.effects:
+    if context.forbids(evaluation.effects):
         violation = ConstraintViolation(candidate.offer.occurrence.identity, "strict preservation")
         return replace(evaluation, violations=(*evaluation.violations, violation))
     if not evaluation.feasible:

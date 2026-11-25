@@ -50,6 +50,7 @@ from squid_ui.planning.semantic_index import UnsupportedSemanticError
 class _PaginationContent:
     factory: PlannedNav | None
     footer: Callable[[LayoutContext], TextLike] | None
+    page_footer: Callable[[int, int], TextLike] | None = None
 
     def __call__(self, ctx: LayoutContext) -> DocumentLike[Any, Any]:
         region = ctx.region()
@@ -62,7 +63,7 @@ class _PaginationContent:
         if self.footer is not None:
             label = self.footer(ctx)
         elif selection is not None and isinstance(selection.number, Known) and isinstance(total, Known):
-            label = navigation.chrome.page_footer(selection.number.value, total.value)
+            label = (self.page_footer or navigation.chrome.page_footer)(selection.number.value, total.value)
         footer = (sem.Paragraph(label, key="footer"),) if label is not None else ()
         controls = self.factory(navigation) if self.factory is not None else ()
         return (*footer, *cast(tuple[sem.LayoutNode[Any, Any], ...], tuple(controls)))
@@ -106,10 +107,12 @@ def pagination_chrome[R, C](
     footer: Callable[[LayoutContext], TextLike] | None = None,
     *,
     default_controls: bool = False,
+    page_footer: Callable[[int, int], TextLike] | None = None,
 ) -> ContextualChrome[R, C, Realization]:
+    """Navigation chrome for a paged region. `page_footer` replaces the chrome's "Page n of m"."""
     factory = context.navigation or (default_nav if default_controls or not context.mounted else None)
     return ContextualChrome(
-        contextual(_PaginationContent(factory, footer), key="@pagination"),
+        contextual(_PaginationContent(factory, footer, page_footer), key="@pagination"),
         _PaginationRealization(occurrence, disabled_controls),
     )
 

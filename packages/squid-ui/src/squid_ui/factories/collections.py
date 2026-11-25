@@ -104,6 +104,7 @@ def bullets(
     page_size: int | None = None,
     group_size: int | None = None,
     page: PageOwnership = FIRST_PAGE,
+    split_footer: Callable[[int, int], TextLike] | None = None,
 ) -> List:
     """A bulleted or numbered list; bare text becomes an entry. ``key`` carries its page."""
     collected = _collect(entries, (ListItem, str, Text, Template), "sl.bullets()")
@@ -114,6 +115,7 @@ def bullets(
         page_size,
         page,
         group_size=group_size,
+        split_footer=split_footer,
     )
 
 

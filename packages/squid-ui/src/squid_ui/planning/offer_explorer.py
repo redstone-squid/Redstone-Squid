@@ -222,7 +222,7 @@ class OfferExplorer[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepara
             keys.add(offer.key)
             if occurrence.identity in self.selected and self.selected[occurrence.identity] != offer.key:
                 continue
-            if self.context.strict and offer.effects:
+            if self.context.forbids(offer.effects):
                 continue
             rejections = offer.rejections or offer.atomic_violations(self.context)
             if rejections:
@@ -330,7 +330,7 @@ class OfferExplorer[RenderTargetT, ContextT, PayloadT, ResourceT, BodyT, Prepara
                 for offer, offer_rank in zip(domain, domain_ranks, strict=True)
                 if offer_rank > rank
                 and not (offer.rejections or offer.atomic_violations(self.context))
-                and (not self.context.strict or not offer.effects)
+                and not self.context.forbids(offer.effects)
                 and (not offer.effects or current.children or offer.children)
             ]
             if better:

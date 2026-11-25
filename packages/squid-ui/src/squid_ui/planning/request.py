@@ -123,6 +123,8 @@ class PlanRequest[BodyT: scene.Body, RenderTargetT, AdapterT]:
     localization: Localization = NEUTRAL
     palette: Palette = DEFAULT_PALETTE
     strict: bool = False
+    preserve_content: bool = False
+    """Reject omissions and shortenings, unlike `strict`, which rejects every fidelity effect."""
     reservation: ResourceCost = EMPTY_COST
     positions: Mapping[str, PagePosition] | None = None
     nav: PlannedNav | None = None
@@ -151,6 +153,7 @@ class PlanRequest[BodyT: scene.Body, RenderTargetT, AdapterT]:
             Identity(self.palette),
             self.reservation,
             self.strict,
+            self.preserve_content,
             Identity(self.nav),
             getattr(self.nav, "version", 0),
             self.composition is None,

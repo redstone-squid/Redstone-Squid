@@ -369,7 +369,9 @@ class List(Adaptable[RenderTarget]):
 
     page_size limits item count but allows further splits to fit. group_size
     fixes consecutive groups: each group must fit using permitted adaptations
-    or planning fails. Ordered numbering spans the full list.
+    or planning fails. Inside `Truncated`, a fixed group may shorten its items.
+    With split_footer, a group too big for one page is split instead, with
+    split_footer(page, pages) under each part. Ordered numbering spans the full list.
     """
 
     STRUCTURE: ClassVar[Structure] = Structure(query=("items",))
@@ -381,6 +383,7 @@ class List(Adaptable[RenderTarget]):
     page: PageOwnership = FIRST_PAGE
     markers: bool = field(default=True, kw_only=True)
     group_size: int | None = field(default=None, kw_only=True)
+    split_footer: Callable[[int, int], TextLike] | None = field(default=None, kw_only=True, compare=False)
 
     @property
     def group_count(self) -> int | None:
@@ -393,6 +396,9 @@ class List(Adaptable[RenderTarget]):
             raise ValueError(message)
         if self.group_size is not None and self.page_size is not None:
             message = "choose group_size for fixed groups or page_size for a maximum"
+            raise ValueError(message)
+        if self.split_footer is not None and self.group_size is None:
+            message = "List.split_footer needs group_size; other lists already split to fit"
             raise ValueError(message)
         if self.page_size is not None and self.page_size < 1:
             message = "List.page_size must be positive"

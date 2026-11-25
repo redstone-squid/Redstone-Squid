@@ -2,6 +2,7 @@
 
 from dataclasses import replace
 from datetime import UTC
+from typing import Any, Literal
 
 from squid_i18n import tree
 from squid_ui.authoring import semantic as sem
@@ -11,6 +12,7 @@ from squid_ui.authoring.presentations import (
     Omission,
     Replacement,
     SemanticRef,
+    Shortening,
     TextPresentation,
 )
 from squid_ui.content.text import resolve_text, timestamp_text
@@ -59,7 +61,9 @@ from squid_ui.planning.semantic_index import RosterLabel, RosterMembers, RosterS
 from squid_ui.planning.structure import resolve_accent
 from squid_ui.planning.text_presentations import (
     UnsupportedText,
+    _unsupported,
     resolve_presentation_text,
+    slice_text,
     text_ends,
     text_fragments,
 )
@@ -204,6 +208,132 @@ def _roster_label_offers[RenderTargetT, ContextT](
     )
 
 
+def _list_sequence(
+    scope: OfferScope[Any, Any], value: sem.List, items: tuple[ReferencedText, ...], *, fixed: bool
+) -> tuple[TextSequenceRealization, FragmentContract | None, tuple[int, ...]]:
+    """Lay out list items as one text sequence and say where pages may end.
+
+    An item longer than half the text capacity continues over several fragments. With
+    `fixed`, pages end only after each full group; otherwise after any item.
+    """
+    per = value.group_size or value.page_size
+    required: list[int] = []
+    expanded: list[ReferencedText] = []
+    capacity = scope.text_capacity
+    for index, item in enumerate(items):
+        plain = "".join(tree.plain(node) for node in item.nodes)
+        if capacity is not None and len(plain) > capacity // 2:
+            size = max(1, min(256, capacity // 8))
+            scope.context.work.consume(1 + len(plain) // size)
+            expanded.extend(
+                replace(
+                    item,
+                    nodes=nodes,
+                    prefix=item.prefix if index == 0 else "",
+                    continuation=index > 0,
+                )
+                for index, nodes in enumerate(text_fragments(item.nodes, size))
+            )
+        else:
+            expanded.append(item)
+        if per is not None and (index + 1) % per == 0:
+            required.append(len(expanded))
+    payload = TextSequenceRealization(tuple(expanded), list_ordered=value.ordered if value.markers else None)
+    units = tuple(frozenset({item.reference}) for item in expanded)
+    legal_ends = tuple(dict.fromkeys((*required, len(expanded)))) if fixed else tuple(range(1, len(expanded) + 1))
+    fragments = FragmentContract(units, legal_ends, payload.fragment, continuations=True) if expanded else None
+    return payload, fragments, tuple(required)
+
+
+# Below this many characters a list item says too little to be worth keeping.
+_SHORTEST_LIST_ITEM = 8
+
+
+def _length(item: ReferencedText) -> int:
+    return sum(len(tree.plain(node)) for node in item.nodes)
+
+
+def _shortened_items(
+    items: tuple[ReferencedText, ...], budget: int, keep: Literal["head", "tail"]
+) -> tuple[tuple[ReferencedText, ...], tuple[Shortening, ...]]:
+    """Cut each item longer than `budget` at its nearest legal end, marked with an ellipsis."""
+    shortened: list[ReferencedText] = []
+    effects: list[Shortening] = []
+    for item in items:
+        length = _length(item)
+        if length <= budget or _unsupported(item.nodes):
+            shortened.append(item)
+            continue
+        retained = max(
+            kept for end in (0, *text_ends(item.nodes)) if (kept := end if keep == "head" else length - end) <= budget
+        )
+        marker = (tree.literal("…"),)
+        nodes = (
+            (*slice_text(item.nodes, 0, retained), *marker)
+            if keep == "head"
+            else (*marker, *slice_text(item.nodes, length - retained, length))
+        )
+        shortened.append(replace(item, nodes=nodes))
+        effects.append(Shortening(item.reference, retained, keep))
+    return tuple(shortened), tuple(effects)
+
+
+def _fixed_group_offers[RenderTargetT, ContextT](
+    scope: OfferScope[RenderTargetT, ContextT],
+    value: sem.List,
+    items: tuple[ReferencedText, ...],
+    complete: RealizationOffer[RenderTargetT, ContextT, Realization],
+) -> Offers[RenderTargetT, ContextT]:
+    """Offer a fixed group whole, then with shorter items, then split when the list allows it.
+
+    Shorter items need a `Truncated` ancestor. Each step cuts every long item to three
+    quarters of the previous step's length. The split is withheld while the planner
+    preserves content, so a message spread gets the first chance to fit the group.
+    """
+    offers = [complete]
+    occurrence, context = scope.occurrence, scope.context
+    lengths = [_length(item) for item in items]
+    longest, total = max(lengths), sum(lengths)
+    if (keep := scope.keep) is not None and scope.text_capacity is not None:
+        budget = longest
+        while (budget := budget * 3 // 4) >= _SHORTEST_LIST_ITEM:
+            context.work.consume(len(items))
+            shortened, effects = _shortened_items(items, budget, keep)
+            if not effects:
+                continue
+            payload, fragments, _ = _list_sequence(scope, value, shortened, fixed=True)
+            offers.append(
+                replace(
+                    complete,
+                    key=f"shorten-{budget}",
+                    payload=payload,
+                    fragments=fragments,
+                    preference=total - sum(_length(item) for item in shortened),
+                    effects=(*complete.effects, *occurrence.scope_effects(effects)),
+                )
+            )
+    if value.split_footer is not None and not context.preserve_content:
+        payload, fragments, _ = _list_sequence(scope, value, items, fixed=False)
+        assert complete.region is not None
+        offers.append(
+            replace(
+                complete,
+                key="split",
+                payload=payload,
+                fragments=fragments,
+                preference=total + 1,
+                region=replace(
+                    complete.region,
+                    chrome=pagination_chrome(
+                        occurrence, context, scope.policy.disabled_controls, page_footer=value.split_footer
+                    ),
+                    required_ends=(),
+                ),
+            )
+        )
+    return tuple(offers)
+
+
 def _list_offers[RenderTargetT, ContextT](
     scope: OfferScope[RenderTargetT, ContextT], value: sem.List
 ) -> Offers[RenderTargetT, ContextT]:
@@ -220,43 +350,13 @@ def _list_offers[RenderTargetT, ContextT](
             zip(occurrence.graph.children.get(occurrence.reference, ()), value.items, strict=True)
         )
     )
-    per = value.group_size or value.page_size
-    required: list[int] = []
-    expanded: list[ReferencedText] = []
-    capacity = scope.text_capacity
-    for index, item in enumerate(items):
-        plain = "".join(tree.plain(node) for node in item.nodes)
-        if capacity is not None and len(plain) > capacity // 2:
-            size = max(1, min(256, capacity // 8))
-            context.work.consume(1 + len(plain) // size)
-            expanded.extend(
-                replace(
-                    item,
-                    nodes=nodes,
-                    prefix=item.prefix if index == 0 else "",
-                    continuation=index > 0,
-                )
-                for index, nodes in enumerate(text_fragments(item.nodes, size))
-            )
-        else:
-            expanded.append(item)
-        if per is not None and (index + 1) % per == 0:
-            required.append(len(expanded))
-    items = tuple(expanded)
-    payload = TextSequenceRealization(items, list_ordered=value.ordered if value.markers else None)
-    units = tuple(frozenset({item.reference}) for item in items)
-    legal_ends = (
-        tuple(dict.fromkeys((*required, len(items))))
-        if value.group_size is not None
-        else tuple(range(1, len(items) + 1))
-    )
-    fragments = FragmentContract(units, legal_ends, payload.fragment, continuations=True) if items else None
+    payload, fragments, required = _list_sequence(scope, value, items, fixed=value.group_size is not None)
     contract = RegionContract(
         value.key,
         pagination_chrome(occurrence, scope.context, scope.policy.disabled_controls),
         owner=value.page,
         cursor_key=value.key,
-        required_ends=tuple(required),
+        required_ends=required,
     )
     complete = RealizationOffer[RenderTargetT, ContextT, Realization](
         occurrence,
@@ -265,6 +365,9 @@ def _list_offers[RenderTargetT, ContextT](
         fragments=fragments,
         region=None if isinstance(value, RosterMembers) else contract,
     )
+    if value.group_size is not None and not isinstance(value, RosterMembers) and items:
+        return _fixed_group_offers(scope, value, items, complete)
+    per = value.group_size or value.page_size
     if value.group_size is not None or (not scope.spill and not isinstance(value, RosterMembers)) or not value.items:
         return (complete,)
     originals = tuple(

@@ -1,26 +1,34 @@
 """Plan one document as a sequence of messages when it does not fit in one.
 
 A message target budgets one message. A crowded screen can exceed that budget even
-though every part of it is legal. plan_spread then cuts the document's top-level
-children into consecutive segments and plans each segment as its own message, with
-the target's full budget. Regions inside a segment still paginate as usual.
+though every part of it is legal. plan_spread then cuts the document into consecutive
+segments and plans each segment as its own message, with the target's full budget.
+Regions inside a segment still paginate as usual.
 
-Cuts fall only between top-level children, and never after a child wrapped in
-`keep_with_next`. The first cut that works is remembered by the caller as anchors,
-one per later message: the key that identifies the child starting that message.
-Passing those anchors back keeps the same children at the head of the same
-messages on later renders, so controls do not move between messages while the
-reader is using them. Messages merge again only when an anchor's child disappears.
+Complete content wins over fewer messages: the document is first planned without
+omitting or shortening anything, as one message and then spread. Only if that fails
+do the usual lossy adaptations apply, again as one message first.
+
+Cuts fall between top-level children first. When no such cuts fit, they may also fall
+inside a stack, a component placement, or an unordered list that forms one fixed
+group, shallower cuts before deeper ones. Each message then carries its own copy of
+the containers around its part. No cut follows a child wrapped in `keep_with_next`.
+
+The first cut that works is remembered by the caller as anchors, one per later message:
+the key path that identifies the part starting that message. Passing those anchors
+back keeps the same parts at the head of the same messages on later renders, so
+controls do not move between messages while the reader is using them. Messages merge
+again only when an anchor's part disappears.
 """
 
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from dataclasses import dataclass, replace
 from itertools import pairwise, product
 from typing import Any
 
 from squid_ui import scene
 from squid_ui.authoring.document import Document, DocumentLike, as_document
-from squid_ui.authoring.semantic import KeepWithNext, LayoutNode
+from squid_ui.authoring.semantic import ComponentPlacement, KeepWithNext, LayoutNode, List, Stack
 from squid_ui.errors import LayoutSearchExhaustedError, UnsolvableLayoutError
 from squid_ui.planning.cache import PlanCache
 from squid_ui.planning.planner import plan_request
@@ -45,7 +53,7 @@ class MessageSpread[BodyT: scene.Body = Any]:
 
     `anchors` has one entry per message after the first. Pass it to the next
     plan_spread call as `retained` to keep the same cuts. An entry is None when the
-    child starting that message has no key anywhere inside it; such a cut cannot be
+    part starting that message has no key anywhere inside it; such a cut cannot be
     retained and is searched for again.
 
     Each message's session_updates hold only writes that concern that message alone.
@@ -76,8 +84,39 @@ def _anchor(node: object) -> str | None:
     return None
 
 
+def _parts(node: object) -> tuple[Any, ...] | None:
+    """The children a cut may fall between, or None when cuts fall only around the node.
+
+    An ordered list would restart its numbering in the next message, and a list of
+    several groups already pages within one message, so only an unordered single group
+    is cut.
+    """
+    if isinstance(node, Stack | ComponentPlacement):
+        return node.children or None
+    if type(node) is List and not node.ordered and node.group_size is not None:
+        return node.items if 0 < len(node.items) <= node.group_size else None
+    return None
+
+
+def _with_parts(node: Any, parts: tuple[Any, ...]) -> Any:
+    return replace(node, items=parts) if isinstance(node, List) else replace(node, children=parts)
+
+
+def _pieces(children: Sequence[Any], path: tuple[int, ...] = ()) -> Iterator[tuple[int, ...]]:
+    """The paths, as child indices from the root, of the parts no cut falls inside."""
+    for index, child in enumerate(children):
+        if (parts := _parts(child)) is not None:
+            yield from _pieces(parts, (*path, index))
+        else:
+            yield (*path, index)
+
+
 class _Search[BodyT: scene.Body, RenderTargetT, AdapterT]:
-    """Plan segments of one document on demand, remembering each outcome."""
+    """Plan segments of one document on demand, remembering each outcome.
+
+    A cut at index i starts a message with the i-th uncut part. `legal` holds the cuts the search
+    may currently use; `allow` widens it to deeper cuts.
+    """
 
     def __init__(
         self,
@@ -88,20 +127,64 @@ class _Search[BodyT: scene.Body, RenderTargetT, AdapterT]:
         self.document = document
         self.request = request
         self.cache = cache
-        self.count = len(document.children)
-        # A cut at index i starts a message with child i.
-        self.legal = tuple(
-            index for index in range(1, self.count) if not isinstance(document.children[index - 1], KeepWithNext)
-        )
+        self.pieces = tuple(_pieces(document.children))
+        self.count = len(self.pieces)
+        # A cut's depth is how many containers its two sides share.
+        self.depths: dict[int, int] = {}
+        for index, (left, right) in enumerate(pairwise(self.pieces), start=1):
+            depth = next(level for level, (a, b) in enumerate(zip(left, right, strict=False)) if a != b)
+            if not isinstance(self._node(left[: depth + 1]), KeepWithNext):
+                self.depths[index] = depth
+        self.legal: tuple[int, ...] = ()
         self._planned: dict[tuple[int, int], PlanResult[BodyT] | None] = {}
 
+    def _node(self, path: tuple[int, ...]) -> Any:
+        children: Sequence[Any] = self.document.children
+        node: Any = None
+        for index in path:
+            node = children[index]
+            children = _parts(node) or ()
+        return node
+
+    def anchor(self, cut: int) -> str | None:
+        """Name the part a cut starts: the keys of its containers, then its own first key."""
+        path = self.pieces[cut][: self.depths[cut] + 1]
+        names = []
+        for end in range(1, len(path)):
+            key = getattr(self._node(path[:end]), "key", None)
+            names.append(key if isinstance(key, str) and key else f"#{path[end - 1]}")
+        anchor = _anchor(self._node(path))
+        return None if anchor is None else "/".join((*names, anchor))
+
+    def allow(self, depth: int) -> None:
+        self.legal = tuple(cut for cut, cut_depth in self.depths.items() if cut_depth <= depth)
+
+    def _slice(self, children: Sequence[Any], start: int, end: int, depth: int = 0) -> tuple[Any, ...]:
+        """`children` keeping only what the uncut parts start to end cover, at this depth of their paths."""
+        kept: list[Any] = []
+        while start < end:
+            index = self.pieces[start][depth]
+            stop = start
+            while stop < end and self.pieces[stop][depth] == index:
+                stop += 1
+            child = children[index]
+            if len(self.pieces[start]) > depth + 1:
+                parts = _parts(child)
+                assert parts is not None
+                child = _with_parts(child, self._slice(parts, start, stop, depth + 1))
+            kept.append(child)
+            start = stop
+        return tuple(kept)
+
     def segment(self, start: int, end: int) -> PlanResult[BodyT] | None:
-        """Plan children[start:end] as one message, or return None if it does not fit."""
+        """Plan the uncut parts start to end as one message, or return None if it does not fit."""
         span = (start, end)
         if span not in self._planned:
             # A document key asks for root pages under one cursor. Segments would each
             # claim that cursor, so they are planned without it.
-            part = Document(self.document.children[start:end], self.document.assets)
+            part: Document[RenderTargetT, Any] = Document(
+                self._slice(self.document.children, start, end), self.document.assets
+            )
             try:
                 self._planned[span] = plan_request(part, self.request, cache=self.cache)
             except _DOES_NOT_FIT:
@@ -218,7 +301,7 @@ class _Search[BodyT: scene.Body, RenderTargetT, AdapterT]:
         """The cuts these anchors name in this document, if they all still apply and fit."""
         if not anchors or any(anchor is None for anchor in anchors):
             return None
-        positions = {_anchor(self.document.children[index]): index for index in reversed(self.legal)}
+        positions = {self.anchor(index): index for index in reversed(tuple(self.depths))}
         cuts = tuple(positions.get(anchor) for anchor in anchors)
         if any(cut is None for cut in cuts):
             return None
@@ -259,7 +342,7 @@ class _Search[BodyT: scene.Body, RenderTargetT, AdapterT]:
         shared.append(RetainedCompositionUpdate(None))
         return MessageSpread(
             tuple(replace(message, session_updates=updates) for message, updates in zip(messages, own, strict=True)),
-            tuple(_anchor(self.document.children[cut]) for cut in cuts),
+            tuple(self.anchor(cut) for cut in cuts),
             tuple(shared),
         )
 
@@ -275,39 +358,48 @@ def plan_spread[RenderTargetT: RenderTarget, AdapterT, BodyT: scene.Body](
 ) -> MessageSpread[BodyT]:
     """Plan a document as one message, or as up to `max_messages` when one cannot hold it.
 
-    The retained cuts are tried first. Without them the whole document is planned as one
-    message, and only a failure to fit starts a search for cuts. The search uses the
-    fewest messages that fit, then moves cuts so the fullest message keeps some room.
+    Each pass, first without lost content and then with the request as given, tries the
+    retained cuts, then the whole document as one message, then searches for cuts. The
+    search uses the fewest messages that fit, then moves cuts so the fullest message
+    keeps some room.
 
-    The search assumes that removing children from a message that fits leaves a message
+    The search assumes that removing parts from a message that fits leaves a message
     that fits. Authored alternatives make costs non-additive, but they do not break this.
 
     Args:
         max_messages: The most messages the caller can deliver; 1 plans exactly as
             plan_request does.
         retained: The anchors of the previous spread, or empty for a first plan.
-        snapshot: Used only for the single-message plan, as plan_request uses it.
+        snapshot: Used only for the single-message plans, as plan_request uses it.
 
     Raises:
-        LayoutError: The error from the single-message plan, when no spread within
-            `max_messages` fits either.
+        LayoutError: The error from the single-message plan of the request as given,
+            when no spread within `max_messages` fits either.
     """
     if max_messages < 1:
         message = "max_messages must be at least 1"
         raise ValueError(message)
-    document = as_document(rendered)
-    search = _Search(document, request, cache)
-    if max_messages > 1 and (cuts := search.retained(retained)) is not None:
-        return search.spread(cuts)
-    try:
+    if max_messages == 1:
         return MessageSpread((plan_request(rendered, request, cache=cache, snapshot=snapshot),))
-    except _DOES_NOT_FIT:
-        if max_messages == 1 or not search.legal:
-            raise
-        found = search.fewest(max_messages)
-        if not found:
-            raise
-    return search.spread(search.balanced(found))
+    document = as_document(rendered)
+    passes = (
+        (request,) if request.strict or request.preserve_content else (replace(request, preserve_content=True), request)
+    )
+    error: Exception | None = None
+    for planned in passes:
+        search = _Search(document, planned, cache)
+        if (cuts := search.retained(retained)) is not None:
+            return search.spread(cuts)
+        try:
+            return MessageSpread((plan_request(rendered, planned, cache=cache, snapshot=snapshot),))
+        except _DOES_NOT_FIT as failure:
+            error = failure
+        for depth in sorted(set(search.depths.values())):
+            search.allow(depth)
+            if found := search.fewest(max_messages):
+                return search.spread(search.balanced(found))
+    assert error is not None
+    raise error
 
 
 __all__ = ["MessageSpread", "plan_spread"]

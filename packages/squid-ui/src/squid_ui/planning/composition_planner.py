@@ -113,6 +113,7 @@ def _context[BodyT: scene.Body, RenderTargetT, AdapterT](
         inspect_layout=request.inspect_layout,
         local_view=request.partial_layout,
         positions=request.positions or {},
+        preserve_content=request.preserve_content,
     )
 
 

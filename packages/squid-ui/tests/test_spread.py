@@ -92,3 +92,62 @@ def test_writes_about_the_whole_display_are_merged_across_messages() -> None:
         assert not any(
             isinstance(update, ActivePagers | RetainedCompositionUpdate) for update in message.session_updates
         )
+
+
+def test_a_top_level_cut_is_preferred_to_one_inside_a_stack() -> None:
+    first, second, third, *rest = parts(5)
+
+    spread = plan_spread((sl.stack(first, second, third), *rest), REQUEST, max_messages=3)
+
+    assert spread.anchors == ("p3",)
+    assert components(spread) == [3, 2]
+
+
+def test_a_stack_too_big_for_one_message_is_cut_inside_and_kept_in_each_part() -> None:
+    spread = plan_spread((sl.stack(*parts(6), key="group"),), REQUEST, max_messages=3)
+
+    assert spread.anchors == ("group/p3",)
+    assert components(spread) == [3, 3]
+
+
+# Each list item costs about 22 characters, so four fit in a message with room to spare.
+TEXT = PlanRequest(target=replace(V2, limits=replace(V2.limits, total_text=100)))
+
+
+def items(count: int, **options: object) -> sl.semantic.List:
+    return sl.bullets(
+        *(sl.bullet(f"Item {index} " + "x" * 13, key=f"i{index}") for index in range(count)),
+        key="items",
+        group_size=count,
+        **options,  # type: ignore[arg-type]
+    )
+
+
+def test_a_fixed_group_too_big_for_one_message_continues_without_paging() -> None:
+    spread = plan_spread(items(8), TEXT, max_messages=3)
+
+    assert len(spread.messages) == 2
+    assert spread.anchors[0] is not None and spread.anchors[0].startswith("items/")
+    assert not any(message.effects for message in spread.messages)
+
+
+def test_spreading_is_preferred_to_shortening_text() -> None:
+    nodes = (sl.truncate(sl.paragraph("y" * 90, key="long")), sl.paragraph("z" * 30, key="short"))
+
+    spread = plan_spread(nodes, TEXT, max_messages=2)
+    single = plan_spread(nodes, TEXT, max_messages=1)
+
+    assert spread.anchors == ("short",)
+    assert not any(message.effects for message in spread.messages)
+    assert single.messages[0].effects
+
+
+def test_a_fixed_group_that_cannot_fit_fails_unless_it_may_shorten_or_split() -> None:
+    with pytest.raises(UnsolvableLayoutError):
+        plan_spread(items(8), TEXT, max_messages=1)
+
+    shortened = plan_spread(sl.truncate(items(8)), TEXT, max_messages=1).messages[0]
+    split = plan_spread(items(8, split_footer=lambda part, parts: f"{part}/{parts}"), TEXT, max_messages=1)
+
+    assert shortened.effects
+    assert not split.messages[0].effects
