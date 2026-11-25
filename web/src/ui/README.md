@@ -11,6 +11,7 @@ stories per folder; `/zh-cn/design-system` shows them in Simplified Chinese.
 | Page width and gutter, a skip link                        | `layout/Container`, `content/SkipLink`                                           |
 | Vertical rhythm, wrapping rows, title and actions, grids  | `layout/Layout` with `stack`, `cluster`, `split`, `grid` (`min`), `center`       |
 | Page title, breadcrumbs, meta, actions                    | `patterns/PageHeader` (the page's only `h1`)                                     |
+| Counts of related records under the title, as links       | `patterns/RelatedLinks`; same items in every state, zeros included               |
 | A titled part of a page                                   | `patterns/Section`, with `surface` for a panel                                   |
 | The site header                                           | `patterns/NavBar`; its links collapse into a popover when narrow                 |
 | A sidebar of filters or section navigation                | `patterns/SplitLayout`, `collapse="sheet"` to hide it behind a button            |

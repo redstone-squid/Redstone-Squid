@@ -68,18 +68,6 @@ export function storyShow42Builds(locale: Locale = getLocale()): string {
   }
 }
 
-/** Pending review */
-export function storyPendingReview(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Pending review";
-    case "zh-CN":
-      return "待审核";
-    case "en-XA":
-      return "[" + "Þéñđîñĝ ŕéṽîéŵ" + "······]";
-  }
-}
-
 /** A moderator checks the evidence before the record appears in listings. */
 export function storyAModeratorChecksTheEvidenceBeforeTheRecord(
   locale: Locale = getLocale(),
@@ -298,18 +286,6 @@ export function storyActionsWithIconsASeparatorAndADanger(locale: Locale = getLo
   }
 }
 
-/** Build actions */
-export function storyBuildActions(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Build actions";
-    case "zh-CN":
-      return "作品操作";
-    case "en-XA":
-      return "[" + "Ɓûîļđ åçţîöñš" + "······]";
-  }
-}
-
 /** Row actions */
 export function storyRowActions(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -414,18 +390,6 @@ export function storyShowChangelog(locale: Locale = getLocale()): string {
   }
 }
 
-/** Copy link */
-export function storyCopyLink(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Copy link";
-    case "zh-CN":
-      return "复制链接";
-    case "en-XA":
-      return "[" + "Çöþý ļîñķ" + "····]";
-  }
-}
-
 /** Report */
 export function storyReport(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -435,18 +399,6 @@ export function storyReport(locale: Locale = getLocale()): string {
       return "举报";
     case "en-XA":
       return "[" + "Ŕéþöŕţ" + "···]";
-  }
-}
-
-/** More actions */
-export function storyMoreActions(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "More actions";
-    case "zh-CN":
-      return "更多操作";
-    case "en-XA":
-      return "[" + "Ṁöŕé åçţîöñš" + "·····]";
   }
 }
 
@@ -590,16 +542,20 @@ export function storyChangelogEntry(
 
 export {
   storyActions,
+  storyBuildActions,
   storyClose,
   storyColumns,
   storyCopperBolt55,
+  storyCopyLink,
   storyCreator,
   storyDate,
   storyDone,
   storyEdit,
   storyFastest,
   storyFilters,
+  storyMoreActions,
   storyNewest,
+  storyPendingReview,
   storyRevoke,
   storyRevokeDevice,
   storyRevokeLaptopCli,

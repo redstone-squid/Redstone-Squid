@@ -868,3 +868,51 @@ story-remove-file = Remove { $name }
 story-use-as-cover = Use { $name } as the cover
 story-files-summary = { $ready } files ready, { $failed } failed
 story-build-filters = Build filters
+story-relatedlinks-description = Counts of related records in a fixed row under the page header. Every item shows, even at zero, so the row never reshuffles.
+story-related-count = { NUMBER($count) }
+story-related-with-actions = Under a page header, with one primary action and the rest in a menu
+story-related-zero-counts = A record, with a zero count
+story-related-long-labels = A creator, with long labels
+story-related-to-build = Related to this build
+story-related-to-record = Related to this record
+story-related-to-creator = Related to this creator
+story-related-records-held = { $count ->
+    [one] record held
+   *[other] records held
+    }
+story-related-versions = { $count ->
+    [one] version
+   *[other] versions
+    }
+story-related-edits = { $count ->
+    [one] edit
+   *[other] edits
+    }
+story-related-holders = { $count ->
+    [one] holder
+   *[other] holders
+    }
+story-related-past-holders = { $count ->
+    [one] past holder
+   *[other] past holders
+    }
+story-related-sibling-records = { $count ->
+    [one] record in this category
+   *[other] records in this category
+    }
+story-related-builds = { $count ->
+    [one] build
+   *[other] builds
+    }
+story-related-records-currently-held = { $count ->
+    [one] record currently held
+   *[other] records currently held
+    }
+story-related-records-ever-held = { $count ->
+    [one] record held at some point, including since beaten
+   *[other] records held at some point, including since beaten
+    }
+story-vote = Vote
+story-voting-closed = Voting closed 2 days ago
+story-download-schematic = Download schematic
+story-suggest-a-correction = Suggest a correction

@@ -7,6 +7,7 @@ import FilterPanel from "@/ui/patterns/FilterPanel.svelte";
 import FlashNotice from "@/ui/patterns/FlashNotice.svelte";
 import NavBar from "@/ui/patterns/NavBar.svelte";
 import OneTimeSecret from "@/ui/patterns/OneTimeSecret.svelte";
+import RelatedLinks from "@/ui/patterns/RelatedLinks.svelte";
 import ResultsView from "@/ui/patterns/ResultsView.svelte";
 import StepFlow from "@/ui/patterns/StepFlow.svelte";
 import MediaHarness from "./fixtures/MediaHarness.svelte";
@@ -181,6 +182,24 @@ describe("OneTimeSecret", () => {
     expect(leave()).toBe(true);
     await user.click(screen.getByRole("button", { name: "I saved it" }));
     expect(leave()).toBe(false);
+  });
+});
+
+describe("RelatedLinks", () => {
+  it("names its landmark and links each count with its label, zeros included", () => {
+    render(RelatedLinks, {
+      label: "Related to this build",
+      items: [
+        { label: "records held", count: "2", href: "/records?build=1" },
+        { label: "versions", count: "0", href: "/builds/1/versions" },
+      ],
+    });
+    const nav = screen.getByRole("navigation", { name: "Related to this build" });
+    // The order is the contract: it stays fixed whatever the counts.
+    const [held, versions] = within(nav).getAllByRole("link");
+    expect(held).toHaveAccessibleName("2 records held");
+    expect(versions).toHaveAccessibleName("0 versions");
+    expect(versions).toHaveAttribute("href", "/builds/1/versions");
   });
 });
 

@@ -1,6 +1,13 @@
 <script lang="ts">
   import * as m from "@/locales/messages-patterns.gen";
+  import Copy from "@lucide/svelte/icons/copy";
+  import Download from "@lucide/svelte/icons/download";
+  import Ellipsis from "@lucide/svelte/icons/ellipsis";
+  import History from "@lucide/svelte/icons/history";
+  import Layers from "@lucide/svelte/icons/layers";
   import Pencil from "@lucide/svelte/icons/pencil";
+  import Trophy from "@lucide/svelte/icons/trophy";
+  import Vote from "@lucide/svelte/icons/vote";
   import BuildCard from "@/features/catalogue/BuildCard.svelte";
   import RecordCard from "@/features/catalogue/RecordCard.svelte";
   import Button from "@/ui/actions/Button.svelte";
@@ -8,7 +15,9 @@
   import Badge from "@/ui/feedback/Badge.svelte";
   import Notice from "@/ui/feedback/Notice.svelte";
   import Layout from "@/ui/layout/Layout.svelte";
+  import Menu from "@/ui/overlays/Menu.svelte";
   import PageHeader from "@/ui/patterns/PageHeader.svelte";
+  import RelatedLinks from "@/ui/patterns/RelatedLinks.svelte";
   import CheckField from "@/ui/forms/CheckField.svelte";
   import SelectField from "@/ui/forms/SelectField.svelte";
   import ActiveFilters from "@/ui/patterns/ActiveFilters.svelte";
@@ -117,6 +126,115 @@
     {#snippet actions()}<Button icon={Pencil}>{m.storyEdit()}</Button>{/snippet}
     {#snippet notice()}<Notice tone="warning">{m.storyPendingReviewByStaff()}</Notice>{/snippet}
   </PageHeader>
+</Story>
+
+<Story
+  name="RelatedLinks"
+  source="patterns/RelatedLinks"
+  description={m.storyRelatedlinksDescription()}
+>
+  {@const count = (value: number) => m.storyRelatedCount({ count: value })}
+  <Variant label={m.storyRelatedWithActions()}>
+    <div class="grid min-w-0 gap-4">
+      <PageHeader title={m.storyCopperBolt55()} eyebrow={m.trialDoor()}>
+        {#snippet meta()}<Badge tone="warning" dot>{m.storyPendingReview()}</Badge>{/snippet}
+        {#snippet actions()}
+          <!-- The vote applies to a pending build, so it stays visible with its reason. -->
+          <p id="relatedlinks-vote-reason" class="text-sm text-fg-muted">
+            {m.storyVotingClosed()}
+          </p>
+          <div class="flex items-center gap-3">
+            <Button
+              variant="primary"
+              icon={Vote}
+              disabled
+              aria-describedby="relatedlinks-vote-reason">{m.storyVote()}</Button
+            >
+            <Menu
+              label={m.storyBuildActions()}
+              trigger={{ label: m.storyMoreActions(), iconOnly: true, icon: Ellipsis }}
+              items={[
+                { label: m.storyEdit(), icon: Pencil, href: "#relatedlinks" },
+                { label: m.storyDownloadSchematic(), icon: Download, href: "#relatedlinks" },
+                { label: m.storyCopyLink(), icon: Copy, href: "#relatedlinks" },
+                { label: m.storySuggestACorrection(), href: "#relatedlinks" },
+              ]}
+            />
+          </div>
+        {/snippet}
+      </PageHeader>
+      <RelatedLinks
+        label={m.storyRelatedToBuild()}
+        items={[
+          {
+            label: m.storyRelatedRecordsHeld({ count: 2 }),
+            count: count(2),
+            href: "#relatedlinks-records",
+            icon: Trophy,
+          },
+          {
+            label: m.storyRelatedVersions({ count: 3 }),
+            count: count(3),
+            href: "#relatedlinks-versions",
+            icon: Layers,
+          },
+          {
+            label: m.storyRelatedEdits({ count: 14 }),
+            count: count(14),
+            href: "#relatedlinks-history",
+            icon: History,
+          },
+        ]}
+      />
+    </div>
+  </Variant>
+  <Variant label={m.storyRelatedZeroCounts()}>
+    <RelatedLinks
+      label={m.storyRelatedToRecord()}
+      items={[
+        {
+          label: m.storyRelatedHolders({ count: 1 }),
+          count: count(1),
+          href: "#relatedlinks-holders",
+          icon: Trophy,
+        },
+        {
+          label: m.storyRelatedPastHolders({ count: 0 }),
+          count: count(0),
+          href: "#relatedlinks-past",
+          icon: History,
+        },
+        {
+          label: m.storyRelatedSiblingRecords({ count: 4 }),
+          count: count(4),
+          href: "#relatedlinks-siblings",
+          icon: Layers,
+        },
+      ]}
+    />
+  </Variant>
+  <Variant label={m.storyRelatedLongLabels()}>
+    <RelatedLinks
+      label={m.storyRelatedToCreator()}
+      items={[
+        {
+          label: m.storyRelatedBuilds({ count: 1204 }),
+          count: count(1204),
+          href: "#relatedlinks-builds",
+        },
+        {
+          label: m.storyRelatedRecordsCurrentlyHeld({ count: 0 }),
+          count: count(0),
+          href: "#relatedlinks-held",
+        },
+        {
+          label: m.storyRelatedRecordsEverHeld({ count: 37 }),
+          count: count(37),
+          href: "#relatedlinks-ever",
+        },
+      ]}
+    />
+  </Variant>
 </Story>
 
 <Story name="Section" source="patterns/Section">
