@@ -156,7 +156,9 @@ async def test_starboard_reaction_records_and_withdraws_a_vote(monkeypatch: pyte
         pending.assert_awaited_once_with("starboard_entry", key, context=ANY)
 
         await voter.unreact(message, "⭐")
-        withdraw.assert_awaited_once_with(message.id, voter.id, "⭐", context=ANY)
+        withdraw.assert_awaited_once_with(message.id, "⭐", context=ANY)
+        withdrawn_by = withdraw.records[0].kwargs["context"].effective
+        assert (withdrawn_by.discord_user_id, withdrawn_by.guild_id) == (voter.id, env.guild.id)
         await env.advance_time(2)
         assert pending.await_count == 2
         assert pending.records[1] == pending.records[0]

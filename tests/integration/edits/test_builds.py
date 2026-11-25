@@ -29,6 +29,7 @@ from squid.core.builds.application.restrictions import RestrictionService
 from squid.core.builds.application.tag_service import BuildTagService
 from squid.core.builds.domain import BuildStatus, ShowcaseTag, UnresolvedTags
 from squid.core.builds.domain.credits import Credit, CreditKind, CreditRole
+from squid.core.builds.errors import BuildNotFoundError
 from squid.core.builds.history_models import BuildHistoryEntry
 from squid.core.builds.models import Build, DoorBuild, ExtenderBuild, OtherBuild
 from squid.core.edits.application import EditExecutor
@@ -252,13 +253,13 @@ async def test_build_receipts_restore_children_and_unresolved_tags_in_one_audit_
         context=ActingContext.direct(actor),
     )
     assert result.receipt is not None
-    current = await service.get(build.id, context=ActingContext.direct(Actor()))
+    current = await service.get(build.id, context=ActingContext.direct(actor))
     assert current is not None
     assert current.revision == result.outcome.revisions[0].value
     assert UnresolvedTags.read(current.extra_info).restriction_names() == ("Previously unknown restriction",)
     undone = await executor.execute(result.receipt.undo(result.outcome.revisions), context=ActingContext.direct(actor))
     assert undone.receipt is not None
-    restored = await service.get(build.id, context=ActingContext.direct(Actor()))
+    restored = await service.get(build.id, context=ActingContext.direct(actor))
     assert restored is not None
     assert build_values(restored) == before
     redone = await executor.execute(result.receipt.redo(undone.outcome.revisions), context=ActingContext.direct(actor))
@@ -299,7 +300,7 @@ async def test_unofficial_component_restriction_round_trips_through_build_edits(
             EditCommand(BUILD_EDIT, (target,), patch_values(BuildEditPatch(component_restrictions=names))),
             context=ActingContext.direct(actor),
         )
-        current = await service.get(build.id, context=ActingContext.direct(Actor()))
+        current = await service.get(build.id, context=ActingContext.direct(actor))
         assert current is not None
         assert current.component_restrictions == names
         assert not UnresolvedTags.read(current.extra_info).restrictions
@@ -342,14 +343,15 @@ async def test_competing_build_edits_and_unrelated_child_write_fence_undo(
         )
     with pytest.raises(RevisionConflictError):
         await executor.execute(saved.receipt.undo(saved.outcome.revisions), context=ActingContext.direct(actor))
-    current = await service.get(build.id, context=ActingContext.direct(Actor()))
+    current = await service.get(build.id, context=ActingContext.direct(actor))
     assert current is not None
     async with sessions.begin() as session:
         other = Account()
         session.add(other)
         await session.flush()
         outsider = Actor(account_id=other.id)
-    with pytest.raises(AuthorizationError):
+    assert await service.get(build.id, context=ActingContext.direct(outsider)) is None
+    with pytest.raises(BuildNotFoundError):
         await executor.execute(
             saved.receipt.undo((Revision(build_target(build.id), current.revision),)),
             context=ActingContext.direct(outsider),
@@ -405,7 +407,7 @@ async def test_preparation_does_not_lock_the_build_and_rechecks_after_another_co
                 await uow.commit()
             resume.set()
     assert len(conflicted) == 1
-    current = await service.get(build.id, context=ActingContext.direct(Actor()))
+    current = await service.get(build.id, context=ActingContext.direct(actor))
     assert current is not None
     assert current.description == "newer"
 
@@ -426,7 +428,7 @@ async def test_review_undo_redo_preserves_history_and_rejects_stale_decisions(
     )
     result = await executor.execute(command, context=ActingContext.direct(actor))
     assert result.receipt is not None
-    current = await service.get(build.id, context=ActingContext.direct(Actor()))
+    current = await service.get(build.id, context=ActingContext.direct(actor))
     assert current is not None
     assert current.submission_status is BuildStatus.APPROVED
     with pytest.raises(RevisionConflictError):
@@ -437,11 +439,11 @@ async def test_review_undo_redo_preserves_history_and_rejects_stale_decisions(
             context=ActingContext.direct(actor),
         )
     undone = await executor.execute(result.receipt.undo(result.outcome.revisions), context=ActingContext.direct(actor))
-    current = await service.get(build.id, context=ActingContext.direct(Actor()))
+    current = await service.get(build.id, context=ActingContext.direct(actor))
     assert current is not None
     assert current.submission_status is BuildStatus.PENDING
     await executor.execute(result.receipt.redo(undone.outcome.revisions), context=ActingContext.direct(actor))
-    current = await service.get(build.id, context=ActingContext.direct(Actor()))
+    current = await service.get(build.id, context=ActingContext.direct(actor))
     assert current is not None
     assert current.submission_status is BuildStatus.APPROVED
     async with sessions() as session:
@@ -471,15 +473,15 @@ async def test_typed_credit_edit_undo_and_redo_preserve_identity_and_role(
         context=ActingContext.direct(actor),
     )
     assert result.receipt is not None
-    edited = await service.get(build.id, context=ActingContext.direct(Actor()))
+    edited = await service.get(build.id, context=ActingContext.direct(actor))
     assert edited is not None
     assert edited.credits == credits
     undone = await executor.execute(result.receipt.undo(result.outcome.revisions), context=ActingContext.direct(actor))
-    restored = await service.get(build.id, context=ActingContext.direct(Actor()))
+    restored = await service.get(build.id, context=ActingContext.direct(actor))
     assert restored is not None
     assert restored.credits == []
     await executor.execute(result.receipt.redo(undone.outcome.revisions), context=ActingContext.direct(actor))
-    redone = await service.get(build.id, context=ActingContext.direct(Actor()))
+    redone = await service.get(build.id, context=ActingContext.direct(actor))
     assert redone is not None
     assert redone.credits == credits
 
