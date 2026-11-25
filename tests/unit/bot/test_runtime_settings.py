@@ -50,7 +50,8 @@ async def test_runtime_edit_uses_internal_account_or_refuses_unlinked_owner(
     authorize.assert_awaited_once_with(request, SETTINGS_RUNTIME_EDIT)
     accounts.get_account_by_identity.assert_awaited_once_with(IdentityProvider.DISCORD, "999999")
     if linked:
-        command, actor = edits.execute.call_args.args
+        (command,) = edits.execute.call_args.args
+        actor = edits.execute.call_args.kwargs["context"].effective
         assert command.values.unpack() == {"welcome_forward_chance": 0.25}
         assert command.expected == (
             LatestRevision(RUNTIME_TARGET) if revision is None else Revision(RUNTIME_TARGET, revision),

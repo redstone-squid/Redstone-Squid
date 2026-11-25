@@ -38,7 +38,7 @@ EditCaller = NamedDependency[SkipValidation[Caller]]
 async def get_runtime_settings(services: Services, caller: ViewCaller) -> Response[RuntimeSettingsDetail]:
     """Read current global settings. Discord IDs are returned as decimal strings."""
     response_headers: dict[str, str] = {}
-    settings, revision = await services.settings.runtime_snapshot()
+    settings, revision = await services.settings.runtime_snapshot(context=caller.context())
     response_headers["ETag"] = revision_etag(Revision(RUNTIME_TARGET, revision))
     return Response(
         content=RuntimeSettingsDetail.from_domain(settings, revision=revision),
@@ -81,10 +81,10 @@ async def update_runtime_settings(
     version = expected_revision(RUNTIME_TARGET, if_match)
     result = await services.edits.execute(
         EditCommand(RUNTIME_EDIT, (version,), EditValues.of(data.model_dump(exclude_unset=True)), operation_id),
-        caller.to_actor(),
+        context=caller.context(),
     )
     if result.receipt is None:
-        settings, revision = await services.settings.runtime_snapshot()
+        settings, revision = await services.settings.runtime_snapshot(context=caller.context())
     else:
         settings = RuntimeSettings.model_validate(result.receipt.after.unpack())
         revision = result.outcome.revisions[0].value

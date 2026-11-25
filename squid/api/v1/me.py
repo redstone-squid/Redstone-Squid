@@ -150,7 +150,7 @@ async def grant_consent(
         raise AuthenticationError
     if data is not None and data.version is not None and (data.version != CURRENT_CONSENT_VERSION):
         raise StaleConsentNoticeError(offered=data.version, current=CURRENT_CONSENT_VERSION)
-    await accounts.grant_current_consent(caller.account_id)
+    await accounts.grant_current_consent(context=caller.context())
     return await _render_me(accounts, caller.account_id, consent_pending=False)
 
 
@@ -192,7 +192,7 @@ async def update_profile(
             ProfileValues.patch(data.to_domain()),
             operation_id=operation_id,
         ),
-        caller.to_actor(),
+        context=caller.context(),
     )
     snapshot = await accounts.editor_snapshot(caller.account_id)
     response_headers["ETag"] = revision_etag(Revision(account_target(caller.account_id), snapshot.account.revision))
@@ -220,7 +220,7 @@ async def list_identities(accounts: Accounts, caller: UserCaller) -> list[Accoun
     """
     if caller.account_id is None:
         raise AuthenticationError
-    identities = await accounts.list_identities(caller.account_id)
+    identities = await accounts.list_identities(context=caller.context())
     return list(identities)
 
 
@@ -260,7 +260,7 @@ async def set_identity_visibility(
             EditValues.of({"identity_id": identity_id, "is_public": data.public}),
             operation_id=operation_id,
         ),
-        caller.to_actor(),
+        context=caller.context(),
     )
     snapshot = await accounts.editor_snapshot(caller.account_id)
     response_headers["ETag"] = revision_etag(Revision(account_target(caller.account_id), snapshot.account.revision))
@@ -302,7 +302,7 @@ async def unlink_identity(
     expected = expected_revision(account_target(caller.account_id), if_match)
     result = await services.edits.execute(
         EditCommand(UNLINK_EDIT, (expected,), EditValues.of({"identity_id": identity_id}), operation_id=operation_id),
-        caller.to_actor(),
+        context=caller.context(),
     )
     return Response(content=None, status_code=204, headers={"ETag": revision_etag(result.outcome.revisions[0])})
 
@@ -328,7 +328,7 @@ async def create_merge_code(
     """
     if caller.account_id is None:
         raise AuthenticationError
-    code, ticket = await accounts.create_merge_code(caller.account_id)
+    code, ticket = await accounts.create_merge_code(context=caller.context())
     return MergeCodeDetail(code=code, expires_at=ticket.expires_at)
 
 
@@ -356,7 +356,7 @@ async def preview_merge(
     """
     if caller.account_id is None:
         raise AuthenticationError
-    return await accounts.preview_merge(caller.account_id, data.code)
+    return await accounts.preview_merge(data.code, context=caller.context())
 
 
 @post(
@@ -383,7 +383,7 @@ async def complete_merge(
     """
     if caller.account_id is None:
         raise AuthenticationError
-    return await accounts.complete_merge(caller.account_id, data.code)
+    return await accounts.complete_merge(data.code, context=caller.context())
 
 
 @post(
@@ -405,7 +405,9 @@ async def refresh_minecraft_identity(
     """
     if caller.account_id is None:
         raise AuthenticationError
-    return MinecraftIdentityRefresh.from_domain(await accounts.refresh_java_identity(caller.account_id))
+    return MinecraftIdentityRefresh.from_domain(
+        await accounts.refresh_java_identity(caller.account_id, context=caller.context())
+    )
 
 
 @post(
@@ -419,13 +421,16 @@ async def refresh_minecraft_identity(
     dependencies={"_reservation": Provide(reserve_idempotent_request)},
 )
 async def refresh_minecraft_identity_for(
+    caller: NamedDependency[SkipValidation[Caller]],
     account_id: FromPath[int],
     accounts: Accounts,
     *,
     _reservation: NamedDependency[SkipValidation[None]],
 ) -> MinecraftIdentityRefresh:
     """Re-read another account's linked Minecraft name, for staff resolving a stale credit."""
-    return MinecraftIdentityRefresh.from_domain(await accounts.refresh_java_identity(account_id))
+    return MinecraftIdentityRefresh.from_domain(
+        await accounts.refresh_java_identity(account_id, context=caller.context())
+    )
 
 
 @get(
@@ -483,7 +488,7 @@ async def clear_profile(
             EditValues.of({}),
             operation_id=operation_id,
         ),
-        caller.to_actor(),
+        context=caller.context(),
     )
     snapshot = await accounts.editor_snapshot(account_id)
     response_headers["ETag"] = revision_etag(Revision(account_target(account_id), snapshot.account.revision))

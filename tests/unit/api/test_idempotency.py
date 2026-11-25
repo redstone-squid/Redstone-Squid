@@ -30,6 +30,7 @@ from squid.api.idempotency import (
     reserve_idempotent_request,
 )
 from squid.api.security import current_caller
+from squid.core.actors import ActingContext
 from squid.core.edits.application import EditExecutor
 from squid.core.errors import ErrorCode
 from squid.core.idempotency import IdempotencyService, PendingRequest, StoredResponse
@@ -221,7 +222,7 @@ def test_resource_path_is_part_of_the_request_fingerprint() -> None:
     app, _database = build_app(idempotency=service)
     mutations: list[int] = []
 
-    @post("/mutation/{resource_id:int}", before_request=reserve_idempotent_before_request, status_code=200)
+    @post("/v1/mutation/{resource_id:int}", before_request=reserve_idempotent_before_request, status_code=200)
     async def mutate(resource_id: FromPath[int]) -> dict[str, int]:
         mutations.append(resource_id)
         return {"resource_id": resource_id}
@@ -229,9 +230,12 @@ def test_resource_path_is_part_of_the_request_fingerprint() -> None:
     app.register(mutate)
     headers = {"Authorization": TEST_SYNERGY_SECRET, "Idempotency-Key": "resource-mutation"}
     with TestClient(app) as client:
-        first = client.post("/mutation/1", headers=headers)
-        replay = client.post("/mutation/1", headers=headers)
-        conflict = client.post("/mutation/2", headers=headers)
+        anonymous = client.post("/v1/mutation/1", headers={"Idempotency-Key": "resource-mutation"})
+        assert anonymous.status_code == 401
+        assert not repository.records
+        first = client.post("/v1/mutation/1", headers=headers)
+        replay = client.post("/v1/mutation/1", headers=headers)
+        conflict = client.post("/v1/mutation/2", headers=headers)
 
     assert first.status_code == replay.status_code == 200
     assert first.json() == replay.json() == {"resource_id": 1}
@@ -466,14 +470,16 @@ def test_lost_edit_response_reuses_the_original_outcome_and_checks_if_match() ->
     attempts = []
 
     @post(
-        "/recoverable-edit",
+        "/v1/recoverable-edit",
         before_request=reserve_edit_before_request,
         status_code=200,
         dependencies={"operation_id": Provide(edit_operation_id, sync_to_thread=False)},
     )
     async def mutate(operation_id: NamedDependency[UUID]) -> Response:
         attempts.append(operation_id)
-        result = await executor.execute(replace(command(), operation_id=operation_id), ACTOR)
+        result = await executor.execute(
+            replace(command(), operation_id=operation_id), context=ActingContext.direct(ACTOR)
+        )
         if len(attempts) == 1:
             return Response({"error": "response rendering failed after commit"}, status_code=503)
         return Response({"revision": result.outcome.revisions[0].value})
@@ -481,10 +487,10 @@ def test_lost_edit_response_reuses_the_original_outcome_and_checks_if_match() ->
     app.register(mutate)
     headers = {"Authorization": TEST_SYNERGY_SECRET, "Idempotency-Key": "edit-one", "If-Match": '"example-1-r1"'}
     with TestClient(app) as client:
-        failed = client.post("/recoverable-edit", headers=headers)
-        recovered = client.post("/recoverable-edit", headers=headers)
-        replayed = client.post("/recoverable-edit", headers=headers)
-        changed = client.post("/recoverable-edit", headers=headers | {"If-Match": '"example-1-r2"'})
+        failed = client.post("/v1/recoverable-edit", headers=headers)
+        recovered = client.post("/v1/recoverable-edit", headers=headers)
+        replayed = client.post("/v1/recoverable-edit", headers=headers)
+        changed = client.post("/v1/recoverable-edit", headers=headers | {"If-Match": '"example-1-r2"'})
     assert failed.status_code == 503
     assert recovered.status_code == replayed.status_code == 200
     assert recovered.json() == replayed.json() == {"revision": 2}
@@ -503,7 +509,7 @@ def test_unhandled_failure_replays_without_repeating_an_ordinary_write(recoverab
     calls = 0
 
     @post(
-        "/failing-write",
+        "/v1/failing-write",
         before_request=reserve_edit_before_request if recoverable else reserve_idempotent_before_request,
         status_code=200,
     )
@@ -515,8 +521,8 @@ def test_unhandled_failure_replays_without_repeating_an_ordinary_write(recoverab
     app.register(failing_write)
     headers = {"Authorization": TEST_SYNERGY_SECRET, "Idempotency-Key": "failed-write"}
     with TestClient(app, raise_server_exceptions=False) as client:
-        first = client.post("/failing-write", headers=headers)
-        second = client.post("/failing-write", headers=headers)
+        first = client.post("/v1/failing-write", headers=headers)
+        second = client.post("/v1/failing-write", headers=headers)
     assert first.status_code == 500
     assert second.status_code == 500
     assert calls == (2 if recoverable else 1)

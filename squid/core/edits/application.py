@@ -13,7 +13,7 @@ from anyio import CancelScope
 from pydantic import ValidationError as SchemaValidationError
 from whenever import Instant
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.edits.domain import (
     EditCommand,
     EditCommitUncertainError,
@@ -27,7 +27,7 @@ from squid.core.edits.domain import (
     RevisionConflictError,
 )
 from squid.core.errors import ConflictError, InvalidStateError, ValidationError
-from squid.core.replay import REPLAY_RETENTION_HOURS
+from squid.core.replay import REPLAY_RETENTION_HOURS, replay_fingerprint
 from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 logger = logging.getLogger(__name__)
@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 @runtime_checkable
 class EditRunner(Protocol):
-    async def execute(self, command: EditCommand, actor: Actor) -> EditResult: ...
+    async def execute(self, command: EditCommand, *, context: ActingContext) -> EditResult: ...
 
 
 class EditRepository(Protocol):
@@ -84,12 +84,12 @@ class EditExecutor[UowT: EditUnitOfWork]:
         self._factory = factory
         self._handlers = dict(handlers)
 
-    async def execute(self, command: EditCommand, actor: Actor) -> EditResult:
+    async def execute(self, command: EditCommand, *, context: ActingContext) -> EditResult:
         confirmed: EditResult | None = None
         try:
-            with actor.audit_scope():
+            with context.scope():
                 async with self._factory() as uow:
-                    confirmed = await self._execute_in(uow, command, actor)
+                    confirmed = await self._execute_in(uow, command, context=context)
         except Exception:
             if confirmed is None:
                 raise
@@ -98,13 +98,16 @@ class EditExecutor[UowT: EditUnitOfWork]:
             logger.warning("Edit committed but transaction cleanup failed", exc_info=True)
         return confirmed
 
-    async def _execute_in(self, uow: UowT, command: EditCommand, actor: Actor) -> EditResult:
+    async def _execute_in(self, uow: UowT, command: EditCommand, *, context: ActingContext) -> EditResult:
+        actor = context.effective
         actor_key = actor.key
+        fingerprint = replay_fingerprint(command.fingerprint, context)
         handler = self._handlers[command.kind]
         await uow.edits.lock_operation(command.operation_id)
         existing = await uow.edits.outcome(command.operation_id)
         if existing is not None:
-            self._check_replay(existing, command, actor_key)
+            if existing.actor != actor_key or existing.fingerprint != fingerprint:
+                raise OperationReuseError
             return EditResult(existing, None, replayed=True)
         self._check_deadline(command)
         try:
@@ -128,7 +131,7 @@ class EditExecutor[UowT: EditUnitOfWork]:
         outcome = EditOutcome(
             command.operation_id,
             actor_key,
-            command.fingerprint,
+            fingerprint,
             versions,
             prepared.changed,
             prepared.final,
@@ -162,8 +165,3 @@ class EditExecutor[UowT: EditUnitOfWork]:
     def _check_deadline(command: EditCommand) -> None:
         if command.issued_at.add(hours=REPLAY_RETENTION_HOURS) <= Instant.now():
             raise EditExpiredError
-
-    @staticmethod
-    def _check_replay(existing: EditOutcome, command: EditCommand, actor: str) -> None:
-        if existing.actor != actor or existing.fingerprint != command.fingerprint:
-            raise OperationReuseError

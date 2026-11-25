@@ -51,7 +51,8 @@ def test_attachment_routes_accept_optional_revision_and_return_the_committed_eta
         response = method(path, headers={"If-Match": revision_etag(Revision(target, 4))} if conditional else {})
     assert response.status_code == 200
     assert response.headers["ETag"] == revision_etag(Revision(target, 5))
-    command, actor = runner.execute.call_args.args
+    (command,) = runner.execute.call_args.args
+    actor = runner.execute.call_args.kwargs["context"].effective
     assert command.kind == DRAFT_ATTACHMENTS
     assert command.operation_id == operation_id
     assert command.expected == (Revision(target, 4) if conditional else LatestRevision(target),)

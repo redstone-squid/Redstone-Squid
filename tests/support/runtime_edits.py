@@ -5,7 +5,7 @@ from typing import cast
 
 from pydantic import JsonValue
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.edits.application import EditExecutor
 from squid.core.edits.domain import EditCommand, EditValues, LatestRevision
 from squid.core.permissions.application.services import PermissionService
@@ -27,5 +27,5 @@ async def edit_runtime(service: SettingsService, changes: Mapping[str, object], 
         EditCommand(
             RUNTIME_EDIT, (LatestRevision(RUNTIME_TARGET),), EditValues.of(cast(Mapping[str, JsonValue], changes))
         ),
-        Actor(account_id=actor_account_id, is_bot_owner=True),
+        context=ActingContext.direct(Actor(account_id=actor_account_id, is_bot_owner=True)),
     )

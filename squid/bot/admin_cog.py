@@ -19,6 +19,7 @@ from squid.bot.ui import link_node, text_node
 from squid.bot.utils.autocomplete import suggests
 from squid.bot.utils.permissions import Grants, enforce, requires
 from squid.core.accounts.domain import IdentityProvider
+from squid.core.actors import ActingContext
 from squid.core.edits.domain import EditCommand, EditValues, LatestRevision, Revision
 from squid.core.i18n import tr
 from squid.core.permissions.domain.catalogue import (
@@ -252,10 +253,10 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         if value is not None and setting is None:
             return text_node("Choose a setting to change.")
         if setting is None:
-            settings, current_revision = await service.runtime_snapshot()
+            settings, current_revision = await service.runtime_snapshot(context=ActingContext.current())
             return text_node(json.dumps(settings.model_dump(mode="json") | {"revision": current_revision}, indent=2))
         if value is None:
-            settings, current_revision = await service.runtime_snapshot()
+            settings, current_revision = await service.runtime_snapshot(context=ActingContext.current())
             if setting not in type(settings).model_fields:
                 return text_node("Unknown runtime setting. Run runtime-settings to list available names.")
             schema = type(settings).model_json_schema()["properties"][setting]
@@ -282,7 +283,7 @@ class Admin[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
                     (LatestRevision(RUNTIME_TARGET) if revision is None else Revision(RUNTIME_TARGET, revision),),
                     EditValues.of({setting: json.loads(value)}),
                 ),
-                await request.client.actors.resolve(request),
+                context=ActingContext.for_actor(await request.client.actors.resolve(request)),
             )
         except (json.JSONDecodeError, ValidationError) as exc:
             return text_node(f"Invalid setting: {exc}")

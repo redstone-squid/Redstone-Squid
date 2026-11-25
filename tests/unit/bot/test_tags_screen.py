@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 import squid_ui as sl
 from squid.bot.admin_cog import Admin
 from squid.bot.tags_view import TagsScreen
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.builds.application.restrictions import RestrictionService
 from squid.core.edits.application import EditRunner
 from squid.core.edits.domain import (
@@ -62,16 +62,16 @@ class FakeTagService(TagService):
         self.approvals: list[int] = []
 
     @override
-    async def public_definitions(self) -> Sequence[TagDefinition]:
+    async def public_definitions(self, *, context: ActingContext) -> Sequence[TagDefinition]:
         self.public_reads += 1
         return (self.published,)
 
     @override
-    async def pending(self) -> Sequence[TagDefinition]:
+    async def pending(self, *, context: ActingContext) -> Sequence[TagDefinition]:
         return (self.proposal,)
 
     @override
-    async def reserve_identity(self) -> int:
+    async def reserve_identity(self, *, context: ActingContext) -> int:
         return self.proposal.id
 
 
@@ -81,7 +81,8 @@ class TagEditRecorder(EditRunner):
         self.restrictions = restrictions
 
     @override
-    async def execute(self, command: EditCommand, actor: Actor) -> EditResult:
+    async def execute(self, command: EditCommand, *, context: ActingContext) -> EditResult:
+        actor = context.effective
         if command.kind == ALIAS_EDIT:
             values = AliasValues.model_validate_json(command.values.encoded)
             item = ("locational", values.alias)

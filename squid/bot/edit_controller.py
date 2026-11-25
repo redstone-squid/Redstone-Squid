@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.edits.application import EditRunner
 from squid.core.edits.domain import (
     EditCommand,
@@ -178,7 +178,7 @@ class EditController:
 
     async def _run(self, command: EditCommand) -> EditResult:
         try:
-            return await self._runner.execute(command, await self._actor())
+            return await self._runner.execute(command, context=ActingContext.for_actor(await self._actor()))
         except EditCommitUncertainError:
             self.forget(version.target.identity for version in command.expected)
             await self.refresh()

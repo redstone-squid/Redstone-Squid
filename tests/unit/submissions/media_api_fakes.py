@@ -182,10 +182,11 @@ class MediaEditRecorder(EditRunner):
         self.media = media
 
     @override
-    async def execute(self, command: EditCommand, actor: Actor) -> EditResult:
+    async def execute(self, command: EditCommand, *, context: ActingContext) -> EditResult:
+        actor = context.effective
         version = bound_revisions(command)[0]
         draft_id = UUID(version.target.key)
-        await self.drafts.get_accessible(draft_id, context=ActingContext.direct(actor))
+        await self.drafts.get_accessible(draft_id, context=context)
         values = AttachmentValues.model_validate_json(command.values.encoded)
         for item in values.files:
             assert not item.present

@@ -4,13 +4,13 @@ from dataclasses import dataclass, field, replace
 from functools import partial
 from types import TracebackType
 from typing import override
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from pydantic import BaseModel, ConfigDict, JsonValue
 from whenever import Instant
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.edits.application import EditExecutor
 from squid.core.edits.domain import (
     EditCommand,
@@ -94,20 +94,22 @@ async def test_normalized_edit_replay_undo_and_redo_use_the_same_handler() -> No
     state = CommittedState(Store())
     executor = EditExecutor(partial(Work, state), {"example": Handler()})
     edit = command("  Changed  ")
-    result = await executor.execute(edit, ACTOR)
+    result = await executor.execute(edit, context=ActingContext.direct(ACTOR))
     assert result.receipt is not None
     assert result.receipt.after.unpack()["name"] == "Changed"
     assert result.receipt.revisions == (Revision(TARGET, 2),)
-    replay = await executor.execute(edit, ACTOR)
+    replay = await executor.execute(edit, context=ActingContext.direct(ACTOR))
     assert replay.replayed
     assert replay.outcome == result.outcome
     assert replay.receipt is None
     assert state.value.revision == 2
-    restored = await executor.execute(result.receipt.undo(result.receipt.revisions), ACTOR)
+    restored = await executor.execute(
+        result.receipt.undo(result.receipt.revisions), context=ActingContext.direct(ACTOR)
+    )
     assert restored.receipt is not None
     assert state.value.values.unpack()["name"] == "Original"
     assert state.value.revision == 3
-    await executor.execute(result.receipt.redo(restored.receipt.revisions), ACTOR)
+    await executor.execute(result.receipt.redo(restored.receipt.revisions), context=ActingContext.direct(ACTOR))
     assert state.value.values.unpack()["name"] == "Changed"
     assert state.value.revision == 4
 
@@ -115,17 +117,19 @@ async def test_normalized_edit_replay_undo_and_redo_use_the_same_handler() -> No
 async def test_noops_authorization_unknown_fields_and_stale_versions() -> None:
     state = CommittedState(Store())
     executor = EditExecutor(partial(Work, state), {"example": Handler()})
-    assert not (await executor.execute(command("Original"), ACTOR)).outcome.changed
+    assert not (await executor.execute(command("Original"), context=ActingContext.direct(ACTOR))).outcome.changed
     assert state.value.revision == 1
     with pytest.raises(ValidationError):
-        await executor.execute(replace(command(), values=EditValues.of({"password": "secret"})), ACTOR)
+        await executor.execute(
+            replace(command(), values=EditValues.of({"password": "secret"})), context=ActingContext.direct(ACTOR)
+        )
     state.value.allowed = False
     with pytest.raises(AuthorizationError):
-        await executor.execute(command(), ACTOR)
+        await executor.execute(command(), context=ActingContext.direct(ACTOR))
     state.value.allowed = True
     state.value.revision = 3  # Another writer changed a value away and back.
     with pytest.raises(RevisionConflictError):
-        await executor.execute(command(), ACTOR)
+        await executor.execute(command(), context=ActingContext.direct(ACTOR))
     assert state.value.values.unpack()["name"] == "Original"
     assert len(state.value.outcomes) == 1
 
@@ -143,9 +147,9 @@ async def test_retrying_an_uncertain_commit_applies_the_edit_once(committed: boo
     failing = EditExecutor(partial(FailingWork, state), {"example": Handler()})
     edit = command()
     with pytest.raises(EditCommitUncertainError):
-        await failing.execute(edit, ACTOR)
+        await failing.execute(edit, context=ActingContext.direct(ACTOR))
     executor = EditExecutor(partial(Work, state), {"example": Handler()})
-    retried = await executor.execute(edit, ACTOR)
+    retried = await executor.execute(edit, context=ActingContext.direct(ACTOR))
     assert retried.replayed == committed
     assert state.value.revision == 2
     assert len(state.value.outcomes) == 1
@@ -155,15 +159,17 @@ async def test_operation_reuse_and_expired_attempts_cannot_write() -> None:
     state = CommittedState(Store())
     executor = EditExecutor(partial(Work, state), {"example": Handler()})
     edit = command()
-    await executor.execute(edit, ACTOR)
+    await executor.execute(edit, context=ActingContext.direct(ACTOR))
     with pytest.raises(OperationReuseError) as conflict:
-        await executor.execute(replace(edit, values=EditValues.of({"name": "Other"})), ACTOR)
+        await executor.execute(
+            replace(edit, values=EditValues.of({"name": "Other"})), context=ActingContext.direct(ACTOR)
+        )
     assert conflict.value.code is ErrorCode.IDEMPOTENCY_CONFLICT
     with pytest.raises(OperationReuseError):
-        await executor.execute(edit, Actor(account_id=8))
+        await executor.execute(edit, context=ActingContext.direct(Actor(account_id=8)))
     expired = replace(command(revision=2), issued_at=Instant.now().subtract(hours=25))
     with pytest.raises(EditExpiredError):
-        await executor.execute(expired, ACTOR)
+        await executor.execute(expired, context=ActingContext.direct(ACTOR))
     assert state.value.revision == 2
 
 
@@ -188,10 +194,10 @@ async def test_acknowledged_commit_survives_transaction_cleanup_failure() -> Non
     state = CommittedState(Store())
     executor = EditExecutor(partial(CloseFailure, state), {"example": Handler()})
     edit = command()
-    result = await executor.execute(edit, ACTOR)
+    result = await executor.execute(edit, context=ActingContext.direct(ACTOR))
     assert result.receipt is not None
     assert result.outcome.revisions == (Revision(TARGET, 2),)
-    replay = await executor.execute(edit, ACTOR)
+    replay = await executor.execute(edit, context=ActingContext.direct(ACTOR))
     assert replay.replayed
     assert state.value.revision == 2
 
@@ -199,24 +205,25 @@ async def test_acknowledged_commit_survives_transaction_cleanup_failure() -> Non
 async def test_unconditional_edits_capture_latest_state_and_replay_without_reapplying() -> None:
     state = CommittedState(Store())
     executor = EditExecutor(partial(Work, state), {"example": Handler()})
-    await executor.execute(command("First"), ACTOR)
+    await executor.execute(command("First"), context=ActingContext.direct(ACTOR))
     edit = EditCommand("example", (LatestRevision(TARGET),), EditValues.of({"enabled": False}))
-    result = await executor.execute(edit, ACTOR)
+    result = await executor.execute(edit, context=ActingContext.direct(ACTOR))
     assert result.receipt is not None
     assert result.receipt.before.unpack()["name"] == "First"
     assert result.receipt.after.unpack() == {"name": "First", "enabled": False}
     assert result.outcome.revisions == (Revision(TARGET, 3),)
-    replay = await executor.execute(edit, ACTOR)
+    replay = await executor.execute(edit, context=ActingContext.direct(ACTOR))
     assert replay.replayed
     assert state.value.revision == 3
     noop = await executor.execute(
-        EditCommand("example", (LatestRevision(TARGET),), EditValues.of({"enabled": False})), ACTOR
+        EditCommand("example", (LatestRevision(TARGET),), EditValues.of({"enabled": False})),
+        context=ActingContext.direct(ACTOR),
     )
     assert not noop.outcome.changed
     assert noop.outcome.revisions == (Revision(TARGET, 3),)
-    await executor.execute(command("Later", revision=3), ACTOR)
+    await executor.execute(command("Later", revision=3), context=ActingContext.direct(ACTOR))
     with pytest.raises(RevisionConflictError):
-        await executor.execute(result.receipt.undo(result.receipt.revisions), ACTOR)
+        await executor.execute(result.receipt.undo(result.receipt.revisions), context=ActingContext.direct(ACTOR))
 
 
 def test_unconditional_undo_is_rejected() -> None:
@@ -247,11 +254,36 @@ async def test_executor_checks_reported_revisions_before_applying() -> None:
 
     stale = ReportingHandler((Revision(TARGET, 2),))
     with pytest.raises(RevisionConflictError):
-        await EditExecutor(partial(Work, state), {"example": stale}).execute(edit, ACTOR)
+        await EditExecutor(partial(Work, state), {"example": stale}).execute(edit, context=ActingContext.direct(ACTOR))
     assert not stale.applied
 
     missing = ReportingHandler(())
     with pytest.raises(InvalidStateError):
-        await EditExecutor(partial(Work, state), {"example": missing}).execute(edit, ACTOR)
+        await EditExecutor(partial(Work, state), {"example": missing}).execute(
+            edit, context=ActingContext.direct(ACTOR)
+        )
     assert not missing.applied
     assert not state.value.outcomes
+
+
+async def test_replay_preserves_the_credential_and_impersonation_boundary() -> None:
+    state = CommittedState(Store())
+    executor = EditExecutor(partial(Work, state), {"example": Handler()})
+    edit = command()
+    actor = replace(ACTOR, credential_id="api-key:42", credential_scopes=frozenset({"build.**"}))
+    operator = Actor(account_id=13)
+    context = ActingContext(operator, actor, uuid4())
+    await executor.execute(edit, context=context)
+    retry = replace(context, invocation_id=uuid4())
+    assert (await executor.execute(edit, context=retry)).replayed
+
+    for changed in (
+        replace(context, session_id=uuid4()),
+        replace(context, operator=Actor(account_id=42)),
+        replace(context, effective=replace(actor, credential_scopes=frozenset())),
+        replace(context, effective=replace(actor, credential_id="api-key:other")),
+        ActingContext.direct(ACTOR),
+    ):
+        with pytest.raises(OperationReuseError):
+            await executor.execute(edit, context=changed)
+    assert state.value.revision == 2

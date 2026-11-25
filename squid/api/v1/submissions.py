@@ -482,7 +482,7 @@ async def change_draft(
     command = change_command(draft_id, data.to_domain())
     if if_match is not None and expected_revision(draft_target(draft_id), if_match) != command.expected[0]:
         raise InvalidRevisionError
-    result = await edits.execute(command, context.effective)
+    result = await edits.execute(command, context=context)
     draft = await drafts.get_accessible(draft_id, context=context)
     response_headers["ETag"] = revision_etag(Revision(draft_target(draft_id), draft.snapshot.revision))
     return Response(

@@ -8,7 +8,7 @@ import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.starboard.cog import StarboardCog
 from squid.bot.starboard.screen import StarboardScreen
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.edits.domain import EditCommand, EditOutcome, EditReceipt, EditResult, EditValues, Revision
 from squid.core.permissions.domain import PermissionNode
 from squid.core.permissions.domain.catalogue import (
@@ -41,21 +41,21 @@ class FakeStarboardService(StarboardService):
         self.deletions: list[tuple[int, str]] = []
 
     @override
-    async def reserve_id(self) -> int:
+    async def reserve_id(self, *, context: ActingContext) -> int:
         return 2
 
     @override
-    async def snapshot(self, starboard_id: int) -> StarboardSnapshot:
+    async def snapshot(self, starboard_id: int, *, context: ActingContext) -> StarboardSnapshot:
         return StarboardSnapshot.capture(self.config, {})
 
     @override
-    async def list_for_guild(self, guild_id: int) -> tuple[StarboardConfig, ...]:
+    async def list_for_guild(self, guild_id: int, *, context: ActingContext) -> tuple[StarboardConfig, ...]:
         del guild_id
         self.list_reads += 1
         return (self.config,)
 
     @override
-    async def get(self, guild_id: int, name: str) -> StarboardConfig | None:
+    async def get(self, guild_id: int, name: str, *, context: ActingContext) -> StarboardConfig | None:
         del guild_id
         return self.config if name == self.config.name else None
 
@@ -87,7 +87,8 @@ class EditRecorder:
         self.operations = operations
         self.commands: list[EditCommand] = []
 
-    async def execute(self, command: EditCommand, actor: Actor) -> EditResult:
+    async def execute(self, command: EditCommand, *, context: ActingContext) -> EditResult:
+        actor = context.effective
         self.commands.append(command)
         if command.kind == STARBOARD_DELETE:
             await self.operations.delete_starboard(7, self.operations.config.name)

@@ -119,7 +119,7 @@ async def update_preferences(
             EditValues.of(data.model_dump(mode="json")),
             operation_id,
         ),
-        caller.to_actor(),
+        context=caller.context(),
     )
     return await get_preferences.fn(notifications, caller)
 
@@ -184,7 +184,7 @@ async def create_subscription(
             EditValues.of({"create": values}),
             operation_id,
         ),
-        caller.to_actor(),
+        context=caller.context(),
     )
     if result.receipt is not None:
         subscription = SubscriptionsValues.model_validate(result.receipt.after.unpack()).subscriptions[0]
@@ -245,7 +245,7 @@ async def delete_subscription(
             EditValues.of({"states": {str(subscription_id): False}}),
             operation_id,
         ),
-        caller.to_actor(),
+        context=caller.context(),
     )
     return Response(
         content=None,
@@ -312,7 +312,7 @@ async def mark_read(
             EditValues.of({"states": {str(notification_id): True}}),
             operation_id,
         ),
-        caller.to_actor(),
+        context=caller.context(),
     )
     return Response(
         content=None,
@@ -352,7 +352,7 @@ async def mark_unread(
             EditValues.of({"states": {str(notification_id): False}}),
             operation_id,
         ),
-        caller.to_actor(),
+        context=caller.context(),
     )
     return Response(
         content=None,

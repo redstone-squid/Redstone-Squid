@@ -3,7 +3,7 @@
 from typing import Protocol
 from uuid import UUID
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext
 from squid.core.edits.domain import EditCommand, EditOutcome, EditReceipt, EditResult, EditValues, Revision
 from squid.core.notifications.domain import (
     DEFAULT_INBOX_VISIBILITY,
@@ -44,7 +44,8 @@ class NotificationEditRecorder:
         self.visibility = visibility
         self.commands: list[EditCommand] = []
 
-    async def execute(self, command: EditCommand, actor: Actor) -> EditResult:
+    async def execute(self, command: EditCommand, *, context: ActingContext) -> EditResult:
+        actor = context.effective
         self.commands.append(command)
         account_id = actor.account_id
         assert account_id is not None

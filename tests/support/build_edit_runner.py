@@ -1,7 +1,7 @@
 """Small in-memory build editor for transport tests; database tests exercise the handler."""
 
 from squid.bot.submission.ui.build_edit import BuildEditWorkspace
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.builds.application.editing import BuildEditPatch
 from squid.core.builds.application.edits import build_values
 from squid.core.builds.models import Build, DoorBuild
@@ -28,7 +28,8 @@ class BuildEditRecorder:
         self.commands: list[EditCommand] = []
         self.actors: list[Actor] = []
 
-    async def execute(self, command: EditCommand, actor: Actor) -> EditResult:
+    async def execute(self, command: EditCommand, *, context: ActingContext) -> EditResult:
+        actor = context.effective
         self.commands.append(command)
         self.actors.append(actor)
         if self.error is not None:

@@ -27,6 +27,7 @@ from squid.core.accounts.application.edits import AccountEditorSnapshot
 from squid.core.accounts.domain import AccountMerge, IdentityProvider, MergePreview, ProfileLink, ProfileUpdate
 from squid.core.accounts.errors import InvalidMergeCodeError, LastIdentityError
 from squid.core.accounts.models import Account, AccountIdentity, AccountProfile, MergeTicket
+from squid.core.actors import ActingContext
 from squid.core.errors import AuthenticationError
 from squid.core.sentinel import UNSET
 from tests.support.account_edits import AccountEditRecorder
@@ -68,7 +69,7 @@ class AccountRecorder(AccountService):
         return AccountEditorSnapshot(Account(id=account_id, identities=self.identities), self.profile)
 
     @override
-    async def list_identities(self, account_id: int) -> tuple[AccountIdentity, ...]:
+    async def list_identities(self, *, context: ActingContext) -> tuple[AccountIdentity, ...]:
         return self.identities
 
     async def update_profile(self, account_id: int, update: ProfileUpdate) -> AccountProfile:
@@ -89,14 +90,16 @@ class AccountRecorder(AccountService):
         return JAVA
 
     @override
-    async def create_merge_code(self, account_id: int) -> tuple[str, MergeTicket]:
+    async def create_merge_code(self, *, context: ActingContext) -> tuple[str, MergeTicket]:
+        account_id = context.effective.require_account_id()
         self.merge_codes.append(account_id)
         return "ABCD2345", MergeTicket(
             account_id=1, created_at=Instant.from_utc(2026, 8, 18), expires_at=Instant.from_utc(2026, 8, 18, 0, 10)
         )
 
     @override
-    async def preview_merge(self, surviving_account_id: int, code: str) -> MergePreview:
+    async def preview_merge(self, code: str, *, context: ActingContext) -> MergePreview:
+        surviving_account_id = context.effective.require_account_id()
         self.merge_previews.append((surviving_account_id, code))
         return MergePreview(
             absorbed_public_creator_id=ABSORBED_ID,
@@ -106,7 +109,8 @@ class AccountRecorder(AccountService):
         )
 
     @override
-    async def complete_merge(self, surviving_account_id: int, code: str, *, now: Instant | None = None) -> AccountMerge:
+    async def complete_merge(self, code: str, *, context: ActingContext, now: Instant | None = None) -> AccountMerge:
+        surviving_account_id = context.effective.require_account_id()
         self.merges.append((surviving_account_id, code))
         if self.merge_error is not None:
             raise self.merge_error
@@ -255,7 +259,8 @@ class TestStaffClear:
             '"account-42-r7"',
             _reservation=None,
         )
-        command, actor = edits.execute.call_args.args
+        (command,) = edits.execute.call_args.args
+        actor = edits.execute.call_args.kwargs["context"].effective
         assert command.kind == "accounts.profile_clear"
         assert command.expected[0].target.key == "42"
         assert command.expected[0].value == 7

@@ -27,6 +27,7 @@ from squid.api.contract import iter_contract_routes
 from squid.api.security import Caller, current_caller
 from squid.core.errors import AuthenticationError
 from squid.core.idempotency import IdempotencyService, PendingRequest, StoredResponse, UnsafeHttpMethod
+from squid.core.replay import replay_fingerprint
 
 _UNSAFE_METHODS = frozenset(UnsafeHttpMethod)
 _REPLAYED_HEADERS = frozenset({"cache-control", "content-language", "content-type", "etag", "location", "pragma"})
@@ -69,7 +70,7 @@ async def reserve_idempotent_request(
     idempotency_key: IdempotencyKey = None,
 ) -> None:
     """Reserve a caller key when an unsafe request supplies one."""
-    await reserve_idempotent_request_for(request, caller.subject, idempotency_key)
+    await reserve_idempotent_request_for(request, caller, idempotency_key)
 
 
 async def reserve_edit_request(
@@ -78,12 +79,12 @@ async def reserve_edit_request(
     idempotency_key: IdempotencyKey = None,
 ) -> None:
     """Resume unfinished requests only for routes whose every write uses EditExecutor."""
-    await reserve_idempotent_request_for(request, caller.subject, idempotency_key, recoverable=True)
+    await reserve_idempotent_request_for(request, caller, idempotency_key, recoverable=True)
 
 
 async def reserve_idempotent_request_for(
     request: Request,
-    caller: str,
+    caller: str | Caller,
     idempotency_key: str | None,
     *,
     recoverable: bool = False,
@@ -95,14 +96,17 @@ async def reserve_idempotent_request_for(
     """
     if request.method not in _UNSAFE_METHODS or idempotency_key is None:
         return
-    if caller == "anonymous":
+    if isinstance(caller, Caller) and caller.kind == "anonymous":
         raise AuthenticationError
     service = cast(IdempotencyService, request.app.state.runtime.services.idempotency)
     route_path = request.scope.get("path_template", request.url.path)
+    fingerprint = await _request_fingerprint(request, route_path)
+    if isinstance(caller, Caller):
+        fingerprint = replay_fingerprint(fingerprint, caller.context())
     reservation = await service.reserve(
-        caller=caller,
+        caller=caller.subject if isinstance(caller, Caller) else caller,
         key=idempotency_key,
-        fingerprint=await _request_fingerprint(request, route_path),
+        fingerprint=fingerprint,
         method=UnsafeHttpMethod(request.method),
         route=route_path,
         recoverable=recoverable,
@@ -226,7 +230,7 @@ async def reserve_idempotent_before_request(request: Request) -> None:
 
     caller = await current_caller(request)
     await enforce_route_rate_limits(request, caller)
-    await reserve_idempotent_request_for(request, caller.subject, _idempotency_key(request))
+    await reserve_idempotent_request_for(request, caller, _idempotency_key(request))
 
 
 async def reserve_edit_before_request(request: Request) -> None:
@@ -235,7 +239,7 @@ async def reserve_edit_before_request(request: Request) -> None:
 
     caller = await current_caller(request)
     await enforce_route_rate_limits(request, caller)
-    await reserve_idempotent_request_for(request, caller.subject, _idempotency_key(request), recoverable=True)
+    await reserve_idempotent_request_for(request, caller, _idempotency_key(request), recoverable=True)
 
 
 async def _request_fingerprint(request: Request, route_path: str) -> bytes:

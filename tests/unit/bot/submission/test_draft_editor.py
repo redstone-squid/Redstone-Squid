@@ -154,7 +154,7 @@ class Tags(TagService):
         pass
 
     @override
-    async def public_definitions(self) -> list[TagDefinition]:
+    async def public_definitions(self, *, context: ActingContext) -> list[TagDefinition]:
         return [
             TagDefinition(
                 id=1,

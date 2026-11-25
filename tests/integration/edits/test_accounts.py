@@ -22,7 +22,7 @@ from squid.core.accounts.application.edits import (
 from squid.core.accounts.domain import AccountConsent, ProfileUpdate
 from squid.core.accounts.errors import ConsentRequiredError, LastIdentityError
 from squid.core.accounts.models import AccountIdentity, ProfileClearAudit
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.edits.application import EditExecutor
 from squid.core.edits.domain import EditCommand, EditResult, EditValues, Revision, RevisionConflictError
 from squid.core.errors import AuthorizationError
@@ -49,7 +49,9 @@ async def test_profile_and_identity_compete_on_one_revision_and_undo_checks_curr
 
     async def run(kind: str, values: EditValues) -> None:
         try:
-            outcomes.append(await executor.execute(EditCommand(kind, expected, values), actor))
+            outcomes.append(
+                await executor.execute(EditCommand(kind, expected, values), context=ActingContext.direct(actor))
+            )
         except RevisionConflictError as error:
             outcomes.append(error)
 
@@ -64,8 +66,10 @@ async def test_profile_and_identity_compete_on_one_revision_and_undo_checks_curr
     if saved.receipt.command.kind == PROFILE_EDIT:
         assert saved.receipt.after.unpack()["display_name"] == "Builder"
     with pytest.raises(AuthorizationError):
-        await executor.execute(saved.receipt.undo(saved.outcome.revisions), Actor(account_id=account.id + 1))
-    undone = await executor.execute(saved.receipt.undo(saved.outcome.revisions), actor)
+        await executor.execute(
+            saved.receipt.undo(saved.outcome.revisions), context=ActingContext.direct(Actor(account_id=account.id + 1))
+        )
+    undone = await executor.execute(saved.receipt.undo(saved.outcome.revisions), context=ActingContext.direct(actor))
     assert undone.receipt is not None
     assert undone.outcome.revisions[0].value > saved.outcome.revisions[0].value
     # A provider update is a competing writer even when it changes no profile text.
@@ -73,7 +77,7 @@ async def test_profile_and_identity_compete_on_one_revision_and_undo_checks_curr
         await uow.accounts.set_identity_avatar_key(account.id, account.identities[0].id, "changed-avatar")
         await uow.commit()
     with pytest.raises(RevisionConflictError):
-        await executor.execute(saved.receipt.redo(undone.outcome.revisions), actor)
+        await executor.execute(saved.receipt.redo(undone.outcome.revisions), context=ActingContext.direct(actor))
     async with factory() as uow:
         current = await uow.accounts.lock_for_edit(account.id)
         current.consent_version = None
@@ -86,7 +90,7 @@ async def test_profile_and_identity_compete_on_one_revision_and_undo_checks_curr
                 (Revision(account_target(account.id), current.revision),),
                 EditValues.of({"bio": "New"}),
             ),
-            actor,
+            context=ActingContext.direct(actor),
         )
 
 
@@ -111,7 +115,7 @@ async def test_final_unlink_retains_profile_and_last_identity_guard(
             (Revision(account_target(account.id), account.revision),),
             EditValues.of({"identity_id": identity_id}),
         ),
-        actor,
+        context=ActingContext.direct(actor),
     )
     assert result.receipt is not None
     assert result.receipt.final
@@ -125,7 +129,7 @@ async def test_final_unlink_retains_profile_and_last_identity_guard(
             EditCommand(
                 UNLINK_EDIT, result.outcome.revisions, EditValues.of({"identity_id": account.identities[1].id})
             ),
-            actor,
+            context=ActingContext.direct(actor),
         )
 
 
@@ -147,15 +151,19 @@ async def test_staff_clear_is_final_revision_checked_and_permanently_attributed(
         await uow.commit()
     command = EditCommand(PROFILE_CLEAR, (Revision(account_target(account.id), account.revision),), EditValues.of({}))
     actor = Actor(account_id=staff.id)
-    result = await executor.execute(command, actor)
+    result = await executor.execute(command, context=ActingContext.direct(actor))
     assert result.receipt is not None
     assert result.receipt.final
     with pytest.raises(RevisionConflictError):
-        await executor.execute(EditCommand(PROFILE_CLEAR, command.expected, command.values), actor)
-    await executor.execute(command, actor)
+        await executor.execute(
+            EditCommand(PROFILE_CLEAR, command.expected, command.values), context=ActingContext.direct(actor)
+        )
+    await executor.execute(command, context=ActingContext.direct(actor))
     permissions.require.side_effect = AuthorizationError
     with pytest.raises(AuthorizationError):
-        await executor.execute(EditCommand(PROFILE_CLEAR, result.outcome.revisions, command.values), actor)
+        await executor.execute(
+            EditCommand(PROFILE_CLEAR, result.outcome.revisions, command.values), context=ActingContext.direct(actor)
+        )
     async with factory() as uow:
         profile = await uow.accounts.get_profile(account.id)
         assert profile is not None

@@ -41,6 +41,7 @@ from squid.api.security import Caller, requires
 from squid.api.v1.browser_views import BrowserViews
 from squid.api.v1.schemas.builds import BuildDetail, BuildPatch, BuildStatusFilter
 from squid.api.v1.search import PUBLIC_SEARCH_STATUSES, build_hit_id, hydrate_builds
+from squid.core.actors import ActingContext
 from squid.core.builds.application import (
     BUILD_SORT_FIELDS,
     BuildEditPatch,
@@ -109,7 +110,7 @@ async def edit_build(
             patch_values(BuildEditPatch.from_attributes(data.edit_attributes())),
             operation_id,
         ),
-        caller.to_actor(),
+        context=caller.context(),
     )
     build = await services.builds.get(build_id)
     if build is None:
@@ -222,7 +223,8 @@ async def list_builds(
                 offset=selector.offset,
                 sort=SearchSort.parse(sort),
                 visible_statuses=PUBLIC_SEARCH_STATUSES,
-            )
+            ),
+            context=ActingContext.current(),
         )
         summaries = await hydrate_builds(build_queries, result.hits)
         return Page(

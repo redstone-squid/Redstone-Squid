@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.accounts.models import Account
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.edits.application import EditExecutor
 from squid.core.edits.domain import (
     ConcurrentEditError,
@@ -41,7 +41,7 @@ async def test_competing_settings_edits_have_one_winner_and_a_reversible_receipt
 ) -> None:
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     settings = SettingsService(uow_factory=factory)
-    original, revision = await settings.runtime_snapshot()
+    original, revision = await settings.runtime_snapshot(context=ActingContext.direct(Actor()))
     executor = EditExecutor(
         factory, {RUNTIME_EDIT: RuntimeSettingsEdit(PermissionService(uow_factory=factory), original)}
     )
@@ -52,7 +52,7 @@ async def test_competing_settings_edits_have_one_winner_and_a_reversible_receipt
     async def edit(field: str) -> None:
         command = EditCommand(RUNTIME_EDIT, (Revision(RUNTIME_TARGET, revision),), EditValues.of({field: False}))
         try:
-            results.append(await executor.execute(command, actor))
+            results.append(await executor.execute(command, context=ActingContext.direct(actor)))
         except RevisionConflictError as error:
             conflicts.append(error)
 
@@ -63,9 +63,9 @@ async def test_competing_settings_edits_have_one_winner_and_a_reversible_receipt
     receipt = results[0].receipt
     assert receipt is not None
     assert receipt.revisions[0].value == revision + 1
-    reverted = await executor.execute(receipt.undo(receipt.revisions), actor)
+    reverted = await executor.execute(receipt.undo(receipt.revisions), context=ActingContext.direct(actor))
     assert reverted.receipt is not None
-    current, current_revision = await settings.runtime_snapshot()
+    current, current_revision = await settings.runtime_snapshot(context=ActingContext.direct(Actor()))
     assert current == original
     assert current_revision == revision + 2
     async with migrated_session_factory() as session:
@@ -75,7 +75,7 @@ async def test_competing_settings_edits_have_one_winner_and_a_reversible_receipt
     assert actor.account_id is not None
     await edit_runtime(settings, {"welcome_enabled": False}, actor_account_id=actor.account_id)
     with pytest.raises(RevisionConflictError):
-        await executor.execute(receipt.redo(reverted.receipt.revisions), actor)
+        await executor.execute(receipt.redo(reverted.receipt.revisions), context=ActingContext.direct(actor))
 
 
 @pytest.mark.parametrize("explicit_flush", [False, True])
@@ -84,7 +84,9 @@ async def test_stale_orm_write_is_a_known_conflict_at_flush_or_commit(
     explicit_flush: bool,
 ) -> None:
     defaults = RuntimeSettings()
-    await SettingsService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)).get_runtime()
+    await SettingsService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)).get_runtime(
+        context=ActingContext.direct(Actor())
+    )
     async with (
         SqlAlchemyUnitOfWork(migrated_session_factory) as first,
         SqlAlchemyUnitOfWork(migrated_session_factory) as second,
@@ -105,7 +107,7 @@ async def test_unconditional_settings_edits_serialize_and_preserve_other_fields(
 ) -> None:
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     settings = SettingsService(uow_factory=factory)
-    original, revision = await settings.runtime_snapshot()
+    original, revision = await settings.runtime_snapshot(context=ActingContext.direct(Actor()))
     executor = EditExecutor(
         factory, {RUNTIME_EDIT: RuntimeSettingsEdit(PermissionService(uow_factory=factory), original)}
     )
@@ -115,14 +117,15 @@ async def test_unconditional_settings_edits_serialize_and_preserve_other_fields(
     async def edit(field: str) -> None:
         results.append(
             await executor.execute(
-                EditCommand(RUNTIME_EDIT, (LatestRevision(RUNTIME_TARGET),), EditValues.of({field: False})), actor
+                EditCommand(RUNTIME_EDIT, (LatestRevision(RUNTIME_TARGET),), EditValues.of({field: False})),
+                context=ActingContext.direct(actor),
             )
         )
 
     async with anyio.create_task_group() as tasks:
         tasks.start_soon(edit, "welcome_enabled")
         tasks.start_soon(edit, "redstoner_enabled")
-    current, current_revision = await settings.runtime_snapshot()
+    current, current_revision = await settings.runtime_snapshot(context=ActingContext.direct(Actor()))
     assert not current.welcome_enabled
     assert not current.redstoner_enabled
     assert current_revision == revision + 2

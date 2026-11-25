@@ -40,7 +40,8 @@ async def test_every_account_credential_audits_the_internal_account(kind: str, e
     response = await update_runtime_settings.fn(
         RuntimeSettingsPatch(welcome_forward_chance=0.5), services, caller, uuid4(), etag, _reservation=None
     )
-    command, actor = edits.execute.call_args.args
+    (command,) = edits.execute.call_args.args
+    actor = edits.execute.call_args.kwargs["context"].effective
     assert command.expected == (LatestRevision(RUNTIME_TARGET) if etag is None else Revision(RUNTIME_TARGET, 1),)
     assert command.values.unpack() == {"welcome_forward_chance": 0.5}
     assert actor.account_id == 7

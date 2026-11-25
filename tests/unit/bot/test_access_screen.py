@@ -13,7 +13,7 @@ from squid.bot.access_view import AccessScreen
 from squid.bot.permissions_cog import ACCESS_NODES
 from squid.core.accounts.domain import IdentityProvider
 from squid.core.accounts.models import Account, AccountIdentity
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.edits.application import EditRunner
 from squid.core.edits.domain import (
     EditCommand,
@@ -66,7 +66,8 @@ class PermissionEdits:
         self.admin.roles.return_value = ()
         self.admin.audit.return_value = ()
 
-    async def execute(self, command: EditCommand, actor: Actor) -> EditResult:
+    async def execute(self, command: EditCommand, *, context: ActingContext) -> EditResult:
+        actor = context.effective
         self.commands.append(command)
         (expected,) = bound_revisions(command)
         require_revision(expected, self.revision)

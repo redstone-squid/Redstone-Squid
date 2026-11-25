@@ -5,6 +5,7 @@ from unittest.mock import create_autospec
 import pytest
 from litestar.testing import TestClient
 
+from squid.api.security import Caller
 from squid.core.idempotency import IdempotencyService
 from squid.core.records.application.expansion_regions import DoorRangeQuery, analyze_door_widths
 from squid.core.records.application.published_points import (
@@ -21,6 +22,7 @@ CONFIG = TEST_CONFIG.model_copy(
     update={"api": TEST_CONFIG.api.model_copy(update={"secret_nodes": ["record.entry.rebuild"]})}
 )
 AUTH = {"Authorization": TEST_SYNERGY_SECRET}
+PUBLISHER = Caller(kind="service", subject="legacy-bootstrap", nodes=CONFIG.api.secret_patterns).context()
 BASE = "/v1/records/ranges/door"
 
 
@@ -37,7 +39,7 @@ def test_registration_and_refresh_replay_without_repeating_queue_writes() -> Non
         replay = client.post(BASE, json={"height": 3}, headers=registration_headers)
         assert first.status_code == replay.status_code == 200
         assert first.json() == replay.json() == {"query_id": 7}
-        publications.register.assert_awaited_once_with(DoorRangeQuery(height=3))
+        publications.register.assert_awaited_once_with(DoorRangeQuery(height=3), context=PUBLISHER)
         conflict = client.post(BASE, json={"height": 4}, headers=registration_headers)
         assert conflict.status_code == 409
         refresh_headers = AUTH | {"Idempotency-Key": "refresh-range"}
@@ -45,7 +47,7 @@ def test_registration_and_refresh_replay_without_repeating_queue_writes() -> Non
         replay = client.post(f"{BASE}/7/refresh", headers=refresh_headers)
         assert first.status_code == replay.status_code == 202
         assert first.json() == replay.json() == {"query_id": 7}
-        publications.request_refresh.assert_awaited_once_with(7)
+        publications.request_refresh.assert_awaited_once_with(7, context=PUBLISHER)
         publications.publish.assert_not_called()
 
 
@@ -73,7 +75,7 @@ def test_invalid_queries_and_unknown_refresh_are_rejected() -> None:
             assert response.status_code == 422
         assert client.post(f"{BASE}/99/refresh", headers=AUTH).status_code == 404
     publications.register.assert_not_called()
-    publications.request_refresh.assert_awaited_once_with(99)
+    publications.request_refresh.assert_awaited_once_with(99, context=PUBLISHER)
 
 
 def test_published_point_is_public_and_retains_saved_origin() -> None:

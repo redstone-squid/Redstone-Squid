@@ -11,7 +11,7 @@ from whenever import Instant
 from squid.core.accounts.domain import AccountConsent, ClaimMethod
 from squid.core.accounts.errors import ConsentRequiredError
 from squid.core.accounts.models import Account, CreatorAlias
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.edits.application import EditExecutor
 from squid.core.edits.domain import EditCommand, EditResult, EditValues, Revision, RevisionConflictError
 from squid.core.events.models import DomainEvent
@@ -103,7 +103,7 @@ async def test_follow_labels_resolve_public_names_and_latest_titles(
             (Revision(notification_target(owner.id), snapshot.preferences.revision),),
             EditValues.of({"create": {"kind": "creator", "subject_id": str(creator.public_creator_id)}}),
         ),
-        Actor(account_id=owner.id),
+        context=ActingContext.direct(Actor(account_id=owner.id)),
     )
     assert not repeated.outcome.changed
 
@@ -130,7 +130,9 @@ async def test_preferences_and_follows_compete_on_one_account_revision(
 
     async def edit(kind: str, values: EditValues) -> None:
         try:
-            results.append(await executor.execute(EditCommand(kind, expected, values), actor))
+            results.append(
+                await executor.execute(EditCommand(kind, expected, values), context=ActingContext.direct(actor))
+            )
         except RevisionConflictError as error:
             results.append(error)
 
@@ -145,7 +147,7 @@ async def test_preferences_and_follows_compete_on_one_account_revision(
     saved = next(result for result in results if isinstance(result, EditResult))
     assert saved.receipt is not None
     assert (await service.preferences(account.id)).revision == 1
-    undone = await executor.execute(saved.receipt.undo(saved.outcome.revisions), actor)
+    undone = await executor.execute(saved.receipt.undo(saved.outcome.revisions), context=ActingContext.direct(actor))
     assert undone.receipt is not None
     assert undone.outcome.revisions[0].value == 2
     await executor.execute(
@@ -154,10 +156,10 @@ async def test_preferences_and_follows_compete_on_one_account_revision(
             undone.outcome.revisions,
             EditValues.of({"create": {"kind": "record_filter", "record_filter": {"build_kinds": ["utility"]}}}),
         ),
-        actor,
+        context=ActingContext.direct(actor),
     )
     with pytest.raises(RevisionConflictError):
-        await executor.execute(saved.receipt.redo(undone.outcome.revisions), actor)
+        await executor.execute(saved.receipt.redo(undone.outcome.revisions), context=ActingContext.direct(actor))
 
 
 async def test_follow_creation_undo_and_redo_keep_identity_and_monotonic_revision(
@@ -177,29 +179,32 @@ async def test_follow_creation_undo_and_redo_keep_identity_and_monotonic_revisio
             (Revision(notification_target(account.id), 0),),
             EditValues.of({"create": {"kind": "record_filter", "record_filter": {"build_kinds": ["door"]}}}),
         ),
-        actor,
+        context=ActingContext.direct(actor),
     )
     assert created.receipt is not None
     subscription = SubscriptionsValues.model_validate(created.receipt.after.unpack()).subscriptions[0]
-    undone = await executor.execute(created.receipt.undo(created.outcome.revisions), actor)
+    undone = await executor.execute(
+        created.receipt.undo(created.outcome.revisions), context=ActingContext.direct(actor)
+    )
     assert undone.receipt is not None
     async with migrated_session_factory() as session:
         row = await session.get(NotificationSubscription, subscription.id)
         assert row is not None
         assert row.enabled is False
-    redone = await executor.execute(created.receipt.redo(undone.outcome.revisions), actor)
+    redone = await executor.execute(created.receipt.redo(undone.outcome.revisions), context=ActingContext.direct(actor))
     assert redone.receipt is not None
     assert redone.receipt.after == created.receipt.after
     assert redone.outcome.revisions[0].value == 3
     repeated = await executor.execute(
-        EditCommand(SUBSCRIPTIONS_EDIT, redone.outcome.revisions, created.receipt.command.values), actor
+        EditCommand(SUBSCRIPTIONS_EDIT, redone.outcome.revisions, created.receipt.command.values),
+        context=ActingContext.direct(actor),
     )
     assert not repeated.outcome.changed
     assert repeated.outcome.revisions == redone.outcome.revisions
     async with migrated_session_factory() as session:
         assert len((await session.scalars(select(NotificationSubscription))).all()) == 1
 
-    await executor.execute(redone.receipt.undo(redone.outcome.revisions), actor)
+    await executor.execute(redone.receipt.undo(redone.outcome.revisions), context=ActingContext.direct(actor))
     row, revision = await NotificationService(uow_factory=factory).subscription_snapshot(
         account.id,
         kind=SubscriptionKind.RECORD_FILTER,
@@ -248,7 +253,7 @@ async def test_inbox_batch_conflict_is_atomic_and_arrivals_do_not_block_undo(
             (Revision(inbox_target(second.id), second.revision),),
             EditValues.of({"states": {str(second.id): True}}),
         ),
-        Actor(account_id=account.id),
+        context=ActingContext.direct(Actor(account_id=account.id)),
     )
     with pytest.raises(RevisionConflictError):
         await executor.execute(
@@ -257,7 +262,7 @@ async def test_inbox_batch_conflict_is_atomic_and_arrivals_do_not_block_undo(
                 (Revision(inbox_target(first.id), 1), Revision(inbox_target(second.id), 1)),
                 EditValues.of({"states": {str(first.id): True, str(second.id): True}}),
             ),
-            actor,
+            context=ActingContext.direct(actor),
         )
     async with migrated_session_factory() as session:
         current = await session.get(InboxNotification, first.id)
@@ -267,16 +272,17 @@ async def test_inbox_batch_conflict_is_atomic_and_arrivals_do_not_block_undo(
         EditCommand(
             INBOX_EDIT, (Revision(inbox_target(first.id), 1),), EditValues.of({"states": {str(first.id): True}})
         ),
-        actor,
+        context=ActingContext.direct(actor),
     )
     assert saved.receipt is not None
     repeated = await executor.execute(
-        EditCommand(INBOX_EDIT, saved.outcome.revisions, saved.receipt.command.values), actor
+        EditCommand(INBOX_EDIT, saved.outcome.revisions, saved.receipt.command.values),
+        context=ActingContext.direct(actor),
     )
     assert not repeated.outcome.changed
     assert repeated.outcome.revisions == saved.outcome.revisions
     await arrive()
-    undone = await executor.execute(saved.receipt.undo(saved.outcome.revisions), actor)
+    undone = await executor.execute(saved.receipt.undo(saved.outcome.revisions), context=ActingContext.direct(actor))
     assert undone.outcome.revisions == (Revision(inbox_target(first.id), 3),)
 
     staff = await arrive(NotificationKind.STAFF_BUILD_SUBMITTED)
@@ -284,14 +290,17 @@ async def test_inbox_batch_conflict_is_atomic_and_arrivals_do_not_block_undo(
         EditCommand(
             INBOX_EDIT, (Revision(inbox_target(staff.id), 1),), EditValues.of({"states": {str(staff.id): True}})
         ),
-        Actor(account_id=account.id, is_bot_owner=True),
+        context=ActingContext.direct(Actor(account_id=account.id, is_bot_owner=True)),
     )
     assert staff_saved.receipt is not None
     with pytest.raises(NotificationNotFoundError):
-        await executor.execute(staff_saved.receipt.undo(staff_saved.outcome.revisions), actor)
+        await executor.execute(
+            staff_saved.receipt.undo(staff_saved.outcome.revisions), context=ActingContext.direct(actor)
+        )
 
     repeated = await executor.execute(
-        EditCommand(INBOX_EDIT, undone.outcome.revisions, EditValues.of({"states": {str(first.id): False}})), actor
+        EditCommand(INBOX_EDIT, undone.outcome.revisions, EditValues.of({"states": {str(first.id): False}})),
+        context=ActingContext.direct(actor),
     )
     assert not repeated.outcome.changed
     assert repeated.outcome.revisions == undone.outcome.revisions
@@ -331,4 +340,6 @@ async def test_read_edit_requires_current_inbox_access(
         INBOX_EDIT, (Revision(inbox_target(item.id), item.revision),), EditValues.of({"states": {str(item.id): True}})
     )
     with pytest.raises(ConsentRequiredError if gate == "consent" else NotificationNotFoundError):
-        await executor.execute(command, Actor(account_id=other.id if gate == "owner" else owner.id))
+        await executor.execute(
+            command, context=ActingContext.direct(Actor(account_id=other.id if gate == "owner" else owner.id))
+        )

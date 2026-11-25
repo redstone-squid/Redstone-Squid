@@ -8,6 +8,7 @@ import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.accounts.consent import with_consented_account
 from squid.bot.ui import tr
+from squid.core.actors import ActingContext
 from squid.core.edits.domain import EditCommand, EditValues, Revision
 from squid.core.notifications.domain import SubscriptionKind
 from squid.core.notifications.edits import SUBSCRIPTIONS_EDIT, notification_target
@@ -43,7 +44,7 @@ async def _follow(kind: SubscriptionKind, subject_id: UUID, event: sd.PressEvent
                 (Revision(notification_target(account_id), revision),),
                 EditValues.of({"create": {"kind": kind.value, "subject_id": str(subject_id)}}),
             ),
-            actor,
+            context=ActingContext.for_actor(actor),
         )
         await source.notice(tr(t"context-follow-saved = Following. Manage your follows in /notifications."))
 

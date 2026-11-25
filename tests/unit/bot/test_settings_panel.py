@@ -13,7 +13,7 @@ import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.settings.screen import SettingsPanel
 from squid.bot.utils.permissions import Grants
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.edits.domain import (
     EditCommand,
     EditOutcome,
@@ -86,7 +86,7 @@ class FakeSettingsService(SettingsService):
         self.clears: list[tuple[int, Setting]] = []
 
     @override
-    async def guild_snapshot(self, guild_id: int) -> tuple[GuildSettings, int]:
+    async def guild_snapshot(self, guild_id: int, *, context: ActingContext) -> tuple[GuildSettings, int]:
         voting = {}
         for kind in VoteKind:
             weights = await self.votes.get_role_weights(guild_id, kind)
@@ -96,7 +96,7 @@ class FakeSettingsService(SettingsService):
         ), self.revision
 
     @override
-    async def get_all(self, server_id: int) -> SettingOptions:
+    async def get_all(self, server_id: int, *, context: ActingContext) -> SettingOptions:
         del server_id
         return cast(SettingOptions, dict(self.stored))
 
@@ -109,7 +109,7 @@ class FakeSettingsService(SettingsService):
         self.stored.pop(setting, None)
 
     @override
-    async def get_locale(self, server_id: int) -> str | None:
+    async def get_locale(self, server_id: int, *, context: ActingContext) -> str | None:
         del server_id
         return self.locale
 
@@ -175,7 +175,8 @@ def make_component_panel(
     async def actor() -> Actor:
         return Actor(account_id=1, guild_id=GUILD_ID)
 
-    async def execute(command: EditCommand, actor: Actor) -> EditResult:
+    async def execute(command: EditCommand, *, context: ActingContext) -> EditResult:
+        actor = context.effective
         if not await panel.settings.grants.allows(SETTINGS_SERVER_EDIT):
             raise AuthorizationError
         if bound_revisions(command)[0].value != settings.revision:

@@ -12,7 +12,7 @@ from squid.core.accounts.application.edits import (
 from squid.core.accounts.domain import ProfileUpdate
 from squid.core.accounts.errors import AccountNotFoundError
 from squid.core.accounts.models import AccountIdentity, AccountProfile
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext
 from squid.core.edits.domain import EditCommand, EditOutcome, EditReceipt, EditResult, EditValues, Revision
 
 
@@ -47,7 +47,8 @@ class AccountEditRecorder:
         self.accounts = accounts
         self.commands: list[EditCommand] = []
 
-    async def execute(self, command: EditCommand, actor: Actor) -> EditResult:
+    async def execute(self, command: EditCommand, *, context: ActingContext) -> EditResult:
+        actor = context.effective
         self.commands.append(command)
         account_id = int(command.expected[0].target.key)
         values = command.values.unpack()

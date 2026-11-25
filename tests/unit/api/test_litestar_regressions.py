@@ -11,7 +11,7 @@ from litestar.di import NamedDependency, Provide
 from litestar.params import SkipValidation
 
 from squid.api.idempotency import edit_operation_id, reserve_edit_request
-from squid.api.security import ANONYMOUS
+from squid.api.security import Caller
 from squid.api.v1.search import search
 from squid.core.builds.application import BuildQueryService
 from squid.core.idempotency.application import IdempotencyService
@@ -29,7 +29,7 @@ async def test_edit_operation_id_waits_for_dependency_reservation() -> None:
         "/edit",
         status_code=200,
         dependencies={
-            "caller": Provide(lambda: ANONYMOUS, sync_to_thread=False),
+            "caller": Provide(lambda: Caller(kind="account", account_id=7, subject="account:7"), sync_to_thread=False),
             "_reservation": Provide(reserve_edit_request),
             "operation_id": Provide(edit_operation_id, sync_to_thread=False),
         },
