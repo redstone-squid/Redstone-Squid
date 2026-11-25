@@ -4,7 +4,7 @@ import asyncio
 import contextlib
 import logging
 from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Self, cast, override
 
 import anyio
@@ -19,7 +19,7 @@ from squid.bootstrap import create_bot_runtime
 # Note that every import to a package that imports back RedstoneSquid (even if it is just in TYPE_CHECKING)
 # will create an import cycle from the view of a static type checker, which slows down type checking significantly.
 from squid.bot._types import MessageableChannel
-from squid.bot.actors import AccountIdCache, DiscordActorResolver
+from squid.bot.actors import AccountIdCache, DiscordActionContext, DiscordActorResolver
 from squid.bot.catalogue.search.contextual import ContextualSearches
 from squid.bot.diagnostics.gateway import GatewayHistory
 from squid.bot.errors import UI_ERRORS, SquidCommandTree
@@ -47,6 +47,7 @@ from squid.config import (
     load_bot_process_config,
     load_or_exit,
 )
+from squid.core.actors import ActingContext, Actor, current_acting_context
 from squid.core.errors import RateLimitedError
 from squid.core.observability import TraceSurface, correlation_scope, trace_span
 from squid.core.posts.domain import ResourceKind
@@ -204,7 +205,7 @@ class RedstoneSquid(Bot):
         self.ui: DiscordUIRuntime[RedstoneSquid] = install(
             self,
             Config(
-                defaults=HOST_DEFAULTS,
+                defaults=replace(HOST_DEFAULTS, middleware=(DiscordActionContext(),)),
                 bus=self.topic_bus,
                 profiler=self.layout_profiler,
                 localization=localization_resolver,
@@ -251,6 +252,22 @@ class RedstoneSquid(Bot):
         if subscription is not None:
             subscription.detach()
         return await super().remove_cog(name, guild=guild, guilds=guilds)
+
+    @override
+    def dispatch(self, event_name: str, /, *args: Any, **kwargs: Any) -> None:
+        """Bind gateway listeners before discord.py schedules their individual tasks."""
+        source = args[0] if args else None
+        if event_name == "message" and isinstance(source, discord.Message):
+            actor = Actor(discord_user_id=source.author.id, guild_id=source.guild.id if source.guild else None)
+            context = ActingContext.direct(actor)
+        elif event_name in {"command", "command_completion", "command_error"} and (
+            active := current_acting_context.get()
+        ):
+            context = active
+        else:
+            context = ActingContext.worker(f"discord.gateway.{event_name}")
+        with context.scope():
+            super().dispatch(event_name, *args, **kwargs)
 
     async def on_interaction(self, interaction: discord.Interaction) -> None:
         self.interaction_metrics.observe(interaction)
@@ -321,7 +338,12 @@ class RedstoneSquid(Bot):
             attributes["squid.channel.id"] = ctx.channel.id
         with trace_span(f"discord.command {command_name}", attributes) as span, correlation_scope():
             request = await sd.request(ctx)
-            with localization_scope(request.localization):
+            active = current_acting_context.get()
+            if active is None or active.operator.discord_user_id != ctx.author.id:
+                active = ActingContext.direct(
+                    Actor(discord_user_id=ctx.author.id, guild_id=ctx.guild.id if ctx.guild else None)
+                )
+            with active.scope(), localization_scope(request.localization):
                 await super().invoke(ctx)
                 if ctx.command_failed:
                     span.set_error()

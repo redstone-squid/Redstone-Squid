@@ -1,7 +1,7 @@
 """Resolve Discord identities and membership into application actors."""
 
 from dataclasses import replace
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, override
 from uuid import UUID
 
 import discord
@@ -11,8 +11,9 @@ from whenever import Instant
 import squid_ui.ext.discord as sd
 from squid.core.accounts.application import AccountService
 from squid.core.accounts.domain import IdentityProvider
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, Actor, current_acting_context, impersonation_use
 from squid.core.errors import AuthorizationError
+from squid_ui.interactions import ActionMiddleware, ActionProceed, ActionRequest
 
 if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid
@@ -62,6 +63,20 @@ def has_manage_server(member: discord.Member) -> bool:
     return member.id == member.guild.owner_id or permissions.administrator or permissions.manage_guild
 
 
+class DiscordActionContext(ActionMiddleware):
+    """Use the member who triggered each mounted control or modal submission."""
+
+    @override
+    async def dispatch(self, request: ActionRequest, proceed: ActionProceed) -> None:
+        source = request.event.context
+        if not isinstance(source, sd.Request):
+            message = "A Discord action requires its live Discord request"
+            raise TypeError(message)
+        actor = await source.client.actors.resolve(source)
+        with ActingContext.direct(actor).scope():
+            await proceed()
+
+
 class DiscordActorResolver:
     """Build actors using one bot's account cache and application-owner rules."""
 
@@ -71,7 +86,15 @@ class DiscordActorResolver:
     async def request_actor(
         self, request: sd.Request[Any, RedstoneSquid], session_id: UUID | None, operation: str
     ) -> Actor:
-        return (await self.acting_context(request, session_id, operation)).effective
+        context = await self.acting_context(request, session_id, operation)
+        active = current_acting_context.get()
+        if active is not None:
+            # The ingress scope restores both bindings when this callback ends.
+            if active.operator.discord_user_id != context.operator.discord_user_id:
+                raise AuthorizationError
+            current_acting_context.set(replace(context, invocation_id=active.invocation_id))
+            impersonation_use.set(context.effective.audit_use_id)
+        return context.effective
 
     async def acting_context(
         self, request: sd.Request[Any, RedstoneSquid], session_id: UUID | None, operation: str
@@ -79,7 +102,7 @@ class DiscordActorResolver:
         """Resolve a private workspace callback against the session it opened with."""
         operator = await self.resolve(request, refresh=True)
         if session_id is None:
-            return ActingContext(operator, operator)
+            return ActingContext.direct(operator)
         guild = request.guild
         channel = request.channel
         if guild is None or not isinstance(channel, discord.abc.GuildChannel | discord.Thread):

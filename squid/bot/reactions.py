@@ -69,6 +69,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast, overload
 import anyio
 import discord
 
+from squid.core.actors import ActingContext, Actor
 from squid.core.concurrency import run_all
 from squid.core.observability import add_counter, record_gauge, record_histogram
 from squid.runtime import BackgroundTaskSupervisor, JobHandle
@@ -150,6 +151,10 @@ class ReactionEvent:
     """True when a handler declared with recover=True is called during shutdown recovery."""
 
     @property
+    def acting_context(self) -> ActingContext:
+        return ActingContext.direct(Actor(discord_user_id=self.payload.user_id, guild_id=self.payload.guild_id))
+
+    @property
     def is_own_reaction(self) -> bool:
         """Whether this bot added or removed the reaction."""
         return self.payload.user_id == self._resolver.own_user_id
@@ -225,6 +230,11 @@ class ReactionClearEvent:
     emoji: str | None = None
     recovering: bool = False
     """True when a handler declared with recover=True is called during shutdown recovery."""
+
+    @property
+    def acting_context(self) -> ActingContext:
+        # Discord does not identify who cleared the reactions.
+        return ActingContext.worker("discord.reaction-clear")
 
 
 type ReactionKind = Literal["add", "remove", "clear", "clear_emoji"]
@@ -642,18 +652,19 @@ class ReactionRouter:
             "squid.reaction.recovery.attempts",
             attributes={"squid.reaction.kind": item.kind},
         )
-        await run_all(
-            # `_QueuedEvent` is a union of two `_QueuedReaction` instantiations, so the checker cannot
-            # rebind EventT across the union even though each queued item pairs its own event type with
-            # its own callbacks -- which is exactly what the generic dataclass guarantees.
-            functools.partial(  # pyright: ignore[reportArgumentType]
-                self._run_recovery,
-                callback,  # pyright: ignore[reportArgumentType]  # Paired with its event by _QueuedReaction.
-                item.kind,
-                dataclasses.replace(item.event, recovering=True),  # pyright: ignore[reportArgumentType]
+        with item.event.acting_context.scope():
+            await run_all(
+                # `_QueuedEvent` is a union of two `_QueuedReaction` instantiations, so the checker cannot
+                # rebind EventT across the union even though each queued item pairs its own event type with
+                # its own callbacks -- which is exactly what the generic dataclass guarantees.
+                functools.partial(  # pyright: ignore[reportArgumentType]
+                    self._run_recovery,
+                    callback,  # pyright: ignore[reportArgumentType]  # Paired with its event by _QueuedReaction.
+                    item.kind,
+                    dataclasses.replace(item.event, recovering=True),  # pyright: ignore[reportArgumentType]
+                )
+                for callback in item.recoveries
             )
-            for callback in item.recoveries
-        )
 
     @staticmethod
     def _log_deferred_recovery(item: _QueuedEvent, *, reason: str) -> None:
@@ -727,12 +738,13 @@ class ReactionRouter:
             try:
                 accepted_at = item.accepted_at or item.created_at
                 record_histogram("squid.reaction.queue_latency", time.monotonic() - accepted_at, attributes=attributes)
-                await run_all(
-                    # See `_recover_unadmitted`: the union of `_QueuedReaction` instantiations hides the
-                    # event/callback pairing the dataclass guarantees.
-                    functools.partial(self._run_callback, callback, item.kind, item.event)  # pyright: ignore[reportArgumentType]
-                    for callback in item.callbacks
-                )
+                with item.event.acting_context.scope():
+                    await run_all(
+                        # See `_recover_unadmitted`: the union of `_QueuedReaction` instantiations hides the
+                        # event/callback pairing the dataclass guarantees.
+                        functools.partial(self._run_callback, callback, item.kind, item.event)  # pyright: ignore[reportArgumentType]
+                        for callback in item.callbacks
+                    )
             except anyio.get_cancelled_exc_class():
                 raise
             except Exception:
