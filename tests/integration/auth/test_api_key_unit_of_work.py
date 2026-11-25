@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.accounts.models import Account
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.auth.application import ApiKeyService
 from squid.core.auth.models.entities import ApiKey
 from squid.core.errors import AuthorizationError
@@ -48,7 +48,12 @@ async def test_issuance_checks_current_authority_despite_a_cached_grant(
         )
         await uow.commit()
     assert (await permissions.check(subject, node)).allowed
-    issued = await api_keys.issue(label="Before revocation", scopes=[node], owner_account_id=account_id)
+    issued = await api_keys.issue(
+        label="Before revocation",
+        scopes=[node],
+        owner_account_id=account_id,
+        context=ActingContext.direct(Actor(account_id=account_id)),
+    )
     assert issued.key.id > 0
 
     async with factory() as uow:
@@ -65,7 +70,12 @@ async def test_issuance_checks_current_authority_despite_a_cached_grant(
     # Keep the cache stale: key issuance must read authority inside its own transaction.
     assert (await permissions.check(subject, node)).allowed
     with pytest.raises(AuthorizationError):
-        await api_keys.issue(label="After revocation", scopes=[node], owner_account_id=account_id)
+        await api_keys.issue(
+            label="After revocation",
+            scopes=[node],
+            owner_account_id=account_id,
+            context=ActingContext.direct(Actor(account_id=account_id)),
+        )
     async with migrated_session_factory() as session:
         assert await session.scalar(select(func.count()).select_from(ApiKey)) == 1
 
@@ -90,6 +100,8 @@ async def test_failed_commit_rolls_back_the_flushed_key_before_returning_a_secre
 
     api_keys = ApiKeyService("test-pepper", uow_factory=partial(FailingCommit, migrated_session_factory))
     with pytest.raises(RuntimeError, match="commit failed"):
-        await api_keys.issue(label="Abandoned", scopes=["build.submission.read"])
+        await api_keys.issue(
+            label="Abandoned", scopes=["build.submission.read"], context=ActingContext.worker("api-key-bootstrap")
+        )
     async with migrated_session_factory() as session:
         assert await session.scalar(select(func.count()).select_from(ApiKey)) == 0

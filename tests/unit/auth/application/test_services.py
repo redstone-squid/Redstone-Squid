@@ -7,7 +7,7 @@ from typing import Literal
 import pytest
 from whenever import Instant
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.auth.application.services import LAST_USED_WRITE_INTERVAL_SECONDS, ApiKeyService, hash_api_key_secret
 from squid.core.auth.models.entities import ApiKey
 from squid.core.errors import AuthorizationError, InvalidStateError
@@ -120,7 +120,7 @@ async def test_issue_returns_secret_once_and_stores_only_its_hmac() -> None:
         label="Minecraft server",
         scopes={"account.verify.relay", "build.submission.create"},
         owner_account_id=4,
-        created_by_account_id=7,
+        context=ActingContext.direct(Actor(account_id=7, is_bot_owner=True)),
     )
 
     assert issued.token.startswith(f"sq_{issued.key.key_id}_")
@@ -136,7 +136,9 @@ async def test_issue_returns_secret_once_and_stores_only_its_hmac() -> None:
 async def test_authenticate_returns_active_key_and_records_throttled_use() -> None:
     repository = _state()
     api_keys = service(repository)
-    issued = await api_keys.issue(label="CI", scopes={"account.verify.relay"})
+    issued = await api_keys.issue(
+        label="CI", scopes={"account.verify.relay"}, context=ActingContext.worker("api-key-bootstrap")
+    )
 
     authenticated = await api_keys.authenticate(issued.token, used_ip="192.0.2.4")
 
@@ -161,7 +163,9 @@ async def test_issued_keys_round_trip_with_base64url_separators(entropy: bytes) 
         now=lambda: NOW,
         token_bytes=lambda size: entropy * size,
     )
-    issued = await api_keys.issue(label="Round trip", scopes={"account.verify.relay"})
+    issued = await api_keys.issue(
+        label="Round trip", scopes={"account.verify.relay"}, context=ActingContext.worker("api-key-bootstrap")
+    )
 
     authenticated = await api_keys.authenticate(issued.token)
     assert authenticated is not None
@@ -195,7 +199,9 @@ async def test_malformed_tokens_do_not_reach_persistence(token: str) -> None:
 async def test_wrong_secret_is_rejected_without_recording_use() -> None:
     repository = _state()
     api_keys = service(repository)
-    issued = await api_keys.issue(label="CI", scopes={"account.verify.relay"})
+    issued = await api_keys.issue(
+        label="CI", scopes={"account.verify.relay"}, context=ActingContext.worker("api-key-bootstrap")
+    )
 
     assert await api_keys.authenticate(f"sq_{issued.key.key_id}_wrong") is None
     assert repository.value.touches == []
@@ -213,7 +219,9 @@ async def test_wrong_secret_is_rejected_without_recording_use() -> None:
 async def test_inactive_keys_are_rejected(field: Literal["expires_at", "revoked_at"], value: Instant) -> None:
     repository = _state()
     api_keys = service(repository)
-    issued = await api_keys.issue(label="CI", scopes={"account.verify.relay"})
+    issued = await api_keys.issue(
+        label="CI", scopes={"account.verify.relay"}, context=ActingContext.worker("api-key-bootstrap")
+    )
     if field == "revoked_at":
         repository.value.keys[issued.key.key_id] = replace(issued.key, revoked_at=value)
     else:
@@ -227,7 +235,12 @@ async def test_inactive_keys_are_rejected(field: Literal["expires_at", "revoked_
 async def test_unexpired_key_remains_active() -> None:
     repository = _state()
     api_keys = service(repository)
-    issued = await api_keys.issue(label="CI", scopes={"account.verify.relay"}, expires_at=NOW.add(seconds=1))
+    issued = await api_keys.issue(
+        label="CI",
+        scopes={"account.verify.relay"},
+        expires_at=NOW.add(seconds=1),
+        context=ActingContext.worker("api-key-bootstrap"),
+    )
 
     assert await api_keys.authenticate(issued.token) is not None
 
@@ -255,7 +268,9 @@ class TestDigestConstruction:
     async def test_a_rotated_pepper_stops_authenticating_old_tokens(self) -> None:
         """A different pepper cannot authenticate a digest created with the old key."""
         repository = _state()
-        issued = await service(repository).issue(label="CI", scopes={"account.verify.relay"})
+        issued = await service(repository).issue(
+            label="CI", scopes={"account.verify.relay"}, context=ActingContext.worker("api-key-bootstrap")
+        )
         rotated = ApiKeyService(
             "a-different-pepper", uow_factory=partial(FakeApiKeyUnitOfWork, repository), now=lambda: NOW
         )
@@ -273,7 +288,9 @@ class TestScopeValidation:
         repository = _state()
 
         with pytest.raises(InvalidPatternError):
-            await service(repository).issue(label="CI", scopes={"buildsubmission.raed."})
+            await service(repository).issue(
+                label="CI", scopes={"buildsubmission.raed."}, context=ActingContext.worker("api-key-bootstrap")
+            )
 
         assert repository.value.keys == {}
 
@@ -281,7 +298,9 @@ class TestScopeValidation:
     async def test_equivalent_patterns_are_stored_once(self) -> None:
         repository = _state()
 
-        issued = await service(repository).issue(label="CI", scopes=["build.**", " build.** ", "build.**"])
+        issued = await service(repository).issue(
+            label="CI", scopes=["build.**", " build.** ", "build.**"], context=ActingContext.worker("api-key-bootstrap")
+        )
 
         assert issued.key.scopes == nodes("build.**")
 
@@ -313,7 +332,12 @@ class TestIssuanceBoundary:
         repository = _state()
         api_keys = self._authorized_service(repository, "build.**")
 
-        issued = await api_keys.issue(label="CI", scopes={"build.submission.create"}, owner_account_id=4)
+        issued = await api_keys.issue(
+            label="CI",
+            scopes={"build.submission.create"},
+            owner_account_id=4,
+            context=ActingContext.direct(Actor(account_id=4)),
+        )
 
         assert issued.key.scopes == nodes("build.submission.create")
 
@@ -323,7 +347,12 @@ class TestIssuanceBoundary:
         api_keys = self._authorized_service(repository, "build.**")
 
         with pytest.raises(AuthorizationError):
-            await api_keys.issue(label="CI", scopes={"bot.tree.sync"}, owner_account_id=4)
+            await api_keys.issue(
+                label="CI",
+                scopes={"bot.tree.sync"},
+                owner_account_id=4,
+                context=ActingContext.direct(Actor(account_id=4)),
+            )
 
         assert repository.value.keys == {}
 
@@ -331,6 +360,16 @@ class TestIssuanceBoundary:
         repository = _state()
         api_keys = self._authorized_service(repository)
 
-        issued = await api_keys.issue(label="CI", scopes={"bot.tree.sync"})
+        issued = await api_keys.issue(
+            label="CI", scopes={"bot.tree.sync"}, context=ActingContext.worker("api-key-bootstrap")
+        )
 
         assert issued.key.scopes == nodes("bot.tree.sync")
+
+
+@pytest.mark.parametrize("actor", [Actor(), Actor(account_id=4), Actor(account_id=4, credential_scopes=frozenset())])
+async def test_ordinary_callers_cannot_bootstrap_ownerless_keys(actor: Actor) -> None:
+    repository = _state()
+    with pytest.raises(AuthorizationError):
+        await service(repository).issue(label="unowned", scopes={"bot.tree.sync"}, context=ActingContext.direct(actor))
+    assert repository.value.keys == {}

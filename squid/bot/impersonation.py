@@ -11,6 +11,7 @@ from squid.bot.i18n import to_locale_str
 from squid.bot.submission.ui.controls import edit_build
 from squid.bot.submission.ui.drafts import DraftEditorScreen
 from squid.bot.ui import text_node
+from squid.core.actors import ActingContext
 from squid.core.errors import AuthorizationError, ValidationError
 from squid_i18n import tr
 
@@ -53,10 +54,10 @@ class ImpersonationCommands(sd.Cog[RedstoneSquid]):
         operator = await request.client.actors.resolve(request, refresh=True)
         target = await request.client.actors.resolve(member)
         session = await request.client.services.impersonation.start(
-            operator,
             f"discord:{request.guild.id}:{request.user.id}",
             target.require_account_id(),
             reason,
+            context=ActingContext.for_actor(operator),
             target_discord_id=member.id,
         )
         session_id = session.id
@@ -76,7 +77,7 @@ class ImpersonationCommands(sd.Cog[RedstoneSquid]):
             raise AuthorizationError
         operator = await request.client.actors.resolve(request, refresh=True)
         record = await request.client.services.impersonation.inspect(
-            operator, f"discord:{request.guild.id}:{request.user.id}", _uuid(session)
+            f"discord:{request.guild.id}:{request.user.id}", _uuid(session), context=ActingContext.for_actor(operator)
         )
         target_id = record.target_id
         ends = (record.revoked_at or record.expires_at).format_iso()
@@ -96,7 +97,7 @@ class ImpersonationCommands(sd.Cog[RedstoneSquid]):
             raise AuthorizationError
         operator = await request.client.actors.resolve(request, refresh=True)
         await request.client.services.impersonation.stop(
-            operator, f"discord:{request.guild.id}:{request.user.id}", _uuid(session)
+            f"discord:{request.guild.id}:{request.user.id}", _uuid(session), context=ActingContext.for_actor(operator)
         )
         await request.respond(text_node(tr(t"impersonation-closed = Session closed.")), audience="personal")
 

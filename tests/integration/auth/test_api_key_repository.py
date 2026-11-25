@@ -8,6 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from squid.core.accounts.models import Account
+from squid.core.actors import ActingContext
 from squid.core.auth.application import ApiKeyService
 from squid.core.auth.models.entities import ApiKey
 from squid.core.persistence.base import Base
@@ -42,6 +43,7 @@ async def test_issue_persists_one_sorted_array_for_duplicate_unsorted_scopes(
     issued = await service.issue(
         label="CI",
         scopes=["vote.poll.cast", " build.submission.read ", "vote.poll.cast", "account.self.read"],
+        context=ActingContext.worker("api-key-bootstrap"),
     )
 
     async with async_session_factory() as session:

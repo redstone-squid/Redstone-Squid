@@ -8,7 +8,7 @@ from collections.abc import Callable, Iterable
 
 from whenever import Instant
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor, application_operation
 from squid.core.auth.application.ports import ApiKeyUnitOfWork
 from squid.core.auth.domain import IssuedApiKey
 from squid.core.auth.models.entities import ApiKey
@@ -68,13 +68,14 @@ class ApiKeyService:
         self._now = now
         self._token_bytes = token_bytes
 
+    @application_operation
     async def issue(
         self,
         *,
         label: str,
         scopes: Iterable[str | Pattern],
         owner_account_id: int | None = None,
-        created_by_account_id: int | None = None,
+        context: ActingContext,
         expires_at: Instant | None = None,
     ) -> IssuedApiKey:
         """Create a credential and return its plaintext token once.
@@ -84,6 +85,13 @@ class ApiKeyService:
         currently hold. Ownerless keys and services without permission checks skip
         that boundary check; their callers must authorize issuance.
         """
+        actor = context.effective
+        if actor.worker_name is None and (
+            actor.account_id is None
+            or actor.credential_scopes is not None
+            or (not actor.is_bot_owner and actor.account_id != owner_account_id)
+        ):
+            raise AuthorizationError
         async with self._uow_factory() as uow:
             requested = frozenset(
                 pattern if isinstance(pattern, Pattern) else Pattern.parse(pattern) for pattern in scopes
@@ -97,7 +105,7 @@ class ApiKeyService:
                 label=label,
                 scopes=requested,
                 owner_account_id=owner_account_id,
-                created_by_account_id=created_by_account_id,
+                created_by_account_id=actor.account_id,
                 expires_at=expires_at,
             )
             result = IssuedApiKey(key=key, token=f"{API_KEY_PREFIX}_{key_id}_{secret}")

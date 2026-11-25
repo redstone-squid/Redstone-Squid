@@ -10,7 +10,7 @@ from whenever import Instant
 
 from squid.core.accounts.domain import AccountConsent
 from squid.core.accounts.models import Account
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.auth.impersonation import ImpersonationService
 from squid.core.auth.models.sessions import ImpersonatedEdit, ImpersonationSession, ImpersonationUse
 from squid.core.edits.domain import EditOutcome, EditTarget, Revision
@@ -31,17 +31,17 @@ async def test_session_binding_revocation_and_transaction_audit(
     operator = Actor(account_id=operator_account.id, is_bot_owner=True)
     guild_admin = Actor(account_id=operator_account.id, guild_id=1, discord_guild_admin=True)
     with pytest.raises(AuthorizationError):
-        await service.start(guild_admin, "discord:1", target.id, "check draft")
-    session = await service.start(operator, "discord:1", target.id, "check draft")
+        await service.start("discord:1", target.id, "check draft", context=ActingContext.direct(guild_admin))
+    session = await service.start("discord:1", target.id, "check draft", context=ActingContext.direct(operator))
     for caller, binding in (
         (operator, "discord:2"),
         (Actor(account_id=target.id, is_bot_owner=True), "discord:1"),
         (guild_admin, "discord:1"),
     ):
         with pytest.raises(AuthorizationError):
-            await service.use(caller, binding, session.id, "draft")
+            await service.use(binding, session.id, "draft", context=ActingContext.direct(caller))
 
-    resolved = await service.use(operator, "discord:1", session.id, "draft")
+    resolved = await service.use("discord:1", session.id, "draft", context=ActingContext.direct(operator))
     account, use_id = resolved.target, resolved.use_id
     assert account.id == target.id
     effective = Actor(account_id=account.id, audit_use_id=use_id)
@@ -68,12 +68,12 @@ async def test_session_binding_revocation_and_transaction_audit(
         assert (await db.get_one(Account, operator_account.id)).consent_version is None
         assert await db.scalar(select(ImpersonationUse.commits).where(ImpersonationUse.id == use_id)) == 1
 
-    await service.stop(operator, "discord:1", session.id)
+    await service.stop("discord:1", session.id, context=ActingContext.direct(operator))
     with pytest.raises(AuthorizationError):
-        await service.use(operator, "discord:1", session.id, "stale button")
+        await service.use("discord:1", session.id, "stale button", context=ActingContext.direct(operator))
     async with migrated_session_factory.begin() as db:
         expired = await db.get_one(ImpersonationSession, session.id)
         expired.revoked_at = None
         expired.expires_at = Instant.now().subtract(seconds=1)
     with pytest.raises(AuthorizationError):
-        await service.use(operator, "discord:1", session.id, "expired button")
+        await service.use("discord:1", session.id, "expired button", context=ActingContext.direct(operator))

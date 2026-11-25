@@ -230,6 +230,7 @@ def test_impersonation_header_is_request_scoped_and_bound_to_browser_login(login
         context = current_acting_context.get()
         assert context is not None
         assert context.operator.account_id == login.sessions.account_id
+        assert context is caller.context()
         assert context.effective == caller.to_actor()
         assert context.operator.credential_id == "browser:session-id"
         assert context.effective.audit_use_id == (use_id if context.session_id else None)
@@ -241,10 +242,26 @@ def test_impersonation_header_is_request_scoped_and_bound_to_browser_login(login
     assert response.status_code == 200
     assert response.json() == 77
     assert response.headers["cache-control"] == "no-store"
-    operator, binding, handle, _ = service.use.await_args.args
+    binding, handle, _ = service.use.await_args.args
+    operator = service.use.await_args.kwargs["context"].operator
     assert (operator.account_id, binding, handle) == (login.sessions.account_id, "browser:session-id", session_id)
     assert login.client.get("/v1/acting-probe").json() == login.sessions.account_id
     assert (
         login.client.get("/v1/acting-probe", headers=headers | {"Authorization": TEST_SYNERGY_SECRET}).status_code
         == 403
     )
+
+
+def test_anonymous_invocations_are_scoped_to_one_request(login: BrowserLogin) -> None:
+    @get("/v1/public-invocation")
+    async def probe(caller: CurrentCaller) -> str:
+        context = current_acting_context.get()
+        assert context is caller.context()
+        assert context.effective.reference == "anonymous"
+        return str(context.invocation_id)
+
+    login.client.app.register(probe)
+    first = login.client.get("/v1/public-invocation")
+    second = login.client.get("/v1/public-invocation")
+    assert first.status_code == second.status_code == 200
+    assert first.text != second.text

@@ -101,14 +101,19 @@ class DiscordActorResolver:
     ) -> ActingContext:
         """Resolve a private workspace callback against the session it opened with."""
         operator = await self.resolve(request, refresh=True)
+        active = current_acting_context.get()
+        if active is not None and active.operator.discord_user_id == operator.discord_user_id:
+            operator_context = replace(active, operator=operator, effective=operator, session_id=None)
+        else:
+            operator_context = ActingContext.direct(operator)
         if session_id is None:
-            return ActingContext.direct(operator)
+            return operator_context
         guild = request.guild
         channel = request.channel
         if guild is None or not isinstance(channel, discord.abc.GuildChannel | discord.Thread):
             raise AuthorizationError
         resolved = await self._bot.services.impersonation.use(
-            operator, f"discord:{guild.id}:{operator.discord_user_id}", session_id, operation
+            f"discord:{guild.id}:{operator.discord_user_id}", session_id, operation, context=operator_context
         )
         account = resolved.target
         if resolved.discord_id is None:
@@ -123,7 +128,7 @@ class DiscordActorResolver:
         except (discord.NotFound, discord.Forbidden) as error:
             raise AuthorizationError from error
         effective = replace(await self.resolve(member, account_id=account.id), audit_use_id=resolved.use_id)
-        return ActingContext(operator, effective, session_id)
+        return replace(operator_context, effective=effective, session_id=session_id)
 
     async def resolve(
         self,

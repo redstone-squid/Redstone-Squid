@@ -54,7 +54,7 @@ async def start_impersonation(
 ) -> UUID:
     """Start debugging as an account. Send the returned UUID in Squid-Impersonation-Session."""
     binding = caller.browser_binding()
-    session = await services.impersonation.start(caller.to_actor(), binding, data.account_id, data.reason)
+    session = await services.impersonation.start(binding, data.account_id, data.reason, context=caller.context())
     return session.id
 
 
@@ -77,7 +77,7 @@ async def inspect_impersonation(
     session_id: FromPath[UUID], caller: CurrentCaller, services: Services
 ) -> ImpersonationDetails:
     """Inspect a session belonging to the current browser login."""
-    session = await services.impersonation.inspect(caller.to_actor(), caller.browser_binding(), session_id)
+    session = await services.impersonation.inspect(caller.browser_binding(), session_id, context=caller.context())
     return ImpersonationDetails(session.target_id, session.reason, session.expires_at, session.revoked_at)
 
 
@@ -96,4 +96,4 @@ async def stop_impersonation(
     _reservation: NamedDependency[SkipValidation[None]],
 ) -> None:
     """Revoke a debugging session belonging to the current browser login."""
-    await services.impersonation.stop(caller.to_actor(), caller.browser_binding(), session_id)
+    await services.impersonation.stop(caller.browser_binding(), session_id, context=caller.context())

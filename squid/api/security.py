@@ -178,7 +178,7 @@ async def current_caller(request: Request) -> Caller:
         operation = " ".join((operation, *resource_ids))
         with caller.context().scope():
             resolved = await request.app.state.runtime.services.impersonation.use(
-                operator, binding, session_id, operation
+                binding, session_id, operation, context=caller.context()
             )
         target = resolved.target
         effective = replace(operator, account_id=target.id, audit_use_id=resolved.use_id)
@@ -187,7 +187,7 @@ async def current_caller(request: Request) -> Caller:
             account_id=target.id,
             consent_pending=target.needs_consent_refresh,
             subject=f"impersonation:{session_id}",
-            acting_context=ActingContext(operator, effective, session_id),
+            acting_context=replace(caller.context(), effective=effective, session_id=session_id),
         )
     request.scope["user"] = caller
     request.scope["auth"] = caller.kind
@@ -199,6 +199,7 @@ async def authenticated_caller(request: Request) -> Caller:
     if isinstance(credential, Caller):
         return credential
     credential = await _authenticate_caller(request)
+    credential = replace(credential, acting_context=credential.context())
     request.state.authenticated_caller = credential
     return credential
 
