@@ -187,6 +187,7 @@ async def test_record_detail_serializes_the_application_read_model(expanded: boo
                 "category": "Door",
                 "dimensions": {"width": 5, "height": 6, "depth": None},
                 "creators": [{"name": "Alice", "creator_id": None}],
+                "record_summary": {"held_count": 0, "former_count": 0},
                 "credits": [],
                 "subtitle": None,
                 # Decimal tag values travel as strings so clients keep their exact precision.

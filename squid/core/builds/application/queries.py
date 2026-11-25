@@ -73,6 +73,12 @@ class PublicBuildDimensions:
 
 
 @dataclass(frozen=True, slots=True)
+class BuildRecordSummary:
+    held_count: int = 0
+    former_count: int = 0
+
+
+@dataclass(frozen=True, slots=True)
 class PublicBuildCreator:
     name: str
     creator_id: UUID | None
@@ -121,6 +127,7 @@ class PublicBuildSummary:
     closing_time: int | None
     created_at: datetime | None
     updated_at: datetime | None
+    record_summary: BuildRecordSummary = BuildRecordSummary()
     subtitle: str | None = None
     credits: tuple[PublicBuildCredit, ...] = ()
 
@@ -140,6 +147,7 @@ class PublicBuildSummary:
             revision=build.revision,
             title=build.title,
             subtitle=build.subtitle,
+            record_summary=BuildRecordSummary(len(build.published_records.held), len(build.published_records.former)),
             display_name=build.display_name,
             status=PublicBuildStatus[build.submission_status.name]
             if build.submission_status is not None

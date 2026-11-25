@@ -52,6 +52,7 @@ from squid.core.i18n import tr
 from squid.core.messages.domain import MessageRef
 from squid.core.persistence.base import Base
 from squid.core.persistence.types import InstantUTC, IntEnumSmallInt, StrEnumText
+from squid.core.records.domain.build_records import BuildRecords
 from squid.core.sponsors import PublicSponsor
 from squid.core.tags.models import TagAssignment
 
@@ -216,6 +217,7 @@ class Build(Base, StagedMedia, StagedTags, StagedCredits, kw_only=True):
     component_restrictions: list[str] = field(default_factory=list)
     miscellaneous_restrictions: list[str] = field(default_factory=list)
     credits: list[Credit] = field(default_factory=list)
+    published_records: BuildRecords = field(default_factory=BuildRecords, init=False, compare=False)
     credited_creator_account_ids: frozenset[int] = field(default_factory=frozenset, init=False, compare=False)
     sponsor: Final[PublicSponsor | None] = frozen_field(default=None)
     """Public sponsor details captured at submission time."""

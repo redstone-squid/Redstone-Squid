@@ -24,6 +24,7 @@ from squid.core.builds.application.queries import (
     EMPTY_BUILD_FILTERS,
     BuildListFilters,
     BuildListSort,
+    BuildRecordSummary,
     PublicBuildSummary,
     PublicBuildTag,
 )
@@ -380,6 +381,10 @@ class BuildRepository:
             )
             for row in rows
         }
+        for build_id, holdings in (await self._loader.records(session, public_ids)).items():
+            by_id[build_id] = replace(
+                by_id[build_id], record_summary=BuildRecordSummary(len(holdings.held), len(holdings.former))
+            )
         return tuple(by_id[build_id] for build_id in build_ids if build_id in by_id)
 
     async def get_by_source_submission_draft_id(self, draft_id: uuid.UUID) -> Build | None:

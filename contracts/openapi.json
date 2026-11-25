@@ -19647,6 +19647,9 @@
               }
             ]
           },
+          "record_summary": {
+            "$ref": "#/components/schemas/BuildRecordSummary"
+          },
           "subtitle": {
             "oneOf": [
               {
@@ -19704,6 +19707,20 @@
               "$ref": "#/components/schemas/BuildMedia"
             },
             "type": "array"
+          },
+          "records_held": {
+            "items": {
+              "$ref": "#/components/schemas/BuildRecord"
+            },
+            "type": "array",
+            "default": []
+          },
+          "records_former": {
+            "items": {
+              "$ref": "#/components/schemas/BuildRecord"
+            },
+            "type": "array",
+            "default": []
           },
           "submitted_at": {
             "oneOf": [
@@ -20204,6 +20221,66 @@
         "type": "object",
         "required": [],
         "title": "BuildPatch"
+      },
+      "BuildRecord": {
+        "properties": {
+          "record_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "criterion": {
+            "$ref": "#/components/schemas/RecordCriterion"
+          },
+          "version_scope": {
+            "$ref": "#/components/schemas/VersionScope"
+          },
+          "status": {
+            "$ref": "#/components/schemas/ResolutionStatus"
+          },
+          "since": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "criterion",
+          "record_id",
+          "since",
+          "status",
+          "title",
+          "version_scope"
+        ],
+        "title": "BuildRecord"
+      },
+      "BuildRecordSummary": {
+        "properties": {
+          "held_count": {
+            "type": "integer",
+            "default": 0
+          },
+          "former_count": {
+            "type": "integer",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [],
+        "title": "BuildRecordSummary",
+        "default": {
+          "held_count": 0,
+          "former_count": 0
+        }
       },
       "BuildSchematicOverview": {
         "properties": {
@@ -25593,6 +25670,9 @@
                 "type": "null"
               }
             ]
+          },
+          "record_summary": {
+            "$ref": "#/components/schemas/BuildRecordSummary"
           },
           "subtitle": {
             "oneOf": [

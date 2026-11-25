@@ -146,6 +146,7 @@ export type BuildDetail = {
     closing_time: number | null;
     created_at: string | null;
     updated_at: string | null;
+    record_summary?: BuildRecordSummary;
     subtitle?: string | null;
     credits?: Array<PublicBuildCredit>;
     details: DoorDetails | ExtenderDetails | GeneralDetails;
@@ -155,6 +156,8 @@ export type BuildDetail = {
     description: string | null;
     links: BuildLinks;
     media: Array<BuildMedia>;
+    records_held?: Array<BuildRecord>;
+    records_former?: Array<BuildRecord>;
     submitted_at: string | null;
     schematics?: BuildSchematicOverview | null;
     viewer?: BuildViewer | null;
@@ -221,6 +224,26 @@ export type BuildPatch = {
     coordinates?: string | null;
     command_to_get_to_build?: string | null;
     completion_time?: string | null;
+};
+
+/**
+ * BuildRecord
+ */
+export type BuildRecord = {
+    record_id: string;
+    title: string;
+    criterion: RecordCriterion;
+    version_scope: VersionScope;
+    status: ResolutionStatus;
+    since: string | null;
+};
+
+/**
+ * BuildRecordSummary
+ */
+export type BuildRecordSummary = {
+    held_count?: number;
+    former_count?: number;
 };
 
 /**
@@ -1780,6 +1803,7 @@ export type PublicBuildSummary = {
     closing_time: number | null;
     created_at: string | null;
     updated_at: string | null;
+    record_summary?: BuildRecordSummary;
     subtitle?: string | null;
     credits?: Array<PublicBuildCredit>;
 };

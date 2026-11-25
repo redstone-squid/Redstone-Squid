@@ -17,6 +17,7 @@ from squid.core.builds.application.queries import PublicBuildDimensions, PublicB
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.domain.expansion import DoorExpansion
 from squid.core.builds.models import Build, DoorBuild, ExtenderBuild
+from squid.core.records.domain.build_records import BuildRecord
 
 
 class BuildStatusFilter(StrEnum):
@@ -157,6 +158,8 @@ class BuildDetail(PublicBuildSummary):
     description: str | None
     links: BuildLinks
     media: list[BuildMedia]
+    records_held: tuple[BuildRecord, ...] = ()
+    records_former: tuple[BuildRecord, ...] = ()
     submitted_at: datetime | None
     schematics: BuildSchematicOverview | None = None
     viewer: BuildViewer | None = None
@@ -170,6 +173,8 @@ class BuildDetail(PublicBuildSummary):
             **{field.name: getattr(summary, field.name) for field in fields(summary)},
             details=_details(build),
             submitted_at=summary.created_at,
+            records_held=build.published_records.held,
+            records_former=build.published_records.former,
             restrictions={name: list(values or ()) for name, values in build.restrictions.items()},
             description=build.description,
             media=[
