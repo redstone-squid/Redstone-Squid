@@ -9,7 +9,7 @@ from litestar.types import Receive, Scope, Send
 
 from squid.api.rate_limit import enforce_route_rate_limits
 from squid.api.security import ANONYMOUS, authenticated_caller, current_caller
-from squid.core.actors import impersonation_use
+from squid.core.actors import current_acting_context, impersonation_use
 
 
 class CallerAuthenticationMiddleware(AbstractAuthenticationMiddleware):
@@ -17,7 +17,7 @@ class CallerAuthenticationMiddleware(AbstractAuthenticationMiddleware):
 
     @override
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        with impersonation_use.set(None):
+        with current_acting_context.set(ANONYMOUS.context()), impersonation_use.set(None):
             await super().__call__(scope, receive, send)
 
     @override
@@ -30,6 +30,7 @@ class CallerAuthenticationMiddleware(AbstractAuthenticationMiddleware):
         if hasattr(request.app.state, "rate_limiter"):
             await enforce_route_rate_limits(request, await authenticated_caller(request))
         caller = await current_caller(request)
-        if caller.acting_context is not None:
-            impersonation_use.set(caller.acting_context.effective.audit_use_id)
+        context = caller.context()
+        current_acting_context.set(context)
+        impersonation_use.set(context.effective.audit_use_id)
         return AuthenticationResult(user=caller, auth=caller.kind)

@@ -17,6 +17,7 @@ from squid.api.dependencies import CurrentCaller
 from squid.config import OAuthClientCredentials
 from squid.core.accounts.domain import AccountConsent, IdentityProvider
 from squid.core.accounts.models import Account
+from squid.core.actors import current_acting_context
 from squid.core.auth.application.providers import DiscordOAuthProvider
 from squid.core.auth.application.web import WebSessionService
 from squid.core.auth.impersonation import AuthorizedImpersonation
@@ -226,7 +227,13 @@ def test_impersonation_header_is_request_scoped_and_bound_to_browser_login(login
 
     @get("/v1/acting-probe")
     async def probe(caller: CurrentCaller) -> int:
-        return caller.to_actor().require_account_id()
+        context = current_acting_context.get()
+        assert context is not None
+        assert context.operator.account_id == login.sessions.account_id
+        assert context.effective == caller.to_actor()
+        assert context.operator.credential_id == "browser:session-id"
+        assert context.effective.audit_use_id == (use_id if context.session_id else None)
+        return context.effective.require_account_id()
 
     login.client.app.register(probe)
     headers = {"Squid-Impersonation-Session": str(session_id)}

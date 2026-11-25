@@ -52,7 +52,9 @@ async def test_owned_credentials_consult_current_account_authority_without_a_gui
     caller = Caller(kind=kind, subject="owned", account_id=7, nodes=UNBOUNDED)
 
     assert await caller.allows(permissions, BUILD_SUBMISSION_VIEW_PENDING) is allowed
-    permissions.require.assert_awaited_once_with(Actor(account_id=7, guild_id=None), BUILD_SUBMISSION_VIEW_PENDING)
+    assert caller.to_actor().account_id == 7
+    assert caller.to_actor().guild_id is None
+    permissions.require.assert_awaited_once_with(caller.to_actor(), BUILD_SUBMISSION_VIEW_PENDING)
 
 
 @pytest.mark.parametrize("allowed", [False, True])
@@ -96,3 +98,18 @@ async def test_require_distinguishes_credential_scope_from_account_acl(scoped: b
         uow.permissions.load_for_subject.assert_not_awaited()
     with pytest.raises(AuthenticationError):
         await ANONYMOUS.require(permissions, BUILD_SUBMISSION_VIEW_PENDING)
+
+
+@pytest.mark.parametrize("owner", [None, 7])
+async def test_core_permission_checks_enforce_the_service_credentials_ceiling(owner: int | None) -> None:
+    actor = Caller(kind="service", subject="api-key:42", account_id=owner).to_actor()
+    assert actor.credential_id == "api-key:42"
+    assert actor.service_id == ("api-key:42" if owner is None else None)
+    uow = AsyncMock()
+    uow.__aenter__.return_value = uow
+    grant = PermissionGrant(pattern="**", effect=int(Effect.ALLOW), subject_account_id=owner)
+    uow.permissions.load_for_subject.return_value = SubjectRecords(subject=actor, epoch=1, grants=(grant,))
+    permissions = PermissionService(uow_factory=lambda: uow)
+    check = await permissions.check(actor, BUILD_SUBMISSION_VIEW_PENDING)
+    assert not check.allowed
+    assert check.decisions[0].reason is Reason.CREDENTIAL

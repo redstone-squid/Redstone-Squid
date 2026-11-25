@@ -23,8 +23,11 @@ from squid.core.permissions.domain import (
     CATALOGUE,
     Catalogue,
     CheckMode,
+    Decision,
+    Pattern,
     PermissionCheck,
     PermissionNode,
+    Reason,
     Rule,
     resolve,
 )
@@ -64,11 +67,21 @@ class PermissionService:
         the cache, and leaves its transaction lifecycle to the caller. Otherwise
         the service uses its normal cached lookup.
         """
-        rules = await self._rules_for(subject, uow=uow)
+        scopes = subject.credential_scopes
+        patterns = tuple(Pattern.parse(raw) for raw in scopes) if scopes is not None else None
+        rules = () if subject.service_id is not None else await self._rules_for(subject, uow=uow)
         now = Instant.now()
-        return PermissionCheck(
-            tuple(resolve(node, subject, rules, catalogue=self._catalogue, now=now) for node in nodes), mode=mode
-        )
+        decisions: list[Decision] = []
+        for node in nodes:
+            permission = self._catalogue[node] if isinstance(node, str) else node
+            within_scope = patterns is None or any(pattern.matches(permission) for pattern in patterns)
+            if subject.service_id is not None or not within_scope:
+                decisions.append(
+                    Decision(permission.name, allowed=patterns is not None and within_scope, reason=Reason.CREDENTIAL)
+                )
+            else:
+                decisions.append(resolve(permission, subject, rules, catalogue=self._catalogue, now=now))
+        return PermissionCheck(tuple(decisions), mode=mode)
 
     async def require(
         self,

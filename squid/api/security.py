@@ -55,7 +55,11 @@ class Caller:
     acting_context: ActingContext | None = None
 
     def browser_binding(self) -> str:
-        if self.kind != "account" or self.browser_session_id is None or self.acting_context is not None:
+        if (
+            self.kind != "account"
+            or self.browser_session_id is None
+            or (self.acting_context is not None and self.acting_context.session_id is not None)
+        ):
             raise AuthorizationError
         return f"browser:{self.browser_session_id}"
 
@@ -99,7 +103,21 @@ class Caller:
         No guild is supplied: a permission granted in one Discord server must not
         authorize an HTTP request outside that server.
         """
-        return self.acting_context.effective if self.acting_context else Actor(account_id=self.account_id)
+        if self.acting_context is not None:
+            return self.acting_context.effective
+        if self.kind == "anonymous":
+            return Actor()
+        credential_id = f"browser:{self.browser_session_id}" if self.browser_session_id else self.subject
+        return Actor(
+            account_id=self.account_id,
+            service_id=self.subject if self.kind == "service" and self.account_id is None else None,
+            credential_id=credential_id,
+            credential_scopes=frozenset(pattern.raw for pattern in self.nodes) if self.kind == "service" else None,
+        )
+
+    def context(self) -> ActingContext:
+        """Identify the HTTP operator and the subject of application work."""
+        return self.acting_context or ActingContext.direct(self.to_actor())
 
     def require_consented_account(self) -> int:
         """Return the caller's account ID after checking privacy consent.
@@ -158,9 +176,12 @@ async def current_caller(request: Request) -> Caller:
         operation = getattr(request.scope.get("route_handler"), "operation_id", None) or request.method
         resource_ids = [f"{key}={value}" for key, value in request.path_params.items() if isinstance(value, int | UUID)]
         operation = " ".join((operation, *resource_ids))
-        resolved = await request.app.state.runtime.services.impersonation.use(operator, binding, session_id, operation)
+        with caller.context().scope():
+            resolved = await request.app.state.runtime.services.impersonation.use(
+                operator, binding, session_id, operation
+            )
         target = resolved.target
-        effective = Actor(account_id=target.id, audit_use_id=resolved.use_id)
+        effective = replace(operator, account_id=target.id, audit_use_id=resolved.use_id)
         caller = replace(
             caller,
             account_id=target.id,

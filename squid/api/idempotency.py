@@ -25,6 +25,7 @@ from litestar.types import ASGIApp, Message, Receive, Scope, Send
 
 from squid.api.contract import iter_contract_routes
 from squid.api.security import Caller, current_caller
+from squid.core.errors import AuthenticationError
 from squid.core.idempotency import IdempotencyService, PendingRequest, StoredResponse, UnsafeHttpMethod
 
 _UNSAFE_METHODS = frozenset(UnsafeHttpMethod)
@@ -94,6 +95,8 @@ async def reserve_idempotent_request_for(
     """
     if request.method not in _UNSAFE_METHODS or idempotency_key is None:
         return
+    if caller == "anonymous":
+        raise AuthenticationError
     service = cast(IdempotencyService, request.app.state.runtime.services.idempotency)
     route_path = request.scope.get("path_template", request.url.path)
     reservation = await service.reserve(

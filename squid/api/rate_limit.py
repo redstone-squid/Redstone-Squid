@@ -476,7 +476,7 @@ async def enforce_route_rate_limits(
     limiter, policies = _limiter_state(request)
     checks: list[RateLimitRequest] = []
     identity = caller.subject if caller.kind != "anonymous" else _client_identity(request)
-    if caller.acting_context is not None:
+    if caller.acting_context is not None and caller.acting_context.session_id is not None:
         identity = caller.acting_context.operator.key
     if caller.kind != "anonymous":
         checks.append(RateLimitRequest(policies.caller, identity))

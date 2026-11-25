@@ -87,6 +87,7 @@ class SubjectKind(IntEnum):
 class Reason(StrEnum):
     """Why a decision came out the way it did."""
 
+    CREDENTIAL = "credential"
     OWNER = "owner"
     FORBIDDEN = "forbidden"
     RULE = "rule"

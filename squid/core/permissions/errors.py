@@ -7,6 +7,8 @@ from squid_i18n import Text
 
 
 def _explanation(decision: Decision) -> tuple[str, Text]:
+    if decision.reason is Reason.CREDENTIAL:
+        return "credential_scope", tr(t"permissions-scope-reason = your credential excludes that permission")
     if decision.reason is Reason.FORBIDDEN:
         return "forbidden", tr(t"permissions-forbid-reason = an explicit forbid rule blocks that permission")
     if decision.reason is Reason.RULE:
