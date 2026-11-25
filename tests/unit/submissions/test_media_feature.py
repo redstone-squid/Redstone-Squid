@@ -4,7 +4,8 @@ import pytest
 from httpx import AsyncClient
 
 from squid.api.v1.submission_media import router
-from squid.api.v1.submissions import authenticated_account
+from squid.api.v1.submissions import authenticated_submission_context
+from squid.core.actors import ActingContext, Actor
 from tests.support.litestar import DependencyOverrides, asgi_transport, route_app
 from tests.unit.submissions.media_api_fakes import (
     ACCOUNT_ID,
@@ -22,10 +23,10 @@ async def test_disabled_media_service_fails_closed_with_service_unavailable() ->
     drafts = FakeDrafts(events)
     overrides: DependencyOverrides = {}
 
-    async def account_dependency() -> int:
-        return ACCOUNT_ID
+    async def account_dependency() -> ActingContext:
+        return ActingContext.direct(Actor(account_id=ACCOUNT_ID))
 
-    overrides[authenticated_account] = account_dependency
+    overrides[authenticated_submission_context] = account_dependency
     app = route_app([router], overrides=overrides, handle_errors=True)
     app.state.runtime = DisabledMediaRuntime(DisabledMediaServices(media_jobs=None, submission_drafts=drafts))
     async with AsyncClient(transport=asgi_transport(app), base_url="http://test") as client:

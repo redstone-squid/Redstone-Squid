@@ -44,7 +44,7 @@ from squid.api.v1.schemas.submissions import (
     StoredDraftResponse,
     SubmissionAttemptResponse,
 )
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext
 from squid.core.edits.application import EditRunner
 from squid.core.edits.domain import Revision
 from squid.core.errors import AuthenticationError, AuthorizationError, NotFoundError
@@ -94,13 +94,13 @@ class SubmissionDraftCommands(Protocol):
 
     async def attention_inbox(
         self,
-        actor: Actor,
         *,
+        context: ActingContext,
         after: FromQuery[UUID | None] = None,
         limit: int = 20,
     ) -> tuple[StoredDraft, ...]: ...
 
-    async def get_accessible(self, draft_id: UUID, actor: Actor) -> StoredDraft: ...
+    async def get_accessible(self, draft_id: UUID, *, context: ActingContext) -> StoredDraft: ...
 
     async def upgrade_manifest(
         self,
@@ -121,17 +121,19 @@ class SubmissionFinalizationCommands(Protocol):
     async def submit(
         self,
         draft_id: UUID,
-        actor: Actor,
         *,
+        context: ActingContext,
         locale: str | None,
     ) -> SubmissionRequestResult: ...
 
-    async def status(self, draft_id: UUID, actor: Actor) -> SubmissionRequestResult | None: ...
+    async def status(self, draft_id: UUID, *, context: ActingContext) -> SubmissionRequestResult | None: ...
 
-    async def attempt(self, draft_id: UUID, actor: Actor, attempt_id: UUID) -> FinalizationJobSnapshot | None: ...
+    async def attempt(
+        self, draft_id: UUID, attempt_id: UUID, *, context: ActingContext
+    ) -> FinalizationJobSnapshot | None: ...
 
     async def attempts(
-        self, draft_id: UUID, actor: Actor, *, before: int | None = None, limit: int = 20
+        self, draft_id: UUID, *, context: ActingContext, before: int | None = None, limit: int = 20
     ) -> tuple[FinalizationJobSnapshot, ...]: ...
 
 
@@ -191,10 +193,10 @@ class SubmissionFormRevisionNotFoundError(NotFoundError):
     default_resource = "submission_form_revision"
 
 
-async def authenticated_account(caller: NamedDependency[SkipValidation[Caller]]) -> int:
+async def authenticated_submission_context(caller: NamedDependency[SkipValidation[Caller]]) -> ActingContext:
     """Require a current human or player-bound account for draft access."""
     _submission_origin(caller)
-    return caller.require_consented_account()
+    return caller.context()
 
 
 async def authenticated_submission_caller(request: Request) -> Caller:
@@ -235,7 +237,7 @@ def _submission_origin(caller: Caller) -> SubmissionOrigin:
 Forms = NamedDependency[SkipValidation[SubmissionFormReader]]
 Drafts = NamedDependency[SkipValidation[SubmissionDraftCommands]]
 Finalization = NamedDependency[SkipValidation[SubmissionFinalizationCommands]]
-AccountId = NamedDependency[SkipValidation[int]]
+SubmissionContext = NamedDependency[SkipValidation[ActingContext]]
 SubmissionCaller = NamedDependency[SkipValidation[Caller]]
 OptionSource = Annotated[str, PathParameter(pattern="^[a-z][a-z0-9_]{0,63}$")]
 Category = Annotated[str, QueryParameter(pattern="^[a-z][a-z0-9_]{0,63}$")]
@@ -298,19 +300,17 @@ _DRAFT_DELETE_LINKS = {
     status_code=200,
     dependencies={
         "drafts": Provide(get_submission_drafts, sync_to_thread=False),
-        "account_id": Provide(authenticated_account),
+        "context": Provide(authenticated_submission_context),
     },
 )
 async def list_correction_inbox(
     drafts: Drafts,
-    account_id: AccountId,
+    context: SubmissionContext,
     after: FromQuery[UUID | None] = None,
     limit: Annotated[int, QueryParameter(ge=1, le=100)] = 20,
 ) -> DraftInboxResponse:
     """List drafts needing staff correction, excluding attachment processing waits."""
-    return DraftInboxResponse.from_domain(
-        await drafts.attention_inbox(Actor(account_id=account_id), after=after, limit=limit)
-    )
+    return DraftInboxResponse.from_domain(await drafts.attention_inbox(after=after, limit=limit, context=context))
 
 
 @get(
@@ -324,13 +324,13 @@ async def list_correction_inbox(
     status_code=200,
     dependencies={
         "drafts": Provide(get_submission_drafts, sync_to_thread=False),
-        "account_id": Provide(authenticated_account),
+        "context": Provide(authenticated_submission_context),
     },
 )
 @private_response
-async def list_drafts(drafts: Drafts, account_id: AccountId) -> DraftListResponse:
+async def list_drafts(drafts: Drafts, context: SubmissionContext) -> DraftListResponse:
     """Return at most ten compact active drafts owned by the signed-in account."""
-    return DraftListResponse.from_domain(await drafts.list_active(account_id))
+    return DraftListResponse.from_domain(await drafts.list_active(context.effective.require_account_id()))
 
 
 @get(
@@ -435,14 +435,16 @@ async def create_draft(
     status_code=200,
     dependencies={
         "drafts": Provide(get_submission_drafts, sync_to_thread=False),
-        "account_id": Provide(authenticated_account),
+        "context": Provide(authenticated_submission_context),
     },
 )
 @private_response
-async def get_draft(draft_id: FromPath[UUID], drafts: Drafts, account_id: AccountId) -> Response[StoredDraftResponse]:
+async def get_draft(
+    draft_id: FromPath[UUID], drafts: Drafts, context: SubmissionContext
+) -> Response[StoredDraftResponse]:
     """Return one draft after enforcing caller ownership."""
     response_headers: dict[str, str] = {}
-    draft = await drafts.get_accessible(draft_id, Actor(account_id=account_id))
+    draft = await drafts.get_accessible(draft_id, context=context)
     response_headers["ETag"] = revision_etag(Revision(draft_target(draft_id), draft.snapshot.revision))
     return Response(content=StoredDraftResponse.from_domain(draft), headers=response_headers, status_code=200)
 
@@ -460,7 +462,7 @@ async def get_draft(draft_id: FromPath[UUID], drafts: Drafts, account_id: Accoun
     dependencies={
         "_reservation": Provide(reserve_edit_request),
         "drafts": Provide(get_submission_drafts, sync_to_thread=False),
-        "account_id": Provide(authenticated_account),
+        "context": Provide(authenticated_submission_context),
         "edits": Provide(get_submission_edits, sync_to_thread=False),
     },
 )
@@ -469,7 +471,7 @@ async def change_draft(
     draft_id: FromPath[UUID],
     data: JSONBody[DraftChangeRequest],
     drafts: Drafts,
-    account_id: AccountId,
+    context: SubmissionContext,
     edits: NamedDependency[SkipValidation[EditRunner]],
     if_match: Annotated[str | None, HeaderParameter(name="If-Match")] = None,
     *,
@@ -480,9 +482,8 @@ async def change_draft(
     command = change_command(draft_id, data.to_domain())
     if if_match is not None and expected_revision(draft_target(draft_id), if_match) != command.expected[0]:
         raise InvalidRevisionError
-    actor = Actor(account_id=account_id)
-    result = await edits.execute(command, actor)
-    draft = await drafts.get_accessible(draft_id, actor)
+    result = await edits.execute(command, context.effective)
+    draft = await drafts.get_accessible(draft_id, context=context)
     response_headers["ETag"] = revision_etag(Revision(draft_target(draft_id), draft.snapshot.revision))
     return Response(
         content=DraftChangeResponse(draft=StoredDraftResponse.from_domain(draft), replayed=result.replayed),
@@ -503,7 +504,7 @@ async def change_draft(
     dependencies={
         "_reservation": Provide(reserve_idempotent_request),
         "drafts": Provide(get_submission_drafts, sync_to_thread=False),
-        "account_id": Provide(authenticated_account),
+        "context": Provide(authenticated_submission_context),
     },
 )
 @private_response
@@ -512,14 +513,14 @@ async def upgrade_draft_manifest(
     data: JSONBody[DraftManifestUpgradeRequest],
     request: Request,
     drafts: Drafts,
-    account_id: AccountId,
+    context: SubmissionContext,
     *,
     _reservation: NamedDependency[SkipValidation[None]],
 ) -> DraftManifestUpgradeResponse:
     """Upgrade an owned draft to the next checked-in form revision."""
     result = await drafts.upgrade_manifest(
         draft_id,
-        account_id,
+        context.effective.require_account_id(),
         expected_revision=data.base_revision,
         target_revision=data.target_revision,
         locale=locale_for_request(request),
@@ -540,7 +541,7 @@ async def upgrade_draft_manifest(
     dependencies={
         "_reservation": Provide(reserve_idempotent_request),
         "finalization": Provide(get_submission_finalization, sync_to_thread=False),
-        "account_id": Provide(authenticated_account),
+        "context": Provide(authenticated_submission_context),
     },
 )
 @private_response
@@ -548,7 +549,7 @@ async def submit_draft(
     draft_id: FromPath[UUID],
     request: Request,
     finalization: Finalization,
-    account_id: AccountId,
+    context: SubmissionContext,
     *,
     _reservation: NamedDependency[SkipValidation[None]],
 ) -> SubmissionAttemptResponse | DraftPreparationResponse:
@@ -557,7 +558,7 @@ async def submit_draft(
     If files are still processing or fields need correction, return preparation
     state. Otherwise return the durable attempt that performs finalization.
     """
-    snapshot = await finalization.submit(draft_id, Actor(account_id=account_id), locale=locale_for_request(request))
+    snapshot = await finalization.submit(draft_id, context=context, locale=locale_for_request(request))
     if isinstance(snapshot, DraftPreparationSnapshot):
         return DraftPreparationResponse.from_domain(snapshot)
     return SubmissionAttemptResponse.from_domain(snapshot)
@@ -574,15 +575,15 @@ async def submit_draft(
     status_code=200,
     dependencies={
         "finalization": Provide(get_submission_finalization, sync_to_thread=False),
-        "account_id": Provide(authenticated_account),
+        "context": Provide(authenticated_submission_context),
     },
 )
 @private_response
 async def get_draft_submission(
-    draft_id: FromPath[UUID], finalization: Finalization, account_id: AccountId
+    draft_id: FromPath[UUID], finalization: Finalization, context: SubmissionContext
 ) -> SubmissionAttemptResponse | DraftPreparationResponse:
     """Return retained finalization state after rechecking draft ownership."""
-    snapshot = await finalization.status(draft_id, Actor(account_id=account_id))
+    snapshot = await finalization.status(draft_id, context=context)
     if snapshot is None:
         raise SubmissionFinalizationNotFoundError
     if isinstance(snapshot, DraftPreparationSnapshot):
@@ -599,19 +600,19 @@ async def get_draft_submission(
     status_code=200,
     dependencies={
         "finalization": Provide(get_submission_finalization, sync_to_thread=False),
-        "account_id": Provide(authenticated_account),
+        "context": Provide(authenticated_submission_context),
     },
 )
 @private_response
 async def list_draft_attempts(
     draft_id: FromPath[UUID],
     finalization: Finalization,
-    account_id: AccountId,
+    context: SubmissionContext,
     before: Annotated[int | None, QueryParameter(ge=1)] = None,
     limit: Annotated[int, QueryParameter(ge=1, le=100)] = 20,
 ) -> list[SubmissionAttemptResponse]:
     """List retained attempts newest first; use the last attempt number as the next cursor."""
-    snapshots = await finalization.attempts(draft_id, Actor(account_id=account_id), before=before, limit=limit)
+    snapshots = await finalization.attempts(draft_id, before=before, limit=limit, context=context)
     return [SubmissionAttemptResponse.from_domain(snapshot) for snapshot in snapshots]
 
 
@@ -624,15 +625,15 @@ async def list_draft_attempts(
     status_code=200,
     dependencies={
         "finalization": Provide(get_submission_finalization, sync_to_thread=False),
-        "account_id": Provide(authenticated_account),
+        "context": Provide(authenticated_submission_context),
     },
 )
 @private_response
 async def get_draft_attempt(
-    draft_id: FromPath[UUID], attempt_id: FromPath[UUID], finalization: Finalization, account_id: AccountId
+    draft_id: FromPath[UUID], attempt_id: FromPath[UUID], finalization: Finalization, context: SubmissionContext
 ) -> SubmissionAttemptResponse:
     """Read one attempt without exposing execution credentials or its private payload."""
-    snapshot = await finalization.attempt(draft_id, Actor(account_id=account_id), attempt_id)
+    snapshot = await finalization.attempt(draft_id, attempt_id, context=context)
     if snapshot is None:
         raise SubmissionFinalizationNotFoundError
     return SubmissionAttemptResponse.from_domain(snapshot)
@@ -651,19 +652,19 @@ async def get_draft_attempt(
     dependencies={
         "_reservation": Provide(reserve_idempotent_request),
         "drafts": Provide(get_submission_drafts, sync_to_thread=False),
-        "account_id": Provide(authenticated_account),
+        "context": Provide(authenticated_submission_context),
     },
 )
 @private_response
 async def delete_draft(
     draft_id: FromPath[UUID],
     drafts: Drafts,
-    account_id: AccountId,
+    context: SubmissionContext,
     *,
     _reservation: NamedDependency[SkipValidation[None]],
 ) -> Response[None]:
     """Immediately delete one caller-owned draft."""
-    await drafts.delete(draft_id, account_id)
+    await drafts.delete(draft_id, context.effective.require_account_id())
     return Response(content=None, status_code=status.HTTP_204_NO_CONTENT)
 
 

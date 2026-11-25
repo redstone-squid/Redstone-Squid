@@ -10,13 +10,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.api.security import Caller, current_caller
 from squid.api.v1.submissions import (
-    authenticated_account,
     authenticated_submission_caller,
+    authenticated_submission_context,
     get_submission_drafts,
     get_submission_edits,
     router,
 )
 from squid.core.accounts.models import Account
+from squid.core.actors import ActingContext, Actor
 from squid.core.edits.application import EditExecutor
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.submissions.application.drafts import SubmissionDraftService
@@ -54,7 +55,7 @@ async def test_draft_edits_survive_readback(
     app = route_app(
         [router],
         overrides={
-            authenticated_account: lambda: account_id,
+            authenticated_submission_context: lambda: ActingContext.direct(Actor(account_id=account_id)),
             authenticated_submission_caller: lambda: caller,
             current_caller: lambda: caller,
             get_submission_drafts: lambda: drafts,

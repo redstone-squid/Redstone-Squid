@@ -6,7 +6,8 @@ from httpx import AsyncClient
 from pytest_mock import MockerFixture
 
 from squid.api.v1.submission_schematics import router, schematic_service
-from squid.api.v1.submissions import authenticated_account
+from squid.api.v1.submissions import authenticated_submission_context
+from squid.core.actors import ActingContext, Actor
 from squid.core.submissions.application.schematic_inference import SchematicDetection, SchematicSubmissionSuggestions
 from squid.core.submissions.domain.schematics import DraftSchematicState
 from tests.support.litestar import asgi_transport, route_app
@@ -20,7 +21,13 @@ async def test_suggestion_response_includes_explicit_detection_failures(mocker: 
             upload_id, DraftSchematicState.READY, 5, detections=(SchematicDetection("category"),)
         )
     )
-    app = route_app([router], overrides={schematic_service: lambda: service, authenticated_account: lambda: 42})
+    app = route_app(
+        [router],
+        overrides={
+            schematic_service: lambda: service,
+            authenticated_submission_context: lambda: ActingContext.direct(Actor(account_id=42)),
+        },
+    )
     async with AsyncClient(transport=asgi_transport(app), base_url="http://test") as client:
         response = await client.get(f"/submissions/drafts/{draft_id}/schematics/{upload_id}/suggestions")
     assert response.status_code == 200, response.text
@@ -29,4 +36,4 @@ async def test_suggestion_response_includes_explicit_detection_failures(mocker: 
     assert payload["upload_id"] == str(upload_id)
     assert payload["detections"][0]["status"] == "not_detected"
     assert payload["detections"][0]["value"] is None
-    assert service.suggestions.call_args.args[1].account_id == 42
+    assert service.suggestions.call_args.kwargs["context"].effective.account_id == 42

@@ -8,7 +8,7 @@ from litestar.di import NamedDependency
 from litestar.params import FromPath, HeaderParameter, SkipValidation
 
 from squid.api.revisions import expected_revision, revision_etag
-from squid.api.v1.submissions import AccountId
+from squid.api.v1.submissions import SubmissionContext
 from squid.core.actors import Actor
 from squid.core.edits.application import EditRunner
 from squid.core.edits.domain import EditCommand, LatestRevision, Revision
@@ -33,13 +33,13 @@ class AttachmentEditRequest:
 
 def attachment_edit_request(
     draft_id: FromPath[UUID],
-    account_id: AccountId,
+    context: SubmissionContext,
     runner: NamedDependency[SkipValidation[EditRunner]],
     operation_id: NamedDependency[UUID],
     if_match: Annotated[str | None, HeaderParameter(name="If-Match")] = None,
 ) -> AttachmentEditRequest:
     return AttachmentEditRequest(
-        runner, Actor(account_id=account_id), expected_revision(draft_target(draft_id), if_match), operation_id
+        runner, context.effective, expected_revision(draft_target(draft_id), if_match), operation_id
     )
 
 

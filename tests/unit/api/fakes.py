@@ -640,12 +640,12 @@ class MockSubmissionDrafts(SubmissionDraftService):
 
     @override
     async def attention_inbox(
-        self, actor: Actor, *, after: UUID | None = None, limit: int = 20
+        self, *, context: ActingContext, after: UUID | None = None, limit: int = 20
     ) -> tuple[StoredDraft, ...]:
         return ()
 
     @override
-    async def get_accessible(self, draft_id: UUID, actor: Actor) -> StoredDraft:
+    async def get_accessible(self, draft_id: UUID, *, context: ActingContext) -> StoredDraft:
         raise DraftNotFoundError(draft_id)
 
     @override
@@ -660,16 +660,18 @@ class MockSubmissionFinalization(SubmissionFinalizationService):
         """Hold no queue; nothing here enqueues an attempt."""
 
     @override
-    async def status(self, draft_id: UUID, actor: Actor) -> SubmissionRequestResult | None:
+    async def status(self, draft_id: UUID, *, context: ActingContext) -> SubmissionRequestResult | None:
         raise DraftNotFoundError(draft_id)
 
     @override
-    async def attempt(self, draft_id: UUID, actor: Actor, attempt_id: UUID) -> FinalizationJobSnapshot | None:
+    async def attempt(
+        self, draft_id: UUID, attempt_id: UUID, *, context: ActingContext
+    ) -> FinalizationJobSnapshot | None:
         raise DraftNotFoundError(draft_id)
 
     @override
     async def attempts(
-        self, draft_id: UUID, actor: Actor, *, before: int | None = None, limit: int = 20
+        self, draft_id: UUID, *, context: ActingContext, before: int | None = None, limit: int = 20
     ) -> tuple[FinalizationJobSnapshot, ...]:
         raise DraftNotFoundError(draft_id)
 
@@ -681,19 +683,21 @@ class MockSubmissionSchematics(DraftSchematicService):
         self.max_bytes = SCHEMATIC_FILE_SCHEMA_MAX_BYTES
 
     @override
-    async def list(self, draft_id: UUID, actor: Actor) -> tuple[DraftSchematic, ...]:
+    async def list(self, draft_id: UUID, *, context: ActingContext) -> tuple[DraftSchematic, ...]:
         raise DraftNotFoundError(draft_id)
 
     @override
-    async def reserve(self, draft_id: UUID, actor: Actor, *, filename: str, upload_id: UUID) -> DraftSchematic:
+    async def reserve(
+        self, draft_id: UUID, *, context: ActingContext, filename: str, upload_id: UUID
+    ) -> DraftSchematic:
         raise DraftNotFoundError(draft_id)
 
     @override
     async def upload(
         self,
         draft_id: UUID,
-        actor: Actor,
         *,
+        context: ActingContext,
         filename: str,
         data: bytes,
         upload_id: UUID | None = None,
@@ -701,19 +705,19 @@ class MockSubmissionSchematics(DraftSchematicService):
         raise DraftNotFoundError(draft_id)
 
     @override
-    async def fail(self, draft_id: UUID, actor: Actor, upload_id: UUID) -> None:
+    async def fail(self, draft_id: UUID, upload_id: UUID, *, context: ActingContext) -> None:
         raise DraftNotFoundError(draft_id)
 
     @override
-    async def select_primary(self, draft_id: UUID, actor: Actor, upload_id: UUID) -> None:
+    async def select_primary(self, draft_id: UUID, upload_id: UUID, *, context: ActingContext) -> None:
         raise DraftNotFoundError(draft_id)
 
     @override
-    async def discard(self, draft_id: UUID, actor: Actor, upload_id: UUID) -> None:
+    async def discard(self, draft_id: UUID, upload_id: UUID, *, context: ActingContext) -> None:
         raise DraftNotFoundError(draft_id)
 
     @override
-    async def attach(self, source_id: UUID, destination_id: UUID, actor: Actor, upload_id: UUID) -> None:
+    async def attach(self, source_id: UUID, destination_id: UUID, upload_id: UUID, *, context: ActingContext) -> None:
         raise DraftNotFoundError(destination_id)
 
 
@@ -724,21 +728,23 @@ class MockSubmissionRevisions(RecalculationProposalService):
         """Hold no repository; nothing here reaches one."""
 
     @override
-    async def list_for_source(self, source_message_id: int, actor: Actor) -> tuple[RecalculationProposal, ...]:
+    async def list_for_source(
+        self, source_message_id: int, *, context: ActingContext
+    ) -> tuple[RecalculationProposal, ...]:
         return ()
 
     @override
-    async def get(self, proposal_id: UUID, actor: Actor) -> RecalculationProposal:
+    async def get(self, proposal_id: UUID, *, context: ActingContext) -> RecalculationProposal:
         raise NotFoundError
 
     @override
     async def match(
-        self, proposal_id: UUID, build_id: int, actor: Actor, *, renew: bool = False
+        self, proposal_id: UUID, build_id: int, *, context: ActingContext, renew: bool = False
     ) -> RecalculationProposal:
         raise NotFoundError
 
     @override
-    async def approve(self, proposal_id: UUID, actor: Actor) -> RecalculationProposal:
+    async def approve(self, proposal_id: UUID, *, context: ActingContext) -> RecalculationProposal:
         raise NotFoundError
 
 
@@ -749,37 +755,27 @@ class MockSubmissionIntake(SubmissionAttachmentIntake):
         """Hold no repository; nothing here reaches one."""
 
     @override
-    async def list(self, draft_id: UUID, actor: Actor) -> tuple[SuppliedAttachment, ...]:
+    async def list(self, draft_id: UUID, *, context: ActingContext) -> tuple[SuppliedAttachment, ...]:
         raise DraftNotFoundError(draft_id)
 
     @override
     async def reserve(
-        self,
-        draft_id: UUID,
-        actor: Actor,
-        source_id: UUID,
-        filename: str,
-        content_type: str | None,
+        self, draft_id: UUID, source_id: UUID, filename: str, content_type: str | None, *, context: ActingContext
     ) -> SuppliedAttachment:
         raise DraftNotFoundError(draft_id)
 
     @override
     async def register_file(
-        self,
-        draft_id: UUID,
-        actor: Actor,
-        source_id: UUID,
-        path: Path,
-        content_type: str | None,
+        self, draft_id: UUID, source_id: UUID, path: Path, content_type: str | None, *, context: ActingContext
     ) -> None:
         raise DraftNotFoundError(draft_id)
 
     @override
-    async def discard(self, draft_id: UUID, actor: Actor, source_id: UUID) -> None:
+    async def discard(self, draft_id: UUID, source_id: UUID, *, context: ActingContext) -> None:
         raise DraftNotFoundError(draft_id)
 
     @override
-    async def fail(self, draft_id: UUID, actor: Actor, source_id: UUID) -> None:
+    async def fail(self, draft_id: UUID, source_id: UUID, *, context: ActingContext) -> None:
         raise DraftNotFoundError(draft_id)
 
 

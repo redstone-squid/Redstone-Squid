@@ -15,7 +15,6 @@ from squid.api.dependencies import CurrentCaller, Suggestions, get_suggestions
 from squid.api.errors import responses
 from squid.api.security import Caller
 from squid.api.v1.schemas.suggest import SuggestionPage, SuggestionSourceInfo
-from squid.core.actors import Actor
 from squid.core.i18n import negotiate_locale
 from squid.core.permissions.domain.catalogue import CATALOGUE
 from squid.core.suggestions.application import SuggestionService
@@ -68,7 +67,7 @@ async def suggest(
             limit=limit,
             context={} if category is None else {"category": category},
             locale=negotiate_locale(request.headers.get("accept-language")),
-            viewer=Actor(account_id=caller.account_id),
+            viewer=caller.to_actor(),
             cursor=cursor,
         ),
         authorizer=_CallerAuthorizer(request, caller),

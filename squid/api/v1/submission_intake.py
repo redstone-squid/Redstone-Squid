@@ -21,8 +21,7 @@ from squid.api.attachment_edits import AttachmentEdit, attachment_edit_request
 from squid.api.contract import DEVICE, MINECRAFT, WEB, WEB_WRITE, contract, transport_only
 from squid.api.idempotency import edit_operation_id, reserve_edit_request
 from squid.api.request_body import streams_own_body
-from squid.api.v1.submissions import AccountId, authenticated_account, get_submission_edits
-from squid.core.actors import Actor
+from squid.api.v1.submissions import SubmissionContext, authenticated_submission_context, get_submission_edits
 from squid.core.errors import ValidationError
 from squid.core.submissions.application.attachment_edits import AttachmentValues, FileMembership
 from squid.core.submissions.application.intake import SubmissionAttachmentIntake, SuppliedAttachment
@@ -51,13 +50,13 @@ _WRITE = contract(cli=transport_only())
     opt=_READ,
     status_code=200,
     dependencies={
-        "account_id": Provide(authenticated_account),
+        "context": Provide(authenticated_submission_context),
         "intake": Provide(intake_service, sync_to_thread=False),
     },
 )
-async def list_files(draft_id: FromPath[UUID], account_id: AccountId, intake: Intake) -> list[SuppliedAttachment]:
+async def list_files(draft_id: FromPath[UUID], context: SubmissionContext, intake: Intake) -> list[SuppliedAttachment]:
     """List unresolved, registered, and explicitly discarded supplied files."""
-    return list(await intake.list(draft_id, Actor(account_id=account_id)))
+    return list(await intake.list(draft_id, context=context))
 
 
 @put(
@@ -73,7 +72,7 @@ async def list_files(draft_id: FromPath[UUID], account_id: AccountId, intake: In
         },
     },
     dependencies={
-        "account_id": Provide(authenticated_account),
+        "context": Provide(authenticated_submission_context),
         "intake": Provide(intake_service, sync_to_thread=False),
     },
 )
@@ -82,7 +81,7 @@ async def upload_file(
     draft_id: FromPath[UUID],
     source_id: FromPath[UUID],
     request: Request,
-    account_id: AccountId,
+    context: SubmissionContext,
     intake: Intake,
     filename: Annotated[str, QueryParameter(min_length=1, max_length=255)],
     replaces: FromQuery[UUID | None] = None,
@@ -96,19 +95,18 @@ async def upload_file(
         message = "A replacement requires a new source identifier."
         raise ValidationError(message)
     content_type = request.headers.get("content-type")
-    actor = Actor(account_id=account_id)
-    await intake.reserve(draft_id, actor, source_id, filename, content_type)
+    await intake.reserve(draft_id, source_id, filename, content_type, context=context)
     try:
         with tempfile.TemporaryDirectory(prefix="squid-api-intake-") as directory:
             path = Path(directory) / "source"
             await _receive(request, path, max_bytes=intake.max_file_bytes(filename, content_type))
-            await intake.register_file(draft_id, actor, source_id, path, content_type)
+            await intake.register_file(draft_id, source_id, path, content_type, context=context)
         if replaces is not None:
-            await intake.discard(draft_id, actor, replaces)
+            await intake.discard(draft_id, replaces, context=context)
     except Exception:
-        await intake.fail(draft_id, actor, source_id)
+        await intake.fail(draft_id, source_id, context=context)
         raise
-    return await list_files.fn(draft_id, account_id, intake)
+    return await list_files.fn(draft_id, context, intake)
 
 
 async def _receive(request: Request, path: Path, *, max_bytes: int) -> None:
@@ -131,7 +129,7 @@ async def _receive(request: Request, path: Path, *, max_bytes: int) -> None:
     status_code=200,
     dependencies={
         "_reservation": Provide(reserve_edit_request),
-        "account_id": Provide(authenticated_account),
+        "context": Provide(authenticated_submission_context),
         "intake": Provide(intake_service, sync_to_thread=False),
         "edit": Provide(attachment_edit_request, sync_to_thread=False),
         "runner": Provide(get_submission_edits, sync_to_thread=False),
@@ -141,7 +139,7 @@ async def _receive(request: Request, path: Path, *, max_bytes: int) -> None:
 async def discard_file(
     draft_id: FromPath[UUID],
     source_id: FromPath[UUID],
-    account_id: AccountId,
+    context: SubmissionContext,
     intake: Intake,
     edit: AttachmentEdit,
     *,
@@ -152,9 +150,7 @@ async def discard_file(
     response_headers["ETag"] = await edit.save(
         AttachmentValues(files=(FileMembership(source_id=source_id, present=False),))
     )
-    return Response(
-        content=await list_files.fn(draft_id, account_id, intake), headers=response_headers, status_code=200
-    )
+    return Response(content=await list_files.fn(draft_id, context, intake), headers=response_headers, status_code=200)
 
 
 router = Router(

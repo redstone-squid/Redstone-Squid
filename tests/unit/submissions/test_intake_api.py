@@ -8,7 +8,7 @@ import pytest
 from litestar import Request
 
 from squid.api.v1.submission_intake import upload_file
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.errors import ValidationError
 from squid.core.submissions.application.intake import SubmissionAttachmentIntake, SuppliedAttachment
 from squid.core.submissions.domain.intake import IntakeStatus
@@ -26,20 +26,24 @@ class Intake:
         self.data = b""
         self.source = SuppliedAttachment(uuid4(), "image.png", "image", IntakeStatus.READY)
 
-    async def reserve(self, draft: UUID, actor: Actor, source: UUID, filename: str, mime: str | None) -> None:
+    async def reserve(
+        self, draft: UUID, source: UUID, filename: str, mime: str | None, *, context: ActingContext
+    ) -> None:
         self.events.append("reserve")
 
-    async def register_file(self, draft: UUID, actor: Actor, source: UUID, path: Path, mime: str | None) -> None:
+    async def register_file(
+        self, draft: UUID, source: UUID, path: Path, mime: str | None, *, context: ActingContext
+    ) -> None:
         self.data = path.read_bytes()
         self.events.append("register")
 
-    async def discard(self, draft: UUID, actor: Actor, source: UUID) -> None:
+    async def discard(self, draft: UUID, source: UUID, *, context: ActingContext) -> None:
         self.events.append("discard")
 
-    async def fail(self, draft: UUID, actor: Actor, source: UUID) -> None:
+    async def fail(self, draft: UUID, source: UUID, *, context: ActingContext) -> None:
         self.events.append("fail")
 
-    async def list(self, draft: UUID, actor: Actor) -> tuple[SuppliedAttachment, ...]:
+    async def list(self, draft: UUID, *, context: ActingContext) -> tuple[SuppliedAttachment, ...]:
         return (self.source,)
 
 
@@ -58,7 +62,7 @@ async def test_replacement_registers_bytes_before_discarding_original_requiremen
         uuid4(),
         uuid4(),
         request(b"source bytes"),
-        7,
+        ActingContext.direct(Actor(account_id=7)),
         cast(SubmissionAttachmentIntake, intake),
         "image.png",
         replaces=uuid4(),
@@ -73,7 +77,12 @@ async def test_oversized_upload_is_retained_as_failed(monkeypatch: pytest.Monkey
     intake = Intake()
     with pytest.raises(ValidationError):
         await upload_file.fn(
-            uuid4(), uuid4(), request(b"too large"), 7, cast(SubmissionAttachmentIntake, intake), "image.png"
+            uuid4(),
+            uuid4(),
+            request(b"too large"),
+            ActingContext.direct(Actor(account_id=7)),
+            cast(SubmissionAttachmentIntake, intake),
+            "image.png",
         )
     assert intake.events == ["reserve", "fail"]
     assert intake.data == b""

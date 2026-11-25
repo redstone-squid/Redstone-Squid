@@ -23,8 +23,8 @@ from squid.api.v1.submissions import (
     SubmissionFinalizationCommands,
     SubmissionFormReader,
     _submission_origin,
-    authenticated_account,
     authenticated_submission_caller,
+    authenticated_submission_context,
     get_submission_drafts,
     get_submission_edits,
     get_submission_finalization,
@@ -32,7 +32,7 @@ from squid.api.v1.submissions import (
     router,
 )
 from squid.core.accounts.errors import ConsentRequiredError
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.errors import AuthenticationError
 from squid.core.submissions.application import (
     AppliedDraftChange,
@@ -151,8 +151,8 @@ class FakeDrafts(SubmissionDraftCommands):
     @override
     async def attention_inbox(
         self,
-        actor: Actor,
         *,
+        context: ActingContext,
         after: UUID | None = None,
         limit: int = 20,
     ) -> tuple[StoredDraft, ...]:
@@ -165,21 +165,21 @@ class FakeDrafts(SubmissionDraftCommands):
         return (self.current,)
 
     @override
-    async def get_accessible(self, draft_id: UUID, actor: Actor) -> StoredDraft:
+    async def get_accessible(self, draft_id: UUID, *, context: ActingContext) -> StoredDraft:
         assert draft_id == self.current.snapshot.id
-        assert draft_actor_id(actor) == ACCOUNT_ID
+        assert draft_actor_id(context.effective) == ACCOUNT_ID
         return self.current
 
     async def apply_change(
         self,
         draft_id: UUID,
-        actor: Actor,
         change: DraftChange,
         *,
+        context: ActingContext,
         locale: str | None,
     ) -> AppliedDraftChange:
         assert draft_id == self.current.snapshot.id
-        assert draft_actor_id(actor) == ACCOUNT_ID
+        assert draft_actor_id(context.effective) == ACCOUNT_ID
         assert locale is None
         self.change_seen = change
         self.current = replace(self.current, snapshot=self.current.snapshot.apply(change))
@@ -234,28 +234,30 @@ class FakeFinalization(SubmissionFinalizationCommands):
     async def submit(
         self,
         draft_id: UUID,
-        actor: Actor,
         *,
+        context: ActingContext,
         locale: str | None,
     ) -> FinalizationJobSnapshot:
-        self.submit_calls.append((draft_id, actor, locale))
+        self.submit_calls.append((draft_id, context.effective, locale))
         return self.snapshot
 
     @override
-    async def status(self, draft_id: UUID, actor: Actor) -> FinalizationJobSnapshot | None:
-        self.status_calls.append((draft_id, actor))
+    async def status(self, draft_id: UUID, *, context: ActingContext) -> FinalizationJobSnapshot | None:
+        self.status_calls.append((draft_id, context.effective))
         return self.snapshot
 
     @override
-    async def attempt(self, draft_id: UUID, actor: Actor, attempt_id: UUID) -> FinalizationJobSnapshot | None:
-        assert actor.account_id == ACCOUNT_ID
+    async def attempt(
+        self, draft_id: UUID, attempt_id: UUID, *, context: ActingContext
+    ) -> FinalizationJobSnapshot | None:
+        assert context.effective.account_id == ACCOUNT_ID
         return self.snapshot if draft_id == self.snapshot.draft_id and attempt_id == self.snapshot.job_id else None
 
     @override
     async def attempts(
-        self, draft_id: UUID, actor: Actor, *, before: int | None = None, limit: int = 20
+        self, draft_id: UUID, *, context: ActingContext, before: int | None = None, limit: int = 20
     ) -> tuple[FinalizationJobSnapshot, ...]:
-        assert actor.account_id == ACCOUNT_ID
+        assert context.effective.account_id == ACCOUNT_ID
         assert draft_id == self.snapshot.draft_id
         return (self.snapshot,)[:limit] if before is None or before > self.snapshot.attempt_number else ()
 
@@ -368,8 +370,8 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
     async def finalization_dependency() -> FakeFinalization:
         return finalization
 
-    async def account_dependency() -> int:
-        return ACCOUNT_ID
+    async def account_dependency() -> ActingContext:
+        return ActingContext.direct(Actor(account_id=ACCOUNT_ID))
 
     async def caller_dependency() -> Caller:
         return Caller(kind="account", subject=f"account:{ACCOUNT_ID}", account_id=ACCOUNT_ID)
@@ -378,7 +380,7 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
     overrides[get_submission_forms] = form_dependency
     overrides[get_submission_drafts] = draft_dependency
     overrides[get_submission_finalization] = finalization_dependency
-    overrides[authenticated_account] = account_dependency
+    overrides[authenticated_submission_context] = account_dependency
     overrides[authenticated_submission_caller] = caller_dependency
     overrides[current_caller] = caller_dependency
     app = route_app([router], overrides=overrides, handle_errors=True)
@@ -486,7 +488,7 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
 
 async def test_draft_authentication_requires_a_human_account() -> None:
     with pytest.raises(AuthenticationError):
-        await authenticated_account(ANONYMOUS)
+        await authenticated_submission_context(ANONYMOUS)
 
 
 async def test_draft_authentication_requires_current_privacy_consent() -> None:
@@ -498,7 +500,7 @@ async def test_draft_authentication_requires_current_privacy_consent() -> None:
     )
 
     with pytest.raises(ConsentRequiredError) as error:
-        await authenticated_account(caller)
+        await authenticated_submission_context(caller)
 
     # Consent failures identify the account without assuming a Discord identity.
     assert error.value.context == {"account_id": 42}

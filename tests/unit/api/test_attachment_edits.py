@@ -13,7 +13,8 @@ from squid.api.v1.submission_intake import intake_service
 from squid.api.v1.submission_intake import router as intake_router
 from squid.api.v1.submission_schematics import router as schematics_router
 from squid.api.v1.submission_schematics import schematic_service
-from squid.api.v1.submissions import authenticated_account, get_submission_edits
+from squid.api.v1.submissions import authenticated_submission_context, get_submission_edits
+from squid.core.actors import ActingContext, Actor
 from squid.core.edits.domain import LatestRevision, Revision
 from squid.core.submissions.application.attachment_edits import DRAFT_ATTACHMENTS, AttachmentValues
 from squid.core.submissions.application.edits import draft_target
@@ -32,7 +33,7 @@ def test_attachment_routes_accept_optional_revision_and_return_the_committed_eta
         execute=AsyncMock(return_value=SimpleNamespace(outcome=SimpleNamespace(revisions=(Revision(target, 5),))))
     )
     queries = SimpleNamespace(list=AsyncMock(return_value=[]))
-    overrides[authenticated_account] = lambda: 7
+    overrides[authenticated_submission_context] = lambda: ActingContext.direct(Actor(account_id=7))
     overrides[get_submission_edits] = lambda: runner
     overrides[schematic_service] = lambda: queries
     overrides[intake_service] = lambda: queries

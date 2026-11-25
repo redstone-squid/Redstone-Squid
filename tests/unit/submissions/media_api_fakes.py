@@ -12,8 +12,8 @@ from whenever import Instant
 from squid.api.dependencies import get_draft_attachments
 from squid.api.security import Caller, current_caller
 from squid.api.v1.submission_media import router
-from squid.api.v1.submissions import authenticated_account, get_submission_edits
-from squid.core.actors import Actor
+from squid.api.v1.submissions import authenticated_submission_context, get_submission_edits
+from squid.core.actors import ActingContext, Actor
 from squid.core.edits.application import EditRunner
 from squid.core.edits.domain import EditCommand, EditOutcome, EditResult, Revision
 from squid.core.media.application.jobs import (
@@ -93,10 +93,10 @@ class FakeDrafts:
         self.events = events
         self.deny = deny
 
-    async def get_accessible(self, draft_id: UUID, actor: Actor) -> StoredDraft:
+    async def get_accessible(self, draft_id: UUID, *, context: ActingContext) -> StoredDraft:
         self.events.append("owner")
         assert draft_id == DRAFT_ID
-        assert actor.account_id == ACCOUNT_ID
+        assert context.effective.account_id == ACCOUNT_ID
         if self.deny:
             raise DraftAccessDeniedError
         return stored_draft(draft_id)
@@ -185,7 +185,7 @@ class MediaEditRecorder(EditRunner):
     async def execute(self, command: EditCommand, actor: Actor) -> EditResult:
         version = bound_revisions(command)[0]
         draft_id = UUID(version.target.key)
-        await self.drafts.get_accessible(draft_id, actor)
+        await self.drafts.get_accessible(draft_id, context=ActingContext.direct(actor))
         values = AttachmentValues.model_validate_json(command.values.encoded)
         for item in values.files:
             assert not item.present
@@ -222,14 +222,14 @@ def app_with_fakes(media: FakeMedia, drafts: FakeDrafts) -> Litestar:
     async def attachment_dependency() -> DraftAttachmentService:
         return DraftAttachmentService(drafts, media)
 
-    async def account_dependency() -> int:
-        return ACCOUNT_ID
+    async def account_dependency() -> ActingContext:
+        return ActingContext.direct(Actor(account_id=ACCOUNT_ID))
 
     async def caller_dependency() -> Caller:
         return Caller(kind="account", subject=f"account:{ACCOUNT_ID}", account_id=ACCOUNT_ID)
 
     overrides[get_draft_attachments] = attachment_dependency
-    overrides[authenticated_account] = account_dependency
+    overrides[authenticated_submission_context] = account_dependency
     overrides[current_caller] = caller_dependency
     overrides[get_submission_edits] = lambda: MediaEditRecorder(drafts, media)
     return route_app([router], overrides=overrides, handle_errors=True)

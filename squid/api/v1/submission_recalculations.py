@@ -87,7 +87,7 @@ async def history(
     caller.require_consented_account()
     return [
         RecalculationProposalResponse.from_domain(item)
-        for item in await proposals.list_for_source(message_id, caller.to_actor())
+        for item in await proposals.list_for_source(message_id, context=caller.context())
     ]
 
 
@@ -111,7 +111,7 @@ async def get_proposal(
 ) -> RecalculationProposalResponse:
     """Return a recalculation proposal after checking the caller's access."""
     caller.require_consented_account()
-    return RecalculationProposalResponse.from_domain(await proposals.get(proposal_id, caller.to_actor()))
+    return RecalculationProposalResponse.from_domain(await proposals.get(proposal_id, context=caller.context()))
 
 
 @post(
@@ -139,7 +139,7 @@ async def match_proposal(
     """
     caller.require_consented_account()
     return RecalculationProposalResponse.from_domain(
-        await proposals.match(proposal_id, data.build_id, caller.to_actor(), renew=data.renew)
+        await proposals.match(proposal_id, data.build_id, context=caller.context(), renew=data.renew)
     )
 
 
@@ -166,7 +166,7 @@ async def approve_proposal(
     An already applied proposal returns its existing approval result.
     """
     caller.require_consented_account()
-    return RecalculationProposalResponse.from_domain(await proposals.approve(proposal_id, caller.to_actor()))
+    return RecalculationProposalResponse.from_domain(await proposals.approve(proposal_id, context=caller.context()))
 
 
 router = Router(

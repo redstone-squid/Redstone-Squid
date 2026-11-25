@@ -34,8 +34,7 @@ from squid.api.v1.schemas.submission_media import (
     DraftMediaListResponse,
     DraftMediaResponse,
 )
-from squid.api.v1.submissions import authenticated_account, get_submission_edits
-from squid.core.actors import Actor
+from squid.api.v1.submissions import SubmissionContext, authenticated_submission_context, get_submission_edits
 from squid.core.media.domain import MediaKind, MediaLimitMeasure, MediaLimits, MediaViolation
 from squid.core.media.errors import DraftMediaRequestError, MediaLimitExceededError
 from squid.core.submissions.application import StagedUpload
@@ -61,7 +60,6 @@ _STREAMING_REQUEST_BODY = {
 logger = logging.getLogger(__name__)
 
 
-AccountId = NamedDependency[SkipValidation[int]]
 UploadId = Annotated[UUID | None, QueryParameter(description="Stable client-generated UUID for safe upload retries.")]
 
 
@@ -77,7 +75,7 @@ UploadId = Annotated[UUID | None, QueryParameter(description="Stable client-gene
             cli=cli_command("media.upload", features=("submission-media",), interaction="direct"),
         ),
     },
-    dependencies={"account_id": Provide(authenticated_account)},
+    dependencies={"context": Provide(authenticated_submission_context)},
 )
 @streams_own_body
 async def upload_draft_media(
@@ -85,7 +83,7 @@ async def upload_draft_media(
     kind: FromPath[MediaKind],
     request: Request,
     attachments: DraftAttachments,
-    account_id: AccountId,
+    context: SubmissionContext,
     upload_id: UploadId = None,
 ) -> Response[DraftMediaResponse]:
     """Stream one owned-draft upload through a private bounded staging file."""
@@ -93,7 +91,7 @@ async def upload_draft_media(
     _require_non_nil(draft_id, reason="nil_draft_id")
     if upload_id is not None:
         _require_non_nil(upload_id, reason="nil_upload_id")
-    authority = await attachments.authorize_upload(draft_id, Actor(account_id=account_id), kind)
+    authority = await attachments.authorize_upload(draft_id, kind, context=context)
     _require_query_names(request, _UPLOAD_QUERY_NAMES)
     content_type = _source_content_type(request, kind)
     content_length = _declared_content_length(request, attachments.limits.max_source_bytes)
@@ -134,16 +132,16 @@ def _private_upload_directory() -> Iterator[Path]:
         cli=cli_command("media.list", features=("submission-media",), interaction="direct"),
     ),
     status_code=200,
-    dependencies={"account_id": Provide(authenticated_account)},
+    dependencies={"context": Provide(authenticated_submission_context)},
 )
 async def list_draft_media(
-    draft_id: FromPath[UUID], request: Request, attachments: DraftAttachments, account_id: AccountId
+    draft_id: FromPath[UUID], request: Request, attachments: DraftAttachments, context: SubmissionContext
 ) -> Response[DraftMediaListResponse]:
     """List all retained states and safe processed facts for an owned draft."""
     response_headers: dict[str, str] = {}
     _require_query_names(request, frozenset())
     _require_non_nil(draft_id, reason="nil_draft_id")
-    snapshots = await attachments.list(draft_id, Actor(account_id=account_id))
+    snapshots = await attachments.list(draft_id, context=context)
     _prevent_storage(response_headers, attachments.limits)
     return Response(
         content=DraftMediaListResponse(
@@ -164,21 +162,21 @@ async def list_draft_media(
         cli=cli_command("media.status", features=("submission-media",), interaction="direct"),
     ),
     status_code=200,
-    dependencies={"account_id": Provide(authenticated_account)},
+    dependencies={"context": Provide(authenticated_submission_context)},
 )
 async def get_draft_media(
     draft_id: FromPath[UUID],
     upload_id: FromPath[UUID],
     request: Request,
     attachments: DraftAttachments,
-    account_id: AccountId,
+    context: SubmissionContext,
 ) -> Response[DraftMediaResponse]:
     """Return one upload after enforcing both draft ownership and association."""
     response_headers: dict[str, str] = {}
     _require_query_names(request, frozenset())
     _require_non_nil(draft_id, reason="nil_draft_id")
     _require_non_nil(upload_id, reason="nil_upload_id")
-    snapshot = await attachments.get(draft_id, Actor(account_id=account_id), upload_id)
+    snapshot = await attachments.get(draft_id, upload_id, context=context)
     _prevent_storage(response_headers, attachments.limits)
     return Response(content=DraftMediaResponse.from_snapshot(snapshot), headers=response_headers, status_code=200)
 
@@ -194,7 +192,7 @@ async def get_draft_media(
     ),
     dependencies={
         "_reservation": Provide(reserve_edit_request),
-        "account_id": Provide(authenticated_account),
+        "context": Provide(authenticated_submission_context),
         "edit": Provide(attachment_edit_request, sync_to_thread=False),
         "runner": Provide(get_submission_edits, sync_to_thread=False),
         "operation_id": Provide(edit_operation_id, sync_to_thread=False),
@@ -205,7 +203,7 @@ async def discard_draft_media(
     upload_id: FromPath[UUID],
     request: Request,
     attachments: DraftAttachments,
-    account_id: AccountId,
+    context: SubmissionContext,
     edit: AttachmentEdit,
     *,
     _reservation: NamedDependency[SkipValidation[None]],
@@ -352,7 +350,7 @@ def _prevent_storage(headers: dict[str, str], limits: MediaLimits) -> None:
     status_code=200,
     dependencies={
         "_reservation": Provide(reserve_idempotent_request),
-        "account_id": Provide(authenticated_account),
+        "context": Provide(authenticated_submission_context),
     },
 )
 async def attach_draft_media(
@@ -360,13 +358,13 @@ async def attach_draft_media(
     upload_id: FromPath[UUID],
     source_draft_id: FromQuery[UUID],
     attachments: DraftAttachments,
-    account_id: AccountId,
+    context: SubmissionContext,
     *,
     _reservation: NamedDependency[SkipValidation[None]],
 ) -> DraftMediaResponse:
     """Reference a file supplied to another owned draft without duplicating its processing."""
     return DraftMediaResponse.from_snapshot(
-        await attachments.attach(source_draft_id, draft_id, Actor(account_id=account_id), upload_id)
+        await attachments.attach(source_draft_id, draft_id, upload_id, context=context)
     )
 
 
