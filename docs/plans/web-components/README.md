@@ -66,7 +66,10 @@ Open items:
   the first POST-redirect-GET endpoint.
 - `WorkbenchLayout` keeps its own sidebar (§0 item 22); `SplitLayout` would make its `aside`
   and `NavList` two landmarks with one name.
-- `bun run test:compatibility` (Firefox and WebKit) has not been run.
+- Allow scoped `<style>` blocks in `src/ui` (features and layouts stay utility-only, enforced
+  by lint) and move selector-heavy arbitrary variants and the `styles.ts` shared looks into
+  them where a style block reads better. Tailwind stays for layout, spacing and color.
+- Autocomplete and Combobox duplicate their debounce and abort logic.
 
 Departures from §2.3: `NavBar` and `SplitLayout` collapse into native popovers rather than
 a `Sheet` or `<details>`. One copy of the markup serves both layouts through a container
