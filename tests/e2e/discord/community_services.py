@@ -5,6 +5,7 @@ from typing import override
 
 from whenever import Instant
 
+from squid.core.actors import ActingContext
 from squid.core.diagnostics.application import ErrorReportService
 from squid.core.errors import JSONValue
 from squid.core.events.application import DomainEventDelivery, DomainEventService
@@ -60,7 +61,7 @@ class CommunityVotes(VoteService):
     async def create_generic_poll(
         self,
         *,
-        author_account_id: int,
+        context: ActingContext,
         question: str,
         visibility: VoteVisibility,
         duration_seconds: int,
@@ -70,7 +71,7 @@ class CommunityVotes(VoteService):
         now: Instant | None = None,
     ) -> int:
         return await self.poll_creations(
-            author_account_id=author_account_id,
+            author_account_id=context.effective.require_account_id(),
             question=question,
             visibility=visibility,
             duration_seconds=duration_seconds,

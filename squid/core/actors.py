@@ -3,7 +3,7 @@
 from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from uuid import UUID, uuid4
 
@@ -134,6 +134,26 @@ class ActingContext:
             message = "Application operation requires an acting context"
             raise InvalidStateError(message)
         return context
+
+    @classmethod
+    def for_actor(cls, actor: Actor) -> ActingContext:
+        """Carry the invocation through trusted enrichment of its effective principal."""
+        current = current_acting_context.get()
+        if current is None:
+            return cls.direct(actor)
+        effective = current.effective
+        same_discord = effective.discord_user_id is not None and effective.discord_user_id == actor.discord_user_id
+        if effective.reference != actor.reference and not (same_discord and effective.account_id is None):
+            message = "Resolved identity differs from the current effective actor"
+            raise InvalidStateError(message)
+        resolved = replace(
+            actor,
+            credential_scopes=effective.credential_scopes,
+            credential_id=effective.credential_id,
+            audit_use_id=effective.audit_use_id,
+        )
+        operator = resolved if current.session_id is None and current.operator == effective else current.operator
+        return replace(current, operator=operator, effective=resolved)
 
     @classmethod
     def direct(cls, actor: Actor) -> ActingContext:

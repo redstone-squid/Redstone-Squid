@@ -14,6 +14,7 @@ import pytest
 from whenever import Instant
 
 from squid.bot.voting.publisher import DiscordPollPublisher, PollPublication, PollPublicationError
+from squid.core.actors import ActingContext, Actor
 from squid.core.messages.application.services import MessageService
 from squid.core.messages.domain import MessageSnapshot
 from squid.core.voting.application import VoteService
@@ -32,7 +33,7 @@ class VoteRecorder(VoteService):
     async def create_generic_poll(
         self,
         *,
-        author_account_id: int,
+        context: ActingContext,
         question: str,
         visibility: VoteVisibility,
         duration_seconds: int,
@@ -41,7 +42,7 @@ class VoteRecorder(VoteService):
         scope: PollScope = PollScope.GUILD,
         now: Instant | None = None,
     ) -> int:
-        del author_account_id, question, visibility, duration_seconds, options, guild_id, scope, now
+        del context, question, visibility, duration_seconds, options, guild_id, scope, now
         self.create_calls += 1
         return 41
 
@@ -111,7 +112,7 @@ class PublisherRecorder(DiscordPollPublisher):
 
 async def _publish(publisher: DiscordPollPublisher, channel: Channel) -> PollPublication:
     return await publisher.create_and_publish(
-        author_account_id=7,
+        context=ActingContext.direct(Actor(account_id=7)),
         channel=cast(Any, channel),
         question="Which?",
         visibility=VoteVisibility.ANONYMOUS_LIVE,

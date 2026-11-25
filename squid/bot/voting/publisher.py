@@ -17,6 +17,7 @@ from squid.bot._types import GuildMessageable
 from squid.bot.message_adapter import to_message_snapshot
 from squid.bot.ui import render_payload, text_node
 from squid.bot.voting.poll_wizard import parse_option_lines
+from squid.core.actors import ActingContext
 from squid.core.permissions.domain.catalogue import VOTE_POLL_NETWORK_CREATE
 from squid.core.voting.domain import PollScope, VoteKind, VoteOption, VoteVisibility
 from squid_ui.ext.discord import send_to
@@ -59,7 +60,7 @@ class PollPublisher(Protocol):
     async def create_and_publish(
         self,
         *,
-        author_account_id: int,
+        context: ActingContext,
         channel: GuildMessageable,
         question: str,
         visibility: VoteVisibility,
@@ -95,7 +96,7 @@ class DiscordPollPublisher:
     async def create_and_publish(
         self,
         *,
-        author_account_id: int,
+        context: ActingContext,
         channel: GuildMessageable,
         question: str,
         visibility: VoteVisibility,
@@ -114,7 +115,7 @@ class DiscordPollPublisher:
             # server's card with nothing to react to.
             options = [replace(option, guild_id=None) for option in options]
         session_id = await self._bot.services.votes.create_generic_poll(
-            author_account_id=author_account_id,
+            context=context,
             question=question,
             visibility=visibility,
             duration_seconds=duration_seconds,

@@ -6,7 +6,7 @@ from math import inf, nan
 import pytest
 from whenever import Instant
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.errors import AuthenticationError
 from squid.core.permissions.domain.catalogue import VOTE_LOG_DELETE_CAST, VOTE_WEIGHT_STAFF
 from squid.core.voting.application import VoteService
@@ -688,7 +688,7 @@ async def test_poll_creation_needs_no_guild_and_no_publication_target() -> None:
     )
 
     session_id = await service.create_generic_poll(
-        author_account_id=7,
+        context=ActingContext.direct(Actor(account_id=7)),
         question="  Which one?  ",
         visibility=VoteVisibility.ANONYMOUS_LIVE,
         duration_seconds=3600,
@@ -706,7 +706,7 @@ async def test_poll_creation_rejects_durations_outside_the_supported_range(durat
 
     with pytest.raises(InvalidVoteConfigurationError, match="between 1 minute and 30 days"):
         await service.create_generic_poll(
-            author_account_id=7,
+            context=ActingContext.direct(Actor(account_id=7)),
             question="Which one?",
             visibility=VoteVisibility.ANONYMOUS_LIVE,
             duration_seconds=duration_seconds,
@@ -722,7 +722,7 @@ async def test_poll_creation_rejects_an_empty_question() -> None:
 
     with pytest.raises(InvalidVoteConfigurationError, match="question cannot be empty"):
         await service.create_generic_poll(
-            author_account_id=7,
+            context=ActingContext.direct(Actor(account_id=7)),
             question="   ",
             visibility=VoteVisibility.ANONYMOUS_LIVE,
             duration_seconds=3600,
@@ -957,7 +957,7 @@ async def test_a_network_poll_needs_an_owning_guild_and_unscoped_options() -> No
 
     with pytest.raises(InvalidVoteConfigurationError, match="must belong to a guild"):
         await service.create_generic_poll(
-            author_account_id=7,
+            context=ActingContext.direct(Actor(account_id=7)),
             question="Which?",
             visibility=VoteVisibility.ANONYMOUS_LIVE,
             duration_seconds=3600,
@@ -967,7 +967,9 @@ async def test_a_network_poll_needs_an_owning_guild_and_unscoped_options() -> No
 
     with pytest.raises(InvalidVoteConfigurationError, match="not be scoped to one guild"):
         await service.create_generic_poll(
-            author_account_id=7,
+            context=ActingContext.direct(
+                Actor(account_id=7, guild_id=10, capabilities=frozenset({"vote.poll.network_create"}))
+            ),
             question="Which?",
             visibility=VoteVisibility.ANONYMOUS_LIVE,
             duration_seconds=3600,
@@ -982,7 +984,9 @@ async def test_a_network_poll_records_its_scope() -> None:
     service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
 
     await service.create_generic_poll(
-        author_account_id=7,
+        context=ActingContext.direct(
+            Actor(account_id=7, guild_id=10, capabilities=frozenset({"vote.poll.network_create"}))
+        ),
         question="Which?",
         visibility=VoteVisibility.ANONYMOUS_LIVE,
         duration_seconds=3600,

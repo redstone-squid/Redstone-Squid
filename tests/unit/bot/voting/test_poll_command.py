@@ -14,6 +14,7 @@ import squid_ui_widgets as sp
 from squid.bot.voting.cog import VoteCog
 from squid.bot.voting.poll_wizard import PollDraft, PollScreen, parse_option_lines
 from squid.bot.voting.publisher import DiscordPollPublisher
+from squid.core.actors import Actor
 from squid.core.voting.domain import PollScope, VoteVisibility
 from tests.support.voting import GENERIC_OPTIONS
 
@@ -23,7 +24,8 @@ def poll_context() -> tuple[Any, Any]:
     cog = VoteCog.__new__(VoteCog)
     account = SimpleNamespace(id=7, needs_consent_refresh=False)
     cast(Any, cog).bot = SimpleNamespace(
-        services=SimpleNamespace(accounts=SimpleNamespace(get_account_by_identity=AsyncMock(return_value=account)))
+        actors=SimpleNamespace(resolve=AsyncMock(return_value=Actor(account_id=7, guild_id=10))),
+        services=SimpleNamespace(accounts=SimpleNamespace(get_account_by_identity=AsyncMock(return_value=account))),
     )
     cast(Any, cog).publisher = SimpleNamespace(
         may_create_network=AsyncMock(return_value=True),

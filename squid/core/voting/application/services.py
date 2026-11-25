@@ -7,7 +7,9 @@ from math import isfinite
 import anyio
 from whenever import Instant
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
+from squid.core.errors import AuthorizationError
+from squid.core.permissions.domain.catalogue import VOTE_POLL_NETWORK_CREATE
 from squid.core.unit_of_work import UnitOfWorkFactory
 from squid.core.voting.application.policies import RoleVoteWeightPolicy
 from squid.core.voting.application.ports import VoteActorResolver, VoteUnitOfWork, VoteWeightPolicy
@@ -182,7 +184,7 @@ class VoteService:
     async def create_generic_poll(
         self,
         *,
-        author_account_id: int,
+        context: ActingContext,
         question: str,
         visibility: VoteVisibility,
         duration_seconds: int,
@@ -196,37 +198,44 @@ class VoteService:
         Publication is separate, so creating a poll does not require a Discord message.
         Network polls require an owning guild and options usable in every guild.
         """
-        async with self._uow_factory() as uow:
-            if not question.strip():
-                msg = "Poll question cannot be empty."
-                raise InvalidVoteConfigurationError(msg)
-            if not MIN_POLL_DURATION_SECONDS <= duration_seconds <= MAX_POLL_DURATION_SECONDS:
-                msg = "Poll duration must be between 1 minute and 30 days."
-                raise InvalidVoteConfigurationError(msg, context={"duration_seconds": duration_seconds})
-            options = normalize_vote_options(options, kind=VoteKind.GENERIC)
-            if guild_id is not None and any(option.guild_id not in (None, guild_id) for option in options):
-                msg = "Poll options must belong to the poll guild."
-                raise InvalidVoteConfigurationError(msg)
-            if scope is PollScope.NETWORK:
-                if guild_id is None:
-                    # The owning guild weighs the ballots cast on every card.
-                    msg = "A network poll must belong to a guild."
+        actor = context.effective
+        author_account_id = actor.require_account_id()
+        if actor.guild_id != guild_id:
+            raise AuthorizationError
+        with context.scope():
+            async with self._uow_factory() as uow:
+                if not question.strip():
+                    msg = "Poll question cannot be empty."
                     raise InvalidVoteConfigurationError(msg)
-                if any(option.guild_id is not None for option in options):
-                    # Guild-scoped aliases would leave the other guilds' cards unvotable.
-                    msg = "Network poll options must not be scoped to one guild."
+                if not MIN_POLL_DURATION_SECONDS <= duration_seconds <= MAX_POLL_DURATION_SECONDS:
+                    msg = "Poll duration must be between 1 minute and 30 days."
+                    raise InvalidVoteConfigurationError(msg, context={"duration_seconds": duration_seconds})
+                options = normalize_vote_options(options, kind=VoteKind.GENERIC)
+                if guild_id is not None and any(option.guild_id not in (None, guild_id) for option in options):
+                    msg = "Poll options must belong to the poll guild."
                     raise InvalidVoteConfigurationError(msg)
-            result = await uow.votes.create_generic_session(
-                author_account_id=author_account_id,
-                question=question.strip(),
-                visibility=visibility,
-                deadline=(now or Instant.now()).add(seconds=duration_seconds),
-                options=options,
-                guild_id=guild_id,
-                scope=scope,
-            )
-            await uow.commit()
-            return result
+                if scope is PollScope.NETWORK:
+                    if guild_id is None:
+                        # The owning guild weighs the ballots cast on every card.
+                        msg = "A network poll must belong to a guild."
+                        raise InvalidVoteConfigurationError(msg)
+                    if any(option.guild_id is not None for option in options):
+                        # Guild-scoped aliases would leave the other guilds' cards unvotable.
+                        msg = "Network poll options must not be scoped to one guild."
+                        raise InvalidVoteConfigurationError(msg)
+                    if VOTE_POLL_NETWORK_CREATE.name not in actor.capabilities:
+                        raise AuthorizationError
+                result = await uow.votes.create_generic_session(
+                    author_account_id=author_account_id,
+                    question=question.strip(),
+                    visibility=visibility,
+                    deadline=(now or Instant.now()).add(seconds=duration_seconds),
+                    options=options,
+                    guild_id=guild_id,
+                    scope=scope,
+                )
+                await uow.commit()
+                return result
 
     async def get_session(self, vote_session_id: int) -> VoteSessionSnapshot | None:
         async with self._uow_factory() as uow:

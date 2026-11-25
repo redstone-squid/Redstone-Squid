@@ -2,6 +2,7 @@
 
 import contextlib
 from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import replace
 from typing import TYPE_CHECKING, Literal, Self, cast, override
 
 import discord
@@ -30,9 +31,9 @@ from squid.bot.voting.reactions import VoteReactionHandler
 from squid.bot.voting.sessions import start_delete_log_vote
 from squid.bot.voting.spec import VotingExports, extension
 from squid.core.accounts.domain import IdentityProvider
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.i18n import tr
-from squid.core.permissions.domain.catalogue import VOTE_POLL_CLOSE_ANY, VOTE_POLL_RECOUNT
+from squid.core.permissions.domain.catalogue import VOTE_POLL_CLOSE_ANY, VOTE_POLL_NETWORK_CREATE, VOTE_POLL_RECOUNT
 from squid.core.voting.domain import PollScope, VoteKind, VoteOption, VoteStatus, VoteVisibility
 from squid.core.voting.errors import InvalidVoteConfigurationError
 from squid_i18n import md_tr
@@ -136,9 +137,6 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
                 ),
                 audience="personal",
             )
-        # Bound out here because `publish` runs later: a narrowing of `account.id` does not survive
-        # into a closure, and the identity the poll is attributed to is fixed at command time.
-        author_account_id = account.id
         allow_network = isinstance(actor, discord.Member) and await self.publisher.may_create_network(actor)
         guild = request.guild
         channel = request.channel
@@ -159,8 +157,15 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
                         t"to every server."
                     )
                 )
+            subject = await self.bot.actors.resolve(request, refresh=True)
+            if subject.account_id != account.id:
+                raise InvalidVoteConfigurationError(
+                    tr(t"poll-account-changed = Your account changed. Open the poll again.")
+                )
+            if draft.scope is PollScope.NETWORK:
+                subject = replace(subject, capabilities=subject.capabilities | {VOTE_POLL_NETWORK_CREATE.name})
             publication = await self.publisher.create_and_publish(
-                author_account_id=author_account_id,
+                context=ActingContext.for_actor(subject),
                 channel=cast(GuildMessageable, channel),
                 question=draft.question,
                 visibility=draft.visibility,

@@ -9,7 +9,7 @@ from whenever import Instant
 
 from squid.bot.voting.poll_wizard import format_duration, parse_option_lines, parse_poll_choices, parse_poll_duration
 from squid.bot.voting.rendering import generic_poll_text, render_generic_poll
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.permissions.domain.catalogue import VOTE_LOG_DELETE_CAST, VOTE_POLL_CLOSE_ANY, VOTE_WEIGHT_STAFF
 from squid.core.voting.application import RoleVoteWeightPolicy, VoteService
 from squid.core.voting.domain import (
@@ -409,7 +409,7 @@ async def test_publishing_a_network_poll_unscopes_its_options() -> None:
         async def create_generic_poll(
             self,
             *,
-            author_account_id: int,
+            context: ActingContext,
             question: str,
             visibility: VoteVisibility,
             duration_seconds: int,
@@ -419,7 +419,7 @@ async def test_publishing_a_network_poll_unscopes_its_options() -> None:
             now: Instant | None = None,
         ) -> int:
             self.created = {
-                "author_account_id": author_account_id,
+                "author_account_id": context.effective.require_account_id(),
                 "question": question,
                 "visibility": visibility,
                 "duration_seconds": duration_seconds,
@@ -454,7 +454,7 @@ async def test_publishing_a_network_poll_unscopes_its_options() -> None:
     publisher = PublisherRecorder(cast(Any, Bot(services=bot_services(votes=votes))))
 
     await publisher.create_and_publish(
-        author_account_id=1,
+        context=ActingContext.direct(Actor(account_id=1)),
         channel=cast(Any, channel),
         question="Which?",
         visibility=VoteVisibility.ANONYMOUS_LIVE,
