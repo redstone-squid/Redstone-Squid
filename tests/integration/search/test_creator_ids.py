@@ -10,6 +10,7 @@ from whenever import Instant
 
 from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, ClaimMethod
 from squid.core.accounts.models import AccountIdentity, CreatorAlias
+from squid.core.builds.application.queries import BuildListFilters
 from squid.core.persistence.base import Base
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.search.application import SearchService
@@ -105,6 +106,14 @@ async def test_creator_ids_follow_claims_and_identity_visibility(
     owners = partial(_owners, uow_factory)
     assert await owners(by_alias) == await owners(by_java) == {0: account.public_creator_id}
     assert await owners(by_private_discord) == await owners(impostor) == {}
+
+    public_filters = BuildListFilters(creator_id=account.public_creator_id)
+    listed = await service.search(SearchRequest("", scope=SearchScope.BUILDS, catalogue_filters=public_filters))
+    assert {hit.source_id for hit in listed.hits} == {str(by_alias), str(by_java)}
+    async with uow_factory() as uow:
+        summaries = await uow.builds.get_public_summaries([by_java, by_private_discord])
+        assert [summary.creators[0].creator_id for summary in summaries] == [account.public_creator_id, None]
+        assert [summary.credits[0].creator_id for summary in summaries] == [account.public_creator_id, None]
 
     async with migrated_session_factory.begin() as session:
         await session.execute(text("UPDATE account_identities SET is_public = true WHERE subject = '7'"))

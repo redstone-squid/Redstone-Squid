@@ -2,12 +2,12 @@
 
 from typing import Any
 
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, select
 
-from squid.core.accounts.models import Account
+from squid.core.accounts.infrastructure.attribution import attributed_credits, public_creator_ids
 from squid.core.builds.application.queries import BuildListFilters
 from squid.core.builds.domain import BuildStatus
-from squid.core.builds.models import Build, BuildVersion
+from squid.core.builds.models import Build, BuildCredit, BuildVersion
 from squid.core.tags.models import TagAssignment, TagSlug
 
 
@@ -31,14 +31,19 @@ def filter_build_listing[S: Select[Any]](
             .exists()
         )
     if filters.creator_id is not None:
-        linked = func.build_credit_accounts().table_valued("build_id", "account_id", "role")
+        linked = attributed_credits()
+        identifiers = public_creator_ids()
         statement = statement.where(
             select(linked.c.build_id)
-            .join(Account, Account.id == linked.c.account_id)
+            .select_from(linked)
+            .join(identifiers, identifiers.c.account_id == linked.c.account_id)
+            .join(
+                BuildCredit, (BuildCredit.build_id == linked.c.build_id) & (BuildCredit.position == linked.c.position)
+            )
             .where(
                 linked.c.build_id == Build.id,
-                Account.public_creator_id == filters.creator_id,
-                linked.c.role.in_(("creator", "designer")),
+                identifiers.c.public_id == filters.creator_id,
+                BuildCredit.role.in_(("creator", "designer")),
             )
             .exists()
         )

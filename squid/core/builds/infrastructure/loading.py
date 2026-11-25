@@ -8,6 +8,7 @@ from sqlalchemy import and_, case, false, func, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.core.accounts.domain import IdentityProvider
+from squid.core.accounts.infrastructure.attribution import attributed_credits
 from squid.core.accounts.models import Account, AccountIdentity
 from squid.core.builds.domain import BuildCategory, BuildStatus, Credit
 from squid.core.builds.domain.credits import CreditRole
@@ -54,13 +55,22 @@ class BuildLoader:
     def credit_rows(build_ids: Sequence[int]):
         """Resolve each credit to its current account and public creator identifier."""
         linked = func.build_credit_accounts().table_valued("build_id", "position", "account_id")
+        public = attributed_credits()
+        public_id = (
+            select(Account.public_creator_id)
+            .join(public, Account.id == public.c.account_id)
+            .where(public.c.build_id == BuildCredit.build_id, public.c.position == BuildCredit.position)
+            .order_by(Account.id)
+            .limit(1)
+            .correlate(BuildCredit)
+            .scalar_subquery()
+        )
         return (
-            select(BuildCredit, linked.c.account_id, Account.public_creator_id)
+            select(BuildCredit, linked.c.account_id, public_id)
             .outerjoin(
                 linked,
                 and_(linked.c.build_id == BuildCredit.build_id, linked.c.position == BuildCredit.position),
             )
-            .outerjoin(Account, Account.id == linked.c.account_id)
             .where(BuildCredit.build_id.in_(build_ids))
             .order_by(BuildCredit.build_id, BuildCredit.position)
         )
