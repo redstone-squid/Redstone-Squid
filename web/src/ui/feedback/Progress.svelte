@@ -48,7 +48,7 @@
   </div>
   {#if kind === "progress"}
     <progress
-      class="h-2 w-full overflow-hidden rounded-full bg-surface-muted accent-accent [&::-moz-progress-bar]:bg-accent [&::-webkit-progress-bar]:bg-surface-muted [&::-webkit-progress-value]:bg-accent"
+      class="h-2 w-full overflow-hidden rounded-full bg-surface-muted accent-accent"
       aria-labelledby={`${id}-label`}
       aria-valuetext={valueLabel}
       {value}
@@ -85,3 +85,17 @@
     {/if}
   {/if}
 </div>
+
+<style>
+  /* Each engine draws a native bar's parts as its own pseudo-elements. Separate rules, since
+     a browser drops a whole rule over one selector it does not know. */
+  progress::-webkit-progress-bar {
+    background-color: var(--color-surface-muted);
+  }
+  progress::-webkit-progress-value {
+    background-color: var(--color-accent);
+  }
+  progress::-moz-progress-bar {
+    background-color: var(--color-accent);
+  }
+</style>

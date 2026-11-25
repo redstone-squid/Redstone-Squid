@@ -14,15 +14,77 @@
   class={cn(
     "max-w-prose min-w-0 wrap-break-word",
     size === "sm" ? "text-sm" : "text-base",
-    "[&_:is(p,ul,ol,pre,blockquote,table)]:mt-4 [&>:first-child]:mt-0",
-    "[&_h2]:mt-8 [&_h2]:text-xl [&_h2]:font-bold [&_h2]:tracking-tight [&_h3]:mt-6 [&_h3]:text-lg [&_h3]:font-bold",
-    "[&_li]:mt-1 [&_ol]:list-decimal [&_ol]:ps-6 [&_ul]:list-disc [&_ul]:ps-6",
-    "[&_blockquote]:border-s-4 [&_blockquote]:border-line [&_blockquote]:ps-4 [&_blockquote]:text-fg-muted",
-    "[&_code]:rounded-xs [&_code]:bg-surface-muted [&_code]:px-1 [&_code]:font-mono [&_code]:text-[0.9em]",
-    "[&_pre]:overflow-x-auto [&_pre]:rounded-sm [&_pre]:bg-surface-muted [&_pre]:p-4 [&_pre_code]:bg-transparent [&_pre_code]:p-0",
-    "[&_table]:w-full [&_table]:border-collapse [&_td]:border-b [&_td]:border-line [&_td]:py-2 [&_td]:text-start [&_th]:border-b [&_th]:border-line-strong [&_th]:py-2 [&_th]:text-start",
     className,
   )}
 >
   {@render children()}
 </div>
+
+<style>
+  /* The content comes from the caller, so every selector below reaches into it. */
+  div :global(:is(p, ul, ol, pre, blockquote, table)) {
+    margin-block-start: 1rem;
+  }
+  div :global(h2) {
+    margin-block-start: 2rem;
+    font-size: var(--text-xl);
+    line-height: var(--text-xl--line-height);
+    font-weight: 700;
+    letter-spacing: var(--tracking-tight);
+  }
+  div :global(h3) {
+    margin-block-start: 1.5rem;
+    font-size: var(--text-lg);
+    line-height: var(--text-lg--line-height);
+    font-weight: 700;
+  }
+  div > :global(:first-child) {
+    margin-block-start: 0;
+  }
+  div :global(li) {
+    margin-block-start: 0.25rem;
+  }
+  div :global(:is(ul, ol)) {
+    padding-inline-start: 1.5rem;
+  }
+  div :global(ul) {
+    list-style-type: disc;
+  }
+  div :global(ol) {
+    list-style-type: decimal;
+  }
+  div :global(blockquote) {
+    border-inline-start: 4px solid var(--color-line);
+    padding-inline-start: 1rem;
+    color: var(--color-fg-muted);
+  }
+  div :global(code) {
+    border-radius: var(--radius-xs);
+    background-color: var(--color-surface-muted);
+    padding-inline: 0.25rem;
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+  }
+  div :global(pre) {
+    overflow-x: auto;
+    border-radius: var(--radius-sm);
+    background-color: var(--color-surface-muted);
+    padding: 1rem;
+  }
+  div :global(pre code) {
+    background-color: transparent;
+    padding: 0;
+  }
+  div :global(table) {
+    inline-size: 100%;
+    border-collapse: collapse;
+  }
+  div :global(:is(th, td)) {
+    border-block-end: 1px solid var(--color-line);
+    padding-block: 0.5rem;
+    text-align: start;
+  }
+  div :global(th) {
+    border-color: var(--color-line-strong);
+  }
+</style>

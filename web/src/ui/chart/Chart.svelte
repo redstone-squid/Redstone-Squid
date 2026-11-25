@@ -74,17 +74,12 @@
     <div
       style:--plot-height={`${heights[height]}px`}
       bind:clientWidth={measured}
+      data-unmeasured={hasSize ? undefined : ""}
       data-awaiting-width={measurePlot && !hasSize ? "" : undefined}
       role={group ? "group" : "img"}
       aria-labelledby={`${id}-title`}
       aria-describedby={`${id}-description`}
-      class={cn(
-        "relative min-w-0 contain-inline-size",
-        // LayerChart sizes its layers in pixels. Until the plot has a measured width, as on the
-        // server, they flow instead so the SVG scales to the frame through its viewBox.
-        !hasSize &&
-          "[&_.lc-layout-svg]:h-auto! [&_.lc-layout-svg]:w-full! [&_.lc-tooltip-context]:static! [&_.lc-tooltip-context-container]:static! [&_.lc-tooltip-context-container]:size-auto!",
-      )}
+      class="relative min-w-0 contain-inline-size"
     >
       <!-- eslint-enable svelte/no-inline-styles -->
       <!-- A hidden container measures 0; keep the server width until it has a size. -->
@@ -142,6 +137,23 @@
 </figure>
 
 <style>
+  /*
+   * LayerChart sizes its layers in pixels. Until the plot has a measured width, as on the
+   * server, they flow instead so the SVG scales to the frame through its viewBox.
+   */
+  /* stylelint-disable declaration-no-important -- LayerChart sets these sizes inline. */
+  [data-unmeasured] :global(.lc-layout-svg) {
+    inline-size: 100% !important;
+    block-size: auto !important;
+  }
+  [data-unmeasured] :global(:is(.lc-tooltip-context, .lc-tooltip-context-container)) {
+    position: static !important;
+  }
+  [data-unmeasured] :global(.lc-tooltip-context-container) {
+    inline-size: auto !important;
+    block-size: auto !important;
+  }
+  /* stylelint-enable declaration-no-important */
   /* Static Astro components and readers without JavaScript use the server-rendered plot. */
   @media (scripting: enabled) {
     :global(astro-island[client]) [data-awaiting-width] {

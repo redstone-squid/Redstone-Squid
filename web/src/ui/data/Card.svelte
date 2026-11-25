@@ -57,11 +57,8 @@
 >
   {#if media}<div class="border-b border-line">{@render media()}</div>{/if}
   <div
-    class={cn(
-      "grid min-w-0 flex-1 content-start gap-2 wrap-break-word",
-      "[&_:is(a,button,input,select,textarea,summary):not([data-card-link])]:relative [&_:is(a,button,input,select,textarea,summary):not([data-card-link])]:z-sticky",
-      paddings[padding],
-    )}
+    data-card-body
+    class={cn("grid min-w-0 flex-1 content-start gap-2 wrap-break-word", paddings[padding])}
   >
     {#if title !== undefined}
       <Heading level={headingLevel} size="md" {eyebrow}>
@@ -79,3 +76,11 @@
       {@render footer()}
     </div>{/if}
 </svelte:element>
+
+<style>
+  /* The title link stretches over the card; other controls in the body stay clickable on top. */
+  [data-card-body] :global(:is(a, button, input, select, textarea, summary):not([data-card-link])) {
+    position: relative;
+    z-index: var(--z-sticky);
+  }
+</style>
