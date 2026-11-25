@@ -126,7 +126,10 @@
   <Combobox.Portal>
     <Combobox.Content
       sideOffset={4}
-      class="z-dropdown max-h-72 w-(--bits-floating-anchor-width) min-w-field-sm overflow-y-auto rounded-sm border border-line-strong bg-surface-raised p-1 shadow-overlay"
+      class={cn(
+        "z-dropdown max-h-72 w-(--bits-floating-anchor-width) min-w-field-sm overflow-y-auto rounded-sm border border-line-strong bg-surface-raised p-1 shadow-overlay",
+        "data-ending-style:opacity-0 motion-safe:transition-opacity motion-safe:duration-fast motion-safe:starting:opacity-0",
+      )}
     >
       {#each shown as option (option.value)}
         <Combobox.Item

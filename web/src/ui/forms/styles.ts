@@ -41,10 +41,7 @@ export const checkboxClass = cn(
 export const fieldMessageClass = cn("text-xs text-fg-muted");
 export const fieldErrorClass = cn("flex items-start gap-1.5 text-xs font-medium text-danger");
 
-/** The floating list under a combobox or autocomplete, and one option in it. */
-export const popupClass = cn(
-  "absolute inset-x-0 top-full z-dropdown mt-1 max-h-72 overflow-y-auto rounded-sm border border-line-strong bg-surface-raised p-1 shadow-overlay",
-);
+/** One option in the floating list under a combobox or autocomplete. */
 export const popupOptionClass = cn(
   "grid cursor-pointer gap-0.5 rounded-xs px-3 py-2 text-sm wrap-anywhere text-fg",
   "hover:bg-surface-muted aria-selected:forced-highlight aria-selected:bg-accent-soft data-highlighted:forced-highlight data-highlighted:bg-accent-soft",

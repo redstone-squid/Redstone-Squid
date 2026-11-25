@@ -5,7 +5,7 @@
   import type { FieldMessages, SuggestionSource, Suggestions } from "@/ui/forms/field";
   import FieldFrame from "./FieldFrame.svelte";
   import { QueryLoader } from "./query-loader.svelte";
-  import { inputClass, popupClass, popupOptionClass } from "./styles";
+  import { inputClass, popupOptionClass } from "./styles";
 
   /**
    * Free text with suggestions, such as a search query or a credit name. The typed text is
@@ -176,7 +176,9 @@
           bind:this={input}
         />{/if}
       {#if open}
-        <div class={popupClass}>
+        <div
+          class="absolute inset-x-0 top-full z-dropdown mt-1 max-h-72 overflow-y-auto rounded-sm border border-line-strong bg-surface-raised p-1 shadow-overlay motion-safe:transition-opacity motion-safe:duration-fast motion-safe:starting:opacity-0"
+        >
           {#if visible.length > 0}
             <ul class="grid list-none" id={listId} role="listbox" aria-label={labels.suggestions}>
               {#each visible as item, index (index)}
