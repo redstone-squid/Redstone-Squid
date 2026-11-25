@@ -63,7 +63,7 @@
 >
   <div class="flex min-w-0 flex-wrap items-center gap-2">
     <h2 id={`${id}-title`} class="text-lg font-bold">{title}</h2>
-    {#if activeLabel !== undefined}<Badge tone="accent">{activeLabel}</Badge>{/if}
+    {#if activeLabel !== undefined}<Badge>{activeLabel}</Badge>{/if}
   </div>
   {#each Object.entries(hidden) as [key, value] (key)}
     <input type="hidden" name={key} {value} />

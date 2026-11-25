@@ -1,12 +1,11 @@
 <script lang="ts">
   import Button from "@/ui/actions/Button.svelte";
   import CopyButton from "@/ui/actions/CopyButton.svelte";
-  import Code from "@/ui/content/Code.svelte";
   import Notice from "@/ui/feedback/Notice.svelte";
 
   /**
    * A secret shown once, such as an installation key or a merge code. The value sits in a
-   * selectable `Code` with a copy button, under a `warning` that it cannot be shown again.
+   * selectable value with a copy button inside its box, under a `warning` that it cannot be shown again.
    *
    * Until the user presses the acknowledge button, leaving the page asks for confirmation.
    * The button links to `acknowledgeHref` when given, so it also works without JavaScript.
@@ -48,13 +47,14 @@
   <Notice tone="warning">{warning}</Notice>
   <div class="grid min-w-0 gap-2">
     <p class="text-sm font-semibold">{label}</p>
-    <div class="flex min-w-0 flex-wrap items-start gap-2">
-      <div class="min-w-0 flex-1">
-        <Code variant="block" wrap class="text-sm select-all">{value}</Code>
-      </div>
+    <!-- The copy button sits inside the value's box, as a field's adornment would. One line of
+         the value is exactly as tall as the button, so the box is a control's height. -->
+    <div
+      class="flex min-h-control min-w-0 items-start gap-2 rounded-sm border border-line-strong bg-surface-muted p-1 ps-3"
+    >
+      <code class="min-w-0 flex-1 py-2 font-mono text-sm break-all select-all">{value}</code>
       <CopyButton
         {value}
-        size="md"
         label={copyLabels.label}
         copiedLabel={copyLabels.copied}
         failedLabel={copyLabels.failed}
