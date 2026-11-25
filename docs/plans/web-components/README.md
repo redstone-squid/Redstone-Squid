@@ -54,7 +54,7 @@ third-party; revisit this then.
 ## Status and resuming
 
 Phases 0 to 7 are done, along with scoped style blocks and motion (the workbench's
-`motion` page); Phase 8 (screens) is next. Every §2 component exists; the
+`motion` page). Phase 8 (screens) has A1 and the header's account entry. Every §2 component exists; the
 "Need → Use" table in `web/src/ui/README.md` lists them. `src/ui/lib`, `src/api-client` and
 `features/submissions/draft-sync.ts` wait for their screens.
 
@@ -63,9 +63,6 @@ To resume, read `screens.md` for the next screen, its API items in `api-gaps.md`
 
 Open items:
 
-- The `UserMenu` island, built with the header screen. Nothing blocks it: `/v1/session`
-  exists and islands call the API directly (API item 52). Its place is marked in
-  `CatalogueLayout`'s actions.
 - `FlashNotice` takes text; the one-shot flash cookie in `src/server/cookies.ts` waits for
   the first POST-redirect-GET endpoint.
 - `WorkbenchLayout` keeps its own sidebar (§0 item 22); `SplitLayout` would make its `aside`
@@ -76,6 +73,13 @@ Open items:
   page's JavaScript weight (a LayerChart island has never been measured on a real page).
   Each screen's review test also calls `expect(page).toHaveAlignedControls()`, and the screen
   joins the reflow sweep in `tests/review/reflow.spec.ts`.
+
+Departures from §3: the header's `UserMenu` is `layouts/AccountMenu.astro`, a `nojs` `Menu`
+of links and a sign-out form rendered from `Astro.locals.session`, not an island. It ships no
+JavaScript; header counts (A6) are what would make it an island. Consent and sign-out are
+POST-redirect-GET forms handled by the site, which forwards the visitor's cookies and CSRF
+token to the API (`src/server/session.ts`); Astro's origin check stands in for the CSRF
+header a form cannot send.
 
 Departures from §2.3: `NavBar` and `SplitLayout` collapse into native popovers rather than
 a `Sheet` or `<details>`. One copy of the markup serves both layouts through a container

@@ -18,6 +18,9 @@ Items 1–4 are implemented in the API.
 3. **`GET /v1/auth/providers`** returns configured providers as `[{id}]` in display order. A1 uses the stable provider slug for its localized sign-in button. A3 combines discovery with `/me` identities and calls `POST /v1/auth/{provider}/link` with the browser CSRF token. Navigate to the returned `authorization_url`. The callback requires the account that started linking and reports `identity_in_use` if a different account owns the identity.
 4. **Callback failures return to A1** with a stable `auth_error` query parameter. Use `cancelled` for provider denial, `invalid_state` for missing, expired or mismatched state, and `provider_unavailable` for provider failures. Consume and validate state even on denial. Only a validated attempt can carry its saved return destination into a retry. Successful sign-in retains the existing return redirect.
 
+56. **Consent before the account.** The OAuth callback creates the account and its identity before the visitor sees the privacy notice, yet the notice says "Cancelling stores nothing". A1's decline signs the visitor out, but the account row stays. Either create the account on acceptance (hold the verified identity in the session until then) or reword the notice. The callback's error redirect also goes to the unprefixed `/sign-in`, so a zh-CN visitor sees English errors; carry the locale in the saved state.
+57. **List Minecraft grants.** A4 lists grants with origin, server and expiry, but `/v1/minecraft` has only `DELETE /grants/{id}`. Add `GET /v1/users/me/minecraft/grants`.
+
 ## Builds
 
 5. **Build summaries (implemented).** Cards receive the subtitle, typed category and status, creator names with nullable public IDs, and current and former record counts. External preview dimensions can be unknown.
