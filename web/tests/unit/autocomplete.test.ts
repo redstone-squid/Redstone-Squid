@@ -19,7 +19,12 @@ function setup(
         .filter((version) => version.toLowerCase().includes(value.toLowerCase()))
         .map((version) => ({ value: version, label: version })),
     }),
-  props: Partial<{ multiline: boolean; minQueryLength: number }> = {},
+  props: Partial<{
+    multiline: boolean;
+    minQueryLength: number;
+    clearable: boolean;
+    clearLabel: string;
+  }> = {},
 ) {
   const user = userEvent.setup();
   render(Autocomplete, {
@@ -39,6 +44,18 @@ function setup(
 }
 
 describe("Autocomplete", () => {
+  it("empties the field with the clear button, closes the list, and keeps focus", async () => {
+    const { user, input } = setup(undefined, { clearable: true, clearLabel: "Clear search" });
+    expect(screen.queryByRole("button", { name: "Clear search" })).toBeNull();
+    await user.type(input, "java");
+    expect(await screen.findAllByRole("option")).toHaveLength(3);
+    await user.click(screen.getByRole("button", { name: "Clear search" }));
+    expect(input).toHaveValue("");
+    expect(input).toHaveFocus();
+    expect(screen.queryByRole("option")).toBeNull();
+    expect(screen.queryByRole("button", { name: "Clear search" })).toBeNull();
+  });
+
   it("waits for the minimum length before loading", async () => {
     vi.useFakeTimers();
     const load = vi.fn(() => Promise.resolve({ items: [] }));

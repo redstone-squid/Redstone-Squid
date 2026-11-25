@@ -289,6 +289,7 @@
         label={m.storySearchBuildsAndRecords()}
         placeholder={m.storySearchPlaceholder()}
         submitLabel={m.navSearch()}
+        clearLabel={m.navClearSearch()}
         hidden={{ scope: "builds" }}
         value="flush"
       />
@@ -298,6 +299,7 @@
         action="/design-system/patterns"
         label={m.navSearch()}
         submitLabel={m.navSearch()}
+        clearLabel={m.navClearSearch()}
         compact
       />
     </Variant>
@@ -306,6 +308,7 @@
         action="/design-system/patterns"
         label={m.storySearchRecords()}
         submitLabel={m.navSearch()}
+        clearLabel={m.navClearSearch()}
         suggestions={{
           labels: {
             suggestions: m.storySuggestedSearches(),

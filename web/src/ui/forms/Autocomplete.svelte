@@ -1,4 +1,5 @@
 <script lang="ts">
+  import X from "@lucide/svelte/icons/x";
   import { onMount, tick } from "svelte";
   import { cn } from "@/ui/cn";
   import Spinner from "@/ui/feedback/Spinner.svelte";
@@ -18,6 +19,7 @@
    * Arrow keys move through suggestions, Enter takes the active one (otherwise it submits the
    * form), and Escape closes the list. Nothing loads while an input method is composing. The
    * number of suggestions is announced politely. Without JavaScript it is a plain input.
+   * `clearable` adds a button named `clearLabel` that empties a single-line field.
    */
   type Props = Omit<FieldMessages, "width"> & {
     name: string;
@@ -33,6 +35,8 @@
     labels: SuggestionSource["labels"];
     load: SuggestionSource["load"];
     width?: FieldMessages["width"];
+    clearable?: boolean;
+    clearLabel?: string;
     class?: string;
   };
   let {
@@ -47,6 +51,8 @@
     debounceMs = 250,
     labels,
     load,
+    clearable = false,
+    clearLabel,
     ...frame
   }: Props = $props();
   const fieldId = $props.id();
@@ -56,6 +62,7 @@
   let focused = $state(false);
   let dismissed = $state(false);
   let composing = $state(false);
+  let hydrated = $state(false);
   let cursor = $state<number | null>(null);
   const suggestions = new QueryLoader<Suggestions>(() => {
     if (!focused || dismissed || composing) return null;
@@ -72,12 +79,22 @@
   const visible = $derived(open ? result.items : []);
 
   onMount(() => {
+    hydrated = true;
     // A visitor can start typing into the server-rendered field before hydration.
     if (input && document.activeElement === input) {
       focused = true;
       cursor = input.selectionStart;
     }
   });
+
+  function clear(): void {
+    value = "";
+    dismissed = true;
+    input?.focus();
+  }
+  const showClear = $derived(
+    clearable && !multiline && hydrated && value !== "" && disabled !== true,
+  );
 
   async function choose(index: number): Promise<void> {
     const item = visible[index];
@@ -171,10 +188,16 @@
           bind:this={input}
           rows="3"></textarea>{:else}<input
           {...attributes}
-          class={cn(inputClass, "min-h-control w-full px-3")}
+          class={cn(inputClass, "min-h-control w-full ps-3", clearable ? "pe-control" : "pe-3")}
           bind:value
           bind:this={input}
         />{/if}
+      {#if showClear}<button
+          type="button"
+          class="absolute inset-y-0 end-0 grid w-control cursor-pointer place-items-center text-fg-muted hover:text-fg focus-visible:-outline-offset-3"
+          aria-label={clearLabel}
+          onclick={clear}><X class="size-4" aria-hidden="true" /></button
+        >{/if}
       {#if open}
         <div
           class="absolute inset-x-0 top-full z-dropdown mt-1 max-h-72 overflow-y-auto rounded-sm border border-line-strong bg-surface-raised p-1 shadow-overlay motion-safe:transition-opacity motion-safe:duration-fast motion-safe:starting:opacity-0"

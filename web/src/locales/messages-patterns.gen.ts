@@ -2,6 +2,18 @@
 import { getLocale, type Locale } from "./locale";
 import { formatNumber, formatValue, select } from "./format";
 
+/** Clear search */
+export function navClearSearch(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Clear search";
+    case "zh-CN":
+      return "清除搜索";
+    case "en-XA":
+      return "[" + "Çļéåŕ šéåŕçĥ" + "·····]";
+  }
+}
+
 /** Needs attention */
 export function storyNeedsAttention(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -113,18 +125,6 @@ export function storyNavbarDescription(locale: Locale = getLocale()): string {
       return "站点页眉中的首页链接、栏目和操作。";
     case "en-XA":
       return "[" + "Ţĥé šîţé ĥéåđéŕ'š ĥöɱé ļîñķ, šéçţîöñš, åñđ åçţîöñš." + "·····················]";
-  }
-}
-
-/** full width */
-export function storyFullWidth(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "full width";
-    case "zh-CN":
-      return "全宽";
-    case "en-XA":
-      return "[" + "ƒûļļ ŵîđţĥ" + "····]";
   }
 }
 
@@ -1920,6 +1920,7 @@ export {
   storyError,
   storyExtender,
   storyFilters,
+  storyFullWidth,
   storyLoading,
   storyLoadingBuilds,
   storyMeasuredWithATickCounterOnJava1,

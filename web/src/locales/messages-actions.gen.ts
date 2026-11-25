@@ -141,6 +141,7 @@ export {
   storyCancel,
   storyCopied,
   storyCopyFailed,
+  storyFullWidth,
   storyPending,
   storyPreview,
   storyRevoke,

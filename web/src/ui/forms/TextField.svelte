@@ -1,6 +1,7 @@
 <script lang="ts">
   import X from "@lucide/svelte/icons/x";
   import type { LucideIcon } from "@lucide/svelte";
+  import { onMount } from "svelte";
   import type { HTMLInputAttributes } from "svelte/elements";
   import { cn } from "@/ui/cn";
   import type { FieldMessages } from "@/ui/forms/field";
@@ -52,6 +53,9 @@
   }: Props = $props();
   const suffixId = $props.id();
   const text = $derived(String(value ?? ""));
+  // The clear button needs JavaScript, so a server-rendered field leaves it out.
+  let hydrated = $state(false);
+  onMount(() => (hydrated = true));
 
   function clear(): void {
     if (!input) return;
@@ -106,7 +110,7 @@
       {#if suffix !== undefined}<span id={suffixId} class={cn(adornmentClass, "pe-3")}
           >{suffix}</span
         >{/if}
-      {#if clearable && text !== "" && disabled !== true && readonly !== true}<button
+      {#if clearable && hydrated && text !== "" && disabled !== true && readonly !== true}<button
           type="button"
           class="grid w-control shrink-0 cursor-pointer place-items-center text-fg-muted hover:text-fg focus-visible:-outline-offset-3"
           aria-label={clearLabel}

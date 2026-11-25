@@ -2949,6 +2949,18 @@ export function errorUnavailable(locale: Locale = getLocale()): string {
   }
 }
 
+/** full width */
+export function storyFullWidth(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "full width";
+    case "zh-CN":
+      return "全宽";
+    case "en-XA":
+      return "[" + "ƒûļļ ŵîđţĥ" + "····]";
+  }
+}
+
 /** 312 builds */
 export function story312Builds(locale: Locale = getLocale()): string {
   switch (locale) {

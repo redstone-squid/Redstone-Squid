@@ -2,6 +2,7 @@ site-name = 红石鱿鱼
 nav-builds = 作品
 nav-records = 纪录
 nav-search = 搜索
+nav-clear-search = 清除搜索
 nav-submit = 投稿
 nav-about = 关于
 nav-language = 语言

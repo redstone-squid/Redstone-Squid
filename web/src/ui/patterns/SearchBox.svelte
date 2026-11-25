@@ -12,7 +12,8 @@
    * scope and view, across a new search. `suggestions` turns the field into an
    * `Autocomplete`. `compact` hides the label and shortens the button to an icon, for the
    * header; the label still names the field. One magnifier shows either way: in the field, or
-   * on the compact button.
+   * on the compact button. Once hydrated, a button named `clearLabel` empties the field; it does
+   * not search again, since `ActiveFilters` removes an applied query.
    */
   type Props = {
     action: string;
@@ -21,6 +22,7 @@
     label: string;
     placeholder?: string;
     submitLabel: string;
+    clearLabel: string;
     hidden?: Record<string, string>;
     suggestions?: SuggestionSource;
     compact?: boolean;
@@ -33,6 +35,7 @@
     label,
     placeholder,
     submitLabel,
+    clearLabel,
     hidden = {},
     suggestions,
     compact = false,
@@ -56,6 +59,8 @@
         {placeholder}
         load={suggestions.load}
         labels={suggestions.labels}
+        clearable
+        {clearLabel}
       />
     {:else}
       <TextField
@@ -63,6 +68,8 @@
         type="search"
         enterkeyhint="search"
         icon={compact ? undefined : Search}
+        clearable
+        {clearLabel}
         {name}
         {value}
         {label}

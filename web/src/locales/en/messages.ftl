@@ -2,6 +2,7 @@ site-name = Redstone Squid
 nav-builds = Builds
 nav-records = Records
 nav-search = Search
+nav-clear-search = Clear search
 nav-submit = Submit
 nav-about = About
 nav-language = Language
