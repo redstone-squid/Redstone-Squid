@@ -26,9 +26,11 @@ squid/core, so screens are composed from `web/src/ui` instead of one-off markup.
   `src/ui`, and no raw interactive elements in features and layouts.
 - Astro is for pages and layouts; ui and feature components are Svelte, so Astro slot
   wrappers only appear at page and layout boundaries.
-- A style lives in the component that owns it; a style shared by a folder lives in that
-  folder's `styles.ts`, imported only inside `src/ui`. Code that wants a button's look
+- A style lives in the component that owns it; a class string shared by a folder lives in
+  that folder's `styles.ts`, imported only inside `src/ui`. Code that wants a button's look
   renders `Button` (bits-ui triggers through their `child` snippet).
+- Tailwind stays for layout, spacing and color. Scoped `<style>` blocks are allowed inside
+  `src/ui` only, for selector-heavy styles; features and layouts stay utility-only.
 - Builds and records share `features/catalogue`, since a record shows its holders as build
   cards and features cannot import each other.
 - API errors and the islands' write client live in `src/api-client`, a layer that server,
@@ -66,9 +68,6 @@ Open items:
   the first POST-redirect-GET endpoint.
 - `WorkbenchLayout` keeps its own sidebar (§0 item 22); `SplitLayout` would make its `aside`
   and `NavList` two landmarks with one name.
-- Allow scoped `<style>` blocks in `src/ui` (features and layouts stay utility-only, enforced
-  by lint) and move selector-heavy arbitrary variants and the `styles.ts` shared looks into
-  them where a style block reads better. Tailwind stays for layout, spacing and color.
 - Audit each screen as it ships, not the workbench: keyboard walkthrough of the whole page
   (header, filters, results, footer), focus after navigation and after server-driven filter
   changes, Tab through collapsed `NavBar` and `SplitLayout` popovers, Lighthouse, and the

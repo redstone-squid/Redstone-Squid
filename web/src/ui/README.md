@@ -60,8 +60,8 @@ stories per folder; `/zh-cn/design-system` shows them in Simplified Chinese.
 | Filters in the URL, focus after a change, island fetching | `lib/url-state`, `lib/focus`, `lib/query-client`                                 |
 
 Features and layouts build on these: lint rejects raw `<button>`, `<input>`, `<select>`,
-`<textarea>`, `<table>`, `<dialog>` and `<img>` there, and imports of `bits-ui`, `layerchart`,
-`@tanstack/svelte-table` or a folder's `styles.ts`. Components take their text through props
+`<textarea>`, `<table>`, `<dialog>`, `<img>` and `<style>` there, and imports of `bits-ui`,
+`layerchart`, `@tanstack/svelte-table` or a folder's `styles.ts`. Components take their text through props
 and know nothing about builds, records, or the API. A component's own text, such as button
 names and status messages, arrives in one `labels` object; text that depends on a value is a
 function there, such as `labels.count(n)`, so plurals stay in the catalogs. Add one here only when two features need
@@ -72,9 +72,14 @@ it; see `web/AGENTS.md`.
 Components style themselves with Tailwind utilities from `app.css`, which exposes the theme
 tokens in `themes.css`. Merge a caller's `class` with `cn`, and accept it only for properties
 the component leaves open, such as margins. A style used by one component lives in it; a
-style shared by a folder lives in that folder's `styles.ts`. Durations (`duration-fast`,
-`-normal`, `-slow`) and stacking (`z-sticky` up to `z-skiplink`) come from `app.css`. Arbitrary
-values are allowed only here, and only for grid tracks, transition properties, em sizes, and
+class string shared by a folder lives in that folder's `styles.ts`. When a selector does the
+work, such as styling slotted content, vendor pseudo-elements, or a library's markup, write a
+scoped `<style>` block instead of a chain of arbitrary variants, hooked on an element or a
+`data-` attribute (lint rejects class names that are not utilities). Its rules are unlayered,
+so they beat utilities: never style there what a caller's `class` may set. Stylelint holds
+blocks to the same tokens (`var(--color-*)`, `var(--z-*)`, `var(--duration-*)`), and only
+`src/ui` may have them. Durations (`duration-fast`, `-normal`, `-slow`) and stacking
+(`z-sticky` up to `z-skiplink`) come from `app.css`. Arbitrary values are allowed only here, and only for grid tracks, transition properties, em sizes, and
 viewport-bounded sizes; `scripts/lint/arbitrary-values.ts` holds the list. Use sentence case for headings, labels, and badges. Numbers and measurements stay in the
 sans face (`numeric` for tabular figures); monospace is only for `Code`. A badge marks one
 state. Give every other fact a place by its role (eyebrow, `DescriptionList`, the detail page)

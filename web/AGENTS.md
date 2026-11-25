@@ -95,7 +95,9 @@ contrast themes) erase backgrounds and draw every border, so a state shown only 
 background or border color, such as the current tab, also adds `forced-highlight`. Lint rejects unknown
 classes and arbitrary colors. Classes are joined with `cn`, never merged at runtime, so give each
 cva variant sole ownership of the properties it sets. A style shared by a family of components
-lives in that folder's `styles.ts`, which only `src/ui` imports. See `src/ui/README.md`.
+lives in that folder's `styles.ts`, which only `src/ui` imports. Scoped `<style>` blocks are for
+selector-heavy styles inside `src/ui`; features and layouts stay utility-only. See
+`src/ui/README.md`.
 
 ## Content security policy
 
@@ -236,13 +238,14 @@ from `web/` before committing web work.
 
 - `scripts/lint/` holds the custom rules: `squid/import-boundaries` enforces the layer table,
   `squid/no-raw-text` keeps text in the catalogs, and `squid/no-raw-elements` makes features
-  and layouts use `src/ui` controls. `arbitrary-values.ts` limits arbitrary Tailwind values to
-  `src/ui`. Disable a rule on one line only with a reason after `--`.
+  and layouts use `src/ui` controls and no `<style>` blocks. `arbitrary-values.ts` limits
+  arbitrary Tailwind values to `src/ui`. Disable a rule on one line only with a reason after `--`.
 - `strict-boolean-expressions` requires explicit checks such as `items.length > 0` or
   `value !== ""`, so `0` and `""` are never mistaken for missing values.
 - `eslint.config.js` enables chosen unicorn and SonarJS rules rather than their presets,
   plus `eslint-plugin-regexp`. Add a rule there when it catches something real.
-- stylelint requires colors, z-indexes, and durations to come from tokens in `src/ui`.
+- stylelint requires colors, z-indexes, and durations to come from tokens, in CSS files and
+  `<style>` blocks alike; only `src/ui/themes.css` writes `oklch()`.
 - knip fails on unused files, exports, and dependencies. Delete dead code instead of
   exporting it for later.
 
