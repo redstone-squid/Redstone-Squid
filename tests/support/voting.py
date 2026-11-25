@@ -2,13 +2,16 @@
 
 from collections.abc import Mapping, Sequence
 from copy import copy
-from typing import cast
+from typing import Self, cast
 
 from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
+from squid.core.actors import Actor
 from squid.core.messages.models import Message
+from squid.core.permissions.application.ports import SubjectRecords
+from squid.core.permissions.models import PermissionGrant
 from squid.core.posts.models import DiscordPost
 from squid.core.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
@@ -264,8 +267,21 @@ class VoteUnitOfWork[RepositoryT](PublishingFakeUnitOfWork[RepositoryT]):
     commit. Tests using this scope must not rely on rollback of those changes.
     """
 
-    def __init__(self, repository: RepositoryT) -> None:
+    def __init__(self, repository: RepositoryT, *, grants: Sequence[PermissionGrant] = ()) -> None:
+        self._grants = grants
         super().__init__(repository, clone=copy)
+
+    @property
+    def permissions(self) -> Self:
+        return self
+
+    async def load_for_subject(self, subject: Actor) -> SubjectRecords:
+        return SubjectRecords(
+            1, subject, grants=tuple(grant for grant in self._grants if grant.subject_account_id == subject.account_id)
+        )
+
+    async def epoch(self) -> int:
+        return 1
 
     @property
     def votes(self) -> RepositoryT:

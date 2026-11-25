@@ -2,6 +2,7 @@
 
 import logging
 from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import replace
 from math import isfinite
 
 import anyio
@@ -9,7 +10,16 @@ from whenever import Instant
 
 from squid.core.actors import ActingContext, Actor, application_operation
 from squid.core.errors import AuthorizationError
-from squid.core.permissions.domain.catalogue import VOTE_POLL_NETWORK_CREATE
+from squid.core.permissions.application import PermissionService
+from squid.core.permissions.domain.catalogue import (
+    VOTE_LOG_DELETE_CAST,
+    VOTE_POLL_CAST,
+    VOTE_POLL_CLOSE_ANY,
+    VOTE_POLL_CREATE,
+    VOTE_POLL_NETWORK_CREATE,
+    VOTE_POLL_RECOUNT,
+    VOTE_WEIGHT_STAFF,
+)
 from squid.core.unit_of_work import UnitOfWorkFactory
 from squid.core.voting.application.policies import RoleVoteWeightPolicy
 from squid.core.voting.application.ports import VoteActorResolver, VoteUnitOfWork, VoteWeightPolicy
@@ -66,6 +76,7 @@ class VoteService:
         build_owner_guild_id: int | None = None,
     ):
         self._uow_factory = uow_factory
+        self._permissions = PermissionService(uow_factory=uow_factory)
         self._policy = policy or RoleVoteWeightPolicy(
             lambda guild, kind: self.get_role_weights(guild, kind, context=ActingContext.current())
         )
@@ -181,6 +192,7 @@ class VoteService:
         if context.effective.guild_id != server_id:
             raise AuthorizationError
         async with self._uow_factory() as uow:
+            await self._permissions.require(context.effective, VOTE_POLL_CREATE, uow=uow)
             options = normalize_vote_options(options, kind=VoteKind.DELETE_LOG)
             result = await uow.votes.create_delete_log_session(
                 author_account_id=author_account_id,
@@ -236,8 +248,8 @@ class VoteService:
                         # Guild-scoped aliases would leave the other guilds' cards unvotable.
                         msg = "Network poll options must not be scoped to one guild."
                         raise InvalidVoteConfigurationError(msg)
-                    if VOTE_POLL_NETWORK_CREATE.name not in actor.capabilities:
-                        raise AuthorizationError
+                    await self._permissions.require(actor, VOTE_POLL_NETWORK_CREATE, uow=uow)
+                await self._permissions.require(actor, VOTE_POLL_CREATE, uow=uow)
                 result = await uow.votes.create_generic_session(
                     author_account_id=author_account_id,
                     question=question.strip(),
@@ -361,30 +373,6 @@ class VoteService:
         # The option's alias comes from where the ballot was cast; role weights come from the owner guild.
         owner_guild_id = self._owner_guild_id(snapshot)
         weight_actor = await self._weight_actor(actor, snapshot, owner_guild_id)
-        if weight_actor is None:
-            # The owner guild is unreachable right now. Land the ballot at the
-            # default weight rather than letting a Discord blip veto the vote; the
-            # next refresh corrects it.
-            logger.warning(
-                "Vote session %s could not resolve account %s in owner guild %s; weighting at 1.0",
-                snapshot.id,
-                actor.account_id,
-                owner_guild_id,
-                extra={"squid.vote.session_id": snapshot.id},
-            )
-            weight = 1.0
-        else:
-            calculated = await self._policy.calculate(weight_actor, snapshot)
-            if calculated is None:
-                return CastVoteResult(session=snapshot, rejection=VoteRejection.NOT_ELIGIBLE)
-            # Without a designated authority no guild's role table may speak for the
-            # session, but eligibility still had to be judged.
-            weight = calculated if owner_guild_id is not None else 1.0
-        if not isfinite(weight) or weight <= 0:
-            msg = "Vote policies must return a positive finite weight."
-            raise InvalidVoteConfigurationError(msg)
-        weight *= option.multiplier
-
         # Refresh earlier ballots too: role changes may alter the score that closes this vote.
         refreshed, unresolved = await self._calculate_refresh(snapshot, replacing=weight_actor)
         if unresolved:
@@ -395,6 +383,39 @@ class VoteService:
                 extra={"squid.vote.session_id": snapshot.id},
             )
         async with self._uow_factory() as uow:
+            if not (await self._permissions.check(actor, VOTE_POLL_CAST, uow=uow)).allowed:
+                return CastVoteResult(snapshot, VoteRejection.NOT_ELIGIBLE)
+            if weight_actor is None:
+                if snapshot.kind is VoteKind.DELETE_LOG:
+                    return CastVoteResult(snapshot, VoteRejection.NOT_ELIGIBLE)
+                # The owner guild is unreachable right now. Land the ballot at the
+                # default weight rather than letting a Discord blip veto the vote; the
+                # next refresh corrects it.
+                logger.warning(
+                    "Vote session %s could not resolve account %s in owner guild %s; weighting at 1.0",
+                    snapshot.id,
+                    actor.account_id,
+                    owner_guild_id,
+                    extra={"squid.vote.session_id": snapshot.id},
+                )
+                weight = 1.0
+            else:
+                weight_actor = replace(weight_actor, credential_scopes=actor.credential_scopes)
+                privileges = await self._permissions.check(
+                    weight_actor, VOTE_LOG_DELETE_CAST, VOTE_WEIGHT_STAFF, uow=uow
+                )
+                weight_actor = replace(weight_actor, capabilities=privileges.allowed_nodes)
+                calculated = await self._policy.calculate(weight_actor, snapshot)
+                if calculated is None:
+                    return CastVoteResult(session=snapshot, rejection=VoteRejection.NOT_ELIGIBLE)
+                # Without a designated authority no guild's role table may speak for the
+                # session, but eligibility still had to be judged.
+                weight = calculated if owner_guild_id is not None else 1.0
+            if not isfinite(weight) or weight <= 0:
+                msg = "Vote policies must return a positive finite weight."
+                raise InvalidVoteConfigurationError(msg)
+            weight *= option.multiplier
+
             mutation = await uow.votes.cast_vote(
                 vote_session_id,
                 account_id,
@@ -431,6 +452,8 @@ class VoteService:
         if actor.guild_id is None or actor.guild_id not in {message.guild_id for message in snapshot.messages}:
             return CastVoteResult(session=snapshot, rejection=VoteRejection.WRONG_GUILD)
         async with self._uow_factory() as uow:
+            if not (await self._permissions.check(actor, VOTE_POLL_CAST, uow=uow)).allowed:
+                return CastVoteResult(snapshot, VoteRejection.NOT_ELIGIBLE)
             mutation = await uow.votes.clear_vote(vote_session_id, account_id)
             await uow.commit()
         if mutation is None:
@@ -450,11 +473,17 @@ class VoteService:
         snapshot = await self.get_session(vote_session_id, context=context)
         if snapshot is None:
             return VoteRefreshResult(None)
-        return await self._refresh_snapshot(snapshot)
+        return await self._refresh_snapshot(
+            snapshot, actor=context.effective if context.effective.worker_name is None else None
+        )
 
-    async def _refresh_snapshot(self, snapshot: VoteSessionSnapshot) -> VoteRefreshResult:
+    async def _refresh_snapshot(
+        self, snapshot: VoteSessionSnapshot, *, actor: Actor | None = None
+    ) -> VoteRefreshResult:
         weights, unresolved = await self._calculate_refresh(snapshot)
         async with self._uow_factory() as uow:
+            if actor is not None and await self._poll_authority(uow, snapshot, actor) is not None:
+                raise AuthorizationError
             mutation = await uow.votes.refresh_weights(snapshot.id, weights)
             await uow.commit()
         if unresolved:
@@ -480,12 +509,42 @@ class VoteService:
         snapshot = await self.get_session(vote_session_id, context=context)
         if snapshot is None:
             return CastVoteResult(None, VoteRejection.NOT_FOUND)
-        rejection = snapshot.can_close(actor)
-        if rejection is not None:
-            return CastVoteResult(snapshot, rejection)
         if not snapshot.is_open:
             return CastVoteResult(snapshot, VoteRejection.CLOSED)
         return await self._count_and_close(snapshot, recount, actor_id=actor.account_id)
+
+    async def _poll_authority(
+        self,
+        uow: VoteUnitOfWork,
+        snapshot: VoteSessionSnapshot,
+        actor: Actor,
+        *,
+        review_action: str | None = None,
+    ) -> VoteRejection | None:
+        current = await uow.votes.get_by_id(snapshot.id)
+        if (
+            current is None
+            or current.poll is None
+            or current.poll != snapshot.poll
+            or current.status is not snapshot.status
+        ):
+            return VoteRejection.CLOSED
+        permissions = await self._permissions.check(actor, VOTE_POLL_CLOSE_ANY, VOTE_POLL_RECOUNT, uow=uow)
+        actor = replace(actor, capabilities=permissions.allowed_nodes)
+        if review_action is None:
+            if (
+                actor.account_id == current.author_account_id
+                and actor.credential_scopes is not None
+                and VOTE_POLL_CLOSE_ANY.name not in permissions.allowed_nodes
+                and not (await self._permissions.check(actor, VOTE_POLL_CREATE, uow=uow)).allowed
+            ):
+                return VoteRejection.NOT_AUTHORIZED
+            return current.can_close(actor)
+        return (
+            None
+            if current.can_review_poll(actor, recount_only=review_action == "retry")
+            else VoteRejection.NOT_AUTHORIZED
+        )
 
     async def _count_and_close(
         self, snapshot: VoteSessionSnapshot, recount: FinalRecount | None, *, actor_id: int | None = None
@@ -493,6 +552,15 @@ class VoteService:
         # A worker can reclaim an interrupted count after the lease. The revision fences
         # every ballot write and the final transition against a superseded attempt.
         async with self._uow_factory() as uow:
+            if actor_id is not None:
+                rejection = await self._poll_authority(
+                    uow,
+                    snapshot,
+                    ActingContext.current().effective,
+                    review_action="retry" if snapshot.status is VoteStatus.REVIEW else None,
+                )
+                if rejection is not None:
+                    return CastVoteResult(snapshot, rejection)
             counting = await uow.votes.transition_poll(
                 snapshot, VoteStatus.COUNTING, claim=True, retry_at=Instant.now().add(minutes=10), actor_id=actor_id
             )
@@ -549,6 +617,11 @@ class VoteService:
     @application_operation
     async def pending_reviews(self, guild_id: int, *, context: ActingContext) -> Sequence[int]:
         async with self._uow_factory() as uow:
+            if context.effective.guild_id != guild_id:
+                raise AuthorizationError
+            await self._permissions.require(
+                context.effective, VOTE_POLL_CLOSE_ANY, VOTE_POLL_RECOUNT, mode="any", uow=uow
+            )
             return await uow.votes.pending_reviews(guild_id)
 
     @application_operation
@@ -566,8 +639,6 @@ class VoteService:
         actor = context.effective
         if snapshot.poll is None or snapshot.status is not VoteStatus.REVIEW:
             return CastVoteResult(snapshot, VoteRejection.CLOSED)
-        if not snapshot.can_review_poll(actor, recount_only=action == "retry"):
-            return CastVoteResult(snapshot, VoteRejection.NOT_AUTHORIZED)
         account = actor.require_account_id()
         if action == "retry":
             return await self._count_and_close(snapshot, recount, actor_id=account)
@@ -579,6 +650,9 @@ class VoteService:
             msg = "Choose a future voting deadline."
             raise InvalidVoteConfigurationError(msg)
         async with self._uow_factory() as uow:
+            rejection = await self._poll_authority(uow, snapshot, actor, review_action=action)
+            if rejection is not None:
+                return CastVoteResult(snapshot, rejection)
             updated = await uow.votes.transition_poll(
                 snapshot,
                 status,

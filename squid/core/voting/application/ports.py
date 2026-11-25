@@ -6,7 +6,7 @@ from typing import Protocol
 from whenever import Instant
 
 from squid.core.actors import Actor
-from squid.core.unit_of_work import UnitOfWork
+from squid.core.permissions.application.ports import PermissionUnitOfWork
 from squid.core.voting.domain import (
     EmojiPreset,
     PollScope,
@@ -199,6 +199,6 @@ class VoteRepository(Protocol):
     async def reset_configuration(self, guild_id: int, kind: VoteKind | None = None) -> None: ...
 
 
-class VoteUnitOfWork(UnitOfWork, Protocol):
+class VoteUnitOfWork(PermissionUnitOfWork, Protocol):
     @property
     def votes(self) -> VoteRepository: ...

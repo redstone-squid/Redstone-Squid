@@ -9,6 +9,7 @@ from whenever import Instant
 from squid.core.actors import ActingContext, Actor
 from squid.core.errors import AuthenticationError
 from squid.core.permissions.domain.catalogue import VOTE_LOG_DELETE_CAST, VOTE_WEIGHT_STAFF
+from squid.core.permissions.models import PermissionGrant
 from squid.core.voting.application import VoteService
 from squid.core.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
@@ -294,9 +295,36 @@ class RecordingActorResolver:
         return {account_id: await self.resolve(account_id, guild_id, kind) for account_id in account_ids}
 
 
+def vote_grants(*nodes: str, account_id: int = 7) -> tuple[PermissionGrant, ...]:
+    return tuple(PermissionGrant(pattern=node, effect=1, subject_account_id=account_id) for node in nodes)
+
+
+@pytest.mark.parametrize("scoped_out", [True, False])
+async def test_limited_credentials_and_a_revoked_cast_grant_cannot_change_ballots(scoped_out: bool) -> None:
+    initial = snapshot()
+    repository = FakeVoteRepository(initial)
+    grants = () if scoped_out else (PermissionGrant(pattern="vote.poll.cast", effect=-1, subject_account_id=7),)
+    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository, grants=grants))
+    context = ActingContext.direct(
+        Actor(
+            account_id=7,
+            guild_id=OWNER_GUILD_ID,
+            credential_scopes=frozenset({"vote.poll.create"}) if scoped_out else None,
+            capabilities=frozenset({"vote.poll.cast"}),
+        )
+    )
+    cast = await service.cast_vote(initial.id, "approve", context=context)
+    cleared = await service.clear_vote(initial.id, context=context)
+    assert cast.rejection is VoteRejection.NOT_ELIGIBLE
+    assert cleared.rejection is VoteRejection.NOT_ELIGIBLE
+    assert repository.cast_calls == []
+
+
 async def test_vote_creation_delegates_complete_aggregate_to_repository() -> None:
     repository = FakeVoteRepository(None)
-    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
+    service = VoteService(
+        uow_factory=lambda: VoteUnitOfWork(repository, grants=vote_grants("vote.poll.create", account_id=8))
+    )
     changes: list[VoteChange] = [("status", "pending", "confirmed")]
 
     build_session_id = await service.start_build_vote(
@@ -359,7 +387,7 @@ async def test_refresh_log_carries_session_id_without_user_attributes(caplog: py
     )
 
     with caplog.at_level(logging.WARNING, logger="squid.core.voting.application.services"):
-        await service.refresh(12, context=ActingContext.direct(Actor()))
+        await service.refresh(12, context=ActingContext.worker("voting.refresh"))
 
     record_fields = vars(caplog.records[-1])
     assert record_fields["squid.vote.session_id"] == 12
@@ -388,7 +416,12 @@ async def test_cast_vote_applies_choice_and_staff_weight(
         current_weight=expected_weight,
         just_closed=False,
     )
-    service = VoteService(build_owner_guild_id=OWNER_GUILD_ID, uow_factory=lambda: VoteUnitOfWork(repository))
+    service = VoteService(
+        build_owner_guild_id=OWNER_GUILD_ID,
+        uow_factory=lambda: VoteUnitOfWork(
+            repository, grants=vote_grants("vote.weight.staff") if has_staff_weight else ()
+        ),
+    )
     option_id = "approve" if emoji == "👍" else "deny"
 
     result = await service.cast_vote(
@@ -517,7 +550,9 @@ async def test_the_delete_log_capability_admits_a_voter_and_staff_weight_still_a
         current_weight=3.0,
         just_closed=False,
     )
-    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
+    service = VoteService(
+        uow_factory=lambda: VoteUnitOfWork(repository, grants=vote_grants("vote.log_delete.cast", "vote.weight.staff"))
+    )
 
     result = await service.cast_vote(
         12,
@@ -622,7 +657,10 @@ async def test_custom_vote_option_multiplier_is_applied_before_staff_weight() ->
         current_weight=6.0,
         just_closed=False,
     )
-    service = VoteService(build_owner_guild_id=OWNER_GUILD_ID, uow_factory=lambda: VoteUnitOfWork(repository))
+    service = VoteService(
+        build_owner_guild_id=OWNER_GUILD_ID,
+        uow_factory=lambda: VoteUnitOfWork(repository, grants=vote_grants("vote.weight.staff")),
+    )
 
     result = await service.cast_vote(
         12,
@@ -701,7 +739,7 @@ def test_vote_option_rejects_non_positive_or_non_finite_multiplier(multiplier: f
 async def test_poll_creation_needs_no_guild_and_no_publication_target() -> None:
     """A poll is a database row before it is a Discord message."""
     repository = FakeVoteRepository(None)
-    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
+    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository, grants=vote_grants("vote.poll.create")))
     options = (
         VoteOption("1️⃣", VoteChoice.GENERIC, identifier="1", label="One"),
         VoteOption("2️⃣", VoteChoice.GENERIC, identifier="2", label="Two"),
@@ -1014,7 +1052,11 @@ async def test_a_network_poll_needs_an_owning_guild_and_unscoped_options() -> No
 
 async def test_a_network_poll_records_its_scope() -> None:
     repository = FakeVoteRepository(None)
-    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
+    service = VoteService(
+        uow_factory=lambda: VoteUnitOfWork(
+            repository, grants=vote_grants("vote.poll.create", "vote.poll.network_create")
+        )
+    )
 
     await service.create_generic_poll(
         context=ActingContext.direct(
@@ -1090,7 +1132,11 @@ async def test_owner_guild_fallback_clears_all_membership_authority() -> None:
 async def test_failed_final_counts_pause_for_review_and_finalize_uses_collected_ballots() -> None:
     poll = poll_snapshot(messages=(VoteMessage(100, 200, 10),))
     repository = FakeVoteRepository(poll)
-    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
+    service = VoteService(
+        uow_factory=lambda: VoteUnitOfWork(
+            repository, grants=(*vote_grants("vote.poll.close_any"), *vote_grants("vote.poll.recount", account_id=8))
+        )
+    )
     attempts: list[int] = []
 
     async def recount(session_id: int, revision: int) -> tuple[bool, tuple[int, ...]]:
@@ -1108,7 +1154,7 @@ async def test_failed_final_counts_pause_for_review_and_finalize_uses_collected_
     assert review.status is VoteStatus.REVIEW
     assert review.poll.unreadable_cards == (100,)
     manager = Actor(account_id=7, discord_user_id=70, guild_id=10, capabilities=frozenset({"vote.poll.close_any"}))
-    recount_staff = replace(manager, capabilities=frozenset({"vote.poll.recount"}))
+    recount_staff = replace(manager, account_id=8, capabilities=frozenset({"vote.poll.recount"}))
     refused = await service.review_poll(
         review, "finalize", reason="Accept collected ballots", context=ActingContext.for_actor(recount_staff)
     )
@@ -1128,7 +1174,7 @@ async def test_failed_final_counts_pause_for_review_and_finalize_uses_collected_
 async def test_manager_can_resolve_a_paused_poll_without_recounting(action: str, status: VoteStatus) -> None:
     snapshot = poll_snapshot(status=VoteStatus.REVIEW)
     repository = FakeVoteRepository(snapshot)
-    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
+    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository, grants=vote_grants("vote.poll.close_any")))
     manager = Actor(account_id=7, guild_id=10, capabilities=frozenset({"vote.poll.close_any"}))
     deadline = Instant.now().add(hours=1) if action == "reopen" else None
     result = await service.review_poll(
@@ -1141,7 +1187,7 @@ async def test_manager_can_resolve_a_paused_poll_without_recounting(action: str,
 async def test_retry_permission_can_read_current_cards_and_seal_a_complete_recount() -> None:
     snapshot = poll_snapshot(status=VoteStatus.REVIEW, messages=(VoteMessage(100, 200, 10),))
     repository = FakeVoteRepository(snapshot)
-    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
+    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository, grants=vote_grants("vote.poll.recount")))
     staff = Actor(account_id=7, guild_id=10, capabilities=frozenset({"vote.poll.recount"}))
     reads = []
 

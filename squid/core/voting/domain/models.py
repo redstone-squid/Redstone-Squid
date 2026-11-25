@@ -345,7 +345,7 @@ class VoteSessionSnapshot:
         if self.kind is not VoteKind.GENERIC or self.poll is None:
             return VoteRejection.NOT_AUTHORIZED
         author = actor.account_id == self.author_account_id
-        elsewhere = self.poll.guild_id is not None and actor.guild_id and self.poll.guild_id != actor.guild_id
+        elsewhere = self.poll.guild_id is not None and self.poll.guild_id != actor.guild_id
         # Only the author may close a network poll from another guild. Other
         # actors must use capabilities resolved in the poll's owning guild.
         if elsewhere and not (author and self.poll.scope is PollScope.NETWORK):
