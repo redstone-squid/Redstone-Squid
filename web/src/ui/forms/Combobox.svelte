@@ -239,7 +239,11 @@
               if (event.key === "Backspace" && search === "" && values.length > 0)
                 remove(values.at(-1) ?? "");
             }}
-          />
+          >
+            <!-- bits-ui fills the input with a picked item's label, which a multiple combobox
+                 should clear instead, so the input shows our own search text. -->
+            {#snippet child({ props })}<input {...props} value={search} />{/snippet}
+          </Combobox.Input>
           <Combobox.Trigger
             aria-label={labels.toggle}
             class="grid w-9 shrink-0 cursor-pointer place-items-center self-stretch text-fg-muted hover:text-fg"

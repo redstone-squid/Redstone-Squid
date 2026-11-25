@@ -349,6 +349,18 @@ describe("Combobox", () => {
     expect(onchange).toHaveBeenLastCalledWith([]);
   });
 
+  it("keeps the input empty after picking a tag from the list", async () => {
+    const user = userEvent.setup();
+    render(Combobox, { label: "Tags", name: "tags", options, multiple: true, labels });
+    const input = screen.getByRole("combobox", { name: "Tags" });
+    await user.click(input);
+    await user.keyboard("{ArrowDown}");
+    expect(await screen.findAllByRole("option", { hidden: true })).toHaveLength(3);
+    await user.keyboard("{Enter}");
+    expect(await screen.findByRole("button", { name: "Remove 1.20" })).toBeInTheDocument();
+    expect(input).toHaveValue("");
+  });
+
   it("loads options from the server and aborts stale requests", async () => {
     const user = userEvent.setup();
     const signals: AbortSignal[] = [];
