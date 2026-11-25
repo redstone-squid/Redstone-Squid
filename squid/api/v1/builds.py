@@ -301,7 +301,9 @@ async def list_builds(
                 submitter_account_id=submitter_id,
             )
         )
-        summaries = await hydrate_builds(build_queries, result.hits, status=effective.to_domain())
+        summaries = await hydrate_builds(
+            build_queries, result.hits, status=effective.to_domain(), submitter_id=submitter_id
+        )
         return Page(
             # A page can come back short of `total` when the projection outlived a build; the count
             # is the search backend's, and hydrate_builds has already logged the drift.
