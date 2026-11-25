@@ -20,6 +20,7 @@
     variant === "card" && "rounded-md border border-line bg-surface",
     className,
   )}
+  data-variant={variant}
   {open}
 >
   <summary
@@ -65,6 +66,10 @@
       }
       details:not([open])::details-content {
         block-size: 0;
+      }
+      /* The card's padding already fits a focus ring, and a margin would draw text over its border. */
+      details[data-variant="card"]::details-content {
+        overflow-clip-margin: 0;
       }
     }
   }
