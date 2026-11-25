@@ -367,7 +367,8 @@ export default tseslint.config(
     rules: { "squid/no-raw-text": "error" },
   },
   {
-    // Features and layouts render controls, tables, dialogs, and images through src/ui.
+    // Features and layouts render controls, tables, dialogs, and images through src/ui, and
+    // style with utilities: scoped <style> blocks are for src/ui components only.
     files: ["src/{layouts,features}/**/*.{astro,svelte}"],
     rules: { "squid/no-raw-elements": "error" },
   },

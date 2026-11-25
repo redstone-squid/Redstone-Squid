@@ -7,6 +7,7 @@ import { noRawElements } from "../../scripts/lint/no-raw-elements";
 RuleTester.describe = describe;
 RuleTester.it = it;
 const error = { messageId: "element" };
+const style = { messageId: "style" };
 
 new RuleTester({ languageOptions: { parser: svelteParser } }).run(
   "no-raw-elements (Svelte)",
@@ -22,6 +23,11 @@ new RuleTester({ languageOptions: { parser: svelteParser } }).run(
       { filename: "A.svelte", code: "<input type={kind} />", errors: [error] },
       { filename: "A.svelte", code: "<table><tr><td>{n}</td></tr></table>", errors: [error] },
       { filename: "A.svelte", code: '<img src={url} alt="" />', errors: [error] },
+      {
+        filename: "A.svelte",
+        code: "<p>{n}</p>\n<style>p { margin: 0; }</style>",
+        errors: [style],
+      },
     ],
   },
 );
@@ -38,6 +44,8 @@ new RuleTester({ languageOptions: { parser: astroParser } }).run(
       { filename: "A.astro", code: "<select name={name}></select>", errors: [error] },
       { filename: "A.astro", code: "<dialog open></dialog>", errors: [error] },
       { filename: "A.astro", code: "<textarea name={name} />", errors: [error] },
+      { filename: "A.astro", code: "<p>{n}</p>\n<style>p { margin: 0; }</style>", errors: [style] },
+      { filename: "A.astro", code: "<style is:global>p { margin: 0; }</style>", errors: [style] },
     ],
   },
 );

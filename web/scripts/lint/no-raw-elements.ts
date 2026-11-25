@@ -38,8 +38,9 @@ function isHiddenInput(attributes: Attribute[]): boolean {
 
 /**
  * Report native controls, tables, dialogs, and images in Svelte or Astro markup, which must
- * use the src/ui component that wraps them. Hidden inputs are allowed. Disable the rule on a
- * line with a reason when no component fits.
+ * use the src/ui component that wraps them, and `<style>` blocks, which only src/ui components
+ * may have. Hidden inputs are allowed. Disable the rule on a line with a reason when no
+ * component fits.
  */
 export const noRawElements: Rule.RuleModule = {
   meta: {
@@ -47,11 +48,16 @@ export const noRawElements: Rule.RuleModule = {
     schema: [],
     messages: {
       element: "Use {{component}} from src/ui instead of a raw <{{name}}>.",
+      style: "Style with Tailwind utilities. Only src/ui components have <style> blocks.",
     },
   },
   create(context) {
     function check(node: Rule.Node, element: ElementNode, attributes: Attribute[]): void {
       const name = element.name?.name;
+      if (name === "style") {
+        context.report({ node, messageId: "style" });
+        return;
+      }
       if (!isWrapped(name) || (name === "input" && isHiddenInput(attributes))) return;
       context.report({ node, messageId: "element", data: { name, component: WRAPPED[name] } });
     }
@@ -59,6 +65,9 @@ export const noRawElements: Rule.RuleModule = {
       SvelteElement(node: Rule.Node) {
         const element = node as ElementNode;
         if (element.kind === "html") check(node, element, element.startTag?.attributes ?? []);
+      },
+      SvelteStyleElement(node: Rule.Node) {
+        context.report({ node, messageId: "style" });
       },
       JSXOpeningElement(node: Rule.Node) {
         const element = node as ElementNode;
