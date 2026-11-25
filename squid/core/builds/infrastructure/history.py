@@ -41,7 +41,7 @@ class BuildHistoryQueries:
         subject = (
             await session.execute(
                 select(Account.public_creator_id, AccountProfile.display_name)
-                .outerjoin(AccountProfile, AccountProfile.account_id == Account.id)
+                .outerjoin(AccountProfile, (AccountProfile.account_id == Account.id) & AccountProfile.hidden.is_(False))
                 .where(Account.id == build.submitter_account_id)
             )
         ).one_or_none()
@@ -69,7 +69,7 @@ class BuildHistoryQueries:
                 .join(BuildHistorySnapshot, BuildHistorySnapshot.id == BuildHistoryEntry.after_state_id)
                 .outerjoin(old, old.id == BuildHistoryEntry.before_state_id)
                 .outerjoin(Account, Account.id == BuildHistoryEntry.actor_account_id)
-                .outerjoin(AccountProfile, AccountProfile.account_id == Account.id)
+                .outerjoin(AccountProfile, (AccountProfile.account_id == Account.id) & AccountProfile.hidden.is_(False))
                 .where(BuildHistoryEntry.build_id == build.id, published)
                 .order_by(BuildHistoryEntry.id.desc())
                 .limit(1)
@@ -106,7 +106,7 @@ class BuildHistoryQueries:
             .join(after, after.id == BuildHistoryEntry.after_state_id)
             .outerjoin(before, before.id == BuildHistoryEntry.before_state_id)
             .outerjoin(Account, Account.id == BuildHistoryEntry.actor_account_id)
-            .outerjoin(AccountProfile, AccountProfile.account_id == Account.id)
+            .outerjoin(AccountProfile, (AccountProfile.account_id == Account.id) & AccountProfile.hidden.is_(False))
             .where(
                 BuildHistoryEntry.build_id == build_id,
                 after.snapshot["build"]["submission_status"].as_integer() == BuildStatus.APPROVED.value,
