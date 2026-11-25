@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.core.accounts.models import Account
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.edits.application import EditExecutor
 from squid.core.edits.domain import OperationReuseError, RevisionConflictError
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
@@ -72,31 +72,34 @@ async def test_answers_undo_replay_and_external_change_conflict(
         ),
     )
     edit = change_command(draft.snapshot.id, client_change)
-    saved = await executor.execute(edit, actor)
+    saved = await executor.execute(edit, context=ActingContext.direct(actor))
     assert saved.receipt is not None
-    assert (await executor.execute(change_command(draft.snapshot.id, client_change), actor)).replayed
+    assert (
+        await executor.execute(change_command(draft.snapshot.id, client_change), context=ActingContext.direct(actor))
+    ).replayed
     with pytest.raises(OperationReuseError):
         await executor.execute(
-            change_command(draft.snapshot.id, replace(client_change, client_instance_id="different-client")), actor
+            change_command(draft.snapshot.id, replace(client_change, client_instance_id="different-client")),
+            context=ActingContext.direct(actor),
         )
-    undone = await executor.execute(saved.receipt.undo(saved.outcome.revisions), actor)
+    undone = await executor.execute(saved.receipt.undo(saved.outcome.revisions), context=ActingContext.direct(actor))
     assert undone.receipt is not None
-    current = await service.get_accessible(draft.snapshot.id, actor)
+    current = await service.get_accessible(draft.snapshot.id, context=ActingContext.for_actor(actor))
     assert "display_name" not in current.snapshot.answers
     assert current.snapshot.answers["description"] is None
     await service.apply_change(
         draft.snapshot.id,
-        actor,
         DraftChange(
             current.snapshot.revision,
             "other-client",
             DraftChangeKey(str(uuid4())),
             (FieldOperation(uuid4(), "description", FieldOperationKind.SET, "Another answer"),),
         ),
+        context=ActingContext.for_actor(actor),
         locale=None,
     )
     with pytest.raises(RevisionConflictError):
-        await executor.execute(saved.receipt.redo(undone.outcome.revisions), actor)
+        await executor.execute(saved.receipt.redo(undone.outcome.revisions), context=ActingContext.direct(actor))
     async with sessions() as session:
         assert await session.scalar(select(func.count()).select_from(SubmissionDraftChange)) == 3
         first = await session.scalar(select(SubmissionDraftChange).where(SubmissionDraftChange.resulting_revision == 1))

@@ -6,7 +6,7 @@ from uuid import uuid4
 import pytest
 from pytest_mock import MockerFixture
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.errors import NotFoundError
 from squid.core.schematics.domain.doors.detection import detect_cycle
 from squid.core.schematics.infrastructure import wire
@@ -129,15 +129,15 @@ async def test_draft_and_file_access_are_checked_before_returning_metadata(mocke
     scope.__aenter__.return_value = uow
     service = DraftSchematicService(drafts, mocker.Mock(), uow_factory=lambda: scope)
     with pytest.raises(NotFoundError):
-        await service.suggestions(draft.snapshot.id, Actor(account_id=42), uuid4())
+        await service.suggestions(draft.snapshot.id, uuid4(), context=ActingContext.for_actor(Actor(account_id=42)))
     uow.draft_schematics.analysis_for_draft.assert_not_called()
     source = DraftSchematic(uuid4(), "private.schem", "a" * 64, 1, DraftSchematicState.READY, discarded=True)
     uow.draft_schematics.list.return_value = (source,)
     with pytest.raises(NotFoundError):
-        await service.suggestions(draft.snapshot.id, Actor(account_id=42), source.id)
+        await service.suggestions(draft.snapshot.id, source.id, context=ActingContext.for_actor(Actor(account_id=42)))
     drafts.get_accessible_in.side_effect = DraftAccessDeniedError()
     with pytest.raises(DraftAccessDeniedError):
-        await service.suggestions(draft.snapshot.id, Actor(account_id=43), source.id)
+        await service.suggestions(draft.snapshot.id, source.id, context=ActingContext.for_actor(Actor(account_id=43)))
     uow.draft_schematics.analysis_for_draft.assert_not_called()
 
 

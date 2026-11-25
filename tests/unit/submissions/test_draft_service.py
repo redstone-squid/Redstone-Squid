@@ -7,7 +7,7 @@ from uuid import UUID
 import pytest
 from whenever import Instant
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.errors import InvalidStateError, JSONValue
 from squid.core.permissions.application.ports import PermissionUnitOfWork
 from squid.core.permissions.domain import Decision, PermissionCheck, Reason
@@ -407,8 +407,12 @@ async def test_change_is_idempotent_even_after_revision_advances() -> None:
         draft_id=DRAFT_ID,
     )
 
-    first = await service.apply_change(DRAFT_ID, Actor(account_id=7), _change(), locale="en", now=NOW)
-    replay = await service.apply_change(DRAFT_ID, Actor(account_id=7), _change(), locale="en", now=NOW)
+    first = await service.apply_change(
+        DRAFT_ID, _change(), context=ActingContext.for_actor(Actor(account_id=7)), locale="en", now=NOW
+    )
+    replay = await service.apply_change(
+        DRAFT_ID, _change(), context=ActingContext.for_actor(Actor(account_id=7)), locale="en", now=NOW
+    )
 
     assert first.replayed is False
     assert replay.replayed is True
@@ -442,9 +446,13 @@ async def test_expired_draft_is_inaccessible_even_to_replayed_mutations() -> Non
     with pytest.raises(DraftStateConflictError) as access_error:
         await service.get_owned(DRAFT_ID, 7)
     with pytest.raises(DraftStateConflictError):
-        await service.apply_change(DRAFT_ID, Actor(account_id=7), _change(), locale="en")
+        await service.apply_change(
+            DRAFT_ID, _change(), context=ActingContext.for_actor(Actor(account_id=7)), locale="en"
+        )
     with pytest.raises(DraftStateConflictError):
-        await service.validate_for_finalization(DRAFT_ID, Actor(account_id=7), locale="en")
+        await service.validate_for_finalization(
+            DRAFT_ID, context=ActingContext.for_actor(Actor(account_id=7)), locale="en"
+        )
     with pytest.raises(DraftStateConflictError):
         await service.delete(DRAFT_ID, 7)
 
@@ -508,7 +516,7 @@ async def test_finalization_validation_uses_complete_pinned_answers() -> None:
     )
     validated = await service.validate_for_finalization(
         DRAFT_ID,
-        Actor(account_id=7),
+        context=ActingContext.for_actor(Actor(account_id=7)),
         locale="en",
     )
 
@@ -535,7 +543,7 @@ async def test_processing_reports_field_errors_for_incomplete_web_draft() -> Non
     with pytest.raises(DraftValidationError) as error:
         await service.validate_for_finalization(
             DRAFT_ID,
-            Actor(account_id=7),
+            context=ActingContext.for_actor(Actor(account_id=7)),
             locale="en",
         )
     assert error.value.field_issues
@@ -748,7 +756,9 @@ async def test_staff_correction_preserves_owner_and_rechecks_revocation() -> Non
         locale="en",
         draft_id=DRAFT_ID,
     )
-    corrected = await service.apply_change(DRAFT_ID, Actor(account_id=8), _change(), locale="en")
+    corrected = await service.apply_change(
+        DRAFT_ID, _change(), context=ActingContext.for_actor(Actor(account_id=8)), locale="en"
+    )
     assert corrected.draft.snapshot.owner_account_id == 7
     assert repository.actors == [8]
     with pytest.raises(DraftAccessDeniedError) as denied:
@@ -757,11 +767,13 @@ async def test_staff_correction_preserves_owner_and_rechecks_revocation() -> Non
     assert denied.value.public_detail() == "Only the account that owns this draft can perform this action."
     permissions.allowed = False
     with pytest.raises(PermissionDeniedError):
-        await service.get_accessible(DRAFT_ID, Actor(account_id=8))
+        await service.get_accessible(DRAFT_ID, context=ActingContext.for_actor(Actor(account_id=8)))
     with pytest.raises(PermissionDeniedError):
-        await service.apply_change(DRAFT_ID, Actor(account_id=8), _change(base_revision=1), locale="en")
+        await service.apply_change(
+            DRAFT_ID, _change(base_revision=1), context=ActingContext.for_actor(Actor(account_id=8)), locale="en"
+        )
     with pytest.raises(PermissionDeniedError):
-        await service.attention_inbox(Actor(account_id=8))
+        await service.attention_inbox(context=ActingContext.for_actor(Actor(account_id=8)))
     assert repository.actors == [8]
 
 
@@ -777,17 +789,17 @@ async def test_draft_access_requires_actor_even_when_account_owns_the_draft() ->
         locale="en",
         draft_id=DRAFT_ID,
     )
-    assert await service.get_accessible(DRAFT_ID, Actor(account_id=7)) == draft
+    assert await service.get_accessible(DRAFT_ID, context=ActingContext.for_actor(Actor(account_id=7))) == draft
     # A dynamically typed caller must not restore the old implicit account-to-actor conversion.
     with pytest.raises(InvalidStateError, match="requires an Actor"):
-        await service.get_accessible(DRAFT_ID, cast(Actor, 7))
+        await service.get_accessible(DRAFT_ID, context=ActingContext.for_actor(cast(Actor, 7)))
     with pytest.raises(DraftAccessDeniedError) as missing_account:
-        await service.get_accessible(DRAFT_ID, Actor())
+        await service.get_accessible(DRAFT_ID, context=ActingContext.for_actor(Actor()))
     assert missing_account.value.public_context == {"reason": "missing_account"}
     assert missing_account.value.public_detail() == "No linked account was found for this request."
 
     with pytest.raises(DraftAccessDeniedError) as unconfigured:
-        await service.get_accessible(DRAFT_ID, Actor(account_id=8, is_bot_owner=True))
+        await service.get_accessible(DRAFT_ID, context=ActingContext.for_actor(Actor(account_id=8, is_bot_owner=True)))
     assert unconfigured.value.public_context == {"reason": "permissions_unconfigured"}
     assert unconfigured.value.public_detail() == (
         "Staff access to submission drafts is not configured for this service. Contact the service operator."

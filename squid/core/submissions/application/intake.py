@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Protocol
 from uuid import UUID
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.errors import ConflictError, NotFoundError, ValidationError
 from squid.core.media.application.jobs import (
     MediaDraftUploadAuthorization,
@@ -77,10 +77,11 @@ class SubmissionAttachmentIntake:
         return SCHEMATIC_FILE_SCHEMA_MAX_BYTES
 
     async def reserve(
-        self, draft_id: UUID, actor: Actor, source_id: UUID, filename: str, content_type: str | None
+        self, draft_id: UUID, source_id: UUID, filename: str, content_type: str | None, *, context: ActingContext
     ) -> SuppliedAttachment:
         """Record the supplied file before the client adapter downloads it."""
-        with actor.audit_scope():
+        actor = context.effective
+        with context.scope():
             async with self._uow_factory() as uow:
                 if source_id.int == 0 or not filename.strip() or len(filename) > 255:
                     message = "A supplied attachment needs a valid identifier and filename."
@@ -94,10 +95,11 @@ class SubmissionAttachmentIntake:
                 return attachment
 
     async def register_file(
-        self, draft_id: UUID, actor: Actor, source_id: UUID, path: Path, content_type: str | None
+        self, draft_id: UUID, source_id: UUID, path: Path, content_type: str | None, *, context: ActingContext
     ) -> None:
         """Pass downloaded bytes to the media or schematic service and record the outcome."""
-        with actor.audit_scope():
+        actor = context.effective
+        with context.scope():
             async with self._uow_factory() as uow:
                 draft = await self._drafts.get_accessible_in(uow, draft_id, actor)
                 attachment = next(
@@ -130,7 +132,11 @@ class SubmissionAttachmentIntake:
                 message = "Schematic exceeds the upload limit."
                 raise ValidationError(message)
             await self._schematics.upload(
-                draft.snapshot.id, actor, filename=attachment.filename, data=path.read_bytes(), upload_id=attachment.id
+                draft.snapshot.id,
+                context=ActingContext.for_actor(actor),
+                filename=attachment.filename,
+                data=path.read_bytes(),
+                upload_id=attachment.id,
             )
         elif attachment.kind in {"image", "video"} and self._media is not None:
             existing = await self._media.get(attachment.id)
@@ -157,34 +163,42 @@ class SubmissionAttachmentIntake:
             message = "This file type cannot currently be processed; retry or explicitly discard it."
             raise ValidationError(message)
 
-    async def fail(self, draft_id: UUID, actor: Actor, source_id: UUID) -> None:
+    async def fail(self, draft_id: UUID, source_id: UUID, *, context: ActingContext) -> None:
         """Retain a download failure for explicit retry or discard."""
-        with actor.audit_scope():
+        actor = context.effective
+        with context.scope():
             async with self._uow_factory() as uow:
                 await self._drafts.get_accessible_in(uow, draft_id, actor)
                 await uow.attachment_intake.set_status(draft_id, source_id, IntakeStatus.FAILED)
                 await uow.commit()
 
-    async def list(self, draft_id: UUID, actor: Actor) -> tuple[SuppliedAttachment, ...]:
-        async with self._uow_factory() as uow:
-            await self._drafts.get_accessible_in(uow, draft_id, actor)
-            return await uow.attachment_intake.list(draft_id)
+    async def list(self, draft_id: UUID, *, context: ActingContext) -> tuple[SuppliedAttachment, ...]:
+        actor = context.effective
+        with context.scope():
+            async with self._uow_factory() as uow:
+                await self._drafts.get_accessible_in(uow, draft_id, actor)
+                return await uow.attachment_intake.list(draft_id)
 
-    async def discard(self, draft_id: UUID, actor: Actor, source_id: UUID) -> None:
+    async def discard(self, draft_id: UUID, source_id: UUID, *, context: ActingContext) -> None:
         """Discard processor references before resolving the supplied-file requirement."""
-        attachment = next((item for item in await self.list(draft_id, actor) if item.id == source_id), None)
-        if attachment is None:
-            raise NotFoundError
-        if attachment.status is IntakeStatus.DISCARDED:
-            return
-        if attachment.source is not None:
-            await self.reserve(draft_id, actor, source_id, attachment.filename, attachment.source.content_type)
-        if attachment.kind == "schematic":
-            if any(item.id == source_id for item in await self._schematics.list(draft_id, actor)):
-                await self._schematics.discard(draft_id, actor, source_id)
-        elif attachment.kind in {"image", "video"} and self._media is not None:
-            await self._media.discard(draft_id, source_id)
-        await self._set_status(draft_id, source_id, IntakeStatus.DISCARDED)
+        with context.scope():
+            attachment = next(
+                (item for item in await self.list(draft_id, context=context) if item.id == source_id), None
+            )
+            if attachment is None:
+                raise NotFoundError
+            if attachment.status is IntakeStatus.DISCARDED:
+                return
+            if attachment.source is not None:
+                await self.reserve(
+                    draft_id, source_id, attachment.filename, attachment.source.content_type, context=context
+                )
+            if attachment.kind == "schematic":
+                if any(item.id == source_id for item in await self._schematics.list(draft_id, context=context)):
+                    await self._schematics.discard(draft_id, source_id, context=context)
+            elif attachment.kind in {"image", "video"} and self._media is not None:
+                await self._media.discard(draft_id, source_id)
+            await self._set_status(draft_id, source_id, IntakeStatus.DISCARDED)
 
     async def _set_status(self, draft_id: UUID, source_id: UUID, status: IntakeStatus) -> None:
         async with self._uow_factory() as uow:

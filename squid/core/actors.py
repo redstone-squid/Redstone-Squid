@@ -127,6 +127,11 @@ class ActingContext:
     session_id: UUID | None = None
     invocation_id: UUID = field(default_factory=uuid4, compare=False)
 
+    def __post_init__(self) -> None:
+        if not isinstance(self.operator, Actor) or not isinstance(self.effective, Actor):
+            message = "An acting context requires an Actor for both operator and effective identity"
+            raise InvalidStateError(message)
+
     @classmethod
     def current(cls) -> ActingContext:
         context = current_acting_context.get()

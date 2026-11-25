@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.core.accounts.models import Account
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.builds.application import BuildService
 from squid.core.builds.application.ports import BuildUnitOfWork
 from squid.core.builds.domain import BuildCategory
@@ -213,12 +213,12 @@ async def test_history_authorizes_loaded_proposals_without_per_row_queries(
     service = RecalculationProposalService(builds, PermissionService(uow_factory=repository), uow_factory=repository)
 
     with record_queries(migrated_session_factory) as statements:
-        history = await service.list_for_source(456, actor)
+        history = await service.list_for_source(456, context=ActingContext.for_actor(actor))
 
     assert [row.id for row in history] == [proposal.id for proposal in reversed(proposals)]
     assert sum("FROM submission_revision_proposals" in statement for statement in statements) == 1
     assert sum("FROM permission_epoch" in statement for statement in statements) == (1 if role == "staff" else 0)
-    assert await service.get(history[0].id, actor) == history[0]
+    assert await service.get(history[0].id, context=ActingContext.for_actor(actor)) == history[0]
 
 
 async def test_history_refuses_a_list_containing_another_accounts_proposal(
@@ -238,12 +238,12 @@ async def test_history_refuses_a_list_containing_another_accounts_proposal(
     )
     service = RecalculationProposalService(builds, PermissionService(uow_factory=repository), uow_factory=repository)
 
-    assert (await service.get(proposal.id, owner)).id == proposal.id
+    assert (await service.get(proposal.id, context=ActingContext.for_actor(owner))).id == proposal.id
     with pytest.raises(AuthorizationError):
-        await service.get(foreign.id, owner)
+        await service.get(foreign.id, context=ActingContext.for_actor(owner))
     with pytest.raises(AuthorizationError):
-        await service.list_for_source(proposal.source_message_id, owner)
-    assert await service.list_for_source(999, owner) == ()
+        await service.list_for_source(proposal.source_message_id, context=ActingContext.for_actor(owner))
+    assert await service.list_for_source(999, context=ActingContext.for_actor(owner)) == ()
 
 
 def revision_service(

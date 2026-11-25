@@ -14,7 +14,7 @@ from uuid import UUID
 
 from whenever import Instant
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.errors import DataIntegrityError, InvalidStateError
 from squid.core.i18n import tr
 from squid.core.permissions.errors import PermissionDeniedError
@@ -49,6 +49,7 @@ from squid.core.submissions.errors import (
 )
 from squid.core.unit_of_work import UnitOfWorkFactory
 from squid.core.validation import RuleIssue
+from squid.core.worker_context import worker_execution
 from squid_i18n import md_tr
 
 MAX_FINALIZATION_JOB_CLAIM = 32
@@ -234,12 +235,7 @@ class SubmissionFinalizationService:
         self._retention_days = retention_days
 
     async def submit(
-        self,
-        draft_id: UUID,
-        actor: Actor,
-        *,
-        locale: str | None,
-        now: Instant | None = None,
+        self, draft_id: UUID, *, context: ActingContext, locale: str | None, now: Instant | None = None
     ) -> SubmissionRequestResult:
         """Queue a validated draft or retain the issues that prevent finalization.
 
@@ -247,8 +243,9 @@ class SubmissionFinalizationService:
         artifact processing remains, retain a wait that the worker can recheck.
         Other preparation issues are retained for correction before resubmission.
         """
-        with actor.audit_scope():
-            current = await self._drafts.get_accessible(draft_id, actor)
+        actor = context.effective
+        with context.scope():
+            current = await self._drafts.get_accessible(draft_id, context=context)
             return await self._submit(current, actor, locale=locale, now=now or Instant.now(), refresh_retention=True)
 
     async def _submit(
@@ -282,7 +279,9 @@ class SubmissionFinalizationService:
             else current.expires_at
         )
         try:
-            validated = await self._drafts.validate_for_finalization(draft_id, actor, locale=locale)
+            async with self._uow_factory() as uow:
+                latest = await self._drafts.get_accessible_in(uow, draft_id, actor)
+            validated = await self._drafts.validate_snapshot(latest, locale=locale)
             if validated.draft.snapshot.revision != current.snapshot.revision:
                 raise DraftRevisionConflictError(
                     expected=current.snapshot.revision, actual=validated.draft.snapshot.revision
@@ -345,54 +344,66 @@ class SubmissionFinalizationService:
             drafts = await uow.finalization_jobs.reserve_preparations(now=now, limit=limit)
             await uow.commit()
         for draft in drafts:
-            try:
-                await self._submit(
-                    draft,
-                    Actor(account_id=draft.submission_actor_account_id),
-                    locale=None,
-                    now=now,
-                    refresh_retention=False,
-                )
-            except DraftAccessDeniedError, PermissionDeniedError:
-                async with self._uow_factory() as uow:
-                    await uow.finalization_jobs.record_preparation_attention(
+            with worker_execution("submission-preparation", draft.preparation_attempt):
+                try:
+                    await self._submit(
                         draft,
-                        (SubmissionAttentionIssue("submission", SubmissionAttentionReason.PERMISSION_REVOKED),),
+                        Actor(account_id=draft.submission_actor_account_id),
+                        locale=None,
                         now=now,
-                        expires_at=draft.expires_at,
-                        actor_account_id=draft.submission_actor_account_id,
+                        refresh_retention=False,
                     )
-                    await uow.commit()
-            except DraftRevisionConflictError, DraftNotFoundError, DraftStateConflictError:
-                # Edits, deletion, expiry, or account merges invalidate this reservation.
-                continue
+                except DraftAccessDeniedError, PermissionDeniedError:
+                    async with self._uow_factory() as uow:
+                        await uow.finalization_jobs.record_preparation_attention(
+                            draft,
+                            (SubmissionAttentionIssue("submission", SubmissionAttentionReason.PERMISSION_REVOKED),),
+                            now=now,
+                            expires_at=draft.expires_at,
+                            actor_account_id=draft.submission_actor_account_id,
+                        )
+                        await uow.commit()
+                except DraftRevisionConflictError, DraftNotFoundError, DraftStateConflictError:
+                    # Edits, deletion, expiry, or account merges invalidate this reservation.
+                    continue
 
-    async def status(self, draft_id: UUID, actor: Actor) -> SubmissionRequestResult | None:
+    async def status(self, draft_id: UUID, *, context: ActingContext) -> SubmissionRequestResult | None:
         """Return retained finalization state after checking owner or staff access."""
-        async with self._uow_factory() as uow:
-            draft = await self._drafts.get_accessible_in(uow, draft_id, actor)
-            if draft.preparation_issues:
-                return DraftPreparationSnapshot(
-                    draft_id, draft.snapshot.revision, draft.preparation_issues, draft.preparation_retry_at is not None
-                )
-            return await uow.finalization_jobs.get(draft_id)
+        actor = context.effective
+        with context.scope():
+            async with self._uow_factory() as uow:
+                draft = await self._drafts.get_accessible_in(uow, draft_id, actor)
+                if draft.preparation_issues:
+                    return DraftPreparationSnapshot(
+                        draft_id,
+                        draft.snapshot.revision,
+                        draft.preparation_issues,
+                        draft.preparation_retry_at is not None,
+                    )
+                return await uow.finalization_jobs.get(draft_id)
 
-    async def attempt(self, draft_id: UUID, actor: Actor, attempt_id: UUID) -> FinalizationJobSnapshot | None:
+    async def attempt(
+        self, draft_id: UUID, attempt_id: UUID, *, context: ActingContext
+    ) -> FinalizationJobSnapshot | None:
         """Read a retained attempt only within its accessible parent draft."""
-        async with self._uow_factory() as uow:
-            await self._drafts.get_accessible_in(uow, draft_id, actor)
-            return await uow.finalization_jobs.get_attempt(draft_id, attempt_id)
+        actor = context.effective
+        with context.scope():
+            async with self._uow_factory() as uow:
+                await self._drafts.get_accessible_in(uow, draft_id, actor)
+                return await uow.finalization_jobs.get_attempt(draft_id, attempt_id)
 
     async def attempts(
-        self, draft_id: UUID, actor: Actor, *, before: int | None = None, limit: int = 20
+        self, draft_id: UUID, *, context: ActingContext, before: int | None = None, limit: int = 20
     ) -> tuple[FinalizationJobSnapshot, ...]:
         """Read newest-first history with a stable exclusive attempt-number cursor."""
-        async with self._uow_factory() as uow:
-            if not 1 <= limit <= 100 or (before is not None and before < 1):
-                message = "Invalid attempt history cursor or limit."
-                raise InvalidStateError(message)
-            await self._drafts.get_accessible_in(uow, draft_id, actor)
-            return await uow.finalization_jobs.list_attempts(draft_id, before=before, limit=limit)
+        actor = context.effective
+        with context.scope():
+            async with self._uow_factory() as uow:
+                if not 1 <= limit <= 100 or (before is not None and before < 1):
+                    message = "Invalid attempt history cursor or limit."
+                    raise InvalidStateError(message)
+                await self._drafts.get_accessible_in(uow, draft_id, actor)
+                return await uow.finalization_jobs.list_attempts(draft_id, before=before, limit=limit)
 
 
 class SubmissionFinalizationWorker:
@@ -437,7 +448,8 @@ class SubmissionFinalizationWorker:
             jobs = await uow.finalization_jobs.claim(now=claimed_at, limit=limit)
             await uow.commit()
         for job in jobs:
-            await self._process(job, now=claimed_at)
+            with worker_execution("submission-finalization", job.claim_token):
+                await self._process(job, now=claimed_at)
 
     async def _process(self, job: ClaimedFinalizationJob, *, now: Instant) -> None:
         expires_at = now.add(days=self._retention_days, days_assumed_24h_ok=True)

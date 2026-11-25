@@ -7,7 +7,7 @@ from uuid import uuid4
 import pytest
 from whenever import Instant
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.builds.domain import BuildCategory, BuildInput, DoorDraftDetails
 from squid.core.errors import ValidationError
 from squid.core.messages.domain import MessageSnapshot
@@ -47,9 +47,10 @@ class Drafts:
         self.current = replace(self.current, snapshot=self.current.snapshot.apply(change))
         self.changes += 1
 
-    async def get_accessible(self, identifier: object, actor: Actor) -> StoredDraft:
-        assert self.current is not None
-        return self.current
+    async def get_accessible(self, identifier: object, *, context: ActingContext) -> StoredDraft:
+        with context.scope():
+            assert self.current is not None
+            return self.current
 
 
 class Forms:

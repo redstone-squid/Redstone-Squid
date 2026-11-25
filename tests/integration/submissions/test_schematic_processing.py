@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.config import SchematicConfig
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.artifacts.infrastructure import LocalArtifactStore
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.schematics.application import IngestedSchematic, IngestRequest
@@ -69,7 +69,12 @@ async def test_original_upload_reaches_build_and_preview_queue(
     schematics = create_schematic_service(config, artifacts, jobs, uow_factory=uows)
     drafts = SubmissionDraftService(CheckedInFormManifestRegistry(), uow_factory=uows)
     uploads = DraftSchematicService(drafts, artifacts, uow_factory=uows, ingestor=schematics)
-    source = await uploads.upload(draft.snapshot.id, Actor(account_id=owner), filename="original.schem", data=data)
+    source = await uploads.upload(
+        draft.snapshot.id,
+        context=ActingContext.for_actor(Actor(account_id=owner)),
+        filename="original.schem",
+        data=data,
+    )
     assert source.state is DraftSchematicState.PENDING
     assert (await uploads.read_for_draft(draft.snapshot.id)).state is SchematicArtifactState.PROCESSING
 
@@ -96,7 +101,11 @@ async def test_original_upload_reaches_build_and_preview_queue(
     # Replaying the same upload must preserve completed analysis.
     assert (
         await uploads.upload(
-            draft.snapshot.id, Actor(account_id=owner), filename=source.filename, data=data, upload_id=source.id
+            draft.snapshot.id,
+            context=ActingContext.for_actor(Actor(account_id=owner)),
+            filename=source.filename,
+            data=data,
+            upload_id=source.id,
         )
     ).state is DraftSchematicState.READY
 
@@ -180,10 +189,13 @@ async def test_processing_rejects_invalid_files_but_retries_infrastructure_failu
     ingestor = ControlledIngestor(failure)
     uploads = DraftSchematicService(drafts, artifacts, uow_factory=uows, ingestor=ingestor)
     source = await uploads.upload(
-        draft.snapshot.id, Actor(account_id=owner), filename="source.schem", data=b"original bytes"
+        draft.snapshot.id,
+        context=ActingContext.for_actor(Actor(account_id=owner)),
+        filename="source.schem",
+        data=b"original bytes",
     )
     await uploads.process_pending()
-    state = (await uploads.list(draft.snapshot.id, Actor(account_id=owner)))[0].state
+    state = (await uploads.list(draft.snapshot.id, context=ActingContext.for_actor(Actor(account_id=owner))))[0].state
     assert state is (DraftSchematicState.REJECTED if invalid else DraftSchematicState.PENDING)
     async with sessions() as session:
         stored = await session.get(DraftSchematicSource, source.id)
@@ -207,9 +219,12 @@ async def test_late_analysis_cannot_resurrect_a_deleted_source(
     drafts = SubmissionDraftService(CheckedInFormManifestRegistry(), uow_factory=uows)
     uploads = DraftSchematicService(drafts, artifacts, uow_factory=uows)
     source = await uploads.upload(
-        draft.snapshot.id, Actor(account_id=owner), filename="source.schem", data=b"original bytes"
+        draft.snapshot.id,
+        context=ActingContext.for_actor(Actor(account_id=owner)),
+        filename="source.schem",
+        data=b"original bytes",
     )
-    await uploads.discard(draft.snapshot.id, Actor(account_id=owner), source.id)
+    await uploads.discard(draft.snapshot.id, source.id, context=ActingContext.for_actor(Actor(account_id=owner)))
     # Open drafts keep files they have removed, so undo can restore them.
     async with sessions.begin() as session:
         await session.execute(update(SubmissionDraft).values(status=DraftStatus.EXPIRED))

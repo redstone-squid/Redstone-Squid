@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 
 from whenever import Instant
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.builds.domain.credits import name_credits
 from squid.core.builds.domain.expansion import DoorExpansion
 from squid.core.errors import InvalidStateError, JSONValue, ValidationError
@@ -96,6 +96,7 @@ class StoredDraft:
     source_files: tuple[SubmissionSourceFile, ...] = ()
     source_issues: tuple[str, ...] = ()
     inference_run_id: UUID | None = None
+    preparation_attempt: UUID | None = None
 
     def __post_init__(self) -> None:
         if self.origin is not SubmissionOrigin.PAPER and self.source_installation_id is not None:
@@ -380,31 +381,32 @@ class SubmissionDraftService:
             return await uow.submission_drafts.list_active_for_account(account_id, now=self._now(), limit=limit)
 
     async def attention_inbox(
-        self,
-        actor: Actor,
-        *,
-        after: UUID | None = None,
-        limit: int = 20,
+        self, *, context: ActingContext, after: UUID | None = None, limit: int = 20
     ) -> tuple[StoredDraft, ...]:
         """Page correction work by stable ID after checking current staff permission."""
-        async with self._uow_factory() as uow:
-            draft_actor_id(actor)
-            await self._require_staff(uow, actor)
-            if not 1 <= limit <= 100:
-                message = "Draft inbox limit must be between 1 and 100."
-                raise InvalidStateError(message)
-            return await uow.submission_drafts.list_attention(after=after, limit=limit, now=self._now())
+        actor = context.effective
+        with context.scope():
+            async with self._uow_factory() as uow:
+                draft_actor_id(actor)
+                await self._require_staff(uow, actor)
+                if not 1 <= limit <= 100:
+                    message = "Draft inbox limit must be between 1 and 100."
+                    raise InvalidStateError(message)
+                return await uow.submission_drafts.list_attention(after=after, limit=limit, now=self._now())
 
     async def get_owned(self, draft_id: UUID, account_id: int) -> StoredDraft:
         """Return one unexpired draft under strict owner authority."""
-        draft = await self.get_accessible(draft_id, Actor(account_id=account_id))
+        async with self._uow_factory() as uow:
+            draft = await self.get_accessible_in(uow, draft_id, Actor(account_id=account_id))
         self._require_owner(draft, account_id)
         return draft
 
-    async def get_accessible(self, draft_id: UUID, actor: Actor) -> StoredDraft:
+    async def get_accessible(self, draft_id: UUID, *, context: ActingContext) -> StoredDraft:
         """Return one unexpired draft after checking owner or current staff authority."""
-        async with self._uow_factory() as uow:
-            return await self.get_accessible_in(uow, draft_id, actor)
+        actor = context.effective
+        with context.scope():
+            async with self._uow_factory() as uow:
+                return await self.get_accessible_in(uow, draft_id, actor)
 
     async def get_accessible_in(self, uow: DraftUnitOfWork, draft_id: UUID, actor: Actor) -> StoredDraft:
         """Check draft access within the caller's read or write operation."""
@@ -450,9 +452,9 @@ class SubmissionDraftService:
     async def apply_change(
         self,
         draft_id: UUID,
-        actor: Actor,
         change: DraftChange,
         *,
+        context: ActingContext,
         locale: str | None,
         now: Instant | None = None,
     ) -> AppliedDraftChange:
@@ -462,19 +464,21 @@ class SubmissionDraftService:
         without applying the change again. New edits are checked against the pinned
         manifest, then permissions and revision are checked again before commit.
         """
-        async with self._uow_factory() as uow:
-            current = await self.get_accessible_in(uow, draft_id, actor)
-            owner_id = current.snapshot.owner_account_id
-            replayed = await uow.submission_drafts.replayed_change(
-                draft_id, owner_id, change, actor_account_id=draft_actor_id(actor)
-            )
-            if replayed is not None:
-                return replayed
-        await self.validate_change(current, change, locale=locale)
-        async with self._uow_factory() as uow:
-            result = await self.persist_change_in(uow, current, actor, change, now=now)
-            await uow.commit()
-            return result
+        actor = context.effective
+        with context.scope():
+            async with self._uow_factory() as uow:
+                current = await self.get_accessible_in(uow, draft_id, actor)
+                owner_id = current.snapshot.owner_account_id
+                replayed = await uow.submission_drafts.replayed_change(
+                    draft_id, owner_id, change, actor_account_id=draft_actor_id(actor)
+                )
+                if replayed is not None:
+                    return replayed
+            await self.validate_change(current, change, locale=locale)
+            async with self._uow_factory() as uow:
+                result = await self.persist_change_in(uow, current, actor, change, now=now)
+                await uow.commit()
+                return result
 
     async def validate_change(self, current: StoredDraft, change: DraftChange, *, locale: str | None) -> DraftSnapshot:
         """Validate a candidate against its pinned manifest without writing."""
@@ -553,18 +557,19 @@ class SubmissionDraftService:
             return result
 
     async def validate_for_finalization(
-        self,
-        draft_id: UUID,
-        actor: Actor,
-        *,
-        locale: str | None,
+        self, draft_id: UUID, *, context: ActingContext, locale: str | None
     ) -> ValidatedDraft:
         """Validate a pinned manifest without trusting client artifact assertions.
 
         The finalization service performs backend-owned artifact checks and atomically
         changes the draft state while enqueuing its durable job.
         """
-        current = await self.get_accessible(draft_id, actor)
+        with context.scope():
+            current = await self.get_accessible(draft_id, context=context)
+            return await self.validate_snapshot(current, locale=locale)
+
+    async def validate_snapshot(self, current: StoredDraft, *, locale: str | None) -> ValidatedDraft:
+        """Validate answers against the manifest pinned by an accessible draft."""
         manifest = await self._pinned_manifest(current, locale)
         # Ingestion origin is set by the server, not by the form's origin or
         # AI checkbox. Normal Discord submissions retain the pinned requirements.

@@ -9,7 +9,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.artifacts.infrastructure import LocalArtifactStore
 from squid.core.builds.application.inference import BuildInferenceInput, BuildInferenceService, InlineImage
 from squid.core.builds.domain import BuildInput, DoorDraftDetails
@@ -105,7 +105,9 @@ class Recovery:
         return f"submission-inference/{self.repository.id}/0"
 
     async def resume(self, *, account_id: int = 7) -> tuple[InferenceCandidate, ...] | None:
-        return await self.service.resume(self.repository.id, Actor(account_id=account_id))
+        return await self.service.resume(
+            self.repository.id, context=ActingContext.for_actor(Actor(account_id=account_id))
+        )
 
 
 @pytest.fixture

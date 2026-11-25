@@ -7,7 +7,7 @@ from uuid import UUID, uuid4, uuid5
 
 from whenever import Instant
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.builds.application import BuildService
 from squid.core.builds.application.ports import BuildUnitOfWork
 from squid.core.builds.domain import BuildInput
@@ -69,50 +69,58 @@ class RecalculationProposalService:
         run_id: UUID,
         index: int,
         owner_account_id: int,
-        actor: Actor,
+        context: ActingContext,
         source_message_id: int,
         candidate: BuildInput,
     ) -> RecalculationProposal:
         """Retain one stable candidate; inference alone never writes the target build."""
-        async with self._uow_factory() as uow:
-            if actor.account_id is None:
-                raise AccountRequiredError
-            await self._permissions.require(actor, BUILD_SUBMISSION_RECALC, uow=uow)
-            now = Instant.now()
-            result = await uow.recalculation_proposals.create(
-                RecalculationProposal(
-                    uuid5(run_id, str(index)),
-                    run_id,
-                    owner_account_id,
-                    actor.account_id,
-                    source_message_id,
-                    RecalculationFacts.from_draft(candidate),
-                    None,
-                    None,
-                    {},
-                    {},
-                    now,
-                    now.add(days=7, days_assumed_24h_ok=True),
+        actor = context.effective
+        with context.scope():
+            async with self._uow_factory() as uow:
+                if actor.account_id is None:
+                    raise AccountRequiredError
+                await self._permissions.require(actor, BUILD_SUBMISSION_RECALC, uow=uow)
+                now = Instant.now()
+                result = await uow.recalculation_proposals.create(
+                    RecalculationProposal(
+                        uuid5(run_id, str(index)),
+                        run_id,
+                        owner_account_id,
+                        actor.account_id,
+                        source_message_id,
+                        RecalculationFacts.from_draft(candidate),
+                        None,
+                        None,
+                        {},
+                        {},
+                        now,
+                        now.add(days=7, days_assumed_24h_ok=True),
+                    )
                 )
-            )
-            await uow.commit()
-            return result
+                await uow.commit()
+                return result
 
-    async def get(self, proposal_id: UUID, actor: Actor) -> RecalculationProposal:
+    async def get(self, proposal_id: UUID, *, context: ActingContext) -> RecalculationProposal:
         """Read a retained proposal under current owner or staff authority."""
-        async with self._uow_factory() as uow:
-            proposal = await uow.recalculation_proposals.get(proposal_id)
-            if proposal is None:
-                raise NotFoundError
-            await self._require_read_access(uow, (proposal,), actor)
-            return proposal
+        actor = context.effective
+        with context.scope():
+            async with self._uow_factory() as uow:
+                proposal = await uow.recalculation_proposals.get(proposal_id)
+                if proposal is None:
+                    raise NotFoundError
+                await self._require_read_access(uow, (proposal,), actor)
+                return proposal
 
-    async def list_for_source(self, source_message_id: int, actor: Actor) -> tuple[RecalculationProposal, ...]:
+    async def list_for_source(
+        self, source_message_id: int, *, context: ActingContext
+    ) -> tuple[RecalculationProposal, ...]:
         """Return a bounded history with the same visibility policy as individual reads."""
-        async with self._uow_factory() as uow:
-            rows = await uow.recalculation_proposals.list_for_source(source_message_id, limit=20)
-            await self._require_read_access(uow, rows, actor)
-            return rows
+        actor = context.effective
+        with context.scope():
+            async with self._uow_factory() as uow:
+                rows = await uow.recalculation_proposals.list_for_source(source_message_id, limit=20)
+                await self._require_read_access(uow, rows, actor)
+                return rows
 
     async def _require_read_access(
         self, uow: RevisionUnitOfWork, proposals: Sequence[RecalculationProposal], actor: Actor
@@ -124,70 +132,74 @@ class RecalculationProposalService:
             await self._permissions.require(actor, BUILD_SUBMISSION_EDIT, uow=uow)
 
     async def match(
-        self, proposal_id: UUID, build_id: int, actor: Actor, *, renew: bool = False
+        self, proposal_id: UUID, build_id: int, *, context: ActingContext, renew: bool = False
     ) -> RecalculationProposal:
         """Capture a fresh diff; renewed review creates a new immutable proposal identity."""
-        proposal = await self.get(proposal_id, actor)
-        self._require_pending(proposal)
-        build = await self._builds.get(build_id)
-        if build is None:
-            raise BuildNotFoundError(build_id)
-        await self._builds.authorize_edit(actor, build)
-        if build.submitter_account_id != proposal.owner_account_id:
-            raise OwnershipRequiredError
-        if build_id not in await self._builds.list_ids_for_source_message(proposal.source_message_id):
-            message = "Choose a build linked to this source message."
-            raise ValidationError(message)
-        before = recalculation_values(build)
-        await self._builds.prepare_edit(actor, build, proposal.facts.patch(build))
-        matched = replace(
-            proposal,
-            build_id=build_id,
-            expected_revision=build.revision,
-            before=before,
-            after=recalculation_values(build),
-        )
-        async with self._uow_factory() as uow:
-            await self._require_read_access(uow, (proposal,), actor)
-            await self._builds.authorize_edit(actor, build, uow=uow)
-            if renew:
-                matched = replace(matched, id=uuid4(), approved_by_account_id=None, applied_revision=None)
-                result = await uow.recalculation_proposals.create(matched)
-            else:
-                result = await uow.recalculation_proposals.match(matched)
-            await uow.commit()
-            return result
+        actor = context.effective
+        with context.scope():
+            proposal = await self.get(proposal_id, context=context)
+            self._require_pending(proposal)
+            build = await self._builds.get(build_id)
+            if build is None:
+                raise BuildNotFoundError(build_id)
+            await self._builds.authorize_edit(actor, build)
+            if build.submitter_account_id != proposal.owner_account_id:
+                raise OwnershipRequiredError
+            if build_id not in await self._builds.list_ids_for_source_message(proposal.source_message_id):
+                message = "Choose a build linked to this source message."
+                raise ValidationError(message)
+            before = recalculation_values(build)
+            await self._builds.prepare_edit(actor, build, proposal.facts.patch(build))
+            matched = replace(
+                proposal,
+                build_id=build_id,
+                expected_revision=build.revision,
+                before=before,
+                after=recalculation_values(build),
+            )
+            async with self._uow_factory() as uow:
+                await self._require_read_access(uow, (proposal,), actor)
+                await self._builds.authorize_edit(actor, build, uow=uow)
+                if renew:
+                    matched = replace(matched, id=uuid4(), approved_by_account_id=None, applied_revision=None)
+                    result = await uow.recalculation_proposals.create(matched)
+                else:
+                    result = await uow.recalculation_proposals.match(matched)
+                await uow.commit()
+                return result
 
-    async def approve(self, proposal_id: UUID, actor: Actor) -> RecalculationProposal:
+    async def approve(self, proposal_id: UUID, *, context: ActingContext) -> RecalculationProposal:
         """Apply the reviewed changes after rechecking access and the build revision.
 
         An already applied proposal returns its receipt. A changed build or newly
         resolved facts require another review; approval never silently updates
         the retained diff.
         """
-        if actor.account_id is None:
-            raise AccountRequiredError
-        proposal = await self.get(proposal_id, actor)
-        if proposal.applied_revision is not None:
-            return proposal
-        self._require_pending(proposal)
-        if proposal.build_id is None or proposal.expected_revision is None:
-            message = "Match the candidate to a build and review its diff first."
-            raise ValidationError(message)
-        build = await self._builds.get(proposal.build_id)
-        if build is None:
-            raise BuildNotFoundError(proposal.build_id)
-        if build.revision != proposal.expected_revision:
-            raise BuildRevisionMismatchError(
-                build.id or proposal.build_id,
-                expected_revision=proposal.expected_revision,
-                current_revision=build.revision,
-            )
-        prepared = await self._builds.prepare_edit(actor, build.copy_for_edit(), proposal.facts.patch(build))
-        if recalculation_values(prepared) != proposal.after:
-            message = "Resolved build facts changed since review; renew the proposal before approving. "
-            raise ConflictError(message)
-        return await self._approve_prepared(proposal, prepared, actor)
+        actor = context.effective
+        with context.scope():
+            if actor.account_id is None:
+                raise AccountRequiredError
+            proposal = await self.get(proposal_id, context=context)
+            if proposal.applied_revision is not None:
+                return proposal
+            self._require_pending(proposal)
+            if proposal.build_id is None or proposal.expected_revision is None:
+                message = "Match the candidate to a build and review its diff first."
+                raise ValidationError(message)
+            build = await self._builds.get(proposal.build_id)
+            if build is None:
+                raise BuildNotFoundError(proposal.build_id)
+            if build.revision != proposal.expected_revision:
+                raise BuildRevisionMismatchError(
+                    build.id or proposal.build_id,
+                    expected_revision=proposal.expected_revision,
+                    current_revision=build.revision,
+                )
+            prepared = await self._builds.prepare_edit(actor, build.copy_for_edit(), proposal.facts.patch(build))
+            if recalculation_values(prepared) != proposal.after:
+                message = "Resolved build facts changed since review; renew the proposal before approving. "
+                raise ConflictError(message)
+            return await self._approve_prepared(proposal, prepared, actor)
 
     async def _approve_prepared(
         self, proposal: RecalculationProposal, build: Build, actor: Actor

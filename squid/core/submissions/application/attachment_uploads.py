@@ -2,7 +2,7 @@
 
 from uuid import UUID
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext
 from squid.core.edits.domain import Revision, RevisionConflictError
 from squid.core.submissions.application.attachment_edits import AttachmentEditUnitOfWork, FileMembership
 from squid.core.submissions.application.drafts import SubmissionDraftService
@@ -21,8 +21,11 @@ class DraftAttachmentUploads:
         self._drafts = drafts
         self._factory = factory
 
-    async def stage(self, draft_id: UUID, actor: Actor, revision: int, files: tuple[FileMembership, ...]) -> None:
-        with actor.audit_scope():
+    async def stage(
+        self, draft_id: UUID, revision: int, files: tuple[FileMembership, ...], *, context: ActingContext
+    ) -> None:
+        actor = context.effective
+        with context.scope():
             async with self._factory() as uow:
                 draft = await self._drafts.get_accessible_in(uow, draft_id, actor)
                 if draft.snapshot.revision != revision:

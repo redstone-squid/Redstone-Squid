@@ -8,7 +8,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.edits.application import EditExecutor
 from squid.core.edits.domain import EditCommand, LatestRevision, Revision, RevisionConflictError
 from squid.core.errors import ConflictError
@@ -74,7 +74,7 @@ async def test_schematic_removal_restores_analysis_and_primary_until_the_draft_e
             ),
             AttachmentValues(primary=first.id, select_primary=True).edit_values(),
         ),
-        actor,
+        context=ActingContext.direct(actor),
     )
     removed = await executor.execute(
         EditCommand(
@@ -82,7 +82,7 @@ async def test_schematic_removal_restores_analysis_and_primary_until_the_draft_e
             selected.outcome.revisions,
             AttachmentValues(files=(FileMembership(source_id=first.id, present=False),)).edit_values(),
         ),
-        actor,
+        context=ActingContext.direct(actor),
     )
     assert removed.receipt is not None
     async with factory() as uow:
@@ -93,7 +93,9 @@ async def test_schematic_removal_restores_analysis_and_primary_until_the_draft_e
         await session.execute(update(DraftSchematicSource).values(updated_at=Instant.now().subtract(hours=1)))
     async with factory() as uow:
         assert await uow.draft_schematics.cleanup_candidates(limit=10) == ()
-    undone = await executor.execute(removed.receipt.undo(removed.outcome.revisions), actor)
+    undone = await executor.execute(
+        removed.receipt.undo(removed.outcome.revisions), context=ActingContext.direct(actor)
+    )
     assert undone.receipt is not None
     async with factory() as uow:
         restored = next(item for item in await uow.draft_schematics.list(draft.snapshot.id) if item.id == first.id)
@@ -101,8 +103,8 @@ async def test_schematic_removal_restores_analysis_and_primary_until_the_draft_e
         assert restored.primary
         assert not restored.discarded
     with pytest.raises(RevisionConflictError):
-        await executor.execute(removed.receipt.undo(removed.outcome.revisions), actor)
-    redone = await executor.execute(removed.receipt.redo(undone.outcome.revisions), actor)
+        await executor.execute(removed.receipt.undo(removed.outcome.revisions), context=ActingContext.direct(actor))
+    redone = await executor.execute(removed.receipt.redo(undone.outcome.revisions), context=ActingContext.direct(actor))
     assert redone.receipt is not None
     async with sessions.begin() as session:
         await session.execute(update(SubmissionDraft).values(status=DraftStatus.SUBMITTED))
@@ -110,7 +112,7 @@ async def test_schematic_removal_restores_analysis_and_primary_until_the_draft_e
         assert await uow.draft_schematics.cleanup_candidates(limit=10) == (first.id,)
         await uow.commit()
     with pytest.raises(ConflictError):
-        await executor.execute(redone.receipt.undo(redone.outcome.revisions), actor)
+        await executor.execute(redone.receipt.undo(redone.outcome.revisions), context=ActingContext.direct(actor))
 
 
 async def test_media_removal_preserves_job_and_hidden_intake_completion(
@@ -142,19 +144,21 @@ async def test_media_removal_preserves_job_and_hidden_intake_completion(
             (Revision(draft_target(draft.snapshot.id), draft.snapshot.revision),),
             AttachmentValues(files=(FileMembership(source_id=source, present=False),)).edit_values(),
         ),
-        actor,
+        context=ActingContext.direct(actor),
     )
     assert removed.receipt is not None
     async with factory() as uow:
         await uow.attachment_intake.set_status(draft.snapshot.id, source, IntakeStatus.READY)
         assert await uow.media_jobs.terminal_sources(limit=10) == ()
         await uow.commit()
-    undone = await executor.execute(removed.receipt.undo(removed.outcome.revisions), actor)
+    undone = await executor.execute(
+        removed.receipt.undo(removed.outcome.revisions), context=ActingContext.direct(actor)
+    )
     assert undone.receipt is not None
     async with factory() as uow:
         assert (await uow.attachment_intake.list(draft.snapshot.id))[0].status is IntakeStatus.READY
         assert (await uow.media_jobs.list_for_draft(draft.snapshot.id))[0].status is MediaJobStatus.PENDING
-    redone = await executor.execute(removed.receipt.redo(undone.outcome.revisions), actor)
+    redone = await executor.execute(removed.receipt.redo(undone.outcome.revisions), context=ActingContext.direct(actor))
     assert redone.receipt is not None
     async with sessions.begin() as session:
         await session.execute(update(SubmissionDraft).values(status=DraftStatus.SUBMITTED))
@@ -169,7 +173,7 @@ async def test_media_removal_preserves_job_and_hidden_intake_completion(
             is MediaJobStatus.DISCARDED
         )
     with pytest.raises(ConflictError):
-        await executor.execute(redone.receipt.undo(redone.outcome.revisions), actor)
+        await executor.execute(redone.receipt.undo(redone.outcome.revisions), context=ActingContext.direct(actor))
 
 
 async def test_staged_replacement_commits_once_and_redo_reuses_sources(
@@ -189,7 +193,9 @@ async def test_staged_replacement_commits_once_and_redo_reuses_sources(
         await uow.commit()
     draft = await reload(sessions, draft)
     replacement = FileMembership(source_id=uuid4(), present=True, filename="new.schem", kind="schematic")
-    await uploads.stage(draft.snapshot.id, actor, draft.snapshot.revision, (replacement,))
+    await uploads.stage(
+        draft.snapshot.id, draft.snapshot.revision, (replacement,), context=ActingContext.for_actor(actor)
+    )
     source = DraftSchematic(replacement.source_id, "new.schem", "b" * 64, 3, DraftSchematicState.UPLOADING)
     async with factory() as uow:
         hidden = await uow.draft_schematics.register(draft, source, owner)
@@ -206,17 +212,17 @@ async def test_staged_replacement_commits_once_and_redo_reuses_sources(
             (Revision(draft_target(draft.snapshot.id), draft.snapshot.revision),),
             values.edit_values(),
         ),
-        actor,
+        context=ActingContext.direct(actor),
     )
     assert result.receipt is not None
     assert result.outcome.revisions[0].value == draft.snapshot.revision + 1
-    undone = await executor.execute(result.receipt.undo(result.outcome.revisions), actor)
+    undone = await executor.execute(result.receipt.undo(result.outcome.revisions), context=ActingContext.direct(actor))
     assert undone.receipt is not None
     async with factory() as uow:
         sources = await uow.draft_schematics.list(draft.snapshot.id)
         assert next(item for item in sources if item.id == original.id).primary
         assert next(item for item in sources if item.id == replacement.source_id).discarded
-    await executor.execute(result.receipt.redo(undone.outcome.revisions), actor)
+    await executor.execute(result.receipt.redo(undone.outcome.revisions), context=ActingContext.direct(actor))
     async with factory() as uow:
         restored = next(
             item for item in await uow.draft_schematics.list(draft.snapshot.id) if item.id == replacement.source_id
@@ -237,7 +243,9 @@ async def test_staged_files_stay_hidden_until_a_membership_edit_accepts_them(
     service = SubmissionDraftService(CheckedInFormManifestRegistry(), uow_factory=factory)
     uploads = DraftAttachmentUploads(service, factory)
     replacement = FileMembership(source_id=uuid4(), present=True, filename="failed.png", kind="image")
-    await uploads.stage(draft.snapshot.id, actor, draft.snapshot.revision, (replacement,))
+    await uploads.stage(
+        draft.snapshot.id, draft.snapshot.revision, (replacement,), context=ActingContext.for_actor(actor)
+    )
     assert (await reload(sessions, draft)).snapshot.revision == draft.snapshot.revision
     async with factory() as uow:
         assert (await uow.attachment_intake.list(draft.snapshot.id))[0].status is IntakeStatus.DISCARDED

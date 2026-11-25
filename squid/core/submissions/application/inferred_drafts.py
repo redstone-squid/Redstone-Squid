@@ -3,7 +3,7 @@
 from dataclasses import replace
 from uuid import uuid4
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.builds.domain import BuildCategory, DoorDraftDetails
 from squid.core.errors import ValidationError
 from squid.core.submissions.application.drafts import StoredDraft, SubmissionDraftService
@@ -66,7 +66,6 @@ async def materialize_candidate(
     if stored.snapshot.revision == 0:
         await drafts.apply_change(
             candidate.id,
-            actor,
             DraftChange(
                 0,
                 "inference",
@@ -76,6 +75,7 @@ async def materialize_candidate(
                     for key, value in prefill.answers.items()
                 ),
             ),
+            context=ActingContext.for_actor(actor),
             locale=None,
         )
-    return await drafts.get_accessible(candidate.id, actor)
+    return await drafts.get_accessible(candidate.id, context=ActingContext.for_actor(actor))

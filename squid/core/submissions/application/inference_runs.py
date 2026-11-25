@@ -7,7 +7,7 @@ from uuid import UUID, uuid5
 
 import anyio
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.artifacts.application import ArtifactStore
 from squid.core.builds.application.inference import BuildInferenceInput, BuildInferenceService, InlineImage
 from squid.core.builds.domain import BuildInput
@@ -163,53 +163,57 @@ class SubmissionInferenceRuns:
                 await uow.commit()
             raise
 
-    async def resume(self, run_id: UUID, actor: Actor) -> tuple[InferenceCandidate, ...] | None:
+    async def resume(self, run_id: UUID, *, context: ActingContext) -> tuple[InferenceCandidate, ...] | None:
         """Retry retained inputs, or return completed candidates without rereading the source message."""
-        async with self._uow_factory() as uow:
-            retained = await uow.inference_runs.retained(run_id)
-            if retained is None:
-                return None
-            owner, inputs, completed, candidates = retained
-            if inputs.get("purpose") != "submission":
-                raise AuthorizationError
-            if actor.account_id != owner:
-                await self._require_staff(uow, actor)
-            if completed:
-                return candidates
-        bundle = self._codec.decode_bundle(inputs["bundle"])
-        descriptors = inputs.get("images", [])
-        assert isinstance(descriptors, list)
-        images: list[InlineImage] = []
-        for index, descriptor in enumerate(descriptors):
-            assert isinstance(descriptor, dict)
-            data = await self._artifacts.get(f"submission-inference/{run_id}/{index}", max_bytes=16 * 1024 * 1024)
-            if data is None or hashlib.sha256(data).hexdigest() != descriptor["sha256"]:
-                message = "A retained inference image is unavailable; retry after private storage is restored."
-                raise ConflictError(message)
-            images.append(self._codec.decode_image(descriptor, data))
-        model = inputs["model"]
-        reasoning_effort = inputs.get("reasoning_effort")
-        assert isinstance(model, str)
-        assert reasoning_effort is None or isinstance(reasoning_effort, str)
-        return await self.infer(
-            run_id,
-            owner,
-            replace(bundle, images=tuple(images)),
-            model=model,
-            reasoning_effort=reasoning_effort,
-            source_files=self._codec.decode_source_files(inputs.get("source_files", [])),
-        )
+        actor = context.effective
+        with context.scope():
+            async with self._uow_factory() as uow:
+                retained = await uow.inference_runs.retained(run_id)
+                if retained is None:
+                    return None
+                owner, inputs, completed, candidates = retained
+                if inputs.get("purpose") != "submission":
+                    raise AuthorizationError
+                if actor.account_id != owner:
+                    await self._require_staff(uow, actor)
+                if completed:
+                    return candidates
+            bundle = self._codec.decode_bundle(inputs["bundle"])
+            descriptors = inputs.get("images", [])
+            assert isinstance(descriptors, list)
+            images: list[InlineImage] = []
+            for index, descriptor in enumerate(descriptors):
+                assert isinstance(descriptor, dict)
+                data = await self._artifacts.get(f"submission-inference/{run_id}/{index}", max_bytes=16 * 1024 * 1024)
+                if data is None or hashlib.sha256(data).hexdigest() != descriptor["sha256"]:
+                    message = "A retained inference image is unavailable; retry after private storage is restored."
+                    raise ConflictError(message)
+                images.append(self._codec.decode_image(descriptor, data))
+            model = inputs["model"]
+            reasoning_effort = inputs.get("reasoning_effort")
+            assert isinstance(model, str)
+            assert reasoning_effort is None or isinstance(reasoning_effort, str)
+            return await self.infer(
+                run_id,
+                owner,
+                replace(bundle, images=tuple(images)),
+                model=model,
+                reasoning_effort=reasoning_effort,
+                source_files=self._codec.decode_source_files(inputs.get("source_files", [])),
+            )
 
-    async def get(self, run_id: UUID, actor: Actor) -> tuple[InferenceCandidate, ...]:
+    async def get(self, run_id: UUID, *, context: ActingContext) -> tuple[InferenceCandidate, ...]:
         """Reopen retained candidates under the current owner or staff authority."""
-        async with self._uow_factory() as uow:
-            result = await uow.inference_runs.get(run_id)
-            if result is None:
-                raise NotFoundError
-            owner, candidates = result
-            if actor.account_id != owner:
-                await self._require_staff(uow, actor)
-            return candidates
+        actor = context.effective
+        with context.scope():
+            async with self._uow_factory() as uow:
+                result = await uow.inference_runs.get(run_id)
+                if result is None:
+                    raise NotFoundError
+                owner, candidates = result
+                if actor.account_id != owner:
+                    await self._require_staff(uow, actor)
+                return candidates
 
     async def _require_staff(self, uow: PermissionUnitOfWork, actor: Actor) -> None:
         if self._permissions is None:
@@ -217,14 +221,16 @@ class SubmissionInferenceRuns:
             raise AuthorizationError(message)
         await self._permissions.require(actor, BUILD_SUBMISSION_EDIT, uow=uow)
 
-    async def list_active(self, actor: Actor, *, inbox: bool = False) -> tuple[UUID, ...]:
+    async def list_active(self, *, context: ActingContext, inbox: bool = False) -> tuple[UUID, ...]:
         """List retained runs for the actor, or for all accounts after a staff check."""
-        async with self._uow_factory() as uow:
-            if actor.account_id is None:
-                raise AccountRequiredError
-            if inbox:
-                await self._require_staff(uow, actor)
-            return await uow.inference_runs.list_active(None if inbox else actor.account_id)
+        actor = context.effective
+        with context.scope():
+            async with self._uow_factory() as uow:
+                if actor.account_id is None:
+                    raise AccountRequiredError
+                if inbox:
+                    await self._require_staff(uow, actor)
+                return await uow.inference_runs.list_active(None if inbox else actor.account_id)
 
     async def public_status(self, run_id: UUID) -> InferenceStatus | None:
         """Read minimal status for the source-channel reconciler without exposing inferred facts."""

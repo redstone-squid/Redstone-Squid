@@ -12,7 +12,7 @@ from uuid import UUID, uuid4
 
 import anyio
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext
 from squid.core.artifacts import ArtifactStore
 from squid.core.errors import DataIntegrityError, InvalidStateError, NotFoundError, ValidationError
 from squid.core.schematics.application import IngestedSchematic, IngestRequest
@@ -92,117 +92,137 @@ class DraftSchematicService:
         self._artifacts = artifacts
         self.max_bytes = max_bytes
 
-    async def reserve(self, draft_id: UUID, actor: Actor, *, filename: str, upload_id: UUID) -> DraftSchematic:
+    async def reserve(
+        self, draft_id: UUID, *, context: ActingContext, filename: str, upload_id: UUID
+    ) -> DraftSchematic:
         """Retain a source slot before downloading, so failed downloads remain actionable."""
-        async with self._uow_factory() as uow:
-            if not filename.strip() or len(filename) > 255 or upload_id.int == 0:
-                message = "A schematic reservation needs a valid filename and identifier."
-                raise ValidationError(message)
-            draft = await self._drafts.get_accessible_in(uow, draft_id, actor)
-            result = await uow.draft_schematics.register(
-                draft,
-                DraftSchematic(upload_id, filename.strip(), None, None, DraftSchematicState.UPLOADING),
-                draft_actor_id(actor),
-            )
-            await uow.commit()
-            return result
+        actor = context.effective
+        with context.scope():
+            async with self._uow_factory() as uow:
+                if not filename.strip() or len(filename) > 255 or upload_id.int == 0:
+                    message = "A schematic reservation needs a valid filename and identifier."
+                    raise ValidationError(message)
+                draft = await self._drafts.get_accessible_in(uow, draft_id, actor)
+                result = await uow.draft_schematics.register(
+                    draft,
+                    DraftSchematic(upload_id, filename.strip(), None, None, DraftSchematicState.UPLOADING),
+                    draft_actor_id(actor),
+                )
+                await uow.commit()
+                return result
 
-    async def fail(self, draft_id: UUID, actor: Actor, upload_id: UUID) -> None:
+    async def fail(self, draft_id: UUID, upload_id: UUID, *, context: ActingContext) -> None:
         """Record a failed source download without dropping the attachment from the draft."""
-        async with self._uow_factory() as uow:
-            await self._drafts.get_accessible_in(uow, draft_id, actor)
-            if not any(item.id == upload_id for item in await uow.draft_schematics.list(draft_id)):
-                raise NotFoundError
-            await uow.draft_schematics.finish_upload(upload_id, succeeded=False)
-            await uow.commit()
+        actor = context.effective
+        with context.scope():
+            async with self._uow_factory() as uow:
+                await self._drafts.get_accessible_in(uow, draft_id, actor)
+                if not any(item.id == upload_id for item in await uow.draft_schematics.list(draft_id)):
+                    raise NotFoundError
+                await uow.draft_schematics.finish_upload(upload_id, succeeded=False)
+                await uow.commit()
 
     async def upload(
-        self,
-        draft_id: UUID,
-        actor: Actor,
-        *,
-        filename: str,
-        data: bytes,
-        upload_id: UUID | None = None,
+        self, draft_id: UUID, *, context: ActingContext, filename: str, data: bytes, upload_id: UUID | None = None
     ) -> DraftSchematic:
         """Retain bounded source bytes; retrying the same ID requires the same content."""
-        if (
-            not 0 < len(data) <= self.max_bytes
-            or not filename.strip()
-            or len(filename) > 255
-            or (upload_id is not None and upload_id.int == 0)
-        ):
-            message = "A schematic needs a filename and source bytes within the upload limit."
-            raise ValidationError(message)
-        source = DraftSchematic(
-            upload_id or uuid4(),
-            filename.strip(),
-            hashlib.sha256(data).hexdigest(),
-            len(data),
-            DraftSchematicState.UPLOADING,
-        )
-        async with self._uow_factory() as uow:
-            draft = await self._drafts.get_accessible_in(uow, draft_id, actor)
-            retained = await uow.draft_schematics.register(draft, source, draft_actor_id(actor))
-            await uow.commit()
-        if retained.state not in {DraftSchematicState.PENDING, DraftSchematicState.READY, DraftSchematicState.REJECTED}:
-            try:
-                # The cleanup grace period is longer than this bounded storage operation.
-                with anyio.fail_after(60):
-                    await self._artifacts.put(source.object_key, data, content_type="application/octet-stream")
-            except Exception:
-                await self._finish_upload(source.id, succeeded=False)
-                raise
-            await self._finish_upload(source.id, succeeded=True)
-        return next(item for item in await self.list(draft_id, actor) if item.id == source.id)
+        actor = context.effective
+        with context.scope():
+            if (
+                not 0 < len(data) <= self.max_bytes
+                or not filename.strip()
+                or len(filename) > 255
+                or (upload_id is not None and upload_id.int == 0)
+            ):
+                message = "A schematic needs a filename and source bytes within the upload limit."
+                raise ValidationError(message)
+            source = DraftSchematic(
+                upload_id or uuid4(),
+                filename.strip(),
+                hashlib.sha256(data).hexdigest(),
+                len(data),
+                DraftSchematicState.UPLOADING,
+            )
+            async with self._uow_factory() as uow:
+                draft = await self._drafts.get_accessible_in(uow, draft_id, actor)
+                retained = await uow.draft_schematics.register(draft, source, draft_actor_id(actor))
+                await uow.commit()
+            if retained.state not in {
+                DraftSchematicState.PENDING,
+                DraftSchematicState.READY,
+                DraftSchematicState.REJECTED,
+            }:
+                try:
+                    # The cleanup grace period is longer than this bounded storage operation.
+                    with anyio.fail_after(60):
+                        await self._artifacts.put(source.object_key, data, content_type="application/octet-stream")
+                except Exception:
+                    await self._finish_upload(source.id, succeeded=False)
+                    raise
+                await self._finish_upload(source.id, succeeded=True)
+            return next(item for item in await self.list(draft_id, context=context) if item.id == source.id)
 
-    async def list(self, draft_id: UUID, actor: Actor) -> tuple[DraftSchematic, ...]:
+    async def list(self, draft_id: UUID, *, context: ActingContext) -> tuple[DraftSchematic, ...]:
         """Read private source metadata after checking current access."""
-        async with self._uow_factory() as uow:
-            await self._drafts.get_accessible_in(uow, draft_id, actor)
-            return await uow.draft_schematics.list(draft_id)
+        actor = context.effective
+        with context.scope():
+            async with self._uow_factory() as uow:
+                await self._drafts.get_accessible_in(uow, draft_id, actor)
+                return await uow.draft_schematics.list(draft_id)
 
-    async def suggestions(self, draft_id: UUID, actor: Actor, upload_id: UUID) -> SchematicSubmissionSuggestions:
+    async def suggestions(
+        self, draft_id: UUID, upload_id: UUID, *, context: ActingContext
+    ) -> SchematicSubmissionSuggestions:
         """Read private evidence for one retained file without changing the draft."""
-        async with self._uow_factory() as uow:
-            draft = await self._drafts.get_accessible_in(uow, draft_id, actor)
-            source = next(
-                (
-                    item
-                    for item in await uow.draft_schematics.list(draft_id)
-                    if item.id == upload_id and not item.discarded
-                ),
-                None,
-            )
-            if source is None:
-                raise NotFoundError
-            analysis = await uow.draft_schematics.analysis_for_draft(draft_id, upload_id)
-        if self._inference is None:
-            message = "Schematic submission inference is unavailable."
-            raise InvalidStateError(message)
-        return await self._inference.suggest(draft, source.id, source.state, analysis)
+        actor = context.effective
+        with context.scope():
+            async with self._uow_factory() as uow:
+                draft = await self._drafts.get_accessible_in(uow, draft_id, actor)
+                source = next(
+                    (
+                        item
+                        for item in await uow.draft_schematics.list(draft_id)
+                        if item.id == upload_id and not item.discarded
+                    ),
+                    None,
+                )
+                if source is None:
+                    raise NotFoundError
+                analysis = await uow.draft_schematics.analysis_for_draft(draft_id, upload_id)
+            if self._inference is None:
+                message = "Schematic submission inference is unavailable."
+                raise InvalidStateError(message)
+            return await self._inference.suggest(draft, source.id, source.state, analysis)
 
-    async def select_primary(self, draft_id: UUID, actor: Actor, upload_id: UUID) -> None:
+    async def select_primary(self, draft_id: UUID, upload_id: UUID, *, context: ActingContext) -> None:
         """Choose one retained source explicitly when several schematics are attached."""
-        async with self._uow_factory() as uow:
-            await uow.draft_schematics.select_primary(
-                await self._drafts.get_accessible_in(uow, draft_id, actor), upload_id
-            )
-            await uow.commit()
+        actor = context.effective
+        with context.scope():
+            async with self._uow_factory() as uow:
+                await uow.draft_schematics.select_primary(
+                    await self._drafts.get_accessible_in(uow, draft_id, actor), upload_id
+                )
+                await uow.commit()
 
-    async def discard(self, draft_id: UUID, actor: Actor, upload_id: UUID) -> None:
+    async def discard(self, draft_id: UUID, upload_id: UUID, *, context: ActingContext) -> None:
         """Remove one draft's reference while preserving references from other drafts."""
-        async with self._uow_factory() as uow:
-            await uow.draft_schematics.discard(await self._drafts.get_accessible_in(uow, draft_id, actor), upload_id)
-            await uow.commit()
+        actor = context.effective
+        with context.scope():
+            async with self._uow_factory() as uow:
+                await uow.draft_schematics.discard(
+                    await self._drafts.get_accessible_in(uow, draft_id, actor), upload_id
+                )
+                await uow.commit()
 
-    async def attach(self, source_id: UUID, destination_id: UUID, actor: Actor, upload_id: UUID) -> None:
+    async def attach(self, source_id: UUID, destination_id: UUID, upload_id: UUID, *, context: ActingContext) -> None:
         """Share a supplied file only between drafts the caller can currently access."""
-        async with self._uow_factory() as uow:
-            source = await self._drafts.get_accessible_in(uow, source_id, actor)
-            destination = await self._drafts.get_accessible_in(uow, destination_id, actor)
-            await uow.draft_schematics.attach(source, destination, upload_id)
-            await uow.commit()
+        actor = context.effective
+        with context.scope():
+            async with self._uow_factory() as uow:
+                source = await self._drafts.get_accessible_in(uow, source_id, actor)
+                destination = await self._drafts.get_accessible_in(uow, destination_id, actor)
+                await uow.draft_schematics.attach(source, destination, upload_id)
+                await uow.commit()
 
     async def process_pending(self, *, limit: int = 4) -> None:
         """Analyze retained uploads outside transactions, including uploads from older releases.

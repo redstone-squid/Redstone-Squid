@@ -8,7 +8,7 @@ from uuid import UUID
 import pytest
 from whenever import Instant
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.errors import DataIntegrityError, JSONValue
 from squid.core.permissions.application.ports import PermissionRepository
 from squid.core.sponsors import PublicSponsor
@@ -349,7 +349,9 @@ async def _submit(
         SubmissionPreparation(FakeArtifacts(readiness), FakeSponsors(sponsor)),
         uow_factory=partial(FinalizationScope, jobs, repository),
     )
-    return await service.submit(DRAFT_ID, Actor(account_id=7), locale="en", now=NOW), jobs
+    return await service.submit(
+        DRAFT_ID, context=ActingContext.for_actor(Actor(account_id=7)), locale="en", now=NOW
+    ), jobs
 
 
 @pytest.mark.asyncio
@@ -578,16 +580,18 @@ async def test_status_rechecks_draft_ownership_before_returning_job() -> None:
         uow_factory=partial(FinalizationScope, jobs, repository),
     )
 
-    assert await service.status(DRAFT_ID, Actor(account_id=7)) == jobs.snapshot
+    assert await service.status(DRAFT_ID, context=ActingContext.for_actor(Actor(account_id=7))) == jobs.snapshot
 
     with pytest.raises(DraftAccessDeniedError):
-        await service.status(DRAFT_ID, Actor(account_id=8))
+        await service.status(DRAFT_ID, context=ActingContext.for_actor(Actor(account_id=8)))
     with pytest.raises(DraftAccessDeniedError):
-        await service.attempt(DRAFT_ID, Actor(account_id=8), JOB_ID)
+        await service.attempt(DRAFT_ID, JOB_ID, context=ActingContext.for_actor(Actor(account_id=8)))
     with pytest.raises(DraftAccessDeniedError):
-        await service.attempts(DRAFT_ID, Actor(account_id=8))
-    assert await service.attempt(DRAFT_ID, Actor(account_id=7), JOB_ID) == jobs.snapshot
-    assert await service.attempts(DRAFT_ID, Actor(account_id=7)) == (jobs.snapshot,)
+        await service.attempts(DRAFT_ID, context=ActingContext.for_actor(Actor(account_id=8)))
+    assert (
+        await service.attempt(DRAFT_ID, JOB_ID, context=ActingContext.for_actor(Actor(account_id=7))) == jobs.snapshot
+    )
+    assert await service.attempts(DRAFT_ID, context=ActingContext.for_actor(Actor(account_id=7))) == (jobs.snapshot,)
 
 
 async def _payload() -> NormalizedSubmission:
@@ -600,7 +604,7 @@ async def _payload() -> NormalizedSubmission:
         uow_factory=partial(FinalizationScope, jobs, repository),
     )
 
-    await service.submit(DRAFT_ID, Actor(account_id=7), locale="en", now=NOW)
+    await service.submit(DRAFT_ID, context=ActingContext.for_actor(Actor(account_id=7)), locale="en", now=NOW)
     assert jobs.enqueued is not None
     return jobs.enqueued
 
@@ -738,7 +742,7 @@ async def test_attachment_wait_resumes_without_extending_retention() -> None:
     service = SubmissionFinalizationService(
         _drafts(repository), SubmissionPreparation(artifacts), uow_factory=partial(FinalizationScope, jobs, repository)
     )
-    waiting = await service.submit(DRAFT_ID, Actor(account_id=7), locale="en", now=NOW)
+    waiting = await service.submit(DRAFT_ID, context=ActingContext.for_actor(Actor(account_id=7)), locale="en", now=NOW)
     assert isinstance(waiting, DraftPreparationSnapshot)
     assert waiting.waiting_for_artifacts is True
     assert jobs.enqueued is None
@@ -846,7 +850,7 @@ async def test_ingested_expansion_reaches_the_durable_finalization_payload() -> 
         SubmissionPreparation(FakeArtifacts(SubmissionArtifactReadiness())),
         uow_factory=partial(FinalizationScope, jobs, repository),
     )
-    await service.submit(DRAFT_ID, Actor(account_id=7), locale="en", now=NOW)
+    await service.submit(DRAFT_ID, context=ActingContext.for_actor(Actor(account_id=7)), locale="en", now=NOW)
     assert jobs.enqueued is not None
     assert isinstance(jobs.enqueued.details, DoorSubmissionDetails)
     assert jobs.enqueued.details.expansion == document
