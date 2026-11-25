@@ -95,6 +95,7 @@ def test_build_slash_group_includes_the_app_only_workspaces() -> None:
 
     assert {command.qualified_name for command in build_group.walk_commands()} == {
         "build browse",
+        "build change-category",
         "build submit",
         "build drafts",
         "build issues",
