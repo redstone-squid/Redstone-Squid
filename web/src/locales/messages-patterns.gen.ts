@@ -356,18 +356,6 @@ export function storyReset(locale: Locale = getLocale()): string {
   }
 }
 
-/** in a SplitLayout sheet */
-export function storyInASplitlayoutSheet(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "in a SplitLayout sheet";
-    case "zh-CN":
-      return "在 SplitLayout 侧边面板中";
-    case "en-XA":
-      return "[" + "îñ å ŠþļîţĻåýöûţ šĥééţ" + "·········]";
-  }
-}
-
 /** Filters · 2 */
 export function storyFiltersTwo(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -1416,15 +1404,43 @@ export function storyCredits(locale: Locale = getLocale()): string {
   }
 }
 
-/** A sidebar beside the main content. */
+/** A sidebar beside the main content. Drag a frame's corner to narrow it. */
 export function storySplitlayoutDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "A sidebar beside the main content.";
+      return "A sidebar beside the main content. Drag a frame's corner to narrow it.";
     case "zh-CN":
-      return "主内容旁的侧栏。";
+      return "主内容旁的侧栏。拖动框的一角可将其缩窄。";
     case "en-XA":
-      return "[" + "Å šîđéƀåŕ ƀéšîđé ţĥé ɱåîñ çöñţéñţ." + "··············]";
+      return (
+        "[" +
+        "Å šîđéƀåŕ ƀéšîđé ţĥé ɱåîñ çöñţéñţ. Đŕåĝ å ƒŕåɱé'š çöŕñéŕ ţö ñåŕŕöŵ îţ." +
+        "····························]"
+      );
+  }
+}
+
+/** Build sections */
+export function storyBuildSections(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Build sections";
+    case "zh-CN":
+      return "作品分区";
+    case "en-XA":
+      return "[" + "Ɓûîļđ šéçţîöñš" + "······]";
+  }
+}
+
+/** 2 records */
+export function storyTwoRecords(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "2 records";
+    case "zh-CN":
+      return "2 项纪录";
+    case "en-XA":
+      return "[" + "2 ŕéçöŕđš" + "····]";
   }
 }
 
@@ -1461,30 +1477,6 @@ export function storySheetEndSticky(locale: Locale = getLocale()): string {
       return "侧边面板，侧栏在末尾，固定";
     case "en-XA":
       return "[" + "šĥééţ, šîđéƀåŕ åţ ţĥé éñđ, šţîçķý" + "··············]";
-  }
-}
-
-/** sheet in a narrow frame */
-export function storySheetInANarrowFrame(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "sheet in a narrow frame";
-    case "zh-CN":
-      return "窄框架中的侧边面板";
-    case "en-XA":
-      return "[" + "šĥééţ îñ å ñåŕŕöŵ ƒŕåɱé" + "··········]";
-  }
-}
-
-/** Close account navigation */
-export function storyCloseAccountNavigation(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Close account navigation";
-    case "zh-CN":
-      return "关闭账号导航";
-    case "en-XA":
-      return "[" + "Çļöšé åççöûñţ ñåṽîĝåţîöñ" + "··········]";
   }
 }
 
@@ -1900,7 +1892,6 @@ export {
   recordHolders,
   siteName,
   story312Builds,
-  storyAccount,
   storyApproved,
   storyBreadcrumb,
   storyBuildActions,

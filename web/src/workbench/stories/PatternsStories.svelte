@@ -41,11 +41,16 @@
   import SearchBox from "@/ui/patterns/SearchBox.svelte";
   import Section from "@/ui/patterns/Section.svelte";
   import SplitLayout from "@/ui/patterns/SplitLayout.svelte";
+  import NavList from "@/ui/navigation/NavList.svelte";
   import Variant from "./Variant.svelte";
   import { buildFixtures, recordFixtures } from "@/workbench/fixtures";
   import Story from "./Story.svelte";
 
   const categories = [m.trialDoor(), m.storySeamlessDoor(), m.storyExtender()];
+  // A frame readers can drag narrower, to watch a layout collapse at its own width. It clips
+  // rather than scrolls, so the wheel keeps scrolling the page.
+  const resizableFrame =
+    "max-w-full min-w-0 resize-x overflow-hidden rounded-md border border-dashed border-line-strong p-4";
   const statuses = ["ready", "refreshing", "loading", "empty", "error"] as const;
   let revokeError = $state<string>();
   const wait = () => new Promise<void>((resolve) => setTimeout(resolve, 800));
@@ -360,26 +365,6 @@
         hidden={{ q: "door" }}
         children={filterFields}
       />
-    </Variant>
-    <Variant label={m.storyInASplitlayoutSheet()}>
-      <SplitLayout
-        sidebarLabel={m.storyFilters()}
-        trigger={{ label: m.storyFiltersTwo() }}
-        closeLabel={m.storyCloseFilters()}
-        collapse="sheet"
-      >
-        {#snippet sidebar()}
-          <FilterPanel
-            action="/design-system/patterns"
-            title={m.storyFilters()}
-            applyLabel={m.storyApplyFilters()}
-            resetHref="/design-system/patterns"
-            resetLabel={m.storyReset()}
-            children={filterFields}
-          />
-        {/snippet}
-        <p class="text-sm">{m.story312Builds()}</p>
-      </SplitLayout>
     </Variant>
   </Layout>
 </Story>
@@ -715,11 +700,40 @@
 </Story>
 
 {#snippet sideNav()}
-  <ul class="grid gap-2 text-sm">
-    <li><a href="#splitlayout">{m.storyGeneral()}</a></li>
-    <li><a href="#splitlayout">{m.storyMedia()}</a></li>
-    <li><a href="#splitlayout">{m.storyCredits()}</a></li>
-  </ul>
+  <NavList
+    label={m.storyBuildSections()}
+    groups={[
+      {
+        items: [
+          { label: m.storyGeneral(), href: "#splitlayout-general", current: true },
+          { label: m.storyMedia(), href: "#splitlayout-media" },
+          { label: m.storyCredits(), href: "#splitlayout-credits" },
+        ],
+      },
+    ]}
+  />
+{/snippet}
+
+{#snippet resultsPreview()}
+  <Layout pattern="stack" gap="md">
+    <ResultsToolbar count={m.storyTwoRecords()} />
+    <Layout as="ul" pattern="grid" min="card-wide">
+      {#each recordFixtures().slice(0, 2) as record (record.record_id)}
+        <RecordCard {record} as="li" />
+      {/each}
+    </Layout>
+  </Layout>
+{/snippet}
+
+{#snippet filtersSidebar()}
+  <FilterPanel
+    action="/design-system/patterns"
+    title={m.storyBuildFilters()}
+    applyLabel={m.storyApplyFilters()}
+    resetHref="/design-system/patterns"
+    resetLabel={m.storyReset()}
+    children={filterFields}
+  />
 {/snippet}
 
 <Story
@@ -728,32 +742,26 @@
   description={m.storySplitlayoutDescription()}
 >
   <Variant label={m.storyStackSidebarAtStart()}>
-    <SplitLayout sidebarLabel={m.storySections()} sidebar={sideNav}>
-      <p class="text-sm">{m.storyAFastFlush55Door()}</p>
-    </SplitLayout>
+    <div class={resizableFrame}>
+      <SplitLayout sidebarLabel={m.storySections()} sidebar={sideNav}>
+        <Section title={m.storyGeneral()} level={3}>
+          <p class="text-sm">{m.storyAFastFlush55Door()}</p>
+        </Section>
+      </SplitLayout>
+    </div>
   </Variant>
   <Variant label={m.storySheetEndSticky()}>
-    <SplitLayout
-      sidebarLabel={m.storyBuildFilters()}
-      trigger={{ label: m.storyFiltersTwo() }}
-      closeLabel={m.storyCloseFilters()}
-      collapse="sheet"
-      side="end"
-      sticky
-      sidebar={sideNav}
-    >
-      <p class="text-sm">{m.story312Builds()}</p>
-    </SplitLayout>
-  </Variant>
-  <Variant label={m.storySheetInANarrowFrame()}>
-    <div class="max-w-dialog-sm">
+    <div class={resizableFrame}>
       <SplitLayout
-        sidebarLabel={m.storyAccount()}
-        closeLabel={m.storyCloseAccountNavigation()}
+        sidebarLabel={m.storyBuildFilters()}
+        trigger={{ label: m.storyFiltersTwo() }}
+        closeLabel={m.storyCloseFilters()}
         collapse="sheet"
-        sidebar={sideNav}
+        side="end"
+        sticky
+        sidebar={filtersSidebar}
       >
-        <p class="text-sm">{m.storyShowTheDoorClosedAndOpen()}</p>
+        {@render resultsPreview()}
       </SplitLayout>
     </div>
   </Variant>

@@ -122,6 +122,18 @@ export function storyYourVote(locale: Locale = getLocale()): string {
   }
 }
 
+/** Account */
+export function storyAccount(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Account";
+    case "zh-CN":
+      return "账号";
+    case "en-XA":
+      return "[" + "Åççöûñţ" + "···]";
+  }
+}
+
 /** Links between pages of a listing. */
 export function storyPaginationDescription(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -359,7 +371,6 @@ export {
   navBuilds,
   navPagination,
   navRecords,
-  storyAccount,
   storyBreadcrumb,
   storyCards,
   storyCopperBolt55,
