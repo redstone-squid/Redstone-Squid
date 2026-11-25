@@ -137,13 +137,20 @@
   grid-template-columns: repeat(auto-fill, minmax(min(100%, --value(--container-*)), 1fr));
 }
 
+/*
+ * Tailwind's transition-* utilities reset the duration to --tw-duration or their 150ms default,
+ * so the tokens set both, and win whichever class comes later in the stylesheet.
+ */
 @utility duration-fast {
+  --tw-duration: var(--duration-fast);
   transition-duration: var(--duration-fast);
 }
 @utility duration-normal {
+  --tw-duration: var(--duration-normal);
   transition-duration: var(--duration-normal);
 }
 @utility duration-slow {
+  --tw-duration: var(--duration-slow);
   transition-duration: var(--duration-slow);
 }
 
