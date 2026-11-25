@@ -8,6 +8,7 @@ from discord.ext.commands import Cog
 from squid.core.observability import TraceSurface, trace_span
 from squid.core.posts.topics import resource_topic
 from squid.core.sync import ReconciliationJob
+from squid.core.worker_context import worker_execution
 from squid.runtime import JobHandle
 
 if TYPE_CHECKING:
@@ -41,7 +42,8 @@ class ReconciliationCog[BotT: squid.bot.app.RedstoneSquid](Cog):
         await self.bot.wait_until_ready()
         with trace_span("squid.background.reconciliation", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             for job in await self.bot.services.discord_reconciliation.claim():
-                await self._process_job(job)
+                with worker_execution("discord-reconciliation", job.claim_token):
+                    await self._process_job(job)
 
     async def _process_job(self, job: ReconciliationJob) -> None:
         """Render one resource, then acknowledge the job only if that succeeded.

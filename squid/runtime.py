@@ -86,6 +86,7 @@ from squid.core.versions.application.services import VersionService
 from squid.core.voting.application import VoteService
 from squid.core.voting.application.ports import InteractiveVoteActorResolver
 from squid.core.voting.application.recount import BallotRecounter, VoteCardReactions
+from squid.core.worker_context import worker_execution
 from squid_reactivity import TopicBus
 from squid_storage import PostgresTopicBridge
 
@@ -470,7 +471,7 @@ class BackgroundTaskSupervisor:
             # One correlation per run, so a failure's stored report carries the lines this run
             # logged rather than a slice of whatever else the process was doing. The logging call
             # stays inside the scope; only then does it carry the id the report is filed under.
-            with correlation_scope() as correlation:
+            with worker_execution(name), correlation_scope() as correlation:
                 try:
                     await operation()
                 except anyio.get_cancelled_exc_class():
@@ -522,7 +523,7 @@ class BackgroundTaskSupervisor:
 
     async def _run_owned(self, coroutine: Coroutine[Any, Any, None], handle: JobHandle) -> None:
         try:
-            with handle.scope:
+            with handle.scope, worker_execution(handle.name):
                 await coroutine
         except Exception:
             # Letting a failure escape would cancel every sibling in the task group.

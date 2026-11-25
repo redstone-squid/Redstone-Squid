@@ -2,6 +2,7 @@
 
 from typing import Protocol
 
+from squid.core.actors import ActingContext
 from squid.core.builds.history import BuildEditActor, HistoryOperation
 from squid.core.events import DomainEvent, UnsupportedEventVersionError
 from squid.core.notifications import NotificationService
@@ -74,7 +75,7 @@ class ApplyBuildVoteOutcomeHandler:
         if snapshot.result is VoteSessionResult.APPROVED:
             await self._builds.approve(
                 snapshot.target.build_id,
-                actor="vote_worker",
+                actor=ActingContext.current().effective.reference,
                 operation="moderation",
                 source="vote_outcome",
                 correlation_kind="domain_event",
@@ -83,7 +84,7 @@ class ApplyBuildVoteOutcomeHandler:
         elif snapshot.result is VoteSessionResult.DENIED:
             await self._builds.reject(
                 snapshot.target.build_id,
-                actor="vote_worker",
+                actor=ActingContext.current().effective.reference,
                 operation="moderation",
                 source="vote_outcome",
                 correlation_kind="domain_event",

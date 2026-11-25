@@ -14,6 +14,7 @@ from squid.bot.notification_text import notification_build_id, notification_deta
 from squid.core.i18n import DEFAULT_LOCALE, localization_for, tr
 from squid.core.notifications import PendingNotificationDelivery
 from squid.core.notifications.domain import NotificationKind
+from squid.core.worker_context import worker_execution
 from squid.runtime import JobHandle
 from squid_i18n import discord_text, md_tr, resolve_text
 from squid_ui.content.text import Text, localization_scope
@@ -68,43 +69,44 @@ class NotificationCog(sd.Cog["squid.bot.app.RedstoneSquid"]):
             if not deliveries:
                 break
             delivery = deliveries[0]
-            try:
-                with anyio.fail_after(DELIVERY_TIMEOUT_SECONDS):
-                    user = self.bot.get_user(delivery.discord_id) or await self.bot.fetch_user(delivery.discord_id)
-                    build_id = notification_build_id(delivery.payload)
-                    content = render_delivery(delivery, self.bot.notification_site_url)
-                    nonce = str(delivery.nonce.int & ((1 << 63) - 1))
-                    if build_id is None:
-                        await user.send(content, allowed_mentions=discord.AllowedMentions.none(), nonce=nonce)
-                    else:
-                        view = discord.ui.LayoutView(timeout=None)
-                        view.add_item(discord.ui.TextDisplay(content))
-                        view.add_item(
-                            discord.ui.ActionRow(
-                                discord.ui.Button(
-                                    label=tr(t"notifications-open-build = Open build").resolve(),
-                                    custom_id=BuildBrowseScreen.open_detail.custom_id(build_id=build_id),
+            with worker_execution("notification-deliveries", delivery.claim_token):
+                try:
+                    with anyio.fail_after(DELIVERY_TIMEOUT_SECONDS):
+                        user = self.bot.get_user(delivery.discord_id) or await self.bot.fetch_user(delivery.discord_id)
+                        build_id = notification_build_id(delivery.payload)
+                        content = render_delivery(delivery, self.bot.notification_site_url)
+                        nonce = str(delivery.nonce.int & ((1 << 63) - 1))
+                        if build_id is None:
+                            await user.send(content, allowed_mentions=discord.AllowedMentions.none(), nonce=nonce)
+                        else:
+                            view = discord.ui.LayoutView(timeout=None)
+                            view.add_item(discord.ui.TextDisplay(content))
+                            view.add_item(
+                                discord.ui.ActionRow(
+                                    discord.ui.Button(
+                                        label=tr(t"notifications-open-build = Open build").resolve(),
+                                        custom_id=BuildBrowseScreen.open_detail.custom_id(build_id=build_id),
+                                    )
                                 )
                             )
+                            await user.send(
+                                view=view,
+                                allowed_mentions=discord.AllowedMentions.none(),
+                                nonce=nonce,
+                            )
+                except discord.Forbidden as error:
+                    await self.bot.services.notifications.suspend_dm(delivery, error)
+                except Exception as error:
+                    if isinstance(error, TimeoutError):
+                        error = TimeoutError("Discord notification delivery timed out")
+                    dead_lettered = await self.bot.services.notifications.fail_delivery(delivery, error)
+                    if dead_lettered:
+                        logger.exception(
+                            "Dead-lettered a Discord notification DM",
+                            extra={"squid.notification.delivery_id": delivery.id},
                         )
-                        await user.send(
-                            view=view,
-                            allowed_mentions=discord.AllowedMentions.none(),
-                            nonce=nonce,
-                        )
-            except discord.Forbidden as error:
-                await self.bot.services.notifications.suspend_dm(delivery, error)
-            except Exception as error:
-                if isinstance(error, TimeoutError):
-                    error = TimeoutError("Discord notification delivery timed out")
-                dead_lettered = await self.bot.services.notifications.fail_delivery(delivery, error)
-                if dead_lettered:
-                    logger.exception(
-                        "Dead-lettered a Discord notification DM",
-                        extra={"squid.notification.delivery_id": delivery.id},
-                    )
-            else:
-                await self.bot.services.notifications.complete_delivery(delivery)
+                else:
+                    await self.bot.services.notifications.complete_delivery(delivery)
 
 
 def delivery_message(delivery: PendingNotificationDelivery) -> Text:

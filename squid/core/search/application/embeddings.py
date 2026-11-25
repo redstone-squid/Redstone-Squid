@@ -11,6 +11,7 @@ import anyio
 from squid.core.errors import InvalidStateError
 from squid.core.i18n import tr
 from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
+from squid.core.worker_context import worker_execution
 
 EMBEDDING_CALL_TIMEOUT_SECONDS = 300.0
 """Maximum time for one embedding call, including the adapter's retries.
@@ -87,25 +88,26 @@ class SearchEmbeddingService:
             jobs = await uow.search_embeddings.claim(limit=limit)
             await uow.commit()
         for job in jobs:
-            try:
-                # Bound even adapters without their own timeout. A hung call would
-                # stall the worker's heartbeat; the handler below records the timeout
-                # as a failed attempt so the job can be retried.
-                with anyio.fail_after(EMBEDDING_CALL_TIMEOUT_SECONDS):
-                    embedding = await self._model.embed(job.text)
-                embedding = _require_embedding(embedding)
-                async with self._uow_factory() as uow:
-                    applied = await uow.search_embeddings.complete(job, embedding, self._model.model_name)
-                    await uow.commit()
-                if applied:
-                    succeeded += 1
-            except asyncio.CancelledError:
-                raise
-            except Exception as error:
-                async with self._uow_factory() as uow:
-                    await uow.search_embeddings.fail(job, str(error), max_attempts=self._max_attempts)
-                    await uow.commit()
-                failed += 1
+            with worker_execution("search-embeddings", job.claim_token):
+                try:
+                    # Bound even adapters without their own timeout. A hung call would
+                    # stall the worker's heartbeat; the handler below records the timeout
+                    # as a failed attempt so the job can be retried.
+                    with anyio.fail_after(EMBEDDING_CALL_TIMEOUT_SECONDS):
+                        embedding = await self._model.embed(job.text)
+                    embedding = _require_embedding(embedding)
+                    async with self._uow_factory() as uow:
+                        applied = await uow.search_embeddings.complete(job, embedding, self._model.model_name)
+                        await uow.commit()
+                    if applied:
+                        succeeded += 1
+                except asyncio.CancelledError:
+                    raise
+                except Exception as error:
+                    async with self._uow_factory() as uow:
+                        await uow.search_embeddings.fail(job, str(error), max_attempts=self._max_attempts)
+                        await uow.commit()
+                    failed += 1
         return succeeded, failed
 
 

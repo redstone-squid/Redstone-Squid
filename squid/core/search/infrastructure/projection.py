@@ -38,6 +38,7 @@ from squid.core.builds.models import (
 )
 from squid.core.diagnostics.log_capture import work_lost
 from squid.core.errors import DataIntegrityError
+from squid.core.persistence.provenance import bind_work_attribution
 from squid.core.persistence.queue import ClaimedRowQueue, QueueSpec
 from squid.core.records.application.door_categories import door_category_lookup
 from squid.core.records.application.models import CategoryIdentity
@@ -61,6 +62,7 @@ from squid.core.tags.infrastructure.loading import assignment_units
 from squid.core.tags.models import TagAlias, TagDefinition
 from squid.core.tags.models import TagAssignment as TagAssignment
 from squid.core.versions.models import Version
+from squid.core.worker_context import worker_execution
 
 logger = logging.getLogger(__name__)
 PROJECTION_MAX_ATTEMPTS = 5
@@ -707,59 +709,65 @@ class SearchProjectionWorker:
             attempts = item.attempts
             resource_kind = item.resource_kind
             source_key = item.source_key
-            try:
-                async with self._session.begin_nested():
-                    if item.action == "delete":
-                        await self._store.delete_document(resource_kind, source_key)
-                    else:
-                        projection = await self._loader.load(resource_kind, source_key)
-                        if projection is None:
+            with worker_execution("search-projections", token):
+                await bind_work_attribution(self._session)
+                try:
+                    async with self._session.begin_nested():
+                        if item.action == "delete":
                             await self._store.delete_document(resource_kind, source_key)
                         else:
-                            await self._store.replace(projection)
-                    if resource_kind == "build" and source_key.isdecimal():
-                        await self._session.execute(
-                            select(
-                                func.upsert_search_projection_request(
-                                    "record", func.concat("result:", RecordResult.id), "upsert"
-                                )
-                            )
-                            .select_from(RecordResult)
-                            .join(RecordHolder, RecordHolder.result_id == RecordResult.id)
-                            .join(ComputationRun, ComputationRun.id == RecordResult.run_id)
-                            .where(RecordHolder.build_id == int(source_key), ComputationRun.is_active.is_(True))
-                            .order_by(RecordResult.id)
-                        )
-                    if resource_kind == "metadata" and (key := parse_projection_key(resource_kind, source_key)):
-                        subtype, tag_id = key
-                        if subtype == "tag":
+                            projection = await self._loader.load(resource_kind, source_key)
+                            if projection is None:
+                                await self._store.delete_document(resource_kind, source_key)
+                            else:
+                                await self._store.replace(projection)
+                        if resource_kind == "build" and source_key.isdecimal():
                             await self._session.execute(
                                 select(
-                                    func.upsert_search_projection_request("record", SearchDocument.source_key, "upsert")
+                                    func.upsert_search_projection_request(
+                                        "record", func.concat("result:", RecordResult.id), "upsert"
+                                    )
                                 )
-                                .select_from(SearchDocumentFilter)
-                                .join(SearchDocument, SearchDocument.id == SearchDocumentFilter.document_id)
-                                .where(
-                                    SearchDocument.resource_kind == "record",
-                                    SearchDocumentFilter.field_name == "category_tag_id",
-                                    SearchDocumentFilter.numeric_value == Decimal(tag_id),
-                                )
-                                .order_by(SearchDocument.source_key)
+                                .select_from(RecordResult)
+                                .join(RecordHolder, RecordHolder.result_id == RecordResult.id)
+                                .join(ComputationRun, ComputationRun.id == RecordResult.run_id)
+                                .where(RecordHolder.build_id == int(source_key), ComputationRun.is_active.is_(True))
+                                .order_by(RecordResult.id)
                             )
-                    await self._store.complete(item_id, token)
-                succeeded += 1
-            except Exception as error:
-                dead_lettered = await self._store.retry(item_id, token, attempts, error)
-                if dead_lettered:
-                    logger.exception(
-                        "Dead-lettered a search projection after repeated failures",
-                        extra={
-                            "squid.search.resource_kind": resource_kind,
-                            "squid.search.source_key": source_key,
-                            **work_lost(),
-                        },
-                    )
-                failed += 1
+                        if resource_kind == "metadata" and (key := parse_projection_key(resource_kind, source_key)):
+                            subtype, tag_id = key
+                            if subtype == "tag":
+                                await self._session.execute(
+                                    select(
+                                        func.upsert_search_projection_request(
+                                            "record", SearchDocument.source_key, "upsert"
+                                        )
+                                    )
+                                    .select_from(SearchDocumentFilter)
+                                    .join(SearchDocument, SearchDocument.id == SearchDocumentFilter.document_id)
+                                    .where(
+                                        SearchDocument.resource_kind == "record",
+                                        SearchDocumentFilter.field_name == "category_tag_id",
+                                        SearchDocumentFilter.numeric_value == Decimal(tag_id),
+                                    )
+                                    .order_by(SearchDocument.source_key)
+                                )
+                        await self._store.complete(item_id, token)
+                    succeeded += 1
+                except Exception as error:
+                    dead_lettered = await self._store.retry(item_id, token, attempts, error)
+                    if dead_lettered:
+                        logger.exception(
+                            "Dead-lettered a search projection after repeated failures",
+                            extra={
+                                "squid.search.resource_kind": resource_kind,
+                                "squid.search.source_key": source_key,
+                                **work_lost(),
+                            },
+                        )
+                    failed += 1
+        if succeeded or failed:
+            await bind_work_attribution(self._session, reset=True)
         return succeeded, failed
 
 

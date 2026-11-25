@@ -58,6 +58,7 @@ from squid.core.schematics.errors import (
 )
 from squid.core.schematics.infrastructure import wire
 from squid.core.schematics.infrastructure.worker import current_schematic_job_id
+from squid.core.worker_context import worker_execution
 
 logger = logging.getLogger(__name__)
 
@@ -294,14 +295,15 @@ class SchematicJobRunner:
         await self._jobs.cleanup(self._artifacts.delete)
 
     async def _process(self, job: ClaimedSchematicJob) -> None:
-        token = current_schematic_job_id.set(job.id)
-        try:
-            async with anyio.create_task_group() as tasks:
-                tasks.start_soon(self._renew_claim, job, tasks)
-                await self._process_claimed(job)
-                tasks.cancel_scope.cancel()
-        finally:
-            current_schematic_job_id.reset(token)
+        with worker_execution("schematic-jobs", job.claim_token):
+            token = current_schematic_job_id.set(job.id)
+            try:
+                async with anyio.create_task_group() as tasks:
+                    tasks.start_soon(self._renew_claim, job, tasks)
+                    await self._process_claimed(job)
+                    tasks.cancel_scope.cancel()
+            finally:
+                current_schematic_job_id.reset(token)
 
     async def _renew_claim(self, job: ClaimedSchematicJob, tasks: TaskGroup) -> None:
         while True:

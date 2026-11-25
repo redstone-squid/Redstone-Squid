@@ -19,6 +19,7 @@ from squid.core.records.application.range_snapshots import RangePublication, Ran
 from squid.core.records.application.services import RecordComputationService
 from squid.core.records.domain.regions import DEFAULT_REGION_LIMITS, RegionAnalysisStatus
 from squid.core.unit_of_work import UnitOfWorkFactory
+from squid.core.worker_context import worker_execution
 
 logger = logging.getLogger(__name__)
 
@@ -88,25 +89,26 @@ class RangePublicationService:
                 await uow.commit()
             if claim is None:
                 break
-            error: str | None = None
-            try:
-                publication = await self.publish(claim.query)
-                latest = publication.latest
-                if latest is None or latest.error is not None:
-                    error = latest.error if latest is not None else "missing_attempt"
-                elif latest.result is None or latest.result.analysis.status is not RegionAnalysisStatus.EXACT:
-                    error = "inexact_analysis" if latest.result is None else latest.result.analysis.status.value
-            except Exception as exc:
-                logger.exception("Range query %s failed to refresh", claim.query_id)
-                error = type(exc).__name__
-            async with self._uow_factory() as uow:
-                if error is None:
-                    await uow.record_ranges.complete_refresh(claim)
-                    succeeded += 1
-                else:
-                    await uow.record_ranges.fail_refresh(claim, error)
-                    failed += 1
-                await uow.commit()
+            with worker_execution("record-ranges", claim.token):
+                error: str | None = None
+                try:
+                    publication = await self.publish(claim.query)
+                    latest = publication.latest
+                    if latest is None or latest.error is not None:
+                        error = latest.error if latest is not None else "missing_attempt"
+                    elif latest.result is None or latest.result.analysis.status is not RegionAnalysisStatus.EXACT:
+                        error = "inexact_analysis" if latest.result is None else latest.result.analysis.status.value
+                except Exception as exc:
+                    logger.exception("Range query %s failed to refresh", claim.query_id)
+                    error = type(exc).__name__
+                async with self._uow_factory() as uow:
+                    if error is None:
+                        await uow.record_ranges.complete_refresh(claim)
+                        succeeded += 1
+                    else:
+                        await uow.record_ranges.fail_refresh(claim, error)
+                        failed += 1
+                    await uow.commit()
         return succeeded, failed
 
     async def publish(self, query: DoorRangeQuery) -> RangePublication:

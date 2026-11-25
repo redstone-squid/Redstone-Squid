@@ -8,6 +8,7 @@ import pytest
 from whenever import Instant
 
 from squid.config import WorkerConfig
+from squid.core.actors import ActingContext
 from squid.core.builds.application import BuildService
 from squid.core.builds.history import BuildEditActor, HistoryOperation
 from squid.core.builds.models import Build
@@ -142,7 +143,8 @@ async def test_apply_build_vote_outcome_names_no_chat_client() -> None:
     builds = BuildRecorder()
     handler = ApplyBuildVoteOutcomeHandler(votes, builds)
 
-    await handler.handle(_event())
+    with ActingContext.worker("events.core").scope():
+        await handler.handle(_event())
 
     assert builds.confirmed == [42]
     assert builds.denied == []

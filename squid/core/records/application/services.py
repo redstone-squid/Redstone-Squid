@@ -66,6 +66,7 @@ from squid.core.records.domain.models import DOOR_TIMING_METHODS, EXTENDER_TIMIN
 from squid.core.records.domain.resolution import resolve_record
 from squid.core.records.errors import NoMatchingRecordCategoryError, RecordDefinitionNotFoundError
 from squid.core.unit_of_work import UnitOfWorkFactory
+from squid.core.worker_context import worker_execution
 from squid_i18n import md_tr
 
 
@@ -290,16 +291,18 @@ class RecordComputationService:
                 await uow.commit()
             if not lease:
                 break
-            try:
-                summary = await self._rebuild(current_version_id=version_id, kinds=lease.kinds, lease=lease)
-            except Exception as error:
-                async with self._uow_factory() as uow:
-                    await uow.records.fail_recompute(lease, str(error))
-                    await uow.commit()
-                failures.append(error)
-                continue
-            kinds.extend(lease.kinds)
-            summaries.append(summary)
+            # Recompute claims one queue item per iteration.
+            with worker_execution("record-maintenance", next(iter(lease.claim_tokens), None)):
+                try:
+                    summary = await self._rebuild(current_version_id=version_id, kinds=lease.kinds, lease=lease)
+                except Exception as error:
+                    async with self._uow_factory() as uow:
+                        await uow.records.fail_recompute(lease, str(error))
+                        await uow.commit()
+                    failures.append(error)
+                    continue
+                kinds.extend(lease.kinds)
+                summaries.append(summary)
         if failures:
             raise failures[0]
         return QueueProcessSummary(

@@ -8,6 +8,7 @@ import pytest
 from whenever import Instant
 
 from squid.bot.voting.event_handlers import DeleteVotedMessageHandler
+from squid.core.actors import ActingContext
 from squid.core.builds.application import BuildService
 from squid.core.events import DomainEvent
 from squid.core.voting.application import VoteService
@@ -73,11 +74,12 @@ def _bot(snapshot: VoteSessionSnapshot | None) -> Any:
 async def test_a_decided_build_vote_applies_its_outcome(result: VoteSessionResult, expected: str) -> None:
     bot = _bot(_snapshot(kind=VoteKind.BUILD, result=result, target=BuildVoteTarget(42)))
 
-    await ApplyBuildVoteOutcomeHandler(bot.services.votes, bot.services.builds).handle(_event())
+    with ActingContext.worker("events.core").scope():
+        await ApplyBuildVoteOutcomeHandler(bot.services.votes, bot.services.builds).handle(_event())
 
     getattr(bot.services.builds, expected).assert_awaited_once_with(
         42,
-        actor="vote_worker",
+        actor="worker:events.core",
         operation="moderation",
         source="vote_outcome",
         correlation_kind="domain_event",

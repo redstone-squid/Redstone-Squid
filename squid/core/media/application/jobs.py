@@ -58,6 +58,7 @@ from squid.core.media.errors import (
     MediaUploadConflictError,
 )
 from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
+from squid.core.worker_context import worker_execution
 from squid_i18n import md_tr
 
 logger = logging.getLogger(__name__)
@@ -684,14 +685,15 @@ class MediaProcessingJobRunner:
         await run_all_settled([partial(self._process, job) for job in claimed])
 
     async def _process(self, job: ClaimedMediaJob) -> None:
-        claim_lost = asyncio.Event()
-        async with task_group() as heartbeat:
-            heartbeat.start_soon(self._maintain_claim, job, claim_lost, name=f"media-heartbeat-{job.upload.id}")
-            try:
-                await self._process_claim(job, claim_lost)
-            finally:
-                # Stop renewal on every exit path, including cancellation and lost claims.
-                heartbeat.cancel_scope.cancel()
+        with worker_execution("media-processing", job.claim_token):
+            claim_lost = asyncio.Event()
+            async with task_group() as heartbeat:
+                heartbeat.start_soon(self._maintain_claim, job, claim_lost, name=f"media-heartbeat-{job.upload.id}")
+                try:
+                    await self._process_claim(job, claim_lost)
+                finally:
+                    # Stop renewal on every exit path, including cancellation and lost claims.
+                    heartbeat.cancel_scope.cancel()
 
     async def _process_claim(self, job: ClaimedMediaJob, claim_lost: asyncio.Event) -> None:
         with tempfile.TemporaryDirectory(prefix="squid-media-", dir=self._working_directory) as temporary_name:

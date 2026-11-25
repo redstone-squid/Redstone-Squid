@@ -8,6 +8,7 @@ from squid.core.diagnostics.log_capture import work_lost
 from squid.core.posts.topics import TopicPublisher, resource_topic
 from squid.core.schematics.application import SchematicPreviewService, SchematicRenderJobService
 from squid.core.schematics.application.previews import CachedRender, FreshRender, SkippedRender
+from squid.core.worker_context import worker_execution
 
 logger = logging.getLogger(__name__)
 
@@ -43,17 +44,18 @@ class SchematicPreviewWorker:
         if not self._enabled:
             return
         for job in await self._jobs.claim():
-            try:
-                await self._publish_preview(job.build_id)
-            except Exception as error:
-                dead = await self._jobs.fail(job, error)
-                if dead:
-                    logger.exception(
-                        "Dead-lettered schematic preview publication",
-                        extra={"squid.build.id": job.build_id, **work_lost()},
-                    )
-                continue
-            await self._jobs.complete(job)
+            with worker_execution("schematic-renders", job.claim_token):
+                try:
+                    await self._publish_preview(job.build_id)
+                except Exception as error:
+                    dead = await self._jobs.fail(job, error)
+                    if dead:
+                        logger.exception(
+                            "Dead-lettered schematic preview publication",
+                            extra={"squid.build.id": job.build_id, **work_lost()},
+                        )
+                    continue
+                await self._jobs.complete(job)
 
     async def _publish_preview(self, build_id: int) -> None:
         """Apply the preparation decision, acknowledging skips without an upload.
