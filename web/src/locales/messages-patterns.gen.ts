@@ -2,15 +2,15 @@
 import { getLocale, type Locale } from "./locale";
 import { formatNumber, formatValue, select } from "./format";
 
-/** Pending review by staff. */
-export function storyPendingReviewByStaff(locale: Locale = getLocale()): string {
+/** Needs attention */
+export function storyNeedsAttention(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Pending review by staff.";
+      return "Needs attention";
     case "zh-CN":
-      return "等待工作人员审核。";
+      return "需要关注";
     case "en-XA":
-      return "[" + "Þéñđîñĝ ŕéṽîéŵ ƀý šţåƒƒ." + "··········]";
+      return "[" + "Ñééđš åţţéñţîöñ" + "······]";
   }
 }
 
@@ -23,30 +23,6 @@ export function storyViewAll(locale: Locale = getLocale()): string {
       return "查看全部";
     case "en-XA":
       return "[" + "Ṽîéŵ åļļ" + "····]";
-  }
-}
-
-/** Section content. */
-export function storySectionContent(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Section content.";
-    case "zh-CN":
-      return "分区内容。";
-    case "en-XA":
-      return "[" + "Šéçţîöñ çöñţéñţ." + "·······]";
-  }
-}
-
-/** Drawn as a panel. */
-export function storyDrawnAsAPanel(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Drawn as a panel.";
-    case "zh-CN":
-      return "以面板形式显示。";
-    case "en-XA":
-      return "[" + "Đŕåŵñ åš å þåñéļ." + "·······]";
   }
 }
 
@@ -87,18 +63,6 @@ export function storyBuildsThatHoldThisRecord(locale: Locale = getLocale()): str
       return "保持此纪录的作品。";
     case "en-XA":
       return "[" + "Ɓûîļđš ţĥåţ ĥöļđ ţĥîš ŕéçöŕđ." + "············]";
-  }
-}
-
-/** Surface section */
-export function storySurfaceSection(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Surface section";
-    case "zh-CN":
-      return "带背景的分区";
-    case "en-XA":
-      return "[" + "Šûŕƒåçé šéçţîöñ" + "······]";
   }
 }
 
@@ -152,15 +116,15 @@ export function storyNavbarDescription(locale: Locale = getLocale()): string {
   }
 }
 
-/** as wide as the page */
-export function storyAsWideAsThePage(locale: Locale = getLocale()): string {
+/** full width */
+export function storyFullWidth(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "as wide as the page";
+      return "full width";
     case "zh-CN":
-      return "与页面同宽";
+      return "全宽";
     case "en-XA":
-      return "[" + "åš ŵîđé åš ţĥé þåĝé" + "········]";
+      return "[" + "ƒûļļ ŵîđţĥ" + "····]";
   }
 }
 
@@ -176,15 +140,15 @@ export function storyStoryNavigation(locale: Locale = getLocale()): string {
   }
 }
 
-/** narrow frame, links collapsed */
-export function storyNarrowFrameLinksCollapsed(locale: Locale = getLocale()): string {
+/** narrow */
+export function storyNarrow(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "narrow frame, links collapsed";
+      return "narrow";
     case "zh-CN":
-      return "窄框架，链接已收起";
+      return "窄";
     case "en-XA":
-      return "[" + "ñåŕŕöŵ ƒŕåɱé, ļîñķš çöļļåþšéđ" + "············]";
+      return "[" + "ñåŕŕöŵ" + "···]";
   }
 }
 
@@ -248,15 +212,15 @@ export function storySearchPlaceholder(locale: Locale = getLocale()): string {
   }
 }
 
-/** compact, for the header */
-export function storyCompactForTheHeader(locale: Locale = getLocale()): string {
+/** compact */
+export function storyCompact(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "compact, for the header";
+      return "compact";
     case "zh-CN":
-      return "紧凑，用于页眉";
+      return "紧凑";
     case "en-XA":
-      return "[" + "çöɱþåçţ, ƒöŕ ţĥé ĥéåđéŕ" + "··········]";
+      return "[" + "çöɱþåçţ" + "···]";
   }
 }
 
@@ -428,18 +392,6 @@ export function storyCloseFilters(locale: Locale = getLocale()): string {
   }
 }
 
-/** Results. */
-export function storyResults(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Results.";
-    case "zh-CN":
-      return "结果。";
-    case "en-XA":
-      return "[" + "Ŕéšûļţš." + "····]";
-  }
-}
-
 /** The filters applied to a listing, each removable. */
 export function storyActivefiltersDescription(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -533,18 +485,6 @@ export function storyResultstoolbarDescription(locale: Locale = getLocale()): st
       return "列表上方的数量、排序和视图控件。";
     case "en-XA":
       return "[" + "Çöûñţ, šöŕţ, åñđ ṽîéŵ çöñţŕöļš åƀöṽé å ļîšţîñĝ." + "···················]";
-  }
-}
-
-/** 312 builds */
-export function story312Builds(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "312 builds";
-    case "zh-CN":
-      return "312 个作品";
-    case "en-XA":
-      return "[" + "312 ƀûîļđš" + "····]";
   }
 }
 
@@ -764,18 +704,6 @@ export function storyDeviceSignsOut(locale: Locale = getLocale()): string {
   }
 }
 
-/** Cancel */
-export function storyCancel(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Cancel";
-    case "zh-CN":
-      return "取消";
-    case "en-XA":
-      return "[" + "Çåñçéļ" + "···]";
-  }
-}
-
 /** Revoking */
 export function storyRevoking(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -884,18 +812,6 @@ export function storyRejectThisProposal(locale: Locale = getLocale()): string {
   }
 }
 
-/** Reject, failing */
-export function storyRejectFailing(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Reject, failing";
-    case "zh-CN":
-      return "拒绝（会失败）";
-    case "en-XA":
-      return "[" + "Ŕéĵéçţ, ƒåîļîñĝ" + "······]";
-  }
-}
-
 /** The proposal changed since you opened it. Reload and try again. */
 export function storyProposalChanged(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -921,22 +837,6 @@ export function storyPublishTheDraft(locale: Locale = getLocale()): string {
       return "发布此草稿？";
     case "en-XA":
       return "[" + "Þûƀļîšĥ ţĥé đŕåƒţ?" + "········]";
-  }
-}
-
-/** Staff will review it before it appears in the catalogue. */
-export function storyStaffWillReview(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Staff will review it before it appears in the catalogue.";
-    case "zh-CN":
-      return "工作人员审核后，它才会出现在目录中。";
-    case "en-XA":
-      return (
-        "[" +
-        "Šţåƒƒ ŵîļļ ŕéṽîéŵ îţ ƀéƒöŕé îţ åþþéåŕš îñ ţĥé çåţåļöĝûé." +
-        "·······················]"
-      );
   }
 }
 
@@ -1360,15 +1260,15 @@ export function storyContinue(locale: Locale = getLocale()): string {
   }
 }
 
-/** a failed phase */
-export function storyAFailedPhase(locale: Locale = getLocale()): string {
+/** failed step */
+export function storyFailedStep(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "a failed phase";
+      return "failed step";
     case "zh-CN":
-      return "失败的阶段";
+      return "失败的步骤";
     case "en-XA":
-      return "[" + "å ƒåîļéđ þĥåšé" + "······]";
+      return "[" + "ƒåîļéđ šţéþ" + "·····]";
   }
 }
 
@@ -1552,22 +1452,6 @@ export function storySections(locale: Locale = getLocale()): string {
   }
 }
 
-/** Main content flows beside the sidebar when there is room. */
-export function storyMainContentFlows(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Main content flows beside the sidebar when there is room.";
-    case "zh-CN":
-      return "有空间时，主要内容排在侧栏旁边。";
-    case "en-XA":
-      return (
-        "[" +
-        "Ṁåîñ çöñţéñţ ƒļöŵš ƀéšîđé ţĥé šîđéƀåŕ ŵĥéñ ţĥéŕé îš ŕööɱ." +
-        "·······················]"
-      );
-  }
-}
-
 /** sheet, sidebar at the end, sticky */
 export function storySheetEndSticky(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -1577,22 +1461,6 @@ export function storySheetEndSticky(locale: Locale = getLocale()): string {
       return "侧边面板，侧栏在末尾，固定";
     case "en-XA":
       return "[" + "šĥééţ, šîđéƀåŕ åţ ţĥé éñđ, šţîçķý" + "··············]";
-  }
-}
-
-/** On a narrow layout the sidebar opens as a sheet from the end edge. */
-export function storyNarrowLayoutSheet(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "On a narrow layout the sidebar opens as a sheet from the end edge.";
-    case "zh-CN":
-      return "布局较窄时，侧栏会从末端边缘以面板形式打开。";
-    case "en-XA":
-      return (
-        "[" +
-        "Öñ å ñåŕŕöŵ ļåýöûţ ţĥé šîđéƀåŕ öþéñš åš å šĥééţ ƒŕöɱ ţĥé éñđ éđĝé." +
-        "···························]"
-      );
   }
 }
 
@@ -1617,22 +1485,6 @@ export function storyCloseAccountNavigation(locale: Locale = getLocale()): strin
       return "关闭账号导航";
     case "en-XA":
       return "[" + "Çļöšé åççöûñţ ñåṽîĝåţîöñ" + "··········]";
-  }
-}
-
-/** This frame is always narrow, so the sidebar stays behind a button. */
-export function storyFrameAlwaysNarrow(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "This frame is always narrow, so the sidebar stays behind a button.";
-    case "zh-CN":
-      return "这个框架始终很窄，所以侧栏一直收在按钮后面。";
-    case "en-XA":
-      return (
-        "[" +
-        "Ţĥîš ƒŕåɱé îš åļŵåýš ñåŕŕöŵ, šö ţĥé šîđéƀåŕ šţåýš ƀéĥîñđ å ƀûţţöñ." +
-        "···························]"
-      );
   }
 }
 
@@ -1734,43 +1586,39 @@ export function storyRelatedCount(args: { count: number }, locale: Locale = getL
   }
 }
 
-/** Under a page header, with one primary action and the rest in a menu */
+/** under a page header, with actions */
 export function storyRelatedWithActions(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Under a page header, with one primary action and the rest in a menu";
+      return "under a page header, with actions";
     case "zh-CN":
-      return "位于页面标题下，一个主要操作，其余放在菜单中";
+      return "位于页面标题下，带操作";
     case "en-XA":
-      return (
-        "[" +
-        "Ûñđéŕ å þåĝé ĥéåđéŕ, ŵîţĥ öñé þŕîɱåŕý åçţîöñ åñđ ţĥé ŕéšţ îñ å ɱéñû" +
-        "···························]"
-      );
+      return "[" + "ûñđéŕ å þåĝé ĥéåđéŕ, ŵîţĥ åçţîöñš" + "··············]";
   }
 }
 
-/** A record, with a zero count */
+/** zero count */
 export function storyRelatedZeroCounts(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "A record, with a zero count";
+      return "zero count";
     case "zh-CN":
-      return "纪录，含零计数";
+      return "零计数";
     case "en-XA":
-      return "[" + "Å ŕéçöŕđ, ŵîţĥ å žéŕö çöûñţ" + "···········]";
+      return "[" + "žéŕö çöûñţ" + "····]";
   }
 }
 
-/** A creator, with a four-digit count */
+/** four-digit count */
 export function storyRelatedCreator(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "A creator, with a four-digit count";
+      return "four-digit count";
     case "zh-CN":
-      return "创作者，含四位数计数";
+      return "四位数计数";
     case "en-XA":
-      return "[" + "Å çŕéåţöŕ, ŵîţĥ å ƒöûŕ-đîĝîţ çöûñţ" + "··············]";
+      return "[" + "ƒöûŕ-đîĝîţ çöûñţ" + "·······]";
   }
 }
 
@@ -1946,18 +1794,6 @@ export function storyRelatedPastRecords(
   }
 }
 
-/** Vote */
-export function storyVote(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Vote";
-    case "zh-CN":
-      return "投票";
-    case "en-XA":
-      return "[" + "Ṽöţé" + "··]";
-  }
-}
-
 /** Voting closed 2 days ago */
 export function storyVotingClosed(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -1994,6 +1830,66 @@ export function storySuggestACorrection(locale: Locale = getLocale()): string {
   }
 }
 
+/** with actions */
+export function storyWithActions(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "with actions";
+    case "zh-CN":
+      return "带操作";
+    case "en-XA":
+      return "[" + "ŵîţĥ åçţîöñš" + "·····]";
+  }
+}
+
+/** surface, level 3 */
+export function storySurfaceLevel3(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "surface, level 3";
+    case "zh-CN":
+      return "面板，三级";
+    case "en-XA":
+      return "[" + "šûŕƒåçé, ļéṽéļ 3" + "·······]";
+  }
+}
+
+/** danger */
+export function storyDanger(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "danger";
+    case "zh-CN":
+      return "危险";
+    case "en-XA":
+      return "[" + "đåñĝéŕ" + "···]";
+  }
+}
+
+/** typed confirmation */
+export function storyTypedConfirmation(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "typed confirmation";
+    case "zh-CN":
+      return "输入确认";
+    case "en-XA":
+      return "[" + "ţýþéđ çöñƒîŕɱåţîöñ" + "········]";
+  }
+}
+
+/** default tone */
+export function storyDefaultTone(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "default tone";
+    case "zh-CN":
+      return "默认色调";
+    case "en-XA":
+      return "[" + "đéƒåûļţ ţöñé" + "·····]";
+  }
+}
+
 export {
   navAbout,
   navBuilds,
@@ -2003,10 +1899,12 @@ export {
   navSubmit,
   recordHolders,
   siteName,
+  story312Builds,
   storyAccount,
   storyApproved,
   storyBreadcrumb,
   storyBuildActions,
+  storyCancel,
   storyCards,
   storyChooseFiles,
   storyClose,
@@ -2015,18 +1913,21 @@ export {
   storyCopyFailed,
   storyCopyLink,
   storyDone,
+  storyDoorEvidence,
   storyDropFilesHereOr,
   storyEdit,
   storyEmpty,
+  storyError,
   storyExtender,
   storyFilters,
   storyLoading,
   storyLoadingBuilds,
+  storyMeasuredWithATickCounterOnJava1,
   storyMoreActions,
-  storyNeedsAttention,
   storyNewest,
   storyNotifications,
   storyPendingReview,
+  storyPendingReviewByStaff,
   storyPublish,
   storyRecordHolders,
   storyReject,
@@ -2039,11 +1940,13 @@ export {
   storySaving,
   storySortNewest,
   storySortOrder,
+  storyStaffWillReview,
   storySuggestionCount,
   storySuggestionsAreUnavailable,
   storyTable,
   storyTryAgain,
   storyUploadFailed,
+  storyVote,
   trialCategory,
   trialDoor,
   workbenchPistonDoor,

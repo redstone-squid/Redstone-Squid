@@ -61,6 +61,11 @@
     { id: "closing", label: "Closing time" },
     { id: "evidence", label: "Evidence" },
   ];
+  const tabText: Record<string, string> = {
+    opening: "Opens in 12 ticks.",
+    closing: "Closes in 9 ticks.",
+    evidence: "Tick counter recording on Java 1.21.4.",
+  };
 
   let results = $state<"ready" | "loading">("ready");
   function reload(): void {
@@ -103,7 +108,7 @@
     <Button icon={Play} onclick={() => (played = !played)} aria-pressed={played}>Play</Button>
     <Switch label="Slow motion (×5)" bind:checked={slow} />
   </div>
-  <Variant label="Durations, with ease-standard">
+  <Variant label="durations, ease-standard">
     <div class="grid gap-3">
       {#each durations as [token, duration] (token)}
         <div class="grid gap-1">
@@ -119,7 +124,7 @@
       {/each}
     </div>
   </Variant>
-  <Variant label="Easings, with duration-slow">
+  <Variant label="easings, duration-slow">
     <div class="grid gap-3">
       {#each easings as [token, easing] (token)}
         <div class="grid gap-1">
@@ -146,23 +151,23 @@
   {@render reducedNote()}
   <div class="flex flex-wrap items-center gap-3">
     <Dialog title="Rename build" closeLabel="Close" trigger={{ label: "Dialog" }}>
-      <p>Close it to see it leave.</p>
+      <p>Copper Bolt 5×5 keeps its links and votes.</p>
     </Dialog>
     <Sheet title="Filters" closeLabel="Close" trigger={{ label: "Sheet" }}>
-      <p>The sheet slides back to its edge.</p>
+      <p>312 builds match.</p>
     </Sheet>
-    <Popover trigger={{ label: "Popover" }} label="About motion" closeLabel="Close">
-      <p class="text-sm">Fades in beside its trigger and out again.</p>
+    <Popover trigger={{ label: "Popover" }} label="What pending means" closeLabel="Close">
+      <p class="text-sm">A moderator checks the evidence first.</p>
     </Popover>
     <Menu trigger={{ label: "Menu" }} label="Build actions" items={menuItems} />
     <Menu trigger={{ label: "Language" }} label="Language" items={linkItems} nojs />
-    <Tooltip content="More about motion">
+    <Tooltip content="Status help">
       {#snippet children(props)}<Button
           {...props}
           variant="quiet"
           iconOnly
           icon={Info}
-          label="More about motion"
+          label="Status help"
         />{/snippet}
     </Tooltip>
   </div>
@@ -189,7 +194,7 @@
 >
   {@render reducedNote()}
   <Tabs mode="panel" label="Record details" items={tabs}>
-    {#snippet panel(tab)}<p class="text-sm text-fg-muted">{tab.label} details.</p>{/snippet}
+    {#snippet panel(tab)}<p class="text-sm text-fg-muted">{tabText[tab.id]}</p>{/snippet}
   </Tabs>
   <SegmentedControl
     mode="radio"

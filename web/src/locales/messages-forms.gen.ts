@@ -26,18 +26,6 @@ export function searchSuggestionError(locale: Locale = getLocale()): string {
   }
 }
 
-/** Submit for review */
-export function storySubmitForReview(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Submit for review";
-    case "zh-CN":
-      return "提交审核";
-    case "en-XA":
-      return "[" + "Šûƀɱîţ ƒöŕ ŕéṽîéŵ" + "·······]";
-  }
-}
-
 /** Discard draft */
 export function storyDiscardDraft(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -107,18 +95,6 @@ export function storyVideoLink(locale: Locale = getLocale()): string {
       return "视频链接";
     case "en-XA":
       return "[" + "Ṽîđéö ļîñķ" + "····]";
-  }
-}
-
-/** error */
-export function storyError(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "error";
-    case "zh-CN":
-      return "错误";
-    case "en-XA":
-      return "[" + "éŕŕöŕ" + "··]";
   }
 }
 
@@ -239,18 +215,6 @@ export function storyShortTitle(locale: Locale = getLocale()): string {
       return "短标题";
     case "en-XA":
       return "[" + "Šĥöŕţ ţîţļé" + "·····]";
-  }
-}
-
-/** Seamless 3×3 flush door */
-export function storySeamless33FlushDoor(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Seamless 3×3 flush door";
-    case "zh-CN":
-      return "无痕 3×3 平墙门";
-    case "en-XA":
-      return "[" + "Šéåɱļéšš 3×3 ƒļûšĥ đööŕ" + "··········]";
   }
 }
 
@@ -2171,6 +2135,7 @@ export {
   storyCopperBolt,
   storyCreator,
   storyDropFilesHereOr,
+  storyError,
   storyFastest,
   storyFlush,
   storyFlushLabel,
@@ -2182,7 +2147,9 @@ export {
   storyRemoveOption,
   storySave,
   storySeamless,
+  storySeamless33FlushDoor,
   storySilent,
+  storySubmitForReview,
   storySuggestionCount,
   storySuggestionsAreUnavailable,
   storyTitle,

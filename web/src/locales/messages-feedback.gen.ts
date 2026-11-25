@@ -50,18 +50,6 @@ export function storyRetryWithTheSameFileOrChooseAnother(locale: Locale = getLoc
   }
 }
 
-/** This build is pending review. */
-export function storyThisBuildIsPendingReview(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "This build is pending review.";
-    case "zh-CN":
-      return "此作品正等待审核。";
-    case "en-XA":
-      return "[" + "Ţĥîš ƀûîļđ îš þéñđîñĝ ŕéṽîéŵ." + "············]";
-  }
-}
-
 /** Checking the record… */
 export function storyCheckingTheRecord(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -278,18 +266,6 @@ export function storySkeletonDescription(locale: Locale = getLocale()): string {
   }
 }
 
-/** No drafts yet */
-export function storyNoDraftsYet(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "No drafts yet";
-    case "zh-CN":
-      return "暂无草稿";
-    case "en-XA":
-      return "[" + "Ñö đŕåƒţš ýéţ" + "······]";
-  }
-}
-
 /** Start a submission to see it here. */
 export function storyStartASubmissionToSeeItHere(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -500,20 +476,59 @@ export function storyFiltersPreserved(locale: Locale = getLocale()): string {
   }
 }
 
+/** Draft */
+export function storyDraft(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Draft";
+    case "zh-CN":
+      return "草稿";
+    case "en-XA":
+      return "[" + "Đŕåƒţ" + "··]";
+  }
+}
+
+/** Needs evidence */
+export function storyNeedsEvidence(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Needs evidence";
+    case "zh-CN":
+      return "缺少证据";
+    case "en-XA":
+      return "[" + "Ñééđš éṽîđéñçé" + "······]";
+  }
+}
+
+/** Rejected */
+export function storyRejected(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Rejected";
+    case "zh-CN":
+      return "已拒绝";
+    case "en-XA":
+      return "[" + "Ŕéĵéçţéđ" + "····]";
+  }
+}
+
 export {
   storyApproved,
+  storyConfirmed,
+  storyFastest,
   storyFlush,
   storyFlushLabel,
   storyJava121,
   storyLoading,
   storyLoadingBuilds,
+  storyNoDraftsYet,
   storyPendingLabel,
   storyRemoveOption,
   storyRetry,
   storySaved,
   storySaving,
   storySeamless,
-  storySelected,
+  storyThisBuildIsPendingReview,
   storyTones,
   storyTryAgain,
   storyUploadFailed,

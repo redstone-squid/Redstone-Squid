@@ -19,6 +19,14 @@
   import Variant from "./Variant.svelte";
 
   const tones = ["neutral", "info", "success", "warning", "danger", "accent"] as const;
+  const toneExamples = {
+    neutral: m.storyDraft,
+    info: m.storyJava121,
+    success: m.storyConfirmed,
+    warning: m.storyNeedsEvidence,
+    danger: m.storyRejected,
+    accent: m.storyFastest,
+  } satisfies Record<(typeof tones)[number], () => string>;
   let flush = $state(true);
   let chips = $state([m.storyWidth5(), m.storyFlush()]);
   let results = $state(312);
@@ -46,7 +54,7 @@
 <Story name="Badge" source="feedback/Badge" description={m.storyBadgeDescription()}>
   <Variant label={m.storyTones()}>
     <div class="flex flex-wrap gap-2">
-      {#each tones as tone (tone)}<Badge {tone}>{tone}</Badge>{/each}
+      {#each tones as tone (tone)}<Badge {tone}>{toneExamples[tone]()}</Badge>{/each}
     </div>
   </Variant>
   <Variant label={m.storyDotIconSizeMd()}>
@@ -64,7 +72,7 @@
       <Chip href="#chip" icon={Tag}>{m.storySeamless()}</Chip>
       <Chip pressed={flush} onclick={() => (flush = !flush)}>{m.storyFlushLabel()}</Chip>
       <Chip>3×3</Chip>
-      <Chip tone="accent">{m.storySelected()}</Chip>
+      <Chip tone="accent">{m.storyRecordHolder()}</Chip>
     </div>
   </Variant>
   <Variant label={m.storyRemovableLinkAndButton()}>

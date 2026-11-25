@@ -7,6 +7,11 @@
 
   const boxes = [m.storyCopper(), m.storyIris(), m.storyExtender(), m.storyFlushLabel()];
   const box = "rounded-xs border border-line-strong bg-surface-muted px-3 py-2 text-sm";
+  const widthExamples = {
+    prose: m.storyOpeningTimeIsMeasuredInGameTicks,
+    form: m.submissionPageTitle,
+    content: m.story312Builds,
+  };
 </script>
 
 <Story name="Layout" source="layout/Layout" description={m.storyLayoutDescription()}>
@@ -22,8 +27,8 @@
   </Variant>
   <Variant label={m.storySplit()}>
     <Layout pattern="split">
-      <div class={box}>{m.storyTitle()}</div>
-      <div class={box}>{m.storyActions()}</div>
+      <div class={box}>{m.storyCopperBolt55()}</div>
+      <div class={box}>{m.storyEdit()}</div>
     </Layout>
   </Variant>
   <Variant label={m.storyGridMinTile()}>
@@ -33,7 +38,7 @@
   </Variant>
   <Variant label={m.storyCenter()}>
     <Layout pattern="center" class="h-24 rounded-sm border border-dashed border-line">
-      <div class={box}>{m.storyCentered()}</div>
+      <div class={box}>{m.storyNoDraftsYet()}</div>
     </Layout>
   </Variant>
 </Story>
@@ -42,7 +47,7 @@
   {#each ["prose", "form", "content"] as const as width (width)}
     <Variant label={width}>
       <Container {width} class="rounded-sm border border-dashed border-line py-2">
-        <div class={box}>{width}</div>
+        <div class={box}>{widthExamples[width]()}</div>
       </Container>
     </Variant>
   {/each}

@@ -19,8 +19,8 @@
     <Variant label={m.storyButtonVariants({ size })}>
       <div class="flex flex-wrap items-center gap-3">
         <Button variant="primary" {size} icon={Plus}>{m.workbenchNewDraft()}</Button>
-        <Button {size}>{m.storySecondary()}</Button>
-        <Button variant="quiet" {size}>{m.storyQuiet()}</Button>
+        <Button {size}>{m.storyPreview()}</Button>
+        <Button variant="quiet" {size}>{m.storyCancel()}</Button>
         <Button variant="danger" {size} icon={Trash}>{m.storyRevoke()}</Button>
         <Button {size} iconOnly icon={Plus} label={m.storyAdd()} />
       </div>
@@ -45,9 +45,9 @@
         onclick={() => {
           pending = true;
           setTimeout(() => (pending = false), 1500);
-        }}>{m.storyClickToSave()}</Button
+        }}>{m.workbenchSaveDraft()}</Button
       >
-      <Button variant="primary" fullWidth>{m.storyFullWidth()}</Button>
+      <Button variant="primary" fullWidth>{m.storySubmitForReview()}</Button>
     </div>
   </Variant>
 </Story>

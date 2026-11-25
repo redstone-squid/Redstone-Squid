@@ -32,7 +32,7 @@
 </Story>
 
 <Story name="Tabs" source="navigation/Tabs" description={m.storyTabsDescription()}>
-  <Variant label={m.storyLinkModeForViewsKeptInTheUrl()}>
+  <Variant label={m.storyLinkMode()}>
     <Tabs
       label={m.storySearchScope()}
       items={[
@@ -42,7 +42,7 @@
       ]}
     />
   </Variant>
-  <Variant label={m.storyPanelModeArrowKeysSwitchPanels()}>
+  <Variant label={m.storyPanelMode()}>
     <Tabs
       mode="panel"
       label={m.storyPreview()}
@@ -84,7 +84,7 @@
       ]}
     />
   </Variant>
-  <Variant label={m.storyRadioModeNothingChosenYet()}>
+  <Variant label={m.storyRadioModeNoChoice()}>
     <SegmentedControl
       mode="radio"
       label={m.storyYourVote()}

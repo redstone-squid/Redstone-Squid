@@ -2,30 +2,6 @@
 import { getLocale, type Locale } from "./locale";
 import { formatValue } from "./format";
 
-/** Secondary */
-export function storySecondary(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Secondary";
-    case "zh-CN":
-      return "次要按钮";
-    case "en-XA":
-      return "[" + "Šéçöñđåŕý" + "····]";
-  }
-}
-
-/** Quiet */
-export function storyQuiet(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Quiet";
-    case "zh-CN":
-      return "低调按钮";
-    case "en-XA":
-      return "[" + "Ǫûîéţ" + "··]";
-  }
-}
-
 /** No next page */
 export function storyNoNextPage(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -35,30 +11,6 @@ export function storyNoNextPage(locale: Locale = getLocale()): string {
       return "没有下一页";
     case "en-XA":
       return "[" + "Ñö ñéẋţ þåĝé" + "·····]";
-  }
-}
-
-/** Click to save */
-export function storyClickToSave(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Click to save";
-    case "zh-CN":
-      return "点击保存";
-    case "en-XA":
-      return "[" + "Çļîçķ ţö šåṽé" + "······]";
-  }
-}
-
-/** Full width */
-export function storyFullWidth(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Full width";
-    case "zh-CN":
-      return "占满宽度";
-    case "en-XA":
-      return "[" + "Ƒûļļ ŵîđţĥ" + "····]";
   }
 }
 
@@ -134,15 +86,15 @@ export function storyCopyWithText(locale: Locale = getLocale()): string {
   }
 }
 
-/** size md, beside another page action */
+/** size md, with page actions */
 export function storyCopySizeMd(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "size md, beside another page action";
+      return "size md, with page actions";
     case "zh-CN":
-      return "中号，与其他页面操作并排";
+      return "中号，与页面操作并排";
     case "en-XA":
-      return "[" + "šîžé ɱđ, ƀéšîđé åñöţĥéŕ þåĝé åçţîöñ" + "··············]";
+      return "[" + "šîžé ɱđ, ŵîţĥ þåĝé åçţîöñš" + "···········]";
   }
 }
 
@@ -186,13 +138,17 @@ export function storyButtonVariants(
 }
 
 export {
+  storyCancel,
   storyCopied,
   storyCopyFailed,
   storyPending,
+  storyPreview,
   storyRevoke,
   storySave,
   storySaving,
+  storySubmitForReview,
   submissionPageTitle,
   workbenchNewDraft,
+  workbenchSaveDraft,
   workbenchUnavailable,
 } from "./messages.gen";

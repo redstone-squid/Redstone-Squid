@@ -14,18 +14,6 @@ export function storyTabsDescription(locale: Locale = getLocale()): string {
   }
 }
 
-/** link mode, for views kept in the URL */
-export function storyLinkModeForViewsKeptInTheUrl(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "link mode, for views kept in the URL";
-    case "zh-CN":
-      return "链接模式，视图保存在 URL 中";
-    case "en-XA":
-      return "[" + "ļîñķ ɱöđé, ƒöŕ ṽîéŵš ķéþţ îñ ţĥé ÛŔĻ" + "···············]";
-  }
-}
-
 /** Search scope */
 export function storySearchScope(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -38,27 +26,15 @@ export function storySearchScope(locale: Locale = getLocale()): string {
   }
 }
 
-/** panel mode, arrow keys switch panels */
-export function storyPanelModeArrowKeysSwitchPanels(locale: Locale = getLocale()): string {
+/** panel mode */
+export function storyPanelMode(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "panel mode, arrow keys switch panels";
+      return "panel mode";
     case "zh-CN":
-      return "面板模式，方向键切换面板";
+      return "面板模式";
     case "en-XA":
-      return "[" + "þåñéļ ɱöđé, åŕŕöŵ ķéýš šŵîţçĥ þåñéļš" + "···············]";
-  }
-}
-
-/** Preview */
-export function storyPreview(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Preview";
-    case "zh-CN":
-      return "预览";
-    case "en-XA":
-      return "[" + "Þŕéṽîéŵ" + "···]";
+      return "[" + "þåñéļ ɱöđé" + "····]";
   }
 }
 
@@ -110,27 +86,27 @@ export function storyDurationUnit(locale: Locale = getLocale()): string {
   }
 }
 
-/** radio mode, nothing chosen yet */
-export function storyRadioModeNothingChosenYet(locale: Locale = getLocale()): string {
+/** radio mode, no choice */
+export function storyRadioModeNoChoice(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "radio mode, nothing chosen yet";
+      return "radio mode, no choice";
     case "zh-CN":
-      return "单选模式，尚未选择";
+      return "单选模式，未选择";
     case "en-XA":
-      return "[" + "ŕåđîö ɱöđé, ñöţĥîñĝ çĥöšéñ ýéţ" + "············]";
+      return "[" + "ŕåđîö ɱöđé, ñö çĥöîçé" + "·········]";
   }
 }
 
-/** submit mode, saved when picked */
+/** submit mode */
 export function storySubmitMode(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "submit mode, saved when picked";
+      return "submit mode";
     case "zh-CN":
-      return "提交模式，选中即保存";
+      return "提交模式";
     case "en-XA":
-      return "[" + "šûƀɱîţ ɱöđé, šåṽéđ ŵĥéñ þîçķéđ" + "············]";
+      return "[" + "šûƀɱîţ ɱöđé" + "·····]";
   }
 }
 
@@ -388,6 +364,7 @@ export {
   storyCards,
   storyCopperBolt55,
   storyNotifications,
+  storyPreview,
   storyReject,
   storyTable,
   storyTicks,

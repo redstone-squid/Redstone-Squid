@@ -2,24 +2,6 @@
 import { getLocale, type Locale } from "./locale";
 import { formatValue } from "./format";
 
-/** Small dialogs suit confirmations, large ones suit pickers. full-mobile rises from the bottom of narrow screens. */
-export function storySmallDialogsSuitConfirmationsLargeOnesSuitPickers(
-  locale: Locale = getLocale(),
-): string {
-  switch (locale) {
-    case "en":
-      return "Small dialogs suit confirmations, large ones suit pickers. full-mobile rises from the bottom of narrow screens.";
-    case "zh-CN":
-      return "小对话框适合确认操作，大对话框适合选择器。在窄屏上，full-mobile 从底部弹出。";
-    case "en-XA":
-      return (
-        "[" +
-        "Šɱåļļ đîåļöĝš šûîţ çöñƒîŕɱåţîöñš, ļåŕĝé öñéš šûîţ þîçķéŕš. ƒûļļ-ɱöƀîļé ŕîšéš ƒŕöɱ ţĥé ƀöţţöɱ öƒ ñåŕŕöŵ šçŕééñš." +
-        "·············································]"
-      );
-  }
-}
-
 /** Tokens issued to this device stop working. */
 export function storyTokensIssuedToThisDeviceStopWorking(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -41,18 +23,6 @@ export function storyKeepDevice(locale: Locale = getLocale()): string {
       return "保留设备";
     case "en-XA":
       return "[" + "Ķééþ đéṽîçé" + "·····]";
-  }
-}
-
-/** Rename from code */
-export function storyRenameFromCode(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Rename from code";
-    case "zh-CN":
-      return "通过代码重命名";
-    case "en-XA":
-      return "[" + "Ŕéñåɱé ƒŕöɱ çöđé" + "·······]";
   }
 }
 
@@ -98,15 +68,15 @@ export function storyDialogDescription(locale: Locale = getLocale()): string {
   }
 }
 
-/** form, focus on the first field */
-export function storyFormFocusOnTheFirstField(locale: Locale = getLocale()): string {
+/** form */
+export function storyForm(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "form, focus on the first field";
+      return "form";
     case "zh-CN":
-      return "表单，焦点位于第一个字段";
+      return "表单";
     case "en-XA":
-      return "[" + "ƒöŕɱ, ƒöçûš öñ ţĥé ƒîŕšţ ƒîéļđ" + "············]";
+      return "[" + "ƒöŕɱ" + "··]";
   }
 }
 
@@ -122,29 +92,15 @@ export function storySizes(locale: Locale = getLocale()): string {
   }
 }
 
-/** Width follows the content's needs. */
-export function storyWidthFollowsTheContentSNeeds(locale: Locale = getLocale()): string {
+/** destructive, focus on cancel */
+export function storyDestructiveFocusOnCancel(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Width follows the content's needs.";
+      return "destructive, focus on cancel";
     case "zh-CN":
-      return "宽度随内容需要而定。";
+      return "危险操作，焦点在取消";
     case "en-XA":
-      return "[" + "Ŵîđţĥ ƒöļļöŵš ţĥé çöñţéñţ'š ñééđš." + "··············]";
-  }
-}
-
-/** destructive confirmation, focus on the safe action */
-export function storyDestructiveConfirmationFocusOnTheSafeAction(
-  locale: Locale = getLocale(),
-): string {
-  switch (locale) {
-    case "en":
-      return "destructive confirmation, focus on the safe action";
-    case "zh-CN":
-      return "破坏性操作确认，焦点位于安全操作";
-    case "en-XA":
-      return "[" + "đéšţŕûçţîṽé çöñƒîŕɱåţîöñ, ƒöçûš öñ ţĥé šåƒé åçţîöñ" + "····················]";
+      return "[" + "đéšţŕûçţîṽé, ƒöçûš öñ çåñçéļ" + "············]";
   }
 }
 
@@ -164,15 +120,15 @@ export function storyTheDeviceSignsOutAtOnceYouCan(locale: Locale = getLocale())
   }
 }
 
-/** controlled, not dismissible while saving */
-export function storyControlledNotDismissibleWhileSaving(locale: Locale = getLocale()): string {
+/** controlled, locked while saving */
+export function storyControlledLockedWhileSaving(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "controlled, not dismissible while saving";
+      return "controlled, locked while saving";
     case "zh-CN":
-      return "受控对话框，保存期间无法关闭";
+      return "受控，保存时锁定";
     case "en-XA":
-      return "[" + "çöñţŕöļļéđ, ñöţ đîšɱîššîƀļé ŵĥîļé šåṽîñĝ" + "················]";
+      return "[" + "çöñţŕöļļéđ, ļöçķéđ ŵĥîļé šåṽîñĝ" + "·············]";
   }
 }
 
@@ -188,17 +144,15 @@ export function storyRenameBuild(locale: Locale = getLocale()): string {
   }
 }
 
-/** long content scrolls between header and footer */
-export function storyLongContentScrollsBetweenHeaderAndFooter(
-  locale: Locale = getLocale(),
-): string {
+/** long content */
+export function storyLongContent(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "long content scrolls between header and footer";
+      return "long content";
     case "zh-CN":
-      return "长内容在页头和页脚之间滚动";
+      return "长内容";
     case "en-XA":
-      return "[" + "ļöñĝ çöñţéñţ šçŕöļļš ƀéţŵééñ ĥéåđéŕ åñđ ƒööţéŕ" + "···················]";
+      return "[" + "ļöñĝ çöñţéñţ" + "·····]";
   }
 }
 
@@ -266,15 +220,15 @@ export function storyMenuDescription(locale: Locale = getLocale()): string {
   }
 }
 
-/** actions with icons, a separator, and a danger item */
-export function storyActionsWithIconsASeparatorAndADanger(locale: Locale = getLocale()): string {
+/** actions with icons and a danger item */
+export function storyActionsIconsDanger(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "actions with icons, a separator, and a danger item";
+      return "actions with icons and a danger item";
     case "zh-CN":
-      return "带图标的操作、分隔线和危险操作";
+      return "带图标的操作和一个危险项";
     case "en-XA":
-      return "[" + "åçţîöñš ŵîţĥ îçöñš, å šéþåŕåţöŕ, åñđ å đåñĝéŕ îţéɱ" + "····················]";
+      return "[" + "åçţîöñš ŵîţĥ îçöñš åñđ å đåñĝéŕ îţéɱ" + "···············]";
   }
 }
 
@@ -290,27 +244,27 @@ export function storyRowActions(locale: Locale = getLocale()): string {
   }
 }
 
-/** checkbox items stay open */
-export function storyCheckboxItemsStayOpen(locale: Locale = getLocale()): string {
+/** checkbox items */
+export function storyCheckboxItems(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "checkbox items stay open";
+      return "checkbox items";
     case "zh-CN":
-      return "勾选后菜单保持打开";
+      return "复选项";
     case "en-XA":
-      return "[" + "çĥéçķƀöẋ îţéɱš šţåý öþéñ" + "··········]";
+      return "[" + "çĥéçķƀöẋ îţéɱš" + "······]";
   }
 }
 
-/** nojs: links with the current choice */
-export function storyNojsLinksWithTheCurrentChoice(locale: Locale = getLocale()): string {
+/** nojs links */
+export function storyNojsLinks(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "nojs: links with the current choice";
+      return "nojs links";
     case "zh-CN":
-      return "nojs：标出当前选项的链接";
+      return "nojs 链接";
     case "en-XA":
-      return "[" + "ñöĵš: ļîñķš ŵîţĥ ţĥé çûŕŕéñţ çĥöîçé" + "··············]";
+      return "[" + "ñöĵš ļîñķš" + "····]";
   }
 }
 
@@ -422,53 +376,6 @@ export function storyMostVotes(locale: Locale = getLocale()): string {
   }
 }
 
-/** Size { $size } */
-export function storyDialogSize(
-  args: { size: string | number },
-  locale: Locale = getLocale(),
-): string {
-  switch (locale) {
-    case "en":
-      return "Size " + formatValue(locale, args.size);
-    case "zh-CN":
-      return "尺寸 " + formatValue(locale, args.size);
-    case "en-XA":
-      return "[" + "Šîžé " + formatValue(locale, args.size) + "··]";
-  }
-}
-
-/** Slides in from the { $side } edge. */
-export function storySheetEdge(
-  args: { side: string | number },
-  locale: Locale = getLocale(),
-): string {
-  switch (locale) {
-    case "en":
-      return "Slides in from the " + formatValue(locale, args.side) + " edge.";
-    case "zh-CN":
-      return "从 " + formatValue(locale, args.side) + " 边缘滑入。";
-    case "en-XA":
-      return (
-        "[" + "Šļîđéš îñ ƒŕöɱ ţĥé " + formatValue(locale, args.side) + " éđĝé." + "··········]"
-      );
-  }
-}
-
-/** Filters ({ $side }) */
-export function storySheetTrigger(
-  args: { side: string | number },
-  locale: Locale = getLocale(),
-): string {
-  switch (locale) {
-    case "en":
-      return "Filters (" + formatValue(locale, args.side) + ")";
-    case "zh-CN":
-      return "筛选条件（" + formatValue(locale, args.side) + "）";
-    case "en-XA":
-      return "[" + "Ƒîļţéŕš (" + formatValue(locale, args.side) + ")" + "····]";
-  }
-}
-
 /** Chose { $lastAction } */
 export function storyChoseAction(
   args: { lastAction: string | number },
@@ -484,18 +391,15 @@ export function storyChoseAction(
   }
 }
 
-/** Status help ({ $placement }) */
-export function storyStatusHelp(
-  args: { placement: string | number },
-  locale: Locale = getLocale(),
-): string {
+/** Status help */
+export function storyStatusHelp(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Status help (" + formatValue(locale, args.placement) + ")";
+      return "Status help";
     case "zh-CN":
-      return "状态帮助（" + formatValue(locale, args.placement) + "）";
+      return "状态帮助";
     case "en-XA":
-      return "[" + "Šţåţûš ĥéļþ (" + formatValue(locale, args.placement) + ")" + "······]";
+      return "[" + "Šţåţûš ĥéļþ" + "·····]";
   }
 }
 
@@ -524,6 +428,18 @@ export function storyChangelogEntry(
   }
 }
 
+/** Show only builds that match. */
+export function storyShowOnlyBuildsThatMatch(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Show only builds that match.";
+    case "zh-CN":
+      return "只显示符合条件的作品。";
+    case "en-XA":
+      return "[" + "Šĥöŵ öñļý ƀûîļđš ţĥåţ ɱåţçĥ." + "············]";
+  }
+}
+
 export {
   storyActions,
   storyBuildActions,
@@ -548,6 +464,7 @@ export {
   storySilent,
   storySortNewest,
   storySortOrder,
+  storyStaffWillReview,
   storyTitle,
   storyVersion,
 } from "./messages.gen";

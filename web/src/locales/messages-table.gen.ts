@@ -50,21 +50,15 @@ export function story13Of42(locale: Locale = getLocale()): string {
   }
 }
 
-/** grouped rows, one group open, compact, column menu with two hidden */
-export function storyGroupedRowsOneGroupOpenCompactColumnMenu(
-  locale: Locale = getLocale(),
-): string {
+/** grouped, compact, two columns hidden */
+export function storyGroupedCompactTwoHidden(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "grouped rows, one group open, compact, column menu with two hidden";
+      return "grouped, compact, two columns hidden";
     case "zh-CN":
-      return "分组行、展开一组、紧凑布局、列菜单中隐藏两列";
+      return "分组，紧凑，隐藏两列";
     case "en-XA":
-      return (
-        "[" +
-        "ĝŕöûþéđ ŕöŵš, öñé ĝŕöûþ öþéñ, çöɱþåçţ, çöļûɱñ ɱéñû ŵîţĥ ţŵö ĥîđđéñ" +
-        "···························]"
-      );
+      return "[" + "ĝŕöûþéđ, çöɱþåçţ, ţŵö çöļûɱñš ĥîđđéñ" + "···············]";
   }
 }
 
@@ -137,18 +131,6 @@ export function storyDoorBuildPages(locale: Locale = getLocale()): string {
       return "门类作品分页";
     case "en-XA":
       return "[" + "Đööŕ ƀûîļđ þåĝéš" + "·······]";
-  }
-}
-
-/** Iris door with a much longer name than the column */
-export function storyIrisDoorWithAMuchLongerNameThan(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Iris door with a much longer name than the column";
-    case "zh-CN":
-      return "名称长于列宽的虹膜门";
-    case "en-XA":
-      return "[" + "Îŕîš đööŕ ŵîţĥ å ɱûçĥ ļöñĝéŕ ñåɱé ţĥåñ ţĥé çöļûɱñ" + "····················]";
   }
 }
 
@@ -304,5 +286,6 @@ export {
   storyConfirmed,
   storyCopperBolt55,
   storyFlushPistonDoor,
+  storyObserverlessIris,
   storyPendingLabel,
 } from "./messages.gen";

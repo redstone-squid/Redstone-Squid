@@ -19,6 +19,13 @@
     '  File "squid/core/records.py", line 42, in resolve',
     "ValueError: no candidate",
   ].join("\n");
+  const toneExamples = {
+    default: m.storySeamless33FlushDoor,
+    muted: m.storySubmittedByCircuitsage,
+    success: m.storyRecordConfirmed,
+    warning: m.storyThisBuildIsPendingReview,
+    danger: m.storyEvidenceVideoMissing,
+  };
 </script>
 
 <Story name="Heading" source="content/Heading" description={m.storyHeadingDescription()}>
@@ -44,16 +51,16 @@
 <Story name="Text" source="content/Text">
   <Variant label={m.storyTones()}>
     {#each ["default", "muted", "success", "warning", "danger"] as const as tone (tone)}
-      <Text {tone}>{m.storyToneExample({ tone })}</Text>
+      <Text {tone}>{toneExamples[tone]()}</Text>
     {/each}
   </Variant>
   <Variant label={m.storySizesNumericSemibold()}>
-    <Text size="xs">{m.storyExtraSmallHintText()}</Text>
-    <Text size="sm" weight="semibold">{m.storySmallSemibold()}</Text>
+    <Text size="xs">{m.storyMeasuredWithATickCounterOnJava1()}</Text>
+    <Text size="sm" weight="semibold">{m.storyCopperBolt55()}</Text>
     <Text numeric>{m.story9748Gt()}</Text>
   </Variant>
   <Variant label={m.storyClampedToOneLine()}>
-    <Text lines={1} class="max-w-64">{m.storyAVeryLongCreatorListThatDoesNot()}</Text>
+    <Text lines={1} class="max-w-64">{m.storyByCircuitsageAndOthers()}</Text>
   </Variant>
 </Story>
 
@@ -68,7 +75,7 @@
   <Variant label={m.storyStandaloneSubtleCurrentExternal()}>
     <Link href="#link" variant="standalone">{m.storyViewAllRecords()}</Link>
     <Link href="#link" variant="subtle">{m.storyEdited3DaysAgo()}</Link>
-    <Link href="#link" variant="standalone" current>{m.storyCurrentPage()}</Link>
+    <Link href="#link" variant="standalone" current>{m.navRecords()}</Link>
     <Link href="https://example.com" externalLabel={m.storyOpensAnotherSite()}>Discord</Link>
   </Variant>
 </Story>
@@ -129,6 +136,7 @@
 </Story>
 
 <Story name="SkipLink" source="content/SkipLink" description={m.storySkipLinkDescription()}>
-  <SkipLink href="#heading" label={m.storySkipToTheHeadingStory()} />
-  <Text tone="muted">{m.storyPressTabFromTheTopOfThePage()}</Text>
+  <Variant label={m.storyHiddenUntilFocused()}>
+    <SkipLink href="#heading" label={m.storySkipToTheHeadingStory()} />
+  </Variant>
 </Story>

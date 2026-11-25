@@ -31,7 +31,7 @@
     },
     {
       id: "iris",
-      title: m.storyIrisDoorWithAMuchLongerNameThan(),
+      title: m.storyObserverlessIris(),
       size: "11 × 11 × 5",
       volume: 605,
       opening: 12,
@@ -153,7 +153,7 @@
       {/snippet}
     </DataTable>
   </Variant>
-  <Variant label={m.storyGroupedRowsOneGroupOpenCompactColumnMenu()}>
+  <Variant label={m.storyGroupedCompactTwoHidden()}>
     <DataTable
       caption={m.storyDoorRecords()}
       {columns}

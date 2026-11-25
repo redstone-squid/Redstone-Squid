@@ -1693,6 +1693,30 @@ export function storyCopperBolt55(locale: Locale = getLocale()): string {
   }
 }
 
+/** 9 × 7 × 4, 8 gt */
+export function story9748Gt(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "9 × 7 × 4, 8 gt";
+    case "zh-CN":
+      return "9 × 7 × 4，8 游戏刻";
+    case "en-XA":
+      return "[" + "9 × 7 × 4, 8 ĝţ" + "······]";
+  }
+}
+
+/** Edited 3 days ago */
+export function storyEdited3DaysAgo(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Edited 3 days ago";
+    case "zh-CN":
+      return "3 天前编辑";
+    case "en-XA":
+      return "[" + "Éđîţéđ 3 đåýš åĝö" + "·······]";
+  }
+}
+
 /** Approved */
 export function storyApproved(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -1714,6 +1738,18 @@ export function storyFlush(locale: Locale = getLocale()): string {
       return "平墙";
     case "en-XA":
       return "[" + "ƒļûšĥ" + "··]";
+  }
+}
+
+/** Opening time is measured in game ticks. */
+export function storyOpeningTimeIsMeasuredInGameTicks(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Opening time is measured in game ticks.";
+    case "zh-CN":
+      return "开启时间以游戏刻为单位。";
+    case "en-XA":
+      return "[" + "Öþéñîñĝ ţîɱé îš ɱéåšûŕéđ îñ ĝåɱé ţîçķš." + "················]";
   }
 }
 
@@ -1765,27 +1801,27 @@ export function story2Holders(locale: Locale = getLocale()): string {
   }
 }
 
-/** Selected */
-export function storySelected(locale: Locale = getLocale()): string {
+/** Measured with a tick counter on Java 1.21.4. */
+export function storyMeasuredWithATickCounterOnJava1(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Selected";
+      return "Measured with a tick counter on Java 1.21.4.";
     case "zh-CN":
-      return "已选中";
+      return "使用 Java 版 1.21.4 的计时器测量。";
     case "en-XA":
-      return "[" + "Šéļéçţéđ" + "····]";
+      return "[" + "Ṁéåšûŕéđ ŵîţĥ å ţîçķ çöûñţéŕ öñ Ĵåṽå 1.21.4." + "··················]";
   }
 }
 
-/** Needs attention */
-export function storyNeedsAttention(locale: Locale = getLocale()): string {
+/** Door evidence */
+export function storyDoorEvidence(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Needs attention";
+      return "Door evidence";
     case "zh-CN":
-      return "需要关注";
+      return "活塞门证明材料";
     case "en-XA":
-      return "[" + "Ñééđš åţţéñţîöñ" + "······]";
+      return "[" + "Đööŕ éṽîđéñçé" + "······]";
   }
 }
 
@@ -1945,6 +1981,18 @@ export function storyRetry(locale: Locale = getLocale()): string {
   }
 }
 
+/** This build is pending review. */
+export function storyThisBuildIsPendingReview(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "This build is pending review.";
+    case "zh-CN":
+      return "此作品正等待审核。";
+    case "en-XA":
+      return "[" + "Ţĥîš ƀûîļđ îš þéñđîñĝ ŕéṽîéŵ." + "············]";
+  }
+}
+
 /** Upload failed */
 export function storyUploadFailed(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -1978,6 +2026,18 @@ export function storyLoadingBuilds(locale: Locale = getLocale()): string {
       return "正在加载作品";
     case "en-XA":
       return "[" + "Ļöåđîñĝ ƀûîļđš" + "······]";
+  }
+}
+
+/** No drafts yet */
+export function storyNoDraftsYet(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "No drafts yet";
+    case "zh-CN":
+      return "暂无草稿";
+    case "en-XA":
+      return "[" + "Ñö đŕåƒţš ýéţ" + "······]";
   }
 }
 
@@ -2017,6 +2077,18 @@ export function storyNewest(locale: Locale = getLocale()): string {
   }
 }
 
+/** Submit for review */
+export function storySubmitForReview(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Submit for review";
+    case "zh-CN":
+      return "提交审核";
+    case "en-XA":
+      return "[" + "Šûƀɱîţ ƒöŕ ŕéṽîéŵ" + "·······]";
+  }
+}
+
 /** Publish */
 export function storyPublish(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -2026,6 +2098,30 @@ export function storyPublish(locale: Locale = getLocale()): string {
       return "发布";
     case "en-XA":
       return "[" + "Þûƀļîšĥ" + "···]";
+  }
+}
+
+/** error */
+export function storyError(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "error";
+    case "zh-CN":
+      return "错误";
+    case "en-XA":
+      return "[" + "éŕŕöŕ" + "··]";
+  }
+}
+
+/** Seamless 3×3 flush door */
+export function storySeamless33FlushDoor(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Seamless 3×3 flush door";
+    case "zh-CN":
+      return "无痕 3×3 平墙门";
+    case "en-XA":
+      return "[" + "Šéåɱļéšš 3×3 ƒļûšĥ đööŕ" + "··········]";
   }
 }
 
@@ -2110,6 +2206,18 @@ export function storyBreadcrumb(locale: Locale = getLocale()): string {
       return "面包屑";
     case "en-XA":
       return "[" + "Ɓŕéåđçŕûɱƀ" + "····]";
+  }
+}
+
+/** Preview */
+export function storyPreview(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Preview";
+    case "zh-CN":
+      return "预览";
+    case "en-XA":
+      return "[" + "Þŕéṽîéŵ" + "···]";
   }
 }
 
@@ -2302,6 +2410,18 @@ export function storySortNewest(locale: Locale = getLocale()): string {
       return "排序：最新";
     case "en-XA":
       return "[" + "Šöŕţ: Ñéŵéšţ" + "·····]";
+  }
+}
+
+/** Pending review by staff. */
+export function storyPendingReviewByStaff(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Pending review by staff.";
+    case "zh-CN":
+      return "等待工作人员审核。";
+    case "en-XA":
+      return "[" + "Þéñđîñĝ ŕéṽîéŵ ƀý šţåƒƒ." + "··········]";
   }
 }
 
@@ -2826,5 +2946,57 @@ export function errorUnavailable(locale: Locale = getLocale()): string {
         "Ţĥîš šéŕṽîçé îš ţéɱþöŕåŕîļý ûñåṽåîļåƀļé. Ţŕý åĝåîñ šĥöŕţļý." +
         "························]"
       );
+  }
+}
+
+/** 312 builds */
+export function story312Builds(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "312 builds";
+    case "zh-CN":
+      return "312 个作品";
+    case "en-XA":
+      return "[" + "312 ƀûîļđš" + "····]";
+  }
+}
+
+/** Cancel */
+export function storyCancel(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Cancel";
+    case "zh-CN":
+      return "取消";
+    case "en-XA":
+      return "[" + "Çåñçéļ" + "···]";
+  }
+}
+
+/** Staff will review it before it appears in the catalogue. */
+export function storyStaffWillReview(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Staff will review it before it appears in the catalogue.";
+    case "zh-CN":
+      return "工作人员审核后，它才会出现在目录中。";
+    case "en-XA":
+      return (
+        "[" +
+        "Šţåƒƒ ŵîļļ ŕéṽîéŵ îţ ƀéƒöŕé îţ åþþéåŕš îñ ţĥé çåţåļöĝûé." +
+        "·······················]"
+      );
+  }
+}
+
+/** Vote */
+export function storyVote(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Vote";
+    case "zh-CN":
+      return "投票";
+    case "en-XA":
+      return "[" + "Ṽöţé" + "··]";
   }
 }

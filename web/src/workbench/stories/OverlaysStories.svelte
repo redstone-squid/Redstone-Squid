@@ -39,7 +39,7 @@
 </script>
 
 <Story name="Dialog" source="overlays/Dialog" description={m.storyDialogDescription()}>
-  <Variant label={m.storyFormFocusOnTheFirstField()}>
+  <Variant label={m.storyForm()}>
     <DraftDialog />
   </Variant>
   <Variant label={m.storySizes()}>
@@ -47,19 +47,17 @@
       {#each ["sm", "md", "lg", "full-mobile"] as const as size (size)}
         <Dialog
           {size}
-          title={m.storyDialogSize({ size })}
-          description={m.storyWidthFollowsTheContentSNeeds()}
+          title={m.storyPendingReview()}
+          description={m.storyStaffWillReview()}
           closeLabel={m.storyClose()}
           trigger={{ label: size }}
         >
-          <p>
-            {m.storySmallDialogsSuitConfirmationsLargeOnesSuitPickers()}
-          </p>
+          <p>{m.storyAModeratorChecksTheEvidenceBeforeTheRecord()}</p>
         </Dialog>
       {/each}
     </div>
   </Variant>
-  <Variant label={m.storyDestructiveConfirmationFocusOnTheSafeAction()}>
+  <Variant label={m.storyDestructiveFocusOnCancel()}>
     <Dialog
       bind:open={confirmOpen}
       size="sm"
@@ -79,9 +77,9 @@
       {/snippet}
     </Dialog>
   </Variant>
-  <Variant label={m.storyControlledNotDismissibleWhileSaving()}>
+  <Variant label={m.storyControlledLockedWhileSaving()}>
     <div class="flex flex-wrap gap-3">
-      <Button onclick={() => (controlledOpen = true)}>{m.storyRenameFromCode()}</Button>
+      <Button onclick={() => (controlledOpen = true)}>{m.storyRenameBuild()}</Button>
       <Dialog
         bind:open={controlledOpen}
         title={m.storyRenameBuild()}
@@ -97,7 +95,7 @@
       </Dialog>
     </div>
   </Variant>
-  <Variant label={m.storyLongContentScrollsBetweenHeaderAndFooter()}>
+  <Variant label={m.storyLongContent()}>
     <Dialog
       title={m.storyChangelog()}
       closeLabel={m.storyClose()}
@@ -113,28 +111,30 @@
 </Story>
 
 <Story name="Sheet" source="overlays/Sheet" description={m.storySheetDescription()}>
-  <div class="flex flex-wrap gap-3">
+  <div class="flex flex-wrap gap-6">
     {#each ["start", "end", "bottom"] as const as side (side)}
-      <Sheet
-        {side}
-        title={m.storyFilters()}
-        description={m.storySheetEdge({ side })}
-        closeLabel={m.storyClose()}
-        trigger={{ label: m.storySheetTrigger({ side }), icon: SlidersHorizontal }}
-      >
-        <div class="grid gap-3">
-          <CheckField label={m.storyHasAWorldDownload()} />
-          <CheckField label={m.storySurvivalFriendlyLabel()} />
-          <CheckField label={m.storySilent()} />
-        </div>
-        {#snippet footer()}<Button variant="primary">{m.storyShow42Builds()}</Button>{/snippet}
-      </Sheet>
+      <Variant label={side}>
+        <Sheet
+          {side}
+          title={m.storyFilters()}
+          description={m.storyShowOnlyBuildsThatMatch()}
+          closeLabel={m.storyClose()}
+          trigger={{ label: m.storyFilters(), icon: SlidersHorizontal }}
+        >
+          <div class="grid gap-3">
+            <CheckField label={m.storyHasAWorldDownload()} />
+            <CheckField label={m.storySurvivalFriendlyLabel()} />
+            <CheckField label={m.storySilent()} />
+          </div>
+          {#snippet footer()}<Button variant="primary">{m.storyShow42Builds()}</Button>{/snippet}
+        </Sheet>
+      </Variant>
     {/each}
   </div>
 </Story>
 
 <Story name="Menu" source="overlays/Menu" description={m.storyMenuDescription()}>
-  <Variant label={m.storyActionsWithIconsASeparatorAndADanger()}>
+  <Variant label={m.storyActionsIconsDanger()}>
     <div class="flex flex-wrap items-center gap-3">
       <Menu
         label={m.storyBuildActions()}
@@ -170,7 +170,7 @@
       </p>
     </div>
   </Variant>
-  <Variant label={m.storyCheckboxItemsStayOpen()}>
+  <Variant label={m.storyCheckboxItems()}>
     <Menu
       label={m.storyColumns()}
       align="start"
@@ -183,7 +183,7 @@
       }))}
     />
   </Variant>
-  <Variant label={m.storyNojsLinksWithTheCurrentChoice()}>
+  <Variant label={m.storyNojsLinks()}>
     <Menu
       nojs
       label={m.storySortOrder()}
@@ -199,24 +199,21 @@
 </Story>
 
 <Story name="Popover" source="overlays/Popover" description={m.storyPopoverDescription()}>
-  <div class="flex flex-wrap gap-3">
+  <div class="flex flex-wrap gap-6">
     {#each ["bottom", "top", "end"] as const as placement (placement)}
-      <Popover
-        {placement}
-        label={m.storyWhatPendingMeans()}
-        closeLabel={m.storyClose()}
-        trigger={{
-          label: m.storyStatusHelp({ placement }),
-          icon: Info,
-          variant: "quiet",
-          size: "sm",
-        }}
-      >
-        <p class="font-semibold">{m.storyPendingReview()}</p>
-        <p class="text-fg-muted">
-          {m.storyAModeratorChecksTheEvidenceBeforeTheRecord()}
-        </p>
-      </Popover>
+      <Variant label={placement}>
+        <Popover
+          {placement}
+          label={m.storyWhatPendingMeans()}
+          closeLabel={m.storyClose()}
+          trigger={{ label: m.storyStatusHelp(), icon: Info, variant: "quiet", size: "sm" }}
+        >
+          <p class="font-semibold">{m.storyPendingReview()}</p>
+          <p class="text-fg-muted">
+            {m.storyAModeratorChecksTheEvidenceBeforeTheRecord()}
+          </p>
+        </Popover>
+      </Variant>
     {/each}
   </div>
 </Story>

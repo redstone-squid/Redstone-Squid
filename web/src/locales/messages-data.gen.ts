@@ -2,66 +2,6 @@
 import { getLocale, type Locale } from "./locale";
 import { formatValue } from "./format";
 
-/** The title link covers the card. */
-export function storyTheTitleLinkCoversTheCard(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "The title link covers the card.";
-    case "zh-CN":
-      return "标题链接覆盖整张卡片。";
-    case "en-XA":
-      return "[" + "Ţĥé ţîţļé ļîñķ çöṽéŕš ţĥé çåŕđ." + "·············]";
-  }
-}
-
-/** Inner action */
-export function storyInnerAction(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Inner action";
-    case "zh-CN":
-      return "卡片内操作";
-    case "en-XA":
-      return "[" + "Îññéŕ åçţîöñ" + "·····]";
-  }
-}
-
-/** No link. */
-export function storyNoLink(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "No link.";
-    case "zh-CN":
-      return "没有链接。";
-    case "en-XA":
-      return "[" + "Ñö ļîñķ." + "····]";
-  }
-}
-
-/** Footer */
-export function storyFooter(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Footer";
-    case "zh-CN":
-      return "页脚";
-    case "en-XA":
-      return "[" + "Ƒööţéŕ" + "···]";
-  }
-}
-
-/** Measured with a tick counter on Java 1.21.4. */
-export function storyMeasuredWithATickCounterOnJava1(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Measured with a tick counter on Java 1.21.4.";
-    case "zh-CN":
-      return "使用 Java 版 1.21.4 的计时器测量。";
-    case "en-XA":
-      return "[" + "Ṁéåšûŕéđ ŵîţĥ å ţîçķ çöûñţéŕ öñ Ĵåṽå 1.21.4." + "··················]";
-  }
-}
-
 /** Shown above: unread, leading, meta, trailing, and compact. */
 export function storyShownAboveUnreadLeadingMetaTrailingAndCompact(
   locale: Locale = getLocale(),
@@ -92,30 +32,6 @@ export function storyCardDescription(locale: Locale = getLocale()): string {
   }
 }
 
-/** Linked card */
-export function storyLinkedCard(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Linked card";
-    case "zh-CN":
-      return "带链接的卡片";
-    case "en-XA":
-      return "[" + "Ļîñķéđ çåŕđ" + "·····]";
-  }
-}
-
-/** With media */
-export function storyWithMedia(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "With media";
-    case "zh-CN":
-      return "带媒体";
-    case "en-XA":
-      return "[" + "Ŵîţĥ ɱéđîå" + "····]";
-  }
-}
-
 /** Iris door illustration */
 export function storyIrisDoorIllustration(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -137,18 +53,6 @@ export function storyNoPreview(locale: Locale = getLocale()): string {
       return "暂无预览";
     case "en-XA":
       return "[" + "Ñö þŕéṽîéŵ" + "····]";
-  }
-}
-
-/** Plain surface */
-export function storyPlainSurface(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Plain surface";
-    case "zh-CN":
-      return "基础卡片";
-    case "en-XA":
-      return "[" + "Þļåîñ šûŕƒåçé" + "······]";
   }
 }
 
@@ -272,18 +176,6 @@ export function storyDisclosureDescription(locale: Locale = getLocale()): string
   }
 }
 
-/** Door evidence */
-export function storyDoorEvidence(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Door evidence";
-    case "zh-CN":
-      return "活塞门证明材料";
-    case "en-XA":
-      return "[" + "Đööŕ éṽîđéñçé" + "······]";
-  }
-}
-
 /** Expansion parameters */
 export function storyExpansionParameters(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -344,15 +236,15 @@ export function storyLastUsedYesterday(locale: Locale = getLocale()): string {
   }
 }
 
-/** Compact row */
-export function storyCompactRow(locale: Locale = getLocale()): string {
+/** Iris door was approved */
+export function storyIrisDoorWasApproved(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Compact row";
+      return "Iris door was approved";
     case "zh-CN":
-      return "紧凑行";
+      return "虹膜门已通过审核";
     case "en-XA":
-      return "[" + "Çöɱþåçţ ŕöŵ" + "·····]";
+      return "[" + "Îŕîš đööŕ ŵåš åþþŕöṽéđ" + "·········]";
   }
 }
 
@@ -668,15 +560,15 @@ export function storyNotes(locale: Locale = getLocale()): string {
   }
 }
 
-/** Old notes */
-export function storyOldNotes(locale: Locale = getLocale()): string {
+/** Opens in 0.45 s. */
+export function storyOpensIn045S(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Old notes";
+      return "Opens in 0.45 s.";
     case "zh-CN":
-      return "旧备注";
+      return "0.45 秒内开启。";
     case "en-XA":
-      return "[" + "Öļđ ñöţéš" + "····]";
+      return "[" + "Öþéñš îñ 0.45 š." + "·······]";
   }
 }
 
@@ -710,6 +602,78 @@ export function storyImagePosition(
   }
 }
 
+/** linked, eyebrow, inner action */
+export function storyLinkedEyebrowInnerAction(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "linked, eyebrow, inner action";
+    case "zh-CN":
+      return "带链接，眉题，内部操作";
+    case "en-XA":
+      return "[" + "ļîñķéđ, éýéƀŕöŵ, îññéŕ åçţîöñ" + "············]";
+  }
+}
+
+/** linked, media */
+export function storyLinkedMedia(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "linked, media";
+    case "zh-CN":
+      return "带链接，媒体";
+    case "en-XA":
+      return "[" + "ļîñķéđ, ɱéđîå" + "······]";
+  }
+}
+
+/** muted, padding lg, footer */
+export function storyMutedPaddingLgFooter(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "muted, padding lg, footer";
+    case "zh-CN":
+      return "柔和，大内边距，页脚";
+    case "en-XA":
+      return "[" + "ɱûţéđ, þåđđîñĝ ļĝ, ƒööţéŕ" + "··········]";
+  }
+}
+
+/** selected, padding sm */
+export function storySelectedPaddingSm(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "selected, padding sm";
+    case "zh-CN":
+      return "已选中，小内边距";
+    case "en-XA":
+      return "[" + "šéļéçţéđ, þåđđîñĝ šɱ" + "········]";
+  }
+}
+
+/** warning, padding sm */
+export function storyWarningPaddingSm(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "warning, padding sm";
+    case "zh-CN":
+      return "警告，小内边距";
+    case "en-XA":
+      return "[" + "ŵåŕñîñĝ, þåđđîñĝ šɱ" + "········]";
+  }
+}
+
+/** Copper door needs evidence */
+export function storyCopperDoorNeedsEvidence(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Copper door needs evidence";
+    case "zh-CN":
+      return "铜门缺少证据";
+    case "en-XA":
+      return "[" + "Çöþþéŕ đööŕ ñééđš éṽîđéñçé" + "···········]";
+  }
+}
+
 export {
   buildDimensions,
   buildImageUnavailable,
@@ -719,20 +683,26 @@ export {
   commonPrevious,
   navBuilds,
   story3DaysAgo,
+  story9748Gt,
   storyClose,
   storyCopperBolt55,
   storyCreator,
+  storyDoorEvidence,
+  storyEdited3DaysAgo,
   storyEmpty,
   storyFastest,
+  storyFlushPistonDoor,
   storyIrisDoor,
-  storyNeedsAttention,
+  storyMeasuredWithATickCounterOnJava1,
   storyNotifications,
   storyOpeningTime,
+  storyPendingReviewByStaff,
   storyRecordHolders,
   storyRemoved,
   storyRevoke,
-  storySelected,
+  storySeamless33FlushDoor,
   storyVersion,
   storyVideo,
+  storyVote,
   storyWidth,
 } from "./messages.gen";

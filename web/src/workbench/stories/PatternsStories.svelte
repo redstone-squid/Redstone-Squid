@@ -238,13 +238,17 @@
 </Story>
 
 <Story name="Section" source="patterns/Section">
-  <Section title={m.recordHolders()} description={m.storyBuildsThatHoldThisRecord()}>
-    {#snippet actions()}<Button size="sm" variant="quiet">{m.storyViewAll()}</Button>{/snippet}
-    <p class="text-sm">{m.storySectionContent()}</p>
-  </Section>
-  <Section title={m.storySurfaceSection()} surface level={3}>
-    <p class="text-sm">{m.storyDrawnAsAPanel()}</p>
-  </Section>
+  <Variant label={m.storyWithActions()}>
+    <Section title={m.recordHolders()} description={m.storyBuildsThatHoldThisRecord()}>
+      {#snippet actions()}<Button size="sm" variant="quiet">{m.storyViewAll()}</Button>{/snippet}
+      <p class="text-sm">{m.storyCopperBolt55()}</p>
+    </Section>
+  </Variant>
+  <Variant label={m.storySurfaceLevel3()}>
+    <Section title={m.storyDoorEvidence()} surface level={3}>
+      <p class="text-sm">{m.storyMeasuredWithATickCounterOnJava1()}</p>
+    </Section>
+  </Variant>
 </Story>
 
 {#snippet navActions()}<Button size="sm" variant="primary">{m.navSubmit()}</Button>{/snippet}
@@ -256,7 +260,7 @@
     { label: m.navSearch(), href: "#navbar-search" },
     { label: m.navAbout(), href: "#navbar-about" },
   ]}
-  <Variant label={m.storyAsWideAsThePage()}>
+  <Variant label={m.storyFullWidth()}>
     <NavBar
       label={m.storyStoryNavigation()}
       menuLabel={m.navMenu()}
@@ -265,7 +269,7 @@
       actions={navActions}
     />
   </Variant>
-  <Variant label={m.storyNarrowFrameLinksCollapsed()}>
+  <Variant label={m.storyNarrow()}>
     <div class="max-w-dialog-sm">
       <NavBar
         label={m.storyNarrowStoryNavigation()}
@@ -289,7 +293,7 @@
         value="flush"
       />
     </Variant>
-    <Variant label={m.storyCompactForTheHeader()}>
+    <Variant label={m.storyCompact()}>
       <SearchBox
         action="/design-system/patterns"
         label={m.navSearch()}
@@ -371,7 +375,7 @@
             children={filterFields}
           />
         {/snippet}
-        <p class="text-sm">{m.storyResults()}</p>
+        <p class="text-sm">{m.story312Builds()}</p>
       </SplitLayout>
     </Variant>
   </Layout>
@@ -490,59 +494,67 @@
   source="patterns/ConfirmDialog"
   description={m.storyConfirmdialogDescription()}
 >
-  <Layout pattern="cluster">
-    <ConfirmDialog
-      title={m.storyRevokeLaptopCli()}
-      description={m.storyDeviceSignsOut()}
-      confirmLabel={m.storyRevoke()}
-      cancelLabel={m.storyCancel()}
-      closeLabel={m.storyClose()}
-      pendingLabel={m.storyRevoking()}
-      trigger={{ label: m.storyRevokeDevice(), variant: "danger" }}
-      fallbackHref="#confirmdialog"
-      onConfirm={wait}
-    />
-    <ConfirmDialog
-      title={m.storyMergeAccountsQuestion()}
-      consequences={[
-        m.storyBuildsMoveToCircuitsage(),
-        m.storySignInLinksRemoved(),
-        m.storyCannotBeUndone(),
-      ]}
-      requireText={{
-        label: m.storyTypeCircuitsage(),
-        expected: "CircuitSage",
-        error: m.storyTypeAccountNameExactly(),
-      }}
-      confirmLabel={m.storyMergeAccounts()}
-      cancelLabel={m.storyCancel()}
-      closeLabel={m.storyClose()}
-      trigger={{ label: m.storyMergeAccounts() }}
-      onConfirm={wait}
-    />
-    <ConfirmDialog
-      title={m.storyRejectThisProposal()}
-      confirmLabel={m.storyReject()}
-      cancelLabel={m.storyCancel()}
-      closeLabel={m.storyClose()}
-      error={revokeError}
-      trigger={{ label: m.storyRejectFailing() }}
-      onConfirm={async () => {
-        await wait();
-        revokeError = m.storyProposalChanged();
-        throw new Error("conflict");
-      }}
-    />
-    <ConfirmDialog
-      tone="default"
-      title={m.storyPublishTheDraft()}
-      description={m.storyStaffWillReview()}
-      confirmLabel={m.storyPublish()}
-      cancelLabel={m.storyNotYet()}
-      closeLabel={m.storyClose()}
-      trigger={{ label: m.storyPublish(), variant: "primary" }}
-      onConfirm={wait}
-    />
+  <Layout pattern="cluster" gap="lg">
+    <Variant label={m.storyDanger()}>
+      <ConfirmDialog
+        title={m.storyRevokeLaptopCli()}
+        description={m.storyDeviceSignsOut()}
+        confirmLabel={m.storyRevoke()}
+        cancelLabel={m.storyCancel()}
+        closeLabel={m.storyClose()}
+        pendingLabel={m.storyRevoking()}
+        trigger={{ label: m.storyRevokeDevice(), variant: "danger" }}
+        fallbackHref="#confirmdialog"
+        onConfirm={wait}
+      />
+    </Variant>
+    <Variant label={m.storyTypedConfirmation()}>
+      <ConfirmDialog
+        title={m.storyMergeAccountsQuestion()}
+        consequences={[
+          m.storyBuildsMoveToCircuitsage(),
+          m.storySignInLinksRemoved(),
+          m.storyCannotBeUndone(),
+        ]}
+        requireText={{
+          label: m.storyTypeCircuitsage(),
+          expected: "CircuitSage",
+          error: m.storyTypeAccountNameExactly(),
+        }}
+        confirmLabel={m.storyMergeAccounts()}
+        cancelLabel={m.storyCancel()}
+        closeLabel={m.storyClose()}
+        trigger={{ label: m.storyMergeAccounts() }}
+        onConfirm={wait}
+      />
+    </Variant>
+    <Variant label={m.storyError()}>
+      <ConfirmDialog
+        title={m.storyRejectThisProposal()}
+        confirmLabel={m.storyReject()}
+        cancelLabel={m.storyCancel()}
+        closeLabel={m.storyClose()}
+        error={revokeError}
+        trigger={{ label: m.storyReject() }}
+        onConfirm={async () => {
+          await wait();
+          revokeError = m.storyProposalChanged();
+          throw new Error("conflict");
+        }}
+      />
+    </Variant>
+    <Variant label={m.storyDefaultTone()}>
+      <ConfirmDialog
+        tone="default"
+        title={m.storyPublishTheDraft()}
+        description={m.storyStaffWillReview()}
+        confirmLabel={m.storyPublish()}
+        cancelLabel={m.storyNotYet()}
+        closeLabel={m.storyClose()}
+        trigger={{ label: m.storyPublish(), variant: "primary" }}
+        onConfirm={wait}
+      />
+    </Variant>
   </Layout>
 </Story>
 
@@ -673,7 +685,7 @@
       >
     </Layout>
   </StepFlow>
-  <Variant label={m.storyAFailedPhase()}>
+  <Variant label={m.storyFailedStep()}>
     <StepFlow
       label={m.storyFinalization()}
       current="render"
@@ -714,7 +726,7 @@
 >
   <Variant label={m.storyStackSidebarAtStart()}>
     <SplitLayout sidebarLabel={m.storySections()} sidebar={sideNav}>
-      <p class="text-sm">{m.storyMainContentFlows()}</p>
+      <p class="text-sm">{m.storyAFastFlush55Door()}</p>
     </SplitLayout>
   </Variant>
   <Variant label={m.storySheetEndSticky()}>
@@ -727,7 +739,7 @@
       sticky
       sidebar={sideNav}
     >
-      <p class="text-sm">{m.storyNarrowLayoutSheet()}</p>
+      <p class="text-sm">{m.story312Builds()}</p>
     </SplitLayout>
   </Variant>
   <Variant label={m.storySheetInANarrowFrame()}>
@@ -738,7 +750,7 @@
         collapse="sheet"
         sidebar={sideNav}
       >
-        <p class="text-sm">{m.storyFrameAlwaysNarrow()}</p>
+        <p class="text-sm">{m.storyShowTheDoorClosedAndOpen()}</p>
       </SplitLayout>
     </div>
   </Variant>

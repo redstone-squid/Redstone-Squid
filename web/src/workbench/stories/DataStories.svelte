@@ -27,27 +27,37 @@
 </script>
 
 <Story name="Card" source="data/Card" description={m.storyCardDescription()}>
-  <Layout as="ul" pattern="grid">
-    <Card as="li" title={m.storyLinkedCard()} href="#card" eyebrow={m.storyFastest()}>
-      <Text size="sm" tone="muted">{m.storyTheTitleLinkCoversTheCard()}</Text>
-      <div><Button size="sm">{m.storyInnerAction()}</Button></div>
-    </Card>
-    <Card as="li" title={m.storyWithMedia()} href="#card">
-      {#snippet media()}<Image
-          src="/fixtures/iris-door.svg"
-          alt={m.storyIrisDoorIllustration()}
-          width={640}
-          height={400}
-          fallbackLabel={m.storyNoPreview()}
-        />{/snippet}
-      <Text size="sm" tone="muted">Space Builder</Text>
-    </Card>
-    <Card as="li" title={m.storyPlainSurface()} tone="muted" padding="lg">
-      <Text size="sm">{m.storyNoLink()}</Text>
-      {#snippet footer()}<Text size="xs" tone="muted">{m.storyFooter()}</Text>{/snippet}
-    </Card>
-    <Card as="li" title={m.storySelected()} tone="selected" padding="sm" />
-    <Card as="li" title={m.storyNeedsAttention()} tone="warning" padding="sm" />
+  <Layout pattern="grid">
+    <Variant label={m.storyLinkedEyebrowInnerAction()}>
+      <Card title={m.storyCopperBolt55()} href="#card" eyebrow={m.storyFastest()}>
+        <Text size="sm" tone="muted" numeric>{m.story9748Gt()}</Text>
+        <div><Button size="sm">{m.storyVote()}</Button></div>
+      </Card>
+    </Variant>
+    <Variant label={m.storyLinkedMedia()}>
+      <Card title={m.storyIrisDoor()} href="#card">
+        {#snippet media()}<Image
+            src="/fixtures/iris-door.svg"
+            alt={m.storyIrisDoorIllustration()}
+            width={640}
+            height={400}
+            fallbackLabel={m.storyNoPreview()}
+          />{/snippet}
+        <Text size="sm" tone="muted">Space Builder</Text>
+      </Card>
+    </Variant>
+    <Variant label={m.storyMutedPaddingLgFooter()}>
+      <Card title={m.storySeamless33FlushDoor()} tone="muted" padding="lg">
+        <Text size="sm">{m.storyPendingReviewByStaff()}</Text>
+        {#snippet footer()}<Text size="xs" tone="muted">{m.storyEdited3DaysAgo()}</Text>{/snippet}
+      </Card>
+    </Variant>
+    <Variant label={m.storySelectedPaddingSm()}>
+      <Card title={m.storyFlushPistonDoor()} tone="selected" padding="sm" />
+    </Variant>
+    <Variant label={m.storyWarningPaddingSm()}>
+      <Card title={m.storyCopperDoorNeedsEvidence()} tone="warning" padding="sm" />
+    </Variant>
   </Layout>
 </Story>
 
@@ -124,7 +134,7 @@
     <Avatar name="CircuitSage" size="sm" />
     <Avatar name="Space Builder" />
     <Avatar name="红石猫" size="lg" alt="红石猫" />
-    <Avatar name="Broken Link" src="https://media.fixture.invalid/broken.png" />
+    <Avatar name="Quartz" src="https://media.fixture.invalid/broken.png" />
   </div>
 </Story>
 
@@ -175,7 +185,7 @@
       {#snippet leading()}<Avatar name="Laptop CLI" size="sm" />{/snippet}
       {#snippet trailing()}<Button size="sm" variant="danger">{m.storyRevoke()}</Button>{/snippet}
     </ListItem>
-    <ListItem title={m.storyCompactRow()} density="compact" />
+    <ListItem title={m.storyIrisDoorWasApproved()} density="compact" />
   </List>
 </Story>
 
@@ -207,8 +217,9 @@
         id: 3,
         datetime: "2024-03-19",
         dateLabel: m.story19Mar2024(),
-        title: m.storyFirstHolder(),
+        title: m.storyFlushPistonDoor(),
         tone: "success",
+        description: m.storyFirstHolder(),
       },
     ]}
   />
@@ -231,7 +242,7 @@
     rows={[
       { label: m.storyOpeningTime(), before: m.story9Gt(), after: m.story8Gt(), kind: "changed" },
       { label: m.storyVideo(), before: null, after: "https://youtu.be/…", kind: "added" },
-      { label: m.storyNotes(), before: m.storyOldNotes(), after: null, kind: "removed" },
+      { label: m.storyNotes(), before: m.storyOpensIn045S(), after: null, kind: "removed" },
       { label: m.storyWidth(), before: "5", after: "5", kind: "unchanged" },
     ]}
   />

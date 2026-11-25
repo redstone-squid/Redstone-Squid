@@ -26,54 +26,18 @@ export function storyFastest33FlushDoor(locale: Locale = getLocale()): string {
   }
 }
 
-/** Extra small hint text */
-export function storyExtraSmallHintText(locale: Locale = getLocale()): string {
+/** By CircuitSage, Space Builder, 红石猫, Quartz, and Copper Golem Works */
+export function storyByCircuitsageAndOthers(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Extra small hint text";
+      return "By CircuitSage, Space Builder, 红石猫, Quartz, and Copper Golem Works";
     case "zh-CN":
-      return "特小号提示文字";
-    case "en-XA":
-      return "[" + "Éẋţŕå šɱåļļ ĥîñţ ţéẋţ" + "·········]";
-  }
-}
-
-/** Small semibold */
-export function storySmallSemibold(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Small semibold";
-    case "zh-CN":
-      return "小号半粗体";
-    case "en-XA":
-      return "[" + "Šɱåļļ šéɱîƀöļđ" + "······]";
-  }
-}
-
-/** 9 × 7 × 4, 8 gt */
-export function story9748Gt(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "9 × 7 × 4, 8 gt";
-    case "zh-CN":
-      return "9 × 7 × 4，8 游戏刻";
-    case "en-XA":
-      return "[" + "9 × 7 × 4, 8 ĝţ" + "······]";
-  }
-}
-
-/** A very long creator list that does not fit: CircuitSage, Space Builder, 红石猫 */
-export function storyAVeryLongCreatorListThatDoesNot(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "A very long creator list that does not fit: CircuitSage, Space Builder, 红石猫";
-    case "zh-CN":
-      return "超出一行的建造者名单：CircuitSage、Space Builder、红石猫";
+      return "作者：CircuitSage、Space Builder、红石猫、Quartz 和 Copper Golem Works";
     case "en-XA":
       return (
         "[" +
-        "Å ṽéŕý ļöñĝ çŕéåţöŕ ļîšţ ţĥåţ đöéš ñöţ ƒîţ: ÇîŕçûîţŠåĝé, Šþåçé Ɓûîļđéŕ, 红石猫" +
-        "······························]"
+        "Ɓý ÇîŕçûîţŠåĝé, Šþåçé Ɓûîļđéŕ, 红石猫, Ǫûåŕţž, åñđ Çöþþéŕ Ĝöļéɱ Ŵöŕķš" +
+        "···························]"
       );
   }
 }
@@ -123,30 +87,6 @@ export function storyViewAllRecords(locale: Locale = getLocale()): string {
       return "查看全部纪录";
     case "en-XA":
       return "[" + "Ṽîéŵ åļļ ŕéçöŕđš" + "·······]";
-  }
-}
-
-/** Edited 3 days ago */
-export function storyEdited3DaysAgo(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Edited 3 days ago";
-    case "zh-CN":
-      return "3 天前编辑";
-    case "en-XA":
-      return "[" + "Éđîţéđ 3 đåýš åĝö" + "·······]";
-  }
-}
-
-/** Current page */
-export function storyCurrentPage(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Current page";
-    case "zh-CN":
-      return "当前页面";
-    case "en-XA":
-      return "[" + "Çûŕŕéñţ þåĝé" + "·····]";
   }
 }
 
@@ -222,18 +162,6 @@ export function storyDoorLeavesNoBlocksProtrudingWhenClosed(locale: Locale = get
   }
 }
 
-/** Opening time is measured in game ticks. */
-export function storyOpeningTimeIsMeasuredInGameTicks(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Opening time is measured in game ticks.";
-    case "zh-CN":
-      return "开启时间以游戏刻为单位。";
-    case "en-XA":
-      return "[" + "Öþéñîñĝ ţîɱé îš ɱéåšûŕéđ îñ ĝåɱé ţîçķš." + "················]";
-  }
-}
-
 /** Closing time starts when the input turns off. */
 export function storyClosingTimeStartsWhenTheInputTurnsOff(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -282,15 +210,15 @@ export function storyHeldByThisBuild(locale: Locale = getLocale()): string {
   }
 }
 
-/** Press Tab from the top of the page to reveal it. */
-export function storyPressTabFromTheTopOfThePage(locale: Locale = getLocale()): string {
+/** hidden until focused */
+export function storyHiddenUntilFocused(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Press Tab from the top of the page to reveal it.";
+      return "hidden until focused";
     case "zh-CN":
-      return "在页面顶部按 Tab 键即可显示。";
+      return "获得焦点前隐藏";
     case "en-XA":
-      return "[" + "Þŕéšš Ţåƀ ƒŕöɱ ţĥé ţöþ öƒ ţĥé þåĝé ţö ŕéṽéåļ îţ." + "····················]";
+      return "[" + "ĥîđđéñ ûñţîļ ƒöçûšéđ" + "········]";
   }
 }
 
@@ -551,21 +479,6 @@ export function storyHeadingSize(
   }
 }
 
-/** A { $tone } line of body text. */
-export function storyToneExample(
-  args: { tone: string | number },
-  locale: Locale = getLocale(),
-): string {
-  switch (locale) {
-    case "en":
-      return "A " + formatValue(locale, args.tone) + " line of body text.";
-    case "zh-CN":
-      return "一行使用 " + formatValue(locale, args.tone) + " 色调的正文。";
-    case "en-XA":
-      return "[" + "Å " + formatValue(locale, args.tone) + " ļîñé öƒ ƀöđý ţéẋţ." + "·········]";
-  }
-}
-
 /** Bedrock 1.20 */
 export function storyBedrockVersion(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -578,13 +491,56 @@ export function storyBedrockVersion(locale: Locale = getLocale()): string {
   }
 }
 
+/** Submitted by CircuitSage */
+export function storySubmittedByCircuitsage(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Submitted by CircuitSage";
+    case "zh-CN":
+      return "由 CircuitSage 提交";
+    case "en-XA":
+      return "[" + "Šûƀɱîţţéđ ƀý ÇîŕçûîţŠåĝé" + "··········]";
+  }
+}
+
+/** Record confirmed */
+export function storyRecordConfirmed(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Record confirmed";
+    case "zh-CN":
+      return "纪录已确认";
+    case "en-XA":
+      return "[" + "Ŕéçöŕđ çöñƒîŕɱéđ" + "·······]";
+  }
+}
+
+/** Evidence video is missing. */
+export function storyEvidenceVideoMissing(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Evidence video is missing.";
+    case "zh-CN":
+      return "缺少证据视频。";
+    case "en-XA":
+      return "[" + "Éṽîđéñçé ṽîđéö îš ɱîššîñĝ." + "···········]";
+  }
+}
+
 export {
+  navRecords,
   story2Holders,
   story3DaysAgo,
+  story9748Gt,
   storyApproved,
   storyCopperBolt55,
+  storyEdited3DaysAgo,
   storyFastest,
   storyFlush,
   storyJava121,
+  storyMeasuredWithATickCounterOnJava1,
+  storyOpeningTimeIsMeasuredInGameTicks,
+  storySeamless33FlushDoor,
+  storyThisBuildIsPendingReview,
   storyTones,
 } from "./messages.gen";
