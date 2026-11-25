@@ -392,6 +392,18 @@ export function storyTraceback(locale: Locale = getLocale()): string {
   }
 }
 
+/** Highlighted Python */
+export function storyHighlightedPython(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Highlighted Python";
+    case "zh-CN":
+      return "高亮的 Python";
+    case "en-XA":
+      return "[" + "Ĥîĝĥļîĝĥţéđ Þýţĥöñ" + "········]";
+  }
+}
+
 /** 12 January 2026 */
 export function story12January2026(locale: Locale = getLocale()): string {
   switch (locale) {

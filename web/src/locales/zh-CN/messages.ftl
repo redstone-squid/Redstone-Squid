@@ -250,6 +250,7 @@ story-builder = 建造者
 story-inline-and-key = 行内代码和按键
 story-block = 代码块
 story-traceback = 回溯信息
+story-highlighted-python = 高亮的 Python
 story-3-days-ago = 3 天前
 story-12-january-2026 = 2026 年 1 月 12 日
 story-prose-description = 为渲染后的 Markdown 设置样式。

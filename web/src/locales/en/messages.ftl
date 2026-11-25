@@ -253,6 +253,7 @@ story-builder = Builder
 story-inline-and-key = inline and key
 story-block = block
 story-traceback = Traceback
+story-highlighted-python = Highlighted Python
 story-3-days-ago = 3 days ago
 story-12-january-2026 = 12 January 2026
 story-prose-description = Styles rendered Markdown.

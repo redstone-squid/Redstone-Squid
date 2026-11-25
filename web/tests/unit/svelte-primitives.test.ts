@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { createRawSnippet } from "svelte";
 import { describe, expect, it, vi } from "vitest";
 import Button from "@/ui/actions/Button.svelte";
+import CodeBlock from "@/ui/content/CodeBlock.svelte";
 import Heading from "@/ui/content/Heading.svelte";
 import Link from "@/ui/content/Link.svelte";
 import Avatar from "@/ui/data/Avatar.svelte";
@@ -199,6 +200,15 @@ describe("navigation", () => {
 });
 
 describe("content and data", () => {
+  it("highlights a CodeBlock without changing its text", () => {
+    const code = 'def area(w):\n    return w * 3  # "door"';
+    const { container } = render(CodeBlock, { code, lang: "python", wrap: true });
+    // The text copies exactly, line breaks included, while tokens get their colors.
+    expect(container.textContent).toBe(code);
+    expect(screen.getByText("def")).toHaveClass("text-accent");
+    expect(screen.getByText('"door"', { exact: false })).toHaveClass("italic");
+  });
+
   it("groups an eyebrow with its heading and keeps the level separate from size", () => {
     render(Heading, { level: 4, size: "display", eyebrow: "Fastest", children: text("Iris") });
     const heading = screen.getByRole("heading", { level: 4, name: "Iris" });

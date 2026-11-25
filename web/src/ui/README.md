@@ -21,7 +21,7 @@ stories per folder; `/zh-cn/design-system` shows them in Simplified Chinese.
 | Settings that save on change                              | `patterns/SettingsList` of `Switch`es with per-row `SaveStatus`                  |
 | Draft files, secrets shown once, multi-step flows         | `patterns/MediaUploader`, `OneTimeSecret`, `StepFlow`                            |
 | The outcome after a POST redirect                         | `patterns/FlashNotice` in the `PageHeader` notice slot                           |
-| Headings, body text, links, code                          | `content/Heading`, `Text`, `Link`, `Code`, `Prose` for rendered Markdown         |
+| Headings, body text, links, code                          | `content/Heading`, `Text`, `Link`, `Code`, `CodeBlock`, `Prose` for Markdown     |
 | Text only screen readers need                             | `content/VisuallyHidden`                                                         |
 | Dates                                                     | `content/Timestamp`; format the label in a message                               |
 | Two or three facts of one kind, such as count and version | `content/MetaList`; facts with other roles go elsewhere                          |

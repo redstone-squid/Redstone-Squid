@@ -2,6 +2,7 @@
   import * as m from "@/locales/messages-content.gen";
   import Hammer from "@lucide/svelte/icons/hammer";
   import Code from "@/ui/content/Code.svelte";
+  import CodeBlock from "@/ui/content/CodeBlock.svelte";
   import Heading from "@/ui/content/Heading.svelte";
   import Icon from "@/ui/content/Icon.svelte";
   import Link from "@/ui/content/Link.svelte";
@@ -18,6 +19,11 @@
     "Traceback (most recent call last):",
     '  File "squid/core/records.py", line 42, in resolve',
     "ValueError: no candidate",
+  ].join("\n");
+  const python = [
+    "def door_area(width: int, height: int) -> int:",
+    '    """Blocks in the opening of a door."""',
+    "    return width * height  # a 3x3 door is 9",
   ].join("\n");
   const toneExamples = {
     default: m.storySeamless33FlushDoor,
@@ -96,8 +102,14 @@
       <Code variant="key">{m.storyEnter()}</Code>.</Text
     >
   </Variant>
+</Story>
+
+<Story name="CodeBlock" source="content/CodeBlock">
   <Variant label={m.storyBlock()}>
-    <Code variant="block" label={m.storyTraceback()}>{traceback}</Code>
+    <CodeBlock code={traceback} label={m.storyTraceback()} />
+  </Variant>
+  <Variant label={m.storyHighlightedPython()}>
+    <CodeBlock code={python} lang="python" label={m.storyHighlightedPython()} />
   </Variant>
 </Story>
 

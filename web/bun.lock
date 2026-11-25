@@ -23,6 +23,7 @@
         "es-toolkit": "^1.53.2",
         "layerchart": "2.11.0",
         "runed": "^0.38.0",
+        "shiki": "^4.6.0",
         "svelte": "^5.57.3",
         "tailwindcss": "^4.3.5",
         "temporal-polyfill": "^1.0.8",

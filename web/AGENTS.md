@@ -153,6 +153,7 @@ Use these before writing your own. Ask before adding a library that overlaps one
 | Tables with sorting, column visibility, or grouped rows  | `@tanstack/svelte-table`, wrapped in `src/ui`                          |
 | Charts                                                   | `layerchart` (pinned exactly), wrapped in `src/ui`                     |
 | Date arithmetic: durations, time zones, "3 days ago"     | `temporal-polyfill` (Node 24 lacks Temporal); format dates in messages |
+| Syntax highlighting                                      | `shiki`, through `content/CodeBlock` and its `lang` list               |
 
 `knip.jsonc` lists libraries installed ahead of their first use; remove an entry once code
 imports it.
