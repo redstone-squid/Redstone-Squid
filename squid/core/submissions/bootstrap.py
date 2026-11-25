@@ -23,6 +23,7 @@ from squid.core.submissions.application.artifact_readiness import (
     AuthoritativeDraftArtifactReadiness,
 )
 from squid.core.submissions.application.attachment_uploads import DraftAttachmentUploads
+from squid.core.submissions.application.build_drafts import BuildDraftEditor
 from squid.core.submissions.application.build_target import SubmissionBuildPreparation
 from squid.core.submissions.application.commit import BuildSubmissionExecutor
 from squid.core.submissions.application.inference_runs import SubmissionInferenceRuns
@@ -129,6 +130,7 @@ class SubmissionServices:
         return SubmissionFinalizationService(
             self.drafts,
             SubmissionPreparation(readiness, sponsors),
+            editor=BuildDraftEditor(self.drafts, self.builds, self.forms, self.permissions, self.uow_factory),
             uow_factory=self.uow_factory,
         )
 

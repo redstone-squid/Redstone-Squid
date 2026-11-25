@@ -269,6 +269,7 @@ class DraftCreateRequest(StrictSchema):
     """Request an empty account-owned draft pinned to the current form revision."""
 
     category: StableIdentifier
+    source_build_id: int | None = Field(default=None, ge=1)
     origin: SubmissionOrigin
     client_capabilities: set[StableIdentifier] = Field(default_factory=set, max_length=64)
 
@@ -332,6 +333,8 @@ class StoredDraftResponse(StrictSchema):
     """The compacted current state of one caller-owned draft."""
 
     id: UUID
+    source_build_id: int | None = None
+    source_revision: int | None = None
     schema_id: str
     schema_revision: int
     category: StableIdentifier
@@ -350,6 +353,8 @@ class StoredDraftResponse(StrictSchema):
     def from_domain(cls, draft: StoredDraft) -> StoredDraftResponse:
         return cls(
             id=draft.snapshot.id,
+            source_build_id=draft.edit_source.build_id if draft.edit_source else None,
+            source_revision=draft.edit_source.revision if draft.edit_source else None,
             schema_id=draft.snapshot.schema_id,
             schema_revision=draft.snapshot.schema_revision,
             category=draft.snapshot.category,

@@ -12,7 +12,7 @@ appear in the submit projection, so adding them does not change a pinned revisio
 """
 
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Final, Protocol
 
 from squid.core.errors import InvalidStateError, JSONValue
@@ -140,6 +140,8 @@ class CheckedInFormManifestRegistry:
         locale: str | None,
     ) -> FormManifest | None:
         """Return a pinned schema when its exact immutable revision is still available."""
+        if schema_id == f"{CURRENT_SUBMISSION_SCHEMA}.edit" and revision in _CHECKED_IN_REVISIONS:
+            return build_edit_manifest(locale, revision=revision)
         if schema_id != CURRENT_SUBMISSION_SCHEMA or revision not in _CHECKED_IN_REVISIONS:
             return None
         return build_submission_manifest(locale, revision=revision)
@@ -162,10 +164,14 @@ def build_submission_manifest(
         return _build_form_manifest(revision).for_purpose(FormPurpose.SUBMIT)
 
 
-def build_edit_manifest(locale: str | None = None) -> FormManifest:
+def build_edit_manifest(
+    locale: str | None = None, *, revision: int = CURRENT_SUBMISSION_SCHEMA_REVISION
+) -> FormManifest:
     """Build the current form for editing saved builds, localized for one client."""
     with localization_scope(localization_for(locale)):
-        return _build_form_manifest(CURRENT_SUBMISSION_SCHEMA_REVISION).for_purpose(FormPurpose.EDIT)
+        return replace(
+            _build_form_manifest(revision).for_purpose(FormPurpose.EDIT), schema_id=f"{CURRENT_SUBMISSION_SCHEMA}.edit"
+        )
 
 
 _SUBMIT_ONLY = frozenset({FormPurpose.SUBMIT})

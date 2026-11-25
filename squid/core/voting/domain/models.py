@@ -171,6 +171,7 @@ class BuildEditVoteTarget:
     revision: int
     patch: Mapping[str, JSONValue]
     changes: tuple[VoteChange, ...]
+    public_suggestion: bool = False
 
 
 @dataclass(frozen=True, slots=True)

@@ -759,8 +759,18 @@ export type DraftChangeResponse = {
  */
 export type DraftCreateRequest = {
     category: string;
+    source_build_id?: number | null;
     origin: SubmissionOrigin;
     client_capabilities?: Array<string>;
+};
+
+/**
+ * DraftEditResult
+ */
+export type DraftEditResult = {
+    build_id: number;
+    revision: number;
+    review_vote_id: number | null;
 };
 
 /**
@@ -2481,6 +2491,8 @@ export type StartImpersonation = {
  */
 export type StoredDraftResponse = {
     id: string;
+    source_build_id?: number | null;
+    source_revision?: number | null;
     schema_id: string;
     schema_revision: number;
     category: string;
@@ -7822,6 +7834,10 @@ export type SubmissionFinalizationStartErrors = {
      */
     409: ProblemDetail;
     /**
+     * Precondition Failed
+     */
+    412: ProblemDetail;
+    /**
      * Unprocessable Content
      */
     422: ValidationProblemDetail;
@@ -7841,7 +7857,7 @@ export type SubmissionFinalizationStartResponses = {
     /**
      * Request accepted, processing continues off-line
      */
-    202: SubmissionAttemptResponse | DraftPreparationResponse;
+    202: SubmissionAttemptResponse | DraftPreparationResponse | DraftEditResult;
 };
 
 export type SubmissionFinalizationStartResponse = SubmissionFinalizationStartResponses[keyof SubmissionFinalizationStartResponses];
@@ -7888,7 +7904,7 @@ export type SubmissionFinalizationGetResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: SubmissionAttemptResponse | DraftPreparationResponse;
+    200: SubmissionAttemptResponse | DraftPreparationResponse | DraftEditResult;
 };
 
 export type SubmissionFinalizationGetResponse = SubmissionFinalizationGetResponses[keyof SubmissionFinalizationGetResponses];

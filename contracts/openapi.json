@@ -13393,7 +13393,7 @@
           "submissions"
         ],
         "summary": "CreateDraft",
-        "description": "Create an empty draft owned by the signed-in account.",
+        "description": "Create a submission draft or prefill an edit draft from an approved source build.",
         "operationId": "submission_draft_create",
         "parameters": [
           {
@@ -14957,6 +14957,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/DraftPreparationResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DraftEditResult"
                     }
                   ]
                 }
@@ -15067,6 +15070,21 @@
               }
             }
           },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
           "422": {
             "description": "Unprocessable Content",
             "content": {
@@ -15158,6 +15176,9 @@
                     },
                     {
                       "$ref": "#/components/schemas/DraftPreparationResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/DraftEditResult"
                     }
                   ]
                 }
@@ -22053,6 +22074,17 @@
           "category": {
             "type": "string"
           },
+          "source_build_id": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "minimum": 1
+          },
           "origin": {
             "$ref": "#/components/schemas/SubmissionOrigin"
           },
@@ -22071,6 +22103,33 @@
           "origin"
         ],
         "title": "DraftCreateRequest"
+      },
+      "DraftEditResult": {
+        "properties": {
+          "build_id": {
+            "type": "integer"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "review_vote_id": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "build_id",
+          "review_vote_id",
+          "revision"
+        ],
+        "title": "DraftEditResult"
       },
       "DraftInboxResponse": {
         "properties": {
@@ -28199,6 +28258,26 @@
           "id": {
             "type": "string",
             "format": "uuid"
+          },
+          "source_build_id": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source_revision": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "schema_id": {
             "type": "string"

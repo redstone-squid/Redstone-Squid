@@ -216,6 +216,8 @@ class FakeDrafts(SubmissionDraftCommands):
 
 
 class FakeFinalization(SubmissionFinalizationCommands):
+    editor = None
+
     def __init__(self, draft_id: UUID) -> None:
         self.snapshot = FinalizationJobSnapshot(
             job_id=UUID("3ff2c7e7-8df7-4147-853f-fea71a8c39e4"),

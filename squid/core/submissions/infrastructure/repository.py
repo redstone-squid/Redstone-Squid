@@ -30,6 +30,7 @@ from squid.core.submissions.domain import (
     FieldOperation,
     FieldOperationKind,
 )
+from squid.core.submissions.domain.build_edit import DraftEditResult, DraftEditSource
 from squid.core.submissions.domain.source_files import SubmissionSourceFile
 from squid.core.submissions.errors import (
     DraftAccessDeniedError,
@@ -178,6 +179,17 @@ class PostgresDraftRepository(DraftRepository):
             )
         )
         return _to_stored(model)
+
+    async def lock_edit(self, draft_id: UUID) -> StoredDraft:
+        return _to_stored(await self._locked(self._session(), draft_id))
+
+    async def finish_edit(self, draft_id: UUID, result: DraftEditResult, now: Instant) -> None:
+        model = await self._locked(self._session(), draft_id)
+        assert model.edit_source is not None
+        model.edit_source = {**model.edit_source, "result": result.model_dump(mode="json")}
+        model.status = DraftStatus.SUBMITTED
+        model.revision += 1
+        model.updated_at = now
 
     @override
     async def get(self, draft_id: UUID) -> StoredDraft | None:
@@ -408,6 +420,7 @@ def _to_model(draft: StoredDraft) -> SubmissionDraft:
     snapshot = draft.snapshot
     return SubmissionDraft(
         id=snapshot.id,
+        edit_source=draft.edit_source.model_dump(mode="json") if draft.edit_source else None,
         owner_account_id=snapshot.owner_account_id,
         schema_id=snapshot.schema_id,
         schema_revision=snapshot.schema_revision,
@@ -444,6 +457,7 @@ def _to_stored(model: SubmissionDraft) -> StoredDraft:
             status=model.status,
             answers=cast(Mapping[str, JSONValue], model.answers),
         ),
+        edit_source=DraftEditSource.model_validate(model.edit_source) if model.edit_source else None,
         origin=model.origin,
         created_at=model.created_at,
         updated_at=model.updated_at,

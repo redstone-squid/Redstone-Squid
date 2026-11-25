@@ -31,6 +31,7 @@ from squid.core.submissions.application.preparation import (
     SubmissionPreparation,
 )
 from squid.core.submissions.domain import DraftRevisionConflictError, DraftStatus
+from squid.core.submissions.domain.build_edit import DraftEditResult
 from squid.core.submissions.domain.finalization import (
     BuildSubmissionRejected,
     BuildSubmissionResult,
@@ -208,6 +209,13 @@ class FinalizationJobRepository(Protocol):
     ) -> FinalizationFailureOutcome: ...
 
 
+class DraftEditor(Protocol):
+    async def create(
+        self, build_id: int, category: str, actor: Actor, capabilities: frozenset[str], locale: str | None
+    ) -> StoredDraft: ...
+    async def finish(self, draft_id: UUID, actor: Actor, locale: str | None) -> DraftEditResult: ...
+
+
 class SubmissionFinalizationService:
     """Check a submission draft and queue it for build creation.
 
@@ -223,11 +231,13 @@ class SubmissionFinalizationService:
         preparation: SubmissionPreparation,
         *,
         uow_factory: UnitOfWorkFactory[FinalizationUnitOfWork],
+        editor: DraftEditor | None = None,
         retention_days: int = DEFAULT_DRAFT_RETENTION_DAYS,
     ) -> None:
         if retention_days < 1:
             msg = tr(t"submissions-attention-retention-positive = finalization attention retention must be positive")
             raise InvalidStateError(msg)
+        self.editor = editor
         self._drafts = drafts
         self._preparation = preparation
         self._uow_factory = uow_factory
@@ -240,7 +250,7 @@ class SubmissionFinalizationService:
         *,
         locale: str | None,
         now: Instant | None = None,
-    ) -> SubmissionRequestResult:
+    ) -> SubmissionRequestResult | DraftEditResult:
         """Queue a validated draft or retain the issues that prevent finalization.
 
         Repeated requests return the active job or completed result. If only
@@ -249,6 +259,10 @@ class SubmissionFinalizationService:
         """
         with actor.audit_scope():
             current = await self._drafts.get_accessible(draft_id, actor)
+            if current.edit_source is not None:
+                if self.editor is None:
+                    raise InvalidStateError
+                return await self.editor.finish(draft_id, actor, locale)
             return await self._submit(current, actor, locale=locale, now=now or Instant.now(), refresh_retention=True)
 
     async def _submit(
@@ -367,10 +381,12 @@ class SubmissionFinalizationService:
                 # Edits, deletion, expiry, or account merges invalidate this reservation.
                 continue
 
-    async def status(self, draft_id: UUID, actor: Actor) -> SubmissionRequestResult | None:
+    async def status(self, draft_id: UUID, actor: Actor) -> SubmissionRequestResult | DraftEditResult | None:
         """Return retained finalization state after checking owner or staff access."""
         async with self._uow_factory() as uow:
             draft = await self._drafts.get_accessible_in(uow, draft_id, actor)
+            if draft.edit_source is not None:
+                return draft.edit_source.result
             if draft.preparation_issues:
                 return DraftPreparationSnapshot(
                     draft_id, draft.snapshot.revision, draft.preparation_issues, draft.preparation_retry_at is not None

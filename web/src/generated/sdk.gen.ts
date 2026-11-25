@@ -1469,7 +1469,7 @@ export const submissionDraftsList = <ThrowOnError extends boolean = false>(optio
 /**
  * CreateDraft
  *
- * Create an empty draft owned by the signed-in account.
+ * Create a submission draft or prefill an edit draft from an approved source build.
  */
 export const submissionDraftCreate = <ThrowOnError extends boolean = false>(options: Options<SubmissionDraftCreateData, ThrowOnError>): RequestResult<SubmissionDraftCreateResponses, SubmissionDraftCreateErrors, ThrowOnError> => (options.client ?? client).post<SubmissionDraftCreateResponses, SubmissionDraftCreateErrors, ThrowOnError>({
     security: [

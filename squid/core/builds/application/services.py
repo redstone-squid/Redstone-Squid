@@ -208,9 +208,14 @@ class BuildService:
         if await self.edit_decision(actor, build, {"recalculation"}, uow=uow) is not BuildEditDecision.DIRECT:
             raise AuthorizationError
 
-    async def prepare_edit(self, actor: Actor, build: Build, patch: BuildEditPatch) -> Build:
+    async def prepare_edit(
+        self, actor: Actor, build: Build, patch: BuildEditPatch, *, suggestion: bool = False
+    ) -> Build:
         """Apply a candidate patch. The writer checks changed fields against the locked build."""
-        if await self.edit_decision(actor, build, set()) is BuildEditDecision.DENY:
+        if (
+            not (suggestion and build.submission_status is BuildStatus.APPROVED)
+            and await self.edit_decision(actor, build, set()) is BuildEditDecision.DENY
+        ):
             raise AuthorizationError
         await self._apply_patch(build, patch)
         return build
@@ -219,7 +224,14 @@ class BuildService:
         """Apply the exact reviewed change once, if its base revision still exists."""
         async with self._uow_factory() as uow:
             build = await uow.builds.get_for_update(target.build_id)
-            if build is None or build.revision != target.revision or not build.is_creator(author_account_id):
+            if (
+                build is None
+                or build.revision != target.revision
+                or not (
+                    build.is_creator(author_account_id)
+                    or (target.public_suggestion and build.submission_status is BuildStatus.APPROVED)
+                )
+            ):
                 return False
             before = build_values(build)
             try:
