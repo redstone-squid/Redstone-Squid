@@ -135,5 +135,7 @@ def test_roster_validates_dispatch_modes_and_namespaces_its_controls() -> None:
             return self.child.keyed("child")
 
     tree = render_component_tree(Parent())
-    roster = cast(sl.semantic.Roster, tree.nodes[0])
+    boundary = tree.nodes[0]
+    assert isinstance(boundary, sl.semantic.ComponentPlacement)
+    roster = cast(sl.semantic.Roster, boundary.children[0])
     assert roster.key == "child.raid"

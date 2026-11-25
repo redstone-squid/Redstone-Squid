@@ -28,6 +28,7 @@ from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.primitives import Lines, Paginate, Panel, Sep, Text, Variant, Variants, alts
 from squid_ui.ext.discord.primitives.nodes import Node
 from squid_ui.interactions import ActionEvent, ActionMode
+from squid_ui.overflow import Never
 from squid_ui.pages import PagePosition
 from squid_ui.planning import plan
 from squid_ui.planning.action_projection import ActionAllocation
@@ -387,21 +388,30 @@ def test_opening_a_fallback_abandons_the_decisions_under_the_old_branch() -> Non
     assert any("@fallback-1" in event.path for event in replacements)
 
 
-def test_a_strategy_and_a_ladder_rung_are_weighed_against_each_other() -> None:
-    """One frontier: a lossless representation change beats a ladder step that costs loss."""
+@pytest.mark.parametrize("ladder_priority", [0, 1])
+def test_a_strategy_and_a_ladder_rung_are_weighed_against_each_other(ladder_priority: int) -> None:
+    """Both compact text with buttons and rich text with a grouped select fit."""
     document = (
-        *(Paragraph(f"component {index}") for index in range(34)),
-        _text_variants(Panel((Text("rich"), Text("detail"))), Text("compact")),
+        *(Paragraph(f"component {index}") for index in range(33)),
+        _text_variants(
+            Panel((Text("rich", overflow=Never()), Text("detail", overflow=Never()))),
+            Text("compact", overflow=Never()),
+            priority=ladder_priority,
+        ),
         ActionControls(_actions(5), key="demo"),
     )
 
     result = plan(document, target=DISCORD_V2_DPY27)
     rendered = _texts(result)
+    controls = result.scene.expect_body(discord_scene.ComponentsV2).children[-1]
 
-    assert "compact" not in rendered  # the ladder kept its preferred rung
-    assert any(
-        isinstance(node, discord_scene.Select) for node in result.scene.expect_body(discord_scene.ComponentsV2).children
-    )
+    if ladder_priority:
+        assert {"rich", "detail"} <= rendered
+        assert isinstance(controls, discord_scene.Select)
+    else:
+        assert "compact" in rendered
+        assert isinstance(controls, discord_scene.Row)
+    assert _visible_action_keys(result) == {f"action.{index}" for index in range(5)}
     assert not result.report.events
 
 

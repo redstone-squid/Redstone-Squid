@@ -318,7 +318,7 @@ def test_legacy_paged_content_can_participate_in_joint_allocation() -> None:
     assert [(item.key, item.pages) for item in result.report.regions] == [("$/outer", 1), ("$/outer/legacy", 4)]
 
 
-def test_keep_with_next_and_unbreakable_constrain_legal_page_boundaries() -> None:
+def test_keep_with_next_constrains_legal_page_boundaries() -> None:
     content = sl.region(
         sl.keep_with_next(sl.paragraph("heading", key="heading")),
         sl.paragraph("body", key="body"),
@@ -326,7 +326,7 @@ def test_keep_with_next_and_unbreakable_constrain_legal_page_boundaries() -> Non
         key="root",
         title="Root",
     )
-    result = plan(content, target=target(6), nav=default_nav)
+    result = plan(content, target=target(5), nav=default_nav)
     assert [
         getattr(node, "content", None)
         for node in result.scene.expect_body(discord_scene.ComponentsV2).children[:2]
@@ -336,7 +336,7 @@ def test_keep_with_next_and_unbreakable_constrain_legal_page_boundaries() -> Non
         "body",
     ]
     with pytest.raises(UnsolvableLayoutError):
-        plan(content, target=target(5), nav=default_nav)
+        plan(content, target=target(4), nav=default_nav)
 
 
 def test_large_root_region_finds_a_solution_with_the_default_budget() -> None:

@@ -135,6 +135,10 @@ class TestBoundaries:
         assert button.key == "inc"
 
 
+def placed(key: str, *children: LayoutNode[ComponentsV2Target]) -> sl.semantic.ComponentPlacement[ComponentsV2Target]:
+    return sl.semantic.ComponentPlacement(tuple(children), key=key.rsplit(".", 1)[-1], placement=key)
+
+
 class TestRenderCaching:
     def test_equal_but_distinct_context_value_rerenders_the_consumer(self) -> None:
         service_key = ContextKey[object]("service")
@@ -178,7 +182,7 @@ class TestRenderCaching:
         root.value = 1
         changed = runtime.render(reuse_committed=True)
 
-        assert changed.nodes == (Text("1"),)
+        assert changed.nodes == (placed("child", Text("1")),)
         assert len(root.child.services) == 2
         assert root.child.services[-1] is not first_service
 
@@ -221,13 +225,13 @@ class TestRenderCaching:
         runtime.commit(equivalent)
 
         assert root.child.renders == 1
-        assert equivalent.nodes == (Text("0"),)
+        assert equivalent.nodes == (placed("child", Text("0")),)
 
         root.service_version = 1
         changed = runtime.render(reuse_committed=True)
 
         assert root.child.renders == 2
-        assert changed.nodes == (Text("1"),)
+        assert changed.nodes == (placed("child", Text("1")),)
 
     @settings(max_examples=20, deadline=None)
     @given(
@@ -341,7 +345,7 @@ class TestRenderCaching:
 
         changed = runtime.render(reuse_committed=True)
 
-        assert changed.nodes[499:502] == (Text("0"), Text("1"), Text("0"))
+        assert changed.nodes[499:502] == (placed("499", Text("0")), placed("500", Text("1")), placed("501", Text("0")))
         assert namespaces == 1
 
     def test_metadata_stable_commit_reuses_topology_indexes(self) -> None:
@@ -481,7 +485,11 @@ class TestRenderCaching:
 
         changed = runtime.render(reuse_committed=True)
 
-        assert changed.nodes == (Panel(children=(Text("before"), Text("1"), Text("after"))),)
+        middle = changed.nodes[0]
+        assert isinstance(middle, sl.semantic.ComponentPlacement)
+        panel = middle.children[0]
+        assert isinstance(panel, Panel)
+        assert panel.children == (Text("before"), placed("middle.leaf", Text("1")), Text("after"))
         assert namespaces == 2
 
     def test_one_changed_leaf_does_not_render_its_parent_or_sibling(self) -> None:
@@ -519,7 +527,7 @@ class TestRenderCaching:
         assert root.renders == 1
         assert root.left.renders == 2
         assert root.right.renders == 1
-        assert changed.nodes == (Text("left:1"), Text("right:0"))
+        assert changed.nodes == (placed("left", Text("left:1")), placed("right", Text("right:0")))
 
     def test_computed_backdating_keeps_the_render_snapshot(self) -> None:
         class Parity(Component[ComponentsV2Target]):
@@ -675,7 +683,7 @@ class TestRenderCaching:
         assert root.renders == 1
         assert root.left.renders == 2
         assert root.right.renders == 1
-        assert changed.nodes == (Text("1"), Text("0"))
+        assert changed.nodes == (placed("left", Text("1")), placed("right", Text("0")))
 
     def test_explicit_invalidation_rerenders_opaque_inputs(self) -> None:
         class Opaque(Component[ComponentsV2Target]):
@@ -762,7 +770,9 @@ def test_boundaries_expand_and_namespace_inside_every_primitive_child_container(
 
     container = render_component_tree(Parent()).nodes[0]
     assert isinstance(container, Card | Budget | Break)
-    row = next(node for node in container.children if isinstance(node, Row))
+    placement = container.children[0]
+    assert isinstance(placement, sl.semantic.ComponentPlacement)
+    row = next(node for node in placement.children if isinstance(node, Row))
     button = row.items[0]
     assert isinstance(button, Button)
     assert button.key == "child.inc"

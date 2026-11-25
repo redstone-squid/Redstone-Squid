@@ -139,6 +139,8 @@ def test_toggle_key_is_prefixed_through_embed() -> None:
             return self.child.keyed("settings")
 
     tree = render_component_tree(Parent())
+    placement = tree.nodes[0]
+    assert isinstance(placement, sl.semantic.ComponentPlacement)
 
-    assert isinstance(tree.nodes[0], sl.semantic.Toggle)
-    assert tree.nodes[0].key == "settings.web"
+    assert isinstance(placement.children[0], sl.semantic.Toggle)
+    assert placement.children[0].key == "settings.web"

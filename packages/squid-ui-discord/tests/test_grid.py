@@ -172,7 +172,9 @@ def test_semantic_grid_namespaces_its_key_inside_a_component_boundary() -> None:
             return self.child.keyed("child")
 
     tree = render_component_tree(Parent())
-    grid = cast(sl.semantic.Grid, tree.nodes[0])
+    placement = tree.nodes[0]
+    assert isinstance(placement, sl.semantic.ComponentPlacement)
+    grid = cast(sl.semantic.Grid, placement.children[0])
 
     assert grid.key == "child.board"
 

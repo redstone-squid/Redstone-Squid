@@ -49,8 +49,9 @@ def select_violations(
             errors.append(LocalCapacityExceeded(identity, name, used, capacity))
 
     check(occurrence, "select.placeholder", len(node.placeholder or ""), component.select_placeholder)
-    identifier = node.route_id if isinstance(node, scene.RoutedSelect | controls.RoutedSelect) else node.action
-    check(occurrence, "select.id", len(identifier), component.custom_id)
+    # Mounted controls encode their local binding key when wired to a message.
+    if isinstance(node, scene.RoutedSelect | controls.RoutedSelect):
+        check(occurrence, "select.id", len(node.route_id), component.custom_id)
     if isinstance(node, scene.EntitySelect | controls.EntitySelect):
         check(occurrence, "select.max_values", node.max_values, component.select_options)
         if not 0 <= node.min_values <= node.max_values or node.max_values < 1:
@@ -95,7 +96,7 @@ def button_violations(
         for name, used, capacity in (
             ("button.label", len(control.label), component.button_label),
             ("button.url", len(control.url or ""), component.link_url),
-            ("button.id", len(control.action or control.route or ""), component.custom_id),
+            ("button.id", len(control.route or ""), component.custom_id),
             ("row.buttons", 1, component.row_buttons),
         )
         if used > capacity

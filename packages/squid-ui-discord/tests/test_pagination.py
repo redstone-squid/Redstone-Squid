@@ -389,7 +389,13 @@ def test_paginated_code_skips_cuts_that_cannot_fit() -> None:
 
 # Public planning certifies every page; this property has no timing contract.
 @settings(deadline=None)
-@given(st.text(min_size=4500, max_size=9000, alphabet=st.characters(blacklist_categories=("Cs",))))
+@given(
+    st.builds(
+        lambda fragment, length: (fragment * (length // len(fragment) + 1))[:length],
+        st.text(min_size=1, max_size=64, alphabet=st.characters(blacklist_categories=("Cs",))),
+        st.integers(4500, 9000),
+    )
+)
 def test_paginated_documents_fit_on_every_page(body):
     card_node = section(sl.heading("Title"), truncate(paragraph("intro")), fields(field("k", "v")))
     result = plan(

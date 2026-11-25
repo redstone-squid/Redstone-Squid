@@ -692,16 +692,9 @@ class V2CompositionRules[RenderTargetT, ContextT]:
                     ) > self.limits.components.button_label:
                         msg = "built V2 button violates its label limit"
                         raise DrawInvariantError(msg)
-                    identifier = (
-                        node.action
-                        if isinstance(node, scene.Button)
-                        else node.route_id
-                        if isinstance(node, scene.RoutedButton)
-                        else ""
-                    )
-                    if len(identifier) > self.limits.components.custom_id or (
-                        isinstance(node, scene.Link) and len(node.url) > self.limits.components.link_url
-                    ):
+                    if (
+                        isinstance(node, scene.RoutedButton) and len(node.route_id) > self.limits.components.custom_id
+                    ) or (isinstance(node, scene.Link) and len(node.url) > self.limits.components.link_url):
                         msg = "built V2 button violates its destination limit"
                         raise DrawInvariantError(msg)
                 case scene.Select() | scene.RoutedSelect() | scene.EntitySelect():
