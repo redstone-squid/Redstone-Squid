@@ -81,6 +81,7 @@ class RecoveringInference(BuildInferenceService):
         *,
         model: str,
         reasoning_effort: str | None = None,
+        context: ActingContext,
     ) -> list[BuildInput]:
         return await self.infer_calls(source, model=model, reasoning_effort=reasoning_effort)
 
@@ -129,7 +130,14 @@ async def recovery(tmp_path: Path) -> Recovery:
         inference, artifacts, PydanticInferenceRunCodec(), uow_factory=partial(InferenceScope, repository)
     )
     with pytest.raises(RuntimeError, match="model unavailable"):
-        await service.infer(repository.id, repository.owner, bundle, model="original-model", reasoning_effort="low")
+        await service.infer(
+            repository.id,
+            repository.owner,
+            bundle,
+            model="original-model",
+            reasoning_effort="low",
+            context=ActingContext.direct(Actor(account_id=repository.owner)),
+        )
     assert not repository.completed
     assert repository.token is None
     return Recovery(service, repository, artifacts, inference, bundle)

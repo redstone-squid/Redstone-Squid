@@ -4,6 +4,7 @@ from uuid import UUID
 
 from squid.bot.routes import AppRequest, AppRoutes, ScreenUnavailable
 from squid.bot.submission.ui import opening, recalculation
+from squid.core.actors import ActingContext
 from squid.core.i18n import tr
 
 router = AppRoutes()
@@ -29,7 +30,7 @@ async def _open_editor(
 ) -> None:
     if session is not None:
         await request.client.actors.request_actor(request, session, f"build:{build_id}")
-    build = await request.client.services.builds.get(build_id)
+    build = await request.client.services.builds.get(build_id, context=ActingContext.current())
     if build is None:
         raise ScreenUnavailable(tr(t"build-editor-build-deleted = That build no longer exists."))
     await opening.open_build_editor(request, build, recovered=recovered, session=session)

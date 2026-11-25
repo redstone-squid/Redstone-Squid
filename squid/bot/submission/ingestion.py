@@ -82,6 +82,7 @@ async def ingest_message_bundle(
                 model=model,
                 reasoning_effort=reasoning_effort,
                 source_files=source_files,
+                context=ActingContext.current(),
             )
         await admit_candidates(services, candidates, actor=context.effective, retry_failed=retry_failed)
     return run_id

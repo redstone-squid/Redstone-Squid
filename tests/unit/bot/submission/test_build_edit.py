@@ -105,6 +105,7 @@ async def test_changes_stay_staged_and_undo_steps_back_through_them() -> None:
 
 
 @pytest.mark.parametrize("registered", [True, False])
+@pytest.mark.usefixtures("discord_screen_context")
 async def test_search_patterns_hands_off_to_the_command_and_stages_an_undoable_result(registered: bool) -> None:
     build = _door(patterns=["Regular"])
     screen = editor(build)

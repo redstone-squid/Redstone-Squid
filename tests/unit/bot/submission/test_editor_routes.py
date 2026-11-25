@@ -17,7 +17,7 @@ from squid.bot.utils.web import MediaPreviewClient
 from squid.core.accounts.application import AccountService
 from squid.core.accounts.domain import IdentityProvider
 from squid.core.accounts.models import Account
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.builds.application import BuildService
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import DoorBuild
@@ -54,7 +54,7 @@ class StubBuilds(BuildService):
         self.gets = 0
 
     @override
-    async def get(self, build_id: int) -> Any:
+    async def get(self, build_id: int, *, context: ActingContext) -> Any:
         self.gets += 1
         return self._build
 
@@ -64,11 +64,11 @@ class Forms(SubmissionFormService):
         pass
 
     @override
-    async def edit_manifest(self, *, locale: str | None) -> FormManifest:
+    async def edit_manifest(self, *, locale: str | None, context: ActingContext) -> FormManifest:
         return build_edit_manifest()
 
     @override
-    async def options(self, source: str, category: str, *, locale: str | None) -> FormOptionSet:
+    async def options(self, source: str, category: str, *, locale: str | None, context: ActingContext) -> FormOptionSet:
         return FormOptionSet(source, category, 1, EDIT_OPTIONS.get(source, ()))
 
 
@@ -77,7 +77,7 @@ class SettingsRecorder(SettingsService):
         pass
 
     @override
-    async def get_locale(self, server_id: int) -> str | None:
+    async def get_locale(self, server_id: int, *, context: ActingContext) -> str | None:
         return None
 
 

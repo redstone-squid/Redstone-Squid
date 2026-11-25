@@ -7,7 +7,7 @@ from uuid import UUID, uuid4
 
 from whenever import Instant
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, Actor, application_operation
 from squid.core.builds.domain.credits import name_credits
 from squid.core.builds.domain.expansion import DoorExpansion
 from squid.core.errors import InvalidStateError, JSONValue, ValidationError
@@ -306,6 +306,7 @@ class SubmissionDraftService:
         self._inferred_capacity = inferred_capacity
         self._permissions = permissions
 
+    @application_operation
     async def create(
         self,
         *,
@@ -323,8 +324,12 @@ class SubmissionDraftService:
         source_files: tuple[SubmissionSourceFile, ...] = (),
         source_issues: tuple[str, ...] = (),
         inference_run_id: UUID | None = None,
+        context: ActingContext,
     ) -> StoredDraft:
         """Create an empty draft pinned to the current schema revision."""
+        requester = draft_actor_id(context.effective)
+        if requester != owner_account_id and not inferred:
+            raise DraftAccessDeniedError(reason="owner_required")
         if (origin is SubmissionOrigin.PAPER) != (source_installation_id is not None):
             msg = tr(
                 t"submissions-paper-installation-origin-required "
@@ -365,12 +370,16 @@ class SubmissionDraftService:
             inference_run_id=inference_run_id,
         )
         async with self._uow_factory() as uow:
+            if requester != owner_account_id:
+                await self._require_staff(uow, context.effective)
             result = await uow.submission_drafts.create(stored, capacity=limit)
             await uow.commit()
             return result
 
-    async def list_active(self, account_id: int, *, limit: int = 10) -> tuple[StoredDraft, ...]:
+    @application_operation
+    async def list_active(self, *, limit: int = 10, context: ActingContext) -> tuple[StoredDraft, ...]:
         """List a bounded newest-first view of one account's unexpired active drafts."""
+        account_id = context.effective.require_account_id()
         async with self._uow_factory() as uow:
             if not 1 <= limit <= DEFAULT_ACCOUNT_DRAFT_CAPACITY:
                 maximum = DEFAULT_ACCOUNT_DRAFT_CAPACITY
@@ -395,10 +404,12 @@ class SubmissionDraftService:
                     raise InvalidStateError(message)
                 return await uow.submission_drafts.list_attention(after=after, limit=limit, now=self._now())
 
-    async def get_owned(self, draft_id: UUID, account_id: int) -> StoredDraft:
+    @application_operation
+    async def get_owned(self, draft_id: UUID, *, context: ActingContext) -> StoredDraft:
         """Return one unexpired draft under strict owner authority."""
+        account_id = context.effective.require_account_id()
         async with self._uow_factory() as uow:
-            draft = await self.get_accessible_in(uow, draft_id, Actor(account_id=account_id))
+            draft = await self.get_accessible_in(uow, draft_id, context.effective)
         self._require_owner(draft, account_id)
         return draft
 
@@ -429,10 +440,12 @@ class SubmissionDraftService:
             raise DraftAccessDeniedError(reason="permissions_unconfigured")
         await self._permissions.require(actor, BUILD_SUBMISSION_EDIT, uow=uow)
 
-    async def delete(self, draft_id: UUID, account_id: int) -> None:
+    @application_operation
+    async def delete(self, draft_id: UUID, *, context: ActingContext) -> None:
         """Delete an owned draft only while it remains user-editable."""
+        account_id = context.effective.require_account_id()
         async with self._uow_factory() as uow:
-            current = await self.get_accessible_in(uow, draft_id, Actor(account_id=account_id))
+            current = await self.get_accessible_in(uow, draft_id, context.effective)
             self._require_owner(current, account_id)
             if current.snapshot.status not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
                 raise DraftStateConflictError(current.snapshot.status.value, operation="delete")
@@ -476,13 +489,16 @@ class SubmissionDraftService:
                 )
                 if replayed is not None:
                     return replayed
-            await self.validate_change(current, change, locale=locale)
+            await self.validate_change(current, change, locale=locale, context=context)
             async with self._uow_factory() as uow:
                 result = await self.persist_change_in(uow, current, actor, change, now=now)
                 await uow.commit()
                 return result
 
-    async def validate_change(self, current: StoredDraft, change: DraftChange, *, locale: str | None) -> DraftSnapshot:
+    @application_operation
+    async def validate_change(
+        self, current: StoredDraft, change: DraftChange, *, locale: str | None, context: ActingContext
+    ) -> DraftSnapshot:
         """Validate a candidate against its pinned manifest without writing."""
         manifest = await self._pinned_manifest(current, locale)
         candidate = current.snapshot.apply(change)
@@ -517,22 +533,24 @@ class SubmissionDraftService:
             actor_account_id=draft_actor_id(actor),
         )
 
+    @application_operation
     async def upgrade_manifest(
         self,
         draft_id: UUID,
-        account_id: int,
         *,
         expected_revision: int,
         target_revision: int,
         locale: str | None,
         now: Instant | None = None,
+        context: ActingContext,
     ) -> AppliedDraftUpgrade:
         """Upgrade to the next form revision without dropping answered fields.
 
         If the draft already uses target_revision, return it as a replay before
         checking its editability or expected revision.
         """
-        current = await self.get_owned(draft_id, account_id)
+        account_id = context.effective.require_account_id()
+        current = await self.get_owned(draft_id, context=context)
         if current.snapshot.schema_revision == target_revision:
             return AppliedDraftUpgrade(current, replayed=True)
         if current.snapshot.status not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
@@ -544,7 +562,7 @@ class SubmissionDraftService:
         answers = self._revision_migration.migrate(current, source, target)
         touched_at = now or self._now()
         async with self._uow_factory() as uow:
-            latest = await self.get_accessible_in(uow, draft_id, Actor(account_id=account_id))
+            latest = await self.get_accessible_in(uow, draft_id, context.effective)
             self._require_owner(latest, account_id)
             result = await uow.submission_drafts.upgrade_manifest(
                 draft_id,
@@ -568,9 +586,12 @@ class SubmissionDraftService:
         """
         with context.scope():
             current = await self.get_accessible(draft_id, context=context)
-            return await self.validate_snapshot(current, locale=locale)
+            return await self.validate_snapshot(current, locale=locale, context=context)
 
-    async def validate_snapshot(self, current: StoredDraft, *, locale: str | None) -> ValidatedDraft:
+    @application_operation
+    async def validate_snapshot(
+        self, current: StoredDraft, *, locale: str | None, context: ActingContext
+    ) -> ValidatedDraft:
         """Validate answers against the manifest pinned by an accessible draft."""
         manifest = await self._pinned_manifest(current, locale)
         # Ingestion origin is set by the server, not by the form's origin or

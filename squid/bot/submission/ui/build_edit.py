@@ -316,7 +316,7 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
         seed, self._seed = self._seed, None
         if seed is not None:
             return seed
-        latest = await self.builds.get(self._build_id)
+        latest = await self.builds.get(self._build_id, context=await self.controller.context())
         if latest is None:
             message = f"build {self._build_id} no longer exists"
             raise LookupError(message)
@@ -615,7 +615,7 @@ class BuildEditScreen(BuildEditorScreen[int, BuildEditWorkspace]):
 
     async def _refresh_saved(self) -> None:
         """Start again from the saved build after a save, an undo of one, or a reload."""
-        current = await self.builds.get(self._build_id)
+        current = await self.builds.get(self._build_id, context=await self.controller.context())
         if current is None:
             raise LookupError(self._build_id)
         if current.category.value.lower() != self.workspace.category:

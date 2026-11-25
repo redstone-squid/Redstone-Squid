@@ -5,7 +5,7 @@ from uuid import UUID
 
 from whenever import Instant
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor, application_operation
 from squid.core.builds.application.ports import BuildUnitOfWork
 from squid.core.builds.models import Build
 from squid.core.errors import InvalidStateError
@@ -27,7 +27,9 @@ from squid.core.unit_of_work import UnitOfWorkFactory
 class SubmissionBuildPreparer(Protocol):
     """Resolve application-owned build facts before acquiring persistence locks."""
 
-    async def prepare(self, submission: NormalizedSubmission) -> Build | BuildSubmissionRejected: ...
+    async def prepare(
+        self, submission: NormalizedSubmission, *, context: ActingContext
+    ) -> Build | BuildSubmissionRejected: ...
 
 
 class BuildSubmissionExecutor:
@@ -52,23 +54,26 @@ class BuildSubmissionExecutor:
         self._preparation = preparation
         self._drafts = drafts
 
+    @application_operation
     async def execute(
         self,
         job: ClaimedFinalizationJob,
         *,
         now: Instant,
+        context: ActingContext,
     ) -> FinalizedBuild | BuildSubmissionRejected | None:
         """Return the committed build ID, a rejection, or None if the claim was lost.
 
         Revoked permission produces a rejection. An existing build with the same
         source draft is reused after checking its owner and sponsor details.
         """
+        context.require_worker()
         actor_id = job.requested_by_account_id
         if actor_id is None or not await self._authorized(job):
             return BuildSubmissionRejected(
                 (SubmissionAttentionIssue("submission", SubmissionAttentionReason.PERMISSION_REVOKED),)
             )
-        candidate = await self._preparation.prepare(job.payload)
+        candidate = await self._preparation.prepare(job.payload, context=context)
         if isinstance(candidate, BuildSubmissionRejected):
             return candidate
         if (

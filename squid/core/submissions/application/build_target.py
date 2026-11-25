@@ -5,6 +5,7 @@ from contextlib import suppress
 from typing import Any, Protocol, cast
 from uuid import UUID
 
+from squid.core.actors import ActingContext, application_operation
 from squid.core.builds.domain import (
     BuildCategory,
     BuildStatus,
@@ -57,7 +58,7 @@ _RESTRICTION_FIELDS = {
 class SubmissionBuildCommands(Protocol):
     """The build command needed by synchronized finalization."""
 
-    async def get_by_source_submission_draft_id(self, draft_id: UUID) -> Build | None: ...
+    async def get_by_source_submission_draft_id(self, draft_id: UUID, *, context: ActingContext) -> Build | None: ...
 
     async def prepare_for_account(
         self,
@@ -67,21 +68,22 @@ class SubmissionBuildCommands(Protocol):
         source_submission_draft_id: UUID,
         display_name: str | None,
         ai_generated: bool,
+        context: ActingContext,
     ) -> Build: ...
 
 
 class ApprovedSubmissionTags(Protocol):
     """Read the currently approved definitions behind stable form option keys."""
 
-    async def public_definitions(self) -> Sequence[TagDefinition]: ...
+    async def public_definitions(self, *, context: ActingContext) -> Sequence[TagDefinition]: ...
 
 
 class CanonicalSubmissionVersions(Protocol):
     """Resolve compatibility claims and read canonical version names."""
 
-    async def list_all(self) -> Sequence[MinecraftVersion]: ...
+    async def list_all(self, *, context: ActingContext) -> Sequence[MinecraftVersion]: ...
 
-    async def resolve_spec(self, version_spec: str) -> list[str]: ...
+    async def resolve_spec(self, version_spec: str, *, context: ActingContext) -> list[str]: ...
 
 
 class SubmissionBuildPreparation:
@@ -103,9 +105,12 @@ class SubmissionBuildPreparation:
         self._tags = tags
         self._versions = versions
 
-    async def prepare(self, submission: NormalizedSubmission) -> Build | BuildSubmissionRejected:
+    @application_operation
+    async def prepare(
+        self, submission: NormalizedSubmission, *, context: ActingContext
+    ) -> Build | BuildSubmissionRejected:
         """Resolve a candidate without saving it, or return an existing matching source build."""
-        existing = await self._builds.get_by_source_submission_draft_id(submission.source_draft_id)
+        existing = await self._builds.get_by_source_submission_draft_id(submission.source_draft_id, context=context)
         if existing is not None:
             if existing.submitter_account_id != submission.owner_account_id or existing.sponsor != submission.sponsor:
                 return _target_rejected()
@@ -123,7 +128,7 @@ class SubmissionBuildPreparation:
             # compatible releases or refusing an otherwise usable build.
             with suppress(ValueError, InvalidVersionError):
                 build.versions = list(
-                    dict.fromkeys(await self._versions.resolve_spec(submission.version_compatibility))
+                    dict.fromkeys(await self._versions.resolve_spec(submission.version_compatibility, context=context))
                 )
         try:
             return await self._builds.prepare_for_account(
@@ -132,12 +137,15 @@ class SubmissionBuildPreparation:
                 source_submission_draft_id=submission.source_draft_id,
                 display_name=submission.display_name,
                 ai_generated=submission.ai_generated,
+                context=context,
             )
         except InvalidBuildError, InvalidStateError:
             return _target_rejected()
 
     async def _validate_source_version(self, source_version: str) -> BuildSubmissionRejected | None:
-        canonical_versions = {str(version) for version in await self._versions.list_all()}
+        canonical_versions = {
+            str(version) for version in await self._versions.list_all(context=ActingContext.current())
+        }
         if source_version not in canonical_versions:
             return BuildSubmissionRejected(
                 (SubmissionAttentionIssue("source_version", SubmissionAttentionReason.UNKNOWN_OPTION),)
@@ -155,7 +163,7 @@ class SubmissionBuildPreparation:
         """
         definitions = {
             definition.stable_key: definition
-            for definition in await self._tags.public_definitions()
+            for definition in await self._tags.public_definitions(context=ActingContext.current())
             if definition.moderation_status is TagModerationStatus.APPROVED
         }
         requested: dict[str, tuple[tuple[str, ...], TagSemanticKind]] = {

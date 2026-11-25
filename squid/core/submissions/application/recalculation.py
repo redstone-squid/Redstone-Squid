@@ -139,17 +139,19 @@ class RecalculationProposalService:
         with context.scope():
             proposal = await self.get(proposal_id, context=context)
             self._require_pending(proposal)
-            build = await self._builds.get(build_id)
+            build = await self._builds.get(build_id, context=context)
             if build is None:
                 raise BuildNotFoundError(build_id)
-            await self._builds.authorize_edit(actor, build)
+            await self._builds.authorize_edit(build, context=ActingContext.for_actor(actor))
             if build.submitter_account_id != proposal.owner_account_id:
                 raise OwnershipRequiredError
-            if build_id not in await self._builds.list_ids_for_source_message(proposal.source_message_id):
+            if build_id not in await self._builds.list_ids_for_source_message(
+                proposal.source_message_id, context=context
+            ):
                 message = "Choose a build linked to this source message."
                 raise ValidationError(message)
             before = recalculation_values(build)
-            await self._builds.prepare_edit(actor, build, proposal.facts.patch(build))
+            await self._builds.prepare_edit(build, proposal.facts.patch(build), context=ActingContext.for_actor(actor))
             matched = replace(
                 proposal,
                 build_id=build_id,
@@ -159,7 +161,7 @@ class RecalculationProposalService:
             )
             async with self._uow_factory() as uow:
                 await self._require_read_access(uow, (proposal,), actor)
-                await self._builds.authorize_edit(actor, build, uow=uow)
+                await self._builds.authorize_edit(build, uow=uow, context=ActingContext.for_actor(actor))
                 if renew:
                     matched = replace(matched, id=uuid4(), approved_by_account_id=None, applied_revision=None)
                     result = await uow.recalculation_proposals.create(matched)
@@ -186,7 +188,7 @@ class RecalculationProposalService:
             if proposal.build_id is None or proposal.expected_revision is None:
                 message = "Match the candidate to a build and review its diff first."
                 raise ValidationError(message)
-            build = await self._builds.get(proposal.build_id)
+            build = await self._builds.get(proposal.build_id, context=context)
             if build is None:
                 raise BuildNotFoundError(proposal.build_id)
             if build.revision != proposal.expected_revision:
@@ -195,7 +197,9 @@ class RecalculationProposalService:
                     expected_revision=proposal.expected_revision,
                     current_revision=build.revision,
                 )
-            prepared = await self._builds.prepare_edit(actor, build.copy_for_edit(), proposal.facts.patch(build))
+            prepared = await self._builds.prepare_edit(
+                build.copy_for_edit(), proposal.facts.patch(build), context=ActingContext.for_actor(actor)
+            )
             if recalculation_values(prepared) != proposal.after:
                 message = "Resolved build facts changed since review; renew the proposal before approving. "
                 raise ConflictError(message)
@@ -243,7 +247,7 @@ class RecalculationProposalService:
                 build.submission_status,
             ) or retained.owner_account_id != build.submitter_account_id:
                 raise AuthorizationError
-            await self._builds.authorize_edit(actor, current, uow=uow)
+            await self._builds.authorize_edit(current, uow=uow, context=ActingContext.for_actor(actor))
             build.edited_time = Instant.now()
             await uow.builds.save(
                 build,

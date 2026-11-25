@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Literal
 from uuid import UUID
 
+from squid.core.actors import ActingContext, application_operation
 from squid.core.builds.domain.credits import name_credits
 from squid.core.errors import JSONValue
 from squid.core.schematics.domain.doors.detection import DoorDetection
@@ -94,13 +95,20 @@ class SchematicSubmissionInference:
                 detections[field] = SchematicDetection(field, "ambiguous", reason="Hallway interpretations differ.")
         return tuple(detections.values())
 
+    @application_operation
     async def suggest(
-        self, draft: StoredDraft, upload_id: UUID, state: DraftSchematicState, analysis: SchematicAnalysis | None
+        self,
+        draft: StoredDraft,
+        upload_id: UUID,
+        state: DraftSchematicState,
+        analysis: SchematicAnalysis | None,
+        *,
+        context: ActingContext,
     ) -> SchematicSubmissionSuggestions:
         if analysis is None or state is not DraftSchematicState.READY:
             return SchematicSubmissionSuggestions(upload_id, state, draft.snapshot.revision)
         manifest = await self._forms.manifest_revision(
-            draft.snapshot.schema_id, draft.snapshot.schema_revision, locale=None
+            draft.snapshot.schema_id, draft.snapshot.schema_revision, locale=None, context=context
         )
         metrics = analysis.metrics
         candidates: list[SchematicFieldSuggestion] = []
@@ -128,9 +136,11 @@ class SchematicSubmissionInference:
                 SchematicFieldSuggestion("credits", credits, "Embedded author text; confirm attribution and role.")
             )
         if metrics.source_data_version is not None:
-            label = await self._versions.label_for_data_version(metrics.source_data_version)
+            label = await self._versions.label_for_data_version(metrics.source_data_version, context=context)
             if label:
-                options = await self._forms.options("approved_source_versions", draft.snapshot.category, locale=None)
+                options = await self._forms.options(
+                    "approved_source_versions", draft.snapshot.category, locale=None, context=context
+                )
                 key = match_choice(label, options.options)
                 if key is not None:
                     candidates.append(
@@ -151,7 +161,9 @@ class SchematicSubmissionInference:
                 )
                 if block not in names
             ]
-            options = await self._forms.options("approved_restrictions", draft.snapshot.category, locale=None)
+            options = await self._forms.options(
+                "approved_restrictions", draft.snapshot.category, locale=None, context=context
+            )
             keys: list[JSONValue] = [
                 key for label in absent if (key := match_choice(label, options.options)) is not None
             ]

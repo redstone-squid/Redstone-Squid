@@ -63,7 +63,7 @@ from squid.core.submissions.domain import FormManifest, SubmissionOrigin
 class SubmissionFormReader(Protocol):
     """Form reads needed by the HTTP transport."""
 
-    async def manifest(self, *, locale: str | None) -> FormManifest: ...
+    async def manifest(self, *, locale: str | None, context: ActingContext) -> FormManifest: ...
 
     async def manifest_revision(
         self,
@@ -71,9 +71,12 @@ class SubmissionFormReader(Protocol):
         revision: int,
         *,
         locale: str | None,
+        context: ActingContext,
     ) -> FormManifest | None: ...
 
-    async def options(self, source: str, category: str, *, locale: str | None) -> FormOptionSet: ...
+    async def options(
+        self, source: str, category: str, *, locale: str | None, context: ActingContext
+    ) -> FormOptionSet: ...
 
 
 class SubmissionDraftCommands(Protocol):
@@ -88,9 +91,10 @@ class SubmissionDraftCommands(Protocol):
         client_capabilities: frozenset[str],
         locale: str | None,
         source_installation_id: UUID | None = None,
+        context: ActingContext,
     ) -> StoredDraft: ...
 
-    async def list_active(self, account_id: int, *, limit: int = 10) -> tuple[StoredDraft, ...]: ...
+    async def list_active(self, *, limit: int = 10, context: ActingContext) -> tuple[StoredDraft, ...]: ...
 
     async def attention_inbox(
         self,
@@ -105,14 +109,14 @@ class SubmissionDraftCommands(Protocol):
     async def upgrade_manifest(
         self,
         draft_id: UUID,
-        account_id: int,
         *,
         expected_revision: int,
         target_revision: int,
         locale: str | None,
+        context: ActingContext,
     ) -> AppliedDraftUpgrade: ...
 
-    async def delete(self, draft_id: UUID, account_id: int) -> None: ...
+    async def delete(self, draft_id: UUID, *, context: ActingContext) -> None: ...
 
 
 class SubmissionFinalizationCommands(Protocol):
@@ -330,7 +334,7 @@ async def list_correction_inbox(
 @private_response
 async def list_drafts(drafts: Drafts, context: SubmissionContext) -> DraftListResponse:
     """Return at most ten compact active drafts owned by the signed-in account."""
-    return DraftListResponse.from_domain(await drafts.list_active(context.effective.require_account_id()))
+    return DraftListResponse.from_domain(await drafts.list_active(context=context))
 
 
 @get(
@@ -340,11 +344,11 @@ async def list_drafts(drafts: Drafts, context: SubmissionContext) -> DraftListRe
     security=[ANONYMOUS],
     opt=contract(cli=transport_only()),
     status_code=200,
-    dependencies={"forms": Provide(get_submission_forms, sync_to_thread=False)},
+    dependencies={"forms": Provide(get_submission_forms, sync_to_thread=False), "caller": Provide(current_caller)},
 )
-async def current_form(request: Request, forms: Forms) -> FormManifestResponse:
+async def current_form(request: Request, forms: Forms, caller: SubmissionCaller) -> FormManifestResponse:
     """Return the localized form and protocol bounds authored by this server."""
-    manifest = await forms.manifest(locale=locale_for_request(request))
+    manifest = await forms.manifest(locale=locale_for_request(request), context=caller.context())
     return FormManifestResponse.from_domain(manifest)
 
 
@@ -355,13 +359,19 @@ async def current_form(request: Request, forms: Forms) -> FormManifestResponse:
     security=[ANONYMOUS],
     opt=contract(cli=transport_only()),
     status_code=200,
-    dependencies={"forms": Provide(get_submission_forms, sync_to_thread=False)},
+    dependencies={"forms": Provide(get_submission_forms, sync_to_thread=False), "caller": Provide(current_caller)},
 )
 async def pinned_form(
-    schema_id: SchemaId, revision: Annotated[int, PathParameter(ge=1)], request: Request, forms: Forms
+    schema_id: SchemaId,
+    revision: Annotated[int, PathParameter(ge=1)],
+    request: Request,
+    forms: Forms,
+    caller: SubmissionCaller,
 ) -> FormManifestResponse:
     """Return an exact immutable schema revision retained for an unexpired draft."""
-    manifest = await forms.manifest_revision(schema_id, revision, locale=locale_for_request(request))
+    manifest = await forms.manifest_revision(
+        schema_id, revision, locale=locale_for_request(request), context=caller.context()
+    )
     if manifest is None:
         raise SubmissionFormRevisionNotFoundError
     return FormManifestResponse.from_domain(manifest)
@@ -374,13 +384,13 @@ async def pinned_form(
     security=[ANONYMOUS],
     opt=contract(cli=transport_only()),
     status_code=200,
-    dependencies={"forms": Provide(get_submission_forms, sync_to_thread=False)},
+    dependencies={"forms": Provide(get_submission_forms, sync_to_thread=False), "caller": Provide(current_caller)},
 )
 async def form_options(
-    source: OptionSource, category: Category, request: Request, forms: Forms
+    source: OptionSource, category: Category, request: Request, forms: Forms, caller: SubmissionCaller
 ) -> FormOptionSetResponse:
     """Return one revisioned dynamic option source for a build category."""
-    option_set = await forms.options(source, category, locale=locale_for_request(request))
+    option_set = await forms.options(source, category, locale=locale_for_request(request), context=caller.context())
     return FormOptionSetResponse.from_domain(option_set)
 
 
@@ -415,6 +425,7 @@ async def create_draft(
         raise AuthorizationError
     draft = await drafts.create(
         owner_account_id=caller.require_consented_account(),
+        context=caller.context(),
         category=data.category,
         origin=origin,
         client_capabilities=frozenset(data.client_capabilities),
@@ -520,7 +531,7 @@ async def upgrade_draft_manifest(
     """Upgrade an owned draft to the next checked-in form revision."""
     result = await drafts.upgrade_manifest(
         draft_id,
-        context.effective.require_account_id(),
+        context=context,
         expected_revision=data.base_revision,
         target_revision=data.target_revision,
         locale=locale_for_request(request),
@@ -664,7 +675,7 @@ async def delete_draft(
     _reservation: NamedDependency[SkipValidation[None]],
 ) -> Response[None]:
     """Immediately delete one caller-owned draft."""
-    await drafts.delete(draft_id, context.effective.require_account_id())
+    await drafts.delete(draft_id, context=context)
     return Response(content=None, status_code=status.HTTP_204_NO_CONTENT)
 
 

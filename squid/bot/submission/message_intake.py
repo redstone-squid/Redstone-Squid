@@ -49,7 +49,7 @@ class BuildMessageIntake[BotT: squid.bot.app.RedstoneSquid]:
         """Check the shared author/channel eligibility rule for ingestion and recalculation."""
         if message.author.bot or not isinstance(message.channel, discord.TextChannel):
             return False
-        settings = await self.bot.services.settings.get_runtime()
+        settings = await self.bot.services.settings.get_runtime(context=ActingContext.current())
         return message.channel.id in settings.build_log_channel_ids
 
     async def infer_build_from_message(self, message: discord.Message) -> None:
@@ -136,7 +136,7 @@ class BuildMessageIntake[BotT: squid.bot.app.RedstoneSquid]:
         owner_account_id: int,
     ) -> sd.CommandResult:
         """Retain inferred candidates and return review controls without submitting builds."""
-        actor = await request.client.actors.resolve(request)
+        context = ActingContext.for_actor(await request.client.actors.resolve(request))
         run_id = (
             uuid5(NAMESPACE_URL, f"discord-recalculation:{request.interaction.id}")
             if request.interaction is not None
@@ -150,6 +150,7 @@ class BuildMessageIntake[BotT: squid.bot.app.RedstoneSquid]:
             purpose="recalculation",
             model=self.bot.inference_model,
             reasoning_effort=self.bot.inference_reasoning_effort,
+            context=context,
         )
         proposals = [
             await self.bot.services.submission_recalculations.create(
@@ -158,7 +159,7 @@ class BuildMessageIntake[BotT: squid.bot.app.RedstoneSquid]:
                 owner_account_id=owner_account_id,
                 source_message_id=message.id,
                 candidate=candidate.facts,
-                context=ActingContext.for_actor(actor),
+                context=context,
             )
             for index, candidate in enumerate(candidates)
         ]

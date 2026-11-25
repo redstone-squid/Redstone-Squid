@@ -9,6 +9,7 @@ from uuid import UUID
 
 import pytest
 
+from squid.core.actors import ActingContext, Actor
 from squid.core.builds.domain import BuildCategory, BuildInput, BuildStatus, ShowcaseTag
 from squid.core.builds.domain.credits import Credit, CreditAttribution, CreditKind, CreditRole, name_credits
 from squid.core.builds.domain.tags import RestrictionField
@@ -66,7 +67,7 @@ class FakeBuilds:
         self.calls: list[tuple[Build, dict[str, object]]] = []
         self.created: dict[UUID, Build] = {}
 
-    async def get_by_source_submission_draft_id(self, draft_id: UUID) -> Build | None:
+    async def get_by_source_submission_draft_id(self, draft_id: UUID, *, context: ActingContext) -> Build | None:
         return self.created.get(draft_id)
 
     async def prepare_for_account(
@@ -77,6 +78,7 @@ class FakeBuilds:
         source_submission_draft_id: UUID,
         display_name: str | None,
         ai_generated: bool,
+        context: ActingContext,
     ) -> Build:
         if self.error is not None:
             raise self.error
@@ -102,7 +104,7 @@ class FakeTags:
     def __init__(self, definitions: tuple[TagDefinition, ...] = ()) -> None:
         self.definitions = definitions
 
-    async def public_definitions(self) -> tuple[TagDefinition, ...]:
+    async def public_definitions(self, *, context: ActingContext) -> tuple[TagDefinition, ...]:
         return self.definitions
 
 
@@ -110,10 +112,10 @@ class FakeVersions:
     def __init__(self, versions: tuple[MinecraftVersion, ...] | None = None) -> None:
         self.versions = versions or (MinecraftVersion("Java", 26, 1, 2),)
 
-    async def list_all(self) -> tuple[MinecraftVersion, ...]:
+    async def list_all(self, *, context: ActingContext) -> tuple[MinecraftVersion, ...]:
         return self.versions
 
-    async def resolve_spec(self, version_spec: str) -> list[str]:
+    async def resolve_spec(self, version_spec: str, *, context: ActingContext) -> list[str]:
         raise ValueError("No compatibility resolution configured")
 
 
@@ -188,7 +190,7 @@ async def test_adapter_creates_every_category_with_direct_account_ownership(
     builds = FakeBuilds()
 
     result = await SubmissionBuildPreparation(builds, FakeTags(), FakeVersions()).prepare(
-        _submission(submission_category)
+        _submission(submission_category), context=ActingContext.direct(Actor())
     )
 
     build, arguments = builds.calls[0]
@@ -237,7 +239,9 @@ async def test_general_patterns_survive_prefill_durable_payload_and_build(catego
     restored = decode_submission(payload)
     assert restored == normalized
 
-    build = await SubmissionBuildPreparation(FakeBuilds(), FakeTags((pattern,)), FakeVersions()).prepare(restored)
+    build = await SubmissionBuildPreparation(FakeBuilds(), FakeTags((pattern,)), FakeVersions()).prepare(
+        restored, context=ActingContext.direct(Actor())
+    )
     assert isinstance(build, Build)
     assert build.patterns == [pattern.display_name]
     assert build.extra_info.get("unknown_patterns") == ["Spiral Staircase"]
@@ -294,7 +298,7 @@ async def test_adapter_preserves_tags_timings_rights_and_opaque_artifact_origin(
         builds,
         FakeTags((restriction, pattern, showcase)),
         FakeVersions(),
-    ).prepare(submission)
+    ).prepare(submission, context=ActingContext.direct(Actor()))
 
     build = builds.calls[0][0]
     assert isinstance(build, DoorBuild)
@@ -329,7 +333,9 @@ async def test_showcase_tags_become_assignments_with_their_parsed_values() -> No
     )
     builds = FakeBuilds()
 
-    await SubmissionBuildPreparation(builds, FakeTags((speed, compact)), FakeVersions()).prepare(submission)
+    await SubmissionBuildPreparation(builds, FakeTags((speed, compact)), FakeVersions()).prepare(
+        submission, context=ActingContext.direct(Actor())
+    )
 
     build = builds.calls[0][0]
     assert [(tag.definition.stable_key, tag.value) for tag in build.tags] == [
@@ -347,7 +353,9 @@ async def test_a_showcase_value_its_tag_cannot_take_is_a_field_issue(tag: Showca
     submission = replace(_submission(SubmissionCategory.OTHER), tags=SubmissionTags(showcase_tags=(tag,)))
     builds = FakeBuilds()
 
-    result = await SubmissionBuildPreparation(builds, FakeTags((speed, compact)), FakeVersions()).prepare(submission)
+    result = await SubmissionBuildPreparation(builds, FakeTags((speed, compact)), FakeVersions()).prepare(
+        submission, context=ActingContext.direct(Actor())
+    )
 
     assert result == BuildSubmissionRejected(
         (SubmissionAttentionIssue("showcase_tags", SubmissionAttentionReason.WRONG_TYPE),)
@@ -407,7 +415,9 @@ async def test_adapter_persists_the_verified_public_sponsor_snapshot() -> None:
     )
     builds = FakeBuilds()
 
-    result = await SubmissionBuildPreparation(builds, FakeTags(), FakeVersions()).prepare(submission)
+    result = await SubmissionBuildPreparation(builds, FakeTags(), FakeVersions()).prepare(
+        submission, context=ActingContext.direct(Actor())
+    )
 
     build = builds.calls[0][0]
     origin = cast(Mapping[str, object], build.extra_info)["source_submission"]
@@ -434,7 +444,7 @@ async def test_retry_rejects_a_sponsor_snapshot_that_differs_from_the_existing_b
     )
     builds = FakeBuilds()
     target = SubmissionBuildPreparation(builds, FakeTags(), FakeVersions())
-    first = await target.prepare(submission)
+    first = await target.prepare(submission, context=ActingContext.direct(Actor()))
     assert isinstance(first, Build)
     builds.created[DRAFT_ID] = first
 
@@ -442,7 +452,7 @@ async def test_retry_rejects_a_sponsor_snapshot_that_differs_from_the_existing_b
         submission,
         sponsor=PublicSponsor(INSTALLATION_ID, display_name="Changed server"),
     )
-    result = await target.prepare(changed)
+    result = await target.prepare(changed, context=ActingContext.direct(Actor()))
 
     assert result == BuildSubmissionRejected(
         (SubmissionAttentionIssue("submission", SubmissionAttentionReason.TARGET_REJECTED),)
@@ -460,7 +470,9 @@ async def test_extender_timing_is_stored_on_the_extender_and_in_origin() -> None
     )
     builds = FakeBuilds()
 
-    await SubmissionBuildPreparation(builds, FakeTags(), FakeVersions()).prepare(submission)
+    await SubmissionBuildPreparation(builds, FakeTags(), FakeVersions()).prepare(
+        submission, context=ActingContext.direct(Actor())
+    )
 
     build = builds.calls[0][0]
     assert isinstance(build, ExtenderBuild)
@@ -477,10 +489,10 @@ async def test_retries_delegate_the_source_draft_key_and_return_the_existing_bui
     target = SubmissionBuildPreparation(builds, FakeTags(), FakeVersions())
     submission = _submission(SubmissionCategory.OTHER)
 
-    first = await target.prepare(submission)
+    first = await target.prepare(submission, context=ActingContext.direct(Actor()))
     assert isinstance(first, Build)
     builds.created[DRAFT_ID] = first
-    second = await target.prepare(submission)
+    second = await target.prepare(submission, context=ActingContext.direct(Actor()))
 
     assert first == second
     assert len(builds.created) == 1
@@ -501,13 +513,13 @@ async def test_retry_returns_existing_build_after_a_tags_option_is_retired() -> 
     tags = FakeTags((pattern,))
     versions = FakeVersions()
     target = SubmissionBuildPreparation(builds, tags, versions)
-    first = await target.prepare(submission)
+    first = await target.prepare(submission, context=ActingContext.direct(Actor()))
     assert isinstance(first, Build)
     builds.created[DRAFT_ID] = first
     tags.definitions = ()
     versions.versions = ()
 
-    second = await target.prepare(submission)
+    second = await target.prepare(submission, context=ActingContext.direct(Actor()))
 
     assert second == first
     assert len(builds.calls) == 1
@@ -517,7 +529,9 @@ async def test_unknown_source_version_is_actionable_and_never_delegated_to_persi
     builds = FakeBuilds()
     submission = replace(_submission(SubmissionCategory.OTHER), source_version="Java 26.1.20")
 
-    result = await SubmissionBuildPreparation(builds, FakeTags(), FakeVersions()).prepare(submission)
+    result = await SubmissionBuildPreparation(builds, FakeTags(), FakeVersions()).prepare(
+        submission, context=ActingContext.direct(Actor())
+    )
 
     assert result == BuildSubmissionRejected(
         (SubmissionAttentionIssue("source_version", SubmissionAttentionReason.UNKNOWN_OPTION),)
@@ -549,7 +563,9 @@ async def test_user_repairable_validation_failures_become_stable_attention_issue
     submission: NormalizedSubmission,
     expected_issue: SubmissionAttentionIssue,
 ) -> None:
-    result = await SubmissionBuildPreparation(FakeBuilds(), FakeTags(), FakeVersions()).prepare(submission)
+    result = await SubmissionBuildPreparation(FakeBuilds(), FakeTags(), FakeVersions()).prepare(
+        submission, context=ActingContext.direct(Actor())
+    )
 
     assert isinstance(result, BuildSubmissionRejected)
     assert expected_issue in result.issues
@@ -562,7 +578,7 @@ async def test_structured_build_rejection_becomes_target_attention() -> None:
         FakeVersions(),
     )
 
-    result = await target.prepare(_submission(SubmissionCategory.UTILITY))
+    result = await target.prepare(_submission(SubmissionCategory.UTILITY), context=ActingContext.direct(Actor()))
 
     assert result == BuildSubmissionRejected(
         (SubmissionAttentionIssue("submission", SubmissionAttentionReason.TARGET_REJECTED),)
@@ -582,7 +598,9 @@ async def test_a_door_without_depth_build_size_or_exported_version_still_becomes
     assert decode_submission(encode_submission(submission)) == submission
     builds = FakeBuilds()
 
-    result = await SubmissionBuildPreparation(builds, FakeTags(), FakeVersions()).prepare(submission)
+    result = await SubmissionBuildPreparation(builds, FakeTags(), FakeVersions()).prepare(
+        submission, context=ActingContext.direct(Actor())
+    )
 
     assert isinstance(result, DoorBuild)
     assert result.versions == []
@@ -657,7 +675,9 @@ async def test_unknown_metadata_survives_payload_build_and_title(category: Submi
     )
     restored = decode_submission(encode_submission(submission))
     assert restored == submission
-    build = await SubmissionBuildPreparation(FakeBuilds(), FakeTags(), FakeVersions()).prepare(restored)
+    build = await SubmissionBuildPreparation(FakeBuilds(), FakeTags(), FakeVersions()).prepare(
+        restored, context=ActingContext.direct(Actor())
+    )
     assert isinstance(build, DoorBuild | ExtenderBuild)
     assert build.orientation is None
     assert build.creators_ign == []
@@ -685,7 +705,9 @@ async def test_typed_credits_survive_durable_payload_and_build_preparation() -> 
     assert "creators" not in encoded
     decoded = decode_submission(encoded)
     assert decoded.credits == credits
-    build = await SubmissionBuildPreparation(FakeBuilds(), FakeTags(), FakeVersions()).prepare(decoded)
+    build = await SubmissionBuildPreparation(FakeBuilds(), FakeTags(), FakeVersions()).prepare(
+        decoded, context=ActingContext.direct(Actor())
+    )
     assert isinstance(build, Build)
     assert build.credits == list(credits)
     assert build.creators_ign == ["Alex"]
@@ -709,7 +731,9 @@ async def test_external_links_survive_payload_and_build_preparation_without_beco
     restored = decode_submission(encoded)
     assert restored.links == links
     assert restored.artifacts == VerifiedSubmissionArtifacts()
-    build = await SubmissionBuildPreparation(FakeBuilds(), FakeTags(), FakeVersions()).prepare(restored)
+    build = await SubmissionBuildPreparation(FakeBuilds(), FakeTags(), FakeVersions()).prepare(
+        restored, context=ActingContext.direct(Actor())
+    )
     assert isinstance(build, DoorBuild)
     assert [(link.url, link.media_type) for link in build.links] == [(link.url, link.media_type) for link in links]
     assert (build.normal_opening_time, build.visible_opening_time) == (27, 25)
@@ -729,7 +753,9 @@ async def test_expansion_survives_finalization_payload_and_build_preparation() -
     submission = replace(submission, details=replace(submission.details, expansion=document))
     decoded = decode_submission(encode_submission(submission))
     assert decoded == submission
-    build = await SubmissionBuildPreparation(FakeBuilds(), FakeTags(), FakeVersions()).prepare(decoded)
+    build = await SubmissionBuildPreparation(FakeBuilds(), FakeTags(), FakeVersions()).prepare(
+        decoded, context=ActingContext.direct(Actor())
+    )
     assert isinstance(build, DoorBuild)
     assert build.expansion == document
 
@@ -744,7 +770,9 @@ async def test_discord_compatibility_survives_durable_payload_without_a_capture_
         version_compatibility="Java 1.16+",
     )
     restored = decode_submission(encode_submission(submission))
-    result = await SubmissionBuildPreparation(FakeBuilds(), FakeTags(), versions).prepare(restored)
+    result = await SubmissionBuildPreparation(FakeBuilds(), FakeTags(), versions).prepare(
+        restored, context=ActingContext.direct(Actor())
+    )
     assert isinstance(result, Build)
     assert result.versions == ["Java 1.16.0", "Java 1.16.1"]
     assert result.version_spec == "Java 1.16+"
@@ -757,7 +785,9 @@ async def test_unparseable_compatibility_keeps_the_claim_without_failing_the_bui
     submission = replace(
         _submission(SubmissionCategory.DOOR), source_version=None, version_compatibility="Java unknown"
     )
-    result = await SubmissionBuildPreparation(FakeBuilds(), FakeTags(), versions).prepare(submission)
+    result = await SubmissionBuildPreparation(FakeBuilds(), FakeTags(), versions).prepare(
+        submission, context=ActingContext.direct(Actor())
+    )
     assert isinstance(result, Build)
     assert result.versions == []
     assert result.version_spec == "Java unknown"
@@ -777,7 +807,9 @@ async def test_restriction_categories_survive_durable_payload_and_preparation() 
     assert payload["payload_schema"] == 1
     restored = decode_submission(payload)
     assert restored == submission
-    build = await SubmissionBuildPreparation(FakeBuilds(), FakeTags(), FakeVersions()).prepare(restored)
+    build = await SubmissionBuildPreparation(FakeBuilds(), FakeTags(), FakeVersions()).prepare(
+        restored, context=ActingContext.direct(Actor())
+    )
     assert isinstance(build, Build)
     assert build.extra_info.get("unknown_restrictions") == {
         "wiring_placement_restrictions": ["Seamless"],

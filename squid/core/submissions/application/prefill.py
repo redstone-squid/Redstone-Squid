@@ -9,6 +9,7 @@ reported for review, while the original BuildInput remains available to callers.
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
+from squid.core.actors import ActingContext
 from squid.core.builds.domain import (
     RESTRICTION_FIELDS,
     BuildInput,
@@ -42,11 +43,13 @@ async def prefill_submission(
     category = source.category.value.lower() if source.category is not None else None
     if category is None:
         return SubmissionPrefill(None, {}, ("category",))
-    manifest = await forms.manifest(locale=None)
+    manifest = await forms.manifest(locale=None, context=ActingContext.current())
     options: dict[str, tuple[ChoiceOption, ...]] = {}
     for field in manifest.fields_for(category):
         if field.option_source is not None:
-            options[field.option_source] = (await forms.options(field.option_source, category, locale=None)).options
+            options[field.option_source] = (
+                await forms.options(field.option_source, category, locale=None, context=ActingContext.current())
+            ).options
     return project_submission(source, manifest, options, origin=origin)
 
 

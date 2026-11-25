@@ -127,11 +127,13 @@ class Forms(SubmissionFormService):
         pass
 
     @override
-    async def manifest_revision(self, schema_id: str, revision: int, *, locale: str | None) -> FormManifest | None:
+    async def manifest_revision(
+        self, schema_id: str, revision: int, *, locale: str | None, context: ActingContext
+    ) -> FormManifest | None:
         return build_submission_manifest(revision=revision)
 
     @override
-    async def options(self, source: str, category: str, *, locale: str | None) -> FormOptionSet:
+    async def options(self, source: str, category: str, *, locale: str | None, context: ActingContext) -> FormOptionSet:
         # Thirty versions force a second picker page; tag catalogues stay small.
         if source == "approved_source_versions":
             choices = tuple(ChoiceOption(f"Java 1.{minor}", f"Java 1.{minor}") for minor in range(30, 0, -1))

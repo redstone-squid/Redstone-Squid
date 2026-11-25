@@ -92,7 +92,7 @@ class FakeForms(SubmissionFormReader):
         self.option_calls: list[tuple[str, str, str | None]] = []
 
     @override
-    async def manifest(self, *, locale: str | None) -> FormManifest:
+    async def manifest(self, *, locale: str | None, context: ActingContext) -> FormManifest:
         self.manifest_locales.append(locale)
         return build_submission_manifest(locale)
 
@@ -103,6 +103,7 @@ class FakeForms(SubmissionFormReader):
         revision: int,
         *,
         locale: str | None,
+        context: ActingContext,
     ) -> FormManifest | None:
         self.revision_calls.append((schema_id, revision, locale))
         if schema_id == "build_submission.v1" and revision == 2:
@@ -110,7 +111,7 @@ class FakeForms(SubmissionFormReader):
         return None
 
     @override
-    async def options(self, source: str, category: str, *, locale: str | None) -> FormOptionSet:
+    async def options(self, source: str, category: str, *, locale: str | None, context: ActingContext) -> FormOptionSet:
         self.option_calls.append((source, category, locale))
         return FormOptionSet(source, category, 8, (ChoiceOption("slim", "Slim"),))
 
@@ -132,6 +133,7 @@ class FakeDrafts(SubmissionDraftCommands):
         client_capabilities: frozenset[str],
         locale: str | None,
         source_installation_id: UUID | None = None,
+        context: ActingContext,
     ) -> StoredDraft:
         self.created_with = (
             owner_account_id,
@@ -159,7 +161,8 @@ class FakeDrafts(SubmissionDraftCommands):
         return ()
 
     @override
-    async def list_active(self, account_id: int, *, limit: int = 10) -> tuple[StoredDraft, ...]:
+    async def list_active(self, *, limit: int = 10, context: ActingContext) -> tuple[StoredDraft, ...]:
+        account_id = context.effective.require_account_id()
         assert account_id == ACCOUNT_ID
         assert limit == 10
         return (self.current,)
@@ -189,12 +192,13 @@ class FakeDrafts(SubmissionDraftCommands):
     async def upgrade_manifest(
         self,
         draft_id: UUID,
-        account_id: int,
         *,
         expected_revision: int,
         target_revision: int,
         locale: str | None,
+        context: ActingContext,
     ) -> AppliedDraftUpgrade:
+        account_id = context.effective.require_account_id()
         assert draft_id == self.current.snapshot.id
         assert account_id == ACCOUNT_ID
         assert expected_revision == self.current.snapshot.revision
@@ -211,7 +215,8 @@ class FakeDrafts(SubmissionDraftCommands):
         return AppliedDraftUpgrade(self.current)
 
     @override
-    async def delete(self, draft_id: UUID, account_id: int) -> None:
+    async def delete(self, draft_id: UUID, *, context: ActingContext) -> None:
+        account_id = context.effective.require_account_id()
         self.deleted = (draft_id, account_id)
 
 

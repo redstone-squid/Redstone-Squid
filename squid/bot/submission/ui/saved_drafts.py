@@ -40,7 +40,7 @@ class SavedDraftsScreen(sd.Screen):
         drafts = (
             await request.client.services.submission_drafts.attention_inbox(limit=10, context=context)
             if inbox
-            else await request.client.services.submission_drafts.list_active(account_id)
+            else await request.client.services.submission_drafts.list_active(context=context)
         )
         runs = await request.client.services.submission_inference.list_active(inbox=inbox, context=context)
         nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request]] = [

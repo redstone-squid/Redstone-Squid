@@ -15,6 +15,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import Final, Protocol
 
+from squid.core.actors import ActingContext, application_operation
 from squid.core.errors import InvalidStateError, JSONValue
 from squid.core.i18n import localization_for, tr
 from squid.core.submissions.domain import (
@@ -65,6 +66,7 @@ class FormOptionCatalog(Protocol):
         category: str,
         *,
         locale: str | None,
+        context: ActingContext,
     ) -> FormOptionSet: ...
 
 
@@ -96,33 +98,39 @@ class SubmissionFormService:
         self._option_catalog = option_catalog
         self._manifests = manifests
 
-    async def manifest(self, *, locale: str | None) -> FormManifest:
+    @application_operation
+    async def manifest(self, *, locale: str | None, context: ActingContext) -> FormManifest:
         """Return the localized current form with revisioned option-source references."""
         return await self._manifests.current(locale=locale)
 
+    @application_operation
     async def manifest_revision(
         self,
         schema_id: str,
         revision: int,
         *,
         locale: str | None,
+        context: ActingContext,
     ) -> FormManifest | None:
         """Return one immutable checked-in form revision while this server can validate it."""
         return await self._manifests.get(schema_id, revision, locale=locale)
 
-    async def edit_manifest(self, *, locale: str | None) -> FormManifest:
+    @application_operation
+    async def edit_manifest(self, *, locale: str | None, context: ActingContext) -> FormManifest:
         """Return the localized current form for editing saved builds; see `build_edit_manifest`."""
         return await self._manifests.edit(locale=locale)
 
+    @application_operation
     async def options(
         self,
         source: str,
         category: str,
         *,
         locale: str | None,
+        context: ActingContext,
     ) -> FormOptionSet:
         """Resolve one category-aware approved option source."""
-        return await self._option_catalog.options(source, category, locale=locale)
+        return await self._option_catalog.options(source, category, locale=locale, context=context)
 
 
 class CheckedInFormManifestRegistry:

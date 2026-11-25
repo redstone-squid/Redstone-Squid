@@ -79,11 +79,11 @@ class SettingsRecorder(SettingsService):
         pass
 
     @override
-    async def get_locale(self, server_id: int) -> str | None:
+    async def get_locale(self, server_id: int, *, context: ActingContext) -> str | None:
         return None
 
     @override
-    async def get_runtime(self) -> RuntimeSettings:
+    async def get_runtime(self, *, context: ActingContext) -> RuntimeSettings:
         return RuntimeSettings(build_log_channel_ids=(BUILD_LOG_CHANNEL,))
 
 
@@ -187,7 +187,8 @@ async def _run(intake: BuildMessageIntake[Any], message: discord.Message) -> dis
     cog.bot = intake.bot
     cog.ui = intake.bot.ui.scope(cog)
     cog.intake = intake
-    await invoke_context_menu(cog, cog.recalc_context_menu, interaction, message)
+    with ActingContext.direct(Actor(discord_user_id=interaction.user.id)).scope():
+        await invoke_context_menu(cog, cog.recalc_context_menu, interaction, message)
     return interaction
 
 
@@ -248,6 +249,7 @@ class RetainedInference(SubmissionInferenceRuns):
         reasoning_effort: str | None = None,
         source_files: tuple[SubmissionSourceFile, ...] = (),
         purpose: Literal["submission", "recalculation"] = "submission",
+        context: ActingContext,
     ) -> tuple[InferenceCandidate, ...]:
         return await self.infer_calls(
             run_id,

@@ -144,6 +144,7 @@ class SubmissionExecutor(Protocol):
         job: ClaimedFinalizationJob,
         *,
         now: Instant,
+        context: ActingContext,
     ) -> BuildSubmissionResult | None: ...
 
 
@@ -246,10 +247,19 @@ class SubmissionFinalizationService:
         actor = context.effective
         with context.scope():
             current = await self._drafts.get_accessible(draft_id, context=context)
-            return await self._submit(current, actor, locale=locale, now=now or Instant.now(), refresh_retention=True)
+            return await self._submit(
+                current, actor, locale=locale, now=now or Instant.now(), refresh_retention=True, context=context
+            )
 
     async def _submit(
-        self, current: StoredDraft, actor: Actor, *, locale: str | None, now: Instant, refresh_retention: bool
+        self,
+        current: StoredDraft,
+        actor: Actor,
+        *,
+        locale: str | None,
+        now: Instant,
+        refresh_retention: bool,
+        context: ActingContext,
     ) -> SubmissionRequestResult:
         draft_id = current.snapshot.id
         if current.snapshot.status is DraftStatus.PROCESSING:
@@ -281,7 +291,7 @@ class SubmissionFinalizationService:
         try:
             async with self._uow_factory() as uow:
                 latest = await self._drafts.get_accessible_in(uow, draft_id, actor)
-            validated = await self._drafts.validate_snapshot(latest, locale=locale)
+            validated = await self._drafts.validate_snapshot(latest, locale=locale, context=context)
             if validated.draft.snapshot.revision != current.snapshot.revision:
                 raise DraftRevisionConflictError(
                     expected=current.snapshot.revision, actual=validated.draft.snapshot.revision
@@ -312,7 +322,7 @@ class SubmissionFinalizationService:
                 await uow.commit()
                 return result
 
-        preparation = await self._preparation.prepare(validated)
+        preparation = await self._preparation.prepare(validated, context=context)
         if isinstance(preparation, PreparationRejected | PreparationWaiting):
             async with self._uow_factory() as uow:
                 await self._drafts.get_accessible_in(uow, draft_id, actor)
@@ -345,7 +355,7 @@ class SubmissionFinalizationService:
                 drafts = await uow.finalization_jobs.reserve_preparations(now=now, limit=limit)
                 await uow.commit()
             for draft in drafts:
-                with worker_execution("submission-preparation", draft.preparation_attempt):
+                with worker_execution("submission-preparation", draft.preparation_attempt) as attempt:
                     try:
                         await self._submit(
                             draft,
@@ -353,6 +363,7 @@ class SubmissionFinalizationService:
                             locale=None,
                             now=now,
                             refresh_retention=False,
+                            context=attempt,
                         )
                     except DraftAccessDeniedError, PermissionDeniedError:
                         async with self._uow_factory() as uow:
@@ -450,13 +461,13 @@ class SubmissionFinalizationWorker:
                 jobs = await uow.finalization_jobs.claim(now=claimed_at, limit=limit)
                 await uow.commit()
             for job in jobs:
-                with worker_execution("submission-finalization", job.claim_token):
-                    await self._process(job, now=claimed_at)
+                with worker_execution("submission-finalization", job.claim_token) as attempt:
+                    await self._process(job, now=claimed_at, context=attempt)
 
-    async def _process(self, job: ClaimedFinalizationJob, *, now: Instant) -> None:
+    async def _process(self, job: ClaimedFinalizationJob, *, now: Instant, context: ActingContext) -> None:
         expires_at = now.add(days=self._retention_days, days_assumed_24h_ok=True)
         try:
-            result = await self._executor.execute(job, now=now)
+            result = await self._executor.execute(job, now=now, context=context)
         except Exception as error:
             logger.exception("Submission finalization failed for draft %s, job %s", job.draft_id, job.job_id)
             retry_at = now.add(seconds=_retry_delay(job.attempts))

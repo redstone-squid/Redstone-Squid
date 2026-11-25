@@ -104,18 +104,21 @@ async def open_submission_form(
     if creators is not None:
         draft.credits = parse_credit_lines("\n".join(split_values(creators)))
     if restrictions is not None:
-        await request.client.services.builds.classify_restrictions(draft, split_values(restrictions))
+        await request.client.services.builds.classify_restrictions(
+            draft, split_values(restrictions), context=ActingContext.current()
+        )
     if description is not None and (parsed_description := optional_text(description)) is not None:
         draft.description = parsed_description
 
     services = request.client.services
-    manifest = await services.submission_forms.manifest(locale=None)
+    manifest = await services.submission_forms.manifest(locale=None, context=ActingContext.current())
     # Derive the draft ID from the interaction so a retried command reopens the same draft.
     draft_id = (
         uuid5(NAMESPACE_URL, f"discord-submission:{request.interaction.id}")
         if request.interaction is not None
         else uuid4()
     )
+    actor = await request.client.actors.resolve(request, refresh=True)
     stored = await services.submission_drafts.create(
         draft_id=draft_id,
         owner_account_id=uploader_account_id,
@@ -127,9 +130,9 @@ async def open_submission_form(
             if field.required_capability is not None
         ),
         locale=None,
+        context=ActingContext.for_actor(actor),
     )
     unresolved: tuple[str, ...] = ()
-    actor = await request.client.actors.resolve(request, refresh=True)
     if stored.snapshot.revision == 0:
         prefill = await prefill_submission(draft, services.submission_forms, origin=SubmissionOrigin.DISCORD)
         unresolved = prefill.unresolved

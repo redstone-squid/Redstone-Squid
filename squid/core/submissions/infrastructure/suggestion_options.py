@@ -7,6 +7,7 @@ cannot supply a complete choice list and are rejected here.
 
 from typing import override
 
+from squid.core.actors import ActingContext
 from squid.core.submissions.application import FormOptionCatalog, FormOptionSet
 from squid.core.submissions.domain import ChoiceOption
 from squid.core.suggestions.application import SuggestionService, UnknownSuggestionSourceError
@@ -26,6 +27,7 @@ class SuggestionFormOptionCatalog(FormOptionCatalog):
         category: str,
         *,
         locale: str | None,
+        context: ActingContext,
     ) -> FormOptionSet:
         """Return a deterministic content revision for one supported option source.
 
@@ -41,7 +43,9 @@ class SuggestionFormOptionCatalog(FormOptionCatalog):
             msg = f"unknown submission option source: {source}"
             raise ValueError(msg)
 
-        result = await self._suggestions.enumerate(source, context={"category": category}, locale=locale)
+        result = await self._suggestions.enumerate(
+            source, source_context={"category": category}, locale=locale, context=context
+        )
         choices = tuple(ChoiceOption(item.value, item.label, item.value_type) for item in result.items)
         # Reuse the suggestion source's revision so both clients can cache the same choices.
         return FormOptionSet(source, category, result.revision or 1, choices)

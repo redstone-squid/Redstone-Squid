@@ -39,7 +39,11 @@ class RecalculationProposalScreen(sd.Screen[None, Any, "RedstoneSquid"]):
         """Reload retained review state and current target choices after restart."""
         actor = await request.client.actors.resolve(request)
         proposal = await services.submission_recalculations.get(proposal_id, context=ActingContext.for_actor(actor))
-        targets = tuple(await services.builds.list_ids_for_source_message(proposal.source_message_id))
+        targets = tuple(
+            await services.builds.list_ids_for_source_message(
+                proposal.source_message_id, context=ActingContext.current()
+            )
+        )
         return cls(services, proposal, targets)
 
     @override

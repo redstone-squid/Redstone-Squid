@@ -39,43 +39,46 @@ async def materialize_candidate(
     if selected is None:
         message = "Choose a category before opening this candidate as a draft."
         raise ValidationError(message)
-    source = replace(candidate.facts, category=selected, ai_generated=True)
-    prefill = await prefill_submission(source, forms, origin=SubmissionOrigin.DISCORD)
-    assert prefill.category is not None
-    manifest = await forms.manifest(locale=None)
-    stored = await drafts.create(
-        draft_id=candidate.id,
-        owner_account_id=candidate.owner_account_id,
-        category=prefill.category,
-        origin=SubmissionOrigin.DISCORD,
-        inferred=True,
-        door_expansion=source.details.door_expansion
-        if selected is BuildCategory.DOOR and isinstance(source.details, DoorDraftDetails)
-        else None,
-        source_messages=source.source_messages,
-        source_files=candidate.source_files,
-        source_issues=prefill.unresolved,
-        inference_run_id=candidate.run_id,
-        client_capabilities=frozenset(
-            field.required_capability
-            for field in manifest.fields_for(prefill.category)
-            if field.required_capability is not None
-        ),
-        locale=None,
-    )
-    if stored.snapshot.revision == 0:
-        await drafts.apply_change(
-            candidate.id,
-            DraftChange(
-                0,
-                "inference",
-                DraftChangeKey(f"inference:{candidate.id}"),
-                tuple(
-                    FieldOperation(uuid4(), key, FieldOperationKind.SET, value)
-                    for key, value in prefill.answers.items()
-                ),
+    context = ActingContext.for_actor(actor)
+    with context.scope():
+        source = replace(candidate.facts, category=selected, ai_generated=True)
+        prefill = await prefill_submission(source, forms, origin=SubmissionOrigin.DISCORD)
+        assert prefill.category is not None
+        manifest = await forms.manifest(locale=None, context=context)
+        stored = await drafts.create(
+            draft_id=candidate.id,
+            owner_account_id=candidate.owner_account_id,
+            category=prefill.category,
+            origin=SubmissionOrigin.DISCORD,
+            inferred=True,
+            door_expansion=source.details.door_expansion
+            if selected is BuildCategory.DOOR and isinstance(source.details, DoorDraftDetails)
+            else None,
+            source_messages=source.source_messages,
+            source_files=candidate.source_files,
+            source_issues=prefill.unresolved,
+            inference_run_id=candidate.run_id,
+            client_capabilities=frozenset(
+                field.required_capability
+                for field in manifest.fields_for(prefill.category)
+                if field.required_capability is not None
             ),
-            context=ActingContext.for_actor(actor),
             locale=None,
+            context=context,
         )
-    return await drafts.get_accessible(candidate.id, context=ActingContext.for_actor(actor))
+        if stored.snapshot.revision == 0:
+            await drafts.apply_change(
+                candidate.id,
+                DraftChange(
+                    0,
+                    "inference",
+                    DraftChangeKey(f"inference:{candidate.id}"),
+                    tuple(
+                        FieldOperation(uuid4(), key, FieldOperationKind.SET, value)
+                        for key, value in prefill.answers.items()
+                    ),
+                ),
+                context=context,
+                locale=None,
+            )
+        return await drafts.get_accessible(candidate.id, context=context)

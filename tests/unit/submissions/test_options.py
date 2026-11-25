@@ -2,6 +2,7 @@
 
 import pytest
 
+from squid.core.actors import ActingContext, Actor
 from squid.core.submissions.application import CheckedInFormManifestRegistry
 from squid.core.submissions.domain import ChoiceOption
 from squid.core.submissions.infrastructure.options import ApprovedSubmissionOptionCatalog, _content_revision
@@ -11,7 +12,7 @@ from squid.core.versions.domain import MinecraftVersion
 
 
 class FakeTags:
-    async def public_definitions(self) -> tuple[TagDefinition, ...]:
+    async def public_definitions(self, *, context: ActingContext) -> tuple[TagDefinition, ...]:
         return (
             _tag(1, "seamless", "Seamless", TagSemanticKind.PATTERN),
             _tag(2, "locational", "Locational", TagSemanticKind.RESTRICTION, restriction_type="door"),
@@ -28,7 +29,7 @@ class FakeVersions:
             MinecraftVersion("Bedrock", 1, 21, 50),
         )
 
-    async def list_all(self) -> tuple[MinecraftVersion, ...]:
+    async def list_all(self, *, context: ActingContext) -> tuple[MinecraftVersion, ...]:
         return self.versions
 
 
@@ -56,13 +57,18 @@ def _tag(
 async def test_option_catalog_uses_stable_keys_and_locale_independent_revision() -> None:
     catalog = ApprovedSubmissionOptionCatalog(FakeTags(), FakeVersions())
 
-    door = await catalog.options("approved_restrictions", "door", locale="en")
-    other = await catalog.options("approved_restrictions", "other", locale="en")
+    door = await catalog.options("approved_restrictions", "door", locale="en", context=ActingContext.direct(Actor()))
+    other = await catalog.options("approved_restrictions", "other", locale="en", context=ActingContext.direct(Actor()))
 
     assert [option.value for option in door.options] == ["directional", "locational"]
     assert [option.value for option in other.options] == ["directional", "locational"]
     assert door.revision > 0
-    assert door.revision == (await catalog.options("approved_restrictions", "door", locale="de")).revision
+    assert (
+        door.revision
+        == (
+            await catalog.options("approved_restrictions", "door", locale="de", context=ActingContext.direct(Actor()))
+        ).revision
+    )
 
 
 @pytest.mark.asyncio
@@ -70,9 +76,13 @@ async def test_option_catalog_publishes_revisioned_canonical_source_versions() -
     versions = FakeVersions()
     catalog = ApprovedSubmissionOptionCatalog(FakeTags(), versions)
 
-    first = await catalog.options("approved_source_versions", "other", locale="en")
+    first = await catalog.options(
+        "approved_source_versions", "other", locale="en", context=ActingContext.direct(Actor())
+    )
     versions.versions = (*versions.versions, MinecraftVersion("Java", 1, 21, 6))
-    updated = await catalog.options("approved_source_versions", "other", locale="en")
+    updated = await catalog.options(
+        "approved_source_versions", "other", locale="en", context=ActingContext.direct(Actor())
+    )
 
     assert [option.value for option in first.options] == [
         "Java 1.21.5",
@@ -97,7 +107,9 @@ async def test_checked_in_registry_resolves_only_exact_revision() -> None:
 @pytest.mark.asyncio
 async def test_unknown_option_source_is_rejected() -> None:
     with pytest.raises(ValueError, match="unknown submission option source"):
-        await ApprovedSubmissionOptionCatalog(FakeTags(), FakeVersions()).options("untrusted", "door", locale="en")
+        await ApprovedSubmissionOptionCatalog(FakeTags(), FakeVersions()).options(
+            "untrusted", "door", locale="en", context=ActingContext.direct(Actor())
+        )
 
 
 def test_option_revision_preserves_field_and_item_boundaries() -> None:

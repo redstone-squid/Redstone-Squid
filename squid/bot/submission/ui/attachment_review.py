@@ -19,6 +19,7 @@ from squid.bot.routes import AppRequest, AppRoutes, ScreenUnavailable
 from squid.bot.submission.attachment_display import attachment_issue_line
 from squid.bot.utils.permissions import allows
 from squid.config import attachment_review_archive_root
+from squid.core.actors import ActingContext
 from squid.core.builds.application import BuildEditPatch
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build
@@ -90,9 +91,9 @@ class AttachmentReview(sd.Screen[None]):
         screen = cls(request)
         builds = request.client.services.builds
         if build_id is None:
-            build_id = await builds.next_attachment_review(0)
+            build_id = await builds.next_attachment_review(0, context=ActingContext.current())
         if build_id is not None:
-            screen.build = await builds.get(build_id)
+            screen.build = await builds.get(build_id, context=ActingContext.current())
             if screen.build is None or screen.build.submission_status is not BuildStatus.APPROVED:
                 msg = "This build is unavailable for attachment review."
                 raise ScreenUnavailable(msg)
@@ -164,11 +165,11 @@ class AttachmentReview(sd.Screen[None]):
         builds = self.request.client.services.builds
         ids: set[int] = set()
         for message in self.build.source_messages:
-            ids.update(await builds.list_ids_for_source_message(message.id))
+            ids.update(await builds.list_ids_for_source_message(message.id, context=ActingContext.current()))
         current = self.build.id
         ids.discard(current)
         for identity in sorted(ids, key=lambda value: (value < current, value)):
-            candidate = await builds.get(identity)
+            candidate = await builds.get(identity, context=ActingContext.current())
             if candidate and candidate.submission_status is BuildStatus.APPROVED:
                 for index, issue in enumerate(candidate.extra_info.get("attachment_failures", [])):
                     if issue["attachment_id"] == attachment_id:
@@ -186,8 +187,10 @@ class AttachmentReview(sd.Screen[None]):
             await event.notice("Build edit permission is required.")
             return
         builds = self.request.client.services.builds
-        identity = await builds.next_attachment_review(self.build.id or 0 if self.build else 0)
-        self.build = await builds.get(identity) if identity else None
+        identity = await builds.next_attachment_review(
+            self.build.id or 0 if self.build else 0, context=ActingContext.current()
+        )
+        self.build = await builds.get(identity, context=ActingContext.current()) if identity else None
         self.index = 0
 
     async def _review(
@@ -199,7 +202,7 @@ class AttachmentReview(sd.Screen[None]):
             return
         builds = request.client.services.builds
         assert shown.id is not None
-        build = await builds.get(shown.id)
+        build = await builds.get(shown.id, context=ActingContext.current())
         if build is None or build.submission_status is not BuildStatus.APPROVED or shown.revision != build.revision:
             await event.notice("This build changed. Reopen attachment review.")
             return
@@ -265,7 +268,11 @@ class AttachmentReview(sd.Screen[None]):
         patch = BuildEditPatch.combine([patch, BuildEditPatch(extra_info=info)])
         actor = await request.client.actors.resolve(request, refresh=True)
         self.build = await builds.apply_edit(
-            actor, shown.id, patch, expected_revision=shown.revision, source="attachment_review_" + action
+            shown.id,
+            patch,
+            expected_revision=shown.revision,
+            source="attachment_review_" + action,
+            context=ActingContext.for_actor(actor),
         )
         self.index = 0
         await request.client.refresh_posts("build", str(self.build.id))

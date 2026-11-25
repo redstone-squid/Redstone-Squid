@@ -8,6 +8,7 @@ import anyio
 import pytest
 from anyio.lowlevel import checkpoint
 
+from squid.core.actors import ActingContext, Actor
 from squid.core.errors import JSONValue, ValidationError
 from squid.core.submissions.application import (
     CURRENT_SUBMISSION_PROTOCOL,
@@ -36,7 +37,7 @@ from squid_ui.content.text import Localization
 
 
 class FakeOptionCatalog:
-    async def options(self, source: str, category: str, *, locale: str | None) -> FormOptionSet:
+    async def options(self, source: str, category: str, *, locale: str | None, context: ActingContext) -> FormOptionSet:
         assert locale == "en"
         return FormOptionSet(source, category, 7, (ChoiceOption("slimestone", "Slimestone"),))
 
@@ -230,9 +231,9 @@ async def test_manifest_localization_is_isolated_between_tasks(monkeypatch: pyte
 async def test_dynamic_options_remain_category_aware() -> None:
     service = SubmissionFormService(FakeOptionCatalog(), CheckedInFormManifestRegistry())
 
-    option_set = await service.options("approved_patterns", "door", locale="en")
+    option_set = await service.options("approved_patterns", "door", locale="en", context=ActingContext.direct(Actor()))
 
-    assert (await service.manifest(locale="en")).category("door").code == "door"
+    assert (await service.manifest(locale="en", context=ActingContext.direct(Actor()))).category("door").code == "door"
     assert option_set == FormOptionSet(
         "approved_patterns",
         "door",

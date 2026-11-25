@@ -30,7 +30,7 @@ from squid.bot.submission.ui.inference import reopen_inference
 from squid.bot.submission.ui.saved_drafts import SavedDraftsScreen
 from squid.bot.submission.ui.source_preview import preview_build_source
 from squid.bot.utils.autocomplete import suggests
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.builds.domain import DoorOrientationLiteral
 from squid.core.builds.domain.models import BuildCategoryLiteral
 from squid.core.builds.errors import BuildNotFoundError
@@ -393,7 +393,7 @@ class BuildCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             await client.refresh_posts("build", str(build_id))
 
         await client.services.permissions.require(await actor(), BUILD_SUBMISSION_RECLASSIFY)
-        build = await client.services.builds.get(build_id)
+        build = await client.services.builds.get(build_id, context=ActingContext.current())
         if build is None:
             raise BuildNotFoundError(build_id)
         return BuildCategoryEditor(build, client.services.edits, actor, refresh)

@@ -42,7 +42,12 @@ class EditPolicy(BuildService):
 
     @override
     async def authorize_edit(
-        self, actor: Actor, build: Build, *, uow: BuildUnitOfWork | None = None, showcase_only: bool = False
+        self,
+        build: Build,
+        *,
+        uow: BuildUnitOfWork | None = None,
+        showcase_only: bool = False,
+        context: ActingContext,
     ) -> None:
         if not self.allowed:
             raise AuthorizationError

@@ -10,9 +10,10 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.builds.domain import BuildCategory
 from squid.core.builds.models import Build
+from squid.core.errors import AuthorizationError
 from squid.core.events.models import DomainEvent
 from squid.core.media.domain import MediaKind
 from squid.core.media.domain.jobs import MediaJobStatus
@@ -42,7 +43,7 @@ from tests.support.submission_targets import normalized_submission, seed_account
 
 
 class PreparedBuilds:
-    async def prepare(self, submission: NormalizedSubmission) -> Build:
+    async def prepare(self, submission: NormalizedSubmission, *, context: ActingContext) -> Build:
         return submission_build(BuildCategory.OTHER, submission.owner_account_id, draft_id=submission.source_draft_id)
 
 
@@ -104,9 +105,16 @@ async def test_executor_commits_build_receipt_and_event_once(
     executor = BuildSubmissionExecutor(
         PreparedBuilds(), uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     )
-    result = await executor.execute(claim, now=Instant.now())
+    with pytest.raises(AuthorizationError):
+        await executor.execute(
+            claim, now=Instant.now(), context=ActingContext.direct(Actor(account_id=claim.requested_by_account_id))
+        )
+    result = await executor.execute(claim, now=Instant.now(), context=ActingContext.worker("submission-finalization"))
     assert isinstance(result, FinalizedBuild)
-    assert await executor.execute(claim, now=Instant.now()) is None
+    assert (
+        await executor.execute(claim, now=Instant.now(), context=ActingContext.worker("submission-finalization"))
+        is None
+    )
     async with migrated_session_factory() as session:
         receipt = await session.get(SubmissionFinalizationResult, claim.job_id)
         assert receipt is not None
@@ -141,7 +149,7 @@ async def test_receipt_failure_rolls_back_build_and_events(
     with monkeypatch.context() as patch:
         patch.setattr(commit_module.PostgresFinalizationJobRepository, "_complete", fail_receipt)
         with pytest.raises(RuntimeError, match="receipt unavailable"):
-            await executor.execute(claim, now=Instant.now())
+            await executor.execute(claim, now=Instant.now(), context=ActingContext.worker("submission-finalization"))
     async with migrated_session_factory() as session:
         assert await session.scalar(select(func.count()).select_from(Build)) == 0
         assert (
@@ -160,7 +168,10 @@ async def test_receipt_failure_rolls_back_build_and_events(
     )
     assert job is not None
     assert job.status is FinalizationJobStatus.CLAIMED
-    assert isinstance(await executor.execute(claim, now=Instant.now()), FinalizedBuild)
+    assert isinstance(
+        await executor.execute(claim, now=Instant.now(), context=ActingContext.worker("submission-finalization")),
+        FinalizedBuild,
+    )
 
 
 async def test_reclaimed_worker_cannot_create_a_build(
@@ -174,10 +185,16 @@ async def test_reclaimed_worker_cannot_create_a_build(
     executor = BuildSubmissionExecutor(
         PreparedBuilds(), uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     )
-    assert await executor.execute(claim, now=Instant.now()) is None
+    assert (
+        await executor.execute(claim, now=Instant.now(), context=ActingContext.worker("submission-finalization"))
+        is None
+    )
     async with migrated_session_factory() as session:
         assert await session.scalar(select(func.count()).select_from(Build)) == 0
-    assert isinstance(await executor.execute(replacement, now=Instant.now()), FinalizedBuild)
+    assert isinstance(
+        await executor.execute(replacement, now=Instant.now(), context=ActingContext.worker("submission-finalization")),
+        FinalizedBuild,
+    )
 
 
 async def test_staff_permission_is_rechecked_after_build_preparation(
@@ -225,9 +242,9 @@ async def test_staff_permission_is_rechecked_after_build_preparation(
 
     class RevokingPreparation(PreparedBuilds):
         @override
-        async def prepare(self, submission: NormalizedSubmission) -> Build:
+        async def prepare(self, submission: NormalizedSubmission, *, context: ActingContext) -> Build:
             permissions.allowed = False
-            return await super().prepare(submission)
+            return await super().prepare(submission, context=context)
 
     drafts = SubmissionDraftService(
         CheckedInFormManifestRegistry(),
@@ -237,7 +254,7 @@ async def test_staff_permission_is_rechecked_after_build_preparation(
     executor = BuildSubmissionExecutor(
         RevokingPreparation(), drafts=drafts, uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     )
-    result = await executor.execute(claim, now=Instant.now())
+    result = await executor.execute(claim, now=Instant.now(), context=ActingContext.worker("submission-finalization"))
     assert isinstance(result, BuildSubmissionRejected)
     assert result.issues[0].reason is SubmissionAttentionReason.PERMISSION_REVOKED
     async with migrated_session_factory() as session:
@@ -314,7 +331,7 @@ async def test_source_messages_commit_with_build_and_survive_run_retention(
     builds = partial(SqlAlchemyUnitOfWork, sessions)
     result = await BuildSubmissionExecutor(
         PreparedBuilds(), uow_factory=partial(SqlAlchemyUnitOfWork, sessions)
-    ).execute(claim, now=Instant.now())
+    ).execute(claim, now=Instant.now(), context=ActingContext.worker("submission-finalization"))
     assert isinstance(result, FinalizedBuild)
     saved = await transact(builds, lambda uow: uow.builds.get_by_id(result.build_id))
     assert saved is not None
@@ -329,7 +346,7 @@ async def test_executor_recovers_a_loaded_source_build(
 ) -> None:
     claim = await claimed_submission(migrated_session_factory)
     repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
-    existing = await PreparedBuilds().prepare(claim.payload)
+    existing = await PreparedBuilds().prepare(claim.payload, context=ActingContext.direct(Actor()))
     await transact(
         repository,
         lambda uow: uow.builds.save(existing),
@@ -337,7 +354,7 @@ async def test_executor_recovers_a_loaded_source_build(
     )
 
     class ExistingBuilds:
-        async def prepare(self, submission: NormalizedSubmission) -> Build:
+        async def prepare(self, submission: NormalizedSubmission, *, context: ActingContext) -> Build:
             loaded = await transact(
                 repository, lambda uow: uow.builds.get_by_source_submission_draft_id(submission.source_draft_id)
             )
@@ -347,7 +364,7 @@ async def test_executor_recovers_a_loaded_source_build(
     executor = BuildSubmissionExecutor(
         ExistingBuilds(), uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     )
-    result = await executor.execute(claim, now=Instant.now())
+    result = await executor.execute(claim, now=Instant.now(), context=ActingContext.worker("submission-finalization"))
     assert isinstance(result, FinalizedBuild)
     assert result.build_id == existing.id
     async with migrated_session_factory() as session:

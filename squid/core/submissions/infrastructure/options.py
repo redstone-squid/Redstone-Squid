@@ -5,7 +5,7 @@ import json
 from collections.abc import Sequence
 from typing import Protocol, override
 
-from squid.core.actors import ActingContext
+from squid.core.actors import ActingContext, application_operation
 from squid.core.submissions.application import FormOptionCatalog, FormOptionSet
 from squid.core.submissions.domain import ChoiceOption
 from squid.core.tags.domain import TagSemanticKind, TagValueType
@@ -39,12 +39,14 @@ class ApprovedSubmissionOptionCatalog(FormOptionCatalog):
         self._versions = versions
 
     @override
+    @application_operation
     async def options(
         self,
         source: str,
         category: str,
         *,
         locale: str | None,
+        context: ActingContext,
     ) -> FormOptionSet:
         """Return approved options and a revision derived from their values and labels.
 

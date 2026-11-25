@@ -7,7 +7,7 @@ from uuid import UUID, uuid4, uuid5
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.edits.application import EditUnitOfWork
 from squid.core.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit, Revision, require_revision
 from squid.core.errors import JSONValue, ValidationError
@@ -115,7 +115,7 @@ class DraftAnswersEdit:
         current = await self._drafts.get_accessible_in(uow, UUID(command.expected[0].target.key), actor)
         revision = require_revision(command.expected[0], current.snapshot.revision)
         change = answer_change(command, revision.value)
-        candidate = await self._drafts.validate_change(current, change, locale=None)
+        candidate = await self._drafts.validate_change(current, change, locale=None, context=ActingContext.current())
         fields = tuple(operation.field_id for operation in change.operations)
         return PreparedAnswers(
             captured_answers(current.snapshot.answers, fields),

@@ -42,7 +42,7 @@ class Drafts:
             )
         return self.current
 
-    async def apply_change(self, identifier: object, actor: Actor, change: DraftChange, **kwargs: Any) -> None:
+    async def apply_change(self, identifier: object, change: DraftChange, **kwargs: Any) -> None:
         assert self.current is not None
         self.current = replace(self.current, snapshot=self.current.snapshot.apply(change))
         self.changes += 1
@@ -54,10 +54,10 @@ class Drafts:
 
 
 class Forms:
-    async def manifest(self, *, locale: str | None) -> object:
+    async def manifest(self, *, locale: str | None, context: ActingContext) -> object:
         return build_submission_manifest()
 
-    async def options(self, source: str, category: str, *, locale: str | None) -> FormOptionSet:
+    async def options(self, source: str, category: str, *, locale: str | None, context: ActingContext) -> FormOptionSet:
         return FormOptionSet(source, category, revision=1, options=())
 
 

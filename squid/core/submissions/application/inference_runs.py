@@ -7,14 +7,14 @@ from uuid import UUID, uuid5
 
 import anyio
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, Actor, application_operation
 from squid.core.artifacts.application import ArtifactStore
 from squid.core.builds.application.inference import BuildInferenceInput, BuildInferenceService, InlineImage
 from squid.core.builds.domain import BuildInput
 from squid.core.errors import AccountRequiredError, AuthorizationError, ConflictError, JSONValue, NotFoundError
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.application.ports import PermissionUnitOfWork
-from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
+from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT, BUILD_SUBMISSION_RECALC
 from squid.core.submissions.domain.source_files import SubmissionSourceFile
 from squid.core.unit_of_work import UnitOfWorkFactory
 from squid.core.worker_context import worker_scope
@@ -106,6 +106,7 @@ class SubmissionInferenceRuns:
         self._capacity = capacity
         self._permissions = permissions
 
+    @application_operation
     async def infer(
         self,
         run_id: UUID,
@@ -116,6 +117,7 @@ class SubmissionInferenceRuns:
         reasoning_effort: str | None = None,
         source_files: tuple[SubmissionSourceFile, ...] = (),
         purpose: Literal["submission", "recalculation"] = "submission",
+        context: ActingContext,
     ) -> tuple[InferenceCandidate, ...]:
         """Retain inputs, run inference, and save candidates under a worker claim.
 
@@ -143,6 +145,12 @@ class SubmissionInferenceRuns:
             ],
         }
         async with self._uow_factory() as uow:
+            if purpose == "recalculation":
+                if self._permissions is None:
+                    raise AuthorizationError
+                await self._permissions.require(context.effective, BUILD_SUBMISSION_RECALC, uow=uow)
+            elif context.effective.account_id != owner:
+                await self._require_staff(uow, context.effective)
             claim = await uow.inference_runs.begin(run_id, owner, inputs, capacity=self._capacity)
             await uow.commit()
         if claim.token is None:
@@ -153,7 +161,9 @@ class SubmissionInferenceRuns:
                     await self._artifacts.put(
                         f"submission-inference/{run_id}/{index}", image.data, content_type=image.content_type
                     )
-                drafts = await self._inference.infer(bundle, model=model, reasoning_effort=reasoning_effort)
+                drafts = await self._inference.infer(
+                    bundle, model=model, reasoning_effort=reasoning_effort, context=context
+                )
                 async with self._uow_factory() as uow:
                     result = await uow.inference_runs.complete(run_id, claim.token, tuple(drafts))
                     await uow.commit()
@@ -201,6 +211,7 @@ class SubmissionInferenceRuns:
                 model=model,
                 reasoning_effort=reasoning_effort,
                 source_files=self._codec.decode_source_files(inputs.get("source_files", [])),
+                context=context,
             )
 
     async def get(self, run_id: UUID, *, context: ActingContext) -> tuple[InferenceCandidate, ...]:
@@ -233,7 +244,8 @@ class SubmissionInferenceRuns:
                     await self._require_staff(uow, actor)
                 return await uow.inference_runs.list_active(None if inbox else actor.account_id)
 
-    async def public_status(self, run_id: UUID) -> InferenceStatus | None:
+    @application_operation
+    async def public_status(self, run_id: UUID, *, context: ActingContext) -> InferenceStatus | None:
         """Read minimal status for the source-channel reconciler without exposing inferred facts."""
         async with self._uow_factory() as uow:
             return await uow.inference_runs.public_status(run_id)

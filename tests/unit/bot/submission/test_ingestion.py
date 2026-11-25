@@ -50,6 +50,7 @@ class InferenceRecorder(SubmissionInferenceRuns):
         reasoning_effort: str | None = None,
         source_files: tuple[SubmissionSourceFile, ...] = (),
         purpose: Literal["submission", "recalculation"] = "submission",
+        context: ActingContext,
     ) -> tuple[InferenceCandidate, ...]:
         return await self.infer_calls(
             run_id,

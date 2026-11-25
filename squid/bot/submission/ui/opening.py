@@ -7,7 +7,7 @@ import squid_ui.ext.discord as sd
 from squid.bot.submission.build_card import render_build_card
 from squid.bot.submission.ui.build_edit import BuildEditScreen, BuildEditWorkspace
 from squid.bot.ui import error_node, tr
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.builds.application import BuildService
 from squid.core.builds.domain import EditAccess
 from squid.core.builds.models import Build
@@ -43,7 +43,8 @@ async def prepare_build_editor(
 
     # The editor keeps the scope it opened with; losing full access closes it rather than narrowing it.
     scope = await access(build)
-    is_moderator = (await client.services.permissions.check(await actor(), BUILD_SUBMISSION_EDIT)).allowed
+    context = ActingContext.for_actor(await actor())
+    is_moderator = (await client.services.permissions.check(context.effective, BUILD_SUBMISSION_EDIT)).allowed
 
     async def authorize() -> bool:
         current = await access(build if prepared is None else prepared.build)
@@ -61,11 +62,13 @@ async def prepare_build_editor(
         await client.refresh_posts("build", str(build_id))
 
     forms = client.services.submission_forms
-    manifest = await forms.edit_manifest(locale=None)
+    manifest = await forms.edit_manifest(locale=None, context=context)
     category = build.category.value.lower()
 
     async def load_options(source: str) -> tuple[ChoiceOption, ...]:
-        return (await forms.options(source, category, locale=None)).options
+        return (
+            await forms.options(source, category, locale=None, context=ActingContext.for_actor(await actor()))
+        ).options
 
     # Load every catalogue now: the restriction and pattern catalogues decide which of the build's
     # names are resolved, and the others label its saved answers in the overview.
