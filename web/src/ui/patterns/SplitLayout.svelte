@@ -1,17 +1,17 @@
 <script lang="ts">
   import PanelRight from "@lucide/svelte/icons/panel-right";
   import X from "@lucide/svelte/icons/x";
-  import type { LucideIcon } from "@lucide/svelte";
   import type { Snippet } from "svelte";
   import Button from "@/ui/actions/Button.svelte";
   import { cn } from "@/ui/cn";
+  import { triggerButtonProps, type OverlayTrigger } from "@/ui/overlays/props";
 
   /**
    * A sidebar beside the main content, such as filters or section navigation. It sits on
    * `side` once the layout is wide enough, measured on the layout itself, not the window.
    *
    * When narrow, `collapse="stack"` puts the sidebar above the content, and `"sheet"` hides it
-   * behind a button named `triggerLabel` that opens it as a panel from the screen edge. The
+   * behind a `trigger` button, named `sidebarLabel` by default, that opens it as a panel from the screen edge. The
    * panel is a native popover, so it works without JavaScript, closes on Escape or an outside
    * click, and is the same markup as the wide sidebar: its fields keep their ids and values.
    * Give the sheet a `closeLabel`.
@@ -25,8 +25,7 @@
     /** Keeps the wide sidebar in view while the content scrolls. */
     sticky?: boolean;
     collapse?: "stack" | "sheet";
-    triggerLabel?: string;
-    triggerIcon?: LucideIcon;
+    trigger?: OverlayTrigger;
     closeLabel?: string;
     class?: string;
   };
@@ -37,8 +36,7 @@
     side = "start",
     sticky = false,
     collapse = "stack",
-    triggerLabel = sidebarLabel,
-    triggerIcon = PanelRight,
+    trigger,
     closeLabel = "",
     class: className,
   }: Props = $props();
@@ -64,11 +62,13 @@
       )}
     >
       {#if collapse === "sheet"}
+        {@const button = trigger ?? { label: sidebarLabel }}
         <Button
+          icon={PanelRight}
+          {...triggerButtonProps(button)}
           class="@3xl:hidden"
-          icon={triggerIcon}
           popovertarget={`${id}-sheet`}
-          aria-controls={`${id}-sheet`}>{triggerLabel}</Button
+          aria-controls={`${id}-sheet`}>{button.label}</Button
         >
         <!-- Follows its button directly, so browsers add no implicit aria-details. -->
         <div

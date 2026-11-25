@@ -239,7 +239,7 @@
     <Variant label={m.storyInASplitlayoutSheet()}>
       <SplitLayout
         sidebarLabel={m.storyFilters()}
-        triggerLabel={m.storyFiltersTwo()}
+        trigger={{ label: m.storyFiltersTwo() }}
         closeLabel={m.storyCloseFilters()}
         collapse="sheet"
       >
@@ -602,7 +602,7 @@
   <Variant label={m.storySheetEndSticky()}>
     <SplitLayout
       sidebarLabel={m.storyBuildFilters()}
-      triggerLabel={m.storyFiltersTwo()}
+      trigger={{ label: m.storyFiltersTwo() }}
       closeLabel={m.storyCloseFilters()}
       collapse="sheet"
       side="end"

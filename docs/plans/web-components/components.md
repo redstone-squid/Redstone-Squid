@@ -77,7 +77,7 @@ The `src/ui` primitives and patterns, the feature components built from them, an
 
 - _Purpose:_ a sidebar plus main area.
 - _API:_ `sidebar` snippet, `children`, `sidebarLabel`, `side` (start or end), `sticky`, `collapse` of `sheet | stack`.
-  - `collapse="sheet"` puts the sidebar in a `Sheet` on mobile, opened by a trigger with `triggerLabel`. Without JS, the sheet falls back to `<details>` above the content.
+  - `collapse="sheet"` puts the sidebar in a `Sheet` on mobile, opened by its `trigger` (an `OverlayTrigger`, named `sidebarLabel` by default).
 - _Users:_ P2, P4, P7, P12 (filters), S2 (section nav), A2–A7 (account nav), X1–X8 (admin nav), and the workbench.
 
 #### Text and content
