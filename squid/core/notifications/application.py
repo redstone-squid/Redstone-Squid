@@ -1,6 +1,6 @@
 """Notification preference, subscription, and inbox orchestration."""
 
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
@@ -23,7 +23,7 @@ from squid.core.permissions.application.services import PermissionService
 from squid.core.permissions.domain.catalogue import ACCOUNT_SELF_READ, BUILD_SUBMISSION_VIEW_PENDING
 from squid.core.settings.domain.runtime import RuntimeSettings
 from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
-from squid.core.worker_context import worker_scope
+from squid.core.worker_context import WorkerOperation, worker_scope
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,7 +94,7 @@ class NotificationService:
         uow_factory: UnitOfWorkFactory[NotificationUnitOfWork],
         permissions: PermissionService,
         retention_days: int = 90,
-        runtime_settings: Callable[[], Awaitable[RuntimeSettings]] | None = None,
+        runtime_settings: WorkerOperation[RuntimeSettings] | None = None,
     ) -> None:
         if retention_days < 1:
             msg = tr(t"notifications-retention-days-positive = retention_days must be positive")
@@ -188,15 +188,15 @@ class NotificationService:
                 id_of=lambda item: item.id,
             )
 
-    @application_operation
     async def materialize(self, event: DomainEvent, *, context: ActingContext) -> None:
         """Create eligible recipients' stored notifications and queue their DMs.
 
         Existing source keys are reused when the event is delivered again.
         """
-        async with self._uow_factory() as uow:
-            await uow.notifications.materialize(event)
-            await uow.commit()
+        with worker_scope(context):
+            async with self._uow_factory() as uow:
+                await uow.notifications.materialize(event)
+                await uow.commit()
 
     async def cleanup(self, *, context: ActingContext) -> int:
         """Remove expired inbox items and return their count.
@@ -206,7 +206,7 @@ class NotificationService:
         """
         with worker_scope(context):
             retention_days = (
-                (await self._runtime_settings()).notification_retention_days
+                (await self._runtime_settings(context=context)).notification_retention_days
                 if self._runtime_settings is not None
                 else self._retention_days
             )

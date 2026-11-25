@@ -84,7 +84,7 @@ async def update_runtime_settings(
         context=caller.context(),
     )
     if result.receipt is None:
-        settings, revision = await services.settings.runtime_snapshot(context=caller.context())
+        settings, revision = await services.settings.runtime_snapshot(context=caller.context(), for_edit=True)
     else:
         settings = RuntimeSettings.model_validate(result.receipt.after.unpack())
         revision = result.outcome.revisions[0].value

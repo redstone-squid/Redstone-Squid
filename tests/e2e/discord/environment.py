@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from dataclasses import replace
 from functools import partial
 from typing import override
+from unittest.mock import create_autospec
 
 import discord
 import pytest
@@ -11,6 +12,7 @@ from discord.ext import commands
 
 from squid.bot.app import RedstoneSquid
 from squid.bot.extensions import Extension, ExtensionManager
+from squid.core.permissions.application.services import PermissionService
 from squid.core.settings.application import SettingsService
 from squid.runtime import BotServices
 from tests.support.services import bot_services, is_configured
@@ -33,7 +35,10 @@ async def command_environment(
 ) -> AsyncIterator[tuple[RedstoneSquid, simcord.Env]]:
     services = services or bot_services()
     if not is_configured(services.settings):
-        settings = SettingsService(uow_factory=partial(FakeSettingsUnitOfWork, settings_state()))
+        settings = SettingsService(
+            permissions=create_autospec(PermissionService, instance=True),
+            uow_factory=partial(FakeSettingsUnitOfWork, settings_state()),
+        )
         services = replace(services, settings=settings)
     bot = CommandTestBot(services, development_mode=development_mode)
     bot.extension_manager = ExtensionManager(extensions)

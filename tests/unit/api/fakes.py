@@ -60,10 +60,6 @@ from squid.core.minecraft_auth.domain.models import (
 from squid.core.minecraft_auth.errors import InvalidChallengeError, InvalidInstallationCredentialError
 from squid.core.minecraft_auth.models import PaperInstallation, PlayerAuthorizationChallenge
 from squid.core.notifications import NotificationPreferences, NotificationService
-from squid.core.notifications.domain import (
-    DEFAULT_INBOX_VISIBILITY,
-    InboxVisibility,
-)
 from squid.core.notifications.models import InboxNotification, NotificationSubscription
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector
 from squid.core.permissions.application import PermissionService, SubjectRecords
@@ -256,12 +252,12 @@ class MockBuilds(BuildService):
     @override
     async def apply_edit(
         self,
-        actor: Actor,
         build_id: int,
         patch: BuildEditPatch,
         *,
         expected_revision: int | None = None,
         source: str = "build_edit",
+        context: ActingContext,
     ) -> Build:
         raise BuildNotFoundError(build_id)
 
@@ -498,7 +494,7 @@ class MockVotes(VoteService):
         """Hold no vote sessions."""
 
     @override
-    async def get_session(self, vote_session_id: int) -> VoteSessionSnapshot | None:
+    async def get_session(self, vote_session_id: int, *, context: ActingContext) -> VoteSessionSnapshot | None:
         return None
 
 
@@ -507,7 +503,7 @@ class MockRangePublication(RangePublicationService):
         pass
 
     @override
-    async def get(self, query_id: int) -> RangePublication | None:
+    async def get(self, query_id: int, *, context: ActingContext) -> RangePublication | None:
         return None
 
 
@@ -516,7 +512,7 @@ class MockRecords(RecordService):
         """Publish no records."""
 
     @override
-    async def get(self, result_id: int) -> PublishedRecordResult | None:
+    async def get(self, result_id: int, *, context: ActingContext) -> PublishedRecordResult | None:
         return None
 
     @override
@@ -528,6 +524,7 @@ class MockRecords(RecordService):
         page_size: int = 20,
         resolved_only: bool = False,
         version_scope: VersionScope | None = None,
+        context: ActingContext,
     ) -> Page[PublishedRecordResult]:
         return cast(Page[PublishedRecordResult], _EMPTY_PAGE)
 
@@ -546,18 +543,18 @@ class MockSubmissionForms(SubmissionFormService):
         """Serve the built-in manifest without a tag repository."""
 
     @override
-    async def manifest(self, *, locale: str | None):
+    async def manifest(self, *, locale: str | None, context: ActingContext):
         return build_submission_manifest(locale)
 
     @override
-    async def manifest_revision(self, schema_id: str, revision: int, *, locale: str | None):
+    async def manifest_revision(self, schema_id: str, revision: int, *, locale: str | None, context: ActingContext):
         manifest = build_submission_manifest(locale)
         if manifest.schema_id == schema_id and manifest.revision == revision:
             return manifest
         return None
 
     @override
-    async def options(self, source: str, category: str, *, locale: str | None) -> FormOptionSet:
+    async def options(self, source: str, category: str, *, locale: str | None, context: ActingContext) -> FormOptionSet:
         del locale
         return FormOptionSet(source, category, 1, ())
 
@@ -591,21 +588,20 @@ class MockNotifications(NotificationService):
         """Hold no repository; preferences are computed per call."""
 
     @override
-    async def preferences(self, account_id: int) -> NotificationPreferences:
-        return NotificationPreferences(account_id=account_id, consent_pending=True)
+    async def preferences(self, *, context: ActingContext) -> NotificationPreferences:
+        return NotificationPreferences(account_id=context.effective.require_account_id(), consent_pending=True)
 
     @override
-    async def subscriptions(self, account_id: int) -> Sequence[NotificationSubscription]:
+    async def subscriptions(self, *, context: ActingContext) -> Sequence[NotificationSubscription]:
         return ()
 
     @override
     async def inbox(
         self,
-        account_id: int,
         *,
+        context: ActingContext,
         selector: PageSelector = FIRST_PAGE,
         page_size: int = 20,
-        visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY,
     ) -> Page[InboxNotification]:
         return cast(Page[InboxNotification], _EMPTY_PAGE)
 
@@ -643,7 +639,7 @@ class MockSubmissionDrafts(SubmissionDraftService):
         """Hold no repository; nothing here reaches one."""
 
     @override
-    async def list_active(self, account_id: int, *, limit: int = 10) -> tuple[StoredDraft, ...]:
+    async def list_active(self, account_id: int, *, limit: int = 10, context: ActingContext) -> tuple[StoredDraft, ...]:
         return ()
 
     @override
@@ -657,7 +653,7 @@ class MockSubmissionDrafts(SubmissionDraftService):
         raise DraftNotFoundError(draft_id)
 
     @override
-    async def delete(self, draft_id: UUID, account_id: int) -> None:
+    async def delete(self, draft_id: UUID, account_id: int, *, context: ActingContext) -> None:
         raise DraftNotFoundError(draft_id)
 
 

@@ -21,6 +21,7 @@ from squid.core.notifications.edits import (
 )
 from squid.core.notifications.errors import NotificationSubscriptionNotFoundError
 from squid.core.permissions.application.services import PermissionService
+from squid.core.permissions.domain.catalogue import ACCOUNT_SELF_READ, BUILD_SUBMISSION_VIEW_PENDING
 from squid.core.settings.domain.runtime import RuntimeSettings
 from tests.support.delivery_uow import NotificationUnitOfWork
 from tests.support.settings import RuntimeSettingsStub
@@ -90,3 +91,19 @@ async def test_cleanup_reads_retention_each_time() -> None:
     settings.value = RuntimeSettings(notification_retention_days=7)
     assert await service.cleanup(context=ActingContext.worker("test-worker")) == 1
     assert repository.days == [90, 7]
+
+
+@pytest.mark.parametrize("staff", [True, False])
+async def test_inbox_checks_the_reader_and_filters_staff_rows(staff: bool) -> None:
+    repository = AsyncMock(spec=NotificationRepository)
+    repository.list_inbox.return_value = ()
+    repository.count_inbox.return_value = 0
+    permissions = AsyncMock(spec=PermissionService)
+    permissions.check.return_value.allowed = staff
+    service = NotificationService(permissions=permissions, uow_factory=lambda: NotificationUnitOfWork(repository))
+    context = ActingContext.direct(Actor(account_id=7))
+    await service.inbox(context=context)
+    permissions.require.assert_awaited_once_with(context.effective, ACCOUNT_SELF_READ)
+    permissions.check.assert_awaited_once_with(context.effective, BUILD_SUBMISSION_VIEW_PENDING)
+    assert repository.list_inbox.await_args.args == (7,)
+    assert repository.list_inbox.await_args.kwargs["visibility"].include_staff is staff

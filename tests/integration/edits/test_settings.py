@@ -40,12 +40,12 @@ async def test_competing_settings_edits_have_one_winner_and_a_reversible_receipt
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
-    settings = SettingsService(uow_factory=factory)
-    original, revision = await settings.runtime_snapshot(context=ActingContext.direct(Actor()))
+    settings = SettingsService(uow_factory=factory, permissions=PermissionService(uow_factory=factory))
+    actor = await owner(migrated_session_factory)
+    original, revision = await settings.runtime_snapshot(context=ActingContext.direct(actor))
     executor = EditExecutor(
         factory, {RUNTIME_EDIT: RuntimeSettingsEdit(PermissionService(uow_factory=factory), original)}
     )
-    actor = await owner(migrated_session_factory)
     results: list[EditResult] = []
     conflicts: list[RevisionConflictError] = []
 
@@ -65,7 +65,7 @@ async def test_competing_settings_edits_have_one_winner_and_a_reversible_receipt
     assert receipt.revisions[0].value == revision + 1
     reverted = await executor.execute(receipt.undo(receipt.revisions), context=ActingContext.direct(actor))
     assert reverted.receipt is not None
-    current, current_revision = await settings.runtime_snapshot(context=ActingContext.direct(Actor()))
+    current, current_revision = await settings.runtime_snapshot(context=ActingContext.direct(actor))
     assert current == original
     assert current_revision == revision + 2
     async with migrated_session_factory() as session:
@@ -84,9 +84,10 @@ async def test_stale_orm_write_is_a_known_conflict_at_flush_or_commit(
     explicit_flush: bool,
 ) -> None:
     defaults = RuntimeSettings()
-    await SettingsService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)).get_runtime(
-        context=ActingContext.direct(Actor())
-    )
+    await SettingsService(
+        permissions=PermissionService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)),
+        uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory),
+    ).get_runtime(context=ActingContext.direct(Actor()))
     async with (
         SqlAlchemyUnitOfWork(migrated_session_factory) as first,
         SqlAlchemyUnitOfWork(migrated_session_factory) as second,
@@ -106,12 +107,12 @@ async def test_unconditional_settings_edits_serialize_and_preserve_other_fields(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
-    settings = SettingsService(uow_factory=factory)
-    original, revision = await settings.runtime_snapshot(context=ActingContext.direct(Actor()))
+    settings = SettingsService(uow_factory=factory, permissions=PermissionService(uow_factory=factory))
+    actor = await owner(migrated_session_factory)
+    original, revision = await settings.runtime_snapshot(context=ActingContext.direct(actor))
     executor = EditExecutor(
         factory, {RUNTIME_EDIT: RuntimeSettingsEdit(PermissionService(uow_factory=factory), original)}
     )
-    actor = await owner(migrated_session_factory)
     results: list[EditResult] = []
 
     async def edit(field: str) -> None:
@@ -125,7 +126,7 @@ async def test_unconditional_settings_edits_serialize_and_preserve_other_fields(
     async with anyio.create_task_group() as tasks:
         tasks.start_soon(edit, "welcome_enabled")
         tasks.start_soon(edit, "redstoner_enabled")
-    current, current_revision = await settings.runtime_snapshot(context=ActingContext.direct(Actor()))
+    current, current_revision = await settings.runtime_snapshot(context=ActingContext.direct(actor))
     assert not current.welcome_enabled
     assert not current.redstoner_enabled
     assert current_revision == revision + 2

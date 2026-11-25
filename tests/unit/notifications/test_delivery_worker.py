@@ -16,9 +16,11 @@ import squid_ui.ext.discord as sd
 from squid.bot import notifications_cog as notification_module
 from squid.bot.app import RedstoneSquid
 from squid.bot.notifications_cog import NotificationCog
+from squid.core.actors import ActingContext
 from squid.core.notifications import NotificationService, PendingNotificationDelivery
 from squid.core.notifications.application import NotificationRepository
 from squid.core.notifications.domain import NotificationKind
+from squid.core.permissions.application.services import PermissionService
 from tests.support.delivery_uow import NotificationUnitOfWork
 from tests.support.services import bot_services
 
@@ -95,7 +97,8 @@ async def worker(mocker: MockerFixture) -> AsyncIterator[DeliveryWorker]:
             "services",
             bot_services(
                 notifications=NotificationService(
-                    uow_factory=lambda: NotificationUnitOfWork(cast(NotificationRepository, repository))
+                    permissions=AsyncMock(spec=PermissionService),
+                    uow_factory=lambda: NotificationUnitOfWork(cast(NotificationRepository, repository)),
                 )
             ),
             create=True,
@@ -162,7 +165,7 @@ async def test_ambiguous_delivery_failure_is_retried_and_only_dead_letters_are_l
 async def test_delivery_claims_only_after_previous_send_settles(worker: DeliveryWorker, mocker: MockerFixture) -> None:
     attempts = 0
 
-    async def claim(*, limit: int) -> tuple[PendingNotificationDelivery, ...]:
+    async def claim(*, limit: int, context: ActingContext) -> tuple[PendingNotificationDelivery, ...]:
         nonlocal attempts
         assert limit == 1
         if attempts:
@@ -182,7 +185,7 @@ async def test_delivery_claims_only_after_previous_send_settles(worker: Delivery
 
 
 async def test_delivery_stops_at_batch_limit(worker: DeliveryWorker, mocker: MockerFixture) -> None:
-    async def claim(*, limit: int) -> tuple[PendingNotificationDelivery, ...]:
+    async def claim(*, limit: int, context: ActingContext) -> tuple[PendingNotificationDelivery, ...]:
         assert limit == 1
         worker.repository.status = "claimed"
         return (worker.repository.delivery,)

@@ -10,7 +10,7 @@ from whenever import Instant
 from squid.config import WorkerConfig
 from squid.core.actors import ActingContext
 from squid.core.builds.application import BuildService
-from squid.core.builds.history import BuildEditActor, HistoryOperation
+from squid.core.builds.history import HistoryOperation
 from squid.core.builds.models import Build
 from squid.core.events import DomainEvent, DomainEventDelivery, DomainEventService, UnsupportedEventVersionError
 from squid.core.events.dispatcher import DomainEventRunner
@@ -32,7 +32,7 @@ class VoteRecorder(VoteService):
         self.requested_ids: list[int] = []
 
     @override
-    async def get_session(self, vote_session_id: int) -> VoteSessionSnapshot:
+    async def get_session(self, vote_session_id: int, *, context: ActingContext) -> VoteSessionSnapshot:
         self.requested_ids.append(vote_session_id)
         return self.snapshot
 
@@ -47,11 +47,11 @@ class BuildRecorder(BuildService):
         self,
         build_id: int,
         *,
-        actor: BuildEditActor,
         source: str,
         operation: HistoryOperation = "moderation",
         correlation_kind: str | None = None,
         correlation_id: str | None = None,
+        context: ActingContext,
     ) -> Build:
         self.confirmed.append(build_id)
         return cast(Build, object())
@@ -61,11 +61,11 @@ class BuildRecorder(BuildService):
         self,
         build_id: int,
         *,
-        actor: BuildEditActor,
         source: str,
         operation: HistoryOperation = "moderation",
         correlation_kind: str | None = None,
         correlation_id: str | None = None,
+        context: ActingContext,
     ) -> Build:
         self.denied.append(build_id)
         return cast(Build, object())
@@ -208,8 +208,9 @@ async def test_notification_handler_accepts_current_account_keyed_build_event_ve
         )
     )
 
-    for event in events:
-        await handler.handle(event)
+    with ActingContext.worker("notifications").scope():
+        for event in events:
+            await handler.handle(event)
 
     assert notifications.materialized == list(events)
 
@@ -246,8 +247,10 @@ async def test_guild_voting_delivery_refreshes_current_configuration_and_checks_
     refresh = AsyncMock()
     handler = RefreshGuildVotingHandler(cast(VoteService, SimpleNamespace(refresh_configuration=refresh)))
     event = DomainEvent(event_type="guild.voting_changed", aggregate_kind="guild", aggregate_id=17)
-    await handler.handle(event)
-    refresh.assert_awaited_once_with(17)
+    context = ActingContext.worker("events.core")
+    with context.scope():
+        await handler.handle(event)
+    refresh.assert_awaited_once_with(17, context=context)
     event.schema_version = 2
     with pytest.raises(UnsupportedEventVersionError):
         await handler.handle(event)

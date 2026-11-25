@@ -264,7 +264,7 @@ class _ServiceGraph:
 
     @cached_property
     def build_queries(self) -> BuildQueryService:
-        return BuildQueryService(self.embedding_service, uow_factory=self.uow_factory)
+        return BuildQueryService(self.embedding_service, self.permissions, uow_factory=self.uow_factory)
 
     @cached_property
     def text_generator(self) -> OpenAITextGenerator:
@@ -284,7 +284,7 @@ class _ServiceGraph:
 
     @cached_property
     def settings(self) -> SettingsService:
-        return SettingsService(uow_factory=self.uow_factory)
+        return SettingsService(uow_factory=self.uow_factory, permissions=self.permissions)
 
     @cached_property
     def edits(self) -> EditExecutor[SqlAlchemyUnitOfWork]:
@@ -429,6 +429,7 @@ class _ServiceGraph:
             self.config.schematics,
             self.artifacts,
             self.schematic_jobs,
+            permissions=self.permissions,
             render_capable=True,
             uow_factory=self.uow_factory,
         )

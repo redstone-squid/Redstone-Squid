@@ -3,6 +3,7 @@
 from dataclasses import dataclass, fields
 from functools import partial
 from typing import Any, cast
+from unittest.mock import create_autospec
 
 import discord
 import pytest
@@ -12,6 +13,7 @@ import squid_ui.ext.discord as sd
 from squid.bot import i18n as bot_i18n
 from squid.bot.i18n import localization_for, localization_resolver, resolve_locale
 from squid.bot.ui import CHROME
+from squid.core.permissions.application.services import PermissionService
 from squid.core.settings.application import SettingsService
 from squid.core.settings.models import ServerSetting
 from squid.runtime import BotServices
@@ -22,7 +24,9 @@ from tests.support.settings import FakeSettingsUnitOfWork, settings_state
 
 def _settings_service(locale: str | None = None) -> SettingsService:
     rows = settings_state({1: ServerSetting(server_id=1, locale=locale)})
-    return SettingsService(uow_factory=partial(FakeSettingsUnitOfWork, rows))
+    return SettingsService(
+        permissions=create_autospec(PermissionService, instance=True), uow_factory=partial(FakeSettingsUnitOfWork, rows)
+    )
 
 
 @dataclass(frozen=True)

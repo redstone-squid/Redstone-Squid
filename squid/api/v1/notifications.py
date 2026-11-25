@@ -11,7 +11,7 @@ from litestar.di import NamedDependency, Provide
 from litestar.params import FromPath, HeaderParameter, JSONBody, SkipValidation
 
 from squid.api.contract import WEB, WEB_WRITE, browser_only, contract
-from squid.api.dependencies import Notifications, Permissions, Services, get_notifications, get_permissions
+from squid.api.dependencies import Notifications, Services, get_notifications
 from squid.api.errors import responses
 from squid.api.idempotency import edit_operation_id, reserve_edit_request
 from squid.api.pagination import (
@@ -32,7 +32,6 @@ from squid.api.v1.schemas.notifications import (
 )
 from squid.core.edits.domain import EditCommand, EditValues, Revision
 from squid.core.errors import AuthenticationError
-from squid.core.notifications import InboxVisibility
 from squid.core.notifications.edits import (
     INBOX_EDIT,
     PREFERENCES_EDIT,
@@ -43,7 +42,7 @@ from squid.core.notifications.edits import (
 )
 from squid.core.notifications.errors import NotificationSubscriptionNotFoundError
 from squid.core.notifications.models import InboxNotification
-from squid.core.permissions.domain.catalogue import ACCOUNT_SELF_READ, BUILD_SUBMISSION_VIEW_PENDING
+from squid.core.permissions.domain.catalogue import ACCOUNT_SELF_READ
 
 
 class InboxNotificationDTO(SQLAlchemyDTO[InboxNotification]):
@@ -54,16 +53,6 @@ class InboxNotificationDTO(SQLAlchemyDTO[InboxNotification]):
 
 
 UserCaller = NamedDependency[SkipValidation[Caller]]
-
-
-async def resolve_inbox_visibility(permissions: Permissions, caller: UserCaller) -> InboxVisibility:
-    """Resolve notification visibility once for one authenticated request."""
-    return InboxVisibility(
-        include_staff=await caller.allows(permissions, BUILD_SUBMISSION_VIEW_PENDING),
-    )
-
-
-InboxAccess = NamedDependency[SkipValidation[InboxVisibility]]
 
 
 @get(
@@ -78,7 +67,8 @@ InboxAccess = NamedDependency[SkipValidation[InboxVisibility]]
 async def get_preferences(notifications: Notifications, caller: UserCaller) -> Response[NotificationPreferencesDetail]:
     """Return channel preferences, with disabled defaults until privacy consent is accepted."""
     response_headers: dict[str, str] = {}
-    preferences = await notifications.preferences(_account_id(caller))
+    _account_id(caller)
+    preferences = await notifications.preferences(context=caller.context())
     response_headers["ETag"] = revision_etag(
         Revision(notification_target(preferences.account_id), preferences.revision)
     )
@@ -138,7 +128,8 @@ async def list_subscriptions(
 ) -> Response[list[NotificationSubscriptionDetail]]:
     """List enabled subscriptions owned by the caller."""
     response_headers: dict[str, str] = {}
-    snapshot = await notifications.editor_snapshot(_account_id(caller))
+    _account_id(caller)
+    snapshot = await notifications.editor_snapshot(context=caller.context())
     response_headers["ETag"] = revision_etag(
         Revision(notification_target(snapshot.preferences.account_id), snapshot.preferences.revision)
     )
@@ -200,7 +191,7 @@ async def create_subscription(
             status_code=status.HTTP_201_CREATED,
         )
     row, revision = await notifications.subscription_snapshot(
-        account_id,
+        context=caller.context(),
         kind=data.kind,
         subject_id=data.subject_id,
         record_filter=None if data.filter is None else data.filter.to_domain(),
@@ -263,21 +254,19 @@ async def delete_subscription(
     opt=contract(cli=browser_only()),
     status_code=200,
     guards=[requires(ACCOUNT_SELF_READ)],
-    dependencies={"visibility": Provide(resolve_inbox_visibility)},
 )
 async def list_inbox(
     notifications: Notifications,
     caller: UserCaller,
-    visibility: InboxAccess,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
     after_id: AfterIdParam = None,
     before_id: BeforeIdParam = None,
 ) -> Page[InboxNotification]:
     """List the caller's web-visible inbox, hiding staff items after access revocation."""
-    account_id = _account_id(caller)
+    _account_id(caller)
     selector = resolve_selector(offset=offset, after_id=after_id, before_id=before_id)
-    page = await notifications.inbox(account_id, selector=selector, page_size=page_size, visibility=visibility)
+    page = await notifications.inbox(context=caller.context(), selector=selector, page_size=page_size)
     return Page[InboxNotification].from_domain(page)
 
 
@@ -370,7 +359,6 @@ def _account_id(caller: Caller) -> int:
 router = Router(
     dependencies={
         "notifications": Provide(get_notifications, sync_to_thread=False),
-        "permissions": Provide(get_permissions, sync_to_thread=False),
     },
     path="/users/me/notifications",
     tags=["notifications"],

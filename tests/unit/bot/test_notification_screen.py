@@ -1,6 +1,5 @@
 """The notification preference and subscription workspace."""
 
-from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import cast, override
 from uuid import UUID
@@ -11,7 +10,7 @@ from whenever import Instant
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.notifications_view import NotificationPanel
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.notifications import (
     DEFAULT_INBOX_VISIBILITY,
     InboxVisibility,
@@ -45,20 +44,22 @@ class NotificationRecorder(NotificationService):
     def __init__(self) -> None:
         self.subscription_reads = 0
         self.subscribe_calls: list[SubscribeCall] = []
-        self.inbox_reads: list[InboxVisibility] = []
+        self.inbox_reads: list[Actor] = []
         self.read_changes: list[tuple[int, int, bool, InboxVisibility]] = []
 
     @override
-    async def editor_snapshot(self, account_id: int) -> NotificationEditorSnapshot:
-        return NotificationEditorSnapshot(await self.preferences(account_id), await self.subscriptions(account_id))
+    async def editor_snapshot(self, *, context: ActingContext) -> NotificationEditorSnapshot:
+        return NotificationEditorSnapshot(
+            await self.preferences(context=context), await self.subscriptions(context=context)
+        )
 
     @override
-    async def preferences(self, account_id: int) -> NotificationPreferences:
-        return NotificationPreferences(account_id, consent_pending=False)
+    async def preferences(self, *, context: ActingContext) -> NotificationPreferences:
+        return NotificationPreferences(context.effective.require_account_id(), consent_pending=False)
 
     @override
-    async def subscriptions(self, account_id: int) -> tuple[NotificationSubscription, ...]:
-        assert account_id == 7
+    async def subscriptions(self, *, context: ActingContext) -> tuple[NotificationSubscription, ...]:
+        assert context.effective.account_id == 7
         self.subscription_reads += 1
         return ()
 
@@ -88,13 +89,12 @@ class NotificationRecorder(NotificationService):
     @override
     async def inbox(
         self,
-        account_id: int,
         *,
+        context: ActingContext,
         selector: PageSelector = FIRST_PAGE,
         page_size: int = 20,
-        visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY,
     ) -> Page[InboxNotification]:
-        self.inbox_reads.append(visibility)
+        self.inbox_reads.append(context.effective)
         item = InboxNotification(
             id=3,
             kind=NotificationKind.BUILD_CONFIRMED,
@@ -133,7 +133,6 @@ class ScreenHarness:
 def make_screen(
     *,
     visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY,
-    visibility_resolver: Callable[[], Awaitable[InboxVisibility]] | None = None,
 ) -> ScreenHarness:
     notifications = NotificationRecorder()
 
@@ -146,8 +145,6 @@ def make_screen(
             edits=NotificationEditRecorder(notifications, visibility),
             actor=actor,
             account_id=7,
-            visibility=visibility,
-            visibility_resolver=visibility_resolver,
         ),
         notifications,
     )
@@ -249,28 +246,8 @@ async def test_inbox_items_can_be_marked_read_and_unread_without_typing_ids() ->
     with sl.runtime.transaction():
         await press(screen.inbox, "mark_selected_unread")
 
-    assert harness.notifications.inbox_reads == [visibility, visibility, visibility]
+    assert harness.notifications.inbox_reads == [Actor(account_id=7, discord_user_id=42)] * 3
     assert harness.notifications.read_changes == [(7, 3, True, visibility), (7, 3, False, visibility)]
-
-
-async def test_inbox_refresh_rechecks_staff_visibility() -> None:
-    refreshed = InboxVisibility()
-
-    async def resolve() -> InboxVisibility:
-        return refreshed
-
-    harness = make_screen(
-        visibility=InboxVisibility(include_staff=True),
-        visibility_resolver=resolve,
-    )
-    screen = harness.screen
-    await screen.on_load()
-
-    await choose(screen.inbox, "inbox", "3")
-    with sl.runtime.transaction():
-        await press(screen.inbox, "mark_selected_read")
-
-    assert harness.notifications.inbox_reads[-1] == refreshed
 
 
 async def test_mounted_inbox_updates_summary_without_undo() -> None:

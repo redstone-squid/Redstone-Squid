@@ -22,7 +22,7 @@ from squid.core.notifications.models import NotificationSubscription
 
 
 class NotificationRecorder(Protocol):
-    async def preferences(self, account_id: int) -> NotificationPreferences: ...
+    async def preferences(self, *, context: ActingContext) -> NotificationPreferences: ...
     async def set_preferences(
         self, account_id: int, *, web_enabled: bool, dm_enabled: bool
     ) -> NotificationPreferences: ...
@@ -55,7 +55,7 @@ class NotificationEditRecorder:
             case "notifications.preferences":
                 assert isinstance(values["web_enabled"], bool)
                 assert isinstance(values["dm_enabled"], bool)
-                old = await self.service.preferences(account_id)
+                old = await self.service.preferences(context=context)
                 before = EditValues.of({"web_enabled": old.web_enabled, "dm_enabled": old.dm_enabled})
                 await self.service.set_preferences(
                     account_id, web_enabled=values["web_enabled"], dm_enabled=values["dm_enabled"]

@@ -8,7 +8,7 @@ import pytest
 
 from squid.bot.admin_cog import Admin
 from squid.core.accounts.domain import IdentityProvider
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.edits.domain import EditValues, LatestRevision, Revision
 from squid.core.errors import AuthorizationError
 from squid.core.permissions.domain.catalogue import SETTINGS_RUNTIME_EDIT, SETTINGS_RUNTIME_VIEW
@@ -84,7 +84,8 @@ async def test_runtime_inspection_includes_json_type_constraints_and_example(mon
             services=SimpleNamespace(settings=SimpleNamespace(runtime_snapshot=AsyncMock(return_value=(settings, 7))))
         )
     )
-    result = await cast(Any, Admin)._runtime_settings(owner, SimpleNamespace(), "welcome_forward_chance")
+    with ActingContext.direct(Actor(account_id=17)).scope():
+        result = await cast(Any, Admin)._runtime_settings(owner, SimpleNamespace(), "welcome_forward_chance")
     rendered = str(result)
     assert '"type": "number"' in rendered
     assert '"minimum": 0' in rendered

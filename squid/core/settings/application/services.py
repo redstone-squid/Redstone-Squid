@@ -4,6 +4,8 @@ from collections.abc import Collection, Iterable, Mapping, Sequence
 from typing import cast
 
 from squid.core.actors import ActingContext, application_operation
+from squid.core.permissions.application.services import PermissionService
+from squid.core.permissions.domain.catalogue import SETTINGS_RUNTIME_EDIT, SETTINGS_RUNTIME_VIEW
 from squid.core.settings.application.edits import guild_snapshot
 from squid.core.settings.application.ports import GuildSettingsUnitOfWork
 from squid.core.settings.domain import Setting, SettingOptions
@@ -19,9 +21,11 @@ class SettingsService:
         self,
         *,
         uow_factory: UnitOfWorkFactory[GuildSettingsUnitOfWork],
+        permissions: PermissionService,
         runtime_defaults: RuntimeSettings | None = None,
     ) -> None:
         self._uow_factory = uow_factory
+        self._permissions = permissions
         self._runtime_defaults = runtime_defaults or RuntimeSettings()
 
     @application_operation
@@ -34,8 +38,9 @@ class SettingsService:
             return result
 
     @application_operation
-    async def runtime_snapshot(self, *, context: ActingContext) -> tuple[RuntimeSettings, int]:
-        """Read settings and the revision used to guard an editor's subsequent save."""
+    async def runtime_snapshot(self, *, context: ActingContext, for_edit: bool = False) -> tuple[RuntimeSettings, int]:
+        """Read a settings revision for inspection or the result of an authorized edit."""
+        await self._permissions.require(context.effective, SETTINGS_RUNTIME_EDIT if for_edit else SETTINGS_RUNTIME_VIEW)
         async with self._uow_factory() as uow:
             row = await uow.settings.runtime(self._runtime_defaults)
             result = RuntimeSettings.model_validate(row), row.revision

@@ -14,11 +14,10 @@ from squid.api.v1.notifications import (
     list_inbox,
     mark_read,
     mark_unread,
-    resolve_inbox_visibility,
     update_preferences,
 )
 from squid.api.v1.schemas.notifications import NotificationPreferenceUpdate, NotificationSubscriptionCreate
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext
 from squid.core.notifications import (
     DEFAULT_INBOX_VISIBILITY,
     InboxVisibility,
@@ -28,12 +27,8 @@ from squid.core.notifications import (
     SubscriptionKind,
     TagPredicate,
 )
-from squid.core.notifications.domain import NotificationKind
 from squid.core.notifications.models import InboxNotification, NotificationSubscription
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector
-from squid.core.permissions.application import PermissionService
-from squid.core.permissions.application.ports import PermissionUnitOfWork
-from squid.core.permissions.domain import CheckMode, Decision, PermissionCheck, PermissionNode, Reason
 from squid.runtime import ApiServices
 from tests.support.notification_edits import NotificationEditRecorder
 
@@ -47,11 +42,11 @@ class NotificationRecorder(NotificationService):
         self.inbox_result: Page[InboxNotification] = Page(items=(), total=0, next=None, prev=None)
         self.preference_updates: list[tuple[int, bool, bool]] = []
         self.subscription_calls: list[tuple[int, SubscriptionKind, UUID | None, RecordSubscriptionFilter | None]] = []
-        self.inbox_reads: list[tuple[int, PageSelector, int, InboxVisibility]] = []
+        self.inbox_reads: list[tuple[ActingContext, PageSelector, int]] = []
         self.read_changes: list[tuple[int, int, bool, InboxVisibility]] = []
 
     @override
-    async def preferences(self, account_id: int) -> NotificationPreferences:
+    async def preferences(self, *, context: ActingContext) -> NotificationPreferences:
         return self.preferences_result
 
     async def set_preferences(self, account_id: int, *, web_enabled: bool, dm_enabled: bool) -> NotificationPreferences:
@@ -73,13 +68,12 @@ class NotificationRecorder(NotificationService):
     @override
     async def inbox(
         self,
-        account_id: int,
         *,
+        context: ActingContext,
         selector: PageSelector = FIRST_PAGE,
         page_size: int = 20,
-        visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY,
     ) -> Page[InboxNotification]:
-        self.inbox_reads.append((account_id, selector, page_size, visibility))
+        self.inbox_reads.append((context, selector, page_size))
         return self.inbox_result
 
     async def mark_read(
@@ -91,23 +85,6 @@ class NotificationRecorder(NotificationService):
         self, account_id: int, notification_id: int, *, visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY
     ) -> None:
         self.read_changes.append((account_id, notification_id, False, visibility))
-
-
-class PermissionAnswer(PermissionService):
-    def __init__(self, allowed: bool) -> None:
-        self.allowed = allowed
-
-    @override
-    async def check(
-        self,
-        subject: Actor,
-        *nodes: PermissionNode | str,
-        uow: PermissionUnitOfWork | None = None,
-        mode: CheckMode = "all",
-    ) -> PermissionCheck:
-        return PermissionCheck(
-            tuple(Decision(str(node), allowed=self.allowed, reason=Reason.DEFAULT) for node in nodes), mode=mode
-        )
 
 
 async def test_channels_stay_off_until_they_are_explicitly_turned_on() -> None:
@@ -169,23 +146,10 @@ def test_empty_record_filter_is_rejected_at_the_api_boundary() -> None:
         NotificationSubscriptionCreate.model_validate({"kind": "record_filter", "filter": {}})
 
 
-@pytest.mark.parametrize("holds_node", [True, False])
-async def test_staff_inbox_access_follows_the_pending_submission_node(holds_node: bool) -> None:
-    """Pass the permission result into the inbox query on each read.
-
-    The recorder returns its supplied item even when staff visibility is false; this test
-    checks the query scope, while repository tests cover filtering.
-    """
+async def test_inbox_uses_the_authenticated_account() -> None:
     notifications = NotificationRecorder()
-    item = InboxNotification(
-        id=3, kind=NotificationKind.STAFF_BUILD_SUBMITTED, payload={"build_id": 42}, created_at=Instant.now()
-    )
-    notifications.inbox_result = Page(items=(item,), total=1, next=None, prev=None)
-    permissions = PermissionAnswer(holds_node)
-    visibility = await resolve_inbox_visibility(permissions, ACCOUNT)
-    page = await list_inbox.fn(notifications, ACCOUNT, visibility)
-    assert page.items[0].kind == "staff_build_submitted"
-    assert notifications.inbox_reads == [(7, PageSelector(), 20, InboxVisibility(include_staff=holds_node))]
+    await list_inbox.fn(notifications, ACCOUNT)
+    assert notifications.inbox_reads == [(ACCOUNT.context(), PageSelector(), 20)]
 
 
 async def test_read_and_unread_routes_share_the_resolved_visibility() -> None:

@@ -3,6 +3,7 @@
 from collections.abc import Sequence
 from typing import Protocol
 
+from squid.core.actors import ActingContext
 from squid.core.notifications.models import NotificationSubscription
 from squid.core.suggestions.application import Candidate
 from squid.core.suggestions.application.registry import SuggestionSource
@@ -12,7 +13,7 @@ from squid.core.suggestions.domain import SuggestionRequest, ValueType, Visibili
 class AccountSubscriptions(Protocol):
     """Read the subscriptions an account owns."""
 
-    async def subscriptions(self, account_id: int) -> Sequence[NotificationSubscription]: ...
+    async def subscriptions(self, *, context: ActingContext) -> Sequence[NotificationSubscription]: ...
 
 
 class SubscriptionProvider:
@@ -36,7 +37,7 @@ class SubscriptionProvider:
                 description=_target(subscription),
                 kind="subscription",
             )
-            for subscription in await self._notifications.subscriptions(account_id)
+            for subscription in await self._notifications.subscriptions(context=ActingContext.for_actor(request.viewer))
         )
 
 

@@ -25,7 +25,7 @@ async def test_guild_child_writes_advance_root_and_block_stale_undo(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
-    settings = SettingsService(uow_factory=factory)
+    settings = SettingsService(uow_factory=factory, permissions=PermissionService(uow_factory=factory))
     executor = EditExecutor(factory, {GUILD_EDIT: GuildSettingsEdit(PermissionService(uow_factory=factory))})
     actor = Actor(account_id=None, guild_id=GUILD, is_bot_owner=True, discord_user_id=17)
     _, revision = await settings.guild_snapshot(GUILD, context=ActingContext.direct(Actor()))
@@ -56,7 +56,7 @@ async def test_guild_voting_round_trip_and_current_authority(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
-    settings = SettingsService(uow_factory=factory)
+    settings = SettingsService(uow_factory=factory, permissions=PermissionService(uow_factory=factory))
     executor = EditExecutor(factory, {GUILD_EDIT: GuildSettingsEdit(PermissionService(uow_factory=factory))})
     actor = Actor(guild_id=GUILD, is_bot_owner=True, discord_user_id=17)
     snapshot, revision = await settings.guild_snapshot(GUILD, context=ActingContext.direct(Actor()))

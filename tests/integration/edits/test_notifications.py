@@ -92,7 +92,9 @@ async def test_follow_labels_resolve_public_names_and_latest_titles(
         session.add_all(follows)
         await session.flush()
         expected = {follows[0].id: "Discovered builder", follows[1].id: "Latest wording"}
-    snapshot = await NotificationService(uow_factory=factory).editor_snapshot(owner.id)
+    snapshot = await NotificationService(
+        uow_factory=factory, permissions=PermissionService(uow_factory=factory)
+    ).editor_snapshot(context=ActingContext.direct(Actor(account_id=owner.id)))
     assert dict(snapshot.labels) == expected
     executor = EditExecutor(
         factory, {SUBSCRIPTIONS_EDIT: NotificationSubscriptionsEdit(PermissionService(uow_factory=factory))}
@@ -120,7 +122,7 @@ async def test_preferences_and_follows_compete_on_one_account_revision(
             SUBSCRIPTIONS_EDIT: NotificationSubscriptionsEdit(permissions),
         },
     )
-    service = NotificationService(uow_factory=factory)
+    service = NotificationService(uow_factory=factory, permissions=PermissionService(uow_factory=factory))
     async with factory() as uow:
         account = await uow.accounts.create(consent=AccountConsent.grant_current())
         await uow.commit()
@@ -146,7 +148,7 @@ async def test_preferences_and_follows_compete_on_one_account_revision(
     assert sum(isinstance(result, RevisionConflictError) for result in results) == 1
     saved = next(result for result in results if isinstance(result, EditResult))
     assert saved.receipt is not None
-    assert (await service.preferences(account.id)).revision == 1
+    assert (await service.preferences(context=ActingContext.direct(actor))).revision == 1
     undone = await executor.execute(saved.receipt.undo(saved.outcome.revisions), context=ActingContext.direct(actor))
     assert undone.receipt is not None
     assert undone.outcome.revisions[0].value == 2
@@ -205,8 +207,10 @@ async def test_follow_creation_undo_and_redo_keep_identity_and_monotonic_revisio
         assert len((await session.scalars(select(NotificationSubscription))).all()) == 1
 
     await executor.execute(redone.receipt.undo(redone.outcome.revisions), context=ActingContext.direct(actor))
-    row, revision = await NotificationService(uow_factory=factory).subscription_snapshot(
-        account.id,
+    row, revision = await NotificationService(
+        uow_factory=factory, permissions=PermissionService(uow_factory=factory)
+    ).subscription_snapshot(
+        context=ActingContext.direct(actor),
         kind=SubscriptionKind.RECORD_FILTER,
         subject_id=None,
         record_filter=RecordSubscriptionFilter(build_kinds=frozenset({"door"})),
@@ -222,7 +226,7 @@ async def test_inbox_batch_conflict_is_atomic_and_arrivals_do_not_block_undo(
 ) -> None:
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory, verification_code_pepper="test-pepper")
     executor = EditExecutor(factory, {INBOX_EDIT: InboxReadEdit(PermissionService(uow_factory=factory))})
-    service = NotificationService(uow_factory=factory)
+    service = NotificationService(uow_factory=factory, permissions=PermissionService(uow_factory=factory))
     async with factory() as uow:
         account = await uow.accounts.create(consent=AccountConsent.grant_current())
         await uow.notifications.update_preferences(account.id, web_enabled=True, dm_enabled=False)

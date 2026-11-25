@@ -14,12 +14,10 @@ from squid.bot.edit_controller import EditController
 from squid.bot.lookup import pick
 from squid.bot.notification_text import notification_build_id, notification_details, notification_summary
 from squid.bot.ui import tr
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.edits.application import EditRunner
 from squid.core.edits.domain import EditValues, Revision
 from squid.core.notifications import (
-    DEFAULT_INBOX_VISIBILITY,
-    InboxVisibility,
     NotificationPreferences,
     RecordSubscriptionFilter,
     SubscriptionKind,
@@ -46,8 +44,6 @@ if TYPE_CHECKING:
 MAX_LISTED = 25
 """Maximum subscriptions or inbox items offered by one Discord select."""
 
-type VisibilityResolver = Callable[[], Awaitable[InboxVisibility]]
-
 
 def _kind_label(kind: SubscriptionKind) -> sl.TextLike:
     match kind:
@@ -69,15 +65,13 @@ class NotificationPanel(sl.Component[ComponentsV2Target, sd.Request[Any, Redston
         edits: EditRunner,
         actor: Callable[[], Awaitable[Actor]],
         account_id: int,
-        visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY,
-        visibility_resolver: VisibilityResolver | None = None,
     ) -> None:
         self.account_id = account_id
-        self.settings = NotificationSettings(notifications, account_id)
+        self.settings = NotificationSettings(notifications, account_id, actor)
         self.edits = EditController(edits, actor, self._refresh)
         self.preferences = NotificationPreferencesControls(self.settings, self.edits)
         self.subscriptions = NotificationSubscriptions(self.settings, self.edits)
-        self.inbox = NotificationInbox(notifications, account_id, self.edits, visibility, visibility_resolver)
+        self.inbox = NotificationInbox(notifications, actor, self.edits)
         self.tabs = sp.Tabs(
             (
                 sp.Tab("inbox", tr(t"notifications-tab-inbox = Inbox"), self.inbox),
@@ -115,12 +109,15 @@ class NotificationSettings(sl.Reactive):
     subscriptions: tuple[NotificationSubscription, ...] = sl.state(())
     labels: Mapping[int, str] = sl.state(factory=dict)
 
-    def __init__(self, notifications: NotificationService, account_id: int) -> None:
+    def __init__(
+        self, notifications: NotificationService, account_id: int, actor: Callable[[], Awaitable[Actor]]
+    ) -> None:
         self._notifications = notifications
         self._account_id = account_id
+        self._actor = actor
 
     async def refresh(self) -> None:
-        snapshot = await self._notifications.editor_snapshot(self._account_id)
+        snapshot = await self._notifications.editor_snapshot(context=ActingContext.for_actor(await self._actor()))
         self.preferences = snapshot.preferences
         self.subscriptions = snapshot.subscriptions
         self.labels = dict(snapshot.labels)
@@ -360,7 +357,7 @@ class NotificationSubscriptions(sl.Component[ComponentsV2Target, sd.Request[Any,
 
     async def _tag_picked(self, event: sd.ActionEvent, item: Suggestion) -> None:
         request = cast(sd.Request[Any, RedstoneSquid], event.context)
-        definitions = await request.client.services.tags.public_definitions()
+        definitions = await request.client.services.tags.public_definitions(context=ActingContext.current())
         tag = next((tag for tag in definitions if str(tag.id) == item.value), None)
         if tag is None:
             await event.notice(
@@ -475,36 +472,29 @@ class NotificationSubscriptions(sl.Component[ComponentsV2Target, sd.Request[Any,
 class NotificationInbox(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]):
     """Own visible inbox items, selection, and read-state changes."""
 
-    _visibility: InboxVisibility = sl.state(DEFAULT_INBOX_VISIBILITY)
     selected_inbox_ids: tuple[str, ...] = sl.state(())
     _inbox: tuple[InboxNotification, ...] = sl.state(())
 
     def __init__(
         self,
         notifications: NotificationService,
-        account_id: int,
+        actor: Callable[[], Awaitable[Actor]],
         edits: EditController,
-        visibility: InboxVisibility,
-        visibility_resolver: VisibilityResolver | None,
     ) -> None:
         self._notifications = notifications
-        self._account_id = account_id
+        self._actor = actor
         self.edits = edits
-        self._visibility = visibility
-        self._visibility_resolver = visibility_resolver
 
     @property
     def unread_count(self) -> int:
         return sum(item.read_at is None for item in self._inbox)
 
     async def refresh(self) -> None:
-        await self._resolve_visibility()
         self._inbox = tuple(
             (
                 await self._notifications.inbox(
-                    self._account_id,
+                    context=ActingContext.for_actor(await self._actor()),
                     page_size=MAX_LISTED,
-                    visibility=self._visibility,
                 )
             ).items
         )
@@ -586,11 +576,6 @@ class NotificationInbox(sl.Component[ComponentsV2Target, sd.Request[Any, Redston
             EditValues.of({"states": {str(row.id): read for row in rows}}),
             tr(t"notification-history-read = Change read state"),
         )
-
-    async def _resolve_visibility(self) -> InboxVisibility:
-        if self._visibility_resolver is not None:
-            self._visibility = await self._visibility_resolver()
-        return self._visibility
 
     @staticmethod
     def _inbox_label(notification: InboxNotification) -> sl.TextLike:

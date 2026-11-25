@@ -3,7 +3,7 @@
 from typing import Protocol
 
 from squid.core.actors import ActingContext
-from squid.core.builds.history import BuildEditActor, HistoryOperation
+from squid.core.builds.history import HistoryOperation
 from squid.core.events import DomainEvent, UnsupportedEventVersionError
 from squid.core.notifications import NotificationService
 from squid.core.voting.application.services import VoteService
@@ -20,32 +20,37 @@ _NOTIFICATION_EVENT_SCHEMA_VERSIONS = {
 class VoteOutcomeReader(Protocol):
     """Read the authoritative state of a closed vote session."""
 
-    async def get_session(self, vote_session_id: int) -> VoteSessionSnapshot | None: ...
+    async def get_session(self, vote_session_id: int, *, context: ActingContext) -> VoteSessionSnapshot | None: ...
 
 
 class BuildStatusWriter(Protocol):
     """Apply the final moderation status of a build."""
 
     async def apply_reviewed_edit(
-        self, target: BuildEditVoteTarget, *, author_account_id: int, vote_id: int
+        self,
+        target: BuildEditVoteTarget,
+        *,
+        author_account_id: int,
+        vote_id: int,
+        context: ActingContext,
     ) -> bool: ...
 
     async def approve(
         self,
         build_id: int,
         *,
-        actor: BuildEditActor,
         source: str,
         operation: HistoryOperation = "moderation",
         correlation_kind: str | None = None,
         correlation_id: str | None = None,
+        context: ActingContext,
     ) -> object: ...
 
     async def reject(
         self,
         build_id: int,
         *,
-        actor: BuildEditActor,
+        context: ActingContext,
         source: str,
         operation: HistoryOperation = "moderation",
         correlation_kind: str | None = None,
@@ -61,13 +66,14 @@ class ApplyBuildVoteOutcomeHandler:
         self._builds = builds
 
     async def handle(self, event: DomainEvent) -> None:
-        snapshot = await self._votes.get_session(event.aggregate_id)
+        context = ActingContext.current()
+        snapshot = await self._votes.get_session(event.aggregate_id, context=context)
         if snapshot is None or snapshot.is_open:
             return
         if isinstance(snapshot.target, BuildEditVoteTarget):
             if snapshot.result is VoteSessionResult.APPROVED:
                 await self._builds.apply_reviewed_edit(
-                    snapshot.target, author_account_id=snapshot.author_account_id, vote_id=snapshot.id
+                    snapshot.target, author_account_id=snapshot.author_account_id, vote_id=snapshot.id, context=context
                 )
             return
         if not isinstance(snapshot.target, BuildVoteTarget):
@@ -75,7 +81,7 @@ class ApplyBuildVoteOutcomeHandler:
         if snapshot.result is VoteSessionResult.APPROVED:
             await self._builds.approve(
                 snapshot.target.build_id,
-                actor=ActingContext.current().effective.reference,
+                context=context,
                 operation="moderation",
                 source="vote_outcome",
                 correlation_kind="domain_event",
@@ -84,7 +90,7 @@ class ApplyBuildVoteOutcomeHandler:
         elif snapshot.result is VoteSessionResult.DENIED:
             await self._builds.reject(
                 snapshot.target.build_id,
-                actor=ActingContext.current().effective.reference,
+                context=context,
                 operation="moderation",
                 source="vote_outcome",
                 correlation_kind="domain_event",
@@ -101,7 +107,7 @@ class RefreshGuildVotingHandler:
     async def handle(self, event: DomainEvent) -> None:
         if event.schema_version != 1:
             raise UnsupportedEventVersionError
-        await self._votes.refresh_configuration(event.aggregate_id)
+        await self._votes.refresh_configuration(event.aggregate_id, context=ActingContext.current())
 
 
 class MaterializeNotificationHandler:

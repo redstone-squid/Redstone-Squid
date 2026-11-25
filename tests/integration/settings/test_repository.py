@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from squid.core.accounts.models import Account
 from squid.core.actors import ActingContext, Actor
 from squid.core.errors import InvalidStateError, ValidationError
+from squid.core.permissions.application.services import PermissionService
 from squid.core.persistence.base import Base
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.settings.application import SettingsService
@@ -45,7 +46,10 @@ def service(
     settings_tables: None,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> SettingsService:
-    return SettingsService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory))
+    return SettingsService(
+        permissions=PermissionService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory)),
+        uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory),
+    )
 
 
 async def _seed_channel(service: SettingsService, server_id: int, setting: Setting, value: int | None) -> None:
@@ -316,7 +320,10 @@ async def test_runtime_edits_persist_and_audit_atomically(
 ) -> None:
     assert (await service.get_runtime(context=ActingContext.direct(Actor()))).welcome_forward_chance == 0.1
     await edit_runtime(service, {"welcome_forward_chance": 0.75}, actor_account_id=actor_account_id)
-    fresh = SettingsService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory))
+    fresh = SettingsService(
+        permissions=PermissionService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory)),
+        uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory),
+    )
     assert (await fresh.get_runtime(context=ActingContext.direct(Actor()))).welcome_forward_chance == 0.75
     with pytest.raises(ValidationError):
         await edit_runtime(fresh, {"welcome_forward_chance": 2}, actor_account_id=actor_account_id)
@@ -334,6 +341,7 @@ async def test_runtime_defaults_are_seeded_only_once(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     first = SettingsService(
+        permissions=PermissionService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory)),
         uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory),
         runtime_defaults=RuntimeSettings(welcome_channel_id=987),
     )
