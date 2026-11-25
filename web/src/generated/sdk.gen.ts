@@ -206,7 +206,7 @@ export const buildMediaContentGet = <ThrowOnError extends boolean = false>(optio
  *
  * Search approved builds, or list builds with a selected moderation status.
  *
- * Supplying q selects indexed search and cannot be combined with status. Search
+ * Supplying q selects indexed search within the selected status. Search
  * uses offset pagination. Without q, results come from the build repository;
  * unpublished statuses require build.submission.view_pending permission.
  */

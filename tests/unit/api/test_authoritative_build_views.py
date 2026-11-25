@@ -207,17 +207,17 @@ async def test_administrator_reads_the_pending_queue() -> None:
 
 
 @pytest.mark.asyncio
-async def test_status_and_query_are_mutually_exclusive() -> None:
+async def test_searching_unpublished_builds_requires_review_permission() -> None:
     graph = fakes()
 
-    with pytest.raises(ValidationError):
+    with pytest.raises(AuthorizationError):
         await list_builds.fn(
             graph.build_queries,
             cast(Any, None),
             graph.permissions,
             ACCOUNT,
             q="piston",
-            status=BuildStatusFilter.APPROVED,
+            status=BuildStatusFilter.PENDING,
         )
 
 

@@ -23,6 +23,7 @@ from squid.api.v1.schemas.search import (
     SearchSuggestions,
 )
 from squid.core.builds.application import BuildQueryService, PublicBuildSummary
+from squid.core.builds.domain import BuildStatus
 from squid.core.errors import DataIntegrityError
 from squid.core.search.application.fields import FieldDefinition
 from squid.core.search.domain import SearchHit, SearchMode, SearchRequest, SearchScope, SearchSort
@@ -159,7 +160,9 @@ def build_hit_id(source_id: str) -> int:
         raise DataIntegrityError(msg, context={"source_id": source_id}) from error
 
 
-async def hydrate_builds(build_queries: BuildQueryService, hits: Sequence[SearchHit]) -> dict[int, PublicBuildSummary]:
+async def hydrate_builds(
+    build_queries: BuildQueryService, hits: Sequence[SearchHit], *, status: BuildStatus = BuildStatus.APPROVED
+) -> dict[int, PublicBuildSummary]:
     """Load current build rows for search hits and log any missing rows.
 
     Build descriptions and other facts may have changed since indexing. Render
@@ -173,7 +176,7 @@ async def hydrate_builds(build_queries: BuildQueryService, hits: Sequence[Search
     summaries = {
         build.id: PublicBuildSummary.from_build(build)
         for build in builds
-        if build.id is not None  # pyright: ignore[reportUnnecessaryComparison]
+        if build.submission_status is status and build.id is not None  # pyright: ignore[reportUnnecessaryComparison]
     }
     missing = [identifier for identifier in hit_ids if identifier not in summaries]
     if missing:

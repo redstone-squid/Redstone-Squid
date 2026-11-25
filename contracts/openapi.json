@@ -1704,7 +1704,7 @@
           "builds"
         ],
         "summary": "ListBuilds",
-        "description": "Search approved builds, or list builds with a selected moderation status.\n\nSupplying q selects indexed search and cannot be combined with status. Search\nuses offset pagination. Without q, results come from the build repository;\nunpublished statuses require build.submission.view_pending permission.",
+        "description": "Search approved builds, or list builds with a selected moderation status.\n\nSupplying q selects indexed search within the selected status. Search\nuses offset pagination. Without q, results come from the build repository;\nunpublished statuses require build.submission.view_pending permission.",
         "operationId": "builds_list",
         "parameters": [
           {

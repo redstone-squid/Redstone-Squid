@@ -40,7 +40,7 @@ from squid.api.pagination import (
 from squid.api.security import Caller, requires
 from squid.api.v1.browser_views import BrowserViews
 from squid.api.v1.schemas.builds import BuildDetail, BuildPatch, BuildStatusFilter
-from squid.api.v1.search import PUBLIC_SEARCH_STATUSES, build_hit_id, hydrate_builds
+from squid.api.v1.search import build_hit_id, hydrate_builds
 from squid.core.builds.application import (
     BUILD_SORT_FIELDS,
     BuildEditPatch,
@@ -56,17 +56,12 @@ from squid.core.builds.errors import (
 )
 from squid.core.builds.models import Build
 from squid.core.edits.domain import EditCommand, LatestRevision, Revision
-from squid.core.errors import ValidationError
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.domain.catalogue import (
     BUILD_SUBMISSION_CREATE,
     BUILD_SUBMISSION_VIEW_PENDING,
 )
 from squid.core.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
-from squid.core.validation import (
-    FieldErrorCode,
-    SimpleIssue,
-)
 
 UserWriter = CurrentCaller
 _BUILD_ETAG = re.compile(r'^"build-(?P<build_id>[1-9][0-9]*)-r(?P<revision>[1-9][0-9]*)"$')
@@ -203,14 +198,14 @@ async def list_builds(
 ) -> Page[PublicBuildSummary]:
     """Search approved builds, or list builds with a selected moderation status.
 
-    Supplying q selects indexed search and cannot be combined with status. Search
+    Supplying q selects indexed search within the selected status. Search
     uses offset pagination. Without q, results come from the build repository;
     unpublished statuses require build.submission.view_pending permission.
     """
+    effective = status or BuildStatusFilter.APPROVED
+    if effective is not BuildStatusFilter.APPROVED:
+        await _require_pending_view(permissions, caller)
     if q is not None:
-        if status is not None:
-            msg = "status cannot be combined with q"
-            raise ValidationError(msg, issues=(SimpleIssue(field="/query/status", code=FieldErrorCode.INVALID_VALUE),))
         # Relevance order has no identifier sequence to anchor to, so ranked pages are offset-only.
         selector = resolve_selector(offset=offset, after_id=after_id, before_id=before_id, keyset_allowed=False)
         result = await search_service.search(
@@ -221,10 +216,10 @@ async def list_builds(
                 page_size=page_size,
                 offset=selector.offset,
                 sort=SearchSort.parse(sort),
-                visible_statuses=PUBLIC_SEARCH_STATUSES,
+                visible_statuses=frozenset({effective.value}),
             )
         )
-        summaries = await hydrate_builds(build_queries, result.hits)
+        summaries = await hydrate_builds(build_queries, result.hits, status=effective.to_domain())
         return Page(
             # A page can come back short of `total` when the projection outlived a build; the count
             # is the search backend's, and hydrate_builds has already logged the drift.
@@ -240,9 +235,6 @@ async def list_builds(
     selector = resolve_selector(
         offset=offset, after_id=after_id, before_id=before_id, keyset_allowed=sort_field == "id"
     )
-    effective = status or BuildStatusFilter.APPROVED
-    if effective is not BuildStatusFilter.APPROVED:
-        await _require_pending_view(permissions, caller)
     page = await build_queries.list_page(
         statuses=frozenset({effective.to_domain()}),
         sort=BuildListSort(field=cast(BuildSortField, sort_field), descending=descending),
