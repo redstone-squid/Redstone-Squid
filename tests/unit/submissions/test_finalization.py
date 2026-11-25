@@ -670,6 +670,7 @@ def _claim(payload: NormalizedSubmission, attempts: int = 1) -> ClaimedFinalizat
         attempts=attempts,
         claimed_at=NOW,
         claim_token=CLAIM_TOKEN,
+        requested_by_account_id=7,
     )
 
 
@@ -742,7 +743,7 @@ async def test_attachment_wait_resumes_without_extending_retention() -> None:
     assert waiting.waiting_for_artifacts is True
     assert jobs.enqueued is None
 
-    jobs.waiting_drafts = (draft,)
+    jobs.waiting_drafts = (replace(draft, submission_actor_account_id=7),)
     artifacts.readiness = SubmissionArtifactReadiness()
     await service.resume_waiting(now=NOW.add(seconds=31))
     assert jobs.enqueued is not None
@@ -753,7 +754,7 @@ async def test_edit_after_wait_reservation_prevents_automatic_submission() -> No
     draft = _stored(SubmissionOrigin.WEB)
     repository = FakeDraftRepository(replace(draft, snapshot=replace(draft.snapshot, revision=1)))
     jobs = FakeFinalizationJobs()
-    jobs.waiting_drafts = (draft,)
+    jobs.waiting_drafts = (replace(draft, submission_actor_account_id=7),)
     service = SubmissionFinalizationService(
         _drafts(repository),
         SubmissionPreparation(FakeArtifacts(SubmissionArtifactReadiness())),

@@ -169,7 +169,7 @@ class FinalizationJobRepository(Protocol):
         *,
         now: Instant,
         expires_at: Instant,
-        actor_account_id: int | None = None,
+        actor_account_id: int,
     ) -> FinalizationJobSnapshot: ...
 
     async def record_preparation_attention(
@@ -180,7 +180,7 @@ class FinalizationJobRepository(Protocol):
         now: Instant,
         expires_at: Instant,
         waiting_for_artifacts: bool = False,
-        actor_account_id: int | None = None,
+        actor_account_id: int | None,
     ) -> SubmissionRequestResult: ...
 
     async def reserve_preparations(self, *, now: Instant, limit: int) -> tuple[StoredDraft, ...]: ...
@@ -348,7 +348,7 @@ class SubmissionFinalizationService:
             try:
                 await self._submit(
                     draft,
-                    Actor(account_id=draft.submission_actor_account_id or draft.snapshot.owner_account_id),
+                    Actor(account_id=draft.submission_actor_account_id),
                     locale=None,
                     now=now,
                     refresh_retention=False,

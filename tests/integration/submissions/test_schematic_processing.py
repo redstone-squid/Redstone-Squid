@@ -115,7 +115,9 @@ async def test_original_upload_reaches_build_and_preview_queue(
     now = Instant.now()
     await transact(
         uows,
-        lambda uow: uow.finalization_jobs.enqueue(current, payload, now=now, expires_at=current.expires_at),
+        lambda uow: uow.finalization_jobs.enqueue(
+            current, payload, actor_account_id=current.snapshot.owner_account_id, now=now, expires_at=current.expires_at
+        ),
         commit=True,
     )
     (claim,) = await transact(uows, lambda uow: uow.finalization_jobs.claim(now=now, limit=1), commit=True)

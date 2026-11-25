@@ -267,7 +267,9 @@ async def _claim_submission(
     jobs = partial(SqlAlchemyUnitOfWork, sessions)
     await transact(
         jobs,
-        lambda uow: uow.finalization_jobs.enqueue(draft, payload, now=current, expires_at=draft.expires_at),
+        lambda uow: uow.finalization_jobs.enqueue(
+            draft, payload, actor_account_id=draft.snapshot.owner_account_id, now=current, expires_at=draft.expires_at
+        ),
         commit=True,
     )
     (claim,) = await transact(jobs, lambda uow: uow.finalization_jobs.claim(now=current, limit=1), commit=True)
@@ -793,6 +795,7 @@ async def test_account_merge_rewrites_pending_payloads_and_fences_claimed_work(
         lambda uow: uow.finalization_jobs.enqueue(
             pending_draft,
             pending_payload,
+            actor_account_id=pending_draft.snapshot.owner_account_id,
             now=queued_at.add(days=1, days_assumed_24h_ok=True),
             expires_at=pending_draft.expires_at,
         ),
@@ -801,7 +804,11 @@ async def test_account_merge_rewrites_pending_payloads_and_fences_claimed_work(
     await transact(
         finalizations,
         lambda uow: uow.finalization_jobs.enqueue(
-            claimed_draft, claimed_payload, now=queued_at, expires_at=claimed_draft.expires_at
+            claimed_draft,
+            claimed_payload,
+            actor_account_id=claimed_draft.snapshot.owner_account_id,
+            now=queued_at,
+            expires_at=claimed_draft.expires_at,
         ),
         commit=True,
     )
@@ -932,6 +939,7 @@ async def test_account_merge_refuses_to_bless_a_conflicting_finalization_digest(
         lambda uow: uow.finalization_jobs.enqueue(
             draft,
             normalized_submission(absorbed.id, draft_id, "Java 1.21.0"),
+            actor_account_id=draft.snapshot.owner_account_id,
             now=queued_at,
             expires_at=draft.expires_at,
         ),

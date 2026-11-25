@@ -63,7 +63,8 @@ class BuildSubmissionExecutor:
         Revoked permission produces a rejection. An existing build with the same
         source draft is reused after checking its owner and sponsor details.
         """
-        if not await self._authorized(job):
+        actor_id = job.requested_by_account_id
+        if actor_id is None or not await self._authorized(job):
             return BuildSubmissionRejected(
                 (SubmissionAttentionIssue("submission", SubmissionAttentionReason.PERMISSION_REVOKED),)
             )
@@ -80,7 +81,7 @@ class BuildSubmissionExecutor:
         async with (
             self._uow_factory() as uow,
             uow.builds.editing(
-                actor=job.requested_by_account_id or job.payload.owner_account_id,
+                actor=actor_id,
                 operation="create",
                 source="submission_finalization",
                 correlation_kind="submission_draft",
@@ -128,7 +129,7 @@ class BuildSubmissionExecutor:
         return result
 
     async def _authorized(self, job: ClaimedFinalizationJob, uow: DraftUnitOfWork | None = None) -> bool:
-        actor = Actor(account_id=job.requested_by_account_id or job.payload.owner_account_id)
+        actor = Actor(account_id=job.requested_by_account_id)
         if self._drafts is None:
             return actor.account_id == job.payload.owner_account_id
         try:

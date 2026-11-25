@@ -174,7 +174,13 @@ async def test_enqueue_claim_fence_and_completion_are_atomic(
 
     first = await transact(
         repository,
-        lambda uow: uow.finalization_jobs.enqueue(stored_draft, payload, now=NOW, expires_at=expires_at),
+        lambda uow: uow.finalization_jobs.enqueue(
+            stored_draft,
+            payload,
+            actor_account_id=stored_draft.snapshot.owner_account_id,
+            now=NOW,
+            expires_at=expires_at,
+        ),
         commit=True,
     )
     replay = await transact(
@@ -182,6 +188,9 @@ async def test_enqueue_claim_fence_and_completion_are_atomic(
         lambda uow: uow.finalization_jobs.enqueue(
             replace(stored_draft, snapshot=replace(stored_draft.snapshot, status=DraftStatus.PROCESSING)),
             payload,
+            actor_account_id=replace(
+                stored_draft, snapshot=replace(stored_draft.snapshot, status=DraftStatus.PROCESSING)
+            ).snapshot.owner_account_id,
             now=NOW,
             expires_at=expires_at,
         ),
@@ -217,7 +226,11 @@ async def test_claim_refuses_a_payload_with_a_conflicting_digest(
     await transact(
         repository,
         lambda uow: uow.finalization_jobs.enqueue(
-            stored_draft, _payload(stored_draft), now=NOW, expires_at=NOW.add(days=7, days_assumed_24h_ok=True)
+            stored_draft,
+            _payload(stored_draft),
+            actor_account_id=stored_draft.snapshot.owner_account_id,
+            now=NOW,
+            expires_at=NOW.add(days=7, days_assumed_24h_ok=True),
         ),
         commit=True,
     )
@@ -287,6 +300,7 @@ async def test_enqueue_rechecks_exact_completed_media_set_after_assessment(
             lambda uow: uow.finalization_jobs.enqueue(
                 stored_draft,
                 payload_before_concurrent_upload,
+                actor_account_id=stored_draft.snapshot.owner_account_id,
                 now=NOW,
                 expires_at=NOW.add(days=7, days_assumed_24h_ok=True),
             ),
@@ -315,6 +329,7 @@ async def test_enqueue_requires_every_payload_media_id_to_remain_completed(
             lambda uow: uow.finalization_jobs.enqueue(
                 stored_draft,
                 _payload(stored_draft, media_id),
+                actor_account_id=stored_draft.snapshot.owner_account_id,
                 now=NOW,
                 expires_at=NOW.add(days=7, days_assumed_24h_ok=True),
             ),
@@ -335,6 +350,7 @@ async def test_enqueue_accepts_an_exact_completed_media_snapshot(
         lambda uow: uow.finalization_jobs.enqueue(
             stored_draft,
             _payload(stored_draft, media_id),
+            actor_account_id=stored_draft.snapshot.owner_account_id,
             now=NOW,
             expires_at=NOW.add(days=7, days_assumed_24h_ok=True),
         ),
@@ -355,7 +371,11 @@ async def test_delete_and_enqueue_race_cannot_remove_a_processing_draft(
         transact(
             finalizations,
             lambda uow: uow.finalization_jobs.enqueue(
-                stored_draft, _payload(stored_draft), now=NOW, expires_at=NOW.add(days=7, days_assumed_24h_ok=True)
+                stored_draft,
+                _payload(stored_draft),
+                actor_account_id=stored_draft.snapshot.owner_account_id,
+                now=NOW,
+                expires_at=NOW.add(days=7, days_assumed_24h_ok=True),
             ),
             commit=True,
         ),
@@ -388,7 +408,11 @@ async def test_preparation_attention_can_be_repaired_without_changing_revision(
     attention = await transact(
         repository,
         lambda uow: uow.finalization_jobs.record_preparation_attention(
-            stored_draft, (issue,), now=NOW, expires_at=expires_at
+            stored_draft,
+            (issue,),
+            actor_account_id=stored_draft.snapshot.owner_account_id,
+            now=NOW,
+            expires_at=expires_at,
         ),
         commit=True,
     )
@@ -399,7 +423,11 @@ async def test_preparation_attention_can_be_repaired_without_changing_revision(
     pending = await transact(
         repository,
         lambda uow: uow.finalization_jobs.enqueue(
-            repaired_draft, _payload(repaired_draft), now=NOW.add(seconds=1), expires_at=expires_at.add(seconds=1)
+            repaired_draft,
+            _payload(repaired_draft),
+            actor_account_id=repaired_draft.snapshot.owner_account_id,
+            now=NOW.add(seconds=1),
+            expires_at=expires_at.add(seconds=1),
         ),
         commit=True,
     )
@@ -426,7 +454,9 @@ async def test_retry_retains_failed_payload_and_rejects_its_stale_completion(
     payload = _payload(stored_draft)
     first = await transact(
         repository,
-        lambda uow: uow.finalization_jobs.enqueue(stored_draft, payload, now=NOW, expires_at=expiry),
+        lambda uow: uow.finalization_jobs.enqueue(
+            stored_draft, payload, actor_account_id=stored_draft.snapshot.owner_account_id, now=NOW, expires_at=expiry
+        ),
         commit=True,
     )
     (claim,) = await transact(repository, lambda uow: uow.finalization_jobs.claim(now=NOW, limit=1), commit=True)
@@ -441,7 +471,11 @@ async def test_retry_retains_failed_payload_and_rejects_its_stale_completion(
     second = await transact(
         repository,
         lambda uow: uow.finalization_jobs.enqueue(
-            repaired, replace(payload, description="corrected"), now=NOW, expires_at=expiry
+            repaired,
+            replace(payload, description="corrected"),
+            actor_account_id=repaired.snapshot.owner_account_id,
+            now=NOW,
+            expires_at=expiry,
         ),
         commit=True,
     )
@@ -499,14 +533,14 @@ async def test_repeated_preparation_issue_does_not_append_history(
     first = await transact(
         repository,
         lambda uow: uow.finalization_jobs.record_preparation_attention(
-            stored_draft, issues, now=NOW, expires_at=expiry
+            stored_draft, issues, actor_account_id=stored_draft.snapshot.owner_account_id, now=NOW, expires_at=expiry
         ),
         commit=True,
     )
     second = await transact(
         repository,
         lambda uow: uow.finalization_jobs.record_preparation_attention(
-            stored_draft, issues, now=NOW, expires_at=expiry
+            stored_draft, issues, actor_account_id=stored_draft.snapshot.owner_account_id, now=NOW, expires_at=expiry
         ),
         commit=True,
     )
@@ -528,6 +562,7 @@ async def test_status_translates_malformed_attention_entries_to_data_integrity_e
         lambda uow: uow.finalization_jobs.record_preparation_attention(
             stored_draft,
             (SubmissionAttentionIssue("schematic", SubmissionAttentionReason.SCHEMATIC_PROCESSING),),
+            actor_account_id=stored_draft.snapshot.owner_account_id,
             now=NOW,
             expires_at=NOW.add(days=7, days_assumed_24h_ok=True),
         ),
@@ -553,7 +588,13 @@ async def test_unexpected_failures_dead_letter_without_deleting_draft(
     expires_at = NOW.add(days=7, days_assumed_24h_ok=True)
     await transact(
         repository,
-        lambda uow: uow.finalization_jobs.enqueue(stored_draft, _payload(stored_draft), now=NOW, expires_at=expires_at),
+        lambda uow: uow.finalization_jobs.enqueue(
+            stored_draft,
+            _payload(stored_draft),
+            actor_account_id=stored_draft.snapshot.owner_account_id,
+            now=NOW,
+            expires_at=expires_at,
+        ),
         commit=True,
     )
     (first,) = await transact(repository, lambda uow: uow.finalization_jobs.claim(now=NOW, limit=1), commit=True)
@@ -609,6 +650,7 @@ async def test_attachment_wait_reservation_recovers_and_never_creates_an_attempt
         lambda uow: uow.finalization_jobs.record_preparation_attention(
             stored_draft,
             (SubmissionAttentionIssue("schematic", SubmissionAttentionReason.SCHEMATIC_PROCESSING),),
+            actor_account_id=stored_draft.snapshot.owner_account_id,
             now=NOW,
             expires_at=stored_draft.expires_at,
             waiting_for_artifacts=True,
@@ -690,7 +732,13 @@ async def test_schema_reset_rewrites_both_payloads_and_digests_atomically(
     tags.pop("restriction_proposal_fields")
     job = await transact(
         repository,
-        lambda uow: uow.finalization_jobs.enqueue(stored_draft, normalized, now=NOW, expires_at=NOW.add(hours=1)),
+        lambda uow: uow.finalization_jobs.enqueue(
+            stored_draft,
+            normalized,
+            actor_account_id=stored_draft.snapshot.owner_account_id,
+            now=NOW,
+            expires_at=NOW.add(hours=1),
+        ),
         commit=True,
     )
     async with async_session_factory.begin() as session:

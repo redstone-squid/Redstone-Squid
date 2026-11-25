@@ -86,7 +86,9 @@ async def claimed_submission(
         payload = replace(payload, artifacts=replace(payload.artifacts, normalized_media_upload_ids=(upload_id,)))
     await transact(
         jobs,
-        lambda uow: uow.finalization_jobs.enqueue(draft, payload, now=now, expires_at=draft.expires_at),
+        lambda uow: uow.finalization_jobs.enqueue(
+            draft, payload, actor_account_id=draft.snapshot.owner_account_id, now=now, expires_at=draft.expires_at
+        ),
         commit=True,
     )
     (claim,) = await transact(jobs, lambda uow: uow.finalization_jobs.claim(now=now, limit=1), commit=True)
