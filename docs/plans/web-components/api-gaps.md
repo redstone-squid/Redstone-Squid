@@ -25,20 +25,20 @@ Items 1–4 are implemented in the API.
 
 5. **Build summaries (implemented).** Cards receive the subtitle, typed category and status, creator names with nullable public IDs, and current and former record counts. External preview dimensions can be unknown.
 6. **Build detail (implemented).** P5 receives current and former records, a typed gallery, public schematic count and primary download, submission and approval metadata, and the public history count. Missing historical approval dates are null. An unpublished primary schematic contributes neither metadata nor a download link.
-7. **Public history (implemented).** `GET /v1/builds/{id}/history?offset&page_size` pages published revisions newest first. Changes cover public dimensions, names, description, version specification, timings, orientation, and creator names. The first published revision has no public predecessor.
+7. **Public history (implemented).** `GET /v1/builds/{id}/history` pages published revisions newest first. Changes cover public dimensions, names, description, version specification, timings, orientation, and creator names. The first published revision has no public predecessor.
 8. **Owner and staff access to unpublished detail (deferred).** P5, A5, and M2 need a visibility decision in the service layer. The detail route still serves approved builds.
-9. **Catalogue filters and sorts (implemented).** `GET /v1/builds` accepts category, version ID, repeated tag IDs or slugs (all must match), creator ID, and `submitted_by=me`. Search accepts the same filters and moderation status. Sorts are `newest`, `oldest`, `updated`, `fastest_open`, `smallest_volume`, and `title`. The existing page selectors apply.
+9. **Catalogue filters and sorts (implemented).** `GET /v1/builds` accepts category, version ID, repeated tag IDs or slugs (all must match), creator ID, and `submitted_by=me`. Search accepts the same filters and moderation status. Sorts are `newest`, `oldest`, `updated`, `fastest_open`, `smallest_volume`, and `title`, and every sort accepts ID anchors (item 55).
 10. **Edit through drafts (implemented).** A web draft with `source_build_id` starts with the approved build's public editable answers and pins its build revision. Finalization applies authorized changes or returns a review vote ID. A stale revision returns 412 with field differences and preserves the draft. Moderators can read the full edit form at `GET /v1/builds/{id}/form`.
 
 ## Records
 
-11. **Filters on `GET /v1/records`:** `build_kind`, `criterion`, `version_scope`, `status`, `tag`, `q`. `sort` as an enum `recently_changed | title | criterion`. Needed by P7.
+11. **Filters on `GET /v1/records`:** `build_kind`, `criterion`, `version_scope`, `status`, `tag`, `q`. `sort` as an enum `recently_changed | title | criterion`, replacing the raw `-result_id` order, with ID anchors on every sort. Needed by P7.
 12. **New fields on `PublishedRecordResult`:**
     - `holders: [{build_id, title, creators: [{name, creator_id}], preview}]`, summaries rather than bare ids.
     - `metrics: {name: {value, unit, display}}`, the same shape as search.
     - `category_key` (base key), `holder_since: datetime`.
     - Needed by P7 table rows, P1 and RecordCard without N+1 requests.
-13. **`GET /v1/records/{id}/history`** returns `[{holders: [build summary], from: datetime, to: datetime | null, metrics}]`. `records/application/history.py` already reconstructs this. Needed by P8 Timeline and chart 2.
+13. **`GET /v1/records/{id}/history`** pages holder periods newest first, each `{holders: [build summary], from: datetime, to: datetime | null, metrics}`. `records/application/history.py` already reconstructs this. Needed by P8 Timeline and chart 2.
 14. **`PublicRecordDetail.siblings`:** `[{record_id, criterion, version_scope, status}]` for the same category. Needed by the P8 switcher.
 15. **Range discovery and labels:**
     - `GET /v1/records/ranges/door?orientation&height&depth` lists registered range queries with labels.
@@ -63,7 +63,7 @@ Items 1–4 are implemented in the API.
 
 21. **`GET /v1/tags` filters:** `kind`, `authority`, `q`. `TagDetail` gains `description`, `aliases`, `build_count`, `record_count`, and `rules_anchor` (a link into `/rules`). Needed by P11 and P12.
 22. **Tag page builds.** `GET /v1/builds?tag=slug` (item 9) avoids the waterfall of tag, then query name, then search on P12.
-23. **Tag proposals:** `GET /v1/tags/proposals?status`, `POST /v1/tags/proposals` (users propose showcase tags), `POST /v1/tags/proposals/{id}/{approve|reject|archive}`, `POST /v1/tags/{id}/aliases`. Needed by X3.
+23. **Tag proposals:** `GET /v1/tags/proposals?status` (a queue, oldest first), `POST /v1/tags/proposals` (users propose showcase tags), `POST /v1/tags/proposals/{id}/{approve|reject|archive}`, `POST /v1/tags/{id}/aliases`. Needed by X3.
 
 ## Creators and accounts
 
@@ -71,8 +71,8 @@ Items 1–4 are implemented in the API.
 25. **Creator builds.** `GET /v1/builds?creator_id=` or `?alias=` for unclaimed names (item 9). Needed by P13.
 26. **Alias claims:**
     - `POST /v1/creator-aliases/{name}/claims` and `GET /v1/users/me/claims` (P13, A3).
-    - `GET /v1/claims?status`, `POST /v1/claims/{id}/{approve|reject}` (X4).
-27. **Account lookup.** `GET /v1/accounts?q=` returns `{id, display_name, identities}` for staff. Needed by X5 and X6.
+    - `GET /v1/claims?status` (a queue, oldest first), `POST /v1/claims/{id}/{approve|reject}` (X4).
+27. **Account lookup.** `GET /v1/accounts?q=&limit=` returns `{id, display_name, identities}` for staff. It serves pickers, so it's a completion with `limit`, not a paged list. Needed by X5 and X6.
 28. **Product decision: account deletion and data export.** `DELETE /v1/users/me` and `GET /v1/users/me/export`. Needed for A2 if the privacy notice promises them.
 53. **Merge code normalization.** `POST /v1/users/me/merge` and `/merge/preview` compare the code exactly, while CLI and Minecraft codes go through `normalize_user_code`. Normalize merge codes the same way (case, spaces, hyphens), since `CodeEntry` submits the grouped text. Needed by A3's merge flow.
 
@@ -89,12 +89,12 @@ Items 1–4 are implemented in the API.
 34. **Manifest presentation hints:** `FormFieldResponse` gains `placeholder`, `unit`, `width: full | half | narrow`, and `description` on sections, plus confirmation that labels and help text are localized to the request locale.
 35. **Media preview URLs.** `DraftMediaArtifactResponse` gains `url` (signed and short-lived), `width` and `height`. Today S2 cannot show what was uploaded.
 36. **Finalization long-poll or events.** `GET /v1/submissions/drafts/{id}/status?wait=25` (long-poll) or an SSE stream. Removes polling loops on S3.
-37. **Correction proposals list.** `GET /v1/submissions/revisions?status=pending&build_id=` (today only lookup by source message). `before` and `after` become `changes: [{field, label, before, after}]`. Needed by M1 and M3.
+37. **Correction proposals list.** `GET /v1/submissions/revisions?status=pending&build_id=` (today only lookup by source message), a queue, oldest first. `before` and `after` become `changes: [{field, label, before, after}]`. Needed by M1 and M3.
 38. **Draft sharing.** `submission_draft_access` already exists. Add `GET/POST/DELETE /v1/submissions/drafts/{id}/editors`, needed if S2 adds collaborators (todo.md). This is a product decision, so leave it as an optional phase.
 
 ## Voting and review
 
-39. **Review queue endpoint.** `GET /v1/review/builds?sort=deadline|submitted&offset` returns pending builds with `{build summary, submitted_by, vote: {id, status, tallies, pass_threshold, fail_threshold, deadline, own_selection}}`, plus `GET /v1/review/counts`. Needed by M1.
+39. **Review queue endpoint.** `GET /v1/review/builds?sort=deadline|submitted` is a queue that returns pending builds with `{build summary, submitted_by, vote: {id, status, tallies, pass_threshold, fail_threshold, deadline, own_selection}}`, plus `GET /v1/review/counts`. Needed by M1.
 40. **Web voting without a guild.** `POST /v1/vote-sessions/{id}/votes` requires `guild_id`, which a website voter doesn't have. Make it optional: the server resolves the caller's weight (for example, highest across guilds, or a network weight), and the session's `viewer` exposes `eligible: bool, weight`. This is a product decision.
 41. **`VoteSessionDetail` additions:** `build: summary`, `deadline`, and `voters: [{display_name, choice}]` when visibility is `visible_live`.
 
@@ -140,7 +140,8 @@ Items 1–4 are implemented in the API.
     - **Numbered pages** use `offset` up to 10,000. The website turns `?page=N` into `offset=(N-1)*page_size`. A row inserted or deleted mid-browse can repeat or skip one item, which is acceptable for browsing.
     - **Anchored pages** use `after_id` or `before_id` with any sort that has a fixed order. The server seeks on the anchor's `(sort value, id)`. With a sort other than `id`, an anchor that is missing or outside the filtered list returns 400 `PAGE_ANCHOR_NOT_FOUND`, and the client starts again from the first page. Ranked search has no seekable order and stays offset-only.
     - **Complete traversal** uses `sort=id` with `after_id`. IDs never change and the anchor needs no lookup, so each surviving item is seen once even if the anchor was deleted. This is the transparent cursor.
-    - Lists take `page_size` (1–50) and named sorts (`newest`, `fastest_open`). Completions are not lists: `suggest` keeps `limit`, and its `cursor` is the caret position.
+    - Lists take `page_size` (1–50) and named sorts (`newest`, `fastest_open`). Items in this document name only their filters and sorts; paging is always this system.
+    - Numbered pages are enough for browsing. Queues, inboxes and logs, where rows arrive or leave while someone works through them, also need anchors so a reader keeps their place: the review queue, tag proposals, alias claims, correction proposals, the notification inbox, diagnostics and the permission audit log. Completions are not lists: `suggest` keeps `limit`, and its `cursor` is the caret position.
     - Stragglers: draft attempts (`before`, `limit`, bare list), the correction inbox (`after` as a UUID, `limit`, which needs anchors that can be UUIDs), diagnostics (ignores `offset`), and `records` (raw `-result_id` sort, replaced by item 11).
     - **Planned: `changed_since=<sequence>`** for sync clients. Each resource kind keeps a change sequence; a client lists everything once, then asks for rows changed after the sequence it last saw, tombstones included. Keyset paging on a sort value that can change can still miss a row that moves across the page boundary, and only this feed guarantees that nothing is lost.
     - ETags on lists serve `If-None-Match` caching only. Detecting a changed collection between pages is `changed_since`'s job.
