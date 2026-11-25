@@ -135,7 +135,7 @@ async def edit_build(
     opt=contract(cli=transport_only()),
 )
 async def get_build(
-    build_id: FromPath[int], build_queries: BuildQueries, services: Services, caller: CurrentCaller
+    request: Request, build_id: FromPath[int], build_queries: BuildQueries, services: Services, caller: CurrentCaller
 ) -> Response[BuildDetail]:
     """Return one approved public build.
 
@@ -143,7 +143,7 @@ async def get_build(
     not expose unpublished submissions, even to callers who can view them elsewhere.
     """
     build = await build_queries.get_public(build_id)
-    detail = await BrowserViews(services, caller).build(build)
+    detail = await BrowserViews(services, caller).build(build, request)
     return Response(detail, headers={"ETag": build_etag(build)})
 
 

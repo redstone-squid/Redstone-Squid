@@ -155,6 +155,8 @@ export type BuildDetail = {
     description: string | null;
     links: BuildLinks;
     media: Array<BuildMedia>;
+    submitted_at: string | null;
+    schematics?: BuildSchematicOverview | null;
     viewer?: BuildViewer | null;
     sponsor?: BuildSponsor | null;
 };
@@ -219,6 +221,14 @@ export type BuildPatch = {
     coordinates?: string | null;
     command_to_get_to_build?: string | null;
     completion_time?: string | null;
+};
+
+/**
+ * BuildSchematicOverview
+ */
+export type BuildSchematicOverview = {
+    count: number;
+    primary: SchematicSummary | null;
 };
 
 /**

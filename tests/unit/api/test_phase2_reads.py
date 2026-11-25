@@ -42,7 +42,7 @@ from squid.core.voting.domain import (
 )
 from squid.runtime import ApiServices
 from tests.support.voting import build_snapshot, poll_snapshot
-from tests.unit.api.fakes import MockDatabaseManager
+from tests.unit.api.fakes import MockDatabaseManager, MockSchematics
 
 CREATOR_PUBLIC_ID = UUID("22222222-2222-2222-2222-222222222222")
 RENDER_RECIPE_HASH = "b" * 64
@@ -222,7 +222,7 @@ def test_public_build_links_and_serves_retained_media(
     app, _database = app_factory
     data = b"processed image"
     media = PublishedMediaFake(tmp_path, data)
-    _override(app, build_queries=ConfirmedBuildFake(), published_build_media=media)
+    _override(app, build_queries=ConfirmedBuildFake(), schematics=MockSchematics(), published_build_media=media)
     resource = f"/v1/builds/7/media/{media.artifact.upload_id}/content"
 
     with TestClient(app) as client:

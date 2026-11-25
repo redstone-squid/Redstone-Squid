@@ -85,6 +85,8 @@ const builds = [
 
 const detail: BuildDetail = {
   ...builds[0],
+  submitted_at: builds[0].created_at,
+  schematics: { count: 0, primary: null },
   details: {
     category: "Door",
     door_dimensions: { width: 5, height: 5, depth: 1 },

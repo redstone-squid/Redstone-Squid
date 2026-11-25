@@ -352,6 +352,10 @@ class MockSchematics(SchematicService):
         """Attach no analyzer or repository; nothing here reaches one."""
 
     @override
+    async def list_public_for_build(self, build_id: int) -> list[StoredSchematic]:
+        return []
+
+    @override
     async def list_public_page(
         self, build_id: int, *, selector: PageSelector = FIRST_PAGE, page_size: int = 50
     ) -> Page[StoredSchematic]:

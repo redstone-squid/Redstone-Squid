@@ -19610,6 +19610,27 @@
             },
             "type": "array"
           },
+          "submitted_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "schematics": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/BuildSchematicOverview"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "viewer": {
             "oneOf": [
               {
@@ -19649,6 +19670,7 @@
           "restrictions",
           "revision",
           "status",
+          "submitted_at",
           "tags",
           "title",
           "updated_at",
@@ -20087,6 +20109,29 @@
         "type": "object",
         "required": [],
         "title": "BuildPatch"
+      },
+      "BuildSchematicOverview": {
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "primary": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SchematicSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "count",
+          "primary"
+        ],
+        "title": "BuildSchematicOverview"
       },
       "BuildSearchResult": {
         "properties": {

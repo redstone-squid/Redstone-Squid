@@ -3,10 +3,13 @@
 from dataclasses import dataclass, replace
 from decimal import Decimal
 
+from litestar import Request
 from pydantic import BaseModel, Field
 
+from squid.api.links import relative_url_for
 from squid.api.security import Caller
-from squid.api.v1.schemas.builds import BuildDetail, BuildMedia, BuildViewer
+from squid.api.v1.schemas.builds import BuildDetail, BuildMedia, BuildSchematicOverview, BuildViewer
+from squid.api.v1.schemas.schematics import SchematicSummary
 from squid.core.accounts.domain.profiles import PublicCreatorProfile
 from squid.core.auth.infrastructure.viewer import SessionCounts, SessionUser
 from squid.core.builds.domain.edit_policy import BuildEditDecision, decide_build_edit
@@ -81,8 +84,22 @@ class BrowserViews:
         )
         return SessionSnapshot(user, self.caller.consent_pending, tuple(sorted(allowed)), counts)
 
-    async def build(self, build: Build) -> BuildDetail:
-        detail = BuildDetail.from_domain(build)
+    async def build(self, build: Build, request: Request) -> BuildDetail:
+        attachments = await self.services.schematics.list_public_for_build(build.id)
+        primary = next((item for item in attachments if item.is_primary), None)
+        summary = (
+            SchematicSummary.from_domain(
+                primary,
+                download_url=relative_url_for(
+                    request, "build_schematic_content", build_id=build.id, schematic_id=primary.id
+                ),
+            )
+            if primary is not None
+            else None
+        )
+        detail = replace(
+            BuildDetail.from_domain(build), schematics=BuildSchematicOverview(count=len(attachments), primary=summary)
+        )
         if self.account_id is not None:
             follows, ballot = await self.services.viewer_queries.build_state(self.account_id, build)
             permissions = await self.services.permissions.check(

@@ -1,12 +1,14 @@
 """Public build representations."""
 
 from dataclasses import dataclass, fields
+from datetime import datetime
 from enum import StrEnum
 from typing import Annotated, Literal, Self, cast
 from uuid import UUID
 
 from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field
 
+from squid.api.v1.schemas.schematics import SchematicSummary
 from squid.core.auth.infrastructure.viewer import ViewerBallot
 from squid.core.builds.application.edit_schema import BuildPatch as BuildPatch
 from squid.core.builds.application.edit_schema import DoorPatch as DoorPatch
@@ -35,6 +37,11 @@ class BuildLinks(BaseModel):
 
     world_downloads: list[str]
     schematics: list[str]
+
+
+class BuildSchematicOverview(BaseModel):
+    count: int
+    primary: SchematicSummary | None
 
 
 class BuildMedia(BaseModel):
@@ -150,6 +157,8 @@ class BuildDetail(PublicBuildSummary):
     description: str | None
     links: BuildLinks
     media: list[BuildMedia]
+    submitted_at: datetime | None
+    schematics: BuildSchematicOverview | None = None
     viewer: BuildViewer | None = None
     sponsor: BuildSponsor | None = None
 
@@ -160,6 +169,7 @@ class BuildDetail(PublicBuildSummary):
         return cls(
             **{field.name: getattr(summary, field.name) for field in fields(summary)},
             details=_details(build),
+            submitted_at=summary.created_at,
             restrictions={name: list(values or ()) for name, values in build.restrictions.items()},
             description=build.description,
             media=[
