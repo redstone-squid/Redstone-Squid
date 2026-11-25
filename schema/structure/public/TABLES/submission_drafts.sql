@@ -21,6 +21,7 @@ CREATE TABLE public.submission_drafts (
     source_messages jsonb DEFAULT '[]'::jsonb NOT NULL,
     inference_run_id uuid,
     door_expansion jsonb,
+    edit_source jsonb,
     preparation_attempt uuid,
     CONSTRAINT submission_drafts_expansion_check CHECK (((door_expansion IS NULL) OR (((category = 'door'::text) AND (jsonb_typeof(door_expansion) = 'object'::text) AND ((door_expansion -> 'schema_version'::text) = '1'::jsonb)) IS TRUE))),
     CONSTRAINT submission_drafts_expiry_after_creation CHECK ((expires_at > created_at)),

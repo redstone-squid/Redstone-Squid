@@ -2198,6 +2198,7 @@ CREATE TABLE public.build_vote_sessions (
     changes jsonb NOT NULL,
     proposal_revision bigint,
     proposal_patch jsonb,
+    public_suggestion boolean DEFAULT false NOT NULL,
     CONSTRAINT build_vote_sessions_proposal_check CHECK ((((proposal_revision IS NULL) AND (proposal_patch IS NULL)) OR ((proposal_revision IS NOT NULL) AND (proposal_revision > 0) AND (proposal_patch IS NOT NULL) AND (jsonb_typeof(proposal_patch) = 'object'::text))))
 );
 
@@ -5438,6 +5439,7 @@ CREATE TABLE public.submission_drafts (
     source_messages jsonb DEFAULT '[]'::jsonb NOT NULL,
     inference_run_id uuid,
     door_expansion jsonb,
+    edit_source jsonb,
     preparation_attempt uuid,
     CONSTRAINT submission_drafts_expansion_check CHECK (((door_expansion IS NULL) OR (((category = 'door'::text) AND (jsonb_typeof(door_expansion) = 'object'::text) AND ((door_expansion -> 'schema_version'::text) = '1'::jsonb)) IS TRUE))),
     CONSTRAINT submission_drafts_expiry_after_creation CHECK ((expires_at > created_at)),

@@ -4,6 +4,7 @@ CREATE TABLE public.build_vote_sessions (
     changes jsonb NOT NULL,
     proposal_revision bigint,
     proposal_patch jsonb,
+    public_suggestion boolean DEFAULT false NOT NULL,
     CONSTRAINT build_vote_sessions_proposal_check CHECK ((((proposal_revision IS NULL) AND (proposal_patch IS NULL)) OR ((proposal_revision IS NOT NULL) AND (proposal_revision > 0) AND (proposal_patch IS NOT NULL) AND (jsonb_typeof(proposal_patch) = 'object'::text))))
 );
 
