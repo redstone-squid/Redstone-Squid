@@ -24,7 +24,7 @@
 >
   <summary
     class={cn(
-      "flex min-h-control cursor-pointer list-none items-center gap-2 rounded-sm font-semibold [&::-webkit-details-marker]:hidden",
+      "flex min-h-control cursor-pointer list-none items-center gap-2 rounded-sm font-semibold",
       variant === "card" && "px-4",
     )}
   >
@@ -38,3 +38,34 @@
     {@render children()}
   </div>
 </details>
+
+<style>
+  /* list-none hides the marker everywhere but Safari, which draws its own. */
+  summary::-webkit-details-marker {
+    display: none;
+  }
+  /*
+   * The content grows to its height and shrinks back. Closed content is hidden with
+   * content-visibility, which transitions discretely so it stays visible while shrinking.
+   * Elsewhere, and with reduced motion, it opens and closes at once.
+   */
+  @supports (interpolate-size: allow-keywords) {
+    @media (prefers-reduced-motion: no-preference) {
+      details::details-content {
+        interpolate-size: allow-keywords;
+        overflow: clip;
+        /* Room for the focus ring (3px outline, 3px offset) of a control at the edge. */
+        overflow-clip-margin: 6px;
+        /* Fixed containment, or toggling content-visibility makes the height jitter. */
+        contain: layout;
+        transition-property: block-size, content-visibility;
+        transition-duration: var(--duration-normal);
+        transition-timing-function: var(--ease-standard);
+        transition-behavior: allow-discrete;
+      }
+      details:not([open])::details-content {
+        block-size: 0;
+      }
+    }
+  }
+</style>
