@@ -28,7 +28,7 @@ from squid.core.search.domain import (
 from squid.core.submissions.application.inference_runs import SubmissionInferenceRuns
 from tests.e2e.discord.environment import command_environment, displayed_text
 from tests.e2e.discord.workspace_services import staff_member, staff_permissions
-from tests.support.accounts import FakeAccountRepository, account_service
+from tests.support.accounts import FakeAccountRepository, InMemoryAccountService
 from tests.support.services import bot_services
 from tests.support.settings import RuntimeSettingsStub
 from tests.support.submission_form import Drafts, Finalization, Forms, Intake, Schematics
@@ -50,7 +50,7 @@ async def submission() -> AsyncIterator[tuple[simcord.Env, simcord.MemberActor, 
     drafts = Drafts()
     accounts = FakeAccountRepository()
     services = bot_services(
-        accounts=account_service(accounts),
+        accounts=InMemoryAccountService(accounts),
         schematics=Schematics(),
         submission_forms=Forms(),
         submission_drafts=drafts,
@@ -175,7 +175,7 @@ class EmptyAttachmentQueue(BuildService):
 async def test_attachment_reviewer_reaches_end_of_queue_privately() -> None:
     accounts = FakeAccountRepository()
     services = bot_services(
-        accounts=account_service(accounts),
+        accounts=InMemoryAccountService(accounts),
         permissions=staff_permissions(BUILD_SUBMISSION_EDIT),
         builds=EmptyAttachmentQueue(),
     )
@@ -239,7 +239,10 @@ async def test_catalogue_search_uses_the_selected_scope(
 ) -> None:
     search = CatalogueSearch()
     services = bot_services(
-        accounts=account_service(), permissions=staff_permissions(), build_queries=CatalogueQueries(), search=search
+        accounts=InMemoryAccountService(),
+        permissions=staff_permissions(),
+        build_queries=CatalogueQueries(),
+        search=search,
     )
     async with command_environment(EXTENSION, services=services) as (_, env):
         channel = env.guild.create_text_channel("catalogue")
@@ -257,7 +260,7 @@ async def test_catalogue_search_uses_the_selected_scope(
 async def test_mention_searches_builds(mention: str) -> None:
     search = CatalogueSearch()
     services = bot_services(
-        accounts=account_service(),
+        accounts=InMemoryAccountService(),
         permissions=staff_permissions(),
         build_queries=CatalogueQueries(),
         search=search,
@@ -279,7 +282,7 @@ async def test_mention_searches_builds(mention: str) -> None:
 
 async def test_browse_by_id_hides_an_unpublished_build_from_a_reader() -> None:
     services = bot_services(
-        accounts=account_service(),
+        accounts=InMemoryAccountService(),
         permissions=staff_permissions(),
         search=CatalogueSearch(),
         build_queries=CatalogueQueries(),
@@ -303,7 +306,7 @@ class BuildLogSettings(RuntimeSettingsStub):
 async def test_scanning_a_message_outside_the_build_log_explains_the_channel_requirement() -> None:
     accounts = FakeAccountRepository()
     services = bot_services(
-        accounts=account_service(accounts),
+        accounts=InMemoryAccountService(accounts),
         settings=BuildLogSettings(),
         permissions=staff_permissions(BUILD_SUBMISSION_RECALC),
     )

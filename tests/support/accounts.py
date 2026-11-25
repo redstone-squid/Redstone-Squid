@@ -1,7 +1,7 @@
 """In-memory account state for tests that run the real `AccountService`.
 
-Seed accounts, aliases and profiles here, then hand `account_service(repository)` to the code
-under test. Reads follow the database repository's rules closely enough for screens and routes.
+Seed accounts, aliases and profiles here, then hand `InMemoryAccountService(repository)` to the
+code under test. Reads follow the database repository's rules closely enough for screens and routes.
 Linking and merging return scripted results instead of performing their database mutations, and
 verification lockouts use the wall clock while everything else uses `NOW`.
 """
@@ -161,7 +161,7 @@ class FakeAccountRepository:
         if len(account.identities) <= 1:
             raise LastIdentityError(account_id=account_id)
         remaining = tuple(identity for identity in account.identities if identity.id != identity_id)
-        self.accounts[account_id] = replace(account, identities=remaining)
+        self.accounts[account_id] = _changed(account, identities=remaining)
         return removed
 
     async def set_identity_visibility(self, account_id: int, identity_id: int, *, is_public: bool) -> AccountIdentity:
@@ -174,9 +174,8 @@ class FakeAccountRepository:
         if account is None or target is None:
             raise AccountIdentityNotFoundError(identity_id, account_id=account_id)
         updated = replace(target, is_public=is_public)
-        self.accounts[account_id] = replace(
-            account,
-            identities=tuple(updated if i.id == identity_id else i for i in account.identities),
+        self.accounts[account_id] = _changed(
+            account, identities=tuple(updated if i.id == identity_id else i for i in account.identities)
         )
         return updated
 
@@ -269,7 +268,9 @@ class FakeAccountRepository:
 
     async def update_consent(self, account_id: int, consent: AccountConsent) -> Account:
         account = self.accounts[account_id]
-        updated = replace(account, consent=consent)
+        # The database's version column advances on every row update.
+        updated = _changed(account, consent=consent)
+        updated.revision = account.revision + 1
         self.accounts[account_id] = updated
         return updated
 
@@ -401,16 +402,29 @@ class FakeAccountRepository:
         self.lockouts.pop((provider, subject), None)
 
 
-def account_service(
-    repository: FakeAccountRepository | None = None,
-    *,
-    username: str | None = "Player",
-    verification_codes: Callable[[], int] = lambda: 123456,
-) -> AccountService:
-    """The real account service over in-memory state. Minecraft lookups answer `username`."""
-    state = FakeAccountRepository() if repository is None else repository
+def _changed(account: Account, **changes: object) -> Account:
+    """Copy an account with changes, keeping its revision, which `replace` would reset."""
+    updated = replace(account, **changes)  # type: ignore[arg-type]
+    updated.revision = account.revision
+    return updated
 
-    async def lookup(_minecraft_uuid: UUID) -> str | None:
-        return username
 
-    return AccountService(lookup, verification_codes, uow_factory=lambda: AccountScope(state))
+class InMemoryAccountService(AccountService):
+    """The real account service over `repository`. Minecraft lookups answer `username`.
+
+    Subclasses may override the calls a test records; everything else runs the real service.
+    """
+
+    def __init__(
+        self,
+        repository: FakeAccountRepository | None = None,
+        *,
+        username: str | None = "Player",
+        verification_codes: Callable[[], int] = lambda: 123456,
+    ) -> None:
+        self.repository = FakeAccountRepository() if repository is None else repository
+
+        async def lookup(_minecraft_uuid: UUID) -> str | None:
+            return username
+
+        super().__init__(lookup, verification_codes, uow_factory=lambda: AccountScope(self.repository))

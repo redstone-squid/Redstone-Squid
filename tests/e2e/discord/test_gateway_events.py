@@ -17,7 +17,7 @@ from squid_ui.ext.discord.testing import AsyncCallRecorder
 from tests.e2e.discord.community_services import Boards, CommunityVotes, EmptyDomainEvents, ObservedMessages, VotePosts
 from tests.e2e.discord.environment import allow_idle_reaction_workers, command_environment
 from tests.e2e.discord.workspace_services import staff_permissions
-from tests.support.accounts import FakeAccountRepository, account_service
+from tests.support.accounts import FakeAccountRepository, InMemoryAccountService
 from tests.support.services import bot_services
 from tests.support.voting import poll_snapshot
 
@@ -51,7 +51,7 @@ async def test_message_edit_and_delete_reach_tracking_and_starboard(monkeypatch:
 async def test_public_poll_reaction_casts_and_withdraws_a_ballot(monkeypatch: pytest.MonkeyPatch) -> None:
     accounts, votes, posts = FakeAccountRepository(), CommunityVotes(), VotePosts()
     services = bot_services(
-        accounts=account_service(accounts),
+        accounts=InMemoryAccountService(accounts),
         permissions=staff_permissions(),
         votes=votes,
         posts=posts,

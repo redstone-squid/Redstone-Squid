@@ -1,49 +1,27 @@
 """A transport recorder for account edit commands; database invariants have integration tests."""
 
 from dataclasses import fields
-from typing import Protocol, override
+from typing import Protocol
 
-from squid.core.accounts.application import AccountService
-from squid.core.accounts.application.edits import (
-    UNLINK_EDIT,
-    AccountEditorSnapshot,
-    ProfileValues,
-)
+from squid.core.accounts.application.edits import UNLINK_EDIT, ProfileValues
 from squid.core.accounts.domain import ProfileUpdate
-from squid.core.accounts.errors import AccountNotFoundError
 from squid.core.accounts.models import AccountIdentity, AccountProfile
 from squid.core.actors import ActingContext
 from squid.core.edits.domain import EditCommand, EditOutcome, EditReceipt, EditResult, EditValues, Revision
 
 
-class SnapshotAccountService(AccountService):
-    async def update_profile(self, account_id: int, update: ProfileUpdate) -> AccountProfile:
-        raise AssertionError("This fixture does not edit profiles")
+class AccountStore(Protocol):
+    """Where recorded edits land: the in-memory repository, or a test's own recorder."""
 
-    async def set_identity_visibility(self, account_id: int, identity_id: int, *, is_public: bool) -> AccountIdentity:
-        raise AssertionError("This fixture does not edit identities")
-
-    async def unlink_identity(self, account_id: int, identity_id: int) -> AccountIdentity:
-        raise AssertionError("This fixture does not unlink identities")
-
-    @override
-    async def editor_snapshot(self, account_id: int, *, context: ActingContext) -> AccountEditorSnapshot:
-        account = await self.get_account_by_id(account_id)
-        if account is None:
-            raise AccountNotFoundError(account_id)
-        return AccountEditorSnapshot(account, await self.get_profile(account_id, context=context))
-
-
-class AccountRecorder(Protocol):
-    async def update_profile(self, account_id: int, update: ProfileUpdate) -> AccountProfile: ...
+    async def upsert_profile(self, account_id: int, update_request: ProfileUpdate) -> AccountProfile: ...
     async def set_identity_visibility(
         self, account_id: int, identity_id: int, *, is_public: bool
     ) -> AccountIdentity: ...
-    async def unlink_identity(self, account_id: int, identity_id: int) -> AccountIdentity: ...
+    async def unlink_identity(self, account_id: int, identity_id: int) -> AccountIdentity | None: ...
 
 
 class AccountEditRecorder:
-    def __init__(self, accounts: AccountRecorder) -> None:
+    def __init__(self, accounts: AccountStore) -> None:
         self.accounts = accounts
         self.commands: list[EditCommand] = []
 
@@ -63,7 +41,7 @@ class AccountEditRecorder:
                         if field.name in values
                     }
                 )
-                await self.accounts.update_profile(account_id, update)
+                await self.accounts.upsert_profile(account_id, update)
                 before = EditValues.of(
                     ProfileValues.model_validate(AccountProfile.empty(account_id)).model_dump(mode="json")
                 )

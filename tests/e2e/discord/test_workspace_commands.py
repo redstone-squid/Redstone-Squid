@@ -18,7 +18,7 @@ from tests.e2e.discord.workspace_services import (
     staff_member,
     staff_permissions,
 )
-from tests.support.accounts import FakeAccountRepository, account_service
+from tests.support.accounts import FakeAccountRepository, InMemoryAccountService
 from tests.support.services import bot_services
 
 
@@ -33,7 +33,7 @@ def assert_private_defer_was_completed(env: simcord.Env) -> None:
 async def test_creator_page_action_on_an_unlinked_member_explains_privately() -> None:
     accounts = FakeAccountRepository()
     async with command_environment(
-        "squid.bot.accounts.cog", services=bot_services(accounts=account_service(accounts))
+        "squid.bot.accounts.cog", services=bot_services(accounts=InMemoryAccountService(accounts))
     ) as (_, env):
         channel = env.guild.create_text_channel("public")
         visitor = env.guild.add_member(env.create_user("visitor"))
@@ -51,7 +51,7 @@ async def test_creator_page_action_on_an_unlinked_member_explains_privately() ->
 async def test_creator_accepts_a_pasted_mention() -> None:
     accounts = FakeAccountRepository()
     async with command_environment(
-        "squid.bot.accounts.cog", services=bot_services(accounts=account_service(accounts))
+        "squid.bot.accounts.cog", services=bot_services(accounts=InMemoryAccountService(accounts))
     ) as (_, env):
         channel = env.guild.create_text_channel("public")
         visitor = env.guild.add_member(env.create_user("visitor"))
@@ -71,7 +71,7 @@ async def test_creator_finds_a_typed_credited_name_and_posts_it_publicly() -> No
     holder = accounts.seed_account(123)
     accounts.seed_alias("Glinte", account=holder)
     async with command_environment(
-        "squid.bot.accounts.cog", services=bot_services(accounts=account_service(accounts))
+        "squid.bot.accounts.cog", services=bot_services(accounts=InMemoryAccountService(accounts))
     ) as (_, env):
         channel = env.guild.create_text_channel("public")
         visitor = env.guild.add_member(env.create_user("visitor"))
@@ -106,7 +106,7 @@ async def test_unknown_screen_address_finishes_the_private_defer_with_navigation
 async def test_notifications_show_a_consented_members_personal_inbox() -> None:
     accounts = FakeAccountRepository()
     services = bot_services(
-        accounts=account_service(accounts), notifications=WorkspaceInbox(7), permissions=staff_permissions()
+        accounts=InMemoryAccountService(accounts), notifications=WorkspaceInbox(7), permissions=staff_permissions()
     )
     async with command_environment("squid.bot.accounts.cog", "squid.bot.notifications_cog", services=services) as (
         _,
@@ -145,7 +145,7 @@ async def test_notifications_show_a_consented_members_personal_inbox() -> None:
 async def test_access_opens_with_the_selected_discord_role_in_the_invoking_guild() -> None:
     accounts = FakeAccountRepository()
     services = bot_services(
-        accounts=account_service(accounts),
+        accounts=InMemoryAccountService(accounts),
         permissions=staff_permissions(PERM_GRANT_GUILD),
         permission_admin=AccessRevision(),
     )
@@ -164,7 +164,9 @@ async def test_access_opens_with_the_selected_discord_role_in_the_invoking_guild
 async def test_settings_renders_the_channel_configured_for_this_guild() -> None:
     accounts, settings = FakeAccountRepository(), GuildConfiguration()
     services = bot_services(
-        accounts=account_service(accounts), permissions=staff_permissions(SETTINGS_SERVER_VIEW), settings=settings
+        accounts=InMemoryAccountService(accounts),
+        permissions=staff_permissions(SETTINGS_SERVER_VIEW),
+        settings=settings,
     )
     async with command_environment("squid.bot.settings.cog", services=services) as (_, env):
         channel = env.guild.create_text_channel("staff")
@@ -188,7 +190,7 @@ async def test_errors_checks_access_before_loading_reports(allowed: bool) -> Non
     accounts, reports = FakeAccountRepository(), StoredReports()
     nodes = (DIAGNOSTICS_ERROR_READ,) if allowed else ()
     services = bot_services(
-        accounts=account_service(accounts), permissions=staff_permissions(*nodes), error_reports=reports
+        accounts=InMemoryAccountService(accounts), permissions=staff_permissions(*nodes), error_reports=reports
     )
     async with command_environment("squid.bot.diagnostics.cog", services=services) as (bot, env):
         channel = env.guild.create_text_channel("staff")
@@ -221,7 +223,9 @@ async def test_errors_checks_access_before_loading_reports(allowed: bool) -> Non
 async def test_errors_opens_the_referenced_report_with_its_full_text_attachment() -> None:
     accounts, reports = FakeAccountRepository(), StoredReports()
     services = bot_services(
-        accounts=account_service(accounts), permissions=staff_permissions(DIAGNOSTICS_ERROR_READ), error_reports=reports
+        accounts=InMemoryAccountService(accounts),
+        permissions=staff_permissions(DIAGNOSTICS_ERROR_READ),
+        error_reports=reports,
     )
     async with command_environment("squid.bot.diagnostics.cog", services=services) as (_, env):
         channel = env.guild.create_text_channel("staff")
@@ -240,7 +244,9 @@ async def test_errors_opens_the_referenced_report_with_its_full_text_attachment(
 
 async def test_connection_privately_reports_the_last_disconnect_and_resume() -> None:
     accounts = FakeAccountRepository()
-    services = bot_services(accounts=account_service(accounts), permissions=staff_permissions(DIAGNOSTICS_ERROR_READ))
+    services = bot_services(
+        accounts=InMemoryAccountService(accounts), permissions=staff_permissions(DIAGNOSTICS_ERROR_READ)
+    )
     async with command_environment("squid.bot.diagnostics.cog", services=services) as (bot, env):
         channel = env.guild.create_text_channel("staff")
         staff = staff_member(env, accounts)

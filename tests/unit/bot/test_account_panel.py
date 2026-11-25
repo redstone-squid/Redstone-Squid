@@ -22,7 +22,6 @@ from squid.bot.accounts.presentation import refresh_message
 from squid.bot.accounts.profile_editor import ProfileEditor
 from squid.bot.accounts.workspace import AccountTab, AccountWorkspace
 from squid.bot.utils.permissions import Grants
-from squid.core.accounts.application.edits import AccountEditorSnapshot
 from squid.core.accounts.domain import (
     AccountConsent,
     AccountMerge,
@@ -34,7 +33,6 @@ from squid.core.accounts.domain import (
     LinkReservation,
     MergePreview,
     ProfileLink,
-    ProfileUpdate,
     PublicCreatorProfile,
 )
 from squid.core.accounts.errors import AccountNotFoundError
@@ -49,12 +47,14 @@ from squid_ui.content.text import NEUTRAL, resolve_text, source_text
 from squid_ui.ext.discord.testing import commit_render, interaction_harness
 from squid_ui.interactions import Visibility
 from squid_ui.testing import RecordingResponder, find, keys, labels, press_event, render_tree, submit_event
-from tests.support.account_edits import AccountEditRecorder, SnapshotAccountService
+from tests.support.account_edits import AccountEditRecorder
+from tests.support.accounts import FakeAccountRepository, InMemoryAccountService
 from tests.support.services import bot_services
 
 ACCOUNT_ID = 42
 AUTHOR_ID = 555
 NOW = Instant.from_utc(2026, 8, 19)
+CONSENTED = AccountConsent.grant_current()
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
 
 DISCORD = replace(AccountIdentity.discord(AUTHOR_ID), id=1, verified_at=NOW)
@@ -65,20 +65,35 @@ async def edit_actor() -> Actor:
     return UserActor(account_id=ACCOUNT_ID, discord_user_id=AUTHOR_ID)
 
 
+def _seeded(*identities: AccountIdentity, consent: AccountConsent | None = CONSENTED) -> InMemoryAccountService:
+    """The real account service holding the author's account, ACCOUNT_ID."""
+    accounts = InMemoryAccountService()
+    accounts.repository.accounts[ACCOUNT_ID] = Account(
+        identities=identities, consent=consent, id=ACCOUNT_ID, created_at=NOW, public_creator_id=UUID(int=ACCOUNT_ID)
+    )
+    return accounts
+
+
+def stored(panel: AccountOverview) -> FakeAccountRepository:
+    return cast(InMemoryAccountService, panel._accounts).repository
+
+
 def _workspace(
-    *, accounts: SnapshotAccountService, notifications: NotificationService | None = None, **kwargs: Any
+    *, accounts: InMemoryAccountService, notifications: NotificationService | None = None, **kwargs: Any
 ) -> AccountWorkspace:
     return AccountWorkspace(
         accounts=accounts,
         notifications=notifications or bot_services().notifications,
-        edits=AccountEditRecorder(accounts),
+        edits=AccountEditRecorder(accounts.repository),
         actor=edit_actor,
         **kwargs,
     )
 
 
-def _overview(*, accounts: SnapshotAccountService, **kwargs: Any) -> AccountOverview:
-    return AccountOverview(accounts=accounts, edits=AccountEditRecorder(accounts), actor=edit_actor, **kwargs)
+def _overview(*, accounts: InMemoryAccountService, **kwargs: Any) -> AccountOverview:
+    return AccountOverview(
+        accounts=accounts, edits=AccountEditRecorder(accounts.repository), actor=edit_actor, **kwargs
+    )
 
 
 async def no_consent_request(
@@ -174,28 +189,9 @@ class TransitionSource:
         self.source = source
 
 
-class NoAccountService(SnapshotAccountService):
+class LinkAccountService(InMemoryAccountService):
     def __init__(self) -> None:
-        pass
-
-    @override
-    async def get_account_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None:
-        del provider, subject
-        return None
-
-
-class PublicProfileService(SnapshotAccountService):
-    def __init__(self, profile: PublicCreatorProfile) -> None:
-        self.profile = profile
-
-    @override
-    async def get_public_profile(self, public_id: UUID, *, context: ActingContext) -> PublicCreatorProfile | None:
-        del public_id
-        return self.profile
-
-
-class LinkAccountService(SnapshotAccountService):
-    def __init__(self) -> None:
+        super().__init__()
         self.linked: list[tuple[int, str]] = []
         self.released: list[str] = []
         self.reservation_ttls: list[int] = []
@@ -256,8 +252,9 @@ class LinkAccountService(SnapshotAccountService):
         self.released.append(code)
 
 
-class StaffRefreshService(SnapshotAccountService):
+class StaffRefreshService(InMemoryAccountService):
     def __init__(self, target: Account | None, refresh: IdentityRefresh) -> None:
+        super().__init__()
         self.target = target
         self.refresh = refresh
         self.identity_reads: list[tuple[IdentityProvider, str]] = []
@@ -277,8 +274,9 @@ class StaffRefreshService(SnapshotAccountService):
         return self.refresh
 
 
-class MergeAccountService(SnapshotAccountService):
+class MergeAccountService(InMemoryAccountService):
     def __init__(self) -> None:
+        super().__init__()
         self.completed: list[tuple[int, str]] = []
 
     @override
@@ -295,50 +293,12 @@ class MergeAccountService(SnapshotAccountService):
         return AccountMerge(surviving_account_id, 9, UUID(int=8), UUID(int=9))
 
 
-class AccountMutationService(SnapshotAccountService):
-    def __init__(self, *, unlinked: AccountIdentity = JAVA) -> None:
-        self.unlinked = unlinked
-        self.profile_updates: list[tuple[int, ProfileUpdate]] = []
-        self.consent_grants: list[int] = []
-        self.visibility_writes: list[tuple[int, int, bool]] = []
-        self.unlinks: list[tuple[int, int]] = []
-
-    @override
-    async def get_account_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None:
-        return Account(identities=(DISCORD,), consent=AccountConsent.grant_current(), id=ACCOUNT_ID, created_at=NOW)
-
-    @override
-    async def update_profile(self, account_id: int, update: ProfileUpdate) -> AccountProfile:
-        self.profile_updates.append((account_id, update))
-        return AccountProfile.empty(account_id)
-
-    @override
-    async def grant_current_consent(self, *, context: ActingContext) -> Account:
-        account_id = context.effective.require_account_id()
-        self.consent_grants.append(account_id)
-        account = Account(identities=(), consent=AccountConsent.grant_current(), id=account_id, created_at=NOW)
-        account.revision = 2
-        return account
-
-    @override
-    async def set_identity_visibility(self, account_id: int, identity_id: int, *, is_public: bool) -> AccountIdentity:
-        self.visibility_writes.append((account_id, identity_id, is_public))
-        return DISCORD
-
-    @override
-    async def unlink_identity(self, account_id: int, identity_id: int) -> AccountIdentity:
-        self.unlinks.append((account_id, identity_id))
-        return self.unlinked
-
-
 async def test_someone_with_no_account_gets_consent_and_linking_workspace() -> None:
-    accounts = NoAccountService()
-
     async def authorize(_node: PermissionNode) -> bool:
         return False
 
     workspace = _workspace(
-        accounts=accounts,
+        accounts=InMemoryAccountService(),
         actor_id=AUTHOR_ID,
         account=None,
         request_consent=no_consent_request,
@@ -354,11 +314,8 @@ async def test_someone_with_no_account_gets_consent_and_linking_workspace() -> N
 
 
 async def test_somebody_elses_creator_page_uses_the_public_profile_projection() -> None:
-    page = UUID(int=7)
-    accounts = PublicProfileService(PublicCreatorProfile(public_id=page, hidden=False))
-
     with ActingContext.direct(await edit_actor()).scope():
-        creator = await CreatorPage.load(accounts, page, "Someone")
+        creator = await CreatorPage.load(_seeded(DISCORD), UUID(int=ACCOUNT_ID), "Someone")
 
     assert "Someone" in str(creator.render())
 
@@ -386,21 +343,13 @@ def test_a_hidden_creator_page_still_opens_their_builds_but_cannot_be_followed()
 
 
 async def test_overview_previews_the_public_page_strangers_see() -> None:
-    public_id = UUID(int=9)
-
-    class OwnAccount(AccountMutationService):
-        @override
-        async def editor_snapshot(self, account_id: int, *, context: ActingContext) -> AccountEditorSnapshot:
-            account = Account(id=account_id, public_creator_id=public_id, consent=AccountConsent.grant_current())
-            return AccountEditorSnapshot(account, AccountProfile.empty(account_id))
-
     panel = _overview(
-        accounts=OwnAccount(), account_id=ACCOUNT_ID, actor_id=AUTHOR_ID, request_consent=no_consent_request
+        accounts=_seeded(DISCORD), account_id=ACCOUNT_ID, actor_id=AUTHOR_ID, request_consent=no_consent_request
     )
     await panel.on_load()
 
     control = find(render_tree(panel), sl.semantic.RoutedActionControl, key="public_page")
-    assert control.route_id == CreatorPage.open.custom_id(public_id=public_id)
+    assert control.route_id == CreatorPage.open.custom_id(public_id=UUID(int=ACCOUNT_ID))
 
 
 async def test_choose_claim_opens_the_creator_picker(mocker: MockerFixture) -> None:
@@ -764,9 +713,8 @@ def test_account_is_one_app_only_workspace() -> None:
 
 
 def _account_panel(profile: AccountProfile) -> AccountOverview:
-    accounts = AccountMutationService()
     panel = _overview(
-        accounts=accounts,
+        accounts=_seeded(DISCORD),
         account_id=ACCOUNT_ID,
         actor_id=AUTHOR_ID,
         request_consent=no_consent_request,
@@ -825,8 +773,7 @@ async def test_profile_editor_commit_persists_and_returns_to_account_panel() -> 
     with sl.runtime.transaction():
         await component.on_change(sp.TransitionEvent(cast(Any, source), "save", staged, committed))
 
-    accounts = cast(AccountMutationService, panel._accounts)
-    assert len(accounts.profile_updates) == 1
+    assert stored(panel).profiles[ACCOUNT_ID].display_name == "Builder"
     assert panel._profile_editor is None
     assert len(notices(source)) == 1
 
@@ -859,7 +806,7 @@ def _gated_panel(monkeypatch: pytest.MonkeyPatch) -> tuple[AccountOverview, dict
         return True
 
     panel = _overview(
-        accounts=AccountMutationService(),
+        accounts=_seeded(replace(DISCORD, is_public=False), consent=None),
         account_id=ACCOUNT_ID,
         actor_id=AUTHOR_ID,
         request_consent=cast(Any, request),
@@ -896,7 +843,7 @@ async def test_a_press_needing_consent_ends_instead_of_holding_the_panel(
 
     # The press resumes where the reader left it, on the panel's own message.
     assert panel._profile_editor is not None
-    assert cast(AccountMutationService, panel._accounts).consent_grants == [ACCOUNT_ID]
+    assert stored(panel).accounts[ACCOUNT_ID].consent is not None
     assert message_root.scheduled == 1
 
 
@@ -909,7 +856,7 @@ async def test_declining_leaves_the_panel_exactly_as_it_was(monkeypatch: pytest.
 
     assert panel._profile_editor is None
     assert panel._needs_consent
-    assert cast(AccountMutationService, panel._accounts).consent_grants == []
+    assert stored(panel).accounts[ACCOUNT_ID].consent is None
     assert message_root.scheduled == 0
 
 
@@ -924,12 +871,13 @@ async def test_a_toggle_needing_consent_still_applies_once_the_reader_agrees(
 
     await panel._toggle_identity(cast(Any, _press(message_root)))
 
-    accounts = cast(AccountMutationService, panel._accounts)
-    assert accounts.visibility_writes == []
+    (identity,) = stored(panel).accounts[ACCOUNT_ID].identities
+    assert not identity.is_public
 
     await opened["on_answer"](AccountConsent.grant_current())
 
-    assert accounts.visibility_writes == [(ACCOUNT_ID, DISCORD.id, True)]
+    (identity,) = stored(panel).accounts[ACCOUNT_ID].identities
+    assert identity.is_public
     assert message_root.scheduled == 1
 
 
@@ -943,8 +891,8 @@ class _Recorder:
         self.requests.append(request)
 
 
-def _linked_panel() -> tuple[AccountOverview, _Recorder, AccountMutationService, sd.MessageRoot]:
-    accounts = AccountMutationService()
+def _linked_panel() -> tuple[AccountOverview, _Recorder, FakeAccountRepository, sd.MessageRoot]:
+    accounts = _seeded(DISCORD, JAVA)
     panel = _overview(
         accounts=accounts,
         account_id=ACCOUNT_ID,
@@ -958,7 +906,7 @@ def _linked_panel() -> tuple[AccountOverview, _Recorder, AccountMutationService,
     presenter = _Recorder()
     message_root = sd.MessageRoot(panel, access=sd.Everyone(), timeout=None, challenge=presenter)
     commit_render(message_root)
-    return panel, presenter, accounts, message_root
+    return panel, presenter, accounts.repository, message_root
 
 
 async def test_unlinking_asks_before_it_removes_anything() -> None:
@@ -967,7 +915,7 @@ async def test_unlinking_asks_before_it_removes_anything() -> None:
 
     await message_root.dispatch("unlink", interaction_harness(user_id=AUTHOR_ID))
 
-    assert accounts.unlinks == []
+    assert accounts.accounts[ACCOUNT_ID].identities == (DISCORD, JAVA)
     assert len(presenter.requests) == 1
     assert presenter.requests[0].key == "unlink"
 
@@ -978,7 +926,7 @@ async def test_agreeing_to_the_question_removes_the_identity() -> None:
 
     await presenter.requests[0].approve()
 
-    assert accounts.unlinks == [(ACCOUNT_ID, JAVA.id)]
+    assert accounts.accounts[ACCOUNT_ID].identities == (DISCORD,)
 
 
 async def test_declining_the_question_removes_nothing() -> None:
@@ -987,7 +935,7 @@ async def test_declining_the_question_removes_nothing() -> None:
 
     await presenter.requests[0].decline()
 
-    assert accounts.unlinks == []
+    assert accounts.accounts[ACCOUNT_ID].identities == (DISCORD, JAVA)
 
 
 def test_unlinking_your_own_discord_account_says_what_that_costs() -> None:
@@ -1037,28 +985,8 @@ async def test_link_reservation_is_released_once_when_prompt_delivery_fails() ->
 
 
 async def test_embedded_overview_opens_consent_under_the_workspace_screen(mocker: MockerFixture) -> None:
-    account = Account(identities=(DISCORD,), id=ACCOUNT_ID, created_at=NOW)
-
-    class OverviewAccounts(AccountMutationService):
-        @override
-        async def get_account_by_identity(self, provider: IdentityProvider, subject: str) -> Account:
-            assert provider is IdentityProvider.DISCORD
-            assert subject == str(AUTHOR_ID)
-            return await self.get_account_by_id(ACCOUNT_ID)
-
-        @override
-        async def get_account_by_id(self, account_id: int) -> Account:
-            assert account_id == ACCOUNT_ID
-            if self.consent_grants:
-                account.consent = AccountConsent.grant_current()
-                account.revision = 2
-            return account
-
-        @override
-        async def get_profile(self, account_id: int, *, context: ActingContext) -> AccountProfile:
-            return AccountProfile.empty(account_id)
-
-    accounts = OverviewAccounts()
+    accounts = _seeded(DISCORD, consent=None)
+    account = accounts.repository.accounts[ACCOUNT_ID]
 
     async def consent(
         event: sd.ActionEvent,
@@ -1116,7 +1044,7 @@ async def test_embedded_overview_opens_consent_under_the_workspace_screen(mocker
         interaction = sd.testing.InteractionHarness(AUTHOR_ID, client=ui.interaction.client)
         await child_root.dispatch("accept", interaction.source)
 
-        assert accounts.consent_grants == [ACCOUNT_ID]
+        assert accounts.repository.accounts[ACCOUNT_ID].consent is not None
         assert overview._profile_editor is not None
         assert not ui.root.finished
         assert child_root.finished
@@ -1125,7 +1053,7 @@ async def test_embedded_overview_opens_consent_under_the_workspace_screen(mocker
         cancel_key = next(key for key in ui.root.snapshot().handler_keys if key.endswith("cancel-profile-edit"))
         await ui.press(cancel_key)
         assert overview._profile_editor is None
-        assert accounts.profile_updates == []
+        assert ACCOUNT_ID not in accounts.repository.profiles
 
         edit_key = next(key for key in ui.root.snapshot().handler_keys if key.endswith("edit_page"))
         await ui.press(edit_key)
@@ -1154,7 +1082,7 @@ async def test_identity_visibility_needs_a_selected_identity() -> None:
 
 def test_linked_account_picker_uses_plain_names_and_visibility() -> None:
     panel = _overview(
-        accounts=AccountMutationService(),
+        accounts=_seeded(DISCORD),
         account_id=ACCOUNT_ID,
         actor_id=AUTHOR_ID,
         discord_username="redbuilder",
@@ -1175,27 +1103,11 @@ def test_linked_account_picker_uses_plain_names_and_visibility() -> None:
 
 
 async def test_account_focus_before_and_after_load_preserves_user_selection() -> None:
-    account = Account(identities=(DISCORD,), id=ACCOUNT_ID, created_at=NOW)
-
-    class FocusAccounts(NoAccountService):
-        current: Account | None = account
-
-        @override
-        async def get_account_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None:
-            return self.current
-
-        @override
-        async def get_account_by_id(self, account_id: int) -> Account:
-            return account
-
-        @override
-        async def get_profile(self, account_id: int, *, context: ActingContext) -> AccountProfile:
-            return AccountProfile.empty(account_id)
-
     async def authorize(_node: PermissionNode) -> bool:
         return False
 
-    accounts = FocusAccounts()
+    accounts = _seeded(DISCORD, consent=None)
+    account = accounts.repository.accounts[ACCOUNT_ID]
     workspace = _workspace(
         accounts=accounts,
         actor_id=AUTHOR_ID,
@@ -1218,7 +1130,7 @@ async def test_account_focus_before_and_after_load_preserves_user_selection() ->
         )
         await workspace._rebuild()
         assert workspace._tabs.machine_state.selected == "notifications"
-        accounts.current = None
+        del accounts.repository.accounts[ACCOUNT_ID]
         await workspace._rebuild()
         assert workspace._tabs.machine_state.selected == "notifications"
         assert "Review privacy notice" in labels(workspace._tabs.render())

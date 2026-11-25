@@ -4,7 +4,7 @@ from squid.bot.accounts.consent import ConsentPrompt
 from squid.core.accounts.domain import CURRENT_CONSENT_VERSION
 from tests.e2e.discord.environment import command_environment, displayed_text
 from tests.e2e.discord.workspace_services import WorkspaceInbox, staff_permissions
-from tests.support.accounts import FakeAccountRepository, account_service
+from tests.support.accounts import FakeAccountRepository, InMemoryAccountService
 from tests.support.services import bot_services
 from tests.support.submission_form import Drafts, Finalization, Forms, Intake, Schematics
 
@@ -14,7 +14,7 @@ async def test_first_submission_waits_for_consent_before_saving(answer: str, mon
     accounts = FakeAccountRepository(next_id=37)
     drafts = Drafts()
     services = bot_services(
-        accounts=account_service(accounts),
+        accounts=InMemoryAccountService(accounts),
         submission_drafts=drafts,
         submission_forms=Forms(),
         submission_intake=Intake(),
@@ -60,7 +60,7 @@ async def test_first_submission_waits_for_consent_before_saving(answer: str, mon
 async def test_notifications_open_with_a_privacy_notice_action_for_new_users() -> None:
     accounts = FakeAccountRepository(next_id=37)
     services = bot_services(
-        accounts=account_service(accounts), notifications=WorkspaceInbox(37), permissions=staff_permissions()
+        accounts=InMemoryAccountService(accounts), notifications=WorkspaceInbox(37), permissions=staff_permissions()
     )
     async with command_environment("squid.bot.notifications_cog", services=services) as (_, env):
         channel = env.guild.create_text_channel("community")

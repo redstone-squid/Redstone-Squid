@@ -72,8 +72,8 @@ class AccountRecorder(AccountService):
     async def list_identities(self, *, context: ActingContext) -> tuple[AccountIdentity, ...]:
         return self.identities
 
-    async def update_profile(self, account_id: int, update: ProfileUpdate) -> AccountProfile:
-        self.profile_updates.append((account_id, update))
+    async def upsert_profile(self, account_id: int, update_request: ProfileUpdate) -> AccountProfile:
+        self.profile_updates.append((account_id, update_request))
         return self.profile
 
     async def set_identity_visibility(self, account_id: int, identity_id: int, *, is_public: bool) -> AccountIdentity:

@@ -42,7 +42,7 @@ from squid.core.accounts.models import (
 )
 from squid.core.actors import ActingContext, AnonymousActor, ServiceActor, UserActor
 from squid.core.permissions.errors import PermissionDeniedError
-from tests.support.accounts import NOW, FakeAccountRepository, account_service
+from tests.support.accounts import NOW, FakeAccountRepository, InMemoryAccountService
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
 OTHER_JAVA_UUID = UUID("22222222-2222-2222-2222-222222222222")
@@ -61,7 +61,7 @@ def test_identity_factories_use_canonical_provider_subjects() -> None:
 async def test_discord_login_creates_an_account_without_making_discord_primary() -> None:
     repository = FakeAccountRepository()
 
-    account = await account_service(repository).get_or_create_identity(IdentityProvider.DISCORD, "123")
+    account = await InMemoryAccountService(repository).get_or_create_identity(IdentityProvider.DISCORD, "123")
 
     (identity,) = account.identities_for(IdentityProvider.DISCORD)
     assert (identity.id, identity.subject, identity.verified_at) == (1, "123", NOW)
@@ -73,7 +73,7 @@ async def test_grant_current_consent_updates_the_internal_account() -> None:
     seeded = repository.seed_account(123)
     assert seeded.id is not None
 
-    account = await account_service(repository).grant_current_consent(
+    account = await InMemoryAccountService(repository).grant_current_consent(
         context=ActingContext.direct(UserActor(account_id=seeded.id))
     )
 
@@ -85,7 +85,7 @@ async def test_link_rejects_an_invalid_or_conflicting_java_identity() -> None:
     repository = FakeAccountRepository()
     account = repository.seed_account(123, consent=CONSENT)
     assert account.id is not None
-    linked = account_service(repository)
+    linked = InMemoryAccountService(repository)
     with pytest.raises(InvalidVerificationCodeError):
         await linked.link_minecraft_account(
             "bad", consent=CONSENT, context=ActingContext.direct(UserActor(discord_user_id=123, account_id=account.id))
@@ -107,7 +107,7 @@ async def test_link_returns_the_automatically_claimed_alias() -> None:
     repository.link_result = _linked(account, claimed_alias=alias)
     assert account.id is not None
 
-    refresh = await account_service(repository).link_minecraft_account(
+    refresh = await InMemoryAccountService(repository).link_minecraft_account(
         "valid", consent=CONSENT, context=ActingContext.direct(UserActor(discord_user_id=123, account_id=account.id))
     )
 
@@ -139,7 +139,7 @@ async def test_a_bad_code_fails_at_reservation_before_any_prompt() -> None:
     repository = FakeAccountRepository()
 
     with pytest.raises(InvalidVerificationCodeError):
-        await account_service(repository).reserve_minecraft_link(
+        await InMemoryAccountService(repository).reserve_minecraft_link(
             "bad", context=ActingContext.direct(UserActor(discord_user_id=123))
         )
 
@@ -152,7 +152,7 @@ async def test_reserving_returns_the_preview_the_prompt_needs() -> None:
     credit = CreditPreview(name="Player", build_count=12)
     repository.reservable["good"] = _preview(credit=credit)
 
-    reservation = await account_service(repository).reserve_minecraft_link(
+    reservation = await InMemoryAccountService(repository).reserve_minecraft_link(
         "good", context=ActingContext.direct(UserActor(discord_user_id=123))
     )
 
@@ -167,7 +167,7 @@ async def test_reservation_lockout_is_enforced_before_reserving() -> None:
     """Reservation reveals whether a code is valid, so it needs the same attempt limit as redemption."""
     repository = FakeAccountRepository()
     repository.reservable["good"] = _preview()
-    accounts = account_service(repository)
+    accounts = InMemoryAccountService(repository)
     for _ in range(VERIFICATION_MAX_CONSECUTIVE_FAILURES):
         with pytest.raises(InvalidVerificationCodeError):
             await accounts.reserve_minecraft_link("bad", context=ActingContext.direct(UserActor(discord_user_id=123)))
@@ -182,7 +182,7 @@ async def test_committing_a_reservation_passes_the_token_through() -> None:
     assert account.id is not None
     repository.reservable["good"] = _preview()
     repository.link_result = _linked(account)
-    accounts = account_service(repository)
+    accounts = InMemoryAccountService(repository)
     reservation = await accounts.reserve_minecraft_link(
         "good", context=ActingContext.direct(UserActor(discord_user_id=123))
     )
@@ -203,7 +203,7 @@ async def test_a_lapsed_reservation_is_not_reported_as_a_bad_code() -> None:
     account = repository.seed_account(123, consent=CONSENT)
     assert account.id is not None
     repository.reservable["good"] = _preview()
-    accounts = account_service(repository)
+    accounts = InMemoryAccountService(repository)
     reservation = await accounts.reserve_minecraft_link(
         "good", context=ActingContext.direct(UserActor(discord_user_id=123))
     )
@@ -226,7 +226,7 @@ async def test_committing_a_reservation_is_not_charged_again() -> None:
     account = repository.seed_account(123, consent=CONSENT)
     assert account.id is not None
     repository.reservable["good"] = _preview()
-    accounts = account_service(repository)
+    accounts = InMemoryAccountService(repository)
     reservation = await accounts.reserve_minecraft_link(
         "good", context=ActingContext.direct(UserActor(discord_user_id=123))
     )
@@ -249,7 +249,7 @@ async def test_consecutive_wrong_codes_lock_the_attempting_identity() -> None:
     repository = FakeAccountRepository()
     account = repository.seed_account(123, consent=CONSENT)
     assert account.id is not None
-    accounts = account_service(repository)
+    accounts = InMemoryAccountService(repository)
 
     for _ in range(VERIFICATION_MAX_CONSECUTIVE_FAILURES):
         with pytest.raises(InvalidVerificationCodeError):
@@ -275,7 +275,7 @@ async def test_a_lockout_is_scoped_to_one_identity() -> None:
     repository = FakeAccountRepository()
     account = repository.seed_account(123, consent=CONSENT)
     assert account.id is not None
-    accounts = account_service(repository)
+    accounts = InMemoryAccountService(repository)
     for _ in range(VERIFICATION_MAX_CONSECUTIVE_FAILURES):
         with pytest.raises(InvalidVerificationCodeError):
             await accounts.link_minecraft_account(
@@ -298,7 +298,7 @@ async def test_a_success_clears_the_failure_count() -> None:
     repository = FakeAccountRepository()
     account = repository.seed_account(123, consent=CONSENT)
     assert account.id is not None
-    accounts = account_service(repository)
+    accounts = InMemoryAccountService(repository)
     for _ in range(VERIFICATION_MAX_CONSECUTIVE_FAILURES - 1):
         with pytest.raises(InvalidVerificationCodeError):
             await accounts.link_minecraft_account(
@@ -331,7 +331,7 @@ async def test_holding_a_correct_code_is_never_charged_as_a_failure() -> None:
     account = repository.seed_account(123, consent=CONSENT)
     assert account.id is not None
     repository.link_result = VerificationLinkResult(account=account, conflicting_java_uuid=OTHER_JAVA_UUID)
-    accounts = account_service(repository)
+    accounts = InMemoryAccountService(repository)
 
     for _ in range(VERIFICATION_MAX_CONSECUTIVE_FAILURES + 2):
         with pytest.raises(AccountAlreadyLinkedError):
@@ -352,7 +352,7 @@ async def test_alias_claim_requires_current_consent() -> None:
     repository.aliases[1] = CreatorAlias(id=1, name="OldName")
 
     with pytest.raises(ConsentRequiredError):
-        await account_service(repository).request_alias_claim(
+        await InMemoryAccountService(repository).request_alias_claim(
             "OldName", context=ActingContext.direct(UserActor(account_id=seeded.id))
         )
 
@@ -362,16 +362,16 @@ async def test_staff_resolution_records_the_staff_account() -> None:
     account = repository.seed_account(123, consent=CONSENT)
     assert account.id is not None
     repository.aliases[1] = CreatorAlias(id=1, name="OldName")
-    claim = await account_service(repository).request_alias_claim(
+    claim = await InMemoryAccountService(repository).request_alias_claim(
         "OldName", context=ActingContext.direct(UserActor(account_id=account.id))
     )
 
     with pytest.raises(PermissionDeniedError):
-        await account_service(repository).approve_alias_claim(
+        await InMemoryAccountService(repository).approve_alias_claim(
             claim.id, context=ActingContext.direct(UserActor(account_id=99))
         )
 
-    resolved = await account_service(repository).approve_alias_claim(
+    resolved = await InMemoryAccountService(repository).approve_alias_claim(
         claim.id, context=ActingContext.direct(UserActor(account_id=99, is_bot_owner=True))
     )
 
@@ -379,7 +379,7 @@ async def test_staff_resolution_records_the_staff_account() -> None:
     assert resolved.resolved_by_account_id == 99
     assert resolved.status is ClaimStatus.APPROVED
     with pytest.raises(ClaimNotFoundError):
-        await account_service(repository).approve_alias_claim(
+        await InMemoryAccountService(repository).approve_alias_claim(
             claim.id, context=ActingContext.direct(UserActor(account_id=99, is_bot_owner=True))
         )
 
@@ -387,7 +387,7 @@ async def test_staff_resolution_records_the_staff_account() -> None:
 async def test_merge_requires_recent_proof_of_two_distinct_accounts() -> None:
     repository = FakeAccountRepository()
     repository.merge_result = AccountMerge(1, 2, UUID(int=1), UUID(int=2))
-    accounts = account_service(repository)
+    accounts = InMemoryAccountService(repository)
 
     result = await accounts.merge_accounts(
         RecentAccountProof(1, NOW),
@@ -415,7 +415,7 @@ async def test_merge_requires_recent_proof_of_two_distinct_accounts() -> None:
 
 async def test_code_generation_validates_java_identity() -> None:
     repository = FakeAccountRepository()
-    generated = await account_service(repository).generate_verification_code(
+    generated = await InMemoryAccountService(repository).generate_verification_code(
         JAVA_UUID,
         context=ActingContext.direct(
             ServiceActor(service_id="verification-relay", credential_scopes=frozenset({"account.verify.relay"}))
@@ -425,7 +425,7 @@ async def test_code_generation_validates_java_identity() -> None:
     assert repository.created_code == (JAVA_UUID, "123456", "Player")
 
     with pytest.raises(MinecraftAccountNotFoundError):
-        await account_service(FakeAccountRepository(), username=None).generate_verification_code(
+        await InMemoryAccountService(FakeAccountRepository(), username=None).generate_verification_code(
             JAVA_UUID,
             context=ActingContext.direct(
                 ServiceActor(service_id="verification-relay", credential_scopes=frozenset({"account.verify.relay"}))
@@ -437,7 +437,7 @@ async def test_code_generation_retries_a_code_another_player_holds() -> None:
     repository = FakeAccountRepository()
     repository.taken_codes = {"111111"}
     codes = iter((111111, 222222))
-    accounts = account_service(repository, verification_codes=lambda: next(codes))
+    accounts = InMemoryAccountService(repository, verification_codes=lambda: next(codes))
 
     assert (
         await accounts.generate_verification_code(
@@ -456,7 +456,7 @@ async def test_refresh_looks_up_the_current_name_and_delegates() -> None:
     account = repository.seed_account(1, consent=CONSENT, java_uuid=JAVA_UUID)
     assert account.id is not None
 
-    refresh = await account_service(repository, username="RenamedPlayer").refresh_java_identity(
+    refresh = await InMemoryAccountService(repository, username="RenamedPlayer").refresh_java_identity(
         account.id, context=ActingContext.direct(UserActor(account_id=account.id))
     )
 
@@ -472,7 +472,7 @@ async def test_refresh_without_a_linked_java_identity_is_rejected() -> None:
     assert account.id is not None
 
     with pytest.raises(NoLinkedMinecraftAccountError):
-        await account_service(repository).refresh_java_identity(
+        await InMemoryAccountService(repository).refresh_java_identity(
             account.id, context=ActingContext.direct(UserActor(account_id=account.id))
         )
 
@@ -483,14 +483,14 @@ async def test_refresh_of_a_uuid_mojang_no_longer_knows_is_rejected() -> None:
     assert account.id is not None
 
     with pytest.raises(MinecraftAccountNotFoundError):
-        await account_service(repository, username=None).refresh_java_identity(
+        await InMemoryAccountService(repository, username=None).refresh_java_identity(
             account.id, context=ActingContext.direct(UserActor(account_id=account.id))
         )
 
 
 async def test_refresh_of_an_unknown_account_is_rejected() -> None:
     with pytest.raises(AccountNotFoundError):
-        await account_service(FakeAccountRepository()).refresh_java_identity(
+        await InMemoryAccountService(FakeAccountRepository()).refresh_java_identity(
             999, context=ActingContext.direct(UserActor(account_id=999))
         )
 
@@ -501,7 +501,7 @@ async def test_refresh_can_name_which_java_identity_to_refresh() -> None:
     assert account.id is not None
 
     with pytest.raises(NoLinkedMinecraftAccountError):
-        await account_service(repository).refresh_java_identity(
+        await InMemoryAccountService(repository).refresh_java_identity(
             account.id, java_uuid=OTHER_JAVA_UUID, context=ActingContext.direct(UserActor(account_id=account.id))
         )
 
@@ -522,7 +522,7 @@ async def test_refresh_without_uuid_deliberately_selects_most_recent_java_identi
     )
     repository.accounts[account.id] = replace(account, identities=(*account.identities, newest))
 
-    await account_service(repository, username="RefreshedPlayer").refresh_java_identity(
+    await InMemoryAccountService(repository, username="RefreshedPlayer").refresh_java_identity(
         account.id, context=ActingContext.direct(UserActor(account_id=account.id))
     )
 
@@ -543,7 +543,7 @@ async def test_refresh_exact_uuid_ignores_a_more_recent_java_identity() -> None:
     )
     repository.accounts[account.id] = replace(account, identities=(*account.identities, newest))
 
-    await account_service(repository, username="RefreshedPlayer").refresh_java_identity(
+    await InMemoryAccountService(repository, username="RefreshedPlayer").refresh_java_identity(
         account.id, java_uuid=JAVA_UUID, context=ActingContext.direct(UserActor(account_id=account.id))
     )
 
@@ -558,7 +558,7 @@ async def test_an_account_without_discord_can_link_and_unlink_minecraft() -> Non
     assert account.identities_for(IdentityProvider.DISCORD) == ()
     alias = CreatorAlias(id=1, name="Player", account_id=account.id, claim_method=ClaimMethod.VERIFIED_IGN)
     repository.link_result = _linked(account, claimed_alias=alias)
-    accounts = account_service(repository)
+    accounts = InMemoryAccountService(repository)
 
     linked = await accounts.link_minecraft_account(
         "valid", consent=CONSENT, context=ActingContext.direct(UserActor(discord_user_id=123, account_id=account.id))
@@ -577,7 +577,7 @@ async def test_linking_against_a_missing_account_does_not_create_one() -> None:
     repository = FakeAccountRepository()
 
     with pytest.raises(AccountNotFoundError):
-        await account_service(repository).link_minecraft_account(
+        await InMemoryAccountService(repository).link_minecraft_account(
             "valid", consent=CONSENT, context=ActingContext.direct(UserActor(discord_user_id=123, account_id=999))
         )
 
@@ -590,7 +590,7 @@ class TestProfiles:
         account = repository.seed_account(1, consent=CONSENT)
         assert account.id is not None
         assert account.public_creator_id is not None
-        accounts = account_service(repository)
+        accounts = InMemoryAccountService(repository)
         await repository.upsert_profile(account.id, ProfileUpdate(display_name="Notch", hidden=True))
 
         public = await accounts.get_public_profile(
@@ -603,7 +603,7 @@ class TestProfiles:
 
     async def test_public_profile_is_none_for_an_unknown_creator(self) -> None:
         assert (
-            await account_service(FakeAccountRepository()).get_public_profile(
+            await InMemoryAccountService(FakeAccountRepository()).get_public_profile(
                 UUID(int=99), context=ActingContext.direct(AnonymousActor())
             )
             is None
@@ -615,7 +615,7 @@ class TestIdentityManagement:
         repository = FakeAccountRepository()
         account = repository.seed_account(1, consent=CONSENT, java_uuid=JAVA_UUID)
         assert account.id is not None
-        accounts = account_service(repository)
+        accounts = InMemoryAccountService(repository)
         await repository.set_identity_visibility(account.id, 2, is_public=False)
 
         identities = await accounts.list_identities(context=ActingContext.direct(UserActor(account_id=account.id)))
@@ -634,7 +634,7 @@ class TestMergeCodes:
         assert survivor.id is not None
         assert absorbed.id is not None
         repository.merge_result = AccountMerge(survivor.id, absorbed.id, UUID(int=1), UUID(int=2))
-        accounts = account_service(repository)
+        accounts = InMemoryAccountService(repository)
 
         code, ticket = await accounts.create_merge_code(context=ActingContext.direct(UserActor(account_id=absorbed.id)))
         preview = await accounts.preview_merge(code, context=ActingContext.direct(UserActor(account_id=survivor.id)))
@@ -657,7 +657,7 @@ class TestMergeCodes:
         assert survivor.id is not None
         assert absorbed.id is not None
         repository.merge_result = AccountMerge(survivor.id, absorbed.id, UUID(int=1), UUID(int=2))
-        accounts = account_service(repository)
+        accounts = InMemoryAccountService(repository)
         code, _ = await accounts.create_merge_code(context=ActingContext.direct(UserActor(account_id=absorbed.id)))
         await accounts.complete_merge(code, now=NOW, context=ActingContext.direct(UserActor(account_id=survivor.id)))
 
@@ -673,7 +673,7 @@ class TestMergeCodes:
         absorbed = repository.seed_account(2, consent=CONSENT)
         assert survivor.id is not None
         assert absorbed.id is not None
-        accounts = account_service(repository)
+        accounts = InMemoryAccountService(repository)
 
         first, _ = await accounts.create_merge_code(context=ActingContext.direct(UserActor(account_id=absorbed.id)))
         await accounts.create_merge_code(context=ActingContext.direct(UserActor(account_id=absorbed.id)))
@@ -687,7 +687,7 @@ class TestMergeCodes:
         assert survivor.id is not None
 
         with pytest.raises(InvalidMergeCodeError):
-            await account_service(repository).complete_merge(
+            await InMemoryAccountService(repository).complete_merge(
                 "NOTACODE", context=ActingContext.direct(UserActor(account_id=survivor.id))
             )
 
@@ -697,7 +697,7 @@ class TestMergeCodes:
         absorbed = repository.seed_account(2, consent=CONSENT)
         assert survivor.id is not None
         assert absorbed.id is not None
-        accounts = account_service(repository)
+        accounts = InMemoryAccountService(repository)
         code, _ = await accounts.create_merge_code(context=ActingContext.direct(UserActor(account_id=absorbed.id)))
         repository.expire_merge_tickets()
 
@@ -710,7 +710,7 @@ class TestMergeCodes:
         repository = FakeAccountRepository()
         account = repository.seed_account(1, consent=CONSENT)
         assert account.id is not None
-        accounts = account_service(repository)
+        accounts = InMemoryAccountService(repository)
         code, _ = await accounts.create_merge_code(context=ActingContext.direct(UserActor(account_id=account.id)))
 
         with pytest.raises(InvalidMergeCodeError):
@@ -724,7 +724,7 @@ class TestMergeCodes:
 async def test_an_account_can_be_created_with_its_consent_receipt_in_one_write() -> None:
     """Store consent with the new account so a separate failing call cannot leave the receipt missing."""
     repository = FakeAccountRepository()
-    service = account_service(repository)
+    service = InMemoryAccountService(repository)
     consent = AccountConsent.grant_current()
 
     account = await service.get_or_create_identity(IdentityProvider.DISCORD, "99", consent=consent)
@@ -736,7 +736,7 @@ async def test_an_account_can_be_created_with_its_consent_receipt_in_one_write()
 async def test_an_existing_account_is_not_handed_a_receipt_it_never_agreed_to() -> None:
     """Account lookup must not grant consent to an existing account as a side effect."""
     repository = FakeAccountRepository()
-    service = account_service(repository)
+    service = InMemoryAccountService(repository)
     existing = repository.seed_account(99, provider=IdentityProvider.DISCORD)
 
     account = await service.get_or_create_identity(

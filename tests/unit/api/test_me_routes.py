@@ -22,7 +22,7 @@ from squid.core.accounts.domain import (
 from squid.core.accounts.models import Account, AccountIdentity, AccountProfile, AliasClaim, CreatorAlias
 from squid.core.actors import ActingContext
 from squid.core.errors import AuthenticationError
-from tests.support.account_edits import SnapshotAccountService
+from tests.support.accounts import InMemoryAccountService
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
 CREATOR_ID = UUID("22222222-2222-4222-8222-222222222222")
@@ -42,7 +42,7 @@ def _account(*, discord: bool = True) -> Account:
     )
 
 
-class AccountRecorder(SnapshotAccountService):
+class AccountRecorder(InMemoryAccountService):
     def __init__(
         self,
         *,
@@ -50,28 +50,13 @@ class AccountRecorder(SnapshotAccountService):
         profile: AccountProfile | None = None,
         refresh: IdentityRefresh | None = None,
     ) -> None:
+        super().__init__()
         self.account = account or _account()
-        self.profile = profile or AccountProfile.empty(1)
+        self.repository.accounts[1] = self.account
+        self.repository.profiles[1] = profile or AccountProfile.empty(1)
         self.refresh = refresh
-        self.account_reads: list[int] = []
         self.consent_grants: list[int] = []
         self.refreshes: list[tuple[int, UUID | None]] = []
-
-    @override
-    async def get_account_by_id(self, account_id: int) -> Account | None:
-        self.account_reads.append(account_id)
-        return self.account
-
-    @override
-    async def get_profile(self, account_id: int, *, context: ActingContext) -> AccountProfile:
-        assert account_id == 1
-        return self.profile
-
-    @override
-    async def list_identities(self, *, context: ActingContext) -> tuple[AccountIdentity, ...]:
-        account_id = context.effective.require_account_id()
-        assert account_id == 1
-        return self.account.identities
 
     @override
     async def grant_current_consent(self, *, context: ActingContext) -> Account:
@@ -110,7 +95,6 @@ async def test_a_cli_caller_can_read_its_own_account() -> None:
     """A Java-only account remains readable through its CLI credential."""
     accounts = _accounts(account=_account(discord=False))
     response = (await get_me.fn(accounts, _caller("cli"))).content
-    assert accounts.account_reads == [1]
     assert response.id == 1
     assert response.creator_id == CREATOR_ID
     assert _identity_of(response, IdentityProvider.DISCORD) is None
