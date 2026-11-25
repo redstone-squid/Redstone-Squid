@@ -319,25 +319,25 @@ account-credits-retained = You are still credited under: { $names }.
 # squid/bot/accounts/presentation.py:27
 account-discord-linked = Your Discord account is now linked to **{ $name }**.
 
-# squid/bot/accounts/overview.py:366
+# squid/bot/accounts/overview.py:377
 account-discord-unlink-warning = This is the Discord account you are using now. The bot will stop recognising you here.
 
-# squid/bot/accounts/overview.py:375
+# squid/bot/accounts/overview.py:386
 account-hidden-page-credit-note = Your profile is hidden. Your credited names still appear on your builds.
 
-# squid/bot/accounts/overview.py:262, squid/bot/accounts/overview.py:274
+# squid/bot/accounts/overview.py:273, squid/bot/accounts/overview.py:285
 account-history-profile = Edit profile
 
 # squid/bot/accounts/profile_editor.py:149
 account-history-profile-draft = Edit profile draft
 
-# squid/bot/accounts/overview.py:246
+# squid/bot/accounts/overview.py:257
 account-history-unlink = Unlink identity
 
-# squid/bot/accounts/overview.py:226
+# squid/bot/accounts/overview.py:237
 account-history-visibility = Change identity visibility
 
-# squid/bot/accounts/overview.py:252
+# squid/bot/accounts/overview.py:263
 account-identity-unlinked = Unlinked { $removed_label }. Any build credit you hold is unaffected.
 
 # squid/bot/accounts/workspace.py:289
@@ -346,7 +346,7 @@ account-link-heading = Connect Minecraft
 # squid/bot/accounts/workspace.py:291
 account-link-help = Run `/link` in Minecraft on the community server, then enter the code here.
 
-# squid/bot/accounts/overview.py:361
+# squid/bot/accounts/overview.py:372
 account-linked-identity-remove-warning = Remove { $identity_label }? Any build credit you hold is unaffected.
 
 # squid/bot/accounts/workspace.py:569
@@ -388,7 +388,7 @@ account-search-credit-names = Search credited names
 # squid/bot/accounts/workspace.py:547
 account-submit-claim = Submit claim
 
-# squid/bot/accounts/overview.py:336
+# squid/bot/accounts/overview.py:347
 account-view-account-option = { $provider } — { $name }
 
 # squid/bot/accounts/profile_editor.py:91
@@ -397,19 +397,19 @@ account-view-bio = Bio
 # squid/bot/accounts/profile_editor.py:58
 account-view-cancel = Cancel
 
-# squid/bot/accounts/overview.py:184
+# squid/bot/accounts/overview.py:188
 account-view-creator-page = Profile
 
-# squid/bot/accounts/overview.py:139
+# squid/bot/accounts/overview.py:143
 account-view-creator-profile = Creator profile
 
-# squid/bot/accounts/overview.py:335
+# squid/bot/accounts/overview.py:346
 account-view-current-discord = Your Discord account
 
 # squid/bot/accounts/profile_editor.py:79
 account-view-display-name = Display name
 
-# squid/bot/accounts/overview.py:178
+# squid/bot/accounts/overview.py:182
 account-view-edit-page = Edit profile
 
 # squid/bot/accounts/profile_editor.py:75
@@ -418,13 +418,13 @@ account-view-edit-profile = Edit profile
 # squid/bot/accounts/profile_editor.py:130
 account-view-edit-your-creator-page = Edit your creator page
 
-# squid/bot/accounts/overview.py:343
+# squid/bot/accounts/overview.py:354
 account-view-hidden = Hidden from your profile
 
-# squid/bot/accounts/overview.py:188
+# squid/bot/accounts/overview.py:192
 account-view-hidden-2 = Hidden
 
-# squid/bot/accounts/overview.py:196
+# squid/bot/accounts/overview.py:207
 account-view-hidden-from-page = Hidden
 
 # squid/bot/accounts/profile_editor.py:110
@@ -433,7 +433,7 @@ account-view-https-url = HTTPS URL
 # squid/bot/accounts/profile_editor.py:105
 account-view-label = Label
 
-# squid/bot/accounts/overview.py:322
+# squid/bot/accounts/overview.py:333
 account-view-linked-accounts = Linked accounts
 
 # squid/bot/accounts/profile_editor.py:30
@@ -442,7 +442,7 @@ account-view-links = { $count } links
 # squid/bot/accounts/profile_editor.py:122, squid/bot/accounts/profile_editor.py:99
 account-view-links-2 = Links
 
-# squid/bot/accounts/overview.py:323
+# squid/bot/accounts/overview.py:334
 account-view-none-yet = _None yet._
 
 # squid/bot/accounts/profile_editor.py:73
@@ -457,37 +457,40 @@ account-view-profile-saved = Profile saved.
 # squid/bot/accounts/profile_editor.py:85
 account-view-pronouns = Pronouns
 
-# squid/bot/accounts/overview.py:359
+# squid/bot/accounts/overview.py:197
+account-view-public-page = View public page
+
+# squid/bot/accounts/overview.py:370
 account-view-remove-this-linked-account = Remove this linked account?
 
 # squid/bot/accounts/profile_editor.py:133
 account-view-save-profile = Save profile
 
-# squid/bot/accounts/overview.py:153
+# squid/bot/accounts/overview.py:157
 account-view-select-linked-account = Select a linked account to change its visibility or unlink it.
 
-# squid/bot/accounts/overview.py:192
+# squid/bot/accounts/overview.py:203
 account-view-selected-identity = Account
 
-# squid/bot/accounts/overview.py:187
+# squid/bot/accounts/overview.py:191
 account-view-shown = Public
 
-# squid/bot/accounts/overview.py:195
+# squid/bot/accounts/overview.py:206
 account-view-shown-on-page = Shown
 
-# squid/bot/accounts/overview.py:341
+# squid/bot/accounts/overview.py:352
 account-view-shown-publicly = Shown on your profile
 
-# squid/bot/accounts/overview.py:351
+# squid/bot/accounts/overview.py:362
 account-view-unknown = unknown
 
-# squid/bot/accounts/overview.py:200
+# squid/bot/accounts/overview.py:211
 account-view-unlink = Unlink account
 
-# squid/bot/accounts/overview.py:370
+# squid/bot/accounts/overview.py:381
 account-view-value = { $warning } { $consequence }
 
-# squid/bot/accounts/overview.py:353
+# squid/bot/accounts/overview.py:364
 account-view-verified = { $visibility } · verified { $age }
 
 # squid/bot/accounts/profile_editor.py:193

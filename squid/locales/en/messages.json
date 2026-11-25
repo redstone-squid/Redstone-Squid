@@ -1081,7 +1081,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:366"
+      "squid/bot/accounts/overview.py:377"
     ]
   },
   "account-hidden-page-credit-note": {
@@ -1090,7 +1090,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:375"
+      "squid/bot/accounts/overview.py:386"
     ]
   },
   "account-history-profile": {
@@ -1099,8 +1099,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:262",
-      "squid/bot/accounts/overview.py:274"
+      "squid/bot/accounts/overview.py:273",
+      "squid/bot/accounts/overview.py:285"
     ]
   },
   "account-history-profile-draft": {
@@ -1118,7 +1118,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:246"
+      "squid/bot/accounts/overview.py:257"
     ]
   },
   "account-history-visibility": {
@@ -1127,7 +1127,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:226"
+      "squid/bot/accounts/overview.py:237"
     ]
   },
   "account-identity-unlinked": {
@@ -1142,7 +1142,7 @@
       }
     ],
     "locations": [
-      "squid/bot/accounts/overview.py:252"
+      "squid/bot/accounts/overview.py:263"
     ]
   },
   "account-link-heading": {
@@ -1175,7 +1175,7 @@
       }
     ],
     "locations": [
-      "squid/bot/accounts/overview.py:361"
+      "squid/bot/accounts/overview.py:372"
     ]
   },
   "account-merge-code-warning": {
@@ -1357,7 +1357,7 @@
       }
     ],
     "locations": [
-      "squid/bot/accounts/overview.py:336"
+      "squid/bot/accounts/overview.py:347"
     ]
   },
   "account-view-bio": {
@@ -1384,7 +1384,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:184"
+      "squid/bot/accounts/overview.py:188"
     ]
   },
   "account-view-creator-profile": {
@@ -1393,7 +1393,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:139"
+      "squid/bot/accounts/overview.py:143"
     ]
   },
   "account-view-current-discord": {
@@ -1402,7 +1402,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:335"
+      "squid/bot/accounts/overview.py:346"
     ]
   },
   "account-view-display-name": {
@@ -1420,7 +1420,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:178"
+      "squid/bot/accounts/overview.py:182"
     ]
   },
   "account-view-edit-profile": {
@@ -1447,7 +1447,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:343"
+      "squid/bot/accounts/overview.py:354"
     ]
   },
   "account-view-hidden-2": {
@@ -1456,7 +1456,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:188"
+      "squid/bot/accounts/overview.py:192"
     ]
   },
   "account-view-hidden-from-page": {
@@ -1465,7 +1465,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:196"
+      "squid/bot/accounts/overview.py:207"
     ]
   },
   "account-view-https-url": {
@@ -1492,7 +1492,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:322"
+      "squid/bot/accounts/overview.py:333"
     ]
   },
   "account-view-links": {
@@ -1526,7 +1526,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:323"
+      "squid/bot/accounts/overview.py:334"
     ]
   },
   "account-view-profile": {
@@ -1565,13 +1565,22 @@
       "squid/bot/accounts/profile_editor.py:85"
     ]
   },
+  "account-view-public-page": {
+    "fingerprint": "1ad3660dcedb936cf25d2caaf07c0d0578a411c204ab89b504c1735961e094e2",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/accounts/overview.py:197"
+    ]
+  },
   "account-view-remove-this-linked-account": {
     "fingerprint": "8529eb3c0bb7249949d9b255c21a6db677667fe9a536e6c00c6fdaf9f2e3b066",
     "attributes": [],
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:359"
+      "squid/bot/accounts/overview.py:370"
     ]
   },
   "account-view-save-profile": {
@@ -1589,7 +1598,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:153"
+      "squid/bot/accounts/overview.py:157"
     ]
   },
   "account-view-selected-identity": {
@@ -1598,7 +1607,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:192"
+      "squid/bot/accounts/overview.py:203"
     ]
   },
   "account-view-shown": {
@@ -1607,7 +1616,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:187"
+      "squid/bot/accounts/overview.py:191"
     ]
   },
   "account-view-shown-on-page": {
@@ -1616,7 +1625,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:195"
+      "squid/bot/accounts/overview.py:206"
     ]
   },
   "account-view-shown-publicly": {
@@ -1625,7 +1634,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:341"
+      "squid/bot/accounts/overview.py:352"
     ]
   },
   "account-view-unknown": {
@@ -1634,7 +1643,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:351"
+      "squid/bot/accounts/overview.py:362"
     ]
   },
   "account-view-unlink": {
@@ -1643,7 +1652,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:200"
+      "squid/bot/accounts/overview.py:211"
     ]
   },
   "account-view-value": {
@@ -1663,7 +1672,7 @@
       }
     ],
     "locations": [
-      "squid/bot/accounts/overview.py:370"
+      "squid/bot/accounts/overview.py:381"
     ]
   },
   "account-view-verified": {
@@ -1683,7 +1692,7 @@
       }
     ],
     "locations": [
-      "squid/bot/accounts/overview.py:353"
+      "squid/bot/accounts/overview.py:364"
     ]
   },
   "account-view-your-account": {

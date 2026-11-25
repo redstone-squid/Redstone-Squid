@@ -7,12 +7,14 @@ its UI action transaction open while the user reads the notice.
 
 from collections.abc import Awaitable, Callable
 from typing import Protocol, override
+from uuid import UUID
 
 import discord
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
+from squid.bot.accounts.creator_page import CreatorPage
 from squid.bot.accounts.profile_editor import ProfileEditor
 from squid.bot.accounts.profile_render import identity_label as _identity_label
 from squid.bot.accounts.profile_render import own_profile_avatar, own_profile_fields, provider_label
@@ -73,6 +75,7 @@ class AccountOverview(sl.Component[ComponentsV2Target, sd.Request]):
     _needs_consent: bool = sl.state(False)
     # No default: the empty profile needs this instance's account id.
     _profile: AccountProfile = sl.state()
+    _public_id: UUID | None = sl.state(None)
     _profile_editor: ProfileEditor | None = sl.state(None, opaque=True)
 
     def __init__(
@@ -111,6 +114,7 @@ class AccountOverview(sl.Component[ComponentsV2Target, sd.Request]):
         self._identities = snapshot.account.identities
         self._needs_consent = snapshot.account.needs_consent_refresh
         self._profile = snapshot.profile
+        self._public_id = snapshot.account.public_creator_id
         if self.selected is None:
             self.selected_id = None
 
@@ -186,6 +190,13 @@ class AccountOverview(sl.Component[ComponentsV2Target, sd.Request]):
                     on=sl.controlled(not self.page_hidden, self._toggle_page),
                     on_label=tr(t"account-view-shown = Public"),
                     off_label=tr(t"account-view-hidden-2 = Hidden"),
+                ),
+                # Strangers see a filtered projection, so check visibility changes on the real page.
+                self._public_id is not None
+                and sl.routed_action_control(
+                    tr(t"account-view-public-page = View public page"),
+                    CreatorPage.open.custom_id(public_id=self._public_id),
+                    key="public_page",
                 ),
                 identity is not None
                 and sl.toggle(

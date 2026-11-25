@@ -22,6 +22,7 @@ from squid.bot.accounts.presentation import refresh_message
 from squid.bot.accounts.profile_editor import ProfileEditor
 from squid.bot.accounts.workspace import AccountTab, AccountWorkspace
 from squid.bot.utils.permissions import Grants
+from squid.core.accounts.application.edits import AccountEditorSnapshot
 from squid.core.accounts.domain import (
     AccountConsent,
     AccountMerge,
@@ -382,6 +383,24 @@ def test_a_hidden_creator_page_still_opens_their_builds_but_cannot_be_followed()
 
     assert "builds" in tree_keys
     assert not {"follow", "credited-as"} & tree_keys
+
+
+async def test_overview_previews_the_public_page_strangers_see() -> None:
+    public_id = UUID(int=9)
+
+    class OwnAccount(AccountMutationService):
+        @override
+        async def editor_snapshot(self, account_id: int, *, context: ActingContext) -> AccountEditorSnapshot:
+            account = Account(id=account_id, public_creator_id=public_id, consent=AccountConsent.grant_current())
+            return AccountEditorSnapshot(account, AccountProfile.empty(account_id))
+
+    panel = _overview(
+        accounts=OwnAccount(), account_id=ACCOUNT_ID, actor_id=AUTHOR_ID, request_consent=no_consent_request
+    )
+    await panel.on_load()
+
+    control = find(render_tree(panel), sl.semantic.RoutedActionControl, key="public_page")
+    assert control.route_id == CreatorPage.open.custom_id(public_id=public_id)
 
 
 async def test_choose_claim_opens_the_creator_picker(mocker: MockerFixture) -> None:
