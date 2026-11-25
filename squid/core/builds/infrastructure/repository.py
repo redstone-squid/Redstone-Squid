@@ -9,7 +9,7 @@ from dataclasses import replace
 from decimal import Decimal
 from typing import Any, cast
 
-from sqlalchemy import BigInteger, Select, String, Table, delete, func, select, update
+from sqlalchemy import BigInteger, String, Table, delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import raiseload, selectinload
@@ -33,6 +33,7 @@ from squid.core.builds.domain.events import BuildEdited
 from squid.core.builds.errors import BuildRevisionMismatchError, InvalidBuildError
 from squid.core.builds.history import BuildEditActor, BuildEditContext, HistoryOperation
 from squid.core.builds.infrastructure.edit_scope import build_edit_scope
+from squid.core.builds.infrastructure.listing import filter_build_listing
 from squid.core.builds.infrastructure.loading import BuildLoader
 from squid.core.builds.models import (
     BUILD_CLASS_BY_CATEGORY,
@@ -56,54 +57,11 @@ from squid.core.tags.infrastructure.loading import assignment_units, definition_
 from squid.core.tags.models import (
     TagAssignment,
     TagDefinition,
-    TagSlug,
     UnitDefinition,
 )
 from squid.core.versions.models import Version
 
 logger = logging.getLogger(__name__)
-
-
-def _page_filter[S: Select[Any]](
-    statement: S,
-    *,
-    statuses: frozenset[BuildStatus],
-    submitter_account_id: int | None,
-    filters: BuildListFilters,
-) -> S:
-    """Apply the status and submitter visibility policy shared by page and count queries."""
-    statement = statement.where(Build.submission_status.in_(statuses))
-    if submitter_account_id is not None:
-        statement = statement.where(Build.submitter_account_id == submitter_account_id)
-    if filters.category is not None:
-        statement = statement.where(Build.category == filters.category)
-    if filters.version is not None:
-        statement = statement.where(
-            select(BuildVersion.build_id)
-            .where(BuildVersion.build_id == Build.id, BuildVersion.version_id == filters.version)
-            .exists()
-        )
-    if filters.creator_id is not None:
-        linked = func.build_credit_accounts().table_valued("build_id", "account_id", "role")
-        statement = statement.where(
-            select(linked.c.build_id)
-            .join(Account, Account.id == linked.c.account_id)
-            .where(
-                linked.c.build_id == Build.id,
-                Account.public_creator_id == filters.creator_id,
-                linked.c.role.in_(("creator", "designer")),
-            )
-            .exists()
-        )
-    for tag in filters.tags:
-        tag_ids = select(TagSlug.tag_id).where(TagSlug.slug == tag)
-        predicate = TagAssignment.tag_id.in_(tag_ids)
-        if tag.isascii() and tag.isdigit() and len(tag) <= 19 and int(tag) < 2**63:
-            predicate = predicate | (TagAssignment.tag_id == int(tag))
-        statement = statement.where(
-            select(TagAssignment.tag_id).where(TagAssignment.build_id == Build.id, predicate).exists()
-        )
-    return statement
 
 
 def _mapper_load_options() -> tuple[Any, ...]:
@@ -426,7 +384,7 @@ class BuildRepository:
             msg = "ID anchors require the ID sort"
             raise ValueError(msg)
         session = self._session()
-        statement = _page_filter(
+        statement = filter_build_listing(
             select(Build),
             statuses=statuses,
             submitter_account_id=submitter_account_id,
@@ -476,7 +434,7 @@ class BuildRepository:
         if not statuses:
             return 0
         session = self._session()
-        statement = _page_filter(
+        statement = filter_build_listing(
             select(func.count()).select_from(Build),
             statuses=statuses,
             submitter_account_id=submitter_account_id,

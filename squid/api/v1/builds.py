@@ -51,7 +51,7 @@ from squid.core.builds.application import (
     PublicBuildSummary,
 )
 from squid.core.builds.application.edits import BUILD_EDIT, build_target, patch_values
-from squid.core.builds.application.queries import EMPTY_BUILD_FILTERS, BuildListFilters
+from squid.core.builds.application.queries import BuildListFilters
 from squid.core.builds.domain import BuildCategory
 from squid.core.builds.errors import (
     BuildNotFoundError,
@@ -61,7 +61,6 @@ from squid.core.builds.errors import (
 from squid.core.builds.history import PublicBuildRevision
 from squid.core.builds.models import Build
 from squid.core.edits.domain import EditCommand, LatestRevision, Revision
-from squid.core.errors import ValidationError
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.domain.catalogue import (
     BUILD_SUBMISSION_CREATE,
@@ -279,9 +278,6 @@ async def list_builds(
     if effective is not BuildStatusFilter.APPROVED and submitter_id is None:
         await _require_pending_view(permissions, caller)
     if q is not None:
-        if filters != EMPTY_BUILD_FILTERS or submitter_id is not None:
-            msg = "Catalogue filters and submitted_by require a listing without q"
-            raise ValidationError(msg)
         # Relevance order has no identifier sequence to anchor to, so ranked pages are offset-only.
         selector = resolve_selector(offset=offset, after_id=after_id, before_id=before_id, keyset_allowed=False)
         result = await search_service.search(
@@ -301,6 +297,8 @@ async def list_builds(
                     else None
                 ),
                 visible_statuses=frozenset({effective.value}),
+                catalogue_filters=filters,
+                submitter_account_id=submitter_id,
             )
         )
         summaries = await hydrate_builds(build_queries, result.hits, status=effective.to_domain())
