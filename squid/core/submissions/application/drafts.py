@@ -3,7 +3,7 @@
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from typing import Protocol
-from uuid import UUID, uuid4
+from uuid import UUID, uuid7
 
 from whenever import Instant
 
@@ -356,7 +356,7 @@ class SubmissionDraftService:
         created_at = now or self._now()
         stored = StoredDraft(
             snapshot=DraftSnapshot(
-                id=draft_id or uuid4(),
+                id=draft_id or uuid7(),
                 owner_account_id=owner_account_id,
                 schema_id=manifest.schema_id,
                 schema_revision=manifest.revision,

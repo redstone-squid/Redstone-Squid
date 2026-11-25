@@ -10,7 +10,7 @@ user has already edited alone.
 import logging
 from collections import Counter
 from collections.abc import Sequence
-from uuid import NAMESPACE_URL, UUID, uuid5
+from uuid import UUID, uuid5
 
 import discord
 
@@ -25,6 +25,7 @@ from squid.core.submissions.application.inference_runs import InferenceCandidate
 from squid.core.submissions.application.inferred_drafts import materialize_candidate
 from squid.core.submissions.domain import DraftStatus, SubmissionAttentionIssue, SubmissionAttentionReason
 from squid.core.submissions.domain.build_edit import DraftEditResult
+from squid.core.submissions.domain.identity import discord_uuid7
 from squid.core.submissions.domain.source_files import SubmissionSourceFile
 from squid.core.submissions.errors import DraftCapacityExceededError
 from squid.runtime import BotServices
@@ -34,7 +35,10 @@ logger = logging.getLogger(__name__)
 
 def message_bundle_run_id(primary: Sequence[discord.Message]) -> UUID:
     """Identify a retained Discord inference run by its ordered primary messages."""
-    return uuid5(NAMESPACE_URL, "discord-inference:" + ":".join(str(message.id) for message in primary))
+    return discord_uuid7(
+        min(message.id for message in primary),
+        "discord-inference:" + ":".join(str(message.id) for message in primary),
+    )
 
 
 async def ingest_message_bundle(

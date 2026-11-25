@@ -2,7 +2,7 @@
 
 from collections.abc import Sequence
 from functools import partial
-from uuid import NAMESPACE_URL, uuid4, uuid5
+from uuid import uuid4, uuid7
 
 import discord
 
@@ -29,6 +29,7 @@ from squid.core.submissions.domain import (
     FormManifest,
     SubmissionOrigin,
 )
+from squid.core.submissions.domain.identity import discord_uuid7
 from squid_i18n import md_tr, tr
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 
@@ -114,9 +115,9 @@ async def open_submission_form(
     manifest = await services.submission_forms.manifest(locale=None, context=ActingContext.current())
     # Derive the draft ID from the interaction so a retried command reopens the same draft.
     draft_id = (
-        uuid5(NAMESPACE_URL, f"discord-submission:{request.interaction.id}")
+        discord_uuid7(request.interaction.id, f"discord-submission:{request.interaction.id}")
         if request.interaction is not None
-        else uuid4()
+        else uuid7()
     )
     actor = await request.client.actors.resolve(request, refresh=True)
     stored = await services.submission_drafts.create(

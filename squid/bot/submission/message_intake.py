@@ -2,7 +2,7 @@
 
 import logging
 from typing import TYPE_CHECKING
-from uuid import NAMESPACE_URL, uuid4, uuid5
+from uuid import uuid7
 
 import discord
 
@@ -20,6 +20,7 @@ from squid.core.accounts.domain import IdentityProvider
 from squid.core.actors import ActingContext
 from squid.core.i18n import tr
 from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_RECALC
+from squid.core.submissions.domain.identity import discord_uuid7
 from squid.core.submissions.errors import DraftCapacityExceededError
 from squid_i18n import md_tr
 from squid_ui.ext.discord import primitives
@@ -138,9 +139,9 @@ class BuildMessageIntake[BotT: squid.bot.app.RedstoneSquid]:
         """Retain inferred candidates and return review controls without submitting builds."""
         context = ActingContext.for_actor(await request.client.actors.resolve(request))
         run_id = (
-            uuid5(NAMESPACE_URL, f"discord-recalculation:{request.interaction.id}")
+            discord_uuid7(request.interaction.id, f"discord-recalculation:{request.interaction.id}")
             if request.interaction is not None
-            else uuid4()
+            else uuid7()
         )
         bundle = await assemble_bundle([message], preceding=(), include_images=True)
         candidates = await self.bot.services.submission_inference.infer(

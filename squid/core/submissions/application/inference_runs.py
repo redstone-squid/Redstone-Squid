@@ -15,6 +15,7 @@ from squid.core.errors import AccountRequiredError, AuthorizationError, Conflict
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.application.ports import PermissionUnitOfWork
 from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT, BUILD_SUBMISSION_RECALC
+from squid.core.submissions.domain.identity import stable_uuid7
 from squid.core.submissions.domain.source_files import SubmissionSourceFile
 from squid.core.unit_of_work import UnitOfWorkFactory
 from squid.core.worker_context import worker_scope
@@ -264,8 +265,15 @@ class SubmissionInferenceRuns:
 
 
 def candidate_id(run_id: UUID, index: int) -> UUID:
-    """Derive identity from the retained run, never from mutable candidate content."""
-    return uuid5(run_id, f"candidate:{index}")
+    """Derive identity from the retained run, never from mutable candidate content.
+
+    Candidates share their run's timestamp, so they sort by when the run was created.
+    """
+    if run_id.version != 7:
+        # Runs retained from before UUIDv7 keep their old candidate IDs, so reopening one finds
+        # drafts it already made. Remove once those runs have expired.
+        return uuid5(run_id, f"candidate:{index}")
+    return stable_uuid7(run_id.time, f"{run_id}:candidate:{index}")
 
 
 def inference_busy() -> ConflictError:
