@@ -26,9 +26,9 @@ squid/core, so screens are composed from `web/src/ui` instead of one-off markup.
   `src/ui`, and no raw interactive elements in features and layouts.
 - Astro is for pages and layouts; ui and feature components are Svelte, so Astro slot
   wrappers only appear at page and layout boundaries.
-- `variants.ts` is gone. A style lives in the component that owns it; a style shared by a
-  folder lives in that folder's `styles.ts`, imported only inside `src/ui`. Code that wants a
-  button's look renders `Button` (bits-ui triggers through their `child` snippet).
+- A style lives in the component that owns it; a style shared by a folder lives in that
+  folder's `styles.ts`, imported only inside `src/ui`. Code that wants a button's look
+  renders `Button` (bits-ui triggers through their `child` snippet).
 - Builds and records share `features/catalogue`, since a record shows its holders as build
   cards and features cannot import each other.
 - API errors and the islands' write client live in `src/api-client`, a layer that server,
@@ -50,32 +50,23 @@ third-party; revisit this then.
 
 ## Status and resuming
 
-Phases 0 to 7 are done; Phase 8 (screens) is next. Phase 6 added `src/ui/lib`,
-`src/api-client` and `features/submissions/draft-sync.ts`, whose users arrive with the
-screens. Phase 7's lint rules are listed in `web/AGENTS.md` under Checks; the only
-disables are Dialog's `full-mobile` viewport breakpoint and the footer logo's `<img>`.
-Phase 7 also added the `--duration-*` tokens from §2.4, which had been missed, and a
-`submit` mode for `SegmentedControl`, used by the footer's appearance switch.
+Phases 0 to 7 are done; Phase 8 (screens) is next. Every §2 component exists; the
+"Need → Use" table in `web/src/ui/README.md` lists them. `src/ui/lib`, `src/api-client` and
+`features/submissions/draft-sync.ts` wait for their screens.
 
-What exists in `web/src/ui`, by folder: `layout` (Layout, Container), `content` (Heading,
-Text, Link, Icon, Code, Prose, Timestamp, VisuallyHidden, SkipLink), `actions` (Button,
-CopyButton), `feedback` (Badge, Chip, Notice, Progress, Skeleton, Spinner, EmptyState,
-ErrorState, SaveStatus, Announcer), `data` (Card, Image, Avatar, DescriptionList, StatGroup,
-Disclosure, List, ListItem, Timeline, Diff, Gallery), `table` (DataTable), `chart` (Chart,
-SeriesChart, RangeChart, DistributionBar), `navigation` (Breadcrumbs, Pagination, NavList,
-Tabs and SegmentedControl in both modes), `forms` (every §2.2 component), `overlays`
-(Dialog, Sheet, Popover, Tooltip, Menu), and `patterns` (every §2.3 pattern).
-`CatalogueLayout`'s header is a `NavBar`, and the layout renders `Announcer`.
+To resume, read `screens.md` for the next screen, its API items in `api-gaps.md`, and
+`components.md` §3 for its feature components, then compose it from `src/ui`.
 
-Left over from Phase 5:
+Open items:
 
-- The `UserMenu` island, built with the header screen in Phase 8. Nothing blocks it:
-  `/v1/session` exists, Phase 6 supplies the query client, and islands call the API directly
-  (API item 52). Its place is marked in `CatalogueLayout`'s actions.
+- The `UserMenu` island, built with the header screen. Nothing blocks it: `/v1/session`
+  exists and islands call the API directly (API item 52). Its place is marked in
+  `CatalogueLayout`'s actions.
 - `FlashNotice` takes text; the one-shot flash cookie in `src/server/cookies.ts` waits for
   the first POST-redirect-GET endpoint.
-- `WorkbenchLayout` still has its own sidebar (§0 item 22); `SplitLayout` would make its
-  `aside` and `NavList` two landmarks with one name.
+- `WorkbenchLayout` keeps its own sidebar (§0 item 22); `SplitLayout` would make its `aside`
+  and `NavList` two landmarks with one name.
+- `bun run test:compatibility` (Firefox and WebKit) has not been run.
 
 Departures from §2.3: `NavBar` and `SplitLayout` collapse into native popovers rather than
 a `Sheet` or `<details>`. One copy of the markup serves both layouts through a container
@@ -83,55 +74,31 @@ query (`popover-inline` in `app.css`), so filter fields keep their ids and value
 needs hydration; the price is light dismiss without a focus trap. `NavBar` takes `home` as
 data, because Astro passes a Svelte component only one slotted child. `Announcer` is not an
 island: `announce()` writes to the server-rendered region, which saved 23 KiB of runtime on
-every page. `SettingsList` rows take a labelled control instead of their own label, since
-`Switch` already labels itself. `ResultsToolbar` has no `columns`; `DataTable` renders its
-column menu. `SearchBox` has `compact` instead of `size`. `FilterPanel` takes a
-preformatted `activeLabel`, and its auto-apply navigates with `location.assign`; url-state's
-`commitUrlState` is for islands that refetch without navigating.
+every page. `SettingsList` rows take a labelled control, since `Switch` labels itself.
+`ResultsToolbar` has no `columns`; `DataTable` renders its column menu. `FilterPanel`
+takes a preformatted `activeLabel`.
 
 Departures from §2.2: `RangeField` takes `separator` and `inputmode` instead of `bounds` and
 `step`, which a text input cannot enforce; `UnitField` submits the typed number and unit id
-(`name`, `unitName`); `FileDrop` passes skipped files as a second `onFiles` argument;
-`Autocomplete`, `Combobox` and `ListField` take label functions such as `labels.count(n)`,
-so only Svelte features can render them. `DistributionBar` is HTML bars, not LayerChart, so
-labels wrap and stay text. The `DataTable` header is not sticky to the page, because its
-horizontal scroll container captures `position: sticky`; revisit with a page-height scroll
-region if long tables need it.
+(`name`, `unitName`); `FileDrop` passes skipped files as a second `onFiles` argument.
+`DistributionBar` is HTML bars, not LayerChart, so labels wrap and stay text. The
+`DataTable` header is not sticky to the page, because its horizontal scroll container
+captures `position: sticky`; revisit with a page-height scroll region if long tables need it.
 
-Conventions to follow:
+Things the code does not make obvious:
 
-- **Stories.** Each `src/ui/<folder>` has `src/workbench/stories/<Folder>Stories.svelte`
-  with `<Story name="X" source="folder/X">` blocks and a `<Variant label>` per specimen,
-  showing every variant and state. Raw English fixture text is fine there. A new folder (such
-  as `chart` or `table`) needs an entry in `src/workbench/groups.ts`, a line in
+- A new `src/ui` folder needs an entry in `src/workbench/groups.ts`, a line in
   `src/pages/design-system/[group].astro`, and one in the `it.each` list of
-  `tests/unit/workbench-stories.test.ts`.
-- **Coverage.** `tests/unit/workbench-stories.test.ts` fails when a `src/ui/**/*.svelte` has
-  no story, except its `INTERNAL` set. Vitest coverage for `src/ui` must stay at 90% lines,
-  functions, statements and 85% branches.
-- **Review.** Look at changes on the workbench page in `bun run dev`.
-  `tests/review/workbench.spec.ts` runs axe and an overflow check on every group page in both
-  themes on desktop and mobile; CI compares their screenshots with master's and reports
-  differences without failing. Locally, run only `bun run test:review -- --grep <group>`
-  for the groups you touched; never update or commit screenshots. Broken-image demos use
-  `https://media.fixture.invalid/broken.png`; a real 404 fails the console check. Navigation
-  landmarks on one page need distinct names.
-- **Styles.** No `variants.ts`. A style shared by a folder goes in that folder's `styles.ts`
-  (`forms/styles.ts`, `overlays/styles.ts`). Code that wants a
-  button's look renders `Button`, through bits-ui's `child` snippet for triggers.
-- **Types from `.svelte` files.** ESLint resolves types imported from a `.svelte` module as
-  `any`, so shared prop types belong in a `.ts` file beside the component.
-- **Inline styles.** Data-driven geometry (`style:width`) is allowed with an
-  `eslint-disable svelte/no-inline-styles` block and a reason.
-- **Image fallbacks.** `src/ui/image-fallback.ts` must stay a non-module script loaded only by
-  `DocumentHead`; making it a module or loading it elsewhere splits it into a chunk that fails
-  on the offline page.
-
-How to resume: read `screens.md` for the next Phase 8 screen, its API items in
-`api-gaps.md`, and `components.md` §3 for its feature components. Compose from `src/ui`
-(see its README); lint rejects raw controls and arbitrary values in features.
-
-Not yet run: `bun run test:compatibility` (Firefox and WebKit).
+  `tests/unit/workbench-stories.test.ts`. Vitest coverage for `src/ui` stays at 90% lines,
+  functions and statements and 85% branches.
+- Broken-image demos use `https://media.fixture.invalid/broken.png`; a real 404 fails the
+  console check.
+- ESLint resolves types imported from a `.svelte` module as `any`, so shared prop types
+  belong in a `.ts` file beside the component.
+- Data-driven geometry (`style:width`) is allowed with an `eslint-disable
+svelte/no-inline-styles` block and a reason.
+- `src/ui/image-fallback.ts` must stay a non-module script loaded only by `DocumentHead`;
+  as a module, or loaded elsewhere, it splits into a chunk that fails on the offline page.
 
 ## Build order
 

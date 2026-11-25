@@ -61,7 +61,9 @@ stories per folder; `/zh-cn/design-system` shows them in Simplified Chinese.
 Features and layouts build on these: lint rejects raw `<button>`, `<input>`, `<select>`,
 `<textarea>`, `<table>`, `<dialog>` and `<img>` there, and imports of `bits-ui`, `layerchart`,
 `@tanstack/svelte-table` or a folder's `styles.ts`. Components take their text through props
-and know nothing about builds, records, or the API. Add one here only when two features need
+and know nothing about builds, records, or the API. A component's own text, such as button
+names and status messages, arrives in one `labels` object; text that depends on a value is a
+function there, such as `labels.count(n)`, so plurals stay in the catalogs. Add one here only when two features need
 it; see `web/AGENTS.md`.
 
 ## Styles
@@ -90,8 +92,9 @@ from 320px to 1600px.
 
 Charts take series data, draw static SVG on the server and ship the same data as a table;
 `interactive` adds a tooltip and arrow keys once hydrated. Series colors are the `chart-*`
-tokens, assigned in order through a `tone` and never used for text. `DataTable` and the
-charts take snippets or format functions, so a Svelte feature component wraps them for Astro.
+tokens, assigned in order through a `tone` and never used for text. Astro cannot write
+snippets, and functions cannot cross into an island, so a Svelte feature component wraps
+components that take them, such as `DataTable`, the charts, and fields with label functions.
 
 Astro wraps slot content passed to a Svelte component in an `astro-static-slot` element,
 which `app.css` displays as `contents`. The wrapper still breaks list and table structure,
