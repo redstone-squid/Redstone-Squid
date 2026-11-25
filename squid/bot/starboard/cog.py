@@ -99,9 +99,7 @@ class StarboardCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         if not await self.service.is_relevant_emoji(payload.guild_id, event.emoji, context=ActingContext.current()):
             return
         self._schedule(
-            await self.service.withdraw_vote(
-                payload.message_id, payload.user_id, event.emoji, context=ActingContext.current()
-            )
+            await self.service.withdraw_vote(payload.message_id, event.emoji, context=ActingContext.current())
         )
 
     @reaction_handler("clear")

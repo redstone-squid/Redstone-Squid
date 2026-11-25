@@ -3,7 +3,10 @@
 from collections.abc import Collection
 from dataclasses import dataclass
 
-from squid.core.actors import ActingContext, Actor, application_operation
+from squid.core.actors import ActingContext, Actor, ActorKind, application_operation
+from squid.core.errors import AuthorizationError
+from squid.core.permissions.application import PermissionService
+from squid.core.permissions.domain.catalogue import STARBOARD_BOARD_RECOUNT
 from squid.core.reactions.application import RoleWeightPolicy
 from squid.core.reactions.domain import RoleMultiplier, WeightScope
 from squid.core.starboard.application.ports import (
@@ -42,6 +45,7 @@ class StarboardService:
 
     def __init__(self, *, uow_factory: UnitOfWorkFactory[StarboardUnitOfWork]) -> None:
         self._uow_factory = uow_factory
+        self._permissions = PermissionService(uow_factory=uow_factory)
 
     @staticmethod
     def _weight_policy(repository: StarboardRepository) -> RoleWeightPolicy:
@@ -67,6 +71,8 @@ class StarboardService:
         """
         actor = context.effective
         user_id = actor.require_discord_user_id()
+        if actor.guild_id != origin.guild_id:
+            raise AuthorizationError
         async with self._uow_factory() as uow:
             weight_policy = self._weight_policy(uow.starboards)
             pending: list[PendingVote] = []
@@ -90,8 +96,9 @@ class StarboardService:
 
     @application_operation
     async def withdraw_vote(
-        self, origin_message_id: int, user_id: int, emoji: str, *, context: ActingContext
+        self, origin_message_id: int, emoji: str, *, context: ActingContext
     ) -> tuple[EntryKey, ...]:
+        user_id = context.effective.require_discord_user_id()
         async with self._uow_factory() as uow:
             result = tuple(await uow.starboards.withdraw_vote(origin_message_id, user_id, emoji))
             await uow.commit()
@@ -107,7 +114,11 @@ class StarboardService:
         board. The repository removes old votes across all boards for this origin,
         including votes whose boards no longer accept the source.
         """
+        requester = context.effective
+        if requester.kind is not ActorKind.USER or requester.guild_id != origin.guild_id:
+            raise AuthorizationError
         async with self._uow_factory() as uow:
+            await self._permissions.require(requester, STARBOARD_BOARD_RECOUNT, uow=uow)
             weight_policy = self._weight_policy(uow.starboards)
             configs = await uow.starboards.configs_for_source(origin.guild_id, origin.channel_id)
             accepted: dict[tuple[int, int], tuple[int, PendingVote]] = {}
@@ -133,6 +144,7 @@ class StarboardService:
     async def clear_votes(
         self, origin_message_id: int, emoji: str | None = None, *, context: ActingContext
     ) -> tuple[EntryKey, ...]:
+        context.require_worker()
         async with self._uow_factory() as uow:
             result = tuple(await uow.starboards.clear_votes(origin_message_id, emoji))
             await uow.commit()
@@ -142,6 +154,7 @@ class StarboardService:
     async def refresh(
         self, origin_message_id: int, *, force: bool = False, context: ActingContext
     ) -> tuple[EntryKey, ...]:
+        context.require_worker()
         async with self._uow_factory() as uow:
             result = tuple(await uow.starboards.refresh(origin_message_id, force=force))
             await uow.commit()
@@ -149,6 +162,7 @@ class StarboardService:
 
     @application_operation
     async def mark_origin_deleted(self, origin_message_id: int, *, context: ActingContext) -> tuple[EntryKey, ...]:
+        context.require_worker()
         async with self._uow_factory() as uow:
             result = tuple(await uow.starboards.mark_origin_deleted(origin_message_id))
             await uow.commit()
@@ -191,6 +205,7 @@ class StarboardService:
         self, starboard_id: int, origin_message_id: int, score: float, *, context: ActingContext
     ) -> None:
         """Record the score a post now shows, so an unchanged entry is not re-edited."""
+        context.require_worker()
         async with self._uow_factory() as uow:
             await uow.starboards.mark_rendered(starboard_id, origin_message_id, score)
             await uow.commit()
@@ -214,6 +229,7 @@ class StarboardService:
         can point it at a new channel and keep its configuration. A source channel that is gone
         is removed from every board that read from it.
         """
+        context.require_worker()
         async with self._uow_factory() as uow:
             await uow.starboards.forget_channels(guild_id, channel_ids)
             await uow.commit()

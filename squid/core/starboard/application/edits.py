@@ -14,7 +14,6 @@ from squid.core.errors import (
     NotFoundError,
     ValidationError,
 )
-from squid.core.permissions.application.ports import PermissionUnitOfWork
 from squid.core.permissions.application.services import PermissionService
 from squid.core.permissions.domain import PermissionNode
 from squid.core.permissions.domain.catalogue import (
@@ -38,7 +37,7 @@ def starboard_target(starboard_id: int) -> EditTarget:
     return EditTarget("starboard", str(starboard_id))
 
 
-class StarboardEditUnitOfWork(StarboardUnitOfWork, EditUnitOfWork, PermissionUnitOfWork, Protocol):
+class StarboardEditUnitOfWork(StarboardUnitOfWork, EditUnitOfWork, Protocol):
     pass
 
 

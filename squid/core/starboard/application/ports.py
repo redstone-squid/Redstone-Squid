@@ -5,9 +5,9 @@ from dataclasses import dataclass
 from typing import Protocol
 
 from squid.core.edits.domain import Revision
+from squid.core.permissions.application.ports import PermissionUnitOfWork
 from squid.core.starboard.domain import StarboardDirection
 from squid.core.starboard.models import OriginMessage, StarboardConfig, StarboardEmoji, StarboardEntry
-from squid.core.unit_of_work import UnitOfWork
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,6 +97,6 @@ class StarboardRepository(Protocol):
     async def set_role_multiplier(self, starboard_id: int, role_id: int, multiplier: float | None) -> None: ...
 
 
-class StarboardUnitOfWork(UnitOfWork, Protocol):
+class StarboardUnitOfWork(PermissionUnitOfWork, Protocol):
     @property
     def starboards(self) -> StarboardRepository: ...

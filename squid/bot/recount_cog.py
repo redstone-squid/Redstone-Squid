@@ -81,7 +81,8 @@ class RecountCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         async def authorize_starboard() -> None:
             await enforce(request, STARBOARD_BOARD_RECOUNT)
 
-        return text_node(await self.recount_link(guild.id, message, authorize_starboard=authorize_starboard))
+        with ActingContext.for_actor(await request.client.actors.resolve(request)).scope():
+            return text_node(await self.recount_link(guild.id, message, authorize_starboard=authorize_starboard))
 
     @sd.context_menu(name=to_locale_str(tr(t"command-recount-context = Recount reactions")), defer="private")
     @app_commands.guild_only()

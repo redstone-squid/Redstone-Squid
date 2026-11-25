@@ -204,9 +204,8 @@ async def test_first_vote_and_creation_undo_cannot_both_win(
     async with anyio.create_task_group() as tasks:
         tasks.start_soon(undo)
         tasks.start_soon(
-            partial(service.record_vote, context=ActingContext.worker("reaction")),
+            partial(service.record_vote, context=ActingContext.direct(Actor(discord_user_id=50, guild_id=10))),
             origin,
-            Actor(discord_user_id=50, guild_id=10),
             "⭐",
         )
     async with factory() as uow:

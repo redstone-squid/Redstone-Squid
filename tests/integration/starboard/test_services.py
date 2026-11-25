@@ -43,15 +43,13 @@ async def test_concurrent_votes_commit_and_abandoned_votes_leave_no_entry(
 
     async with create_task_group() as tasks:
         tasks.start_soon(
-            partial(service.record_vote, context=ActingContext.worker("reaction")),
+            partial(service.record_vote, context=ActingContext.direct(Actor(discord_user_id=50, guild_id=10))),
             origin,
-            Actor(discord_user_id=50, guild_id=10),
             "⭐",
         )
         tasks.start_soon(
-            partial(service.record_vote, context=ActingContext.worker("reaction")),
+            partial(service.record_vote, context=ActingContext.direct(Actor(discord_user_id=51, guild_id=10))),
             origin,
-            Actor(discord_user_id=51, guild_id=10),
             "⭐",
         )
     stored = await service.entry_state(config.id, origin.id, context=ActingContext.direct(Actor()))
