@@ -71,6 +71,8 @@
   let open = $state(false);
   let search = $state("");
   let filtering = $state(false);
+  // The list anchors to the whole box, so it spans the chips and the toggle as well.
+  let anchor = $state<HTMLElement | null>(null);
   // Labels of every option seen, so chips and the input can name values no longer listed.
   const seen = new SvelteMap<string, string>();
   const values = $derived(
@@ -126,6 +128,7 @@
   <Combobox.Portal>
     <Combobox.Content
       sideOffset={4}
+      customAnchor={anchor}
       class={cn(
         "z-dropdown max-h-72 w-(--bits-floating-anchor-width) min-w-field-sm overflow-y-auto rounded-sm border border-line-strong bg-surface-raised p-1 shadow-overlay",
         "data-ending-style:opacity-0 motion-safe:transition-opacity motion-safe:duration-fast motion-safe:starting:opacity-0",
@@ -156,7 +159,7 @@
         <Combobox.Item
           value={query}
           label={query}
-          class={cn(popupOptionClass, "flex items-center gap-2")}
+          class={cn(popupOptionClass, "grid-cols-[auto_1fr] items-center gap-x-2")}
         >
           <Plus class="size-4 shrink-0 text-fg-muted" aria-hidden="true" />{labels.create(query)}
         </Combobox.Item>
@@ -215,18 +218,19 @@
         }}
       >
         <div
-          class={cn(boxClass, "flex-wrap items-center gap-1.5 p-1.5")}
+          bind:this={anchor}
+          class={cn(boxClass, "flex-wrap items-center gap-1 p-1")}
           data-disabled={disabled === true ? "" : undefined}
         >
           {#each values as item (item)}
-            <Chip removeLabel={labels.remove(labelOf(item))} onRemove={() => remove(item)}
+            <Chip size="sm" removeLabel={labels.remove(labelOf(item))} onRemove={() => remove(item)}
               >{labelOf(item)}</Chip
             >
           {/each}
           <Combobox.Input
             {...attributes}
             {placeholder}
-            class={cn(boxInputClass, "min-w-field-xs px-1.5 py-1")}
+            class={cn(boxInputClass, "min-w-field-xs px-2 py-1")}
             oninput={(event) => {
               search = event.currentTarget.value;
               filtering = true;
@@ -238,7 +242,7 @@
           />
           <Combobox.Trigger
             aria-label={labels.toggle}
-            class="grid size-control-sm shrink-0 cursor-pointer place-items-center rounded-xs text-fg-muted hover:bg-surface-muted"
+            class="grid w-9 shrink-0 cursor-pointer place-items-center self-stretch text-fg-muted hover:text-fg"
             ><ChevronDown class="size-4" aria-hidden="true" /></Combobox.Trigger
           >
         </div>
@@ -258,11 +262,11 @@
           if (!next) filtering = false;
         }}
       >
-        <div class={boxClass} data-disabled={disabled === true ? "" : undefined}>
+        <div bind:this={anchor} class={boxClass} data-disabled={disabled === true ? "" : undefined}>
           <Combobox.Input
             {...attributes}
             {placeholder}
-            class={boxInputClass}
+            class={cn(boxInputClass, "px-3 py-2")}
             oninput={(event) => {
               search = event.currentTarget.value;
               filtering = true;

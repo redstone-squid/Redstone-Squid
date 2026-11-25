@@ -22,14 +22,14 @@ export const inputClass = cn(
  */
 export const boxClass = cn(
   controlBorder,
-  "flex min-h-control w-full min-w-0 items-stretch",
+  "flex min-h-control w-full min-w-0",
   "hover:not-data-disabled:not-has-aria-invalid:border-fg-muted has-aria-invalid:border-danger",
   "has-focus-visible:outline-3 has-focus-visible:outline-offset-3 has-focus-visible:outline-focus",
   "data-disabled:bg-surface-muted data-disabled:text-fg-muted data-readonly:bg-surface-muted",
 );
-/** The input inside `boxClass`. */
+/** The input inside `boxClass`. Callers add the padding, which depends on what shares the box. */
 export const boxInputClass = cn(
-  "min-w-0 flex-1 bg-transparent px-3 py-2 placeholder:text-fg-muted focus-visible:outline-none",
+  "min-w-0 flex-1 bg-transparent placeholder:text-fg-muted focus-visible:outline-none",
   "disabled:cursor-not-allowed",
 );
 /** A native checkbox or radio, aligned with the first line of its label. */

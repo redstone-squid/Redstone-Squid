@@ -101,7 +101,7 @@
         {readonly}
         bind:value
         bind:this={input}
-        class={boxInputClass}
+        class={cn(boxInputClass, "px-3 py-2")}
       />
       {#if suffix !== undefined}<span id={suffixId} class={cn(adornmentClass, "pe-3")}
           >{suffix}</span

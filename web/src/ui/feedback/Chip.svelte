@@ -8,7 +8,8 @@
    * A tag people interact with: a link (`href`), a toggle (`pressed` with `onclick`), or a
    * static token. A removable chip renders a separate remove control named `removeLabel`
    * (such as "Remove width ≥ 5"), as a link when `removeHref` is given so it works without
-   * JavaScript, otherwise as a button calling `onRemove`.
+   * JavaScript, otherwise as a button calling `onRemove`. `size="sm"` is for chips inside a
+   * field's box, which must fit the box's height; its remove target stays above 24px.
    */
   type Props = {
     href?: string;
@@ -16,6 +17,7 @@
     onclick?: () => void;
     icon?: LucideIcon;
     tone?: "neutral" | "accent";
+    size?: "sm" | "md";
     removeLabel?: string;
     removeHref?: string;
     onRemove?: () => void;
@@ -28,6 +30,7 @@
     onclick,
     icon: Glyph,
     tone = "neutral",
+    size = "md",
     removeLabel,
     removeHref,
     onRemove,
@@ -44,7 +47,18 @@
       className,
     ),
   );
-  const body = "inline-flex min-h-control-sm min-w-0 items-center gap-1.5 px-2.5 no-underline";
+  const body = $derived(
+    cn(
+      "inline-flex min-w-0 items-center gap-1.5 no-underline",
+      size === "sm" ? "min-h-7 px-2" : "min-h-control-sm px-2.5",
+    ),
+  );
+  const remover = $derived(
+    cn(
+      "grid shrink-0 place-items-center rounded-xs hover:bg-surface-muted",
+      size === "sm" ? "size-7" : "size-control-sm",
+    ),
+  );
   const interactive = "cursor-pointer rounded-xs hover:bg-surface-muted";
 </script>
 
@@ -69,15 +83,13 @@
   {/if}
   {#if removable}
     {#if removeHref !== undefined}
-      <a
-        href={removeHref}
-        class="grid size-control-sm shrink-0 place-items-center rounded-xs hover:bg-surface-muted"
-        aria-label={removeLabel}><X class="size-4" aria-hidden="true" /></a
+      <a href={removeHref} class={remover} aria-label={removeLabel}
+        ><X class="size-4" aria-hidden="true" /></a
       >
     {:else}
       <button
         type="button"
-        class="grid size-control-sm shrink-0 cursor-pointer place-items-center rounded-xs hover:bg-surface-muted"
+        class={cn(remover, "cursor-pointer")}
         aria-label={removeLabel}
         onclick={onRemove}><X class="size-4" aria-hidden="true" /></button
       >
