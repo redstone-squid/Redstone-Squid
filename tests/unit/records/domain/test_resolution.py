@@ -7,6 +7,7 @@ from squid.core.records.domain.models import (
     EXTENDER_TIMING_METHODS,
     Candidate,
     CandidateGap,
+    RecordFact,
     ResolutionStatus,
     TimingVariant,
 )
@@ -73,14 +74,14 @@ def test_smallest_undated_tie_loses_to_a_dated_build_but_remains_a_contender() -
     assert result.status is ResolutionStatus.RESOLVED
     assert result.holder_ids == (2,)
     assert result.tied_ids == ()
-    assert result.gaps == (CandidateGap(build_id=1, field="completion_at"),)
+    assert result.gaps == (CandidateGap(build_id=1, field=RecordFact.COMPLETION_AT),)
 
 
 def test_smallest_undated_ties_share_the_record_until_dates_are_known() -> None:
     result = resolve_smallest((Candidate(build_id=1, fixed_volume=20), Candidate(build_id=2, fixed_volume=20)))
 
     assert result.holder_ids == (1, 2)
-    assert result.gaps == (CandidateGap(1, "completion_at"), CandidateGap(2, "completion_at"))
+    assert result.gaps == (CandidateGap(1, RecordFact.COMPLETION_AT), CandidateGap(2, RecordFact.COMPLETION_AT))
 
 
 def test_smallest_has_no_candidate_without_fixed_volume() -> None:
@@ -146,7 +147,7 @@ def test_fastest_missing_method_loses_to_a_known_one_and_is_reported() -> None:
 
     assert result.status is ResolutionStatus.RESOLVED
     assert result.holder_ids == (2,)
-    assert result.gaps == (CandidateGap(build_id=1, field="opening_visible"),)
+    assert result.gaps == (CandidateGap(build_id=1, field=RecordFact.OPENING_VISIBLE),)
 
 
 def test_fastest_skips_a_method_nobody_measured_and_reports_it() -> None:
@@ -159,7 +160,7 @@ def test_fastest_skips_a_method_nobody_measured_and_reports_it() -> None:
     )
 
     assert result.holder_ids == (2,)
-    assert result.gaps == (CandidateGap(1, "opening_visible"), CandidateGap(2, "opening_visible"))
+    assert result.gaps == (CandidateGap(1, RecordFact.OPENING_VISIBLE), CandidateGap(2, RecordFact.OPENING_VISIBLE))
 
 
 def test_fastest_supports_negative_reset_times() -> None:
@@ -234,11 +235,11 @@ def test_smallest_fastest_reports_a_build_that_might_join_the_fastest_pool() -> 
             Candidate(build_id=1, fixed_volume=10, timing_variants=(TimingVariant((4, None)),)),
             Candidate(build_id=2, fixed_volume=11, timing_variants=(TimingVariant((4, 2)),)),
         ),
-        ("opening", "opening_visible"),
+        ("opening", RecordFact.OPENING_VISIBLE),
     )
 
     assert result.holder_ids == (2,)
-    assert result.gaps == (CandidateGap(build_id=1, field="opening_visible"),)
+    assert result.gaps == (CandidateGap(build_id=1, field=RecordFact.OPENING_VISIBLE),)
 
 
 def test_reduce_timing_variants_selects_lexicographically_slowest_behavior() -> None:

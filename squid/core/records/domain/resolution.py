@@ -19,6 +19,7 @@ from squid.core.records.domain.models import (
     Candidate,
     CandidateGap,
     RecordCriterion,
+    RecordFact,
     RecordResolution,
     ResolutionStatus,
     TimingReduction,
@@ -70,7 +71,7 @@ class _Contest:
     active: list[Candidate]
     gaps: list[CandidateGap] = field(default_factory=list)
 
-    def keep_best[T: (int, datetime)](self, name: str, value: Callable[[Candidate], T | None]) -> None:
+    def keep_best[T: (int, datetime)](self, name: RecordFact, value: Callable[[Candidate], T | None]) -> None:
         """Keep the candidates with the lowest known value; unknown values lose but leave gaps."""
         known = [(candidate, metric) for candidate in self.active if (metric := value(candidate)) is not None]
         if not known:
@@ -86,7 +87,7 @@ class _Contest:
         if not self.active:
             return RecordResolution(ResolutionStatus.NO_CANDIDATE)
         level = self.active
-        self.keep_best("completion_at", lambda candidate: candidate.completion_at)
+        self.keep_best(RecordFact.COMPLETION_AT, lambda candidate: candidate.completion_at)
         holders = {candidate.build_id for candidate in self.active}
         tied = (c.build_id for c in level if c.build_id not in holders and c.completion_at is not None)
         return RecordResolution(
@@ -125,14 +126,14 @@ def resolve_fastest_smallest(candidates: Iterable[Candidate], methods: Sequence[
 def resolve_smallest_fastest(candidates: Iterable[Candidate], methods: Sequence[str]) -> RecordResolution:
     """Resolve the smallest build in the fastest-timing pool."""
     contest = _fastest(_Contest(list(candidates)), methods)
-    contest.keep_best("fixed_volume", lambda candidate: candidate.fixed_volume)
+    contest.keep_best(RecordFact.FIXED_VOLUME, lambda candidate: candidate.fixed_volume)
     return contest.finish()
 
 
 def _smallest(contest: _Contest) -> _Contest:
     # Volume is the primary metric, so builds without one do not compete at all.
     contest.active = [candidate for candidate in contest.active if candidate.fixed_volume is not None]
-    contest.keep_best("fixed_volume", lambda candidate: candidate.fixed_volume)
+    contest.keep_best(RecordFact.FIXED_VOLUME, lambda candidate: candidate.fixed_volume)
     return contest
 
 
@@ -145,7 +146,7 @@ def _fastest(contest: _Contest, methods: Sequence[str]) -> _Contest:
             timings[candidate.build_id] = values + (None,) * (len(methods) - len(values))
     contest.active = [candidate for candidate in contest.active if candidate.build_id in timings]
     for index, method in enumerate(methods):
-        contest.keep_best(method, lambda candidate, index=index: timings[candidate.build_id][index])
+        contest.keep_best(RecordFact(method), lambda candidate, index=index: timings[candidate.build_id][index])
     return contest
 
 

@@ -58,6 +58,23 @@ class TimingMethod(StrEnum):
     EXTENSION_RESET = "extension_reset"
 
 
+class RecordFact(StrEnum):
+    """A fact a record comparison reads, as gaps name it; timing facts share TimingMethod values."""
+
+    COMPLETION_AT = "completion_at"
+    FIXED_VOLUME = "fixed_volume"
+    OPENING = "opening"
+    OPENING_VISIBLE = "opening_visible"
+    CLOSING = "closing"
+    CLOSING_VISIBLE = "closing_visible"
+    OPENING_RESET = "opening_reset"
+    CLOSING_RESET = "closing_reset"
+    RETRACTION = "retraction"
+    EXTENSION = "extension"
+    RETRACTION_RESET = "retraction_reset"
+    EXTENSION_RESET = "extension_reset"
+
+
 DOOR_TIMING_METHODS: tuple[TimingMethod, ...] = (
     TimingMethod.OPENING,
     TimingMethod.OPENING_VISIBLE,
@@ -103,7 +120,7 @@ class CandidateGap:
     """
 
     build_id: int
-    field: str
+    field: RecordFact
 
 
 @dataclass(frozen=True, slots=True)

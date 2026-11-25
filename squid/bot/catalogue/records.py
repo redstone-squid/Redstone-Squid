@@ -491,7 +491,7 @@ def _gap_summary(gap: RecordGap) -> sl.TextLike:
 
 
 def _needed_facts(gap: RecordGap) -> Text:
-    return Text.join(", ", [RECORD_FACTS.get(field, field) for field in dict.fromkeys(gap.fields)])
+    return Text.join(", ", [RECORD_FACTS[field] for field in dict.fromkeys(gap.fields)])
 
 
 def _diagnostic_text(diagnostic: Mapping[str, str | list[str]]) -> str:

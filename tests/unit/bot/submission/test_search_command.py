@@ -255,7 +255,7 @@ async def test_a_plain_target_leaves_the_query_untouched() -> None:
 @pytest.mark.parametrize(
     "query",
     [
-        "status:unresolved",
+        "status:no_candidate",
         "status:resolved OR status:no_candidate",
         "NOT status:resolved",
         "NOT (status:resolved OR kind:door)",

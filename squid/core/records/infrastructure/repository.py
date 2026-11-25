@@ -40,6 +40,7 @@ from squid.core.records.domain import (
     ExtenderCategory,
     FormattedTitle,
     RecordCriterion,
+    RecordFact,
     ResolutionStatus,
     TimingVariant,
     VersionScope,
@@ -1179,11 +1180,12 @@ def _stored_gaps(result: RecordResult) -> tuple[CandidateGap, ...]:
     missing = result.gap_reasons.get("missing", [])
     entries = cast(list[object], missing) if isinstance(missing, list) else []
     return tuple(
-        CandidateGap(build_id, field)
+        CandidateGap(build_id, RecordFact(field))
         for entry in entries
         if isinstance(entry, Mapping)
         and isinstance(build_id := entry.get("build_id"), int)
         and isinstance(field := entry.get("field"), str)
+        and field in RecordFact
     )
 
 

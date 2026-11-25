@@ -12,7 +12,7 @@ from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import DoorBuild
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.records.application.services import RecordComputationService
-from squid.core.records.domain import BuildKind, CandidateGap, RecordCriterion, ResolutionStatus
+from squid.core.records.domain import BuildKind, CandidateGap, RecordCriterion, RecordFact, ResolutionStatus
 from tests.support.build_edits import build_edit_session
 
 
@@ -57,6 +57,6 @@ async def test_publication_separates_holder_tied_builds_and_contenders(
         assert smallest.status is ResolutionStatus.RESOLVED
         assert smallest.holder_build_ids == (earliest_id,)
         assert smallest.tied_build_ids == (later_id,)
-        assert smallest.gaps == (CandidateGap(undated_id, "completion_at"),)
+        assert smallest.gaps == (CandidateGap(undated_id, RecordFact.COMPLETION_AT),)
         gaps = await uow.records.list_gaps(kind=BuildKind.DOOR)
         assert smallest.definition_id in {gap.definition_id for gap in gaps}

@@ -17,6 +17,7 @@ from squid.core.records.domain import (
     ExtenderCategory,
     FormattedTitle,
     RecordCriterion,
+    RecordFact,
     RecordResolution,
     ResolutionStatus,
     VersionScope,
@@ -172,7 +173,7 @@ class RecordGap:
     subtitle: str | None
     criterion: RecordCriterion
     build_ids: tuple[int, ...]
-    fields: tuple[str, ...]
+    fields: tuple[RecordFact, ...]
     build_kind: BuildKind
 
 

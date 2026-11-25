@@ -39,6 +39,7 @@ from squid.core.records.domain import (
     DoorCategory,
     FormattedTitle,
     RecordCriterion,
+    RecordFact,
     ResolutionStatus,
     TimingVariant,
     VersionScope,
@@ -590,7 +591,7 @@ async def test_gaps_delegates_active_result_query() -> None:
         subtitle=None,
         criterion=RecordCriterion.FASTEST,
         build_ids=(4,),
-        fields=("closing",),
+        fields=(RecordFact.CLOSING,),
         build_kind=BuildKind.DOOR,
     )
     runs.gap_rows = (gap,)

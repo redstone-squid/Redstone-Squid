@@ -38,7 +38,7 @@ def test_record_documents_carry_titles_not_category_keys() -> None:
     source = RecordProjectionSource(
         result_id=3,
         definition_id=7,
-        status="unresolved",
+        status="resolved",
         history_complete=True,
         gap_reasons={},
         criterion="fastest",

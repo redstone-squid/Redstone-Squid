@@ -20580,7 +20580,7 @@
             "type": "integer"
           },
           "field": {
-            "type": "string"
+            "$ref": "#/components/schemas/RecordFact"
           }
         },
         "type": "object",
@@ -26781,6 +26781,25 @@
         "title": "RecordCriterion",
         "description": "A metric by which records are classified.",
         "default": "smallest"
+      },
+      "RecordFact": {
+        "type": "string",
+        "enum": [
+          "completion_at",
+          "fixed_volume",
+          "opening",
+          "opening_visible",
+          "closing",
+          "closing_visible",
+          "opening_reset",
+          "closing_reset",
+          "retraction",
+          "extension",
+          "retraction_reset",
+          "extension_reset"
+        ],
+        "title": "RecordFact",
+        "description": "A fact a record comparison reads, as gaps name it; timing facts share TimingMethod values."
       },
       "RecordFilterInput": {
         "properties": {

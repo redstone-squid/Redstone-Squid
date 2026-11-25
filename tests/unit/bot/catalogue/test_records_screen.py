@@ -21,7 +21,7 @@ from squid.core.records.application import (
     RecordNameDiagnostic,
     RecordService,
 )
-from squid.core.records.domain import BuildKind, RecordCriterion
+from squid.core.records.domain import BuildKind, RecordCriterion, RecordFact
 from squid.core.suggestions.domain import Suggestion
 from squid_ui.ext.discord.testing import assert_within_limits, commit_render, delivered_to, message_harness
 from squid_ui.testing import RecordingResponder, labels, press, press_event, submit, submit_event
@@ -38,7 +38,11 @@ class RecordRecorder(RecordService):
     @override
     async def gaps(self, *, kind: BuildKind | None = None, context: ActingContext) -> Sequence[RecordGap]:
         self.gap_reads += 1
-        return (RecordGap(1, "Smallest door", None, RecordCriterion.SMALLEST, (7,), ("volume",), BuildKind.DOOR),)
+        return (
+            RecordGap(
+                1, "Smallest door", None, RecordCriterion.SMALLEST, (7,), (RecordFact.FIXED_VOLUME,), BuildKind.DOOR
+            ),
+        )
 
     @override
     async def title_gaps(
@@ -231,7 +235,7 @@ async def test_large_diagnostics_render_within_discord_limits() -> None:
                 None,
                 RecordCriterion.SMALLEST,
                 (i,),
-                ("volume",),
+                (RecordFact.FIXED_VOLUME,),
                 BuildKind.DOOR,
             )
             for i in range(1, 101)

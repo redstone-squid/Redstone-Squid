@@ -34,7 +34,7 @@ from squid.core.permissions.domain.catalogue import (
 )
 from squid.core.records.application import RecordService
 from squid.core.records.application.models import PublishedRecordResult, RecordGap, RecordNameDiagnostic
-from squid.core.records.domain import BuildKind, RecordCriterion, ResolutionStatus, VersionScope
+from squid.core.records.domain import BuildKind, RecordCriterion, RecordFact, ResolutionStatus, VersionScope
 from squid.core.schematics.application import SchematicService
 from squid.core.search.application import SearchService
 from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY
@@ -533,7 +533,7 @@ async def test_long_record_titles_fit_picker_controls_and_timeout(browser: str, 
         prev=None,
     )
     records.gaps.return_value = tuple(
-        RecordGap(index, title, None, RecordCriterion.SMALLEST, (7,), ("width",), BuildKind.DOOR)
+        RecordGap(index, title, None, RecordCriterion.SMALLEST, (7,), (RecordFact.FIXED_VOLUME,), BuildKind.DOOR)
         for index in range(count)
     )
     records.title_gaps.return_value = tuple(
@@ -574,7 +574,9 @@ async def test_full_build_card_fits_with_catalogue_navigation() -> None:
 async def test_record_tools_show_populated_diagnostics_after_a_click() -> None:
     records = AsyncMock()
     records.gaps.return_value = (
-        RecordGap(1, "Smallest 2x2 door", None, RecordCriterion.SMALLEST, (7,), ("width",), BuildKind.DOOR),
+        RecordGap(
+            1, "Smallest 2x2 door", None, RecordCriterion.SMALLEST, (7,), (RecordFact.FIXED_VOLUME,), BuildKind.DOOR
+        ),
     )
     records.title_gaps.return_value = ()
     tools = RecordsScreen(records, AsyncMock(), grants=grants(RECORD_ENTRY_INSPECT))
@@ -582,13 +584,13 @@ async def test_record_tools_show_populated_diagnostics_after_a_click() -> None:
         await ui.press("record-tools")
         assert "## Records missing evidence" in ui.texts()
         await ui.select("evidence-gaps.open", ["1"])
-        assert any("Needs width" in text for text in ui.texts())
+        assert any("Needs Volume" in text for text in ui.texts())
         ui.assert_within_limits()
         # A gap's build opens in place of the tools, and Back returns to the same gap.
         await ui.press("gap-build-7")
         assert "Build #7" in ui.texts()
         await ui.press("linked-build.back")
-        assert any("Needs width" in text for text in ui.texts())
+        assert any("Needs Volume" in text for text in ui.texts())
 
 
 @pytest.mark.parametrize("records", [False, True])
@@ -1489,7 +1491,7 @@ async def test_records_default_to_all_statuses_and_reset_clears_status_filter() 
         assert screen._guided is not None
         assert screen._guided.query.text == ""
         form = await ui.press_for_form("advanced")
-        await form.submit({"query": "status:unresolved"})
+        await form.submit({"query": "status:no_candidate"})
         await ui.press("remove-0")
         assert screen._query.text == ""
         assert service.search.call_args.args[0].query == ""
@@ -1497,7 +1499,7 @@ async def test_records_default_to_all_statuses_and_reset_clears_status_filter() 
         await ui.press("all-criteria")
         assert screen._results is None
         form = await ui.press_for_form("advanced")
-        await form.submit({"query": "status:unresolved"})
+        await form.submit({"query": "status:no_candidate"})
         await ui.press("reset")
         assert screen._query == screen._guided.query == CatalogueQuery(RecordQuery(None, ""))
         assert screen._results is None
@@ -1507,9 +1509,9 @@ async def test_record_status_is_not_injected_into_an_explicit_expression() -> No
     screen = _screen(initial_id=None)
     screen._mode = "records"
     async with stage(screen, owner=object()) as ui:
-        await submit_search(ui, "status:unresolved OR status:no_candidate")
+        await submit_search(ui, "status:resolved OR status:no_candidate")
         request = cast(AsyncMock, screen._search_service).search.call_args.args[0]
-        assert request.query == "status:unresolved OR status:no_candidate"
+        assert request.query == "status:resolved OR status:no_candidate"
 
 
 async def test_catalogue_reopens_with_field_filters_and_sort() -> None:
