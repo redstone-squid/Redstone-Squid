@@ -33,3 +33,19 @@ window.matchMedia = (query: string) =>
     // eslint-disable-next-line @typescript-eslint/no-deprecated
     removeListener: () => undefined,
   }) satisfies MediaQueryList;
+
+// jsdom has no Web Animations, which Svelte's `animate:` directives use. Animations finish at
+// once, so components see the same end state as in a browser.
+Element.prototype.getAnimations = () => [];
+Element.prototype.animate = function animate() {
+  const animation = Object.assign(new EventTarget(), {
+    onfinish: null as (() => void) | null,
+    cancel: () => undefined,
+    finish: () => undefined,
+    currentTime: 0,
+  }) as Animation;
+  queueMicrotask(() => {
+    animation.onfinish?.call(animation, new Event("finish") as AnimationPlaybackEvent);
+  });
+  return animation;
+};

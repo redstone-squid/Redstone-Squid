@@ -5,6 +5,8 @@
   import Plus from "@lucide/svelte/icons/plus";
   import Trash from "@lucide/svelte/icons/trash-2";
   import { tick, type Snippet } from "svelte";
+  import { flip } from "svelte/animate";
+  import { prefersReducedMotion } from "svelte/motion";
   import { focusAfterRemoval } from "@/ui/lib/focus";
   import Button from "@/ui/actions/Button.svelte";
   import { cn } from "@/ui/cn";
@@ -122,7 +124,9 @@
     <ol bind:this={rows} class="@container grid list-none gap-3">
       {#each items as item, index (keys[index])}
         {@const rowLabel = labels.rowLabel(index + 1)}
+        <!-- A moved row slides to its new place; 200ms is --duration-normal. -->
         <li
+          animate:flip={{ duration: prefersReducedMotion.current ? 0 : 200 }}
           class="grid min-w-0 gap-3 rounded-md border border-line bg-surface p-4 @md:grid-cols-[1fr_auto]"
         >
           <fieldset class="grid min-w-0 gap-4">
