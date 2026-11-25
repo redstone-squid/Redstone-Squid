@@ -344,7 +344,7 @@ async def list_drafts(drafts: Drafts, context: SubmissionContext) -> DraftListRe
     security=[ANONYMOUS],
     opt=contract(cli=transport_only()),
     status_code=200,
-    dependencies={"forms": Provide(get_submission_forms, sync_to_thread=False), "caller": Provide(current_caller)},
+    dependencies={"forms": Provide(get_submission_forms, sync_to_thread=False)},
 )
 async def current_form(request: Request, forms: Forms, caller: SubmissionCaller) -> FormManifestResponse:
     """Return the localized form and protocol bounds authored by this server."""
@@ -359,7 +359,7 @@ async def current_form(request: Request, forms: Forms, caller: SubmissionCaller)
     security=[ANONYMOUS],
     opt=contract(cli=transport_only()),
     status_code=200,
-    dependencies={"forms": Provide(get_submission_forms, sync_to_thread=False), "caller": Provide(current_caller)},
+    dependencies={"forms": Provide(get_submission_forms, sync_to_thread=False)},
 )
 async def pinned_form(
     schema_id: SchemaId,
@@ -384,7 +384,7 @@ async def pinned_form(
     security=[ANONYMOUS],
     opt=contract(cli=transport_only()),
     status_code=200,
-    dependencies={"forms": Provide(get_submission_forms, sync_to_thread=False), "caller": Provide(current_caller)},
+    dependencies={"forms": Provide(get_submission_forms, sync_to_thread=False)},
 )
 async def form_options(
     source: OptionSource, category: Category, request: Request, forms: Forms, caller: SubmissionCaller

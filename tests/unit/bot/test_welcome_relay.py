@@ -10,6 +10,7 @@ import pytest
 from pytest_mock import MockerFixture
 
 from squid.bot import welcome_relay_cog as welcome_relay
+from squid.core.actors import ActingContext, Actor
 from squid.core.community.application import WelcomeRelayService
 from squid.core.community.domain import WelcomeRelayPolicy
 from squid.core.settings.domain.runtime import RuntimeSettings
@@ -109,13 +110,17 @@ async def test_welcome_relay_forwards_once_in_either_event_order_without_cache_o
 
     with anyio.fail_after(0.2):
         if message_first:
-            await cog.maybe_forward_welcome_message(message)
+            with ActingContext.direct(Actor(discord_user_id=member.id, guild_id=member.guild.id)).scope():
+                await cog.maybe_forward_welcome_message(message)
             fetch_channel.assert_not_awaited()
-            await cog.track_new_member(member)
+            with ActingContext.worker("discord.gateway.member_join").scope():
+                await cog.track_new_member(member)
         else:
-            await cog.track_new_member(member)
+            with ActingContext.worker("discord.gateway.member_join").scope():
+                await cog.track_new_member(member)
             fetch_channel.assert_not_awaited()
-            await cog.maybe_forward_welcome_message(message)
+            with ActingContext.direct(Actor(discord_user_id=member.id, guild_id=member.guild.id)).scope():
+                await cog.maybe_forward_welcome_message(message)
 
     fetch_channel.assert_awaited_once_with(20)
     assert sent == [["Everyone welcome <@42>!"]]

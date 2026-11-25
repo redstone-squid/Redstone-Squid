@@ -16,7 +16,14 @@ from squid.core.builds.models import Build, DoorBuild
 from squid.core.errors import DataIntegrityError
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
 from squid.core.permissions.application import PermissionService
-from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_VIEW_PENDING
+from squid.core.permissions.application.ports import PermissionUnitOfWork
+from squid.core.permissions.domain import Pattern
+from squid.core.permissions.domain.catalogue import (
+    BUILD_SUBMISSION_CREATE,
+    BUILD_SUBMISSION_EDIT,
+    BUILD_SUBMISSION_READ,
+    BUILD_SUBMISSION_VIEW_PENDING,
+)
 from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 type BuildSortField = Literal["id", "submission_time"]
@@ -216,6 +223,37 @@ class SemanticBuildSearch(Protocol):
     async def find_build_id(self, query: str, *, context: ActingContext) -> int | None: ...
 
 
+async def visible_builds(
+    builds: Sequence[Build],
+    context: ActingContext,
+    permissions: PermissionService | None,
+    *,
+    editing: bool = False,
+    uow: PermissionUnitOfWork | None = None,
+) -> Sequence[Build]:
+    """Include private builds for the submitter, permitted staff, and background processors."""
+    actor = context.effective
+    if actor.worker_name is not None:
+        return builds
+    owner_id = actor.account_id
+    if owner_id is not None and actor.credential_scopes is not None:
+        owner_nodes = (BUILD_SUBMISSION_READ, BUILD_SUBMISSION_CREATE) if editing else (BUILD_SUBMISSION_READ,)
+        if not any(Pattern.parse(raw).matches(node) for raw in actor.credential_scopes for node in owner_nodes):
+            owner_id = None
+    visible = [
+        build
+        for build in builds
+        if build.submission_status is BuildStatus.APPROVED
+        or (owner_id is not None and build.submitter_account_id == owner_id)
+    ]
+    if len(visible) == len(builds) or permissions is None:
+        return visible
+    nodes = (BUILD_SUBMISSION_VIEW_PENDING, BUILD_SUBMISSION_EDIT) if editing else (BUILD_SUBMISSION_VIEW_PENDING,)
+    if (await permissions.check(actor, *nodes, mode="any", uow=uow)).allowed:
+        return builds
+    return visible
+
+
 class BuildQueryService:
     """Read stored builds by ID, listing filters, or a natural-language query."""
 
@@ -259,21 +297,7 @@ class BuildQueryService:
         with context.scope():
             async with self._uow_factory() as uow:
                 rows = await uow.builds.get_many(build_ids)
-            actor = context.effective
-            if actor.worker_name is not None:
-                return rows
-            visible = [
-                build
-                for build in rows
-                if build.submission_status is BuildStatus.APPROVED
-                or (actor.account_id is not None and build.submitter_account_id == actor.account_id)
-            ]
-            if (
-                len(visible) == len(rows)
-                or not (await self._permissions.check(actor, BUILD_SUBMISSION_VIEW_PENDING)).allowed
-            ):
-                return visible
-            return rows
+            return list(await visible_builds(rows, context, self._permissions))
 
     async def get_public_summaries(
         self, build_ids: Sequence[int], *, context: ActingContext

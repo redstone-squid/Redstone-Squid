@@ -79,7 +79,7 @@ async def test_record_listing_dto_preserves_json_and_declares_public_fields() ->
         return_dto=PublicRecordDTO,
         dependencies={"records": Provide(lambda: records, sync_to_thread=False)},
     )(list_records.fn)
-    app = Litestar([handler])
+    app = Litestar([handler], dependencies={"caller": Provide(lambda: ANONYMOUS, sync_to_thread=False)})
 
     # Litestar annotates ASGI scopes more narrowly than httpx's mutable dictionaries.
     transport = httpx.ASGITransport(app=app)  # type: ignore[bad-argument-type]
@@ -162,11 +162,10 @@ async def test_record_detail_serializes_the_application_read_model(expanded: boo
         "/records/{record_id:uuid}",
         dependencies={
             "records": Provide(lambda: records, sync_to_thread=False),
-            "caller": Provide(lambda: ANONYMOUS, sync_to_thread=False),
             "services": Provide(lambda: None, sync_to_thread=False),
         },
     )(get_record.fn)
-    app = Litestar([handler])
+    app = Litestar([handler], dependencies={"caller": Provide(lambda: ANONYMOUS, sync_to_thread=False)})
 
     transport = httpx.ASGITransport(app=app)  # type: ignore[bad-argument-type]
     async with httpx.AsyncClient(transport=transport, base_url="https://test") as client:
@@ -234,7 +233,7 @@ async def test_live_door_lookup_serializes_configuration_evidence() -> None:
         status_code=200,
         dependencies={"records": Provide(lambda: records, sync_to_thread=False)},
     )(lookup_door.fn)
-    app = Litestar([handler])
+    app = Litestar([handler], dependencies={"caller": Provide(lambda: ANONYMOUS, sync_to_thread=False)})
     transport = httpx.ASGITransport(app=app)  # type: ignore[bad-argument-type]
     async with httpx.AsyncClient(transport=transport, base_url="https://test") as client:
         response = await client.post("/records/lookup/door", json={"opening": [9999, 3, 1]})
@@ -246,7 +245,9 @@ async def test_live_door_lookup_serializes_configuration_evidence() -> None:
         assert body["configurations"][0]["volume"] == 50000
         assert body["configurations"][0]["membership"] == "supported"
         assert body["configurations"][0]["timing_variants"] == [[4999, None, None, None, None, None]]
-        records.lookup_door.assert_awaited_once_with(DoorRecordLookup(opening=(9999, 3, 1)))
+        records.lookup_door.assert_awaited_once_with(
+            DoorRecordLookup(opening=(9999, 3, 1)), context=ANONYMOUS.context()
+        )
         records.lookup_or_materialize.assert_not_called()
         records.lookup_door.reset_mock()
         for invalid in (
@@ -281,7 +282,7 @@ async def test_range_lookup_serializes_live_analysis_and_validates_dimensions(st
         status_code=200,
         dependencies={"records": Provide(lambda: records, sync_to_thread=False)},
     )(lookup_door_ranges.fn)
-    app = Litestar([handler])
+    app = Litestar([handler], dependencies={"caller": Provide(lambda: ANONYMOUS, sync_to_thread=False)})
     transport = httpx.ASGITransport(app=app)  # type: ignore[bad-argument-type]
     async with httpx.AsyncClient(transport=transport, base_url="https://test") as client:
         response = await client.post("/records/lookup/door/ranges", json={"height": 3})
@@ -294,7 +295,7 @@ async def test_range_lookup_serializes_live_analysis_and_validates_dimensions(st
             assert body["analysis"]["regions"] == []
         else:
             assert body["analysis"]["regions"][0]["domain"]["maximum"] is None
-        records.lookup_door_ranges.assert_awaited_once_with(query)
+        records.lookup_door_ranges.assert_awaited_once_with(query, context=ANONYMOUS.context())
         records.lookup_or_materialize.assert_not_called()
         records.lookup_door_ranges.reset_mock()
         for invalid in (
@@ -351,7 +352,7 @@ async def test_published_ranges_show_active_and_failed_latest_attempts() -> None
         "/records/ranges/door/{query_id:int}",
         dependencies={"publications": Provide(lambda: publications, sync_to_thread=False)},
     )(get_door_ranges.fn)
-    app = Litestar([handler])
+    app = Litestar([handler], dependencies={"caller": Provide(lambda: ANONYMOUS, sync_to_thread=False)})
     transport = httpx.ASGITransport(app=app)  # type: ignore[bad-argument-type]
     async with httpx.AsyncClient(transport=transport, base_url="https://test") as client:
         response = await client.get("/records/ranges/door/7")
@@ -363,6 +364,6 @@ async def test_published_ranges_show_active_and_failed_latest_attempts() -> None
         assert body["latest"]["error"] == "cancelled"
         assert body["latest"]["snapshot_hash"] == "def"
         assert body["latest"]["result"] is None
-        publications.get.assert_awaited_once_with(7)
+        publications.get.assert_awaited_once_with(7, context=ANONYMOUS.context())
         publications.publish.assert_not_called()
         publications.register.assert_not_called()

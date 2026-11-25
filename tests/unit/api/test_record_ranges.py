@@ -5,7 +5,7 @@ from unittest.mock import create_autospec
 import pytest
 from litestar.testing import TestClient
 
-from squid.api.security import Caller
+from squid.api.security import ANONYMOUS, Caller
 from squid.core.idempotency import IdempotencyService
 from squid.core.records.application.expansion_regions import DoorRangeQuery, analyze_door_widths
 from squid.core.records.application.published_points import (
@@ -93,7 +93,7 @@ def test_published_point_is_public_and_retains_saved_origin() -> None:
         assert body["publication"]["id"] == 11
         assert body["publication"]["snapshot_hash"] == "snapshot-one"
         assert "result" not in body["publication"]
-        publications.get_point.assert_awaited_once_with(7, 9999)
+        publications.get_point.assert_awaited_once_with(7, 9999, context=ANONYMOUS.context())
         publications.get_point.reset_mock()
         for width in (0, 2**31):
             assert client.get(f"{BASE}/7/at/{width}").status_code == 422

@@ -14,6 +14,7 @@ from squid.core.builds.application.ports import (
     BuildUnitOfWork,
     DefaultVersionResolver,
 )
+from squid.core.builds.application.queries import visible_builds
 from squid.core.builds.application.restrictions import RestrictionReader
 from squid.core.builds.application.tags import BuildTagResolver, apply_build_tags, replace_showcase_tags
 from squid.core.builds.domain import BuildInput, BuildStatus, RestrictionTypeLiteral, sort_restrictions
@@ -66,24 +67,38 @@ class BuildService:
     @application_operation
     async def get(self, build_id: int, *, context: ActingContext) -> Build | None:
         async with self._uow_factory() as uow:
-            return await uow.builds.get_by_id(build_id)
+            build = await uow.builds.get_by_id(build_id)
+            if build is None or not await visible_builds((build,), context, self._permissions, editing=True, uow=uow):
+                return None
+            return build
 
     @application_operation
     async def get_by_source_submission_draft_id(self, draft_id: UUID, *, context: ActingContext) -> Build | None:
         """Return the build previously finalized from a synchronized draft, if any."""
         async with self._uow_factory() as uow:
-            return await uow.builds.get_by_source_submission_draft_id(draft_id)
+            build = await uow.builds.get_by_source_submission_draft_id(draft_id)
+            if build is None or not await visible_builds((build,), context, self._permissions, editing=True, uow=uow):
+                return None
+            return build
 
     @application_operation
     async def next_attachment_review(self, after: int, *, context: ActingContext) -> int | None:
         async with self._uow_factory() as uow:
+            if self._permissions is None:
+                raise AuthorizationError
+            await self._permissions.require(context.effective, BUILD_SUBMISSION_EDIT, uow=uow)
             return await uow.builds.next_attachment_review(after)
 
     @application_operation
     async def list_ids_for_source_message(self, message_id: int, *, context: ActingContext) -> Sequence[int]:
         """Return IDs of builds linked to a Discord source message, in ascending order."""
         async with self._uow_factory() as uow:
-            return await uow.builds.list_ids_for_source_message(message_id)
+            ids = await uow.builds.list_ids_for_source_message(message_id)
+            if not ids:
+                return ()
+            builds = await uow.builds.get_many(ids)
+            visible = await visible_builds(builds, context, self._permissions, editing=True, uow=uow)
+            return tuple(build.id for build in visible)
 
     @application_operation
     async def save(

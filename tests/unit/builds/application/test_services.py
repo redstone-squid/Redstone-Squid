@@ -28,6 +28,7 @@ from squid.core.builds.errors import (
 )
 from squid.core.builds.models import Build, DoorBuild, ExtenderBuild, OtherBuild, UtilityBuild
 from squid.core.errors import AuthorizationError, InvalidStateError
+from squid.core.messages.domain import MessageRef
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.application.ports import PermissionRepository, SubjectRecords
 from squid.core.permissions.models import PermissionGrant
@@ -65,6 +66,9 @@ class FakeBuildRepository(FakeBuildEditing):
         if self.build is not None and self.build.id == build_id:
             return self.build
         return None
+
+    async def get_many(self, build_ids: Sequence[int]) -> Sequence[Build]:
+        return [self.build] if self.build is not None and self.build.id in build_ids else []
 
     async def get_by_source_submission_draft_id(self, draft_id: UUID) -> Build | None:
         if self.build is not None and self.build.source_submission_draft_id == draft_id:
@@ -521,7 +525,7 @@ async def test_get_by_source_submission_draft_id_returns_an_existing_build() -> 
     existing = OtherBuild(id=41, source_submission_draft_id=draft_id)
 
     result = await build_service(FakeBuildRepository(existing)).get_by_source_submission_draft_id(
-        draft_id, context=ActingContext.direct(Actor())
+        draft_id, context=ActingContext.worker("submission-finalization")
     )
 
     assert result is not None
@@ -572,6 +576,58 @@ class TestAuthorizedEditing:
 
         return Store()
 
+    @pytest.mark.parametrize(
+        ("actor", "granted", "visible"),
+        [
+            (Actor(), "", False),
+            (Actor(account_id=1), "", True),
+            (Actor(account_id=2), "", False),
+            (Actor(account_id=2), "build.submission.edit", True),
+            (Actor(account_id=2), "build.submission.view_pending", True),
+            (Actor(account_id=2, credential_scopes=frozenset()), "build.submission.edit", False),
+            (Actor(account_id=1, credential_scopes=frozenset({"account.self.read"})), "", False),
+            (Actor(worker_name="submission-finalization"), "", True),
+        ],
+    )
+    async def test_private_build_lookups_share_visibility(self, actor: Actor, granted: str, visible: bool) -> None:
+        draft_id = UUID(int=12)
+        build = OtherBuild(
+            id=42,
+            submission_status=BuildStatus.PENDING,
+            submitter_account_id=1,
+            source_submission_draft_id=draft_id,
+            source_messages=(MessageRef(id=9),),
+        )
+        service = build_service(
+            FakeBuildRepository(build), permissions=self._permissions(*([granted] if granted else []))
+        )
+        context = ActingContext.direct(actor)
+        assert (await service.get(42, context=context) is not None) is visible
+        assert (await service.get_by_source_submission_draft_id(draft_id, context=context) is not None) is visible
+        assert list(await service.list_ids_for_source_message(9, context=context)) == ([42] if visible else [])
+
+    async def test_attachment_review_requires_edit_authority(self) -> None:
+        build = OtherBuild(
+            id=7,
+            submission_status=BuildStatus.APPROVED,
+            extra_info={
+                "attachment_failures": [
+                    {
+                        "attachment_id": "1",
+                        "filename": "example.litematic",
+                        "stage": "download",
+                        "detail": "missing file",
+                    }
+                ]
+            },
+        )
+        repository = FakeBuildRepository(build)
+        service = build_service(repository, permissions=self._permissions("build.submission.edit"))
+        unprivileged = build_service(repository, permissions=self._permissions())
+        with pytest.raises(AuthorizationError):
+            await unprivileged.next_attachment_review(0, context=ActingContext.direct(self.OWNER))
+        assert await service.next_attachment_review(0, context=ActingContext.direct(self.STRANGER)) == 7
+
     @pytest.mark.parametrize("outcome", ["approve", "reject"])
     async def test_moderation_requires_its_grant_or_closed_vote_delivery(
         self, existing_build: DoorBuild, outcome: str
@@ -602,7 +658,7 @@ class TestAuthorizedEditing:
         repository = FakeBuildRepository(existing_build)
         service = build_service(repository, permissions=self._permissions())
 
-        with pytest.raises(AuthorizationError):
+        with pytest.raises(BuildNotFoundError):
             await service.apply_edit(
                 42, BuildEditPatch(extra_user_info="theirs"), context=ActingContext.for_actor(self.STRANGER)
             )

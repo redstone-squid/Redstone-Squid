@@ -5,9 +5,15 @@ from typing import override
 
 import pytest
 
+from squid.core.actors import ActingContext
 from squid.core.community.application import RedstonerService, WelcomeRelayService
 from squid.core.community.domain import RedstonerDecisionKind, RedstonerPolicy, WelcomeRelayDecision, WelcomeRelayPolicy
 from squid.core.errors import ConfigurationError
+
+
+@pytest.fixture
+def relay_context() -> ActingContext:
+    return ActingContext.worker("welcome-relay-test")
 
 
 class SequenceRandom(Random):
@@ -90,7 +96,7 @@ def test_redstoner_grants_valid_post() -> None:
 
 
 @pytest.mark.parametrize("message_first", [False, True])
-def test_welcome_relay_resolves_both_event_orders(message_first: bool) -> None:
+def test_welcome_relay_resolves_both_event_orders(relay_context: ActingContext, message_first: bool) -> None:
     service = WelcomeRelayService(
         WelcomeRelayPolicy(welcome_channel_id=1, forward_chance=1),
         random_source=Random(0),
@@ -98,49 +104,88 @@ def test_welcome_relay_resolves_both_event_orders(message_first: bool) -> None:
 
     # Keep the call typed while reusing it in both event orders.
     def record_message():
-        return service.record_message(channel_id=1, is_new_member_message=True, system_content="Welcome Alice!")
+        return service.record_message(
+            context=relay_context,
+            channel_id=1,
+            is_new_member_message=True,
+            system_content="Welcome Alice!",
+        )
 
     if message_first:
         assert record_message() is None
-        decision = service.record_join(2, "Alice")
+        decision = service.record_join(2, "Alice", context=relay_context)
     else:
-        assert service.record_join(2, "Alice") is None
+        assert service.record_join(2, "Alice", context=relay_context) is None
         decision = record_message()
 
     assert decision == WelcomeRelayDecision(2, "Alice", "Welcome Alice!")
 
 
-def test_welcome_relay_rolls_once_and_parks_only_messages_that_win() -> None:
+def test_welcome_relay_rolls_once_and_parks_only_messages_that_win(relay_context: ActingContext) -> None:
     random_source = SequenceRandom(0.25, 0.75)
     service = WelcomeRelayService(
         WelcomeRelayPolicy(welcome_channel_id=1, forward_chance=0.5),
         random_source=random_source,
     )
 
-    assert service.record_message(channel_id=1, is_new_member_message=True, system_content="Welcome Alice!") is None
-    assert service.record_message(channel_id=1, is_new_member_message=True, system_content="Welcome Bob!") is None
-    assert service.record_join(3, "Bob") is None
-    decision = service.record_join(2, "Alice")
+    assert (
+        service.record_message(
+            context=relay_context,
+            channel_id=1,
+            is_new_member_message=True,
+            system_content="Welcome Alice!",
+        )
+        is None
+    )
+    assert (
+        service.record_message(
+            context=relay_context,
+            channel_id=1,
+            is_new_member_message=True,
+            system_content="Welcome Bob!",
+        )
+        is None
+    )
+    assert service.record_join(3, "Bob", context=relay_context) is None
+    decision = service.record_join(2, "Alice", context=relay_context)
 
     assert random_source.calls == 2
     assert decision == WelcomeRelayDecision(2, "Alice", "Welcome Alice!")
 
 
-def test_welcome_relay_does_not_roll_for_unrelated_messages() -> None:
+def test_welcome_relay_does_not_roll_for_unrelated_messages(relay_context: ActingContext) -> None:
     random_source = SequenceRandom()
     service = WelcomeRelayService(
         WelcomeRelayPolicy(welcome_channel_id=1, forward_chance=1),
         random_source=random_source,
     )
 
-    assert service.record_message(channel_id=2, is_new_member_message=True, system_content="Welcome Alice!") is None
-    assert service.record_message(channel_id=1, is_new_member_message=False, system_content="Welcome Alice!") is None
+    assert (
+        service.record_message(
+            context=relay_context,
+            channel_id=2,
+            is_new_member_message=True,
+            system_content="Welcome Alice!",
+        )
+        is None
+    )
+    assert (
+        service.record_message(
+            context=relay_context,
+            channel_id=1,
+            is_new_member_message=False,
+            system_content="Welcome Alice!",
+        )
+        is None
+    )
 
     assert random_source.calls == 0
 
 
 @pytest.mark.parametrize("message_first", [False, True])
-def test_welcome_relay_expires_either_side_of_an_unmatched_pair(message_first: bool) -> None:
+def test_welcome_relay_expires_either_side_of_an_unmatched_pair(
+    relay_context: ActingContext, message_first: bool
+) -> None:
     clock = Clock(10)
     service = WelcomeRelayService(
         WelcomeRelayPolicy(welcome_channel_id=1, forward_chance=1, pending_ttl_seconds=5),
@@ -149,13 +194,22 @@ def test_welcome_relay_expires_either_side_of_an_unmatched_pair(message_first: b
     )
 
     if message_first:
-        assert service.record_message(channel_id=1, is_new_member_message=True, system_content="Welcome Alice!") is None
+        assert (
+            service.record_message(
+                context=relay_context,
+                channel_id=1,
+                is_new_member_message=True,
+                system_content="Welcome Alice!",
+            )
+            is None
+        )
         clock.now = 20
-        decision = service.record_join(2, "Alice")
+        decision = service.record_join(2, "Alice", context=relay_context)
     else:
-        assert service.record_join(2, "Alice") is None
+        assert service.record_join(2, "Alice", context=relay_context) is None
         clock.now = 20
         decision = service.record_message(
+            context=relay_context,
             channel_id=1,
             is_new_member_message=True,
             system_content="Welcome Alice!",
@@ -164,45 +218,112 @@ def test_welcome_relay_expires_either_side_of_an_unmatched_pair(message_first: b
     assert decision is None
 
 
-def test_welcome_relay_applies_the_pending_bound_to_members_and_messages() -> None:
+def test_welcome_relay_applies_the_pending_bound_to_members_and_messages(relay_context: ActingContext) -> None:
     policy = WelcomeRelayPolicy(welcome_channel_id=1, forward_chance=1, max_pending_members=1)
     message_first = WelcomeRelayService(policy, random_source=Random(0))
     assert (
-        message_first.record_message(channel_id=1, is_new_member_message=True, system_content="Welcome Alice!") is None
+        message_first.record_message(
+            context=relay_context,
+            channel_id=1,
+            is_new_member_message=True,
+            system_content="Welcome Alice!",
+        )
+        is None
     )
-    assert message_first.record_message(channel_id=1, is_new_member_message=True, system_content="Welcome Bob!") is None
-    assert message_first.record_join(2, "Alice") is None
-    assert message_first.record_join(3, "Bob") == WelcomeRelayDecision(3, "Bob", "Welcome Bob!")
+    assert (
+        message_first.record_message(
+            context=relay_context,
+            channel_id=1,
+            is_new_member_message=True,
+            system_content="Welcome Bob!",
+        )
+        is None
+    )
+    assert message_first.record_join(2, "Alice", context=relay_context) is None
+    assert message_first.record_join(3, "Bob", context=relay_context) == WelcomeRelayDecision(3, "Bob", "Welcome Bob!")
 
     join_first = WelcomeRelayService(policy, random_source=Random(0))
-    assert join_first.record_join(2, "Alice") is None
-    assert join_first.record_join(3, "Bob") is None
-    assert join_first.record_message(channel_id=1, is_new_member_message=True, system_content="Welcome Alice!") is None
+    assert join_first.record_join(2, "Alice", context=relay_context) is None
+    assert join_first.record_join(3, "Bob", context=relay_context) is None
+    assert (
+        join_first.record_message(
+            context=relay_context,
+            channel_id=1,
+            is_new_member_message=True,
+            system_content="Welcome Alice!",
+        )
+        is None
+    )
     assert join_first.record_message(
-        channel_id=1, is_new_member_message=True, system_content="Welcome Bob!"
+        context=relay_context,
+        channel_id=1,
+        is_new_member_message=True,
+        system_content="Welcome Bob!",
     ) == WelcomeRelayDecision(3, "Bob", "Welcome Bob!")
 
 
-def test_welcome_relay_rejects_ambiguous_matches() -> None:
+def test_welcome_relay_rejects_ambiguous_matches(relay_context: ActingContext) -> None:
     service = WelcomeRelayService(WelcomeRelayPolicy(welcome_channel_id=1, forward_chance=1), random_source=Random(0))
-    service.record_join(2, "Alex")
-    service.record_join(3, "Alex")
+    service.record_join(2, "Alex", context=relay_context)
+    service.record_join(3, "Alex", context=relay_context)
 
-    assert service.record_message(channel_id=1, is_new_member_message=True, system_content="Welcome Alex!") is None
+    assert (
+        service.record_message(
+            context=relay_context,
+            channel_id=1,
+            is_new_member_message=True,
+            system_content="Welcome Alex!",
+        )
+        is None
+    )
 
 
-def test_runtime_probability_changes_do_not_resample_pending_welcomes() -> None:
+def test_runtime_probability_changes_do_not_resample_pending_welcomes(relay_context: ActingContext) -> None:
     service = WelcomeRelayService(WelcomeRelayPolicy(welcome_channel_id=1, forward_chance=1))
-    assert service.record_message(channel_id=1, is_new_member_message=True, system_content="Welcome Alice!") is None
-    service.configure(WelcomeRelayPolicy(welcome_channel_id=1, forward_chance=0), enabled=True)
-    assert service.record_join(42, "Alice") is not None
-    assert service.record_message(channel_id=1, is_new_member_message=True, system_content="Welcome Bob!") is None
-    assert service.record_join(43, "Bob") is None
+    assert (
+        service.record_message(
+            context=relay_context,
+            channel_id=1,
+            is_new_member_message=True,
+            system_content="Welcome Alice!",
+        )
+        is None
+    )
+    service.configure(
+        WelcomeRelayPolicy(welcome_channel_id=1, forward_chance=0),
+        enabled=True,
+        context=relay_context,
+    )
+    assert service.record_join(42, "Alice", context=relay_context) is not None
+    assert (
+        service.record_message(
+            context=relay_context,
+            channel_id=1,
+            is_new_member_message=True,
+            system_content="Welcome Bob!",
+        )
+        is None
+    )
+    assert service.record_join(43, "Bob", context=relay_context) is None
 
 
 @pytest.mark.parametrize(("enabled", "channel_id"), [(False, 1), (True, 2)])
-def test_disabling_or_rerouting_welcomes_discards_pending_matches(enabled: bool, channel_id: int) -> None:
+def test_disabling_or_rerouting_welcomes_discards_pending_matches(
+    relay_context: ActingContext, enabled: bool, channel_id: int
+) -> None:
     service = WelcomeRelayService(WelcomeRelayPolicy(welcome_channel_id=1, forward_chance=1))
-    assert service.record_message(channel_id=1, is_new_member_message=True, system_content="Welcome Alice!") is None
-    service.configure(WelcomeRelayPolicy(welcome_channel_id=channel_id, forward_chance=1), enabled=enabled)
-    assert service.record_join(42, "Alice") is None
+    assert (
+        service.record_message(
+            context=relay_context,
+            channel_id=1,
+            is_new_member_message=True,
+            system_content="Welcome Alice!",
+        )
+        is None
+    )
+    service.configure(
+        WelcomeRelayPolicy(welcome_channel_id=channel_id, forward_chance=1),
+        enabled=enabled,
+        context=relay_context,
+    )
+    assert service.record_join(42, "Alice", context=relay_context) is None

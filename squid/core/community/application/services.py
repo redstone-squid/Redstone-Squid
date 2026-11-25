@@ -5,6 +5,7 @@ import time
 from collections.abc import Callable
 from random import Random
 
+from squid.core.actors import ActingContext
 from squid.core.community.domain import (
     PendingWelcomeMember,
     PendingWelcomeMessage,
@@ -90,31 +91,33 @@ class WelcomeRelayService:
         self._pending_members: list[PendingWelcomeMember] = []
         self._pending_messages: list[PendingWelcomeMessage] = []
 
-    def configure(self, policy: WelcomeRelayPolicy, *, enabled: bool) -> None:
+    def configure(self, policy: WelcomeRelayPolicy, *, enabled: bool, context: ActingContext) -> None:
         """Apply current policy without re-sampling messages already accepted.
 
         Disabling or changing the source channel discards pending matches.
         """
-        if not enabled or policy.welcome_channel_id != self._policy.welcome_channel_id:
-            self._pending_members.clear()
-            self._pending_messages.clear()
-        self._policy = policy
+        with context.scope():
+            if not enabled or policy.welcome_channel_id != self._policy.welcome_channel_id:
+                self._pending_members.clear()
+                self._pending_messages.clear()
+            self._policy = policy
 
-    def record_join(self, user_id: int, username: str) -> WelcomeRelayDecision | None:
+    def record_join(self, user_id: int, username: str, *, context: ActingContext) -> WelcomeRelayDecision | None:
         """Record a member join and return a decision when its message arrived first."""
-        now = self._clock()
-        self._prune(now)
-        self._pending_members.append(PendingWelcomeMember(user_id, username, now))
-        self._trim(self._pending_members)
+        with context.scope():
+            now = self._clock()
+            self._prune(now)
+            self._pending_members.append(PendingWelcomeMember(user_id, username, now))
+            self._trim(self._pending_members)
 
-        matching_messages = [message for message in self._pending_messages if username in message.system_content]
-        if len(matching_messages) != 1:
-            return None
-        message = matching_messages[0]
-        decision = self._resolve(message)
-        if decision is not None:
-            self._pending_messages.remove(message)
-        return decision
+            matching_messages = [message for message in self._pending_messages if username in message.system_content]
+            if len(matching_messages) != 1:
+                return None
+            message = matching_messages[0]
+            decision = self._resolve(message)
+            if decision is not None:
+                self._pending_messages.remove(message)
+            return decision
 
     def record_message(
         self,
@@ -122,22 +125,24 @@ class WelcomeRelayService:
         channel_id: int,
         is_new_member_message: bool,
         system_content: str,
+        context: ActingContext,
     ) -> WelcomeRelayDecision | None:
         """Record one eligible message and return a decision when its join arrived first."""
-        if channel_id != self._policy.welcome_channel_id or not is_new_member_message:
-            return None
-        if self._random.random() >= self._policy.forward_chance:
-            return None
+        with context.scope():
+            if channel_id != self._policy.welcome_channel_id or not is_new_member_message:
+                return None
+            if self._random.random() >= self._policy.forward_chance:
+                return None
 
-        now = self._clock()
-        self._prune(now)
-        message = PendingWelcomeMessage(system_content, now)
-        decision = self._resolve(message)
-        if decision is not None:
-            return decision
-        self._pending_messages.append(message)
-        self._trim(self._pending_messages)
-        return None
+            now = self._clock()
+            self._prune(now)
+            message = PendingWelcomeMessage(system_content, now)
+            decision = self._resolve(message)
+            if decision is not None:
+                return decision
+            self._pending_messages.append(message)
+            self._trim(self._pending_messages)
+            return None
 
     def _resolve(self, message: PendingWelcomeMessage) -> WelcomeRelayDecision | None:
         matches = [member for member in self._pending_members if member.username in message.system_content]

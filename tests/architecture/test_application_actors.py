@@ -1,7 +1,7 @@
 """Process service bundles define the application operations available to entry points."""
 
 from functools import cached_property
-from inspect import Parameter, getmembers, isclass, iscoroutinefunction, signature
+from inspect import Parameter, getmembers, isclass, isroutine, signature
 from types import UnionType
 from typing import get_args, get_origin, get_type_hints
 
@@ -51,6 +51,32 @@ INFRASTRUCTURE = {
 }
 
 
+# Synchronous calculations and process wiring do not perform work for an actor.
+CONTEXT_FREE_OPERATIONS = {
+    "ApiKeyService": {"hash_secret"},
+    "ErrorReportService": {"normalize"},
+    "PermissionAdministrationService": {
+        "check_grant",
+        "check_pattern",
+        "check_rank",
+        "check_role_creation",
+        "resolved_leaves",
+        "unmanageable_patterns",
+        "in_transaction",
+    },
+    "RecordComputationService": {
+        "compute_snapshot",
+        "door_range_candidates",
+        "format_record_titles",
+        "requested_category",
+    },
+    "SchematicService": {"render_recipe"},
+    "SubmissionAttachmentIntake": {"max_file_bytes"},
+    "VoteService": {"set_actor_resolver"},  # Wire the process's Discord or worker resolver.
+    "WebSessionService": {"hash_token"},
+}
+
+
 def test_process_application_operations_require_context() -> None:
     exemptions = IDENTITY_RESOLUTION | POLICY_QUERIES | INFRASTRUCTURE
     services = set()
@@ -65,8 +91,13 @@ def test_process_application_operations_require_context() -> None:
                     services.add(service)
     failures = []
     for service in services:
-        for name, operation in getmembers(service, iscoroutinefunction):
-            if name.startswith("_") or name.endswith("_in") or name in exemptions.get(service.__name__, ()):
+        for name, operation in getmembers(service, isroutine):
+            if (
+                name.startswith("_")
+                or name.endswith("_in")
+                or name in exemptions.get(service.__name__, ())
+                or name in CONTEXT_FREE_OPERATIONS.get(service.__name__, ())
+            ):
                 continue
             parameter = signature(operation).parameters.get("context")
             if (

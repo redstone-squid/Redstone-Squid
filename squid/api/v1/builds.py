@@ -99,6 +99,7 @@ async def edit_build(
 ) -> Response[BuildDetail]:
     """Apply a permitted build edit or submit it for review."""
     caller.require_consented_account()
+    context = caller.context()
     result = await services.edits.execute(
         EditCommand(
             BUILD_EDIT,
@@ -110,9 +111,9 @@ async def edit_build(
             patch_values(BuildEditPatch.from_attributes(data.edit_attributes())),
             operation_id,
         ),
-        context=caller.context(),
+        context=context,
     )
-    build = await services.builds.get(build_id, context=ActingContext.current())
+    build = await services.builds.get(build_id, context=context)
     if build is None:
         raise BuildNotFoundError(build_id)
     headers = {"ETag": build_etag(build)}
@@ -224,7 +225,7 @@ async def list_builds(
                 sort=SearchSort.parse(sort),
                 visible_statuses=PUBLIC_SEARCH_STATUSES,
             ),
-            context=ActingContext.current(),
+            context=caller.context(),
         )
         summaries = await hydrate_builds(build_queries, result.hits, context=caller.context())
         return Page(

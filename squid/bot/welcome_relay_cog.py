@@ -28,11 +28,12 @@ class WelcomeRelay[BotT: squid.bot.app.RedstoneSquid](Cog):
         self.bot = bot
         self.service = bot.services.welcome_relay
 
-    async def _settings(self) -> RuntimeSettings:
-        settings = await self.bot.services.settings.get_runtime(context=ActingContext.current())
+    async def _settings(self, context: ActingContext) -> RuntimeSettings:
+        settings = await self.bot.services.settings.get_runtime(context=context)
         self.service.configure(
             WelcomeRelayPolicy(settings.welcome_channel_id, settings.welcome_forward_chance),
             enabled=settings.welcome_enabled,
+            context=context,
         )
         return settings
 
@@ -41,13 +42,15 @@ class WelcomeRelay[BotT: squid.bot.app.RedstoneSquid](Cog):
         """Forward some welcome system messages to the general channel."""
         if message.type is not discord.MessageType.new_member:
             return
-        settings = await self._settings()
+        context = ActingContext.current()
+        settings = await self._settings(context)
         if not settings.welcome_enabled:
             return
         decision = self.service.record_message(
             channel_id=message.channel.id,
             is_new_member_message=message.type is discord.MessageType.new_member,
             system_content=message.system_content,
+            context=context,
         )
         if decision is not None:
             await self._forward(decision, settings.welcome_relay_channel_id)
@@ -57,10 +60,11 @@ class WelcomeRelay[BotT: squid.bot.app.RedstoneSquid](Cog):
         """Track a new member who joined, so we can match them to the welcome message later."""
         if member.guild.id != self.bot.owner_server_id:
             return
-        settings = await self._settings()
+        context = ActingContext.current()
+        settings = await self._settings(context)
         if not settings.welcome_enabled:
             return
-        decision = self.service.record_join(member.id, member.name)
+        decision = self.service.record_join(member.id, member.name, context=context)
         if decision is not None:
             await self._forward(decision, settings.welcome_relay_channel_id)
 
