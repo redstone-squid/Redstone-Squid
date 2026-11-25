@@ -37,7 +37,8 @@
   const segmentClass = $derived(
     cn(
       "flex items-center gap-2 rounded-xs px-3 text-sm font-semibold whitespace-nowrap text-fg-muted no-underline hover:text-fg",
-      size === "sm" ? "min-h-control-sm" : "min-h-control",
+      // The track's 2px padding and 1px border make it exactly a control's height.
+      size === "sm" ? "min-h-7.5" : "min-h-9.5",
     ),
   );
   const trackClass = "flex flex-wrap rounded-sm border border-line-strong bg-surface p-0.5";
