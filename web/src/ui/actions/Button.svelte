@@ -6,21 +6,22 @@
       "relative inline-flex cursor-pointer items-center justify-center gap-2 rounded-sm border",
       "font-semibold no-underline transition-[background-color,border-color] duration-fast ease-standard",
       "active:not-disabled:not-aria-disabled:shadow-pressed",
-      "disabled:cursor-not-allowed disabled:border-line disabled:bg-surface-muted disabled:text-fg-muted",
+      // Becoming disabled is instant: a fade reads as a flicker when a move disables a button.
+      "disabled:cursor-not-allowed disabled:text-fg-muted disabled:transition-none",
       "aria-disabled:cursor-not-allowed",
-      "data-disabled:border-line data-disabled:bg-surface-muted data-disabled:text-fg-muted",
+      "data-disabled:text-fg-muted data-disabled:transition-none",
     ],
     {
       variants: {
         variant: {
           primary:
-            "border-accent bg-accent text-on-accent hover:not-disabled:not-aria-disabled:border-accent-hover hover:not-disabled:not-aria-disabled:bg-accent-hover",
+            "border-accent bg-accent text-on-accent hover:not-disabled:not-aria-disabled:border-accent-hover hover:not-disabled:not-aria-disabled:bg-accent-hover disabled:border-line disabled:bg-surface-muted data-disabled:border-line data-disabled:bg-surface-muted",
           secondary:
-            "border-line-strong bg-surface text-fg hover:not-disabled:not-aria-disabled:bg-surface-muted",
+            "border-line-strong bg-surface text-fg hover:not-disabled:not-aria-disabled:bg-surface-muted disabled:border-line disabled:bg-surface-muted data-disabled:border-line data-disabled:bg-surface-muted",
           quiet:
             "border-transparent bg-transparent text-fg hover:not-disabled:not-aria-disabled:bg-surface-muted",
           danger:
-            "border-danger bg-danger text-on-danger hover:not-disabled:not-aria-disabled:opacity-90",
+            "border-danger bg-danger text-on-danger hover:not-disabled:not-aria-disabled:opacity-90 disabled:border-line disabled:bg-surface-muted data-disabled:border-line data-disabled:bg-surface-muted",
         },
         size: {
           md: "min-h-control px-4 py-2.5 text-sm",
