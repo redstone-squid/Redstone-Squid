@@ -27,7 +27,12 @@ from squid.core.auth.impersonation import ImpersonationService
 from squid.core.auth.infrastructure.viewer import ViewerQueries
 from squid.core.builds.application import BuildQueryService, BuildService
 from squid.core.builds.application.editing import BuildEditPatch
-from squid.core.builds.application.queries import DEFAULT_BUILD_LIST_SORT, BuildListSort
+from squid.core.builds.application.queries import (
+    DEFAULT_BUILD_LIST_SORT,
+    EMPTY_BUILD_FILTERS,
+    BuildListFilters,
+    BuildListSort,
+)
 from squid.core.builds.domain.models import BuildStatus
 from squid.core.builds.errors import BuildNotFoundError
 from squid.core.builds.models import Build
@@ -287,6 +292,7 @@ class MockBuildQueries(BuildQueryService):
         self,
         *,
         statuses: frozenset[BuildStatus],
+        filters: BuildListFilters = EMPTY_BUILD_FILTERS,
         submitter_account_id: int | None = None,
         sort: BuildListSort = DEFAULT_BUILD_LIST_SORT,
         selector: PageSelector = FIRST_PAGE,

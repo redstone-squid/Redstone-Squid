@@ -4,7 +4,7 @@ import re
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Annotated, cast
+from typing import Annotated, Literal, cast
 from uuid import UUID
 
 from litestar import Request, Response, Router, get, patch
@@ -51,6 +51,8 @@ from squid.core.builds.application import (
     PublicBuildSummary,
 )
 from squid.core.builds.application.edits import BUILD_EDIT, build_target, patch_values
+from squid.core.builds.application.queries import EMPTY_BUILD_FILTERS, BuildListFilters
+from squid.core.builds.domain import BuildCategory
 from squid.core.builds.errors import (
     BuildNotFoundError,
     BuildRevisionMismatchError,
@@ -59,6 +61,7 @@ from squid.core.builds.errors import (
 from squid.core.builds.history import PublicBuildRevision
 from squid.core.builds.models import Build
 from squid.core.edits.domain import EditCommand, LatestRevision, Revision
+from squid.core.errors import ValidationError
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.domain.catalogue import (
     BUILD_SUBMISSION_CREATE,
@@ -244,6 +247,11 @@ async def list_builds(
     caller: CurrentCaller,
     q: Annotated[str | None, QueryParameter(max_length=1_000)] = None,
     status: FromQuery[BuildStatusFilter | None] = None,
+    category: FromQuery[BuildCategory | None] = None,
+    version: Annotated[int | None, QueryParameter(ge=1)] = None,
+    tag: FromQuery[list[str] | None] = None,
+    creator_id: FromQuery[UUID | None] = None,
+    submitted_by: FromQuery[Literal["me"] | None] = None,
     sort: Annotated[str | None, QueryParameter(max_length=80)] = None,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
@@ -256,10 +264,15 @@ async def list_builds(
     uses offset pagination. Without q, results come from the build repository;
     unpublished statuses require build.submission.view_pending permission.
     """
+    filters = BuildListFilters(category, version, tuple(dict.fromkeys(tag or ())), creator_id)
+    submitter_id = caller.require_consented_account() if submitted_by is not None else None
     effective = status or BuildStatusFilter.APPROVED
-    if effective is not BuildStatusFilter.APPROVED:
+    if effective is not BuildStatusFilter.APPROVED and submitter_id is None:
         await _require_pending_view(permissions, caller)
     if q is not None:
+        if filters != EMPTY_BUILD_FILTERS or submitter_id is not None:
+            msg = "Catalogue filters and submitted_by require a listing without q"
+            raise ValidationError(msg)
         # Relevance order has no identifier sequence to anchor to, so ranked pages are offset-only.
         selector = resolve_selector(offset=offset, after_id=after_id, before_id=before_id, keyset_allowed=False)
         result = await search_service.search(
@@ -291,6 +304,8 @@ async def list_builds(
     )
     page = await build_queries.list_page(
         statuses=frozenset({effective.to_domain()}),
+        submitter_account_id=submitter_id,
+        filters=filters,
         sort=BuildListSort(field=cast(BuildSortField, sort_field), descending=descending),
         selector=selector,
         page_size=page_size,

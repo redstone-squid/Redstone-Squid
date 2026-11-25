@@ -24,6 +24,14 @@ BUILD_SORT_FIELDS: frozenset[str] = frozenset(get_args(BuildSortField.__value__)
 
 
 @dataclass(frozen=True, slots=True)
+class BuildListFilters:
+    category: BuildCategory | None = None
+    version: int | None = None
+    tags: tuple[str, ...] = ()
+    creator_id: UUID | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class BuildListSort:
     """Display ordering for a build listing."""
 
@@ -31,6 +39,7 @@ class BuildListSort:
     descending: bool = True
 
 
+EMPTY_BUILD_FILTERS = BuildListFilters()
 DEFAULT_BUILD_LIST_SORT = BuildListSort()
 
 
@@ -205,6 +214,7 @@ class BuildQueryRepository(Protocol):
         self,
         *,
         statuses: frozenset[BuildStatus],
+        filters: BuildListFilters,
         submitter_account_id: int | None,
         sort: BuildListSort,
         offset: int,
@@ -217,6 +227,7 @@ class BuildQueryRepository(Protocol):
         self,
         *,
         statuses: frozenset[BuildStatus],
+        filters: BuildListFilters,
         submitter_account_id: int | None,
     ) -> int: ...
 
@@ -284,6 +295,7 @@ class BuildQueryService:
         self,
         *,
         statuses: frozenset[BuildStatus],
+        filters: BuildListFilters = EMPTY_BUILD_FILTERS,
         submitter_account_id: int | None = None,
         sort: BuildListSort = DEFAULT_BUILD_LIST_SORT,
         selector: PageSelector = FIRST_PAGE,
@@ -297,6 +309,7 @@ class BuildQueryService:
         async with self._uow_factory() as uow:
             rows = await uow.builds.list_page(
                 statuses=statuses,
+                filters=filters,
                 submitter_account_id=submitter_account_id,
                 sort=sort,
                 offset=selector.offset,
@@ -307,6 +320,7 @@ class BuildQueryService:
             )
             total = await uow.builds.count(
                 statuses=statuses,
+                filters=filters,
                 submitter_account_id=submitter_account_id,
             )
             return keyset_page(

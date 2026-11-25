@@ -21,6 +21,8 @@ from squid.core.accounts.domain import fold_creator_name
 from squid.core.accounts.models import Account, CreatorAlias
 from squid.core.builds.application.queries import (
     DEFAULT_BUILD_LIST_SORT,
+    EMPTY_BUILD_FILTERS,
+    BuildListFilters,
     BuildListSort,
     PublicBuildSummary,
     PublicBuildTag,
@@ -52,6 +54,7 @@ from squid.core.tags.infrastructure.loading import assignment_units, definition_
 from squid.core.tags.models import (
     TagAssignment,
     TagDefinition,
+    TagSlug,
     UnitDefinition,
 )
 from squid.core.versions.models import Version
@@ -64,11 +67,40 @@ def _page_filter[S: Select[Any]](
     *,
     statuses: frozenset[BuildStatus],
     submitter_account_id: int | None,
+    filters: BuildListFilters,
 ) -> S:
     """Apply the status and submitter visibility policy shared by page and count queries."""
     statement = statement.where(Build.submission_status.in_(statuses))
     if submitter_account_id is not None:
         statement = statement.where(Build.submitter_account_id == submitter_account_id)
+    if filters.category is not None:
+        statement = statement.where(Build.category == filters.category)
+    if filters.version is not None:
+        statement = statement.where(
+            select(BuildVersion.build_id)
+            .where(BuildVersion.build_id == Build.id, BuildVersion.version_id == filters.version)
+            .exists()
+        )
+    if filters.creator_id is not None:
+        linked = func.build_credit_accounts().table_valued("build_id", "account_id", "role")
+        statement = statement.where(
+            select(linked.c.build_id)
+            .join(Account, Account.id == linked.c.account_id)
+            .where(
+                linked.c.build_id == Build.id,
+                Account.public_creator_id == filters.creator_id,
+                linked.c.role.in_(("creator", "designer")),
+            )
+            .exists()
+        )
+    for tag in filters.tags:
+        tag_ids = select(TagSlug.tag_id).where(TagSlug.slug == tag)
+        predicate = TagAssignment.tag_id.in_(tag_ids)
+        if tag.isascii() and tag.isdigit() and len(tag) <= 19 and int(tag) < 2**63:
+            predicate = predicate | (TagAssignment.tag_id == int(tag))
+        statement = statement.where(
+            select(TagAssignment.tag_id).where(TagAssignment.build_id == Build.id, predicate).exists()
+        )
     return statement
 
 
@@ -368,6 +400,7 @@ class BuildRepository:
         self,
         *,
         statuses: frozenset[BuildStatus],
+        filters: BuildListFilters = EMPTY_BUILD_FILTERS,
         submitter_account_id: int | None = None,
         sort: BuildListSort = DEFAULT_BUILD_LIST_SORT,
         offset: int = 0,
@@ -391,6 +424,7 @@ class BuildRepository:
             select(Build),
             statuses=statuses,
             submitter_account_id=submitter_account_id,
+            filters=filters,
         )
         reverse = before_id is not None
         if sort.field == "submission_time":
@@ -416,6 +450,7 @@ class BuildRepository:
         self,
         *,
         statuses: frozenset[BuildStatus],
+        filters: BuildListFilters = EMPTY_BUILD_FILTERS,
         submitter_account_id: int | None = None,
     ) -> int:
         """Count the builds a listing can display under a visibility policy."""
@@ -426,6 +461,7 @@ class BuildRepository:
             select(func.count()).select_from(Build),
             statuses=statuses,
             submitter_account_id=submitter_account_id,
+            filters=filters,
         )
         return await session.scalar(statement) or 0
 

@@ -3693,6 +3693,11 @@ export type BuildsListData = {
     query?: {
         q?: string | null;
         status?: BuildStatusFilter | null;
+        category?: BuildCategory | null;
+        version?: number | null;
+        tag?: Array<string> | null;
+        creator_id?: string | null;
+        submitted_by?: 'me' | null;
         sort?: string | null;
         /**
          * Maximum number of items to return.

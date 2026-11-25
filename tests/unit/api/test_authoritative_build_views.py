@@ -12,6 +12,7 @@ from squid.api.v1.me import list_my_builds
 from squid.api.v1.schemas.builds import BuildStatusFilter
 from squid.core.actors import Actor
 from squid.core.builds.application import DEFAULT_BUILD_LIST_SORT, BuildListSort, BuildQueryService
+from squid.core.builds.application.queries import EMPTY_BUILD_FILTERS, BuildListFilters
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build, DoorBuild
 from squid.core.errors import AuthenticationError, AuthorizationError, ValidationError
@@ -51,6 +52,7 @@ class BuildQueryRecorder(BuildQueryService):
         self,
         *,
         statuses: frozenset[BuildStatus],
+        filters: BuildListFilters = EMPTY_BUILD_FILTERS,
         submitter_account_id: int | None = None,
         sort: BuildListSort = DEFAULT_BUILD_LIST_SORT,
         selector: PageSelector = FIRST_PAGE,
