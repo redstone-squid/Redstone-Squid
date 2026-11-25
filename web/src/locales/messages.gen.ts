@@ -2413,6 +2413,18 @@ export function storyPatterns(locale: Locale = getLocale()): string {
   }
 }
 
+/** Motion */
+export function storyMotion(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Motion";
+    case "zh-CN":
+      return "动效";
+    case "en-XA":
+      return "[" + "Ṁöţîöñ" + "···]";
+  }
+}
+
 /** Page width, rhythm, and responsive arrangement. */
 export function workbenchLayoutDescription(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -2556,6 +2568,22 @@ export function workbenchPatternsDescription(locale: Locale = getLocale()): stri
       return "页头、分区和目录卡片。";
     case "en-XA":
       return "[" + "Þåĝé ĥéåđéŕš, šéçţîöñš, åñđ çåţåļöĝûé çåŕđš." + "··················]";
+  }
+}
+
+/** Motion tokens, overlays entering and leaving, disclosures, moving indicators, and content replacing skeletons. */
+export function workbenchMotionDescription(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Motion tokens, overlays entering and leaving, disclosures, moving indicators, and content replacing skeletons.";
+    case "zh-CN":
+      return "动效令牌、浮层的进入与离开、展开内容、移动的选中指示，以及替换骨架屏的内容。";
+    case "en-XA":
+      return (
+        "[" +
+        "Ṁöţîöñ ţöķéñš, öṽéŕļåýš éñţéŕîñĝ åñđ ļéåṽîñĝ, đîšçļöšûŕéš, ɱöṽîñĝ îñđîçåţöŕš, åñđ çöñţéñţ ŕéþļåçîñĝ šķéļéţöñš." +
+        "············································]"
+      );
   }
 }
 

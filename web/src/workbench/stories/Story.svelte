@@ -3,7 +3,7 @@
 
   /**
    * One component's story: an anchored heading, the `src/ui` path it shows (`source`, such as
-   * "feedback/Badge"), and a preview of its variants and states. The workbench coverage test
+   * "feedback/Badge", or a stylesheet such as "app.css"), and a preview of its variants and states. The workbench coverage test
    * reads `source` to check that every component has a story.
    */
   type Props = {
@@ -24,7 +24,9 @@
   <header class="grid gap-1">
     <h2 id={`${name.toLowerCase()}-title`} class="text-xl font-bold tracking-tight">{heading}</h2>
     <code class="font-mono text-xs wrap-anywhere text-fg-muted"
-      >{source.startsWith("features/") ? `src/${source}` : `src/ui/${source}.svelte`}</code
+      >{source.startsWith("features/")
+        ? `src/${source}`
+        : `src/ui/${source}${source.endsWith(".css") ? "" : ".svelte"}`}</code
     >
     {#if description}<p class="max-w-prose text-sm wrap-anywhere text-fg-muted">
         {description}

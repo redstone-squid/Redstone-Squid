@@ -18,6 +18,7 @@ import OverlaysStories from "@/workbench/stories/OverlaysStories.svelte";
 import PatternsStories from "@/workbench/stories/PatternsStories.svelte";
 import TableStories from "@/workbench/stories/TableStories.svelte";
 import ChartStories from "@/workbench/stories/ChartStories.svelte";
+import MotionStories from "@/workbench/stories/MotionStories.svelte";
 
 // Building blocks of other components, with no use on their own.
 const INTERNAL = new Set(["forms/FieldFrame", "forms/CharacterCount", "overlays/ModalFrame"]);
@@ -59,6 +60,7 @@ describe("workbench", () => {
     ["chart", ChartStories],
     ["overlays", OverlaysStories],
     ["patterns", PatternsStories],
+    ["motion", MotionStories],
   ])("renders the %s stories", (_group, Stories) => {
     const { container } = render(Stories);
     expect(container.querySelectorAll("section[id]").length).toBeGreaterThan(0);

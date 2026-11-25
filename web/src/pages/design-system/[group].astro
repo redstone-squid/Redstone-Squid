@@ -14,6 +14,7 @@ import OverlaysStories from "@/workbench/stories/OverlaysStories.svelte";
 import PatternsStories from "@/workbench/stories/PatternsStories.svelte";
 import TableStories from "@/workbench/stories/TableStories.svelte";
 import ChartStories from "@/workbench/stories/ChartStories.svelte";
+import MotionStories from "@/workbench/stories/MotionStories.svelte";
 import WorkbenchLayout from "@/workbench/WorkbenchLayout.astro";
 
 const group = Astro.params.group;
@@ -39,4 +40,5 @@ const description = GROUPS[group].description();
   {group === "chart" && <ChartStories client:load />}
   {group === "overlays" && <OverlaysStories client:load />}
   {group === "patterns" && <PatternsStories client:load />}
+  {group === "motion" && <MotionStories client:load />}
 </WorkbenchLayout>

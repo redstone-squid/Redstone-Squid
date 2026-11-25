@@ -1,7 +1,7 @@
 import * as m from "@/locales/messages.gen";
 
 /**
- * The workbench pages, one per folder of `src/ui`. Each has a stories component in
+ * The workbench pages, one per folder of `src/ui`, and `motion` across them. Each has a stories component in
  * `stories/`, imported by `src/pages/design-system/[group].astro`.
  */
 export const GROUPS = {
@@ -28,6 +28,7 @@ export const GROUPS = {
     description: m.workbenchOverlaysDescription,
   },
   patterns: { title: m.storyPatterns, description: m.workbenchPatternsDescription },
+  motion: { title: m.storyMotion, description: m.workbenchMotionDescription },
 } as const;
 export type Group = keyof typeof GROUPS;
 
