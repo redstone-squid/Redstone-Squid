@@ -8,7 +8,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 
 from squid.core.builds.domain.expansion_math import ExpressionParser
-from squid.core.records.domain.models import Candidate, ResolutionStatus
+from squid.core.records.domain.models import Candidate
 from squid.core.records.domain.regions import (
     IntegerProgression,
     RegionAnalysisStatus,
@@ -146,7 +146,7 @@ def test_empty_population_and_query_clipping() -> None:
     result = smallest_record_regions([], minimum=7, maximum=20)
     assert result.status is RegionAnalysisStatus.EXACT
     assert result.regions[0].domain == IntegerProgression(7, 20)
-    assert result.regions[0].resolution.status is ResolutionStatus.NO_CANDIDATE
+    assert not result.regions[0].resolution
     clipped = smallest_record_regions([candidate(1, "ceil(n/2)")], minimum=7, maximum=7)
     assert len(clipped.regions) == 1
     assert clipped.regions[0].domain.minimum == 7
@@ -191,10 +191,10 @@ def test_huge_winning_boundary_does_not_materialize_sizes() -> None:
     root = 10**60
     result = smallest_record_regions([candidate(1, "n"), candidate(2, str(root))])
     assert result.status is RegionAnalysisStatus.EXACT
-    assert [(r.domain.minimum, r.domain.maximum, r.resolution.status) for r in result.regions] == [
-        (1, root - 1, ResolutionStatus.RESOLVED),
-        (root, root, ResolutionStatus.RESOLVED),
-        (root + 1, None, ResolutionStatus.RESOLVED),
+    assert [(r.domain.minimum, r.domain.maximum, bool(r.resolution)) for r in result.regions] == [
+        (1, root - 1, True),
+        (root, root, True),
+        (root + 1, None, True),
     ]
     assert result.regions[0].resolution.holder_ids == (1,)
     assert result.regions[2].resolution.holder_ids == (2,)

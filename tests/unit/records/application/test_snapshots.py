@@ -23,7 +23,7 @@ def test_captured_inputs_preserve_tag_types_and_compute_deterministically() -> N
     snapshot = RecordSnapshot(
         rules_revision_id=1,
         kind=BuildKind.DOOR,
-        version_id=None,
+        version_ids=(None,),
         captured_at=datetime(2026, 1, 1, tzinfo=UTC),
         requested=(),
         sources=(

@@ -142,7 +142,10 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/TABLES/public_creator_redirects.sql
 \ir public/TABLES/record_computation_runs.sql
 \ir public/SEQUENCES/record_computation_runs_id_seq.sql
+\ir public/TABLES/record_drift.sql
+\ir public/SEQUENCES/record_drift_id_seq.sql
 \ir public/TABLES/record_input_generations.sql
+\ir public/TABLES/record_members.sql
 \ir public/TABLES/record_recompute_queue.sql
 \ir public/SEQUENCES/record_recompute_queue_id_seq.sql
 \ir public/TABLES/record_settings.sql

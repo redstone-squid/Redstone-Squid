@@ -133,7 +133,7 @@ class InboxNotification(CreatedAtMixin, Revisioned, Base, kw_only=True):
         CheckConstraint("revision > 0", name="notifications_revision_positive"),
         CheckConstraint(
             "kind IN ('build_confirmed', 'build_denied', 'creator_build_confirmed', "
-            "'record_gained', 'staff_build_submitted')",
+            "'record_gained', 'record_retired', 'staff_build_submitted')",
             name="notifications_kind_check",
         ),
         UniqueConstraint("source_key", name="notifications_source_key_key"),

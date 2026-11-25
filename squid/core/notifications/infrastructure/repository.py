@@ -40,8 +40,6 @@ from squid.core.persistence.queue import VISIBILITY_TIMEOUT, retry_delay
 from squid.core.records.models import (
     Record,
     RecordDefinition,
-    RecordHolder,
-    RecordResult,
 )
 from squid.core.tags.models import TagAssignment
 
@@ -366,8 +364,8 @@ class PostgresNotificationRepository:
             await self._materialize_staff_submission(session, event)
         elif event.event_type in {"build.confirmed", "build.denied"}:
             await self._materialize_build_outcome(session, event)
-        elif event.event_type == "record_run.activated":
-            await self._materialize_record_gains(session, event)
+        elif event.event_type == "record_run.published":
+            await self._materialize_record_changes(session, event)
 
     async def cleanup(self, *, retention_days: int) -> int:
         session = self._session()
@@ -610,30 +608,37 @@ class PostgresNotificationRepository:
             )
         await self._insert_candidates(session, event=event, candidates=candidates)
 
-    async def _materialize_record_gains(self, session: AsyncSession, event: DomainEvent) -> None:
-        """Create one message per recipient and build, combining all newly gained records."""
-        # The baseline establishes existing holders; it does not represent newly won records.
+    async def _materialize_record_changes(self, session: AsyncSession, event: DomainEvent) -> None:
+        """Tell followers about records builds gained, and about records that retired.
+
+        Gains produce one message per recipient and build, combining every record
+        that build gained, including revived ones. Retirements produce one message
+        per recipient listing the followed records that lost their last competitor.
+        """
+        # A baseline establishes existing holders; it does not represent newly won records.
         if event.payload.get("baseline") is True:
             return
-        previous_run_id = event.payload.get("previous_run_id")
-        if isinstance(previous_run_id, bool) or not isinstance(previous_run_id, int):
-            return
-        gains = await self._record_gains(session, event.aggregate_id, previous_run_id)
-        recipients_by_build = await self._record_gain_recipients(session, gains)
+        changes = _record_changes(event.payload)
+        records = await self._record_facts(session, {change[0] for change in changes})
+        gains: dict[int, list[_RecordGain]] = defaultdict(list)
+        retired: list[tuple[_RecordGain, tuple[int, ...]]] = []
+        for record_id, change, previous, holders in changes:
+            facts = records.get(record_id)
+            if facts is None:
+                continue
+            if change == "retired":
+                retired.append((facts, previous))
+                continue
+            for build_id in holders:
+                if build_id not in previous:
+                    gains[build_id].append(replace(facts, build_id=build_id))
+        grouped = {build_id: tuple(values) for build_id, values in gains.items()}
+        recipients_by_build = await self._record_gain_recipients(session, grouped)
         candidates: list[NotificationCandidate] = []
-        for build_id, build_gains in gains.items():
+        for build_id, build_gains in grouped.items():
             payload: dict[str, object] = {
                 "build_id": build_id,
-                "records": [
-                    {
-                        "title_id": str(gain.record_id),
-                        "title": gain.title,
-                        "base_title": gain.criterion,
-                        "build_kind": gain.build_kind,
-                        "version_scope": gain.version_scope,
-                    }
-                    for gain in build_gains
-                ],
+                "records": [_record_entry(gain) for gain in build_gains],
             }
             candidates.extend(
                 NotificationCandidate(
@@ -647,7 +652,92 @@ class PostgresNotificationRepository:
                 )
                 for account_id, follows in recipients_by_build[build_id].items()
             )
+        for account_id, (follows, followed) in (await self._retirement_recipients(session, retired)).items():
+            candidates.append(
+                NotificationCandidate(
+                    account_id=account_id,
+                    kind=NotificationKind.RECORD_RETIRED,
+                    source_key=NotificationSource(event.id, NotificationKind.RECORD_RETIRED).key_for(account_id),
+                    payload={"records": [_record_entry(record) for record in followed]},
+                    subscription_ids=tuple(sorted(follows)),
+                )
+            )
         await self._insert_candidates(session, event=event, candidates=candidates)
+
+    @staticmethod
+    async def _record_facts(session: AsyncSession, record_ids: set[UUID]) -> dict[UUID, _RecordGain]:
+        """Name each record by its newest definition; `build_id` is filled in per gain."""
+        if not record_ids:
+            return {}
+        title = (
+            select(RecordDefinition.title)
+            .where(RecordDefinition.record_id == Record.public_id)
+            .order_by(RecordDefinition.id.desc())
+            .limit(1)
+            .correlate(Record)
+            .scalar_subquery()
+        )
+        rows = await session.execute(
+            select(Record.public_id, title, Record.criterion, Record.build_kind, Record.version_scope).where(
+                Record.public_id.in_(record_ids)
+            )
+        )
+        return {
+            record_id: _RecordGain(record_id, 0, record_title or "", criterion, build_kind, version_scope)
+            for record_id, record_title, criterion, build_kind, version_scope in rows
+        }
+
+    async def _retirement_recipients(
+        self, session: AsyncSession, retired: Sequence[tuple[_RecordGain, tuple[int, ...]]]
+    ) -> dict[int, tuple[set[int], list[_RecordGain]]]:
+        """Collect each follower of a retired record, with the follows and records that matched.
+
+        A filter's tag predicates are checked against the record's former holders.
+        """
+        recipients: dict[int, tuple[set[int], list[_RecordGain]]] = {}
+        if not retired:
+            return recipients
+
+        def add(account_id: int, subscription_id: int, record: _RecordGain) -> None:
+            follows, records = recipients.setdefault(account_id, (set(), []))
+            follows.add(subscription_id)
+            if record not in records:
+                records.append(record)
+
+        by_id = {record.record_id: record for record, _previous in retired}
+        exact = await session.execute(
+            select(
+                NotificationSubscription.account_id, NotificationSubscription.subject_id, NotificationSubscription.id
+            ).where(
+                NotificationSubscription.kind == SubscriptionKind.RECORD,
+                NotificationSubscription.subject_id.in_(by_id),
+                NotificationSubscription.enabled.is_(True),
+            )
+        )
+        for account_id, subject_id, subscription_id in exact:
+            if subject_id is not None:
+                add(account_id, subscription_id, by_id[subject_id])
+        filters = (
+            await session.execute(
+                select(
+                    NotificationSubscription.account_id,
+                    NotificationSubscription.record_filter,
+                    NotificationSubscription.id,
+                ).where(
+                    NotificationSubscription.kind == SubscriptionKind.RECORD_FILTER,
+                    NotificationSubscription.enabled.is_(True),
+                )
+            )
+        ).all()
+        if filters:
+            tags = await _build_tags(session, {build_id for _record, previous in retired for build_id in previous})
+            for account_id, record_filter, subscription_id in filters:
+                if record_filter is None:
+                    continue
+                for record, previous in retired:
+                    if any(_filter_matches(record_filter, record, tags[build_id]) for build_id in previous):
+                        add(account_id, subscription_id, record)
+        return recipients
 
     async def _insert_candidates(
         self,
@@ -793,44 +883,6 @@ class PostgresNotificationRepository:
         )
 
     @staticmethod
-    async def _record_gains(
-        session: AsyncSession, run_id: int, previous_run_id: int
-    ) -> dict[int, tuple[_RecordGain, ...]]:
-        new_rows = (
-            await session.execute(
-                select(
-                    RecordDefinition.record_id,
-                    RecordHolder.build_id,
-                    RecordDefinition.title,
-                    Record.criterion,
-                    Record.build_kind,
-                    Record.version_scope,
-                )
-                .select_from(RecordDefinition)
-                .join(Record, Record.public_id == RecordDefinition.record_id)
-                .join(RecordResult, RecordResult.definition_id == RecordDefinition.id)
-                .join(RecordHolder, RecordHolder.result_id == RecordResult.id)
-                .where(RecordResult.run_id == run_id)
-            )
-        ).all()
-        old_holders = set(
-            await session.execute(
-                select(RecordDefinition.record_id, RecordHolder.build_id)
-                .select_from(RecordDefinition)
-                .join(Record, Record.public_id == RecordDefinition.record_id)
-                .join(RecordResult, RecordResult.definition_id == RecordDefinition.id)
-                .join(RecordHolder, RecordHolder.result_id == RecordResult.id)
-                .where(RecordResult.run_id == previous_run_id)
-            )
-        )
-        grouped: dict[int, list[_RecordGain]] = defaultdict(list)
-        for record_id, build_id, title, criterion, build_kind, version_scope in new_rows:
-            if (record_id, build_id) in old_holders:
-                continue
-            grouped[build_id].append(_RecordGain(record_id, build_id, title, criterion, build_kind, version_scope))
-        return {build_id: tuple(values) for build_id, values in grouped.items()}
-
-    @staticmethod
     async def _record_gain_recipients(
         session: AsyncSession,
         gains: dict[int, tuple[_RecordGain, ...]],
@@ -898,22 +950,7 @@ class PostgresNotificationRepository:
                 )
             )
         ).all()
-        assignments = (
-            await session.execute(
-                select(
-                    TagAssignment.build_id,
-                    TagAssignment.tag_id,
-                    TagAssignment.numeric_value,
-                    TagAssignment.text_value,
-                    TagAssignment.boolean_value,
-                ).where(TagAssignment.build_id.in_(build_ids))
-            )
-        ).all()
-        tags_by_build: dict[int, dict[int, Decimal | str | bool | None]] = defaultdict(dict)
-        for build_id, tag_id, numeric, text_value, boolean in assignments:
-            tags_by_build[build_id][tag_id] = (
-                numeric if numeric is not None else text_value if text_value is not None else boolean
-            )
+        tags_by_build = await _build_tags(session, build_ids)
         for account_id, raw_filter, subscription_id in filter_rows:
             if raw_filter is None:
                 continue
@@ -924,6 +961,58 @@ class PostgresNotificationRepository:
                     if follows is not None:
                         follows.add(subscription_id)
         return recipients
+
+
+async def _build_tags(
+    session: AsyncSession, build_ids: set[int]
+) -> defaultdict[int, dict[int, Decimal | str | bool | None]]:
+    """Each build's tag values by tag ID; a tag without a value maps to None."""
+    tags_by_build: defaultdict[int, dict[int, Decimal | str | bool | None]] = defaultdict(dict)
+    if not build_ids:
+        return tags_by_build
+    assignments = await session.execute(
+        select(
+            TagAssignment.build_id,
+            TagAssignment.tag_id,
+            TagAssignment.numeric_value,
+            TagAssignment.text_value,
+            TagAssignment.boolean_value,
+        ).where(TagAssignment.build_id.in_(build_ids))
+    )
+    for build_id, tag_id, numeric, text_value, boolean in assignments:
+        tags_by_build[build_id][tag_id] = (
+            numeric if numeric is not None else text_value if text_value is not None else boolean
+        )
+    return tags_by_build
+
+
+def _record_changes(payload: dict[str, object]) -> list[tuple[UUID, str, tuple[int, ...], tuple[int, ...]]]:
+    """Parse `record_run.published` changes, skipping malformed entries."""
+    raw = payload.get("changes")
+    changes: list[tuple[UUID, str, tuple[int, ...], tuple[int, ...]]] = []
+    for entry in raw if isinstance(raw, list) else ():
+        if not isinstance(entry, dict):
+            continue
+        try:
+            record_id = UUID(str(entry["record_id"]))
+        except KeyError, ValueError:
+            continue
+        ids = [
+            tuple(value for value in values if type(value) is int) if isinstance(values := entry.get(key), list) else ()
+            for key in ("previous_holder_ids", "holder_ids")
+        ]
+        changes.append((record_id, str(entry.get("change")), ids[0], ids[1]))
+    return changes
+
+
+def _record_entry(record: _RecordGain) -> dict[str, object]:
+    return {
+        "title_id": str(record.record_id),
+        "title": record.title,
+        "base_title": record.criterion,
+        "build_kind": record.build_kind,
+        "version_scope": record.version_scope,
+    }
 
 
 def _preferences(

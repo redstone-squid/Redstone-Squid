@@ -21,7 +21,6 @@ from squid.core.records.domain.models import (
     RecordCriterion,
     RecordFact,
     RecordResolution,
-    ResolutionStatus,
     TimingReduction,
     TimingVariant,
 )
@@ -85,13 +84,12 @@ class _Contest:
     def finish(self) -> RecordResolution:
         """Award the record to the earliest completion; later completions are tied."""
         if not self.active:
-            return RecordResolution(ResolutionStatus.NO_CANDIDATE)
+            return RecordResolution()
         level = self.active
         self.keep_best(RecordFact.COMPLETION_AT, lambda candidate: candidate.completion_at)
         holders = {candidate.build_id for candidate in self.active}
         tied = (c.build_id for c in level if c.build_id not in holders and c.completion_at is not None)
         return RecordResolution(
-            ResolutionStatus.RESOLVED,
             holder_ids=tuple(sorted(holders)),
             tied_ids=tuple(sorted(tied)),
             gaps=tuple(sorted(dict.fromkeys(self.gaps), key=lambda gap: (gap.build_id, gap.field))),

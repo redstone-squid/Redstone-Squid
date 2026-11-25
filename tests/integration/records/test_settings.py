@@ -45,16 +45,20 @@ async def test_pin_invalidates_both_kinds_and_is_not_changed_by_fixed_publicatio
         assert kinds == {BuildKind.DOOR, BuildKind.EXTENDER}
         assert await session.get(DoorRangeRecomputeQueueItem, query_id) is not None
 
-    async with factory() as uow:
-        lease = await uow.records.claim_recompute_kinds(limit=10)
-        await uow.commit()
+    leases = []
+    for _ in range(2):
+        async with factory() as uow:
+            leases.append(await uow.records.claim_recompute(limit=10))
+            await uow.commit()
+    assert {lease.kind for lease in leases} == {BuildKind.DOOR, BuildKind.EXTENDER}
     async with factory() as uow:
         await uow.records.set_current_version(current_id)
-        await uow.records.activate(ComputationBatch(revision, BuildKind.DOOR, other_id, ()))
+        await uow.records.publish(ComputationBatch(revision, BuildKind.DOOR, 0, frozenset({(other_id, "door")}), ()))
         await uow.commit()
     async with factory() as uow:
         assert await uow.records.active_current_version_id() == current_id
-        await uow.records.complete_recompute(lease)
+        for lease in leases:
+            await uow.records.complete_recompute(lease)
         await uow.commit()
     async with sessions() as session:
         assert (await session.scalars(select(RecordRecomputeQueueItem))).all() == []

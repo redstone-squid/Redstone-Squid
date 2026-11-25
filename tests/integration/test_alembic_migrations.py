@@ -181,12 +181,12 @@ def test_migrations_create_schema_without_drift(
                 signature: connection.execute(text(f"SELECT to_regprocedure('public.{signature}')")).scalar_one()
                 for signature in ("find_restriction_ids(text[])", "sync_new_restriction()")
             }
-            retirement_rebuild_queued = connection.execute(
+            full_recompute_queued = connection.execute(
                 text(
                     "SELECT EXISTS ("
                     "SELECT 1 FROM record_recompute_queue "
                     "WHERE scope_key = 'door' "
-                    "AND reasons @> '[\"legacy_cache_retirement\"]'::jsonb"
+                    "AND reasons @> '[\"incremental_records\"]'::jsonb"
                     ")"
                 )
             ).scalar_one()
@@ -248,7 +248,7 @@ def test_migrations_create_schema_without_drift(
     assert legacy_record_routines == set()
     assert set(legacy_tag_tables.values()) == {None}
     assert set(legacy_tag_routines.values()) == {None}
-    assert retirement_rebuild_queued is True
+    assert full_recompute_queued is True
     assert set(queue_health_before) == {
         "discord_sync",
         "door_range_recomputation",

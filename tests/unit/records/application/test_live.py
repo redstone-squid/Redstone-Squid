@@ -10,7 +10,7 @@ from squid.core.builds.domain.expansion import DoorExpansion, ExpansionBranch, E
 from squid.core.builds.domain.expansion_evaluation import PointStatus
 from squid.core.records.application.live import DoorRecordLookup, LiveDoorRecord, evaluate_door_record
 from squid.core.records.application.models import CandidateBuild
-from squid.core.records.domain import BuildKind, Candidate, RecordCriterion, ResolutionStatus, TimingVariant
+from squid.core.records.domain import BuildKind, Candidate, RecordCriterion, TimingVariant
 from squid.core.records.domain.door_evidence import DoorRecordEvidence
 
 NOW = datetime(2026, 1, 1, tzinfo=UTC)
@@ -81,13 +81,13 @@ def test_family_does_not_borrow_sample_measurements_or_completion() -> None:
     assert lookup(fixed(), source).resolution.holder_ids == (1,)
     assert lookup(fixed(), source, title=RecordCriterion.FASTEST).resolution.holder_ids == (1,)
     result = lookup(source, title=RecordCriterion.FIRST)
-    assert result.resolution.status is ResolutionStatus.NO_CANDIDATE
+    assert not result.resolution
     assert any(d.code == "unverified_completion" for d in result.configurations[0].diagnostics)
 
 
 def test_undated_tie_loses_to_dated_build_and_is_reported() -> None:
     result = lookup(fixed(volume=60), family())
-    assert result.resolution.status is ResolutionStatus.RESOLVED
+    assert result.resolution
     assert result.resolution.holder_ids == (1,)
     assert [(gap.build_id, gap.field) for gap in result.resolution.gaps] == [(2, "completion_at")]
 
@@ -116,7 +116,7 @@ def test_same_build_alternatives_do_not_require_completion_to_identify_holder() 
 def test_unknown_membership_does_not_block_official_holder(title: RecordCriterion) -> None:
     source = family(parameter=ExpansionParameter(name="n", minimum=1, initial_steps=(), repeating_steps=(1,)))
     result = lookup(fixed(), source, title=title)
-    assert result.resolution.status is ResolutionStatus.RESOLVED
+    assert result.resolution
     assert result.resolution.holder_ids == (1,)
     assert result.resolution.gaps == ()
     configuration = result.configurations[1]
@@ -127,7 +127,7 @@ def test_unknown_membership_does_not_block_official_holder(title: RecordCriterio
 def test_unknown_membership_alone_cannot_claim_record() -> None:
     source = family(parameter=ExpansionParameter(name="n", minimum=1, initial_steps=(), repeating_steps=(1,)))
     result = lookup(source)
-    assert result.resolution.status is ResolutionStatus.NO_CANDIDATE
+    assert not result.resolution
     assert result.resolution.holder_ids == ()
     assert result.configurations[0].membership is PointStatus.UNRESOLVED
 
@@ -137,7 +137,7 @@ def test_document_without_branches_is_reported_but_does_not_block() -> None:
     # unresolve every record in its category.
     source = replace(family(), expansion=DoorExpansion(raw_description="unclear"))
     result = lookup(fixed(), source)
-    assert result.resolution.status is ResolutionStatus.RESOLVED
+    assert result.resolution
     assert result.resolution.holder_ids == (1,)
     assert result.configurations[1].membership is PointStatus.UNMAPPED
     assert result.configurations[1].diagnostics[0].code == "missing"

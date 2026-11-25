@@ -17,7 +17,7 @@ from squid.core.records.application.models import ComputationBatch, RebuildSumma
 from squid.core.records.application.services import RecordComputationService
 from squid.core.records.application.snapshots import RecordSnapshot
 from squid.core.records.domain import BuildKind
-from squid.core.records.models import ComputationRun, RecordHolder, RecordInputGeneration, RecordRecomputeQueueItem
+from squid.core.records.models import Record, RecordHolder, RecordInputGeneration, RecordRecomputeQueueItem
 from squid.core.tags.models import UnitDefinition
 from tests.support.build_edits import build_edit_session
 
@@ -56,11 +56,11 @@ async def test_older_snapshot_cannot_replace_a_newer_publication(
 
     class BlockedComputation(RecordComputationService):
         @override
-        async def _compute_snapshot(self, snapshot: RecordSnapshot) -> ComputationBatch:
+        async def _compute(self, snapshot: RecordSnapshot) -> ComputationBatch:
             inputs.append(snapshot)
             captured.set()
             await release.wait()
-            return await super()._compute_snapshot(snapshot)
+            return await super()._compute(snapshot)
 
     old = BlockedComputation(uow_factory=factory)
     new = RecordComputationService(uow_factory=factory)
@@ -81,11 +81,14 @@ async def test_older_snapshot_cannot_replace_a_newer_publication(
             release.set()
 
     assert newer is not None
-    assert old_results[0].run_ids == newer.run_ids
+    assert newer.changed > 0
+    assert old_results[0].changed == 0
     async with sessions() as session:
-        active = (await session.scalars(select(ComputationRun).where(ComputationRun.is_active))).one()
-        assert active.checked_generation is not None
-        assert active.checked_generation > inputs[0].input_generation
+        generations = set(
+            (await session.scalars(select(Record.input_generation).where(Record.retired_at.is_(None)))).all()
+        )
+        assert generations
+        assert all(generation is not None and generation > inputs[0].input_generation for generation in generations)
         holders = (await session.scalars(select(RecordHolder))).all()
         assert holders
         assert all(holder.metric_snapshot.get("volume") == 50 for holder in holders)
@@ -111,14 +114,14 @@ async def test_source_edit_during_computation_survives_atomic_acknowledgement(
         edited = False
 
         @override
-        async def _compute_snapshot(self, snapshot: RecordSnapshot) -> ComputationBatch:
+        async def _compute(self, snapshot: RecordSnapshot) -> ComputationBatch:
             if not self.edited:
                 async with build_edit_session(sessions) as session:
                     door = await session.get(DoorBuild, build_id)
                     assert door is not None
                     door.width = 5
                 self.edited = True
-            return await super()._compute_snapshot(snapshot)
+            return await super()._compute(snapshot)
 
     computation = EditingComputation(uow_factory=factory)
     await computation.process_queue(limit=1, context=ActingContext.worker("test-worker"))
@@ -129,12 +132,8 @@ async def test_source_edit_during_computation_survives_atomic_acknowledgement(
             )
         ).one()
         assert pending.claim_token is None
-        active = (
-            await session.scalars(
-                select(ComputationRun).where(ComputationRun.is_active, ComputationRun.build_kind == BuildKind.DOOR)
-            )
-        ).one()
-        initial_generation = active.checked_generation
+        assert pending.build_id == build_id
+        initial_generations = set((await session.scalars(select(Record.input_generation))).all())
         holders = (await session.scalars(select(RecordHolder))).all()
         assert holders
         assert all(holder.metric_snapshot.get("volume") == 100 for holder in holders)
@@ -155,17 +154,11 @@ async def test_source_edit_during_computation_survives_atomic_acknowledgement(
         assert all(not record.refresh_pending and record.last_checked_at is not None for record in records)
     async with sessions() as session:
         assert (await session.scalars(select(RecordRecomputeQueueItem))).all() == []
-        active = (
-            await session.scalars(
-                select(ComputationRun).where(ComputationRun.is_active, ComputationRun.build_kind == BuildKind.DOOR)
-            )
-        ).one()
-        assert active.checked_generation is not None
-        assert initial_generation is not None
-        assert active.checked_generation > initial_generation
-        # Previous publication evidence remains available after catch-up.
+        generations = set((await session.scalars(select(Record.input_generation))).all())
+        assert min(g for g in generations if g is not None) > max(g for g in initial_generations if g is not None)
+        # Results update in place, so only the latest measurements remain.
         volumes = {holder.metric_snapshot.get("volume") for holder in await session.scalars(select(RecordHolder))}
-        assert volumes == {50, 100}
+        assert volumes == {50}
 
 
 async def test_tag_changes_advance_both_input_generations(

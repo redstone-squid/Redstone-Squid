@@ -36,13 +36,6 @@ class VersionScope(StrEnum):
     UP_TO_DATE = "up_to_date"
 
 
-class ResolutionStatus(StrEnum):
-    """Whether any build competes in a category."""
-
-    RESOLVED = "resolved"
-    NO_CANDIDATE = "no_candidate"
-
-
 class TimingMethod(StrEnum):
     """Timing methods ordered by each build kind's rules."""
 
@@ -156,21 +149,21 @@ class RecordResolution:
 
     There is normally one holder. Builds share a record only when they also have
     identical, or all unknown, completion dates. Tied builds match the holders on
-    every metric but were completed later.
+    every metric but were completed later. No holders means no build competes,
+    so the record has no current result.
     """
 
-    status: ResolutionStatus
     holder_ids: tuple[int, ...] = ()
     tied_ids: tuple[int, ...] = ()
     gaps: tuple[CandidateGap, ...] = ()
 
     def __post_init__(self) -> None:
-        if self.status is ResolutionStatus.RESOLVED and not self.holder_ids:
-            msg = tr(t"records-title-holder-required = A resolved record title must have at least one holder.")
+        if not self.holder_ids and (self.tied_ids or self.gaps):
+            msg = tr(t"records-title-holders-forbidden = Only a record with holders can have tied builds or gaps.")
             raise ValidationError(msg)
-        if self.status is ResolutionStatus.NO_CANDIDATE and (self.holder_ids or self.tied_ids):
-            msg = tr(t"records-title-holders-forbidden = Only a resolved record title can have official holders.")
-            raise ValidationError(msg)
+
+    def __bool__(self) -> bool:
+        return bool(self.holder_ids)
 
     def by_build(self, build_of: Callable[[int], int]) -> Self:
         """Translate configuration IDs into build IDs.
@@ -184,7 +177,7 @@ class RecordResolution:
             gaps = {gap: None for gap in gaps if gap.build_id != holders[0]}
         excluded = {*holders, *(gap.build_id for gap in gaps)}
         tied = tuple(sorted({build_of(id) for id in self.tied_ids} - excluded))
-        return type(self)(self.status, holders, tied, tuple(gaps))
+        return type(self)(holders, tied, tuple(gaps))
 
 
 class MaterializationSource(StrEnum):
@@ -193,6 +186,20 @@ class MaterializationSource(StrEnum):
     EAGER = "eager"
     SEEDED = "seeded"
     PUBLIC_LOOKUP = "public_lookup"
+
+
+class RecomputeTarget(StrEnum):
+    """What a queued recompute covers.
+
+    `kind` recomputes a whole build kind after a rules, version pin or tag change,
+    where differences are expected. `backstop` does the same but reports each
+    difference that no pending change explains as drift.
+    """
+
+    KIND = "kind"
+    BACKSTOP = "backstop"
+    BUILD = "build"
+    RECORD = "record"
 
 
 class RecordTagRole(StrEnum):

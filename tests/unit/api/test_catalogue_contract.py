@@ -15,7 +15,7 @@ from squid.core.builds.domain import BuildStatus, MediaTypeLiteral
 from squid.core.builds.models import Build, DoorBuild, ExtenderBuild, UtilityBuild
 from squid.core.records.application.models import PublicRecordDetail, PublishedRecordResult
 from squid.core.records.application.services import PublicRecordQueryService
-from squid.core.records.domain import BuildKind, RecordCriterion, ResolutionStatus, VersionScope
+from squid.core.records.domain import BuildKind, RecordCriterion, VersionScope
 from squid.core.sponsors import PublicSponsor
 from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.core.tags.models import TagAssignment, TagDefinition
@@ -62,7 +62,6 @@ def published_record(*holder_build_ids: int) -> PublishedRecordResult:
         criterion=RecordCriterion.FASTEST,
         build_kind=BuildKind.DOOR,
         version_scope=VersionScope.ALL_TIME,
-        status=ResolutionStatus.RESOLVED,
         holder_build_ids=holder_build_ids,
         computed_at=datetime(2026, 8, 10, 12, tzinfo=UTC),
     )

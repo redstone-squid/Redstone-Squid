@@ -129,6 +129,7 @@ class ApiServices:
     permissions: PermissionService
     permission_epoch: PermissionEpochWatcher
     records: RecordService
+    record_administration: RecordAdministrationService
     public_records: PublicRecordQueryService
     range_publication: RangePublicationService
     schematics: SchematicService

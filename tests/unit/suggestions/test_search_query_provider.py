@@ -126,19 +126,18 @@ async def test_version_scopes_are_suggested_without_indexed_records() -> None:
 
 async def test_catalogue_completions_use_the_scoped_registry() -> None:
     instance, _ = provider()
-    for scope, status in (("builds", "approved"), ("records", "resolved")):
-        result = await instance.suggest(
-            SuggestionRequest(source="search_query", query="status:", context={"scope": scope})
-        )
-        assert status in {item.value for item in result.items}
-        assert len(result.items) == 3
+    result = await instance.suggest(
+        SuggestionRequest(source="search_query", query="status:", context={"scope": "builds"})
+    )
+    assert "approved" in {item.value for item in result.items}
+    assert len(result.items) == 3
 
     fields = await SearchFieldProvider(StaticFields()).candidates(
         SuggestionRequest(source="search_fields", context={"scope": "records"})
     )
     names = {item.suggestion.value for item in fields}
-    assert {"kind", "criterion", "status"} <= names
-    assert "width" not in names
+    assert {"kind", "criterion"} <= names
+    assert not {"status", "width"} & names
 
 
 @pytest.mark.parametrize("values", [("Full Lamp", "Flush", "Seamless"), ()])

@@ -46,6 +46,7 @@ class NotificationKind(StrEnum):
     BUILD_DENIED = "build_denied"
     CREATOR_BUILD_CONFIRMED = "creator_build_confirmed"
     RECORD_GAINED = "record_gained"
+    RECORD_RETIRED = "record_retired"
     STAFF_BUILD_SUBMITTED = "staff_build_submitted"
 
 
@@ -79,6 +80,7 @@ class NotificationSource:
             NotificationKind.BUILD_CONFIRMED: "owner",
             NotificationKind.BUILD_DENIED: "owner",
             NotificationKind.CREATOR_BUILD_CONFIRMED: "creator",
+            NotificationKind.RECORD_RETIRED: "record-retired",
         }[self.kind]
         return f"event:{self.event_id}:{label}:{account_id}"
 

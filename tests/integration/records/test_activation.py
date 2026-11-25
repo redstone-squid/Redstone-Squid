@@ -5,9 +5,10 @@ from datetime import UTC, datetime, timedelta
 from functools import partial
 
 import anyio
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import selectinload
+from whenever import Instant
 
 from squid.core.builds.domain import BuildCategory
 from squid.core.events.models import DomainEvent
@@ -19,6 +20,7 @@ from squid.core.records.application.models import (
     ComputationBatch,
     ComputedRecordResult,
     HolderHistoryEntry,
+    PriorPublication,
 )
 from squid.core.records.domain import (
     BuildKind,
@@ -26,16 +28,15 @@ from squid.core.records.domain import (
     FormattedTitle,
     RecordCriterion,
     RecordResolution,
-    ResolutionStatus,
     VersionScope,
 )
 from squid.core.records.domain.models import RecordTagRole
 from squid.core.records.models import (
-    ComputationRun,
     MaterializationSource,
     RecordDefinition,
     RecordDefinitionTag,
     RecordHolderHistory,
+    RecordResult,
     RulesRevision,
 )
 from squid.core.tags.domain.models import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
@@ -69,7 +70,7 @@ def _batch(rules_revision_id: int, build_ids: list[int]) -> ComputationBatch:
         version_id=None,
         category=record_title,
         title=FormattedTitle("Smallest 2x3 Door"),
-        resolution=RecordResolution(ResolutionStatus.RESOLVED, holder_ids=(build_ids[-1],)),
+        resolution=RecordResolution(holder_ids=(build_ids[-1],)),
         history=tuple(
             HolderHistoryEntry(
                 build_ids=(candidate.build_id,),
@@ -81,90 +82,206 @@ def _batch(rules_revision_id: int, build_ids: list[int]) -> ComputationBatch:
         ),
     )
     return ComputationBatch(
-        rules_revision_id=rules_revision_id, kind=BuildKind.DOOR, version_id=None, records=(computed,)
+        rules_revision_id=rules_revision_id,
+        kind=BuildKind.DOOR,
+        input_generation=1,
+        categories=frozenset({(None, record_title.identity.key)}),
+        records=(computed,),
     )
 
 
-async def test_activation_batches_history_and_replaces_the_previous_run(
-    migrated_session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    sessions = migrated_session_factory
+def _with_records(batch: ComputationBatch, records: tuple[ComputedRecordResult, ...]) -> ComputationBatch:
+    return replace(
+        batch,
+        records=records,
+        categories=batch.categories | {(record.version_id, record.category.identity.key) for record in records},
+    )
+
+
+def _changes(events: list[DomainEvent]) -> list[list[tuple[str, list[int], list[int]]]]:
+    return [
+        [(change["change"], change["previous_holder_ids"], change["holder_ids"]) for change in event.payload["changes"]]  # type: ignore[index,union-attr]
+        for event in events
+    ]
+
+
+async def _events(sessions: async_sessionmaker[AsyncSession]) -> list[DomainEvent]:
+    async with sessions() as session:
+        return list(
+            (
+                await session.execute(
+                    select(DomainEvent).where(DomainEvent.event_type == "record_run.published").order_by(DomainEvent.id)
+                )
+            )
+            .scalars()
+            .all()
+        )
+
+
+async def _doors(sessions: async_sessionmaker[AsyncSession], count: int) -> list[int]:
     owner = await seed_account_and_version(sessions)
     builds = partial(SqlAlchemyUnitOfWork, sessions)
     build_ids: list[int] = []
-    for _ in range(5):
+    for _ in range(count):
         build = submission_build(BuildCategory.DOOR, owner)
-        await transact(
-            builds,
-            lambda uow, build=build: uow.builds.save(build),
-            commit=True,
-        )
+        await transact(builds, lambda uow, build=build: uow.builds.save(build), commit=True)
         assert build.id is not None
         build_ids.append(build.id)
+    return build_ids
+
+
+async def test_publication_updates_results_in_place_and_reports_holder_changes(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    sessions = migrated_session_factory
+    build_ids = await _doors(sessions, 5)
     records = partial(SqlAlchemyUnitOfWork, sessions)
     batch = _batch(await transact(records, lambda uow: uow.records.active_rules_revision_id(), commit=True), build_ids)
 
-    first_run = await transact(records, lambda uow: uow.records.activate(batch), commit=True)
+    await transact(records, lambda uow: uow.records.publish(batch), commit=True)
     async with records() as uow:
         (original,) = await uow.records.list_published_records(
             offset=0, after_id=None, before_id=None, descending=False, limit=10
         )
-    # A changed title should publish even when the holder set is unchanged.
-    batch = replace(batch, records=(replace(batch.records[0], title=FormattedTitle("Updated smallest door")),))
+    # A changed title publishes even when the holders stay the same, but announces nothing.
+    batch = _with_records(batch, (replace(batch.records[0], title=FormattedTitle("Updated smallest door")),))
     with record_queries(sessions) as statements:
-        current_run = await transact(records, lambda uow: uow.records.activate(batch), commit=True)
-
+        await transact(records, lambda uow: uow.records.publish(batch), commit=True)
     history_inserts = [
         statement for statement in statements if statement.startswith("INSERT INTO title_holder_history")
     ]
     assert len(history_inserts) == 1, "History must be inserted together, not flushed once per predecessor."
+    # Handing the record to another build is a holder change.
+    moved = replace(batch.records[0], resolution=RecordResolution(holder_ids=(build_ids[0],)))
+    await transact(records, lambda uow: uow.records.publish(_with_records(batch, (moved,))), commit=True)
+
     async with sessions() as session:
-        runs = (await session.execute(select(ComputationRun).order_by(ComputationRun.id))).scalars().all()
         history = (
             (
                 await session.execute(
                     select(RecordHolderHistory)
-                    .where(RecordHolderHistory.run_id == current_run)
+                    .where(RecordHolderHistory.record_id == original.record_id)
                     .order_by(RecordHolderHistory.held_from)
                 )
             )
             .scalars()
             .all()
         )
-        events = (
-            (
-                await session.execute(
-                    select(DomainEvent).where(DomainEvent.event_type == "record_run.activated").order_by(DomainEvent.id)
-                )
-            )
-            .scalars()
-            .all()
-        )
-
-    assert [(run.id, run.is_active) for run in runs] == [(first_run, False), (current_run, True)]
     assert [row.build_id for row in history] == build_ids
     assert [row.predecessor_id for row in history] == [None, *(row.id for row in history[:-1])]
     assert [row.held_until for row in history] == [*(row.held_from for row in history[1:]), None]
-    assert [(event.aggregate_id, event.payload["previous_run_id"], event.payload["baseline"]) for event in events] == [
-        (first_run, None, True),
-        (current_run, first_run, False),
+    events = await _events(sessions)
+    assert [event.payload["baseline"] for event in events] == [True, False]
+    assert _changes(events) == [
+        [("appeared", [], [build_ids[-1]])],
+        [("holders_changed", [build_ids[-1]], [build_ids[0]])],
     ]
-    published = await transact(
-        records,
-        lambda uow: uow.records.list_published_records(
-            offset=0, after_id=None, before_id=None, descending=False, limit=10
-        ),
-    )
-    assert len(published) == 1
     async with records() as uow:
         latest = await uow.records.get_latest_record(original.record_id)
     assert latest is not None
-    assert latest.result_id == published[0].result_id
-    assert latest.result_id != original.result_id
-    assert published[0].title == "Updated smallest door"
-    assert published[0].holder_build_ids == (build_ids[-1],)
-    assert isinstance(published[0].computed_at, datetime)
-    assert published[0].computed_at.utcoffset() == timedelta(0)
+    assert latest.result_id == original.result_id
+    assert latest.title == "Updated smallest door"
+    assert latest.holder_build_ids == (build_ids[0],)
+    assert isinstance(latest.computed_at, datetime)
+    assert latest.computed_at.utcoffset() == timedelta(0)
+
+
+async def test_retirement_keeps_history_and_revival_keeps_the_record(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    sessions = migrated_session_factory
+    build_ids = await _doors(sessions, 2)
+    records = partial(SqlAlchemyUnitOfWork, sessions)
+    batch = _batch(await transact(records, lambda uow: uow.records.active_rules_revision_id(), commit=True), build_ids)
+    await transact(records, lambda uow: uow.records.publish(batch), commit=True)
+    async with records() as uow:
+        (live,) = await uow.records.list_published_records(
+            offset=0, after_id=None, before_id=None, descending=False, limit=10
+        )
+
+    retired = await transact(
+        records, lambda uow: uow.records.publish(replace(batch, records=(), input_generation=2)), commit=True
+    )
+    assert retired.retired == 1
+    async with records() as uow:
+        assert await uow.records.count_published_records() == 0
+        shown = await uow.records.get_latest_record(live.record_id)
+        history = await uow.records.get_record_history(live.record_id)
+        prior = await uow.records.prior_publication(BuildKind.DOOR, frozenset(build_ids))
+    assert shown is not None
+    assert shown.result_id is None
+    assert shown.retired_at is not None
+    assert shown.holder_build_ids == ()
+    assert [period.build_ids for period in history] == [(build_ids[0],), (build_ids[1],)]
+    assert history[-1].held_until == shown.retired_at
+    assert prior == PriorPublication()
+
+    await transact(records, lambda uow: uow.records.publish(replace(batch, input_generation=3)), commit=True)
+    async with records() as uow:
+        revived = await uow.records.get_latest_record(live.record_id)
+        prior = await uow.records.prior_publication(BuildKind.DOOR, frozenset(build_ids))
+    assert revived is not None
+    assert revived.retired_at is None
+    assert revived.result_id is not None
+    assert prior.memberships == {build_id: batch.categories for build_id in build_ids}
+    assert [change[0][0] for change in _changes(await _events(sessions))] == ["appeared", "retired", "revived"]
+
+
+async def test_an_older_generation_cannot_replace_a_newer_publication(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    sessions = migrated_session_factory
+    build_ids = await _doors(sessions, 2)
+    records = partial(SqlAlchemyUnitOfWork, sessions)
+    batch = _batch(await transact(records, lambda uow: uow.records.active_rules_revision_id(), commit=True), build_ids)
+    await transact(records, lambda uow: uow.records.publish(replace(batch, input_generation=5)), commit=True)
+
+    stale = replace(batch.records[0], resolution=RecordResolution(holder_ids=(build_ids[0],)))
+    await transact(
+        records,
+        lambda uow: uow.records.publish(_with_records(replace(batch, input_generation=4), (stale,))),
+        commit=True,
+    )
+    await transact(
+        records, lambda uow: uow.records.publish(replace(batch, records=(), input_generation=4)), commit=True
+    )
+
+    async with records() as uow:
+        (published,) = await uow.records.list_published_records(
+            offset=0, after_id=None, before_id=None, descending=False, limit=10
+        )
+    assert published.holder_build_ids == (build_ids[-1],)
+
+
+async def test_a_backstop_records_changes_no_pending_work_explains(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    sessions = migrated_session_factory
+    build_ids = await _doors(sessions, 2)
+    records = partial(SqlAlchemyUnitOfWork, sessions)
+    batch = _batch(await transact(records, lambda uow: uow.records.active_rules_revision_id(), commit=True), build_ids)
+    await transact(records, lambda uow: uow.records.publish(batch), commit=True)
+
+    # Expected changes are not drift; an unexplained one is.
+    moved = replace(batch.records[0], resolution=RecordResolution(holder_ids=(build_ids[0],)))
+    explained = await transact(
+        records,
+        lambda uow: uow.records.publish(_with_records(replace(batch, expected=batch.categories), (moved,))),
+        commit=True,
+    )
+    unexplained = await transact(
+        records,
+        lambda uow: uow.records.publish(replace(batch, expected=frozenset(), full=True)),
+        commit=True,
+    )
+
+    assert (explained.drift, unexplained.drift) == (0, 1)
+    async with records() as uow:
+        (drift,) = await uow.records.list_drift(offset=0, after_id=None, before_id=None, limit=10)
+        assert await uow.records.count_drift() == 1
+    assert drift.title == "Smallest 2x3 Door"
+    assert drift.published["holder_build_ids"] == [build_ids[0]]
+    assert drift.computed["holder_build_ids"] == [build_ids[-1]]
 
 
 async def test_bulk_definitions_keep_public_requests_and_stable_title_ids(
@@ -223,8 +340,9 @@ async def test_bulk_definitions_keep_public_requests_and_stable_title_ids(
             for criterion in RecordCriterion
         ),
     )
+    batch = _with_records(batch, batch.records)
     with record_queries(sessions) as first_queries:
-        await transact(records, lambda uow: uow.records.activate(batch), commit=True)
+        await transact(records, lambda uow: uow.records.publish(batch), commit=True)
     identity = batch.records[0].category.identity
     titles = {criterion: FormattedTitle(f"Requested {criterion.value}") for criterion in RecordCriterion}
     await transact(
@@ -240,7 +358,7 @@ async def test_bulk_definitions_keep_public_requests_and_stable_title_ids(
             ).all()
         }
     with record_queries(sessions) as repeated_queries:
-        await transact(records, lambda uow: uow.records.activate(batch), commit=True)
+        await transact(records, lambda uow: uow.records.publish(batch), commit=True)
     assert identity in await transact(records, lambda uow: uow.records.list_requested_categories(BuildKind.DOOR))
 
     requested = CategoryIdentity(BuildKind.DOOR, "door|999x3|t[20]|Door", (1, 2))
@@ -279,28 +397,30 @@ async def test_bulk_definitions_keep_public_requests_and_stable_title_ids(
         assert len(definition_writes) <= 2
 
     async with build_edit_session(sessions) as session:
+        # Publication accepts only the active revision.
+        await session.execute(update(RulesRevision).values(activated_at=None))
         next_rules_revision = RulesRevision(
-            document_hash="next-test-rules_revision", calculator_version="next", formatter_version="same"
+            document_hash="next-test-rules_revision",
+            calculator_version="next",
+            formatter_version="same",
+            activated_at=Instant.now(),
         )
         session.add(next_rules_revision)
         await session.flush()
         next_rules_revision_id = next_rules_revision.id
         version_id = await session.scalar(select(Version.id).where(Version.data_version == 3953))
     assert version_id is not None
-    next_batch = replace(batch, rules_revision_id=next_rules_revision_id, records=batch.records[:5])
-    await transact(records, lambda uow: uow.records.activate(next_batch), commit=True)
+    next_batch = replace(
+        batch, rules_revision_id=next_rules_revision_id, records=batch.records[:5], categories=frozenset()
+    )
+    next_batch = _with_records(next_batch, next_batch.records)
+    await transact(records, lambda uow: uow.records.publish(next_batch), commit=True)
+    current = tuple(
+        replace(record, scope=VersionScope.UP_TO_DATE, version_id=version_id) for record in next_batch.records
+    )
     await transact(
         records,
-        lambda uow: uow.records.activate(
-            replace(
-                next_batch,
-                version_id=version_id,
-                records=tuple(
-                    replace(record, scope=VersionScope.UP_TO_DATE, version_id=version_id)
-                    for record in next_batch.records
-                ),
-            )
-        ),
+        lambda uow: uow.records.publish(_with_records(replace(next_batch, categories=frozenset()), current)),
         commit=True,
     )
     async with sessions() as session:
@@ -325,31 +445,24 @@ async def test_unchanged_publication_preserves_ids_and_events(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     sessions = migrated_session_factory
-    owner = await seed_account_and_version(sessions)
+    build_ids = await _doors(sessions, 1)
     records = partial(SqlAlchemyUnitOfWork, sessions)
-    build = submission_build(BuildCategory.DOOR, owner)
-    await transact(records, lambda uow: uow.builds.save(build), commit=True)
-    assert build.id is not None
     revision = await transact(records, lambda uow: uow.records.active_rules_revision_id(), commit=True)
-    batch = _batch(revision, [build.id])
-    first = await transact(records, lambda uow: uow.records.activate(batch), commit=True)
+    batch = _batch(revision, build_ids)
+    await transact(records, lambda uow: uow.records.publish(batch), commit=True)
     async with sessions() as session:
-        before = await session.get(ComputationRun, first)
+        before = await session.scalar(select(RecordResult))
         assert before is not None
-        checked_at = before.last_checked_at
     with record_queries(sessions) as statements:
-        second = await transact(records, lambda uow: uow.records.activate(batch), commit=True)
-    assert second == first
-    assert not any(statement.startswith("INSERT INTO title_results") for statement in statements)
+        summary = await transact(records, lambda uow: uow.records.publish(batch), commit=True)
+    assert summary.changed == 0
+    assert not any(
+        statement.startswith(("INSERT INTO title_results", "UPDATE title_results SET run_id"))
+        for statement in statements
+    )
     async with sessions() as session:
-        run = await session.get(ComputationRun, first)
-        assert run is not None
-        assert run.last_checked_at is not None
-        assert checked_at is not None
-        assert run.last_checked_at >= checked_at
-        events = (
-            (await session.execute(select(DomainEvent).where(DomainEvent.event_type == "record_run.activated")))
-            .scalars()
-            .all()
-        )
-        assert len(events) == 1
+        after = await session.scalar(select(RecordResult))
+        assert after is not None
+    assert (after.id, after.run_id, after.computed_at) == (before.id, before.run_id, before.computed_at)
+    assert after.last_checked_at >= before.last_checked_at
+    assert len(await _events(sessions)) == 1

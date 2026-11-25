@@ -16,10 +16,9 @@ from squid.core.actors import ActingContext, AnonymousActor
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import OtherBuild
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.core.records.domain import BuildKind, RecordCriterion, ResolutionStatus, VersionScope
+from squid.core.records.domain import BuildKind, RecordCriterion, VersionScope
 from squid.core.records.models import (
     ComputationRun,
-    ComputationStatus,
     MaterializationSource,
     Record,
     RecordDefinition,
@@ -290,9 +289,7 @@ async def test_record_category_filters_match_without_holders_and_refresh_aliases
             ),
             (BuildKind.EXTENDER, ("extender:extender|Horizontal|4|t[Double]:r[]:p[]",)),
         ):
-            run = ComputationRun(
-                rules_revision_id=rules.id, build_kind=kind, status=ComputationStatus.COMPLETED, is_active=True
-            )
+            run = ComputationRun(rules_revision_id=rules.id, build_kind=kind, input_generation=1)
             session.add(run)
             await session.flush()
             for key in categories:
@@ -312,7 +309,9 @@ async def test_record_category_filters_match_without_holders_and_refresh_aliases
                 )
                 session.add(definition)
                 await session.flush()
-                result = RecordResult(run_id=run.id, definition_id=definition.id, status=ResolutionStatus.NO_CANDIDATE)
+                result = RecordResult(
+                    record_id=record.public_id, run_id=run.id, definition_id=definition.id, fingerprint=""
+                )
                 session.add(result)
                 await session.flush()
                 result_ids.append(f"result:{result.id}")

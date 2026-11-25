@@ -69,6 +69,7 @@ CONTEXT_FREE_OPERATIONS = {
         "door_range_candidates",
         "format_record_titles",
         "requested_category",
+        "scope_categories",
     },
     "SchematicService": {"render_recipe"},
     "SubmissionAttachmentIntake": {"max_file_bytes"},

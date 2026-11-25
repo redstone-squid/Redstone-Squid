@@ -45,7 +45,6 @@ from squid.core.records.application.door_categories import door_category_lookup
 from squid.core.records.application.models import CategoryIdentity
 from squid.core.records.domain import BuildKind
 from squid.core.records.models import (
-    ComputationRun,
     RecordDefinition,
     RecordHolder,
     RecordResult,
@@ -113,7 +112,6 @@ class RecordProjectionSource:
 
     result_id: int
     definition_id: int
-    status: str
     history_complete: bool
     gap_reasons: dict[str, object]
     criterion: str
@@ -521,9 +519,8 @@ class SearchProjectionLoader:
             await self._session.execute(
                 select(RecordResult, RecordDefinition)
                 .options(selectinload(RecordDefinition.record))
-                .join(ComputationRun, ComputationRun.id == RecordResult.run_id)
                 .join(RecordDefinition, RecordDefinition.id == RecordResult.definition_id)
-                .where(RecordResult.id == result_id, ComputationRun.is_active.is_(True))
+                .where(RecordResult.id == result_id)
             )
         ).one_or_none()
         if row is None:
@@ -550,7 +547,6 @@ class SearchProjectionLoader:
             RecordProjectionSource(
                 result_id=result.id,
                 definition_id=definition.id,
-                status=result.status,
                 history_complete=result.history_complete,
                 gap_reasons=result.gap_reasons,
                 criterion=definition.criterion,
@@ -732,8 +728,7 @@ class SearchProjectionWorker:
                                     )
                                     .select_from(RecordResult)
                                     .join(RecordHolder, RecordHolder.result_id == RecordResult.id)
-                                    .join(ComputationRun, ComputationRun.id == RecordResult.run_id)
-                                    .where(RecordHolder.build_id == int(source_key), ComputationRun.is_active.is_(True))
+                                    .where(RecordHolder.build_id == int(source_key))
                                     .order_by(RecordResult.id)
                                 )
                             if resource_kind == "metadata" and (key := parse_projection_key(resource_kind, source_key)):
@@ -819,7 +814,8 @@ def build_record_projection(
         title=source.title,
         subtitle=source.subtitle,
         description="\n".join(" ".join((holder.title, *holder.creators)) for holder in holders) or None,
-        status=source.status,
+        # Only live records have results, so every record document is current.
+        status="current",
         tags=tags,
         document_data={
             "result_id": source.result_id,

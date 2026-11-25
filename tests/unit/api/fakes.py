@@ -70,11 +70,11 @@ from squid.core.permissions.application import PermissionService, SubjectRecords
 from squid.core.permissions.application.epoch import PermissionEpochWatcher, WakeListener
 from squid.core.permissions.application.ports import PermissionSubject
 from squid.core.permissions.domain import Pattern
-from squid.core.records.application import PublicRecordQueryService, RecordService
+from squid.core.records.application import PublicRecordQueryService, RecordAdministrationService, RecordService
 from squid.core.records.application.models import PublicRecordDetail, PublishedRecordResult
 from squid.core.records.application.range_publication import RangePublicationService
 from squid.core.records.application.range_snapshots import RangePublication
-from squid.core.records.domain import VersionScope
+from squid.core.records.domain import BuildKind, VersionScope
 from squid.core.schematics.application import SchematicService
 from squid.core.schematics.application.attachments import PublicSchematicDownload, StoredSchematic
 from squid.core.schematics.application.commands import RenderRequest
@@ -539,6 +539,15 @@ class MockRecords(RecordService):
         return cast(Page[PublishedRecordResult], _EMPTY_PAGE)
 
 
+class MockRecordAdministration(RecordAdministrationService):
+    def __init__(self) -> None:
+        """Queue nothing."""
+
+    @override
+    async def request_backstop(self, *, kinds: Sequence[BuildKind], context: ActingContext) -> None:
+        return None
+
+
 class MockPublicRecords(PublicRecordQueryService):
     def __init__(self) -> None:
         """Publish no records."""
@@ -848,6 +857,7 @@ def build_services(
         votes=MockVotes(),
         vote_members=None,
         records=MockRecords(),
+        record_administration=MockRecordAdministration(),
         public_records=MockPublicRecords(),
         range_publication=range_publication or MockRangePublication(),
         submission_forms=MockSubmissionForms(),

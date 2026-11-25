@@ -72,6 +72,7 @@ async def test_ordinary_publication_uses_saved_configuration_and_survives_source
         first = next(r for r in listing if r.criterion is RecordCriterion.FIRST)
         assert smallest.holder_build_ids == (family_id,)
         assert first.holder_build_ids == (fixed_id,)
+        assert smallest.result_id is not None
         detail = await uow.records.get_published_record(smallest.result_id)
         assert detail is not None
         assert detail.door_evidence is not None
@@ -121,20 +122,24 @@ async def test_ordinary_publication_uses_saved_configuration_and_survives_source
         replacement = next(r for r in listing if r.criterion is RecordCriterion.SMALLEST)
         assert replacement.record_id == smallest.record_id
         assert replacement.holder_build_ids == (fixed_id,)
-        assert await uow.records.get_published_record(smallest.result_id) is None
+        # The result is updated in place, so it keeps its ID.
+        assert replacement.result_id == smallest.result_id
     # Explicitly requesting a large size creates only that category, using the new source facts.
     service = RecordService(computation, permissions=PermissionService(uow_factory=factory), uow_factory=factory)
     await service.lookup_or_materialize(
         RecordLookupRequest(kind=BuildKind.DOOR, base_key="door|9999x3|t[]|Door", restriction_ids=frozenset()),
         context=ActingContext.direct(UserActor(account_id=1, is_bot_owner=True)),
     )
+    await computation.process_queue(context=ActingContext.worker("test-worker"))
     async with factory() as uow:
         listing = await uow.records.list_published_records(
             offset=0, after_id=None, before_id=None, descending=False, limit=20
         )
-        assert len(listing) == 10
+        # Only the family competes at 9999x3, and it has no completion date, so "first" has no result.
+        assert len(listing) == 9
         large = next(r for r in listing if r.criterion is RecordCriterion.SMALLEST and "9999x3" in r.title)
         assert large.holder_build_ids == (family_id,)
+        assert large.result_id is not None
         detail = await uow.records.get_published_record(large.result_id)
         assert detail is not None
         assert detail.door_evidence is not None

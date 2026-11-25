@@ -13,7 +13,7 @@ from squid.core.builds.domain.expansion import DoorExpansion, ExpansionBranch, E
 from squid.core.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery, analyze_door_widths
 from squid.core.records.application.live import DoorRecordLookup, evaluate_door_record
 from squid.core.records.application.models import CandidateBuild
-from squid.core.records.domain import BuildKind, Candidate, ResolutionStatus
+from squid.core.records.domain import BuildKind, Candidate
 from squid.core.records.domain.regions import RegionAnalysisStatus, RegionLimits
 
 NOW = datetime(2026, 1, 1, tzinfo=UTC)
@@ -161,7 +161,7 @@ def test_claimed_records_and_sample_completion_are_not_eligibility() -> None:
     result = analyze_door_widths(sources, height=3)
     assert_points(sources, result)
     tied = next(r for r in result.analysis.regions if r.domain.contains(6))
-    assert tied.resolution.status is ResolutionStatus.RESOLVED
+    assert tied.resolution
     assert [gap.field for gap in tied.resolution.gaps] == ["completion_at"]
 
 

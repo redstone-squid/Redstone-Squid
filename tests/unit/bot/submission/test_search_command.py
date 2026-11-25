@@ -252,23 +252,6 @@ async def test_a_plain_target_leaves_the_query_untouched() -> None:
     assert search.requests[0].query == "a OR b"
 
 
-@pytest.mark.parametrize(
-    "query",
-    [
-        "status:no_candidate",
-        "status:resolved OR status:no_candidate",
-        "NOT status:resolved",
-        "NOT (status:resolved OR kind:door)",
-    ],
-)
-async def test_explicit_record_status_is_preserved(query: str) -> None:
-    search = RecordingSearch()
-    screen = await _run(_cog(search), query=query, scope=SearchTarget.records)
-    assert isinstance(screen, BuildBrowseScreen)
-    assert screen._query.text == query
-    assert search.requests[0].query == query
-
-
 @pytest.mark.parametrize("query", ["", "   ", "door OR kind:extender"])
 async def test_record_search_does_not_add_a_status_filter(query: str) -> None:
     search = RecordingSearch()

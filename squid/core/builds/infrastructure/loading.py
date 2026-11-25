@@ -24,7 +24,6 @@ from squid.core.messages.domain import MessageRef
 from squid.core.messages.models import Message
 from squid.core.records.domain.build_records import BuildRecord, BuildRecords
 from squid.core.records.models import (
-    ComputationRun,
     Record,
     RecordDefinition,
     RecordHolder,
@@ -77,14 +76,16 @@ class BuildLoader:
 
     @staticmethod
     async def records(session: AsyncSession, build_ids: Sequence[int]) -> dict[int, BuildRecords]:
-        """Collect current holders and reconstructed intervals from active publications."""
+        """Collect the records each build holds now and the ones its holder history names.
+
+        A retired record stays among a former holder's records, marked retired.
+        """
         if not build_ids:
             return {}
         current = (
             select(
                 RecordHolder.build_id,
-                RecordResult.run_id,
-                RecordResult.definition_id,
+                RecordResult.record_id,
                 RecordHolder.completion_at.label("since"),
                 true().label("held"),
             )
@@ -93,39 +94,50 @@ class BuildLoader:
         )
         intervals = select(
             RecordHolderHistory.build_id,
-            RecordHolderHistory.run_id,
-            RecordHolderHistory.definition_id,
+            RecordHolderHistory.record_id,
             RecordHolderHistory.held_from,
             false(),
         ).where(RecordHolderHistory.build_id.in_(build_ids))
         holdings = current.union_all(intervals).subquery()
-        build_id, run_id, definition_id, since, held = holdings.c
+        build_id, record_id, since, held = holdings.c
+        # A build can hold one record under several definitions; name it by the newest.
+        title = (
+            select(RecordDefinition.title)
+            .where(RecordDefinition.record_id == Record.public_id)
+            .order_by(RecordDefinition.id.desc())
+            .limit(1)
+            .correlate(Record)
+            .scalar_subquery()
+        )
         rows = await session.execute(
             select(
                 build_id,
                 Record.public_id,
-                RecordDefinition.title,
+                title,
                 Record.criterion,
                 Record.version_scope,
-                RecordResult.status,
+                Record.retired_at.is_not(None),
                 func.max(since),
                 func.bool_or(held),
             )
             .select_from(holdings)
-            .join(ComputationRun, ComputationRun.id == run_id)
-            .join(RecordDefinition, RecordDefinition.id == definition_id)
-            .join(Record, Record.public_id == RecordDefinition.record_id)
-            .join(RecordResult, and_(RecordResult.run_id == run_id, RecordResult.definition_id == definition_id))
-            .where(ComputationRun.is_active.is_(True))
-            .group_by(build_id, Record.public_id, RecordDefinition.title, RecordResult.status)
-            .order_by(RecordDefinition.title, Record.public_id)
+            .join(Record, Record.public_id == record_id)
+            .group_by(build_id, Record.public_id)
+            .order_by(title, Record.public_id)
         )
         held_records: dict[int, list[BuildRecord]] = defaultdict(list)
         former_records: dict[int, list[BuildRecord]] = defaultdict(list)
-        for identifier, record_id, title, criterion, scope, status, start, is_held in rows:
+        for identifier, public_id, record_title, criterion, scope, retired, start, is_held in rows:
             target = held_records if is_held else former_records
             target[identifier].append(
-                BuildRecord(record_id, title, criterion, scope, status, start.to_stdlib() if start else None)
+                BuildRecord(
+                    public_id,
+                    record_title,
+                    criterion,
+                    scope,
+                    start.to_stdlib() if start else None,
+                    retired=bool(retired),
+                )
             )
         return {
             identifier: BuildRecords(tuple(held_records[identifier]), tuple(former_records[identifier]))

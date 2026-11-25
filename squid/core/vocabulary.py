@@ -9,7 +9,7 @@ from collections.abc import Mapping
 
 from squid.core.builds.domain.models import BuildStatus
 from squid.core.i18n import tr
-from squid.core.records.domain.models import BuildKind, RecordCriterion, RecordFact, ResolutionStatus, VersionScope
+from squid.core.records.domain.models import BuildKind, RecordCriterion, RecordFact, VersionScope
 from squid_i18n import Text
 
 RECORD_CRITERIA: Mapping[RecordCriterion, Text] = {
@@ -30,11 +30,6 @@ BUILD_KINDS: Mapping[BuildKind, Text] = {
 VERSION_SCOPES: Mapping[VersionScope, Text] = {
     VersionScope.ALL_TIME: tr(t"vocabulary-version-scope-all-time = All time"),
     VersionScope.UP_TO_DATE: tr(t"vocabulary-version-scope-up-to-date = Current version"),
-}
-
-RESOLUTION_STATUSES: Mapping[ResolutionStatus, Text] = {
-    ResolutionStatus.RESOLVED: tr(t"vocabulary-resolution-resolved = Resolved"),
-    ResolutionStatus.NO_CANDIDATE: tr(t"vocabulary-resolution-no-candidate = No eligible builds"),
 }
 
 RECORD_FACTS: Mapping[RecordFact, Text] = {
@@ -63,7 +58,6 @@ VOCABULARY: Mapping[str, Mapping[str, Text]] = {
     "record_criterion": {criterion.value: label for criterion, label in RECORD_CRITERIA.items()},
     "build_kind": {kind.value: label for kind, label in BUILD_KINDS.items()},
     "version_scope": {scope.value: label for scope, label in VERSION_SCOPES.items()},
-    "resolution_status": {status.value: label for status, label in RESOLUTION_STATUSES.items()},
     "record_fact": {fact.value: label for fact, label in RECORD_FACTS.items()},
     "build_status": {status.name.casefold(): label for status, label in BUILD_STATUSES.items()},
 }

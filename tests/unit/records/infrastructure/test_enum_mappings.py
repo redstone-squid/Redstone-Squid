@@ -6,16 +6,15 @@ from sqlalchemy import CheckConstraint, Table
 from sqlalchemy.engine import default
 
 from squid.core.persistence.types import StrEnumText
-from squid.core.records.domain import BuildKind, RecordCriterion, ResolutionStatus, VersionScope
+from squid.core.records.domain import BuildKind, RecordCriterion, VersionScope
 from squid.core.records.models import (
     ComputationRun,
-    ComputationStatus,
     MaterializationSource,
+    RecomputeTarget,
     Record,
     RecordDefinition,
     RecordDefinitionTag,
     RecordRecomputeQueueItem,
-    RecordResult,
     RecordTagRole,
 )
 
@@ -26,9 +25,8 @@ _MAPPINGS = (
     (Record.__table__, "version_scope", VersionScope),
     (RecordDefinitionTag.__table__, "tag_role", RecordTagRole),
     (ComputationRun.__table__, "build_kind", BuildKind),
-    (ComputationRun.__table__, "status", ComputationStatus),
-    (RecordResult.__table__, "status", ResolutionStatus),
     (RecordRecomputeQueueItem.__table__, "build_kind", BuildKind),
+    (RecordRecomputeQueueItem.__table__, "target", RecomputeTarget),
 )
 
 _CHECKS = (
@@ -42,9 +40,8 @@ _CHECKS = (
     (Record.__table__, "record_titles_version_scope_check", VersionScope),
     # title_definition_tags_kind_check admits only restrictions; candidate tags use the other kinds.
     (ComputationRun.__table__, "record_computation_runs_build_kind_check", BuildKind),
-    (ComputationRun.__table__, "record_computation_runs_status_check", ComputationStatus),
-    (RecordResult.__table__, "title_results_status_check", ResolutionStatus),
     (RecordRecomputeQueueItem.__table__, "record_recompute_queue_build_kind_check", BuildKind),
+    (RecordRecomputeQueueItem.__table__, "record_recompute_queue_target_check", RecomputeTarget),
 )
 
 

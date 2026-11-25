@@ -4,7 +4,7 @@ from decimal import Decimal
 
 import pytest
 
-from squid.core.records.domain import RecordCriterion, ResolutionStatus
+from squid.core.records.domain import RecordCriterion
 from squid.core.search.application import (
     DEFAULT_FIELD_REGISTRY,
     FieldDefinition,
@@ -23,7 +23,6 @@ from squid.core.search.domain import (
     NotExpression,
     PresenceExpression,
     RangeValue,
-    RecordQuery,
     SearchScope,
     TextExpression,
 )
@@ -201,14 +200,10 @@ def test_record_prefix_requires_a_registered_base_title_field() -> None:
 
 def test_catalogue_scopes_use_distinct_queries_and_enum_values() -> None:
     builds = SearchQueryParser(scope=SearchScope.BUILDS).parse("status:CONFIRMED")
-    records = SearchQueryParser(scope=SearchScope.RECORDS).parse("status:resolved")
     shorthand = SearchQueryParser(scope=SearchScope.RECORDS).parse("Fastest")
     assert isinstance(builds, BuildQuery)
     assert isinstance(builds.expression, FieldExpression)
     assert builds.expression.value is BuildSearchStatus.APPROVED
-    assert isinstance(records, RecordQuery)
-    assert isinstance(records.expression, FieldExpression)
-    assert records.expression.value is ResolutionStatus.RESOLVED
     assert isinstance(shorthand.expression, FieldExpression)
     assert shorthand.expression.value is RecordCriterion.FASTEST
     assert SearchQueryParser(scope=SearchScope.BUILDS).parse("Fastest").expression == TextExpression("Fastest")
@@ -220,7 +215,7 @@ def test_catalogue_scopes_use_distinct_queries_and_enum_values() -> None:
         (SearchScope.BUILDS, "criterion:first", "cannot be used"),
         (SearchScope.BUILDS, "status:resolved", "expects one of"),
         (SearchScope.RECORDS, "door OR NOT width:5", "cannot be used"),
-        (SearchScope.RECORDS, "status:approved", "expects one of"),
+        (SearchScope.RECORDS, "status:approved", "cannot be used"),
         (SearchScope.RECORDS, "kind:other", "expects one of"),
     ],
 )

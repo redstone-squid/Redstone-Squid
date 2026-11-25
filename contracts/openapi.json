@@ -9995,7 +9995,7 @@
           "records"
         ],
         "summary": "GetRecord",
-        "description": "Return the latest published result for a record.",
+        "description": "Return a record's current result, or its retired state with its holder history.\n\nA record retires when no build competes for it, and keeps its ID and history\nin case a competitor brings it back.",
         "operationId": "records_get",
         "parameters": [
           {
@@ -11126,6 +11126,855 @@
         "x-squid-cli": {
           "classification": "transport-only"
         }
+      }
+    },
+    "/v1/records/{record_id}/recompute": {
+      "post": {
+        "tags": [
+          "records"
+        ],
+        "summary": "RecomputeRecord",
+        "description": "Queue every criterion of the record's category for recomputation.",
+        "operationId": "records_recompute",
+        "parameters": [
+          {
+            "name": "record_id",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "deprecated": false
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1,
+              "maxLength": 255,
+              "pattern": "^[\\x21-\\x7e]+$"
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Request accepted, processing continues off-line",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "ApiCredential": []
+          },
+          {
+            "WebSession": [],
+            "CsrfToken": []
+          },
+          {
+            "DeviceSession": []
+          }
+        ],
+        "x-squid-cli": {
+          "classification": "transport-only"
+        },
+        "x-required-api-scopes": [
+          "record.entry.inspect"
+        ]
+      }
+    },
+    "/v1/records/{record_id}/inspection": {
+      "get": {
+        "tags": [
+          "records"
+        ],
+        "summary": "InspectRecord",
+        "description": "Compute the record from current builds, without publishing, and compare it with its published result.",
+        "operationId": "records_inspect",
+        "parameters": [
+          {
+            "name": "record_id",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "deprecated": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "required": false,
+                "deprecated": false
+              },
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecordInspection"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "ApiCredential": []
+          },
+          {
+            "WebSession": []
+          },
+          {
+            "DeviceSession": []
+          }
+        ],
+        "x-squid-cli": {
+          "classification": "transport-only"
+        },
+        "x-required-api-scopes": [
+          "record.entry.inspect"
+        ]
+      }
+    },
+    "/v1/records/recomputes": {
+      "post": {
+        "tags": [
+          "records"
+        ],
+        "summary": "RequestBackstop",
+        "description": "Queue a full recompute that reports each difference no pending change explains as drift.",
+        "operationId": "records_request_backstop",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecomputeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Request accepted, processing continues off-line",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "ApiCredential": []
+          },
+          {
+            "WebSession": [],
+            "CsrfToken": []
+          },
+          {
+            "DeviceSession": []
+          }
+        ],
+        "x-squid-cli": {
+          "classification": "transport-only"
+        },
+        "x-required-api-scopes": [
+          "record.entry.rebuild"
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1,
+              "maxLength": 255,
+              "pattern": "^[\\x21-\\x7e]+$"
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+          }
+        ]
+      }
+    },
+    "/v1/records/recompute-queue": {
+      "get": {
+        "tags": [
+          "records"
+        ],
+        "summary": "RecomputeQueue",
+        "description": "List pending and failed recompute requests, oldest first, with each one's last error.",
+        "operationId": "records_recompute_queue",
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "required": false,
+                "deprecated": false
+              },
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RecomputeItem"
+                  },
+                  "type": "array"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "ApiCredential": []
+          },
+          {
+            "WebSession": []
+          },
+          {
+            "DeviceSession": []
+          }
+        ],
+        "x-squid-cli": {
+          "classification": "transport-only"
+        },
+        "x-required-api-scopes": [
+          "record.entry.inspect"
+        ]
+      }
+    },
+    "/v1/records/drift": {
+      "get": {
+        "tags": [
+          "records"
+        ],
+        "summary": "ListDrift",
+        "description": "List records the backstop changed although no queued change explained it, newest first.\n\nEach entry means the affected-set calculation missed a case.",
+        "operationId": "records_drift",
+        "parameters": [
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "maximum": 50.0,
+              "minimum": 1.0,
+              "description": "Maximum number of items to return.",
+              "default": 20
+            },
+            "description": "Maximum number of items to return.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maximum": 10000,
+              "description": "Number of items to skip. Excludes after_id and before_id."
+            },
+            "description": "Number of items to skip. Excludes after_id and before_id.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "after_id",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "minimum": 1,
+              "description": "Return the items after this identifier in display order. Excludes offset."
+            },
+            "description": "Return the items after this identifier in display order. Excludes offset.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "before_id",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "minimum": 1,
+              "description": "Return the items before this identifier in display order. Excludes offset."
+            },
+            "description": "Return the items before this identifier in display order. Excludes offset.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "required": false,
+                "deprecated": false
+              },
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_squid.core.records.application.models.RecordDrift_"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "ApiCredential": []
+          },
+          {
+            "WebSession": []
+          },
+          {
+            "DeviceSession": []
+          }
+        ],
+        "x-squid-cli": {
+          "classification": "transport-only"
+        },
+        "x-required-api-scopes": [
+          "record.entry.inspect"
+        ]
       }
     },
     "/v1/builds/{build_id}/schematics": {
@@ -20498,9 +21347,6 @@
           "version_scope": {
             "$ref": "#/components/schemas/VersionScope"
           },
-          "status": {
-            "$ref": "#/components/schemas/ResolutionStatus"
-          },
           "since": {
             "oneOf": [
               {
@@ -20511,6 +21357,10 @@
                 "type": "null"
               }
             ]
+          },
+          "retired": {
+            "type": "boolean",
+            "default": false
           }
         },
         "type": "object",
@@ -20518,7 +21368,6 @@
           "criterion",
           "record_id",
           "since",
-          "status",
           "title",
           "version_scope"
         ],
@@ -23807,6 +24656,38 @@
         ],
         "title": "HistoryChange"
       },
+      "HolderHistoryEntry": {
+        "properties": {
+          "build_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "held_from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "held_until": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "build_ids",
+          "held_from",
+          "held_until"
+        ],
+        "title": "HolderHistoryEntry"
+      },
       "IdentityDetail": {
         "properties": {
           "id": {
@@ -24660,6 +25541,7 @@
           "build_denied",
           "creator_build_confirmed",
           "record_gained",
+          "record_retired",
           "staff_build_submitted"
         ],
         "title": "NotificationKind",
@@ -25325,6 +26207,47 @@
           "total"
         ],
         "title": "Page[PublicBuildRevision]"
+      },
+      "Page_squid.core.records.application.models.RecordDrift_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RecordDrift"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "next": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prev": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "next",
+          "prev",
+          "total"
+        ],
+        "title": "Page[RecordDrift]"
       },
       "PaperChallengeCreateRequest": {
         "properties": {
@@ -26127,7 +27050,14 @@
       "PublicRecordDetail": {
         "properties": {
           "result_id": {
-            "type": "integer"
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "definition_id": {
             "type": "integer"
@@ -26157,9 +27087,6 @@
           },
           "version_scope": {
             "$ref": "#/components/schemas/VersionScope"
-          },
-          "status": {
-            "$ref": "#/components/schemas/ResolutionStatus"
           },
           "holder_build_ids": {
             "items": {
@@ -26220,6 +27147,17 @@
               }
             ]
           },
+          "retired_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "holder_builds": {
             "items": {
               "$ref": "#/components/schemas/PublicBuildSummary"
@@ -26236,6 +27174,13 @@
           "contender_builds": {
             "items": {
               "$ref": "#/components/schemas/PublicBuildSummary"
+            },
+            "type": "array",
+            "default": []
+          },
+          "history": {
+            "items": {
+              "$ref": "#/components/schemas/HolderHistoryEntry"
             },
             "type": "array",
             "default": []
@@ -26261,7 +27206,6 @@
           "holder_builds",
           "record_id",
           "result_id",
-          "status",
           "subtitle",
           "title",
           "version_scope"
@@ -26370,7 +27314,14 @@
       "PublishedRecordResult": {
         "properties": {
           "result_id": {
-            "type": "integer"
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "definition_id": {
             "type": "integer"
@@ -26400,9 +27351,6 @@
           },
           "version_scope": {
             "$ref": "#/components/schemas/VersionScope"
-          },
-          "status": {
-            "$ref": "#/components/schemas/ResolutionStatus"
           },
           "holder_build_ids": {
             "items": {
@@ -26456,7 +27404,6 @@
           "holder_build_ids",
           "record_id",
           "result_id",
-          "status",
           "subtitle",
           "title",
           "version_scope"
@@ -26996,6 +27943,108 @@
         ],
         "title": "RecalculationProposalResponse"
       },
+      "RecomputeItem": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/BuildKind"
+          },
+          "target": {
+            "$ref": "#/components/schemas/RecomputeTarget"
+          },
+          "build_id": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "record_id": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "enqueued_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "attempts": {
+            "type": "integer"
+          },
+          "last_error": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "claimed": {
+            "type": "boolean"
+          }
+        },
+        "type": "object",
+        "required": [
+          "attempts",
+          "build_id",
+          "claimed",
+          "enqueued_at",
+          "id",
+          "kind",
+          "last_error",
+          "reasons",
+          "record_id",
+          "target"
+        ],
+        "title": "RecomputeItem"
+      },
+      "RecomputeRequest": {
+        "properties": {
+          "kinds": {
+            "items": {
+              "$ref": "#/components/schemas/BuildKind"
+            },
+            "type": "array",
+            "default": [
+              "door",
+              "extender"
+            ]
+          }
+        },
+        "type": "object",
+        "required": [],
+        "title": "RecomputeRequest"
+      },
+      "RecomputeTarget": {
+        "type": "string",
+        "enum": [
+          "kind",
+          "backstop",
+          "build",
+          "record"
+        ],
+        "title": "RecomputeTarget",
+        "description": "What a queued recompute covers.\n\n`kind` recomputes a whole build kind after a rules, version pin or tag change,\nwhere differences are expected. `backstop` does the same but reports each\ndifference that no pending change explains as drift.\n"
+      },
       "RecordCriterion": {
         "type": "string",
         "enum": [
@@ -27008,6 +28057,46 @@
         "title": "RecordCriterion",
         "description": "A metric by which records are classified.",
         "default": "smallest"
+      },
+      "RecordDrift": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "record_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "run_id": {
+            "type": "integer"
+          },
+          "detected_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "published": {
+            "additionalProperties": {},
+            "type": "object"
+          },
+          "computed": {
+            "additionalProperties": {},
+            "type": "object"
+          }
+        },
+        "type": "object",
+        "required": [
+          "computed",
+          "detected_at",
+          "id",
+          "published",
+          "record_id",
+          "run_id",
+          "title"
+        ],
+        "title": "RecordDrift"
       },
       "RecordFact": {
         "type": "string",
@@ -27077,6 +28166,65 @@
         "required": [],
         "title": "RecordFilterInput"
       },
+      "RecordInspection": {
+        "properties": {
+          "record_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "published_holder_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "computed_holder_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "published_gaps": {
+            "items": {
+              "$ref": "#/components/schemas/CandidateGap"
+            },
+            "type": "array"
+          },
+          "computed_gaps": {
+            "items": {
+              "$ref": "#/components/schemas/CandidateGap"
+            },
+            "type": "array"
+          },
+          "members_gained": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "members_lost": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "required": [
+          "computed_gaps",
+          "computed_holder_ids",
+          "members_gained",
+          "members_lost",
+          "published_gaps",
+          "published_holder_ids",
+          "record_id",
+          "title"
+        ],
+        "title": "RecordInspection"
+      },
       "RecordOperator": {
         "type": "string",
         "enum": [
@@ -27090,9 +28238,6 @@
       },
       "RecordResolution": {
         "properties": {
-          "status": {
-            "$ref": "#/components/schemas/ResolutionStatus"
-          },
           "holder_ids": {
             "items": {
               "type": "integer"
@@ -27116,9 +28261,7 @@
           }
         },
         "type": "object",
-        "required": [
-          "status"
-        ],
+        "required": [],
         "title": "RecordResolution"
       },
       "RecordSearchEntry": {
@@ -27366,15 +28509,6 @@
         ],
         "title": "RequiredValueParams",
         "type": "object"
-      },
-      "ResolutionStatus": {
-        "type": "string",
-        "enum": [
-          "resolved",
-          "no_candidate"
-        ],
-        "title": "ResolutionStatus",
-        "description": "Whether any build competes in a category."
       },
       "RuleIssue": {
         "additionalProperties": false,

@@ -40,7 +40,6 @@ class RecordSource:
         page = await self._records.list_page(
             selector=PageSelector(offset=position.offset),
             page_size=fetch_size,
-            resolved_only=True,
             version_scope=self._version_scope,
             context=ActingContext.current(),
         )

@@ -9,7 +9,7 @@ from enum import StrEnum
 
 from squid.core.errors import InvalidStateError, ValidationError
 from squid.core.i18n import tr
-from squid.core.records.domain.models import BuildKind, RecordCriterion, ResolutionStatus, VersionScope
+from squid.core.records.domain.models import BuildKind, RecordCriterion, VersionScope
 from squid.core.search.domain.fields import FieldDefinition, FieldType
 from squid.core.search.domain.query import ScalarValue
 from squid.core.search.domain.scope import CATALOGUE_SCOPES, SearchScope
@@ -171,8 +171,8 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
         FieldDefinition(
             "status",
             FieldType.TEXT,
-            scopes=CATALOGUE_SCOPES,
-            scoped_enums=((SearchScope.BUILDS, BuildSearchStatus), (SearchScope.RECORDS, ResolutionStatus)),
+            scopes=frozenset({SearchScope.BUILDS}),
+            scoped_enums=((SearchScope.BUILDS, BuildSearchStatus),),
         ),
         FieldDefinition(
             "kind",

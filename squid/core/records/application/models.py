@@ -19,11 +19,10 @@ from squid.core.records.domain import (
     RecordCriterion,
     RecordFact,
     RecordResolution,
-    ResolutionStatus,
     VersionScope,
 )
 from squid.core.records.domain.door_evidence import DoorRecordEvidence
-from squid.core.records.domain.models import MaterializationSource, RecordTagRole
+from squid.core.records.domain.models import MaterializationSource, RecomputeTarget, RecordTagRole
 
 
 @dataclass(frozen=True, slots=True)
@@ -154,14 +153,26 @@ class HolderHistoryEntry:
     held_until: datetime | None
 
 
+type ScopedCategory = tuple[int | None, str]
+"""A category key within one version scope; a null version means all versions."""
+
+
 @dataclass(frozen=True, slots=True)
 class ComputationBatch:
-    """A replacement run for one build kind; a null version includes all versions."""
+    """The recomputed records of some categories of one build kind.
+
+    `categories` is the affected set. Records in it that `records` leaves out have
+    no competitors and retire. `expected` is set by a backstop: the categories
+    pending changes account for, so a change outside them is drift.
+    """
 
     rules_revision_id: int
     kind: BuildKind
-    version_id: int | None
+    input_generation: int
+    categories: frozenset[ScopedCategory]
     records: tuple[ComputedRecordResult, ...]
+    expected: frozenset[ScopedCategory] | None = None
+    full: bool = False
 
 
 @dataclass(frozen=True, slots=True)
@@ -189,13 +200,15 @@ class RecordNameDiagnostic:
 
 @dataclass(frozen=True, slots=True)
 class PublishedRecordResult:
-    """One result belonging to the active computation run for its kind and version.
+    """A record's current result, or a retired record's last name.
 
-    `result_id` identifies this run's result. `definition_id` identifies a definition within
-    its rules revision, while `record_id` stays stable across rules revisions and runs.
+    `record_id` stays stable for the record's lifetime. `result_id` identifies the
+    current result and stays the same while it is updated; it is `None` once the
+    record retires, which happens when no build competes for it. `definition_id`
+    identifies the record's wording under one rules revision.
     """
 
-    result_id: int
+    result_id: int | None
     definition_id: int
     record_id: UUID
     title: str
@@ -203,7 +216,6 @@ class PublishedRecordResult:
     criterion: RecordCriterion
     build_kind: BuildKind
     version_scope: VersionScope
-    status: ResolutionStatus
     holder_build_ids: tuple[int, ...]
     computed_at: datetime
     tied_build_ids: tuple[int, ...] = field(default=(), kw_only=True)
@@ -212,6 +224,7 @@ class PublishedRecordResult:
     refresh_pending: bool = field(default=False, kw_only=True)
     version_id: int | None = field(default=None, kw_only=True)
     door_evidence: DoorRecordEvidence | None = field(default=None, kw_only=True)
+    retired_at: datetime | None = field(default=None, kw_only=True)
 
     @property
     def one_line_title(self) -> str:
@@ -226,17 +239,20 @@ class RecordViewer:
 
 @dataclass(frozen=True, slots=True)
 class PublicRecordDetail(PublishedRecordResult):
-    """One published result with the public builds it names.
+    """One record with the public builds it names.
 
     `holder_builds` and `tied_builds` follow their ID fields. `contender_builds` are
     the non-holders named by `gaps`: builds that could take the record once their
-    missing facts are known. Hidden tied builds and contenders are left out. The
-    REST API serializes this type as it is, so a new field changes the published contract.
+    missing facts are known. `history` lists past and current holder periods; a
+    retired record keeps it with its last period closed. Hidden builds are left
+    out. The REST API serializes this type as it is, so a new field changes the
+    published contract.
     """
 
     holder_builds: tuple[PublicBuildSummary, ...]
     tied_builds: tuple[PublicBuildSummary, ...] = ()
     contender_builds: tuple[PublicBuildSummary, ...] = ()
+    history: tuple[HolderHistoryEntry, ...] = ()
     viewer: RecordViewer | None = None
 
     @property
@@ -246,11 +262,17 @@ class PublicRecordDetail(PublishedRecordResult):
         return tuple(dict.fromkeys(gap.build_id for gap in self.gaps if gap.build_id not in holders))
 
     @classmethod
-    def with_builds(cls, result: PublishedRecordResult, builds: Mapping[int, PublicBuildSummary]) -> Self:
+    def with_builds(
+        cls,
+        result: PublishedRecordResult,
+        builds: Mapping[int, PublicBuildSummary],
+        history: tuple[HolderHistoryEntry, ...] = (),
+    ) -> Self:
         """Attach public summaries; every holder must be present in `builds`."""
         detail = cls(**{field.name: getattr(result, field.name) for field in fields(result)}, holder_builds=())
         return replace(
             detail,
+            history=history,
             holder_builds=tuple(builds[id] for id in result.holder_build_ids),
             tied_builds=tuple(builds[id] for id in result.tied_build_ids if id in builds),
             contender_builds=tuple(builds[id] for id in detail.contender_build_ids if id in builds),
@@ -259,13 +281,12 @@ class PublicRecordDetail(PublishedRecordResult):
 
 @dataclass(frozen=True, slots=True)
 class RecordLookupRequest:
-    """An exact category requested for persistent materialization."""
+    """An exact category to keep in every maintained version scope."""
 
     kind: BuildKind
     base_key: str
     restriction_ids: frozenset[int]
     restriction_values: tuple[tuple[int, str, str], ...] = ()
-    version_id: int | None = None
 
 
 def _render_scalar(value: Decimal | str | bool) -> str:
@@ -278,17 +299,103 @@ def _render_scalar(value: Decimal | str | bool) -> str:
 
 @dataclass(frozen=True, slots=True)
 class RebuildSummary:
-    """Counts produced by rebuilding all requested record scopes."""
+    """What one or more batches published.
 
-    run_ids: tuple[int, ...]
-    definitions: int
-    resolved: int
-    with_gaps: int
+    `records` counts the recomputed records that have holders, `changed` those
+    whose published result changed, and `retired` those left without competitors.
+    `drift` counts backstop differences that no pending change explained.
+    """
+
+    run_ids: tuple[int, ...] = ()
+    records: int = 0
+    changed: int = 0
+    retired: int = 0
+    with_gaps: int = 0
+    drift: int = 0
+
+    def __add__(self, other: RebuildSummary) -> RebuildSummary:
+        return RebuildSummary(
+            self.run_ids + other.run_ids,
+            self.records + other.records,
+            self.changed + other.changed,
+            self.retired + other.retired,
+            self.with_gaps + other.with_gaps,
+            self.drift + other.drift,
+        )
 
 
 @dataclass(frozen=True, slots=True)
 class QueueProcessSummary:
-    """The record scopes claimed and rebuilt from the durable queue."""
+    """The build kinds whose queued work was published."""
 
     kinds: tuple[BuildKind, ...]
     rebuild: RebuildSummary | None
+
+
+@dataclass(frozen=True, slots=True)
+class PriorPublication:
+    """What is published now, as far as working out an affected set needs.
+
+    `live` holds every category with a current result. `memberships` holds, for
+    each build the batch changes, the live categories it was a member of.
+    """
+
+    live: frozenset[ScopedCategory] = frozenset()
+    memberships: Mapping[int, frozenset[ScopedCategory]] = field(default_factory=dict)
+
+
+@dataclass(frozen=True, slots=True)
+class RecomputeItem:
+    """One queued request, as stored in `record_recompute_queue`."""
+
+    id: int
+    kind: BuildKind
+    target: RecomputeTarget
+    build_id: int | None
+    record_id: UUID | None
+    reasons: tuple[str, ...]
+    enqueued_at: datetime
+    attempts: int
+    last_error: str | None
+    claimed: bool
+
+
+@dataclass(frozen=True, slots=True)
+class RecordDrift:
+    """A backstop difference: a published record the affected sets missed."""
+
+    id: int
+    record_id: UUID
+    title: str
+    run_id: int
+    detected_at: datetime
+    published: Mapping[str, object]
+    computed: Mapping[str, object]
+
+
+@dataclass(frozen=True, slots=True)
+class RecordInspection:
+    """A fresh computation of one record compared with what is published.
+
+    `computed_*` comes from current builds and is not published. Members are the
+    builds in the record's category; `gained` and `lost` compare them with the
+    stored membership index. A computed record without holders would retire.
+    """
+
+    record_id: UUID
+    title: str
+    published_holder_ids: tuple[int, ...]
+    computed_holder_ids: tuple[int, ...]
+    published_gaps: tuple[CandidateGap, ...]
+    computed_gaps: tuple[CandidateGap, ...]
+    members_gained: tuple[int, ...]
+    members_lost: tuple[int, ...]
+
+    @property
+    def matches(self) -> bool:
+        return (
+            self.published_holder_ids == self.computed_holder_ids
+            and self.published_gaps == self.computed_gaps
+            and not self.members_gained
+            and not self.members_lost
+        )

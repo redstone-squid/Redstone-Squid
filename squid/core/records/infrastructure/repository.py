@@ -1,15 +1,15 @@
-"""PostgreSQL candidate queries and atomic record-run persistence."""
+"""PostgreSQL candidate queries and atomic per-record publication."""
 
 from collections import defaultdict
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from datetime import datetime
 from decimal import Decimal
-from itertools import pairwise, zip_longest
+from itertools import batched, pairwise, zip_longest
 from typing import cast
 from uuid import UUID
 
-from sqlalchemy import and_, case, func, or_, select, text, update
+from sqlalchemy import ColumnElement, and_, case, delete, exists, func, not_, or_, select, text, tuple_, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import defer, selectinload
@@ -17,7 +17,7 @@ from whenever import Instant
 
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import DoorBuild, ExtenderBuild
-from squid.core.errors import DataIntegrityError, ServiceUnavailableError
+from squid.core.errors import ServiceUnavailableError
 from squid.core.events.infrastructure.repository import publish_domain_event
 from squid.core.persistence.queue import ClaimedRowQueue, QueueSpec
 from squid.core.records.application.models import (
@@ -26,12 +26,17 @@ from squid.core.records.application.models import (
     CategoryIdentity,
     ComputationBatch,
     ComputedRecordResult,
+    HolderHistoryEntry,
+    PriorPublication,
     PublishedRecordResult,
+    RebuildSummary,
+    RecomputeItem,
+    RecordDrift,
     RecordGap,
     RecordNameDiagnostic,
+    ScopedCategory,
 )
-from squid.core.records.application.ports import RecomputeLease
-from squid.core.records.application.snapshots import RecordSnapshot
+from squid.core.records.application.ports import RecomputeLease, StoredRecord
 from squid.core.records.domain import (
     BuildKind,
     Candidate,
@@ -41,17 +46,16 @@ from squid.core.records.domain import (
     FormattedTitle,
     RecordCriterion,
     RecordFact,
-    ResolutionStatus,
     TimingVariant,
     VersionScope,
     reduce_timing_variants,
 )
 from squid.core.records.domain.door_evidence import LiveDoorConfiguration
-from squid.core.records.domain.events import RecordRunActivated
-from squid.core.records.infrastructure.fingerprint import publication_fingerprint
+from squid.core.records.domain.events import RecordChange, RecordChangeKind, RecordRunPublished
+from squid.core.records.domain.models import RecomputeTarget
+from squid.core.records.infrastructure.fingerprint import record_fingerprint
 from squid.core.records.models import (
     ComputationRun,
-    ComputationStatus,
     DoorTimingVariant,
     ExtenderTimingVariant,
     MaterializationSource,
@@ -61,6 +65,7 @@ from squid.core.records.models import (
     RecordHolder,
     RecordHolderHistory,
     RecordInputGeneration,
+    RecordMember,
     RecordRecomputeQueueItem,
     RecordResult,
     RecordSettings,
@@ -68,13 +73,19 @@ from squid.core.records.models import (
     RecordTiedBuild,
     RulesRevision,
 )
+from squid.core.records.models import RecordDrift as RecordDriftRow
 from squid.core.tags.infrastructure.loading import assignment_units
 from squid.core.tags.models import TagAssignment, TagDefinition, display_conversion_scale
-from squid_i18n import md_tr
 
 RULES_REVISION_DOCUMENT_HASH = "312af53ee50a0cb0cee37673a763a6072321039777451997acc23cb26a6ba9ac"
 CALCULATOR_VERSION = "8"
 FORMATTER_VERSION = "2"
+
+RECORD_KINDS = (BuildKind.DOOR, BuildKind.EXTENDER)
+"""The build kinds that have records."""
+
+_CATEGORY_FILTER_LIMIT = 1000
+"""The most categories or records one query names as bound parameters."""
 
 RECORD_RECOMPUTE_QUEUE_SPEC = QueueSpec(
     name="record_recomputation",
@@ -181,7 +192,7 @@ class PostgresRecordRepository:
         )
 
     async def active_rules_revision_id(self) -> int:
-        """Return the active rules revision, activating and queuing it when needed."""
+        """Return the active rules revision, activating it and queuing full recomputes when needed."""
         session = self._session()
         await _advisory_lock(session, "record-rules-revision-activation")
         active_id = (
@@ -221,35 +232,16 @@ class PostgresRecordRepository:
             .where(RulesRevision.id != rules_revision.id, RulesRevision.activated_at.is_not(None))
             .values(activated_at=None)
         )
-        for kind in (BuildKind.DOOR, BuildKind.EXTENDER):
-            await session.execute(
-                insert(RecordRecomputeQueueItem)
-                .values(
-                    scope_key=kind.value,
-                    build_kind=kind,
-                    reasons=["rules_revision_activation"],
-                )
-                .on_conflict_do_update(
-                    index_elements=[RecordRecomputeQueueItem.scope_key],
-                    set_={
-                        "reasons": ["rules_revision_activation"],
-                        "enqueued_at": func.now(),
-                        "available_at": func.now(),
-                        "attempts": 0,
-                        "claimed_at": None,
-                        "claim_token": None,
-                        "last_error": None,
-                    },
-                )
-            )
+        for kind in RECORD_KINDS:
+            await _enqueue(session, kind, RecomputeTarget.KIND, "rules_revision_activation")
         return rules_revision.id
 
     async def active_current_version_id(self) -> int | None:
-        """Read the shared pin; unrelated fixed-version publications never change it."""
+        """Read the shared pin."""
         return await self._session().scalar(select(RecordSettings.current_version_id).where(RecordSettings.id == 1))
 
     async def set_current_version(self, version_id: int | None) -> None:
-        """Change the shared pin and invalidate both kinds in the caller's transaction."""
+        """Change the shared pin and queue full recomputes of both kinds in the caller's transaction."""
         session = self._session()
         changed = await session.scalar(
             update(RecordSettings)
@@ -259,29 +251,8 @@ class PostgresRecordRepository:
         )
         if changed is None:
             return
-        for kind in (BuildKind.DOOR, BuildKind.EXTENDER):
-            await session.execute(
-                insert(RecordRecomputeQueueItem)
-                .values(scope_key=kind.value, build_kind=kind, reasons=["current_version_changed"])
-                .on_conflict_do_update(
-                    index_elements=[RecordRecomputeQueueItem.scope_key],
-                    set_={
-                        "reasons": ["current_version_changed"],
-                        "enqueued_at": func.now(),
-                        "available_at": func.now(),
-                        "claimed_at": None,
-                        "claim_token": None,
-                    },
-                )
-            )
-
-    async def active_publication_versions(self, kind: BuildKind) -> Sequence[int]:
-        versions = await self._session().scalars(
-            select(ComputationRun.version_id)
-            .where(ComputationRun.build_kind == kind, ComputationRun.is_active.is_(True))
-            .order_by(ComputationRun.version_id)
-        )
-        return tuple(version for version in versions if version is not None)
+        for kind in RECORD_KINDS:
+            await _enqueue(session, kind, RecomputeTarget.KIND, "current_version_changed")
 
     async def input_generation(self, kind: BuildKind) -> int:
         return (
@@ -290,187 +261,307 @@ class PostgresRecordRepository:
             )
         ).scalar_one()
 
-    async def activate_snapshot(self, snapshot: RecordSnapshot, batch: ComputationBatch) -> int:
-        """Publish only if no newer input generation has already been checked.
+    async def prior_publication(self, kind: BuildKind, build_ids: frozenset[int]) -> PriorPublication:
+        """Read the kind's live categories and the live categories `build_ids` belong to."""
+        session = self._session()
+        live = (
+            await session.execute(
+                select(Record.version_id, Record.category_key)
+                .join(RecordResult, RecordResult.record_id == Record.public_id)
+                .where(Record.build_kind == kind)
+                .distinct()
+            )
+        ).all()
+        memberships: dict[int, set[ScopedCategory]] = defaultdict(set)
+        if build_ids:
+            rows = await session.execute(
+                select(RecordMember.build_id, Record.version_id, Record.category_key)
+                .join(Record, Record.public_id == RecordMember.record_id)
+                .where(Record.build_kind == kind, RecordMember.build_id.in_(build_ids))
+                .distinct()
+            )
+            for build_id, version_id, key in rows:
+                memberships[build_id].add((version_id, key))
+        return PriorPublication(
+            live=frozenset((version_id, key) for version_id, key in live),
+            memberships={build_id: frozenset(categories) for build_id, categories in memberships.items()},
+        )
 
-        Source edits during arithmetic are allowed. Their queue token remains
-        pending, while the generation check prevents a late older computation
-        from replacing a newer publication. The caller commits acknowledgement
-        in this same transaction.
+    async def pending_builds(self, kind: BuildKind) -> frozenset[int]:
+        builds = await self._session().scalars(
+            select(RecordRecomputeQueueItem.build_id).where(
+                RecordRecomputeQueueItem.build_kind == kind, RecordRecomputeQueueItem.build_id.is_not(None)
+            )
+        )
+        return frozenset(build_id for build_id in builds if build_id is not None)
+
+    async def record_categories(self, record_ids: frozenset[UUID]) -> frozenset[ScopedCategory]:
+        if not record_ids:
+            return frozenset()
+        rows = await self._session().execute(
+            select(Record.version_id, Record.category_key).where(Record.public_id.in_(record_ids))
+        )
+        return frozenset((version_id, key) for version_id, key in rows)
+
+    async def publish(self, batch: ComputationBatch) -> RebuildSummary:
+        """Publish a batch's affected categories in the caller's transaction.
+
+        Each record in `batch.categories` ends up with the computed result, or
+        retires when the batch computed none for it. A record already published
+        from a newer input generation is left alone, so a slow batch cannot
+        undo a faster, newer one. Unchanged results only record the check.
+        Changes of holders and liveness become one `RecordRunPublished` event.
         """
         session = self._session()
         await session.execute(
             select(func.pg_advisory_xact_lock_shared(func.hashtextextended("record-rules-revision-activation", 0)))
         )
-        if (snapshot.kind, snapshot.version_id, snapshot.rules_revision_id) != (
-            batch.kind,
-            batch.version_id,
-            batch.rules_revision_id,
-        ):
-            msg = "Record output does not match its input snapshot scope."
-            raise DataIntegrityError(msg)
         active_revision = await session.scalar(
             select(RulesRevision.id).where(
-                RulesRevision.id == snapshot.rules_revision_id, RulesRevision.activated_at.is_not(None)
+                RulesRevision.id == batch.rules_revision_id, RulesRevision.activated_at.is_not(None)
             )
         )
         if active_revision is None:
             raise ServiceUnavailableError(context={"reason": "record_rules_changed"})
-        await _advisory_lock(session, f"record-run:{batch.kind.value}:{batch.version_id}")
-        previous = await session.scalar(
-            select(ComputationRun).where(
-                ComputationRun.build_kind == batch.kind,
-                ComputationRun.version_id.is_not_distinct_from(batch.version_id),
-                ComputationRun.is_active,
-            )
+        await _advisory_lock(session, f"record-publish:{batch.kind.value}")
+        baseline = not await session.scalar(
+            select(exists().where(RecordResult.record_id == Record.public_id, Record.build_kind == batch.kind))
         )
-        if (
-            previous is not None
-            and previous.checked_generation is not None
-            and previous.checked_generation > snapshot.input_generation
-        ):
-            return previous.id
-        run_id = await self.activate(batch)
-        run = await session.get(ComputationRun, run_id)
-        assert run is not None
-        run.checked_generation = snapshot.input_generation
-        await session.flush()
-        return run_id
-
-    async def activate(self, batch: ComputationBatch) -> int:
-        """Publish changed results, or return the unchanged active run after recording a check.
-
-        Changed results supersede the previous run and enqueue an activation event.
-        The advisory lock lets only one transaction replace the active run for
-        this kind and version at a time. RecordComputationService commits the new
-        results and activation event together, so readers cannot see a partial run.
-        """
-        session = self._session()
-        await _advisory_lock(
-            session,
-            f"record-run:{batch.kind.value}:{batch.version_id}",
-        )
-        version_predicate = (
-            ComputationRun.version_id.is_(None)
-            if batch.version_id is None
-            else ComputationRun.version_id == batch.version_id
-        )
-        previous_run = await session.scalar(
-            select(ComputationRun).where(
-                ComputationRun.build_kind == batch.kind,
-                version_predicate,
-                ComputationRun.is_active.is_(True),
-            )
-        )
-        fingerprint = publication_fingerprint(batch)
-        checked_at = Instant.now()
-        if previous_run is not None and previous_run.publication_fingerprint == fingerprint:
-            previous_run.last_checked_at = checked_at
-            await session.flush()
-            return previous_run.id
-        previous_run_id = None if previous_run is None else previous_run.id
         run = ComputationRun(
-            publication_fingerprint=fingerprint,
-            last_checked_at=checked_at,
             rules_revision_id=batch.rules_revision_id,
             build_kind=batch.kind,
-            version_id=batch.version_id,
-            status=ComputationStatus.RUNNING,
+            full=batch.full,
+            input_generation=batch.input_generation,
         )
         session.add(run)
         await session.flush()
 
         definitions = await self._ensure_definitions(session, batch)
-        results: list[tuple[ComputedRecordResult, RecordDefinition, RecordResult]] = []
-        for computed, definition in zip(batch.records, definitions, strict=True):
-            result = RecordResult(
-                run_id=run.id,
-                definition_id=definition.id,
-                status=computed.resolution.status,
-                gap_reasons={
-                    "missing": [{"build_id": gap.build_id, "field": gap.field} for gap in computed.resolution.gaps]
-                },
-                history_complete=computed.history_complete,
-                door_evidence=computed.door_evidence,
-            )
-            session.add(result)
-            results.append((computed, definition, result))
+        computed = {
+            definition.record_id: (record, definition)
+            for record, definition in zip(batch.records, definitions, strict=True)
+        }
+        existing = await self._results_in(session, batch.kind, batch.categories)
+        record_ids = computed.keys() | existing.keys()
+        records = (
+            {
+                record.public_id: record
+                for record in await session.scalars(select(Record).where(Record.public_id.in_(record_ids)))
+            }
+            if record_ids
+            else {}
+        )
+        holders = await _holders_of(session, tuple(result.id for result in existing.values()))
+        members = await _members_of(session, tuple(record_ids))
 
-        await session.flush()
-        history_chains: list[list[RecordHolderHistory]] = []
-        for computed, definition, result in results:
-            candidates_by_id = {candidate.build_id: candidate for candidate in computed.category.candidates}
-            for build_id in computed.resolution.holder_ids:
-                candidate = candidates_by_id[build_id]
-                session.add(
-                    RecordHolder(
-                        result_id=result.id,
-                        build_id=build_id,
-                        rank=1,
-                        metric_snapshot=_metric_snapshot(computed, candidate),
-                        title=computed.title.title,
-                        subtitle=computed.title.subtitle,
-                        completion_at=_holder_completion(computed, candidate),
+        now = Instant.now()
+        changes: list[RecordChange] = []
+        drift: list[RecordDriftRow] = []
+        changed = retired = 0
+        member_writes: list[dict[str, object]] = []
+        member_deletes: list[tuple[UUID, int]] = []
+        for record_id in sorted(record_ids):
+            record = records[record_id]
+            if record.input_generation is not None and record.input_generation > batch.input_generation:
+                continue
+            record.input_generation = batch.input_generation
+            result = existing.get(record_id)
+            previous = holders.get(result.id, ()) if result is not None else ()
+            previous_members = members.get(record_id, frozenset())
+            category = (record.version_id, record.category_key)
+            expected = batch.expected is None or category in batch.expected
+            if record_id not in computed:
+                assert result is not None
+                if not expected:
+                    drift.append(
+                        RecordDriftRow(
+                            run_id=run.id,
+                            record_id=record_id,
+                            published=_drift_facts(previous, _stored_gaps(result), previous_members),
+                            computed={},
+                        )
+                    )
+                await session.delete(result)
+                member_deletes.extend((record_id, build_id) for build_id in previous_members)
+                await session.execute(
+                    update(RecordHolderHistory)
+                    .where(RecordHolderHistory.record_id == record_id, RecordHolderHistory.held_until.is_(None))
+                    .values(held_until=now)
+                )
+                record.retired_at = now
+                retired += 1
+                changes.append(RecordChange(record_id, RecordChangeKind.RETIRED, previous, ()))
+                continue
+
+            computed_record, definition = computed[record_id]
+            new_members = frozenset(candidate.build_id for candidate in computed_record.category.candidates)
+            member_writes.extend(
+                {"record_id": record_id, "build_id": b} for b in sorted(new_members - previous_members)
+            )
+            member_deletes.extend((record_id, b) for b in previous_members - new_members)
+            fingerprint = record_fingerprint(computed_record)
+            if result is not None and result.fingerprint == fingerprint:
+                result.definition_id = definition.id
+                result.last_checked_at = now
+                if not expected and new_members != previous_members:
+                    gaps = computed_record.resolution.gaps
+                    drift.append(
+                        RecordDriftRow(
+                            run_id=run.id,
+                            record_id=record_id,
+                            published=_drift_facts(previous, gaps, previous_members),
+                            computed=_drift_facts(computed_record.resolution.holder_ids, gaps, new_members),
+                        )
+                    )
+                continue
+
+            if not expected:
+                drift.append(
+                    RecordDriftRow(
+                        run_id=run.id,
+                        record_id=record_id,
+                        published={}
+                        if result is None
+                        else _drift_facts(previous, _stored_gaps(result), previous_members),
+                        computed=_drift_facts(
+                            computed_record.resolution.holder_ids, computed_record.resolution.gaps, new_members
+                        ),
                     )
                 )
-            session.add_all(RecordTiedBuild(result_id=result.id, build_id=id) for id in computed.resolution.tied_ids)
-
-            history_chain: list[RecordHolderHistory] = []
-            for period in computed.history:
-                for build_id in period.build_ids:
-                    candidate = candidates_by_id[build_id]
-                    history = RecordHolderHistory(
-                        run_id=run.id,
-                        definition_id=definition.id,
-                        build_id=build_id,
-                        predecessor_id=None,
-                        held_from=Instant(period.held_from),
-                        held_until=Instant(period.held_until) if period.held_until is not None else None,
-                        metric_snapshot=_metric_snapshot(computed, candidate),
-                    )
-                    session.add(history)
-                    history_chain.append(history)
-            if history_chain:
-                history_chains.append(history_chain)
-
-        if history_chains:
+            holder_ids = computed_record.resolution.holder_ids
+            if result is None:
+                result = RecordResult(
+                    record_id=record_id, run_id=run.id, definition_id=definition.id, fingerprint=fingerprint
+                )
+                session.add(result)
+                kind = RecordChangeKind.REVIVED if record.retired_at is not None else RecordChangeKind.APPEARED
+                changes.append(RecordChange(record_id, kind, (), holder_ids))
+            else:
+                await session.execute(delete(RecordHolder).where(RecordHolder.result_id == result.id))
+                await session.execute(delete(RecordTiedBuild).where(RecordTiedBuild.result_id == result.id))
+                if previous != holder_ids:
+                    changes.append(RecordChange(record_id, RecordChangeKind.HOLDERS_CHANGED, previous, holder_ids))
+            result.run_id = run.id
+            result.definition_id = definition.id
+            result.fingerprint = fingerprint
+            result.gap_reasons = {
+                "missing": [{"build_id": gap.build_id, "field": gap.field} for gap in computed_record.resolution.gaps]
+            }
+            result.history_complete = computed_record.history_complete
+            result.door_evidence = computed_record.door_evidence
+            result.computed_at = now
+            result.last_checked_at = now
+            record.retired_at = None
+            changed += 1
             await session.flush()
-            for history_chain in history_chains:
-                for predecessor, history in pairwise(history_chain):
-                    history.predecessor_id = predecessor.id
+            self._write_holders(session, result, computed_record)
+            await session.execute(delete(RecordHolderHistory).where(RecordHolderHistory.record_id == record_id))
+            await self._write_history(session, record_id, definition.id, computed_record)
 
-        await session.execute(
-            update(ComputationRun)
-            .where(
-                ComputationRun.build_kind == batch.kind,
-                version_predicate,
-                ComputationRun.is_active.is_(True),
-                ComputationRun.id != run.id,
+        if member_deletes:
+            await session.execute(
+                delete(RecordMember).where(tuple_(RecordMember.record_id, RecordMember.build_id).in_(member_deletes))
             )
-            .values(is_active=False)
-        )
-        run.status = ComputationStatus.COMPLETED
-        run.completed_at = Instant.now()
-        run.is_active = True
+        if member_writes:
+            await session.execute(
+                insert(RecordMember).on_conflict_do_nothing().returning(RecordMember.build_id), member_writes
+            )
+        session.add_all(drift)
         await session.flush()
-        await publish_domain_event(
-            session, RecordRunActivated(run.id, previous_run_id, batch.kind.value, batch.version_id)
+        if changes:
+            await publish_domain_event(
+                session, RecordRunPublished(run.id, batch.kind.value, tuple(changes), baseline=baseline)
+            )
+        return RebuildSummary(
+            run_ids=(run.id,),
+            records=len(batch.records),
+            changed=changed,
+            retired=retired,
+            with_gaps=sum(bool(record.resolution.gaps) for record in batch.records),
+            drift=len(drift),
         )
-        return run.id
+
+    async def _results_in(
+        self, session: AsyncSession, kind: BuildKind, categories: frozenset[ScopedCategory]
+    ) -> dict[UUID, RecordResult]:
+        """Load the current results of the records in `categories`."""
+        if not categories:
+            return {}
+        statement = (
+            select(RecordResult, Record.version_id, Record.category_key)
+            .join(Record, Record.public_id == RecordResult.record_id)
+            .where(Record.build_kind == kind)
+            # Publication compares fingerprints and only ever overwrites the evidence.
+            .options(defer(RecordResult.door_evidence))
+        )
+        # A large affected set, such as a full batch, is cheaper to filter here
+        # than to send as thousands of bound parameters.
+        if len(categories) <= _CATEGORY_FILTER_LIMIT:
+            by_version: dict[int | None, list[str]] = defaultdict(list)
+            for version_id, key in categories:
+                by_version[version_id].append(key)
+            statement = statement.where(
+                or_(
+                    *(
+                        and_(Record.version_id.is_not_distinct_from(version_id), Record.category_key.in_(keys))
+                        for version_id, keys in by_version.items()
+                    )
+                )
+            )
+        rows = await session.execute(statement)
+        return {result.record_id: result for result, version_id, key in rows if (version_id, key) in categories}
+
+    @staticmethod
+    def _write_holders(session: AsyncSession, result: RecordResult, computed: ComputedRecordResult) -> None:
+        candidates_by_id = {candidate.build_id: candidate for candidate in computed.category.candidates}
+        for build_id in computed.resolution.holder_ids:
+            candidate = candidates_by_id[build_id]
+            session.add(
+                RecordHolder(
+                    result_id=result.id,
+                    build_id=build_id,
+                    rank=1,
+                    metric_snapshot=_metric_snapshot(computed, candidate),
+                    title=computed.title.title,
+                    subtitle=computed.title.subtitle,
+                    completion_at=_holder_completion(computed, candidate),
+                )
+            )
+        session.add_all(RecordTiedBuild(result_id=result.id, build_id=id) for id in computed.resolution.tied_ids)
+
+    @staticmethod
+    async def _write_history(
+        session: AsyncSession, record_id: UUID, definition_id: int, computed: ComputedRecordResult
+    ) -> None:
+        candidates_by_id = {candidate.build_id: candidate for candidate in computed.category.candidates}
+        chain: list[RecordHolderHistory] = []
+        for period in computed.history:
+            for build_id in period.build_ids:
+                history = RecordHolderHistory(
+                    record_id=record_id,
+                    definition_id=definition_id,
+                    build_id=build_id,
+                    predecessor_id=None,
+                    held_from=Instant(period.held_from),
+                    held_until=Instant(period.held_until) if period.held_until is not None else None,
+                    metric_snapshot=_metric_snapshot(computed, candidates_by_id[build_id]),
+                )
+                session.add(history)
+                chain.append(history)
+        if chain:
+            await session.flush()
+            for predecessor, history in pairwise(chain):
+                history.predecessor_id = predecessor.id
 
     async def list_gaps(self, *, kind: BuildKind | None = None) -> Sequence[RecordGap]:
-        """List active results that missing facts could change."""
+        """List current results that missing facts could change."""
         session = self._session()
         statement = (
             select(RecordDefinition, RecordResult)
             .options(selectinload(RecordDefinition.record))
             .join(Record, Record.public_id == RecordDefinition.record_id)
             .join(RecordResult, RecordResult.definition_id == RecordDefinition.id)
-            .join(ComputationRun, ComputationRun.id == RecordResult.run_id)
-            .where(
-                ComputationRun.is_active.is_(True),
-                func.jsonb_array_length(RecordResult.gap_reasons["missing"]) > 0,
-            )
+            .where(func.jsonb_array_length(RecordResult.gap_reasons["missing"]) > 0)
         )
         if kind is not None:
             statement = statement.where(Record.build_kind == kind)
@@ -478,19 +569,14 @@ class PostgresRecordRepository:
         return tuple(_gap_from_row(definition, result) for definition, result in rows)
 
     async def list_title_gaps(self, *, kind: BuildKind | None = None) -> Sequence[RecordNameDiagnostic]:
-        """List active canonical titles containing formatter diagnostics."""
+        """List current canonical titles containing formatter diagnostics."""
         session = self._session()
         statement = (
             select(RecordDefinition)
             .options(selectinload(RecordDefinition.record))
             .join(Record, Record.public_id == RecordDefinition.record_id)
             .join(RecordResult, RecordResult.definition_id == RecordDefinition.id)
-            .join(ComputationRun, ComputationRun.id == RecordResult.run_id)
-            .where(
-                ComputationRun.is_active.is_(True),
-                RecordDefinition.title_diagnostics != [],
-            )
-            .distinct()
+            .where(RecordDefinition.title_diagnostics != [])
             .order_by(RecordDefinition.id)
         )
         if kind is not None:
@@ -507,14 +593,90 @@ class PostgresRecordRepository:
         )
 
     async def get_published_record(self, result_id: int) -> PublishedRecordResult | None:
-        """Return a published result by its public result identifier."""
+        """Return a current result by its identifier."""
         records = await self._active_records(result_id=result_id, limit=1)
         return records[0] if records else None
 
     async def get_latest_record(self, record_id: UUID) -> PublishedRecordResult | None:
-        """Return the active result for the stable record identifier."""
+        """Return the record's current result, or its retired state."""
         records = await self._active_records(record_id=record_id, limit=1)
-        return records[0] if records else None
+        if records:
+            return records[0]
+        session = self._session()
+        row = (
+            await session.execute(
+                select(RecordDefinition, Record.retired_at, _refresh_pending())
+                .options(selectinload(RecordDefinition.record))
+                .join(Record, Record.public_id == RecordDefinition.record_id)
+                .where(Record.public_id == record_id, Record.retired_at.is_not(None))
+                .order_by(RecordDefinition.id.desc())
+                .limit(1)
+            )
+        ).one_or_none()
+        if row is None:
+            return None
+        definition, retired_at, pending = row
+        assert retired_at is not None
+        return PublishedRecordResult(
+            result_id=None,
+            definition_id=definition.id,
+            record_id=record_id,
+            title=definition.title,
+            subtitle=definition.subtitle,
+            criterion=definition.criterion,
+            build_kind=definition.build_kind,
+            version_scope=definition.version_scope,
+            holder_build_ids=(),
+            computed_at=retired_at.to_stdlib(),
+            refresh_pending=pending,
+            version_id=definition.version_id,
+            retired_at=retired_at.to_stdlib(),
+        )
+
+    async def get_record_history(self, record_id: UUID) -> tuple[HolderHistoryEntry, ...]:
+        """Return holder periods in order; builds sharing a period are grouped."""
+        rows = await self._session().execute(
+            select(RecordHolderHistory.held_from, RecordHolderHistory.held_until, RecordHolderHistory.build_id)
+            .where(RecordHolderHistory.record_id == record_id)
+            .order_by(RecordHolderHistory.held_from, RecordHolderHistory.build_id)
+        )
+        periods: dict[tuple[Instant, Instant | None], list[int]] = {}
+        for held_from, held_until, build_id in rows:
+            periods.setdefault((held_from, held_until), []).append(build_id)
+        return tuple(
+            HolderHistoryEntry(
+                build_ids=tuple(build_ids),
+                held_from=held_from.to_stdlib(),
+                held_until=held_until.to_stdlib() if held_until is not None else None,
+            )
+            for (held_from, held_until), build_ids in periods.items()
+        )
+
+    async def stored_record(self, record_id: UUID) -> StoredRecord | None:
+        session = self._session()
+        record = await session.get(Record, record_id)
+        if record is None:
+            return None
+        title = await session.scalar(
+            select(RecordDefinition.title)
+            .where(RecordDefinition.record_id == record_id)
+            .order_by(RecordDefinition.id.desc())
+            .limit(1)
+        )
+        result = await session.scalar(select(RecordResult).where(RecordResult.record_id == record_id))
+        holders = await _holders_of(session, (result.id,)) if result is not None else {}
+        members = await _members_of(session, (record_id,))
+        return StoredRecord(
+            record_id=record_id,
+            title=title or "",
+            kind=record.build_kind,
+            criterion=record.criterion,
+            version_id=record.version_id,
+            category_key=record.category_key,
+            holder_build_ids=holders.get(result.id, ()) if result is not None else (),
+            gaps=_stored_gaps(result) if result is not None else (),
+            member_build_ids=tuple(sorted(members.get(record_id, ()))),
+        )
 
     async def list_published_records(
         self,
@@ -524,10 +686,9 @@ class PostgresRecordRepository:
         before_id: int | None,
         descending: bool,
         limit: int,
-        resolved_only: bool = False,
         version_scope: VersionScope | None = None,
     ) -> Sequence[PublishedRecordResult]:
-        """List one page of published results in display order.
+        """List one page of current results in display order.
 
         ID anchors page relative to the display order; a `before_id` page is fetched in reversed
         order and restored in memory, leaving its overfetched row at the front for the caller.
@@ -538,30 +699,17 @@ class PostgresRecordRepository:
             before_id=before_id,
             descending=descending,
             limit=limit,
-            resolved_only=resolved_only,
             version_scope=version_scope,
         )
 
-    async def count_published_records(
-        self, *, resolved_only: bool = False, version_scope: VersionScope | None = None
-    ) -> int:
-        """Count the results belonging to the currently active computation runs."""
-        session = self._session()
-        statement = (
-            select(func.count())
-            .select_from(RecordResult)
-            .join(ComputationRun, ComputationRun.id == RecordResult.run_id)
-            .where(ComputationRun.is_active.is_(True))
-        )
-        if resolved_only:
-            statement = statement.where(RecordResult.status == ResolutionStatus.RESOLVED)
+    async def count_published_records(self, *, version_scope: VersionScope | None = None) -> int:
+        """Count current results."""
+        statement = select(func.count()).select_from(RecordResult)
         if version_scope is not None:
-            statement = (
-                statement.join(RecordDefinition, RecordDefinition.id == RecordResult.definition_id)
-                .join(RecordDefinition.record)
-                .where(Record.version_scope == version_scope)
+            statement = statement.join(Record, Record.public_id == RecordResult.record_id).where(
+                Record.version_scope == version_scope
             )
-        return await session.scalar(statement) or 0
+        return await self._session().scalar(statement) or 0
 
     async def _active_records(
         self,
@@ -573,34 +721,24 @@ class PostgresRecordRepository:
         before_id: int | None = None,
         descending: bool = True,
         limit: int,
-        resolved_only: bool = False,
         version_scope: VersionScope | None = None,
     ) -> tuple[PublishedRecordResult, ...]:
         session = self._session()
         statement = (
-            select(
-                RecordResult,
-                RecordDefinition,
-                ComputationRun.last_checked_at,
-                func.coalesce(ComputationRun.checked_generation < RecordInputGeneration.generation, True),
-            )
+            select(RecordResult, RecordDefinition, _refresh_pending())
             .options(selectinload(RecordDefinition.record))
             .join(RecordDefinition, RecordDefinition.id == RecordResult.definition_id)
-            .join(ComputationRun, ComputationRun.id == RecordResult.run_id)
-            .outerjoin(RecordInputGeneration, RecordInputGeneration.build_kind == ComputationRun.build_kind)
-            .where(ComputationRun.is_active.is_(True))
+            .join(Record, Record.public_id == RecordResult.record_id)
         )
         include_evidence = result_id is not None or record_id is not None
         if not include_evidence:
             statement = statement.options(defer(RecordResult.door_evidence))
-        if resolved_only:
-            statement = statement.where(RecordResult.status == ResolutionStatus.RESOLVED)
         if version_scope is not None:
-            statement = statement.join(RecordDefinition.record).where(Record.version_scope == version_scope)
+            statement = statement.where(Record.version_scope == version_scope)
         if result_id is not None:
             statement = statement.where(RecordResult.id == result_id)
         if record_id is not None:
-            statement = statement.where(RecordDefinition.record_id == record_id)
+            statement = statement.where(RecordResult.record_id == record_id)
         reverse = before_id is not None
         if before_id is not None:
             # Walk away from the anchor in reversed display order; the page is flipped back below.
@@ -618,17 +756,8 @@ class PostgresRecordRepository:
             rows = list(reversed(rows))
         if not rows:
             return ()
-        result_ids = [result.id for result, _definition, _checked_at, _pending in rows]
-        holder_rows = (
-            await session.execute(
-                select(RecordHolder.result_id, RecordHolder.build_id)
-                .where(RecordHolder.result_id.in_(result_ids))
-                .order_by(RecordHolder.result_id, RecordHolder.rank, RecordHolder.build_id)
-            )
-        ).all()
-        holders: dict[int, list[int]] = {}
-        for holder_result_id, build_id in holder_rows:
-            holders.setdefault(holder_result_id, []).append(build_id)
+        result_ids = [result.id for result, _definition, _pending in rows]
+        holders = await _holders_of(session, result_ids)
         tied_rows = (
             await session.execute(
                 select(RecordTiedBuild.result_id, RecordTiedBuild.build_id)
@@ -649,17 +778,16 @@ class PostgresRecordRepository:
                 criterion=definition.criterion,
                 build_kind=definition.build_kind,
                 version_scope=definition.version_scope,
-                status=result.status,
-                holder_build_ids=tuple(holders.get(result.id, ())),
+                holder_build_ids=holders.get(result.id, ()),
                 tied_build_ids=tuple(tied.get(result.id, ())),
                 gaps=_stored_gaps(result),
                 computed_at=result.computed_at.to_stdlib(),
-                last_checked_at=None if checked_at is None else checked_at.to_stdlib(),
+                last_checked_at=result.last_checked_at.to_stdlib(),
                 refresh_pending=pending,
                 version_id=definition.version_id,
                 door_evidence=result.door_evidence if include_evidence else None,
             )
-            for result, definition, checked_at, pending in rows
+            for result, definition, pending in rows
         )
 
     async def list_requested_categories(self, kind: BuildKind) -> Sequence[CategoryIdentity]:
@@ -683,83 +811,97 @@ class PostgresRecordRepository:
                 identities.append(identity)
         return tuple(identities)
 
-    async def get_definition_identity(self, definition_id: int) -> CategoryIdentity | None:
-        """Return the parsed category identity of one stored definition."""
-        session = self._session()
-        key = await session.scalar(
-            select(Record.category_key)
-            .join(RecordDefinition, RecordDefinition.record_id == Record.public_id)
-            .where(RecordDefinition.id == definition_id)
+    async def definition_record_id(self, definition_id: int) -> UUID | None:
+        return await self._session().scalar(
+            select(RecordDefinition.record_id).where(RecordDefinition.id == definition_id)
         )
-        if key is None:
-            return None
-        identity = CategoryIdentity.from_key(key)
-        if identity is None:
-            raise DataIntegrityError(
-                md_tr(
-                    t"records-record-definition-stores = "
-                    t"Record definition {definition_id!s} stores a category key that does not parse.",
-                )
-            )
-        return identity
 
     async def save_requested_category(
         self,
         rules_revision_id: int,
         category: CategoryIdentity,
         titles: Mapping[RecordCriterion, FormattedTitle],
-    ) -> None:
-        """Persist an accepted exact category so future rebuilds retain it."""
+    ) -> int:
+        """Persist an accepted category in every maintained scope and queue its records."""
         session = self._session()
-        await self._write_definitions(
-            session,
-            rules_revision_id=rules_revision_id,
-            kind=category.kind,
-            scope=VersionScope.ALL_TIME,
-            version_id=None,
-            writes=tuple(
-                _DefinitionWrite(
-                    criterion,
-                    category.key,
-                    title,
-                    MaterializationSource.PUBLIC_LOOKUP,
-                    tuple((RecordTagRole.RESTRICTION, tag_id) for tag_id in category.restriction_ids),
-                )
-                for criterion, title in titles.items()
-            ),
-        )
-
-        await session.execute(
-            insert(RecordRecomputeQueueItem)
-            .values(scope_key=category.kind.value, build_kind=category.kind, reasons=["requested_category"])
-            .on_conflict_do_update(
-                index_elements=[RecordRecomputeQueueItem.scope_key],
-                set_={
-                    "enqueued_at": func.now(),
-                    "available_at": func.now(),
-                    "claimed_at": None,
-                    "claim_token": None,
-                },
+        pin = await self.active_current_version_id()
+        queued = 0
+        for version_id in dict.fromkeys((None, pin)):
+            definitions = await self._write_definitions(
+                session,
+                rules_revision_id=rules_revision_id,
+                kind=category.kind,
+                scope=VersionScope.ALL_TIME if version_id is None else VersionScope.UP_TO_DATE,
+                version_id=version_id,
+                writes=tuple(
+                    _DefinitionWrite(
+                        criterion,
+                        category.key,
+                        title,
+                        MaterializationSource.PUBLIC_LOOKUP,
+                        tuple((RecordTagRole.RESTRICTION, tag_id) for tag_id in category.restriction_ids),
+                    )
+                    for criterion, title in titles.items()
+                ),
             )
-        )
+            # One record item recomputes every criterion of its category.
+            if definitions:
+                await _enqueue(
+                    session,
+                    category.kind,
+                    RecomputeTarget.RECORD,
+                    "requested_category",
+                    record_id=definitions[0].record_id,
+                )
+            queued += len(definitions)
+        return queued
 
-    async def claim_recompute_kinds(self, *, limit: int) -> RecomputeLease:
-        """Lease queued scopes and return their distinct build kinds.
+    async def request_record_recompute(self, record_id: UUID) -> bool:
+        session = self._session()
+        kind = await session.scalar(select(Record.build_kind).where(Record.public_id == record_id))
+        if kind is None:
+            return False
+        await _enqueue(session, kind, RecomputeTarget.RECORD, "requested", record_id=record_id)
+        return True
+
+    async def request_full_recompute(self, kinds: Sequence[BuildKind], *, target: RecomputeTarget) -> None:
+        for kind in kinds:
+            await _enqueue(self._session(), kind, target, "requested")
+
+    async def claim_recompute(self, *, limit: int) -> RecomputeLease:
+        """Claim ready items of one kind that no other worker is processing.
 
         The caller must commit the claims before computing. Expired claims become
         eligible again through the shared queue visibility timeout.
         """
-        rows = await self._recompute_queue.claim(limit=limit, session=self._session())
+        session = self._session()
+        # Serialize claimers so two cannot both find a kind idle and claim it.
+        await _advisory_lock(session, "record-recompute-claim")
+        queue = RecordRecomputeQueueItem
+        busy = select(queue.build_kind).where(queue.claimed_at.is_not(None), not_(self._recompute_queue.reclaimable()))
+        kind = await session.scalar(
+            select(queue.build_kind)
+            .where(self._recompute_queue.ready(), queue.build_kind.not_in(busy))
+            .order_by(queue.available_at, queue.id)
+            .limit(1)
+        )
+        if kind is None:
+            return RecomputeLease(kind=None)
+        rows = await self._recompute_queue.claim(limit=limit, where=(queue.build_kind == kind,), session=session)
+        targets = {row.target for row in rows}
         return RecomputeLease(
-            kinds=tuple(dict.fromkeys(row.build_kind for row in rows)),
+            kind=kind,
             claim_tokens=tuple(self._recompute_queue.token_of(row) for row in rows),
-            refresh_active_versions=any("holder_measurements" in row.reasons for row in rows),
+            full=bool(targets & {RecomputeTarget.KIND, RecomputeTarget.BACKSTOP}),
+            backstop=RecomputeTarget.BACKSTOP in targets,
+            builds=frozenset(row.build_id for row in rows if row.build_id is not None),
+            records=frozenset(row.record_id for row in rows if row.record_id is not None),
         )
 
     async def complete_recompute(self, lease: RecomputeLease) -> None:
-        """Acknowledge only scopes whose claim tokens still match this lease.
+        """Acknowledge only items whose claim tokens still match this lease.
 
-        Enqueueing resets a scope's claim; reclaiming gives it a new token. Either
+        Enqueueing resets an item's claim; reclaiming gives it a new token. Either
         change prevents this acknowledgement from deleting the newer work.
         """
         await self._recompute_queue.complete_batch(lease.claim_tokens, session=self._session())
@@ -767,6 +909,64 @@ class PostgresRecordRepository:
     async def fail_recompute(self, lease: RecomputeLease, error: str) -> None:
         """Release the failed leases this worker still owns for a later retry."""
         await self._recompute_queue.fail_batch(lease.claim_tokens, error=error, session=self._session())
+
+    async def list_recompute_queue(self) -> Sequence[RecomputeItem]:
+        queue = RecordRecomputeQueueItem
+        rows = await self._session().scalars(select(queue).order_by(queue.enqueued_at, queue.id))
+        return tuple(
+            RecomputeItem(
+                id=row.id,
+                kind=row.build_kind,
+                target=row.target,
+                build_id=row.build_id,
+                record_id=row.record_id,
+                reasons=tuple(row.reasons),
+                enqueued_at=row.enqueued_at.to_stdlib(),
+                attempts=row.attempts,
+                last_error=row.last_error,
+                claimed=row.claimed_at is not None,
+            )
+            for row in rows
+        )
+
+    async def list_drift(
+        self, *, offset: int, after_id: int | None, before_id: int | None, limit: int
+    ) -> Sequence[RecordDrift]:
+        title = (
+            select(RecordDefinition.title)
+            .where(RecordDefinition.record_id == RecordDriftRow.record_id)
+            .order_by(RecordDefinition.id.desc())
+            .limit(1)
+            .correlate(RecordDriftRow)
+            .scalar_subquery()
+        )
+        statement = select(RecordDriftRow, title)
+        if before_id is not None:
+            statement = statement.where(RecordDriftRow.id > before_id).order_by(RecordDriftRow.id.asc())
+        else:
+            if after_id is not None:
+                statement = statement.where(RecordDriftRow.id < after_id)
+            statement = statement.order_by(RecordDriftRow.id.desc())
+        if offset:
+            statement = statement.offset(offset)
+        rows = list((await self._session().execute(statement.limit(limit))).all())
+        if before_id is not None:
+            rows.reverse()
+        return tuple(
+            RecordDrift(
+                id=row.id,
+                record_id=row.record_id,
+                title=row_title or "",
+                run_id=row.run_id,
+                detected_at=row.detected_at.to_stdlib(),
+                published=row.published,
+                computed=row.computed,
+            )
+            for row, row_title in rows
+        )
+
+    async def count_drift(self) -> int:
+        return await self._session().scalar(select(func.count()).select_from(RecordDriftRow)) or 0
 
     async def _list_doors(self, session: AsyncSession) -> Sequence[CandidateBuild]:
         statement = (
@@ -815,23 +1015,35 @@ class PostgresRecordRepository:
         )
 
     async def _ensure_definitions(self, session: AsyncSession, batch: ComputationBatch) -> tuple[RecordDefinition, ...]:
-        return await self._write_definitions(
-            session,
-            rules_revision_id=batch.rules_revision_id,
-            kind=batch.kind,
-            scope=VersionScope.ALL_TIME if batch.version_id is None else VersionScope.UP_TO_DATE,
-            version_id=batch.version_id,
-            writes=tuple(
-                _DefinitionWrite(
-                    computed.criterion,
-                    computed.category.identity.key,
-                    computed.title,
-                    MaterializationSource(computed.category.source),
-                    tuple((RecordTagRole.RESTRICTION, tag_id) for tag_id in computed.category.identity.restriction_ids),
-                )
-                for computed in batch.records
-            ),
-        )
+        """Write the definitions of a batch's records, returned in record order."""
+        by_scope: dict[int | None, list[int]] = defaultdict(list)
+        for index, computed in enumerate(batch.records):
+            by_scope[computed.version_id].append(index)
+        definitions: list[RecordDefinition | None] = [None] * len(batch.records)
+        for version_id, indexes in by_scope.items():
+            written = await self._write_definitions(
+                session,
+                rules_revision_id=batch.rules_revision_id,
+                kind=batch.kind,
+                scope=VersionScope.ALL_TIME if version_id is None else VersionScope.UP_TO_DATE,
+                version_id=version_id,
+                writes=tuple(
+                    _DefinitionWrite(
+                        batch.records[index].criterion,
+                        batch.records[index].category.identity.key,
+                        batch.records[index].title,
+                        MaterializationSource(batch.records[index].category.source),
+                        tuple(
+                            (RecordTagRole.RESTRICTION, tag_id)
+                            for tag_id in batch.records[index].category.identity.restriction_ids
+                        ),
+                    )
+                    for index in indexes
+                ),
+            )
+            for index, definition in zip(indexes, written, strict=True):
+                definitions[index] = definition
+        return tuple(definition for definition in definitions if definition is not None)
 
     async def _write_definitions(
         self,
@@ -1208,3 +1420,76 @@ def _as_datetime(value: Instant | None) -> datetime | None:
 
 async def _advisory_lock(session: AsyncSession, key: str) -> None:
     await session.execute(select(func.pg_advisory_xact_lock(func.hashtextextended(key, 0))))
+
+
+async def _enqueue(
+    session: AsyncSession,
+    kind: BuildKind,
+    target: RecomputeTarget,
+    reason: str,
+    *,
+    record_id: UUID | None = None,
+) -> None:
+    """Queue work, merging it into a pending item with the same scope and resetting its claim."""
+    match target:
+        case RecomputeTarget.KIND:
+            scope_key = kind.value
+        case RecomputeTarget.RECORD:
+            scope_key = f"{kind.value}:record:{record_id}"
+        case _:
+            scope_key = f"{kind.value}:{target.value}"
+    statement = insert(RecordRecomputeQueueItem).values(
+        scope_key=scope_key, build_kind=kind, target=target, record_id=record_id, reasons=[reason]
+    )
+    await session.execute(
+        statement.on_conflict_do_update(
+            index_elements=[RecordRecomputeQueueItem.scope_key],
+            set_={
+                "reasons": func.jsonb_build_array(reason),
+                "enqueued_at": func.now(),
+                "available_at": func.now(),
+                "attempts": 0,
+                "claimed_at": None,
+                "claim_token": None,
+                "last_error": None,
+            },
+        )
+    )
+
+
+def _refresh_pending() -> ColumnElement[bool]:
+    """Whether the record's kind has queued work that could still change it."""
+    return exists().where(RecordRecomputeQueueItem.build_kind == Record.build_kind).label("refresh_pending")
+
+
+async def _holders_of(session: AsyncSession, result_ids: Sequence[int]) -> dict[int, tuple[int, ...]]:
+    if not result_ids:
+        return {}
+    rows = await session.execute(
+        select(RecordHolder.result_id, RecordHolder.build_id)
+        .where(RecordHolder.result_id.in_(result_ids))
+        .order_by(RecordHolder.result_id, RecordHolder.rank, RecordHolder.build_id)
+    )
+    holders: dict[int, list[int]] = defaultdict(list)
+    for result_id, build_id in rows:
+        holders[result_id].append(build_id)
+    return {result_id: tuple(build_ids) for result_id, build_ids in holders.items()}
+
+
+async def _members_of(session: AsyncSession, record_ids: Sequence[UUID]) -> dict[UUID, frozenset[int]]:
+    members: dict[UUID, set[int]] = defaultdict(set)
+    for chunk in batched(record_ids, _CATEGORY_FILTER_LIMIT, strict=False):
+        rows = await session.execute(
+            select(RecordMember.record_id, RecordMember.build_id).where(RecordMember.record_id.in_(chunk))
+        )
+        for record_id, build_id in rows:
+            members[record_id].add(build_id)
+    return {record_id: frozenset(build_ids) for record_id, build_ids in members.items()}
+
+
+def _drift_facts(holder_ids: Sequence[int], gaps: Sequence[CandidateGap], members: frozenset[int]) -> dict[str, object]:
+    return {
+        "holder_build_ids": list(holder_ids),
+        "gaps": [{"build_id": gap.build_id, "field": gap.field.value} for gap in gaps],
+        "member_build_ids": sorted(members),
+    }

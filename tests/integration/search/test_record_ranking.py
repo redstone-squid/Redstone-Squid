@@ -24,7 +24,6 @@ async def test_record_heading_and_holder_matches(migrated_session_factory: async
     source = RecordProjectionSource(
         result_id=1,
         definition_id=1,
-        status="resolved",
         history_complete=True,
         gap_reasons={},
         criterion="fastest",
@@ -66,7 +65,6 @@ async def test_record_measurements_match_one_known_holder(
     source = RecordProjectionSource(
         result_id=1,
         definition_id=1,
-        status="resolved",
         history_complete=True,
         gap_reasons={},
         criterion="fastest",
@@ -84,7 +82,6 @@ async def test_record_measurements_match_one_known_holder(
         for holder in (large, compact, unknown):
             await store.replace(SearchProjection("build", str(holder.build_id), holder.title, status="approved"))
         await store.replace(build_record_projection(source, (large, compact, unknown)))
-        await store.replace(build_record_projection(replace(source, result_id=2, status="no_candidate")))
 
     service = SearchService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
     for scope in (SearchScope.RECORDS, SearchScope.ALL):
@@ -120,10 +117,10 @@ async def test_record_measurements_match_one_known_holder(
             ).total == 0
 
     outside = await service.search(
-        SearchRequest("status:no_candidate OR NOT volume<=100", scope=SearchScope.RECORDS),
+        SearchRequest("NOT volume<=100", scope=SearchScope.RECORDS),
         context=ActingContext.direct(AnonymousActor()),
     )
-    assert {result.source_id for result in outside.hits} == {"result:1", "result:2"}
+    assert {result.source_id for result in outside.hits} == {"result:1"}
     only = await service.search(
         SearchRequest("NOT volume:[1 TO 200]", scope=SearchScope.RECORDS),
         context=ActingContext.direct(AnonymousActor()),
@@ -142,12 +139,6 @@ async def test_record_measurements_match_one_known_holder(
         ).hits
         assert isinstance(hit, RecordSearchHit)
         assert hit.build_id == holder_id
-
-    no_holder = await service.search(
-        SearchRequest("status:no_candidate AND volume IS NOT SET", scope=SearchScope.RECORDS),
-        context=ActingContext.direct(AnonymousActor()),
-    )
-    assert no_holder.total == 0
 
 
 async def test_build_presence_matches_indexed_values_and_document_text(

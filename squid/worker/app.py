@@ -89,7 +89,7 @@ class DatabaseWorker:
                 "build.submitted": (notification_handler.handle,),
                 "build.confirmed": (notification_handler.handle,),
                 "build.denied": (notification_handler.handle,),
-                "record_run.activated": (notification_handler.handle,),
+                "record_run.published": (notification_handler.handle,),
                 "vote_session.closed": (outcome_handler.handle,),
                 "guild.voting_changed": (RefreshGuildVotingHandler(services.votes).handle,),
             },
@@ -210,6 +210,13 @@ class DatabaseWorker:
                 job("search-projections", event_interval, self._refresh_search),
                 job("search-embeddings", event_interval, self._process_search_embeddings),
                 job("record-maintenance", maintenance_interval, self._process_records),
+                job(
+                    "record-backstop",
+                    max(maintenance_interval, 86400),
+                    self._queue_record_backstop,
+                    critical=False,
+                    run_immediately=False,
+                ),
                 job("record-ranges", maintenance_interval, self._process_record_ranges),
                 job("due-votes", maintenance_interval, self._close_due_votes),
                 job("stale-build-locks", max(maintenance_interval, 300), self._clean_stale_build_locks),
@@ -309,6 +316,9 @@ class DatabaseWorker:
     async def _process_records(self, *, context: ActingContext) -> None:
         with trace_span("squid.worker.record_maintenance", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             await self._services.records.process_queue(context=context)
+
+    async def _queue_record_backstop(self, *, context: ActingContext) -> None:
+        await self._services.records.queue_backstop(context=context)
 
     async def _process_record_ranges(self, *, context: ActingContext) -> None:
         with trace_span("squid.worker.record_ranges", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):

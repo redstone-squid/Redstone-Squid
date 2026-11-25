@@ -672,6 +672,9 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         permissions=graph.permissions,
         permission_epoch=graph.permission_epoch,
         records=graph.records,
+        record_administration=RecordAdministrationService(
+            graph.record_computation, graph.permissions, uow_factory=graph.uow_factory
+        ),
         public_records=graph.public_records,
         range_publication=graph.range_publication,
         schematics=graph.schematics,

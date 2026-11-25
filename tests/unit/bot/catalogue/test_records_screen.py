@@ -22,7 +22,6 @@ from squid.core.records.application import (
     RecordService,
 )
 from squid.core.records.domain import BuildKind, RecordCriterion, RecordFact
-from squid.core.suggestions.domain import Suggestion
 from squid_ui.ext.discord.testing import assert_within_limits, commit_render, delivered_to, message_harness
 from squid_ui.testing import RecordingResponder, labels, press, press_event, submit, submit_event
 from tests.support.discord import make_layout_bot
@@ -33,7 +32,7 @@ pytestmark = pytest.mark.usefixtures("discord_screen_context")
 class RecordRecorder(RecordService):
     def __init__(self) -> None:
         self.gap_reads = 0
-        self.materialize_calls: list[tuple[int, BuildKind | None, int | None]] = []
+        self.recompute_calls: list[int] = []
 
     @override
     async def gaps(self, *, kind: BuildKind | None = None, context: ActingContext) -> Sequence[RecordGap]:
@@ -51,20 +50,12 @@ class RecordRecorder(RecordService):
         return (RecordNameDiagnostic(2, "Unknown door", ({"code": "unknown"},), BuildKind.DOOR),)
 
     @override
-    async def materialize_definition(
-        self,
-        definition_id: int,
-        *,
-        kind: BuildKind | None = None,
-        version_id: int | None = None,
-        context: ActingContext,
-    ) -> RebuildSummary:
-        self.materialize_calls.append((definition_id, kind, version_id))
-        return RebuildSummary((), 1, 1, 0)
+    async def request_definition_recompute(self, definition_id: int, *, context: ActingContext) -> None:
+        self.recompute_calls.append(definition_id)
 
     @override
-    async def lookup_or_materialize(self, request: RecordLookupRequest, *, context: ActingContext) -> RebuildSummary:
-        return RebuildSummary((), 1, 1, 0)
+    async def lookup_or_materialize(self, request: RecordLookupRequest, *, context: ActingContext) -> int:
+        return 5
 
 
 class ComputationRecorder(RecordAdministrationService):
@@ -82,7 +73,7 @@ class ComputationRecorder(RecordAdministrationService):
     ) -> RebuildSummary:
         self.contexts.append(context)
         self.rebuild_calls.append((current_version_id, tuple(kinds)))
-        return RebuildSummary((), 4, 3, 1)
+        return RebuildSummary((), records=4, changed=3, retired=1, with_gaps=1)
 
 
 class Authorizer:
@@ -134,8 +125,8 @@ async def test_records_use_tabs_and_browsers_for_diagnostics() -> None:
     assert {"Missing evidence", "Unrecognised titles", "Recompute"} <= set(labels(screen._tabs.render()))
 
 
-async def test_lookup_materializes_and_refreshes_diagnostics() -> None:
-    """A numeric lookup selects a RecordDefinition definition, then refreshes its evidence diagnostics."""
+async def test_numeric_lookup_queues_the_definitions_record() -> None:
+    """A numeric lookup selects a RecordDefinition and queues the record it names."""
     harness = make_screen()
     screen = harness.screen
     await screen.on_load()
@@ -146,12 +137,11 @@ async def test_lookup_materializes_and_refreshes_diagnostics() -> None:
     await submit(
         screen._tabs,
         "lookup",
-        {"kind": BuildKind.DOOR, "base_key": "42", "restrictions": None, "version_id": 3},
+        {"kind": BuildKind.DOOR, "base_key": "42", "restrictions": None},
         responder=responder,
     )
 
-    assert harness.records.materialize_calls == [(42, BuildKind.DOOR, 3)]
-    assert harness.records.gap_reads == 2
+    assert harness.records.recompute_calls == [42]
     assert len(responder.notices) == 1
 
 
@@ -209,19 +199,16 @@ async def test_rebuild_explicitly_sets_the_shared_current_version() -> None:
     assert harness.computation.rebuild_calls == [(3, (BuildKind.DOOR, BuildKind.EXTENDER))]
 
 
-@pytest.mark.parametrize("kind", list(BuildKind))
-async def test_diagnostic_recompute_carries_kind_version_and_rechecks_permission(kind: BuildKind) -> None:
+async def test_diagnostic_recompute_rechecks_permission() -> None:
     harness = make_screen()
     screen = harness.screen
     await screen.on_load()
 
-    with sl.runtime.transaction():
-        screen._version = Suggestion(value="9", label="Java 1.21", kind="version")
-        await screen._recompute_diagnostic(42, kind, press_event())
-    assert harness.records.materialize_calls == [(42, kind, 9)]
+    await screen._recompute_diagnostic(42, press_event())
+    assert harness.records.recompute_calls == [42]
     screen.grants = Grants(screen.grants.held, Authorizer(inspect=False, rebuild=True))
-    await screen._recompute_diagnostic(42, kind, press_event())
-    assert harness.records.materialize_calls == [(42, kind, 9)]
+    await screen._recompute_diagnostic(42, press_event())
+    assert harness.records.recompute_calls == [42]
 
 
 async def test_large_diagnostics_render_within_discord_limits() -> None:

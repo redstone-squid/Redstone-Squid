@@ -15,7 +15,7 @@ from squid.core.builds.application.queries import PublicBuildDimensions, PublicB
 from squid.core.builds.domain import BuildCategory
 from squid.core.builds.domain.expansion import DoorExpansion, ExpansionBranch, ExpansionParameter, ExpansionTiming
 from squid.core.builds.domain.expansion_evaluation import PointStatus
-from squid.core.errors import DataIntegrityError, ServiceUnavailableError, ValidationError
+from squid.core.errors import DataIntegrityError, ServiceUnavailableError
 from squid.core.permissions.application.services import PermissionService
 from squid.core.permissions.errors import PermissionDeniedError
 from squid.core.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery, analyze_door_widths
@@ -25,14 +25,20 @@ from squid.core.records.application.models import (
     CandidateTag,
     CategoryIdentity,
     ComputationBatch,
+    HolderHistoryEntry,
+    PriorPublication,
     PublishedRecordResult,
+    RebuildSummary,
+    RecomputeItem,
+    RecomputeTarget,
+    RecordDrift,
     RecordGap,
     RecordLookupRequest,
     RecordNameDiagnostic,
+    ScopedCategory,
 )
-from squid.core.records.application.ports import DoorRangeAnalyzer, RecomputeLease
+from squid.core.records.application.ports import DoorRangeAnalyzer, RecomputeLease, StoredRecord
 from squid.core.records.application.services import PublicRecordQueryService, RecordComputationService, RecordService
-from squid.core.records.application.snapshots import RecordSnapshot
 from squid.core.records.domain import (
     BuildKind,
     Candidate,
@@ -40,7 +46,6 @@ from squid.core.records.domain import (
     FormattedTitle,
     RecordCriterion,
     RecordFact,
-    ResolutionStatus,
     TimingVariant,
     VersionScope,
 )
@@ -104,27 +109,27 @@ class FakeCandidates:
 
 
 class FakeRuns:
-    """Capture computed batches and supply the configured record queries.
+    """Capture published batches and supply the configured record queries.
 
-    RecordScope copies this state and publishes it on commit. Failed publication
-    leaves batches unchanged. Queue methods record
-    calls without enforcing claim-token ownership.
+    RecordScope copies this state and publishes it on commit, so a failed
+    publication leaves batches unchanged. `queued` holds leases to hand out;
+    queue methods record calls without enforcing claim-token ownership.
     """
 
     def __init__(self) -> None:
         self.batches: list[ComputationBatch] = []
         self.requested: dict[BuildKind, list[CategoryIdentity]] = {}
         self.requested_titles: dict[str, dict[RecordCriterion, FormattedTitle]] = {}
-        self.definition_identities: dict[int, CategoryIdentity] = {}
+        self.definition_records: dict[int, uuid.UUID] = {}
+        self.record_requests: list[uuid.UUID] = []
         self.gap_rows: tuple[RecordGap, ...] = ()
         self.title_gap_rows: tuple[RecordNameDiagnostic, ...] = ()
-        self.queued: tuple[BuildKind, ...] = ()
+        self.queued: tuple[RecomputeLease, ...] = ()
         self.completed: tuple[BuildKind, ...] = ()
-        self.failed: tuple[tuple[BuildKind, ...], str] | None = None
+        self.failed: tuple[BuildKind | None, str] | None = None
         self.current_version_id: int | None = None
-        self.published_versions: tuple[int, ...] = ()
-        self.refresh_active_versions = False
         self.published_records: dict[int, PublishedRecordResult] = {}
+        self.history: dict[uuid.UUID, tuple[HolderHistoryEntry, ...]] = {}
 
     async def active_rules_revision_id(self) -> int:
         return 7
@@ -132,21 +137,24 @@ class FakeRuns:
     async def active_current_version_id(self) -> int | None:
         return self.current_version_id
 
-    async def active_publication_versions(self, kind: BuildKind) -> Sequence[int]:
-        return self.published_versions
-
     async def set_current_version(self, version_id: int | None) -> None:
         self.current_version_id = version_id
 
     async def input_generation(self, kind: BuildKind) -> int:
         return 1
 
-    async def activate_snapshot(self, snapshot: RecordSnapshot, batch: ComputationBatch) -> int:
-        return await self.activate(batch)
+    async def prior_publication(self, kind: BuildKind, build_ids: frozenset[int]) -> PriorPublication:
+        return PriorPublication()
 
-    async def activate(self, batch: ComputationBatch) -> int:
+    async def pending_builds(self, kind: BuildKind) -> frozenset[int]:
+        return frozenset()
+
+    async def record_categories(self, record_ids: frozenset[uuid.UUID]) -> frozenset[ScopedCategory]:
+        return frozenset()
+
+    async def publish(self, batch: ComputationBatch) -> RebuildSummary:
         self.batches.append(batch)
-        return len(self.batches)
+        return RebuildSummary(run_ids=(len(self.batches),), records=len(batch.records))
 
     async def list_gaps(self, *, kind: BuildKind | None = None) -> Sequence[RecordGap]:
         return self.gap_rows
@@ -160,6 +168,12 @@ class FakeRuns:
     async def get_latest_record(self, record_id: uuid.UUID) -> PublishedRecordResult | None:
         return next((result for result in self.published_records.values() if result.record_id == record_id), None)
 
+    async def get_record_history(self, record_id: uuid.UUID) -> tuple[HolderHistoryEntry, ...]:
+        return self.history.get(record_id, ())
+
+    async def stored_record(self, record_id: uuid.UUID) -> StoredRecord | None:
+        return None
+
     async def list_published_records(
         self,
         *,
@@ -168,15 +182,13 @@ class FakeRuns:
         before_id: int | None = None,
         descending: bool = True,
         limit: int,
-        resolved_only: bool = False,
         version_scope: VersionScope | None = None,
     ) -> Sequence[PublishedRecordResult]:
         ordered = sorted(
             (
                 key
                 for key, record in self.published_records.items()
-                if (not resolved_only or record.status is ResolutionStatus.RESOLVED)
-                and (version_scope is None or record.version_scope is version_scope)
+                if version_scope is None or record.version_scope is version_scope
             ),
             reverse=descending,
         )
@@ -187,46 +199,65 @@ class FakeRuns:
             ordered = [rid for rid in ordered if (rid < after_id if descending else rid > after_id)]
         return tuple(self.published_records[rid] for rid in ordered[offset : offset + limit])
 
-    async def count_published_records(
-        self, *, resolved_only: bool = False, version_scope: VersionScope | None = None
-    ) -> int:
+    async def count_published_records(self, *, version_scope: VersionScope | None = None) -> int:
         return sum(
-            (not resolved_only or record.status is ResolutionStatus.RESOLVED)
-            and (version_scope is None or record.version_scope is version_scope)
-            for record in self.published_records.values()
+            version_scope is None or record.version_scope is version_scope for record in self.published_records.values()
         )
 
     async def list_requested_categories(self, kind: BuildKind) -> Sequence[CategoryIdentity]:
         return tuple(self.requested.get(kind, ()))
 
-    async def get_definition_identity(self, definition_id: int) -> CategoryIdentity | None:
-        return self.definition_identities.get(definition_id)
+    async def definition_record_id(self, definition_id: int) -> uuid.UUID | None:
+        return self.definition_records.get(definition_id)
 
     async def save_requested_category(
         self,
         rules_revision_id: int,
         category: CategoryIdentity,
         titles: Mapping[RecordCriterion, FormattedTitle],
-    ) -> None:
+    ) -> int:
         assert rules_revision_id == 7
         self.requested.setdefault(category.kind, []).append(category)
         self.requested_titles[category.key] = dict(titles)
+        return len(titles)
 
-    async def claim_recompute_kinds(self, *, limit: int) -> RecomputeLease:
-        kinds = self.queued[:limit]
-        return RecomputeLease(
-            kinds=kinds,
-            claim_tokens=tuple(uuid.uuid4() for _ in kinds),
-            refresh_active_versions=self.refresh_active_versions,
+    async def request_record_recompute(self, record_id: uuid.UUID) -> bool:
+        self.record_requests.append(record_id)
+        return True
+
+    async def request_full_recompute(self, kinds: Sequence[BuildKind], *, target: RecomputeTarget) -> None:
+        self.queued += tuple(
+            RecomputeLease(kind=kind, full=True, backstop=target is RecomputeTarget.BACKSTOP) for kind in kinds
         )
 
+    async def claim_recompute(self, *, limit: int) -> RecomputeLease:
+        if not self.queued:
+            return RecomputeLease(kind=None)
+        lease, *rest = self.queued
+        self.queued = tuple(rest)
+        return lease
+
     async def complete_recompute(self, lease: RecomputeLease) -> None:
-        self.completed += lease.kinds
-        self.queued = tuple(kind for kind in self.queued if kind not in lease.kinds)
+        assert lease.kind is not None
+        self.completed += (lease.kind,)
 
     async def fail_recompute(self, lease: RecomputeLease, error: str) -> None:
-        self.failed = (lease.kinds, error)
-        self.queued = tuple(kind for kind in self.queued if kind not in lease.kinds)
+        self.failed = (lease.kind, error)
+
+    async def list_recompute_queue(self) -> Sequence[RecomputeItem]:
+        return ()
+
+    async def list_drift(
+        self, *, offset: int, after_id: int | None, before_id: int | None, limit: int
+    ) -> Sequence[RecordDrift]:
+        return ()
+
+    async def count_drift(self) -> int:
+        return 0
+
+
+def _full(*kinds: BuildKind) -> tuple[RecomputeLease, ...]:
+    return tuple(RecomputeLease(kind=kind, full=True) for kind in kinds)
 
 
 class FakePublicBuilds:
@@ -272,7 +303,6 @@ def _published_record(*holder_build_ids: int) -> PublishedRecordResult:
         criterion=RecordCriterion.FASTEST,
         build_kind=BuildKind.DOOR,
         version_scope=VersionScope.ALL_TIME,
-        status=ResolutionStatus.RESOLVED,
         holder_build_ids=holder_build_ids,
         computed_at=datetime(2026, 8, 10, 12, tzinfo=UTC),
     )
@@ -324,8 +354,7 @@ async def test_rebuild_computes_eager_subsets_and_all_door_base_titles() -> None
     summary = await service.rebuild(kinds=(BuildKind.DOOR,), context=ActingContext.direct(AnonymousActor()))
 
     assert summary.run_ids == (1,)
-    assert summary.definitions == 20
-    assert summary.resolved == 20
+    assert summary.records == 20
     batch = runs.batches[0]
     shared = [record for record in batch.records if record.category.identity.restriction_ids == (1,)]
     first = next(record for record in shared if record.criterion is RecordCriterion.FIRST)
@@ -402,20 +431,20 @@ async def test_parameterized_at_most_restriction_derives_weaker_thresholds() -> 
 
 
 @pytest.mark.asyncio
-async def test_rebuild_creates_empty_extender_run() -> None:
+async def test_rebuild_publishes_an_empty_extender_batch() -> None:
     runs = FakeRuns()
     service = RecordComputationService(uow_factory=lambda: RecordScope(FakeCandidates(()), runs))
 
     summary = await service.rebuild(kinds=(BuildKind.EXTENDER,), context=ActingContext.direct(AnonymousActor()))
 
     assert summary.run_ids == (1,)
-    assert summary.definitions == 0
+    assert summary.records == 0
     assert runs.batches[0].kind is BuildKind.EXTENDER
     assert runs.batches[0].records == ()
 
 
 @pytest.mark.asyncio
-async def test_current_version_run_filters_incompatible_candidates() -> None:
+async def test_current_version_scope_filters_incompatible_candidates() -> None:
     candidates = FakeCandidates(
         (
             _door(1, volume=10, opening=5, restrictions=(), version_ids=frozenset({2})),
@@ -423,24 +452,14 @@ async def test_current_version_run_filters_incompatible_candidates() -> None:
         )
     )
     runs = FakeRuns()
+    runs.current_version_id = 3
     service = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
 
-    await service.rebuild(current_version_id=3, kinds=(BuildKind.DOOR,), context=ActingContext.direct(AnonymousActor()))
+    await service.rebuild(kinds=(BuildKind.DOOR,), context=ActingContext.direct(AnonymousActor()))
 
-    assert len(runs.batches) == 2
-    current = runs.batches[1]
-    assert current.version_id == 3
-    assert {
-        record.resolution.holder_ids
-        for record in current.records
-        if record.resolution.status is ResolutionStatus.RESOLVED
-    } == {(2,)}
-    all_time = runs.batches[0]
-    assert {
-        record.resolution.holder_ids
-        for record in all_time.records
-        if record.resolution.status is ResolutionStatus.RESOLVED
-    } == {(1,), (2,)}
+    (batch,) = runs.batches
+    assert {record.resolution.holder_ids for record in batch.records if record.version_id == 3} == {(2,)}
+    assert {record.resolution.holder_ids for record in batch.records if record.version_id is None} == {(1,), (2,)}
 
 
 @pytest.mark.asyncio
@@ -468,7 +487,7 @@ async def test_eager_categories_never_exceed_eight_restrictions() -> None:
 
 
 @pytest.mark.asyncio
-async def test_lookup_materializes_large_exact_category_and_rebuilds_full_kind() -> None:
+async def test_lookup_saves_a_large_exact_category_that_rebuilds_keep() -> None:
     restrictions = tuple(
         CandidateTag(
             id=index,
@@ -488,7 +507,7 @@ async def test_lookup_materializes_large_exact_category_and_rebuilds_full_kind()
         uow_factory=lambda: RecordScope(candidates, runs),
     )
 
-    summary = await service.lookup_or_materialize(
+    queued = await service.lookup_or_materialize(
         RecordLookupRequest(
             kind=BuildKind.DOOR,
             base_key="door|2x2|t[20]|Door",
@@ -496,8 +515,9 @@ async def test_lookup_materializes_large_exact_category_and_rebuilds_full_kind()
         ),
         context=ActingContext.direct(AnonymousActor()),
     )
+    await computation.rebuild(kinds=(BuildKind.DOOR,), context=ActingContext.direct(AnonymousActor()))
 
-    assert summary.run_ids == (1,)
+    assert queued == len(RecordCriterion)
     identity = runs.requested[BuildKind.DOOR][0]
     assert identity.restriction_ids == tuple(range(1, 10))
     titles = runs.requested_titles[identity.key]
@@ -510,55 +530,32 @@ async def test_lookup_materializes_large_exact_category_and_rebuilds_full_kind()
 
 
 @pytest.mark.asyncio
-async def test_materialize_definition_round_trips_the_stored_identity() -> None:
-    flush = CandidateTag(id=1, kind=RecordTagRole.RESTRICTION, name="Flush", restriction_type="wiring-placement")
-    candidates = FakeCandidates((_door(1, volume=10, opening=5, restrictions=(flush,)),))
+async def test_definition_recompute_queues_the_record_it_names() -> None:
     runs = FakeRuns()
-    identity = CategoryIdentity(BuildKind.DOOR, "door|2x2|t[20]|Door", (1,))
-    runs.definition_identities[42] = identity
+    record_id = uuid.UUID(int=42)
+    runs.definition_records[42] = record_id
     service = RecordService(
-        RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs)),
+        RecordComputationService(uow_factory=lambda: RecordScope(FakeCandidates(()), runs)),
         permissions=create_autospec(PermissionService, instance=True),
-        uow_factory=lambda: RecordScope(candidates, runs),
+        uow_factory=lambda: RecordScope(FakeCandidates(()), runs),
     )
 
-    summary = await service.materialize_definition(
-        42, kind=BuildKind.DOOR, context=ActingContext.direct(AnonymousActor())
-    )
+    await service.request_definition_recompute(42, context=ActingContext.direct(AnonymousActor()))
 
-    assert summary.run_ids == (1,)
-    assert runs.requested[BuildKind.DOOR] == [identity]
+    assert runs.record_requests == [record_id]
 
 
 @pytest.mark.asyncio
-async def test_materialize_definition_rejects_unknown_id() -> None:
-    candidates = FakeCandidates(())
+async def test_definition_recompute_rejects_unknown_id() -> None:
     runs = FakeRuns()
     service = RecordService(
-        RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs)),
+        RecordComputationService(uow_factory=lambda: RecordScope(FakeCandidates(()), runs)),
         permissions=create_autospec(PermissionService, instance=True),
-        uow_factory=lambda: RecordScope(candidates, runs),
+        uow_factory=lambda: RecordScope(FakeCandidates(()), runs),
     )
 
     with pytest.raises(RecordDefinitionNotFoundError):
-        await service.materialize_definition(999, context=ActingContext.direct(AnonymousActor()))
-
-
-@pytest.mark.asyncio
-async def test_materialize_definition_rejects_kind_mismatch() -> None:
-    candidates = FakeCandidates(())
-    runs = FakeRuns()
-    runs.definition_identities[42] = CategoryIdentity(BuildKind.DOOR, "door|2x2|t[20]|Door", ())
-    service = RecordService(
-        RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs)),
-        permissions=create_autospec(PermissionService, instance=True),
-        uow_factory=lambda: RecordScope(candidates, runs),
-    )
-
-    with pytest.raises(ValidationError):
-        await service.materialize_definition(
-            42, kind=BuildKind.EXTENDER, context=ActingContext.direct(AnonymousActor())
-        )
+        await service.request_definition_recompute(999, context=ActingContext.direct(AnonymousActor()))
 
 
 @pytest.mark.asyncio
@@ -637,46 +634,32 @@ async def test_public_record_query_rejects_unavailable_holder() -> None:
 
 
 @pytest.mark.asyncio
-async def test_public_record_query_accepts_empty_nonresolved_result() -> None:
+async def test_public_record_query_shows_a_retired_record_with_its_history() -> None:
     runs = FakeRuns()
-    runs.published_records[7] = replace(
-        _published_record(41),
-        status=ResolutionStatus.NO_CANDIDATE,
-        holder_build_ids=(),
-    )
-    builds = FakePublicBuilds(())
+    retired_at = datetime(2026, 9, 1, tzinfo=UTC)
+    record = replace(_published_record(), result_id=None, retired_at=retired_at, computed_at=retired_at)
+    runs.published_records[7] = record
+    runs.history[record.record_id] = (HolderHistoryEntry((41,), datetime(2020, 1, 1, tzinfo=UTC), retired_at),)
+    builds = FakePublicBuilds((_public_build(41),))
     service = PublicRecordQueryService(builds, uow_factory=lambda: RecordQueryScope(runs))
 
-    detail = await service.get(runs.published_records[7].record_id, context=ActingContext.direct(AnonymousActor()))
+    detail = await service.get(record.record_id, context=ActingContext.direct(AnonymousActor()))
 
     assert detail is not None
+    assert detail.retired_at == retired_at
     assert detail.holder_builds == ()
-    assert builds.requests == [()]
+    assert [period.build_ids for period in detail.history] == [(41,)]
+    assert builds.requests == [(41,)]
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "result",
-    [
-        _published_record(),
-        replace(_published_record(41), status=ResolutionStatus.NO_CANDIDATE),
-    ],
-)
-async def test_public_record_query_rejects_status_holder_corruption(result: PublishedRecordResult) -> None:
+async def test_public_record_query_rejects_a_current_result_without_holders() -> None:
     runs = FakeRuns()
-    runs.published_records[7] = result
-    service = PublicRecordQueryService(
-        FakePublicBuilds((_public_build(41),)), uow_factory=lambda: RecordQueryScope(runs)
-    )
+    runs.published_records[7] = _published_record()
+    service = PublicRecordQueryService(FakePublicBuilds(()), uow_factory=lambda: RecordQueryScope(runs))
 
-    with pytest.raises(DataIntegrityError, match="status contradicts") as exc_info:
+    with pytest.raises(DataIntegrityError, match="no holders"):
         await service.get(runs.published_records[7].record_id, context=ActingContext.direct(AnonymousActor()))
-
-    assert exc_info.value.context == {
-        "record_id": str(runs.published_records[7].record_id),
-        "status": result.status.value,
-        "holder_build_ids": list(result.holder_build_ids),
-    }
 
 
 @pytest.mark.asyncio
@@ -707,9 +690,9 @@ async def test_title_gaps_delegates_active_definition_query() -> None:
 
 
 @pytest.mark.asyncio
-async def test_process_queue_rebuilds_and_acknowledges_claimed_kinds() -> None:
+async def test_process_queue_publishes_and_acknowledges_one_kind_per_batch() -> None:
     runs = FakeRuns()
-    runs.queued = (BuildKind.DOOR, BuildKind.EXTENDER)
+    runs.queued = _full(BuildKind.DOOR, BuildKind.EXTENDER)
     computation = RecordComputationService(uow_factory=lambda: RecordScope(FakeCandidates(()), runs))
 
     result = await computation.process_queue(context=ActingContext.worker("test-worker"))
@@ -721,51 +704,39 @@ async def test_process_queue_rebuilds_and_acknowledges_claimed_kinds() -> None:
 
 
 @pytest.mark.asyncio
-async def test_process_queue_preserves_the_pinned_current_version() -> None:
+async def test_process_queue_computes_all_time_and_the_pinned_version() -> None:
     runs = FakeRuns()
-    runs.queued = (BuildKind.DOOR,)
+    runs.queued = _full(BuildKind.DOOR)
     runs.current_version_id = 3
-    computation = RecordComputationService(uow_factory=lambda: RecordScope(FakeCandidates(()), runs))
-
-    result = await computation.process_queue(context=ActingContext.worker("test-worker"))
-
-    assert result.rebuild is not None
-    assert result.rebuild.run_ids == (1, 2)
-    assert [batch.version_id for batch in runs.batches] == [None, 3]
-
-
-async def test_holder_measurement_backfill_refreshes_already_published_versions() -> None:
-    runs = FakeRuns()
-    runs.queued = (BuildKind.DOOR,)
-    runs.current_version_id = 3
-    runs.published_versions = (2, 3)
-    runs.refresh_active_versions = True
-    computation = RecordComputationService(uow_factory=lambda: RecordScope(FakeCandidates(()), runs))
-
-    await computation.process_queue(context=ActingContext.worker("test-worker"))
-
-    assert [batch.version_id for batch in runs.batches] == [None, 3, 2]
-    assert runs.completed == (BuildKind.DOOR,)
-
-
-async def test_rebuild_rolls_back_all_scopes_when_later_activation_fails() -> None:
-    class FailingRuns(FakeRuns):
-        @override
-        async def activate(self, batch: ComputationBatch) -> int:
-            if self.batches:
-                raise RuntimeError("second activation failed")
-            return await super().activate(batch)
-
-    runs = FailingRuns()
     candidates = FakeCandidates((_door(1, volume=10, opening=5, restrictions=()),))
     computation = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
 
-    with pytest.raises(RuntimeError, match="second activation"):
-        await computation.rebuild(
-            kinds=(BuildKind.DOOR,), current_version_id=3, context=ActingContext.direct(AnonymousActor())
-        )
+    await computation.process_queue(context=ActingContext.worker("test-worker"))
 
-    assert runs.batches == []
+    (batch,) = runs.batches
+    assert {record.version_id for record in batch.records} == {None, 3}
+
+
+async def test_a_build_lease_recomputes_only_the_categories_of_that_build() -> None:
+    flush = CandidateTag(id=1, kind=RecordTagRole.RESTRICTION, name="Flush", restriction_type="wiring-placement")
+    three = replace(_door(2, volume=12, opening=4, restrictions=()), door_opening=(3, 2, 1))
+    assert three.door is not None
+    three = replace(three, door=replace(three.door, size="3x2"))
+    runs = FakeRuns()
+    runs.queued = (RecomputeLease(kind=BuildKind.DOOR, builds=frozenset({1})),)
+    candidates = FakeCandidates((_door(1, volume=10, opening=5, restrictions=(flush,)), three))
+    computation = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
+
+    await computation.process_queue(context=ActingContext.worker("test-worker"))
+
+    (batch,) = runs.batches
+    assert {identity.base_key for identity in (record.category.identity for record in batch.records)} == {
+        "door|2x2|t[20]|Door"
+    }
+    assert {key for _version, key in batch.categories} == {
+        "door:door|2x2|t[20]|Door:r[]:p[]",
+        "door:door|2x2|t[20]|Door:r[1]:p[]",
+    }
 
 
 async def test_live_door_lookup_applies_tags_version_and_thresholds_without_writes() -> None:
@@ -847,7 +818,7 @@ async def test_live_lookup_rejects_incompatible_threshold_without_crashing(thres
         ),
         context=ActingContext.direct(AnonymousActor()),
     )
-    assert result.resolution.status is ResolutionStatus.NO_CANDIDATE
+    assert not result.resolution
 
 
 async def test_width_lookup_filters_tags_and_versions_without_writes() -> None:
@@ -930,7 +901,7 @@ async def test_range_admission_precedes_loading_and_releases_on_cancellation() -
 
 async def test_concrete_queue_completes_without_range_work() -> None:
     runs = FakeRuns()
-    runs.queued = (BuildKind.DOOR,)
+    runs.queued = _full(BuildKind.DOOR)
     computation = RecordComputationService(uow_factory=lambda: RecordScope(FakeCandidates(()), runs))
 
     await computation.process_queue(context=ActingContext.worker("test-worker"))
@@ -1003,8 +974,10 @@ async def test_family_sample_never_seeds_categories_but_explicit_large_request_d
         RecordLookupRequest(kind=BuildKind.DOOR, base_key="door|9999x2|t[20]|Door", restriction_ids=frozenset()),
         context=ActingContext.direct(AnonymousActor()),
     )
+    await computation.rebuild(kinds=(BuildKind.DOOR,), context=ActingContext.direct(AnonymousActor()))
     records = runs.batches[-1].records
-    assert len(records) == 5
+    # A family has no completion date, so nothing competes for "first" and it has no result.
+    assert {r.criterion for r in records} == set(RecordCriterion) - {RecordCriterion.FIRST}
     assert {r.category.identity.base_key for r in records} == {"door|9999x2|t[20]|Door"}
     smallest = next(r for r in records if r.criterion is RecordCriterion.SMALLEST)
     assert smallest.resolution.holder_ids == (2,)
@@ -1024,7 +997,7 @@ async def test_ordinary_records_exclude_unproven_expansion_sizes(unknown: bool) 
     computation = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
     await computation.rebuild(kinds=(BuildKind.DOOR,), context=ActingContext.direct(AnonymousActor()))
     smallest = next(r for r in runs.batches[0].records if r.criterion is RecordCriterion.SMALLEST)
-    assert smallest.resolution.status is ResolutionStatus.RESOLVED
+    assert smallest.resolution
     assert smallest.resolution.holder_ids == (1,)
     assert smallest.resolution.gaps == ()
     if unknown:
@@ -1044,15 +1017,15 @@ async def test_family_population_respects_version_and_category_identity() -> Non
     wrong_type = replace(family, candidate=replace(family.candidate, build_id=4), types=())
     candidates = FakeCandidates((fixed, family, wrong_orientation, wrong_type))
     runs = FakeRuns()
+    runs.current_version_id = 3
     computation = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
-    await computation.rebuild(
-        kinds=(BuildKind.DOOR,), current_version_id=3, context=ActingContext.direct(AnonymousActor())
-    )
-    all_time = next(r for r in runs.batches[0].records if r.criterion is RecordCriterion.SMALLEST)
+    await computation.rebuild(kinds=(BuildKind.DOOR,), context=ActingContext.direct(AnonymousActor()))
+    records = runs.batches[0].records
+    all_time = next(r for r in records if r.criterion is RecordCriterion.SMALLEST and r.version_id is None)
     assert all_time.resolution.holder_ids == (2,)
     assert all_time.door_evidence is not None
     assert {c.build_id for c in all_time.door_evidence.evaluation.configurations} == {1, 2}
-    current = next(r for r in runs.batches[1].records if r.criterion is RecordCriterion.SMALLEST)
+    current = next(r for r in records if r.criterion is RecordCriterion.SMALLEST and r.version_id == 3)
     assert current.resolution.holder_ids == (1,)
     assert current.door_evidence is None
 
@@ -1094,20 +1067,20 @@ async def test_family_absent_from_a_size_leaves_that_category_alone() -> None:
 async def test_failed_kind_does_not_roll_back_other_kind_publication() -> None:
     class FailingRuns(FakeRuns):
         @override
-        async def activate(self, batch: ComputationBatch) -> int:
+        async def publish(self, batch: ComputationBatch) -> RebuildSummary:
             if batch.kind is BuildKind.DOOR:
                 raise RuntimeError("door computation failed")
-            return await super().activate(batch)
+            return await super().publish(batch)
 
     runs = FailingRuns()
-    runs.queued = (BuildKind.DOOR, BuildKind.EXTENDER)
+    runs.queued = _full(BuildKind.DOOR, BuildKind.EXTENDER)
     service = RecordComputationService(uow_factory=lambda: RecordScope(FakeCandidates(()), runs))
 
     with pytest.raises(RuntimeError, match="door computation failed"):
         await service.process_queue(context=ActingContext.worker("test-worker"))
 
     assert runs.completed == (BuildKind.EXTENDER,)
-    assert runs.failed == ((BuildKind.DOOR,), "door computation failed")
+    assert runs.failed == (BuildKind.DOOR, "door computation failed")
     assert [batch.kind for batch in runs.batches] == [BuildKind.EXTENDER]
 
 
@@ -1123,7 +1096,9 @@ async def test_record_inspection_rejects_callers_outside_the_credential_ceiling_
     with pytest.raises(PermissionDeniedError):
         await service.title_gaps(context=context)
     with pytest.raises(PermissionDeniedError):
-        await service.materialize_definition(1, context=context)
+        await service.request_definition_recompute(1, context=context)
+    with pytest.raises(PermissionDeniedError):
+        await service.inspect(uuid.UUID(int=1), context=context)
     with pytest.raises(PermissionDeniedError):
         await service.lookup_or_materialize(
             RecordLookupRequest(kind=BuildKind.DOOR, base_key="door", restriction_ids=frozenset()), context=context

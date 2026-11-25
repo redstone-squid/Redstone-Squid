@@ -612,12 +612,13 @@ BEGIN
         );
 
         IF target_kind IN ('door', 'extender') OR previous_kind IN ('door', 'extender') THEN
-            -- As in the upsert_*_request functions, clearing the claim token keeps an older worker
-            -- from acknowledging the new request.
+            -- One item per build and kind; a build moving between kinds affects both. Deleted builds
+            -- keep their ID, so the worker can still find the records they leave. As in the
+            -- upsert_*_request functions, clearing the claim token keeps an older worker from
+            -- acknowledging the new request.
             INSERT INTO public.record_recompute_queue
-                (scope_key, build_kind, build_id, reasons, enqueued_at, available_at)
-            SELECT kind, kind,
-                CASE WHEN build_deleted THEN NULL ELSE target_build_id END,
+                (scope_key, build_kind, target, build_id, reasons, enqueued_at, available_at)
+            SELECT kind || ':build:' || target_build_id, kind, 'build', target_build_id,
                 '["source_change"]'::jsonb, now(), now()
             FROM (
                 SELECT DISTINCT kind FROM unnest(ARRAY[target_kind, previous_kind]) AS kinds(kind)
@@ -625,14 +626,7 @@ BEGIN
             ) AS affected
             ORDER BY kind
             ON CONFLICT (scope_key) DO UPDATE
-            SET build_id = EXCLUDED.build_id,
-                reasons = (
-                    SELECT jsonb_agg(DISTINCT reason)
-                    FROM jsonb_array_elements_text(
-                        record_recompute_queue.reasons || EXCLUDED.reasons
-                    ) AS reason
-                ),
-                enqueued_at = EXCLUDED.enqueued_at,
+            SET enqueued_at = EXCLUDED.enqueued_at,
                 available_at = EXCLUDED.available_at,
                 attempts = 0,
                 claimed_at = NULL,
@@ -695,16 +689,12 @@ BEGIN
             'result:' || (CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END)::text,
             CASE WHEN TG_OP = 'DELETE' THEN 'delete' ELSE 'upsert' END
         );
-    ELSIF TG_TABLE_NAME = 'title_holders' THEN
+    ELSE
         PERFORM public.upsert_search_projection_request(
             'record',
             'result:' || (CASE WHEN TG_OP = 'DELETE' THEN OLD.result_id ELSE NEW.result_id END)::text,
             'upsert'
         );
-    ELSE
-        PERFORM public.upsert_search_projection_request('record', 'result:' || rr.id::text, 'upsert')
-        FROM public.title_results rr
-        WHERE rr.run_id = CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END;
     END IF;
     RETURN NULL;
 END;
@@ -3879,7 +3869,7 @@ CREATE TABLE public.notifications (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     read_at timestamp with time zone,
     revision bigint DEFAULT 1 NOT NULL,
-    CONSTRAINT notifications_kind_check CHECK ((kind = ANY (ARRAY['build_confirmed'::text, 'build_denied'::text, 'creator_build_confirmed'::text, 'record_gained'::text, 'staff_build_submitted'::text]))),
+    CONSTRAINT notifications_kind_check CHECK ((kind = ANY (ARRAY['build_confirmed'::text, 'build_denied'::text, 'creator_build_confirmed'::text, 'record_gained'::text, 'record_retired'::text, 'staff_build_submitted'::text]))),
     CONSTRAINT notifications_revision_positive CHECK ((revision > 0))
 );
 
@@ -4344,17 +4334,11 @@ CREATE TABLE public.record_computation_runs (
     id bigint NOT NULL,
     rules_revision_id bigint NOT NULL,
     build_kind text NOT NULL,
-    version_id smallint,
-    status text DEFAULT 'running'::text NOT NULL,
-    is_active boolean DEFAULT false NOT NULL,
     started_at timestamp with time zone DEFAULT now() NOT NULL,
-    completed_at timestamp with time zone,
-    error text,
-    publication_fingerprint text,
-    last_checked_at timestamp with time zone,
-    checked_generation bigint,
-    CONSTRAINT record_computation_runs_build_kind_check CHECK ((build_kind = ANY (ARRAY['door'::text, 'entrance'::text, 'extender'::text, 'utility'::text]))),
-    CONSTRAINT record_computation_runs_status_check CHECK ((status = ANY (ARRAY['running'::text, 'completed'::text, 'failed'::text])))
+    completed_at timestamp with time zone DEFAULT now() NOT NULL,
+    "full" boolean DEFAULT false NOT NULL,
+    input_generation bigint NOT NULL,
+    CONSTRAINT record_computation_runs_build_kind_check CHECK ((build_kind = ANY (ARRAY['door'::text, 'entrance'::text, 'extender'::text, 'utility'::text])))
 );
 
 
@@ -4362,7 +4346,7 @@ CREATE TABLE public.record_computation_runs (
 -- Name: TABLE record_computation_runs; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.record_computation_runs IS 'A computation attempt for one build kind and version, including its publication state.';
+COMMENT ON TABLE public.record_computation_runs IS 'One published batch of one build kind; results and drift name the run that wrote them.';
 
 
 --
@@ -4371,6 +4355,55 @@ COMMENT ON TABLE public.record_computation_runs IS 'A computation attempt for on
 
 ALTER TABLE public.record_computation_runs ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
     SEQUENCE NAME public.record_computation_runs_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: record_drift; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.record_drift (
+    id bigint NOT NULL,
+    run_id bigint NOT NULL,
+    title_id uuid NOT NULL,
+    detected_at timestamp with time zone DEFAULT now() NOT NULL,
+    published jsonb NOT NULL,
+    computed jsonb NOT NULL
+);
+
+
+--
+-- Name: TABLE record_drift; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.record_drift IS 'A record a backstop recompute changed although no queued change explained it.';
+
+
+--
+-- Name: COLUMN record_drift.published; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.record_drift.published IS 'Holders, gaps and members before the backstop; empty for a retired record.';
+
+
+--
+-- Name: COLUMN record_drift.computed; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.record_drift.computed IS 'The same facts as the backstop computed them; empty when it retired the record.';
+
+
+--
+-- Name: record_drift_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.record_drift ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.record_drift_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -4399,6 +4432,26 @@ COMMENT ON TABLE public.record_input_generations IS 'A permanent per-kind counte
 
 
 --
+-- Name: record_members; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.record_members (
+    title_id uuid NOT NULL,
+    build_id bigint NOT NULL
+);
+
+
+--
+-- Name: TABLE record_members; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.record_members IS 'A build in a live record''s category, whether or not it competes.
+
+There is no foreign key to builds: a deleted build''s rows must survive until
+a worker recomputes the records it leaves.';
+
+
+--
 -- Name: record_recompute_queue; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -4414,9 +4467,12 @@ CREATE TABLE public.record_recompute_queue (
     last_error text,
     available_at timestamp with time zone DEFAULT now() NOT NULL,
     claim_token uuid,
+    target text DEFAULT 'kind'::text NOT NULL,
+    title_id uuid,
     CONSTRAINT record_recompute_queue_attempts_nonnegative CHECK ((attempts >= 0)),
     CONSTRAINT record_recompute_queue_build_kind_check CHECK ((build_kind = ANY (ARRAY['door'::text, 'entrance'::text, 'extender'::text, 'utility'::text]))),
-    CONSTRAINT record_recompute_queue_claim_complete CHECK (((claimed_at IS NULL) = (claim_token IS NULL)))
+    CONSTRAINT record_recompute_queue_claim_complete CHECK (((claimed_at IS NULL) = (claim_token IS NULL))),
+    CONSTRAINT record_recompute_queue_target_check CHECK (((target = ANY (ARRAY['kind'::text, 'backstop'::text, 'build'::text, 'record'::text])) AND ((build_id IS NOT NULL) = (target = 'build'::text)) AND ((title_id IS NOT NULL) = (target = 'record'::text))))
 );
 
 
@@ -4424,7 +4480,10 @@ CREATE TABLE public.record_recompute_queue (
 -- Name: TABLE record_recompute_queue; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.record_recompute_queue IS 'A durable request to recompute an affected record scope.';
+COMMENT ON TABLE public.record_recompute_queue IS 'A durable request to recompute what one change affects.
+
+`scope_key` deduplicates requests: the kind alone for a whole-kind
+recompute, otherwise the kind and target, such as `door:build:12`.';
 
 
 --
@@ -4490,6 +4549,8 @@ CREATE TABLE public.record_titles (
     version_id smallint,
     category_key text NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
+    input_generation bigint,
+    retired_at timestamp with time zone,
     CONSTRAINT record_titles_base_title_check CHECK ((base_title = ANY (ARRAY['first'::text, 'fastest'::text, 'smallest'::text, 'fastest_smallest'::text, 'smallest_fastest'::text]))),
     CONSTRAINT record_titles_build_kind_check CHECK ((build_kind = ANY (ARRAY['door'::text, 'entrance'::text, 'extender'::text, 'utility'::text]))),
     CONSTRAINT record_titles_version_scope_check CHECK ((version_scope = ANY (ARRAY['all_time'::text, 'up_to_date'::text])))
@@ -4501,6 +4562,20 @@ CREATE TABLE public.record_titles (
 --
 
 COMMENT ON TABLE public.record_titles IS 'A stable public identity for a record title across rules revisions.';
+
+
+--
+-- Name: COLUMN record_titles.input_generation; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.record_titles.input_generation IS 'The kind''s input generation last published or retired here; older batches leave the record alone.';
+
+
+--
+-- Name: COLUMN record_titles.retired_at; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.record_titles.retired_at IS 'When the record last lost its competitors; null while it has a result.';
 
 
 --
@@ -5941,13 +6016,13 @@ ALTER TABLE public.title_definitions ALTER COLUMN id ADD GENERATED BY DEFAULT AS
 
 CREATE TABLE public.title_holder_history (
     id bigint NOT NULL,
-    run_id bigint NOT NULL,
     definition_id bigint NOT NULL,
     build_id bigint NOT NULL,
     predecessor_id bigint,
     held_from timestamp with time zone NOT NULL,
     held_until timestamp with time zone,
     metric_snapshot jsonb NOT NULL,
+    title_id uuid NOT NULL,
     CONSTRAINT title_holder_history_interval_check CHECK (((held_until IS NULL) OR (held_until >= held_from)))
 );
 
@@ -5956,7 +6031,10 @@ CREATE TABLE public.title_holder_history (
 -- Name: TABLE title_holder_history; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.title_holder_history IS 'A reconstructed interval in a definition''s beaten-record chronology.';
+COMMENT ON TABLE public.title_holder_history IS 'A reconstructed interval in a record''s beaten-record chronology.
+
+Each publication replaces a record''s periods. Retirement keeps them and
+closes the open one.';
 
 
 --
@@ -6004,13 +6082,14 @@ CREATE TABLE public.title_results (
     id bigint NOT NULL,
     run_id bigint NOT NULL,
     definition_id bigint NOT NULL,
-    status text NOT NULL,
     gap_reasons jsonb DEFAULT '{}'::jsonb NOT NULL,
     history_complete boolean DEFAULT true NOT NULL,
     computed_at timestamp with time zone DEFAULT now() NOT NULL,
     door_evidence jsonb,
-    CONSTRAINT title_results_door_evidence_check CHECK (((door_evidence IS NULL) OR (((jsonb_typeof(door_evidence) = 'object'::text) AND ((door_evidence -> 'schema_version'::text) = '1'::jsonb)) IS TRUE))),
-    CONSTRAINT title_results_status_check CHECK ((status = ANY (ARRAY['resolved'::text, 'no_candidate'::text])))
+    title_id uuid NOT NULL,
+    fingerprint text NOT NULL,
+    last_checked_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT title_results_door_evidence_check CHECK (((door_evidence IS NULL) OR (((jsonb_typeof(door_evidence) = 'object'::text) AND ((door_evidence -> 'schema_version'::text) = '1'::jsonb)) IS TRUE)))
 );
 
 
@@ -6018,7 +6097,21 @@ CREATE TABLE public.title_results (
 -- Name: TABLE title_results; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.title_results IS 'The outcome for one definition in a computation run.';
+COMMENT ON TABLE public.title_results IS 'A live record''s current outcome; a record without competitors has none.';
+
+
+--
+-- Name: COLUMN title_results.run_id; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.title_results.run_id IS 'The batch that last changed this result.';
+
+
+--
+-- Name: COLUMN title_results.fingerprint; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.title_results.fingerprint IS 'A digest of the published contents, to skip republishing unchanged results.';
 
 
 --
@@ -7282,11 +7375,27 @@ ALTER TABLE ONLY public.record_computation_runs
 
 
 --
+-- Name: record_drift record_drift_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.record_drift
+    ADD CONSTRAINT record_drift_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: record_input_generations record_input_generations_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.record_input_generations
     ADD CONSTRAINT record_input_generations_pkey PRIMARY KEY (build_kind);
+
+
+--
+-- Name: record_members record_members_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.record_members
+    ADD CONSTRAINT record_members_pkey PRIMARY KEY (title_id, build_id);
 
 
 --
@@ -7806,7 +7915,7 @@ ALTER TABLE ONLY public.title_definitions
 --
 
 ALTER TABLE ONLY public.title_holder_history
-    ADD CONSTRAINT title_holder_history_identity_key UNIQUE (run_id, definition_id, build_id, held_from);
+    ADD CONSTRAINT title_holder_history_identity_key UNIQUE (title_id, build_id, held_from);
 
 
 --
@@ -7834,11 +7943,11 @@ ALTER TABLE ONLY public.title_results
 
 
 --
--- Name: title_results title_results_run_definition_key; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: title_results title_results_title_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.title_results
-    ADD CONSTRAINT title_results_run_definition_key UNIQUE (run_id, definition_id);
+    ADD CONSTRAINT title_results_title_key UNIQUE (title_id);
 
 
 --
@@ -8697,17 +8806,31 @@ CREATE INDEX public_creator_redirects_target_idx ON public.public_creator_redire
 
 
 --
--- Name: record_computation_runs_one_active_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX record_computation_runs_one_active_idx ON public.record_computation_runs USING btree (build_kind, version_id) NULLS NOT DISTINCT WHERE is_active;
-
-
---
 -- Name: record_computation_runs_started_idx; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX record_computation_runs_started_idx ON public.record_computation_runs USING btree (started_at);
+
+
+--
+-- Name: record_drift_run_id_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX record_drift_run_id_idx ON public.record_drift USING btree (run_id);
+
+
+--
+-- Name: record_drift_title_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX record_drift_title_idx ON public.record_drift USING btree (title_id);
+
+
+--
+-- Name: record_members_build_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX record_members_build_idx ON public.record_members USING btree (build_id);
 
 
 --
@@ -8718,10 +8841,24 @@ CREATE INDEX record_recompute_queue_build_idx ON public.record_recompute_queue U
 
 
 --
+-- Name: record_recompute_queue_kind_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX record_recompute_queue_kind_idx ON public.record_recompute_queue USING btree (build_kind);
+
+
+--
 -- Name: record_recompute_queue_ready_idx; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX record_recompute_queue_ready_idx ON public.record_recompute_queue USING btree (available_at) WHERE (claimed_at IS NULL);
+
+
+--
+-- Name: record_recompute_queue_title_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX record_recompute_queue_title_idx ON public.record_recompute_queue USING btree (title_id);
 
 
 --
@@ -9162,7 +9299,7 @@ CREATE INDEX title_holder_history_build_idx ON public.title_holder_history USING
 -- Name: title_holder_history_definition_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX title_holder_history_definition_idx ON public.title_holder_history USING btree (definition_id, held_from);
+CREATE INDEX title_holder_history_definition_idx ON public.title_holder_history USING btree (definition_id);
 
 
 --
@@ -9177,6 +9314,13 @@ CREATE INDEX title_holders_build_idx ON public.title_holders USING btree (build_
 --
 
 CREATE INDEX title_results_definition_idx ON public.title_results USING btree (definition_id);
+
+
+--
+-- Name: title_results_run_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX title_results_run_idx ON public.title_results USING btree (run_id);
 
 
 --
@@ -9709,13 +9853,6 @@ CREATE TRIGGER permission_role_patterns_bump_epoch BEFORE INSERT OR DELETE OR UP
 --
 
 CREATE TRIGGER permission_roles_bump_epoch BEFORE INSERT OR DELETE OR UPDATE ON public.permission_roles FOR EACH STATEMENT EXECUTE FUNCTION public.bump_permission_epoch();
-
-
---
--- Name: record_computation_runs record_computation_runs_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
---
-
-CREATE TRIGGER record_computation_runs_enqueue_search AFTER INSERT OR DELETE OR UPDATE OF is_active ON public.record_computation_runs FOR EACH ROW EXECUTE FUNCTION public.enqueue_computed_record_search_projection();
 
 
 --
@@ -10655,19 +10792,35 @@ ALTER TABLE ONLY public.record_computation_runs
 
 
 --
--- Name: record_computation_runs record_computation_runs_version_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: record_drift record_drift_run_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.record_computation_runs
-    ADD CONSTRAINT record_computation_runs_version_id_fkey FOREIGN KEY (version_id) REFERENCES public.versions(id) ON DELETE RESTRICT;
+ALTER TABLE ONLY public.record_drift
+    ADD CONSTRAINT record_drift_run_id_fkey FOREIGN KEY (run_id) REFERENCES public.record_computation_runs(id) ON DELETE CASCADE;
 
 
 --
--- Name: record_recompute_queue record_recompute_queue_build_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: record_drift record_drift_title_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.record_drift
+    ADD CONSTRAINT record_drift_title_id_fkey FOREIGN KEY (title_id) REFERENCES public.record_titles(public_id) ON DELETE CASCADE;
+
+
+--
+-- Name: record_members record_members_title_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.record_members
+    ADD CONSTRAINT record_members_title_id_fkey FOREIGN KEY (title_id) REFERENCES public.record_titles(public_id) ON DELETE CASCADE;
+
+
+--
+-- Name: record_recompute_queue record_recompute_queue_title_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.record_recompute_queue
-    ADD CONSTRAINT record_recompute_queue_build_id_fkey FOREIGN KEY (build_id) REFERENCES public.builds(id) ON DELETE CASCADE;
+    ADD CONSTRAINT record_recompute_queue_title_id_fkey FOREIGN KEY (title_id) REFERENCES public.record_titles(public_id) ON DELETE CASCADE;
 
 
 --
@@ -11127,11 +11280,11 @@ ALTER TABLE ONLY public.title_holder_history
 
 
 --
--- Name: title_holder_history title_holder_history_run_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: title_holder_history title_holder_history_title_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.title_holder_history
-    ADD CONSTRAINT title_holder_history_run_id_fkey FOREIGN KEY (run_id) REFERENCES public.record_computation_runs(id) ON DELETE CASCADE;
+    ADD CONSTRAINT title_holder_history_title_id_fkey FOREIGN KEY (title_id) REFERENCES public.record_titles(public_id) ON DELETE CASCADE;
 
 
 --
@@ -11163,7 +11316,15 @@ ALTER TABLE ONLY public.title_results
 --
 
 ALTER TABLE ONLY public.title_results
-    ADD CONSTRAINT title_results_run_id_fkey FOREIGN KEY (run_id) REFERENCES public.record_computation_runs(id) ON DELETE CASCADE;
+    ADD CONSTRAINT title_results_run_id_fkey FOREIGN KEY (run_id) REFERENCES public.record_computation_runs(id) ON DELETE RESTRICT;
+
+
+--
+-- Name: title_results title_results_title_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.title_results
+    ADD CONSTRAINT title_results_title_id_fkey FOREIGN KEY (title_id) REFERENCES public.record_titles(public_id) ON DELETE CASCADE;
 
 
 --

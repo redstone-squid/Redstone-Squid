@@ -14,10 +14,12 @@ from squid.api.dependencies import (
     CurrentCaller,
     PublicRecords,
     RangePublications,
+    RecordAdministration,
     Records,
     Services,
     get_public_records,
     get_range_publication,
+    get_record_administration,
     get_records,
 )
 from squid.api.errors import responses
@@ -33,12 +35,19 @@ from squid.api.pagination import (
 )
 from squid.api.security import requires
 from squid.api.v1.browser_views import BrowserViews
-from squid.core.permissions.domain.catalogue import RECORD_ENTRY_REBUILD
+from squid.core.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD
 from squid.core.records.application.expansion_regions import DoorRangeQuery, DoorRangeResult
 from squid.core.records.application.live import DoorRecordLookup, LiveDoorRecord
-from squid.core.records.application.models import PublicRecordDetail, PublishedRecordResult
+from squid.core.records.application.models import (
+    PublicRecordDetail,
+    PublishedRecordResult,
+    RecomputeItem,
+    RecordDrift,
+    RecordInspection,
+)
 from squid.core.records.application.published_points import PublishedDoorPoint
 from squid.core.records.application.range_snapshots import RangePublication
+from squid.core.records.domain import BuildKind
 from squid.core.records.errors import RecordNotFoundError
 
 
@@ -57,7 +66,6 @@ class PublicRecordDTO(DataclassDTO[PublishedRecordResult]):
             "criterion",
             "build_kind",
             "version_scope",
-            "status",
             "holder_build_ids",
             "tied_build_ids",
             "computed_at",
@@ -84,7 +92,11 @@ _SORT_FIELDS = frozenset({"result_id"})
 async def get_record(
     record_id: FromPath[UUID], records: PublicRecords, services: Services, caller: CurrentCaller
 ) -> PublicRecordDetail:
-    """Return the latest published result for a record."""
+    """Return a record's current result, or its retired state with its holder history.
+
+    A record retires when no build competes for it, and keeps its ID and history
+    in case a competitor brings it back.
+    """
     detail = await records.get(record_id, context=caller.context())
     if detail is None:
         raise RecordNotFoundError(record_id)
@@ -235,6 +247,102 @@ async def get_door_range_point(
     return point
 
 
+@post(
+    "/{record_id:uuid}/recompute",
+    status_code=202,
+    responses=responses(401, 403, 404, 409, 422, 503),
+    operation_id="records_recompute",
+    before_request=reserve_idempotent_before_request,
+    guards=[requires(RECORD_ENTRY_INSPECT)],
+    security=[SERVICE, WEB_WRITE, DEVICE],
+    opt=contract(cli=transport_only(), scopes=("record.entry.inspect",)),
+)
+async def recompute_record(record_id: FromPath[UUID], records: Records, caller: CurrentCaller) -> None:
+    """Queue every criterion of the record's category for recomputation."""
+    if not await records.request_recompute(record_id, context=caller.context()):
+        raise RecordNotFoundError(record_id)
+
+
+@get(
+    "/{record_id:uuid}/inspection",
+    responses=responses(401, 403, 404, 422, 503),
+    operation_id="records_inspect",
+    response_headers={"Cache-Control": "private, no-store"},
+    guards=[requires(RECORD_ENTRY_INSPECT)],
+    security=[SERVICE, WEB, DEVICE],
+    opt=contract(cli=transport_only(), scopes=("record.entry.inspect",)),
+)
+async def inspect_record(record_id: FromPath[UUID], records: Records, caller: CurrentCaller) -> RecordInspection:
+    """Compute the record from current builds, without publishing, and compare it with its published result."""
+    inspection = await records.inspect(record_id, context=caller.context())
+    if inspection is None:
+        raise RecordNotFoundError(record_id)
+    return inspection
+
+
+@dataclass(frozen=True, slots=True)
+class RecomputeRequest:
+    kinds: tuple[BuildKind, ...] = (BuildKind.DOOR, BuildKind.EXTENDER)
+
+
+@post(
+    "/recomputes",
+    status_code=202,
+    responses=responses(400, 401, 403, 409, 422, 503),
+    operation_id="records_request_backstop",
+    dependencies={"administration": Provide(get_record_administration, sync_to_thread=False)},
+    before_request=reserve_idempotent_before_request,
+    guards=[requires(RECORD_ENTRY_REBUILD)],
+    security=[SERVICE, WEB_WRITE, DEVICE],
+    opt=contract(cli=transport_only(), scopes=("record.entry.rebuild",)),
+)
+async def request_backstop(
+    data: JSONBody[RecomputeRequest], administration: RecordAdministration, caller: CurrentCaller
+) -> None:
+    """Queue a full recompute that reports each difference no pending change explains as drift."""
+    await administration.request_backstop(kinds=data.kinds, context=caller.context())
+
+
+@get(
+    "/recompute-queue",
+    responses=responses(401, 403, 422, 503),
+    operation_id="records_recompute_queue",
+    response_headers={"Cache-Control": "private, no-store"},
+    guards=[requires(RECORD_ENTRY_INSPECT)],
+    security=[SERVICE, WEB, DEVICE],
+    opt=contract(cli=transport_only(), scopes=("record.entry.inspect",)),
+)
+async def recompute_queue(records: Records, caller: CurrentCaller) -> tuple[RecomputeItem, ...]:
+    """List pending and failed recompute requests, oldest first, with each one's last error."""
+    return tuple(await records.recompute_queue(context=caller.context()))
+
+
+@get(
+    "/drift",
+    responses=responses(400, 401, 403, 422, 503),
+    operation_id="records_drift",
+    response_headers={"Cache-Control": "private, no-store"},
+    guards=[requires(RECORD_ENTRY_INSPECT)],
+    security=[SERVICE, WEB, DEVICE],
+    opt=contract(cli=transport_only(), scopes=("record.entry.inspect",)),
+)
+async def list_drift(
+    records: Records,
+    caller: CurrentCaller,
+    page_size: PageSizeParam = 20,
+    offset: OffsetParam = None,
+    after_id: AfterIdParam = None,
+    before_id: BeforeIdParam = None,
+) -> Page[RecordDrift]:
+    """List records the backstop changed although no queued change explained it, newest first.
+
+    Each entry means the affected-set calculation missed a case.
+    """
+    selector = resolve_selector(offset=offset, after_id=after_id, before_id=before_id)
+    page = await records.drift(selector=selector, page_size=page_size, context=caller.context())
+    return Page[RecordDrift].from_domain(page)
+
+
 router = Router(
     dependencies={"records": Provide(get_records, sync_to_thread=False)},
     path="/records",
@@ -248,5 +356,10 @@ router = Router(
         register_door_ranges,
         refresh_door_ranges,
         get_door_range_point,
+        recompute_record,
+        inspect_record,
+        request_backstop,
+        recompute_queue,
+        list_drift,
     ],
 )

@@ -8,7 +8,6 @@ from squid.core.records.domain.models import (
     Candidate,
     CandidateGap,
     RecordFact,
-    ResolutionStatus,
     TimingVariant,
 )
 from squid.core.records.domain.resolution import (
@@ -33,7 +32,7 @@ def test_smallest_ignores_missing_completion_when_volume_is_decisive() -> None:
         )
     )
 
-    assert result.status is ResolutionStatus.RESOLVED
+    assert result
     assert result.holder_ids == (1,)
 
 
@@ -59,7 +58,7 @@ def test_smallest_preserves_exact_co_holders() -> None:
         )
     )
 
-    assert result.status is ResolutionStatus.RESOLVED
+    assert result
     assert result.holder_ids == (1, 2)
 
 
@@ -71,7 +70,7 @@ def test_smallest_undated_tie_loses_to_a_dated_build_but_remains_a_contender() -
         )
     )
 
-    assert result.status is ResolutionStatus.RESOLVED
+    assert result
     assert result.holder_ids == (2,)
     assert result.tied_ids == ()
     assert result.gaps == (CandidateGap(build_id=1, field=RecordFact.COMPLETION_AT),)
@@ -87,7 +86,7 @@ def test_smallest_undated_ties_share_the_record_until_dates_are_known() -> None:
 def test_smallest_has_no_candidate_without_fixed_volume() -> None:
     result = resolve_smallest((Candidate(build_id=1),))
 
-    assert result.status is ResolutionStatus.NO_CANDIDATE
+    assert not result
 
 
 def test_first_selects_the_earliest_known_completion() -> None:
@@ -99,7 +98,7 @@ def test_first_selects_the_earliest_known_completion() -> None:
         )
     )
 
-    assert result.status is ResolutionStatus.RESOLVED
+    assert result
     assert result.holder_ids == (3,)
     assert result.tied_ids == ()
     assert result.gaps == ()
@@ -119,7 +118,7 @@ def test_first_preserves_exact_co_holders() -> None:
 def test_first_has_no_candidate_without_completion_evidence() -> None:
     result = resolve_first((Candidate(build_id=1),))
 
-    assert result.status is ResolutionStatus.NO_CANDIDATE
+    assert not result
 
 
 def test_fastest_stops_before_missing_lower_priority_data_when_decisive() -> None:
@@ -131,7 +130,7 @@ def test_fastest_stops_before_missing_lower_priority_data_when_decisive() -> Non
         DOOR_TIMING_METHODS,
     )
 
-    assert result.status is ResolutionStatus.RESOLVED
+    assert result
     assert result.holder_ids == (1,)
 
 
@@ -145,7 +144,7 @@ def test_fastest_missing_method_loses_to_a_known_one_and_is_reported() -> None:
         DOOR_TIMING_METHODS,
     )
 
-    assert result.status is ResolutionStatus.RESOLVED
+    assert result
     assert result.holder_ids == (2,)
     assert result.gaps == (CandidateGap(build_id=1, field=RecordFact.OPENING_VISIBLE),)
 
@@ -198,7 +197,7 @@ def test_fastest_uses_completion_and_co_holders_after_all_methods_tie() -> None:
         DOOR_TIMING_METHODS,
     )
 
-    assert result.status is ResolutionStatus.RESOLVED
+    assert result
     assert result.holder_ids == (1, 2)
     assert result.tied_ids == (3,)
 

@@ -16,7 +16,7 @@ from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.records.application.expansion_regions import DoorRangeQuery
 from squid.core.records.application.live import DoorRecordLookup
 from squid.core.records.application.services import RecordComputationService, RecordService
-from squid.core.records.domain import BuildKind, RecordCriterion, ResolutionStatus, TimingVariant
+from squid.core.records.domain import BuildKind, RecordCriterion, TimingVariant
 from squid.core.records.domain.regions import RegionAnalysisStatus
 from squid.core.records.infrastructure.range_analyzer import SubprocessRangeAnalyzer
 from squid.core.records.infrastructure.repository import PostgresRecordRepository
@@ -157,7 +157,7 @@ async def test_live_lookup_does_not_materialize_large_sizes(
         no_version = await service.lookup_door(
             DoorRecordLookup(opening=(6, 3, 1), version_id=32767), context=ActingContext.direct(AnonymousActor())
         )
-        assert no_version.resolution.status is ResolutionStatus.NO_CANDIDATE
+        assert not no_version.resolution
     assert not any(statement.lstrip().upper().startswith(("INSERT", "UPDATE", "DELETE")) for statement in statements)
     async with sessions() as session:
         after = [await session.scalar(select(func.count()).select_from(model)) for model in models]
@@ -307,7 +307,7 @@ async def test_width_lookup_reads_stored_families_and_fixed_exceptions_without_w
             DoorRangeQuery(height=3, orientation="Skydoor"), context=ActingContext.direct(AnonymousActor())
         )
         assert empty.analysis.status is RegionAnalysisStatus.EXACT
-        assert empty.analysis.regions[0].resolution.status is ResolutionStatus.NO_CANDIDATE
+        assert not empty.analysis.regions[0].resolution
     assert not any(statement.lstrip().upper().startswith(("INSERT", "UPDATE", "DELETE")) for statement in statements)
     async with sessions() as session:
         after = [await session.scalar(select(func.count()).select_from(model)) for model in models]

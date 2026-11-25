@@ -1,7 +1,7 @@
 import uuid
 from unittest.mock import AsyncMock, Mock
 
-from sqlalchemy import CheckConstraint, Index
+from sqlalchemy import CheckConstraint
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,7 +11,6 @@ from squid.core.records.domain import (
     BuildKind,
     Candidate,
     RecordCriterion,
-    ResolutionStatus,
     TimingVariant,
     VersionScope,
 )
@@ -24,7 +23,6 @@ from squid.core.records.infrastructure.repository import (
     _gap_from_row,
 )
 from squid.core.records.models import (
-    ComputationRun,
     MaterializationSource,
     Record,
     RecordDefinition,
@@ -69,9 +67,10 @@ def test_gap_rows_carry_the_definition_title() -> None:
     )
     definition.id = 5
     result = RecordResult(
+        record_id=definition.record_id,
         run_id=1,
         definition_id=5,
-        status=ResolutionStatus.RESOLVED,
+        fingerprint="",
         gap_reasons={"missing": [{"build_id": 4, "field": "closing"}]},
     )
 
@@ -99,19 +98,12 @@ def test_title_definitions_allow_every_base_title() -> None:
     assert all(criterion.value in str(constraint.sqltext) for criterion in RecordCriterion)
 
 
-def test_active_run_identity_is_global_across_rules_revisions() -> None:
-    active_index = next(
-        index
-        for index in ComputationRun.__table_args__
-        if isinstance(index, Index) and index.name == "record_computation_runs_one_active_idx"
-    )
-
-    assert tuple(column.name for column in active_index.columns) == ("build_kind", "version_id")
+def test_rules_versions_are_pinned() -> None:
     assert FORMATTER_VERSION == "2"
     assert CALCULATOR_VERSION == "8"
 
 
-async def test_standings_filter_is_applied_to_both_rows_and_count() -> None:
+async def test_version_scope_filter_is_applied_to_both_rows_and_count() -> None:
     session = AsyncMock(spec=AsyncSession)
     session.execute.return_value = Mock(all=Mock(return_value=[]))
     session.scalar.return_value = 0
@@ -122,14 +114,13 @@ async def test_standings_filter_is_applied_to_both_rows_and_count() -> None:
         before_id=None,
         descending=True,
         limit=9,
-        resolved_only=True,
+        version_scope=VersionScope.UP_TO_DATE,
     )
-    await repository.count_published_records(resolved_only=True)
+    await repository.count_published_records(version_scope=VersionScope.UP_TO_DATE)
 
     for statement in (session.execute.call_args.args[0], session.scalar.call_args.args[0]):
         sql = str(statement.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
-        assert "title_results.status = 'resolved'" in sql
-        assert "record_computation_runs.is_active IS true" in sql
+        assert "record_titles.version_scope = 'up_to_date'" in sql
 
 
 def test_an_extender_without_measured_variants_competes_on_its_own_timings() -> None:

@@ -28,12 +28,13 @@ BEGIN
         );
 
         IF target_kind IN ('door', 'extender') OR previous_kind IN ('door', 'extender') THEN
-            -- As in the upsert_*_request functions, clearing the claim token keeps an older worker
-            -- from acknowledging the new request.
+            -- One item per build and kind; a build moving between kinds affects both. Deleted builds
+            -- keep their ID, so the worker can still find the records they leave. As in the
+            -- upsert_*_request functions, clearing the claim token keeps an older worker from
+            -- acknowledging the new request.
             INSERT INTO public.record_recompute_queue
-                (scope_key, build_kind, build_id, reasons, enqueued_at, available_at)
-            SELECT kind, kind,
-                CASE WHEN build_deleted THEN NULL ELSE target_build_id END,
+                (scope_key, build_kind, target, build_id, reasons, enqueued_at, available_at)
+            SELECT kind || ':build:' || target_build_id, kind, 'build', target_build_id,
                 '["source_change"]'::jsonb, now(), now()
             FROM (
                 SELECT DISTINCT kind FROM unnest(ARRAY[target_kind, previous_kind]) AS kinds(kind)
@@ -41,14 +42,7 @@ BEGIN
             ) AS affected
             ORDER BY kind
             ON CONFLICT (scope_key) DO UPDATE
-            SET build_id = EXCLUDED.build_id,
-                reasons = (
-                    SELECT jsonb_agg(DISTINCT reason)
-                    FROM jsonb_array_elements_text(
-                        record_recompute_queue.reasons || EXCLUDED.reasons
-                    ) AS reason
-                ),
-                enqueued_at = EXCLUDED.enqueued_at,
+            SET enqueued_at = EXCLUDED.enqueued_at,
                 available_at = EXCLUDED.available_at,
                 attempts = 0,
                 claimed_at = NULL,

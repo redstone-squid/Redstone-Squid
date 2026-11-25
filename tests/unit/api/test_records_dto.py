@@ -32,7 +32,7 @@ from squid.core.records.application.live import DoorRecordLookup, LiveDoorConfig
 from squid.core.records.application.models import PublicRecordDetail, PublishedRecordResult
 from squid.core.records.application.range_publication import RangePublicationService
 from squid.core.records.application.range_snapshots import RangeAttempt, RangePublication
-from squid.core.records.domain import BuildKind, RecordCriterion, RecordResolution, ResolutionStatus, VersionScope
+from squid.core.records.domain import BuildKind, RecordCriterion, RecordResolution, VersionScope
 from squid.core.records.domain.door_evidence import DoorExpansionSource, DoorRecordEvidence
 from squid.core.records.domain.regions import RegionAnalysisStatus, SmallestRegionAnalysis
 
@@ -45,7 +45,6 @@ _RECORD = PublishedRecordResult(
     criterion=RecordCriterion.FASTEST,
     build_kind=BuildKind.DOOR,
     version_scope=VersionScope.ALL_TIME,
-    status=ResolutionStatus.RESOLVED,
     holder_build_ids=(42,),
     computed_at=datetime(2026, 8, 10, 12, tzinfo=UTC),
     last_checked_at=datetime(2026, 8, 11, 12, tzinfo=UTC),
@@ -60,7 +59,6 @@ _RECORD_JSON = {
     "criterion": RecordCriterion.FASTEST.value,
     "build_kind": BuildKind.DOOR.value,
     "version_scope": VersionScope.ALL_TIME.value,
-    "status": ResolutionStatus.RESOLVED.value,
     "holder_build_ids": [42],
     "tied_build_ids": [],
     "computed_at": "2026-08-10T12:00:00Z",
@@ -132,7 +130,7 @@ async def test_record_detail_serializes_the_application_read_model(expanded: boo
                 criterion=RecordCriterion.FASTEST,
                 version_id=None,
                 evaluated_at=_RECORD.computed_at,
-                resolution=RecordResolution(ResolutionStatus.RESOLVED, holder_ids=(42,)),
+                resolution=RecordResolution(holder_ids=(42,)),
                 holder_configuration_ids=(0,),
                 configurations=(
                     LiveDoorConfiguration(
@@ -181,6 +179,8 @@ async def test_record_detail_serializes_the_application_read_model(expanded: boo
         "gaps": [],
         "tied_builds": [],
         "contender_builds": [],
+        "history": [],
+        "retired_at": None,
         "holder_builds": [
             {
                 "id": 42,
@@ -219,7 +219,7 @@ async def test_live_door_lookup_serializes_configuration_evidence() -> None:
         criterion=RecordCriterion.SMALLEST,
         version_id=None,
         evaluated_at=datetime(2026, 8, 10, 12, tzinfo=UTC),
-        resolution=RecordResolution(ResolutionStatus.RESOLVED, holder_ids=(42,)),
+        resolution=RecordResolution(holder_ids=(42,)),
         holder_configuration_ids=(0,),
         configurations=(
             LiveDoorConfiguration(

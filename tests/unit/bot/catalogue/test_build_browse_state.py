@@ -34,7 +34,7 @@ from squid.core.permissions.domain.catalogue import (
 )
 from squid.core.records.application import RecordService
 from squid.core.records.application.models import PublishedRecordResult, RecordGap, RecordNameDiagnostic
-from squid.core.records.domain import BuildKind, RecordCriterion, RecordFact, ResolutionStatus, VersionScope
+from squid.core.records.domain import BuildKind, RecordCriterion, RecordFact, VersionScope
 from squid.core.schematics.application import SchematicService
 from squid.core.search.application import SearchService
 from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY
@@ -272,7 +272,6 @@ async def test_sort_keeps_the_focused_record_and_its_open_holder(monkeypatch: py
         criterion=RecordCriterion.SMALLEST,
         build_kind=BuildKind.DOOR,
         version_scope=VersionScope.ALL_TIME,
-        status=ResolutionStatus.RESOLVED,
         holder_build_ids=(7, 9),
         computed_at=datetime.now(UTC),
     )
@@ -454,7 +453,6 @@ async def test_records_open_holders_and_preserve_the_selected_record() -> None:
                 criterion=RecordCriterion.SMALLEST,
                 build_kind=BuildKind.DOOR,
                 version_scope=VersionScope.ALL_TIME,
-                status=ResolutionStatus.RESOLVED,
                 holder_build_ids=(7, 9),
                 computed_at=datetime.now(UTC),
             ),
@@ -522,7 +520,6 @@ async def test_long_record_titles_fit_picker_controls_and_timeout(browser: str, 
                 criterion=RecordCriterion.SMALLEST,
                 build_kind=BuildKind.DOOR,
                 version_scope=VersionScope.ALL_TIME,
-                status=ResolutionStatus.RESOLVED,
                 holder_build_ids=(7,),
                 computed_at=datetime.now(UTC),
             )
@@ -638,7 +635,6 @@ async def test_record_versions_filter_browse_and_search() -> None:
     records = AsyncMock(spec=RecordService)
 
     async def list_page(*, version_scope: VersionScope, **kwargs: object) -> Page[PublishedRecordResult]:
-        assert kwargs["resolved_only"] is True
         current = version_scope is VersionScope.UP_TO_DATE
         record = PublishedRecordResult(
             result_id=2 if current else 1,
@@ -649,7 +645,6 @@ async def test_record_versions_filter_browse_and_search() -> None:
             criterion=RecordCriterion.FASTEST if current else RecordCriterion.SMALLEST,
             build_kind=BuildKind.DOOR,
             version_scope=version_scope,
-            status=ResolutionStatus.RESOLVED,
             holder_build_ids=(7,),
             computed_at=datetime.now(UTC),
         )
@@ -965,7 +960,6 @@ async def test_help_with_full_catalogue_and_search_pages(records: bool) -> None:
                 criterion=RecordCriterion.SMALLEST,
                 build_kind=BuildKind.DOOR,
                 version_scope=VersionScope.ALL_TIME,
-                status=ResolutionStatus.RESOLVED,
                 holder_build_ids=(7,),
                 computed_at=datetime.now(UTC),
             )
@@ -1301,7 +1295,7 @@ async def test_catalogue_tabs_share_filters_and_restore_local_queries_and_sort()
         assert service.search.call_args.args[0].scope is SearchScope.RECORDS
         assert service.search.call_args.args[0].query == shared
 
-        record_query = shared + "criterion:smallest status:resolved"
+        record_query = shared + "criterion:smallest version_scope:all_time"
         await submit_search(ui, record_query, "-updated_at")
         await ui.press("all-builds")
         assert screen._query.text == shared
@@ -1312,12 +1306,12 @@ async def test_catalogue_tabs_share_filters_and_restore_local_queries_and_sort()
         await ui.press("all-records")
         assert (
             screen._query.text
-            == 'kind:door AND (title:"vault door" OR piston) AND criterion:smallest AND status:resolved'
+            == 'kind:door AND (title:"vault door" OR piston) AND criterion:smallest AND version_scope:all_time'
         )
         assert screen._sort == "-updated_at"
         assert ui.control("smallest").payload["style"] == 3
 
-        await submit_search(ui, "kind:door criterion:fastest status:resolved", "-updated_at")
+        await submit_search(ui, "kind:door criterion:fastest version_scope:all_time", "-updated_at")
         await ui.press("all-builds")
         request = service.search.call_args.args[0]
         assert request.scope is SearchScope.BUILDS
@@ -1326,7 +1320,7 @@ async def test_catalogue_tabs_share_filters_and_restore_local_queries_and_sort()
 
         await ui.press("reset")
         await ui.press("all-records")
-        assert screen._query.text == "criterion:fastest AND status:resolved"
+        assert screen._query.text == "criterion:fastest AND version_scope:all_time"
         assert screen._sort == "-updated_at"
         assert ui.control("fastest").payload["style"] == 3
         ui.assert_within_limits()
@@ -1480,7 +1474,7 @@ async def test_expanded_search_filters_and_help_survive_expanding_a_build() -> N
         assert screen._query.text == "width:3 AND height:5 AND depth:2"
 
 
-async def test_records_default_to_all_statuses_and_reset_clears_status_filter() -> None:
+async def test_records_start_unfiltered_and_reset_clears_a_field_filter() -> None:
     records = AsyncMock(spec=RecordService)
     records.list_page.return_value = Page(items=(), total=0, next=None, prev=None)
     screen = _screen(initial_id=None, records=records, initial_records=True)
@@ -1491,7 +1485,7 @@ async def test_records_default_to_all_statuses_and_reset_clears_status_filter() 
         assert screen._guided is not None
         assert screen._guided.query.text == ""
         form = await ui.press_for_form("advanced")
-        await form.submit({"query": "status:no_candidate"})
+        await form.submit({"query": "version_scope:up_to_date"})
         await ui.press("remove-0")
         assert screen._query.text == ""
         assert service.search.call_args.args[0].query == ""
@@ -1499,19 +1493,10 @@ async def test_records_default_to_all_statuses_and_reset_clears_status_filter() 
         await ui.press("all-criteria")
         assert screen._results is None
         form = await ui.press_for_form("advanced")
-        await form.submit({"query": "status:no_candidate"})
+        await form.submit({"query": "version_scope:up_to_date"})
         await ui.press("reset")
         assert screen._query == screen._guided.query == CatalogueQuery(RecordQuery(None, ""))
         assert screen._results is None
-
-
-async def test_record_status_is_not_injected_into_an_explicit_expression() -> None:
-    screen = _screen(initial_id=None)
-    screen._mode = "records"
-    async with stage(screen, owner=object()) as ui:
-        await submit_search(ui, "status:resolved OR status:no_candidate")
-        request = cast(AsyncMock, screen._search_service).search.call_args.args[0]
-        assert request.query == "status:resolved OR status:no_candidate"
 
 
 async def test_catalogue_reopens_with_field_filters_and_sort() -> None:

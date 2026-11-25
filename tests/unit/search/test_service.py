@@ -210,7 +210,7 @@ async def test_query_embedding_is_generated_outside_scopes_and_passed_to_search(
     "search_request",
     [
         SearchRequest("door"),
-        SearchRequest("status:resolved", mode=SearchMode.SEMANTIC),
+        SearchRequest("criterion:fastest", mode=SearchMode.SEMANTIC),
         SearchRequest("door", mode=SearchMode.SEMANTIC, sort=SearchSort("width")),
     ],
 )

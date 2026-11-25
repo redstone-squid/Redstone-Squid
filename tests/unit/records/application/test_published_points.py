@@ -12,7 +12,6 @@ from squid.core.records.application.published_points import (
     PublishedPointStatus,
 )
 from squid.core.records.application.range_snapshots import RangeAttempt, RangePublication
-from squid.core.records.domain import ResolutionStatus
 from squid.core.records.domain.regions import RegionAnalysisStatus, SmallestRegionAnalysis
 from tests.unit.records.application.test_expansion_regions import branch, family, fixed, parameter
 
@@ -53,7 +52,7 @@ def test_periodic_holes_fixed_exceptions_and_large_widths() -> None:
         assert point.publication.snapshot_hash == "snapshot-one"
     hole = PublishedDoorPoint.from_publication(state, 2)
     assert hole.region is not None
-    assert hole.region.resolution.status is ResolutionStatus.NO_CANDIDATE
+    assert not hole.region.resolution
 
 
 def test_pending_failed_and_out_of_bounds_are_not_no_candidate_results() -> None:
@@ -80,7 +79,7 @@ def test_pending_failed_and_out_of_bounds_are_not_no_candidate_results() -> None
     assert point.latest.id == 12
     assert point.latest.analysis_status is RegionAnalysisStatus.TIMED_OUT
     assert point.region is not None
-    assert point.region.resolution.status is ResolutionStatus.NO_CANDIDATE
+    assert not point.region.resolution
 
 
 def test_undated_co_holders_remain_published() -> None:

@@ -37,6 +37,15 @@ def notification_summary(kind: NotificationKind, payload: Mapping[str, object]) 
                    *[other] {build} gained {count} records.
                 }}
             """)
+        case NotificationKind.RECORD_RETIRED:
+            records = payload.get("records")
+            count = len(records) if isinstance(records, list) else 0
+            return tr(t"""
+                notifications-retired-summary = {{ $count ->
+                    [one] A record you follow no longer has any eligible builds.
+                   *[other] {count} records you follow no longer have any eligible builds.
+                }}
+            """)
     return tr(t"notifications-update-summary = {build} has an update.")
 
 
@@ -44,7 +53,7 @@ def notification_details(kind: NotificationKind, payload: Mapping[str, object]) 
     """Show record names without letting large record groups overwhelm a message."""
     summary = notification_summary(kind, payload)
     records = payload.get("records")
-    if kind is not NotificationKind.RECORD_GAINED or not isinstance(records, list):
+    if kind not in {NotificationKind.RECORD_GAINED, NotificationKind.RECORD_RETIRED} or not isinstance(records, list):
         return summary
     lines: list[Text] = [summary]
     for record in records[:5]:

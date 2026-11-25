@@ -13,7 +13,7 @@ _NOTIFICATION_EVENT_SCHEMA_VERSIONS = {
     "build.submitted": frozenset({1, 2}),
     "build.confirmed": frozenset({1, 2, 3}),
     "build.denied": frozenset({1, 2, 3}),
-    "record_run.activated": frozenset({1}),
+    "record_run.published": frozenset({1}),
 }
 
 

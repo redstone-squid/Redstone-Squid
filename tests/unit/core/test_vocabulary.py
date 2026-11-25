@@ -8,12 +8,11 @@ import pytest
 
 from squid import PROJECT_ROOT
 from squid.core.builds.domain.models import BuildStatus
-from squid.core.records.domain.models import BuildKind, RecordCriterion, ResolutionStatus, VersionScope
+from squid.core.records.domain.models import BuildKind, RecordCriterion, VersionScope
 from squid.core.vocabulary import (
     BUILD_KINDS,
     BUILD_STATUSES,
     RECORD_CRITERIA,
-    RESOLUTION_STATUSES,
     VERSION_SCOPES,
     VOCABULARY,
 )
@@ -26,7 +25,6 @@ from squid_i18n import Text
         (RECORD_CRITERIA, RecordCriterion),
         (BUILD_KINDS, BuildKind),
         (VERSION_SCOPES, VersionScope),
-        (RESOLUTION_STATUSES, ResolutionStatus),
         (BUILD_STATUSES, BuildStatus),
     ],
 )

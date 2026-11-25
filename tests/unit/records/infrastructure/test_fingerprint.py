@@ -6,7 +6,6 @@ from squid.core.records.application.models import (
     CandidateBuild,
     CategoryCandidates,
     CategoryIdentity,
-    ComputationBatch,
     ComputedRecordResult,
 )
 from squid.core.records.domain import (
@@ -15,75 +14,58 @@ from squid.core.records.domain import (
     FormattedTitle,
     RecordCriterion,
     RecordResolution,
-    ResolutionStatus,
     VersionScope,
 )
 from squid.core.records.domain.door_evidence import DoorRecordEvidence
-from squid.core.records.infrastructure.fingerprint import publication_fingerprint
+from squid.core.records.infrastructure.fingerprint import record_fingerprint
 
 
-def batch() -> ComputationBatch:
+def record() -> ComputedRecordResult:
     category = CategoryCandidates(
         CategoryIdentity(BuildKind.DOOR, "door|2x2|t[]|Door", ()),
         (),
         FormattedTitle("2x2 Door"),
         (Candidate(1, fixed_volume=10), Candidate(2, fixed_volume=20)),
     )
-    return ComputationBatch(
-        1,
-        BuildKind.DOOR,
+    return ComputedRecordResult(
+        RecordCriterion.SMALLEST,
+        VersionScope.ALL_TIME,
         None,
-        (
-            ComputedRecordResult(
-                RecordCriterion.SMALLEST,
-                VersionScope.ALL_TIME,
-                None,
-                category,
-                FormattedTitle("Smallest 2x2 Door"),
-                RecordResolution(ResolutionStatus.RESOLVED, holder_ids=(1,)),
-            ),
-        ),
+        category,
+        FormattedTitle("Smallest 2x2 Door"),
+        RecordResolution(holder_ids=(1,)),
     )
 
 
 def test_losing_candidate_changes_do_not_republish() -> None:
-    original = batch()
-    record = original.records[0]
-    changed = replace(record.category, candidates=(Candidate(2, fixed_volume=30), Candidate(1, fixed_volume=10)))
-    assert publication_fingerprint(original) == publication_fingerprint(
-        replace(original, records=(replace(record, category=changed),))
-    )
+    original = record()
+    changed = replace(original.category, candidates=(Candidate(2, fixed_volume=30), Candidate(1, fixed_volume=10)))
+    assert record_fingerprint(original) == record_fingerprint(replace(original, category=changed))
 
 
-def test_holder_metrics_and_rules_change_fingerprint() -> None:
-    original = batch()
-    record = original.records[0]
-    changed = replace(record.category, candidates=(Candidate(1, fixed_volume=9), Candidate(2, fixed_volume=20)))
-    assert publication_fingerprint(original) != publication_fingerprint(
-        replace(original, records=(replace(record, category=changed),))
+def test_holder_metrics_and_wording_change_fingerprint() -> None:
+    original = record()
+    changed = replace(original.category, candidates=(Candidate(1, fixed_volume=9), Candidate(2, fixed_volume=20)))
+    assert record_fingerprint(original) != record_fingerprint(replace(original, category=changed))
+    assert record_fingerprint(original) != record_fingerprint(
+        replace(original, title=FormattedTitle("Smallest 2x2 Doors"))
     )
-    assert publication_fingerprint(original) != publication_fingerprint(replace(original, rules_revision_id=2))
 
 
 def test_evaluation_timestamp_does_not_hide_substantive_evidence_changes() -> None:
-    original = batch()
-    record = original.records[0]
+    original = record()
     evaluated = evaluate_door_record(
         DoorRecordLookup(opening=(2, 2, 1)),
         (CandidateBuild(BuildKind.DOOR, Candidate(1, fixed_volume=10), frozenset(), (), ()),),
         evaluated_at=datetime(2026, 1, 1, tzinfo=UTC),
     )
     evidence = DoorRecordEvidence(evaluation=evaluated, sources=())
-    first = replace(original, records=(replace(record, door_evidence=evidence),))
+    first = replace(original, door_evidence=evidence)
     later = evidence.model_copy(
         update={"evaluation": replace(evaluated, evaluated_at=evaluated.evaluated_at + timedelta(days=1))}
     )
-    assert publication_fingerprint(first) == publication_fingerprint(
-        replace(original, records=(replace(record, door_evidence=later),))
-    )
+    assert record_fingerprint(first) == record_fingerprint(replace(original, door_evidence=later))
     changed = evidence.model_copy(
         update={"evaluation": replace(evaluated, configurations=(replace(evaluated.configurations[0], volume=9),))}
     )
-    assert publication_fingerprint(first) != publication_fingerprint(
-        replace(original, records=(replace(record, door_evidence=changed),))
-    )
+    assert record_fingerprint(first) != record_fingerprint(replace(original, door_evidence=changed))

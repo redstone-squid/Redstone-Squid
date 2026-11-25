@@ -3,7 +3,7 @@
 Diagnostics identify a RecordDefinition by its integer definition ID. That rules_revision-specific
 definition is distinct from the stable Record record_title UUID used by record
 subscriptions. Lookup accepts a definition ID or an exact category; the record
-service persists the requested category and recomputes its records.
+service persists the requested category and queues its records.
 """
 
 from collections.abc import Awaitable, Callable, Mapping, Sequence
@@ -37,18 +37,9 @@ class RecordOperations(Protocol):
         self, *, kind: BuildKind | None = None, context: ActingContext
     ) -> Sequence[RecordNameDiagnostic]: ...
 
-    async def materialize_definition(
-        self,
-        definition_id: int,
-        *,
-        kind: BuildKind,
-        version_id: int | None = None,
-        context: ActingContext,
-    ) -> RebuildSummary: ...
+    async def request_definition_recompute(self, definition_id: int, *, context: ActingContext) -> None: ...
 
-    async def lookup_or_materialize(
-        self, request: RecordLookupRequest, *, context: ActingContext
-    ) -> RebuildSummary: ...
+    async def lookup_or_materialize(self, request: RecordLookupRequest, *, context: ActingContext) -> int: ...
 
 
 class RecordAdministration(Protocol):
@@ -62,6 +53,8 @@ class RecordAdministration(Protocol):
         kinds: Sequence[BuildKind],
     ) -> RebuildSummary: ...
 
+
+_QUEUED_NOTICE = tr(t"records-recompute-queued = Queued the record for recomputation.")
 
 type BuildOpener = Callable[[int, sl.ActionEvent], Awaitable[None]]
 
@@ -142,7 +135,7 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
                 sl.action_controls(
                     sl.action_control(
                         tr(t"records-recompute-definition = Recompute definition"),
-                        partial(self._recompute_diagnostic, gap.definition_id, gap.build_kind),
+                        partial(self._recompute_diagnostic, gap.definition_id),
                         key=f"recompute-{gap.definition_id}",
                     ),
                     key="diagnostic-actions",
@@ -175,7 +168,7 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
             sl.action_controls(
                 sl.action_control(
                     tr(t"records-recompute-definition = Recompute definition"),
-                    partial(self._recompute_diagnostic, gap.definition_id, gap.build_kind),
+                    partial(self._recompute_diagnostic, gap.definition_id),
                     key=f"recompute-{gap.definition_id}",
                 ),
                 key="diagnostic-actions",
@@ -183,19 +176,9 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
         )
 
     @requires_grant(RECORD_ENTRY_INSPECT)
-    async def _recompute_diagnostic(self, definition_id: int, kind: BuildKind, event: sl.PressEvent) -> None:
-        summary = await self._records.materialize_definition(
-            definition_id,
-            kind=kind,
-            version_id=int(self._version.value) if self._version else None,
-            context=ActingContext.current(),
-        )
-        await self._refresh_diagnostics()
-        self._build_tabs()
-        definitions, resolved = summary.definitions, summary.resolved
-        await event.notice(
-            md_tr(t"records-recompute-summary = Recomputed {definitions} definitions; {resolved} resolved.")
-        )
+    async def _recompute_diagnostic(self, definition_id: int, event: sl.PressEvent) -> None:
+        await self._records.request_definition_recompute(definition_id, context=ActingContext.current())
+        await event.notice(_QUEUED_NOTICE)
 
     def _build_tabs(self) -> None:
         tabs: list[sp.Tab[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = []
@@ -342,9 +325,7 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
         return replace(
             form,
             items=tuple(
-                item
-                for item in form.items
-                if not isinstance(item, sl.forms.FormField) or item.key not in {"restrictions", "version_id"}
+                item for item in form.items if not isinstance(item, sl.forms.FormField) or item.key != "restrictions"
             ),
         )
 
@@ -386,21 +367,11 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
         self._build_tabs()
 
     async def _choose_definition(self, event: sd.PressEvent[RedstoneSquid]) -> None:
-        version = int(self._version.value) if self._version else None
-
         async def selected(source: sd.ActionEvent, item: Suggestion) -> None:
             if not await self.grants.confirm(source, RECORD_ENTRY_INSPECT):
                 return
-            assert item.description is not None
-            summary = await self._records.materialize_definition(
-                int(item.value), kind=BuildKind(item.description), version_id=version, context=ActingContext.current()
-            )
-            await self._refresh_diagnostics()
-            self._build_tabs()
-            definitions, resolved = summary.definitions, summary.resolved
-            await source.notice(
-                md_tr(t"records-recompute-summary = Recomputed {definitions} definitions; {resolved} resolved.")
-            )
+            await self._records.request_definition_recompute(int(item.value), context=ActingContext.current())
+            await source.notice(_QUEUED_NOTICE)
 
         await pick(
             event,
@@ -415,9 +386,6 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
         form = _LookupForm.from_submission(event)
         kind = form.kind
         selected = form.base_key.strip()
-        version_id = (
-            form.version_id if form.version_id is not None else (int(self._version.value) if self._version else None)
-        )
         raw_restrictions = form.restrictions or ""
         try:
             restrictions = frozenset(
@@ -437,23 +405,13 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
                     )
                 )
                 return
-            summary = await self._records.materialize_definition(
-                int(selected), kind=kind, version_id=version_id, context=ActingContext.current()
-            )
-        else:
-            summary = await self._records.lookup_or_materialize(
-                RecordLookupRequest(kind, selected, restrictions, version_id=version_id),
-                context=ActingContext.current(),
-            )
-        await self._refresh_diagnostics()
-        self._build_tabs()
-        definitions = summary.definitions
-        resolved = summary.resolved
-        await event.notice(
-            md_tr(
-                t"records-recompute-summary = Recomputed {definitions} definitions; {resolved} resolved.",
-            )
+            await self._records.request_definition_recompute(int(selected), context=ActingContext.current())
+            await event.notice(_QUEUED_NOTICE)
+            return
+        count = await self._records.lookup_or_materialize(
+            RecordLookupRequest(kind, selected, restrictions), context=ActingContext.current()
         )
+        await event.notice(tr(t"records-lookup-queued = Saved the category and queued {count} records."))
 
     @requires_grant(RECORD_ENTRY_REBUILD)
     async def _rebuild[ContextT](self, event: sl.SubmitEvent[ContextT]) -> None:
@@ -469,13 +427,11 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
         if RECORD_ENTRY_INSPECT in self.grants:
             await self._refresh_diagnostics()
             self._build_tabs()
-        definitions = summary.definitions
-        resolved = summary.resolved
-        with_gaps = summary.with_gaps
+        records, changed, retired, with_gaps = summary.records, summary.changed, summary.retired, summary.with_gaps
         await event.notice(
             md_tr(
-                t"records-rebuild-summary = Rebuilt {definitions} "
-                t"definitions; {resolved} have holders; {with_gaps} could change with more evidence.",
+                t"records-rebuild-summary = Recomputed {records} records with holders; {changed} changed, "
+                t"{retired} retired, and {with_gaps} could change with more evidence.",
             )
         )
 
@@ -517,9 +473,6 @@ class _LookupForm(sl.forms.Form[sd.Request[Any, Any]]):
         label=tr(t"records-restriction-ids-help = Restriction IDs, comma separated"),
         required=False,
         maximum=300,
-    )
-    version_id = sl.forms.IntField(
-        label=tr(t"bot-submission-records-pinned-version-id = Pinned version ID"), required=False, minimum=1
     )
 
 
