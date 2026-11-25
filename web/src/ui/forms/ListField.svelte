@@ -114,8 +114,10 @@
   aria-describedby={descriptions === "" ? undefined : descriptions}
   class={cn("grid min-w-0 gap-3 text-sm", className)}
 >
-  <p id={`${id}-label`} class={labelClass}>{label}</p>
-  {#if hint !== undefined}<p id={`${id}-hint`} class={fieldMessageClass}>{hint}</p>{/if}
+  <div class="grid gap-1.5">
+    <p id={`${id}-label`} class={labelClass}>{label}</p>
+    {#if hint !== undefined}<p id={`${id}-hint`} class={fieldMessageClass}>{hint}</p>{/if}
+  </div>
   {#if items.length > 0}
     <ol bind:this={rows} class="@container grid list-none gap-3">
       {#each items as item, index (keys[index])}

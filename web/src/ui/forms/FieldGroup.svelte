@@ -8,10 +8,11 @@
   /**
    * A fieldset naming related fields, such as a door's width, height and depth. Its hint and
    * error describe the whole group; each field keeps its own. `layout="row"` lays the fields
-   * side by side and wraps them on narrow screens.
+   * side by side and wraps them on narrow screens. `compound` is for a legend that labels one
+   * control made of parts, such as radios or a range: it sits as close as a field's label.
    */
   type Props = Omit<HTMLFieldsetAttributes, "width"> &
-    Omit<FieldMessages, "width"> & { layout?: "stack" | "row" };
+    Omit<FieldMessages, "width"> & { layout?: "stack" | "row"; compound?: boolean };
   let {
     id,
     label,
@@ -20,12 +21,14 @@
     error,
     labelVisibility = "visible",
     layout = "stack",
+    compound = false,
     class: className,
     children,
     ...props
   }: Props = $props();
   const autoId = $props.id();
   const attributes = $derived(fieldAttributes(id ?? autoId, { ...props, hint, error }));
+  const hasHint = $derived(hint != null && hint !== "");
 </script>
 
 <fieldset
@@ -38,10 +41,17 @@
     >{label}{#if detail !== undefined}
       <span class="ms-1 font-normal text-fg-muted">({detail})</span>{/if}</legend
   >
-  {#if hint != null && hint !== ""}<p id={`${attributes.id}-hint`} class={fieldMessageClass}>
+  {#if hasHint}<p id={`${attributes.id}-hint`} class={fieldMessageClass}>
       {hint}
     </p>{/if}
-  <div class={cn("min-w-0", layout === "row" ? "flex flex-wrap items-start gap-4" : "grid gap-4")}>
+  <!-- Without a hint, the extra space keeps the legend from reading as the first field's label. -->
+  <div
+    class={cn(
+      "min-w-0",
+      layout === "row" ? "flex flex-wrap items-start gap-4" : "grid gap-4",
+      !hasHint && !compound && "mt-1.5",
+    )}
+  >
     {@render children?.()}
   </div>
   {#if error != null && error !== ""}<p id={`${attributes.id}-error`} class={fieldErrorClass}>

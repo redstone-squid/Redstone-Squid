@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { cn } from "@/ui/cn";
   import type { FieldMessages } from "@/ui/forms/field";
   import FieldGroup from "./FieldGroup.svelte";
   import TextField from "./TextField.svelte";
@@ -8,7 +7,7 @@
 
   /**
    * A minimum and a maximum, such as "width 3 to 8 blocks": two numeric text fields in a
-   * fieldset, joined by `separator` ("to") and stacking on narrow screens. Each bound's
+   * fieldset, joined by `separator` ("to") and wrapping on narrow screens. Each bound's
    * `label` ("Minimum width") names its input for screen readers; the legend is visible.
    * Validate the bounds in the feature, and leave either empty for an open range.
    */
@@ -34,8 +33,9 @@
   }: Props = $props();
 </script>
 
-<FieldGroup {...group} class={cn("@container", group.class)}>
-  <div class="flex min-w-0 flex-col gap-2 @md:flex-row @md:items-start @md:gap-3">
+<FieldGroup {...group} compound>
+  <!-- The separator wraps with the maximum, so a narrow row reads "3 blocks", then "to 8 blocks". -->
+  <div class="flex min-w-0 flex-wrap items-start gap-x-3 gap-y-2">
     <TextField
       {width}
       name={min.name}
@@ -47,17 +47,19 @@
       {inputmode}
       {disabled}
     />
-    <span class="text-fg-muted @md:mt-2.5" aria-hidden="true">{separator}</span>
-    <TextField
-      {width}
-      name={max.name}
-      label={max.label}
-      labelVisibility="hidden"
-      error={max.error}
-      bind:value={max.value}
-      suffix={unit}
-      {inputmode}
-      {disabled}
-    />
+    <div class="flex min-w-0 items-start gap-3">
+      <span class="flex h-control items-center text-fg-muted" aria-hidden="true">{separator}</span>
+      <TextField
+        {width}
+        name={max.name}
+        label={max.label}
+        labelVisibility="hidden"
+        error={max.error}
+        bind:value={max.value}
+        suffix={unit}
+        {inputmode}
+        {disabled}
+      />
+    </div>
   </div>
 </FieldGroup>

@@ -60,7 +60,7 @@
   }
 </script>
 
-<FieldGroup {...frame} id={groupId} {hint} {error} class={cn("@container", className)}>
+<FieldGroup {...frame} compound id={groupId} {hint} {error} class={cn("@container", className)}>
   <div
     class={cn(
       "min-w-0",
