@@ -69,7 +69,10 @@ Open items:
 - Allow scoped `<style>` blocks in `src/ui` (features and layouts stay utility-only, enforced
   by lint) and move selector-heavy arbitrary variants and the `styles.ts` shared looks into
   them where a style block reads better. Tailwind stays for layout, spacing and color.
-- Autocomplete and Combobox duplicate their debounce and abort logic.
+- Audit each screen as it ships, not the workbench: keyboard walkthrough of the whole page
+  (header, filters, results, footer), focus after navigation and after server-driven filter
+  changes, Tab through collapsed `NavBar` and `SplitLayout` popovers, Lighthouse, and the
+  page's JavaScript weight (a LayerChart island has never been measured on a real page).
 
 Departures from §2.3: `NavBar` and `SplitLayout` collapse into native popovers rather than
 a `Sheet` or `<details>`. One copy of the markup serves both layouts through a container

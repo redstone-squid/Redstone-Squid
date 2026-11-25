@@ -65,6 +65,8 @@ Rules that apply to every screen:
   - Owners and staff: edit the build.
   - Staff on a pending build: vote, approve, reject.
 - Pending and rejected builds are visible to their owner and to staff, with a status banner.
+- *Related links:* records held, versions, history (edits).
+- *Primary action:* staff on a pending build: vote; owners and staff: edit; everyone else: download.
 
 **P6. Build history `/builds/[id]/history`**
 - *Goal:* see what changed, when, and by whom.
@@ -84,6 +86,8 @@ Rules that apply to every screen:
   - Sibling records: the same category with a different criterion or version scope, shown as a switcher.
   - Door evidence, in a disclosure.
 - *Actions:* follow this record (subscription), open the holder, open the range explorer for this category.
+- *Related links:* holders, past holders (history), sibling records.
+- *Primary action:* follow.
 
 **P9. Door range explorer `/records/ranges`, `/records/ranges/[queryId]`, `/records/ranges/[queryId]/at/[width]`**
 - *Goal:* for a door category (orientation, types, restrictions, height, depth, version), see the smallest record at every width.
@@ -108,6 +112,8 @@ Rules that apply to every screen:
 - *Goal:* understand a tag and see where it is used.
 - *Needs:* name, kind, authority (official or user), description, aliases, unit or value type, and a link to the door-rules section. Below that, builds with the tag (cards or table, paginated) and records that involve it.
 - *Actions:* search with this tag, and follow new records with this tag.
+- *Related links:* builds, records.
+- *Primary action:* search with this tag.
 
 **P13. Creator `/creators/[name]`**
 - *Goal:* see a creator's body of work.
@@ -117,6 +123,8 @@ Rules that apply to every screen:
   - Unclaimed alias: "Is this you? Claim this name", with an explanation of how claiming works.
   - The owner viewing their own page: edit profile.
 - A hidden profile renders the alias's builds only. A merged creator redirects.
+- *Related links:* builds, records held, records ever held.
+- *Primary action:* owner: edit profile; unclaimed alias: claim; everyone else: follow.
 
 **P14. Content pages: `/about`, `/rules` (door rules), `/privacy` (consent notice)**
 - *Needs:* long-form prose with a table of contents and anchored headings.

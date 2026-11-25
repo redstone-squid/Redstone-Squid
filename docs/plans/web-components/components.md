@@ -510,6 +510,13 @@ The `src/ui` primitives and patterns, the feature components built from them, an
 - _Behavior:_ the h1 gets `tabindex=-1` and is the focus target after client-side actions that change the whole page.
 - _Users:_ every screen.
 
+**`RelatedLinks`** (smart buttons: counts of related records, in a fixed place)
+
+- _API:_ `items` of `{label, count, href, icon?}` and a `label` for the navigation landmark. `label` is the plural-aware text from the catalog, so the caller formats the count.
+- _Renders:_ a `nav` with a wrapping row of links under the `PageHeader`, each a count above its label.
+- _Behavior:_ order and presence are fixed per screen, never by data. A zero count still renders ("0 records") so the row never reshuffles; an item is left out only on pages where it can never apply. Plain links, so no JS and no extra keyboard handling.
+- _Users:_ P5, P8, P12, P13.
+
 **`Section`** (replaces `Panel`)
 
 - _API:_ `title`, `level` (default 2), `description?`, `actions?` snippet (e.g. "View all"), `surface?`, `children`.
@@ -930,6 +937,12 @@ Without JS, the trigger links to a confirmation page (for example `/account/devi
 - **Page loads:** `load()` maps 404 and 503 (existing). Island query failures render `ErrorState` with retry and the error reference.
 - **Mutations:** an inline `Notice role=alert` beside the action, or inside the dialog. The message is mapped from `ProblemDetail.code` through a `satisfies Record<ErrorCode, …>` map, with a generic fallback showing the reference and a copy button.
 - **Revision conflicts:** a `Notice` offering "Reload" with a `Diff` of what changed.
+
+### Contextual actions
+
+- Detail pages put verbs (vote, edit, suggest a correction, claim) in the `PageHeader` `actions` slot. Related records are `RelatedLinks`, not actions.
+- At most one primary `Button`, chosen by a priority fixed per screen in `screens.md`. Other actions go into an overflow `Menu`, in the same order every time.
+- An action that applies but is unavailable stays visible with its reason ("Voting closed 2 days ago"). Actions are never suggested by heuristics: the same page state always shows the same actions.
 
 ### Permission gating and sign-in state
 
