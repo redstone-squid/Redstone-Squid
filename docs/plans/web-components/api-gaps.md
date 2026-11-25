@@ -104,15 +104,24 @@ Items 1–4 are implemented in the API.
 
 ## Admin
 
-43. **Runtime settings schema.** `GET /v1/settings/runtime/schema` returns `[{key, group, label, description, type, minimum, maximum, discord_kind: channel | role | user | null}]`, plus `GET /v1/discord/guilds/{id}/channels|roles` for names. Needed by X1: snowflake inputs are unusable.
-44. **Diagnostics:**
-    - List filters: `surface`, `code`, `from`, `to`, `offset`.
-    - `GET /v1/diagnostics/errors/stats?bucket=day` for chart 7.
-    - `DELETE /v1/diagnostics/errors/{reference}`.
-    - Needed by X2.
-45. **Permissions:** `GET /v1/permissions/nodes`, `GET /v1/permissions/subjects/{id}` (effective permissions with source), `GET /v1/permissions/audit`, and CRUD for `/v1/permissions/grants` and `/v1/roles`. Needed by X6.
+43. **Runtime settings metadata and Discord names.** Needed by X1, where raw snowflake inputs are unusable.
+    - Declare `group` and `discord_kind: channel | role | user | null` on the `RuntimeSettings` fields, so they reach OpenAPI and the SDK alongside the existing bounds. No separate schema endpoint. The web localizes labels and descriptions by field name.
+    - `GET /v1/settings/runtime` resolves each snowflake to `{id, name} | null`, with null when Discord no longer knows it.
+    - `PATCH` rejects an ID of the wrong kind, such as a role ID in a channel field, with a field error (item 50).
+    - Pickers need the channels and roles of the guild these IDs belong to. Nothing records that guild yet. Decide whether to add a `home_guild_id` setting or derive it from the configured channels, then add `GET /v1/discord/home/channels` and `/roles`.
+44. **Diagnostics.** Needed by X2.
+    - The list ignores everything but `page_size` and `work_lost`. Add `surface`, `error_code` and an `occurred_at` range, and page it with item 55 anchors on `(occurred_at, id)`.
+    - `GET /v1/diagnostics/errors/stats` returns `[{day, surface, count}]` for chart 7. Reports expire after 7 days, so the chart covers that window.
+    - No per-report delete. Reports expire anyway, and deleting one just destroys evidence.
+45. **Permissions.** `PermissionAdministrationService` already implements all of this, so the work is mostly routing. Every route takes an optional `guild_id` scope, and subjects are accounts or Discord roles. Needed by X6.
+    - `GET /v1/permissions/nodes` lists the catalogue by domain.
+    - Grants are granted and revoked, never edited: `GET`, `POST` and `DELETE /v1/permissions/grants`.
+    - Roles: `GET`, `POST` and `DELETE /v1/permissions/roles`, plus `PATCH` for rank and endpoints to add or remove patterns.
+    - Role assignments: `GET`, `POST` and `DELETE /v1/permissions/assignments`.
+    - `GET /v1/permissions/explain?subject&node` returns the resolver's `Decision` (reason, trace, and each rule's source and the role it came through) for one node, or for every node when `node` is omitted.
+    - `GET /v1/permissions/audit` pages with item 55 anchors. It only takes `limit` today.
 46. **Record operations:** `GET /v1/records/{id}/inspection`, `POST /v1/records/{id}/rebuild`, and `GET /v1/records/computations?status=failed` (todo: persist failed attempts). Needed by X7.
-47. **`POST /v1/versions`.** Needed by X8.
+47. **Version corrections.** `POST /v1/versions` wraps `VersionService.add`, including its edition override. The version announcement worker adds most versions, so X8 exists to fix mistakes and also needs `DELETE /v1/versions/{id}`, which core lacks. Needed by X8.
 
 ## Home and sponsors
 
