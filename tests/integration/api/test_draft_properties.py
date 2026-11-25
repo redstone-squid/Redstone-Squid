@@ -14,6 +14,7 @@ from squid.api.v1.submissions import (
     authenticated_submission_context,
     get_submission_drafts,
     get_submission_edits,
+    get_submission_finalization,
     router,
 )
 from squid.core.accounts.models import Account
@@ -24,6 +25,7 @@ from squid.core.submissions.application.drafts import SubmissionDraftService
 from squid.core.submissions.application.edits import DRAFT_ANSWERS, DraftAnswersEdit
 from squid.core.submissions.application.forms import CheckedInFormManifestRegistry
 from tests.support.litestar import asgi_transport, route_app
+from tests.support.submission_form import Finalization
 
 edits = st.lists(
     st.tuples(
@@ -60,6 +62,7 @@ async def test_draft_edits_survive_readback(
             current_caller: lambda: caller,
             get_submission_drafts: lambda: drafts,
             get_submission_edits: lambda: executor,
+            get_submission_finalization: lambda: Finalization(),
         },
     )
     async with AsyncClient(transport=asgi_transport(app), base_url="http://test") as client:
