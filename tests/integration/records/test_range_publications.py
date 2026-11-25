@@ -12,9 +12,12 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.accounts.models import Account
+from squid.core.actors import ActingContext, Actor
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import DoorBuild
 from squid.core.errors import InvalidStateError
+from squid.core.permissions.application.services import PermissionService
+from squid.core.permissions.errors import PermissionDeniedError
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery, analyze_door_widths
 from squid.core.records.application.models import CandidateBuild
@@ -28,6 +31,8 @@ from squid.core.records.infrastructure.range_wire import failed_analysis
 from squid.core.records.models import DoorRangeRecomputeQueueItem, DoorRangeSnapshot, RulesRevision
 from tests.support.build_edits import build_edit_session
 from tests.unit.records.application.test_expansion_regions import branch, family
+
+ADMIN = ActingContext.direct(Actor(account_id=7, is_bot_owner=True))
 
 
 async def test_snapshots_are_immutable_and_old_workers_cannot_replace_newer_attempts(
@@ -188,7 +193,10 @@ async def test_publication_uses_saved_inputs_despite_live_edits_and_queue_refres
             return await SubprocessRangeAnalyzer().analyze(sources, query)
 
     publisher = RangePublicationService(
-        RecordComputationService(uow_factory=factory), uow_factory=factory, analyzer=EditingAnalyzer()
+        RecordComputationService(uow_factory=factory),
+        PermissionService(uow_factory=factory),
+        uow_factory=factory,
+        analyzer=EditingAnalyzer(),
     )
     first = await publisher.publish(DoorRangeQuery(height=3))
     assert first.active is not None
@@ -231,7 +239,10 @@ async def test_cancelled_publication_records_failure_and_preserves_previous_resu
     analyzer = create_autospec(DoorRangeAnalyzer, instance=True)
     analyzer.analyze.return_value = analyze_door_widths((), height=3)
     publisher = RangePublicationService(
-        RecordComputationService(uow_factory=factory), uow_factory=factory, analyzer=analyzer
+        RecordComputationService(uow_factory=factory),
+        PermissionService(uow_factory=factory),
+        uow_factory=factory,
+        analyzer=analyzer,
     )
     query = DoorRangeQuery(height=3)
     first = await publisher.publish(query)
@@ -298,23 +309,30 @@ async def test_registration_deduplicates_and_refresh_preserves_new_queue_work(
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     analyzer = create_autospec(DoorRangeAnalyzer, instance=True)
     publisher = RangePublicationService(
-        RecordComputationService(uow_factory=factory), uow_factory=factory, analyzer=analyzer
+        RecordComputationService(uow_factory=factory),
+        PermissionService(uow_factory=factory),
+        uow_factory=factory,
+        analyzer=analyzer,
     )
     query = DoorRangeQuery(
         height=3, restriction_ids=frozenset({7, 8}), restriction_values=((7, "exact", "3"), (8, "at_most", "4"))
     )
-    query_id = await publisher.register(query)
+    with pytest.raises(PermissionDeniedError):
+        await publisher.register(query, context=ActingContext.direct(Actor()))
+    async with factory() as uow:
+        assert not await uow.record_ranges.list_registered()
+    query_id = await publisher.register(query, context=ADMIN)
     async with factory() as uow:
         lease = await uow.record_ranges.claim_refresh()
         assert lease is not None
         await uow.commit()
     reordered = query.model_copy(update={"restriction_values": tuple(reversed(query.restriction_values))})
-    assert await publisher.register(reordered) == query_id
+    assert await publisher.register(reordered, context=ADMIN) == query_id
     async with migrated_session_factory() as session:
         token = await session.scalar(select(DoorRangeRecomputeQueueItem.claim_token))
         assert token == lease.token
-    assert not await publisher.request_refresh(query_id + 999)
-    assert await publisher.request_refresh(query_id)
+    assert not await publisher.request_refresh(query_id + 999, context=ADMIN)
+    assert await publisher.request_refresh(query_id, context=ADMIN)
     async with factory() as uow:
         await uow.record_ranges.complete_refresh(lease)
         await uow.commit()
@@ -332,10 +350,13 @@ async def test_refresh_attempts_every_query_before_reporting_a_failure(
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     analyzer = create_autospec(DoorRangeAnalyzer, instance=True)
     publisher = RangePublicationService(
-        RecordComputationService(uow_factory=factory), uow_factory=factory, analyzer=analyzer
+        RecordComputationService(uow_factory=factory),
+        PermissionService(uow_factory=factory),
+        uow_factory=factory,
+        analyzer=analyzer,
     )
-    broken = await publisher.register(DoorRangeQuery(height=3))
-    healthy = await publisher.register(DoorRangeQuery(height=4))
+    broken = await publisher.register(DoorRangeQuery(height=3), context=ADMIN)
+    healthy = await publisher.register(DoorRangeQuery(height=4), context=ADMIN)
 
     async def analyze(sources: Sequence[CandidateBuild], query: DoorRangeQuery) -> DoorRangeAnalysis:
         if query.height == 3:
@@ -375,7 +396,10 @@ async def test_query_with_too_many_sources_saves_no_snapshot(
         )
     analyzer = create_autospec(DoorRangeAnalyzer, instance=True)
     publisher = RangePublicationService(
-        RecordComputationService(uow_factory=factory), uow_factory=factory, analyzer=analyzer
+        RecordComputationService(uow_factory=factory),
+        PermissionService(uow_factory=factory),
+        uow_factory=factory,
+        analyzer=analyzer,
     )
     publication = await publisher.publish(DoorRangeQuery(height=3))
     assert publication.active is None
@@ -393,16 +417,19 @@ async def test_inexact_refresh_keeps_publication_and_retries_only_that_query(
     analyzer = create_autospec(DoorRangeAnalyzer, instance=True)
     analyzer.analyze.return_value = analyze_door_widths((), height=3)
     publisher = RangePublicationService(
-        RecordComputationService(uow_factory=factory), uow_factory=factory, analyzer=analyzer
+        RecordComputationService(uow_factory=factory),
+        PermissionService(uow_factory=factory),
+        uow_factory=factory,
+        analyzer=analyzer,
     )
-    query_id = await publisher.register(DoorRangeQuery(height=3))
+    query_id = await publisher.register(DoorRangeQuery(height=3), context=ADMIN)
     assert await publisher.process_queue() == (1, 0)
     first = await publisher.get(query_id)
     assert first is not None
     assert first.active is not None
 
     analyzer.analyze.return_value = failed_analysis(RegionAnalysisStatus.TIMED_OUT, "timeout")
-    await publisher.request_refresh(query_id)
+    await publisher.request_refresh(query_id, context=ADMIN)
     assert await publisher.process_queue() == (0, 1)
 
     current = await publisher.get(query_id)
@@ -425,9 +452,12 @@ async def test_unchanged_range_keeps_publication_and_advances_last_checked(
     analyzer = create_autospec(DoorRangeAnalyzer, instance=True)
     analyzer.analyze.return_value = analyze_door_widths((), height=3)
     publisher = RangePublicationService(
-        RecordComputationService(uow_factory=factory), uow_factory=factory, analyzer=analyzer
+        RecordComputationService(uow_factory=factory),
+        PermissionService(uow_factory=factory),
+        uow_factory=factory,
+        analyzer=analyzer,
     )
-    query_id = await publisher.register(DoorRangeQuery(height=3))
+    query_id = await publisher.register(DoorRangeQuery(height=3), context=ADMIN)
     assert await publisher.process_queue() == (1, 0)
     first = await publisher.get(query_id)
     assert first is not None
@@ -435,7 +465,7 @@ async def test_unchanged_range_keeps_publication_and_advances_last_checked(
     assert first.last_checked_at is not None
     assert not first.refresh_pending
 
-    await publisher.request_refresh(query_id)
+    await publisher.request_refresh(query_id, context=ADMIN)
     pending = await publisher.get(query_id)
     assert pending is not None
     assert pending.refresh_pending

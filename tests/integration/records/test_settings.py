@@ -6,6 +6,8 @@ from functools import partial
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from squid.core.actors import ActingContext, Actor
+from squid.core.permissions.application.services import PermissionService
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery, analyze_door_widths
 from squid.core.records.application.models import CandidateBuild, ComputationBatch
@@ -88,7 +90,10 @@ async def test_current_ranges_follow_the_pin_without_changing_fixed_queries(
             return analyze_door_widths(sources, height=query.height)
 
     publisher = RangePublicationService(
-        RecordComputationService(uow_factory=factory), uow_factory=factory, analyzer=PinChangingAnalyzer()
+        RecordComputationService(uow_factory=factory),
+        PermissionService(uow_factory=factory),
+        uow_factory=factory,
+        analyzer=PinChangingAnalyzer(),
     )
     fixed = await publisher.publish(DoorRangeQuery(height=3, version_id=first_id))
     current = await publisher.publish(DoorRangeQuery(height=3, follow_current_version=True))
@@ -116,9 +121,15 @@ async def test_current_range_without_a_pin_stays_pending(
 ) -> None:
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     publisher = RangePublicationService(
-        RecordComputationService(uow_factory=factory), uow_factory=factory, analyzer=SubprocessRangeAnalyzer()
+        RecordComputationService(uow_factory=factory),
+        PermissionService(uow_factory=factory),
+        uow_factory=factory,
+        analyzer=SubprocessRangeAnalyzer(),
     )
-    query_id = await publisher.register(DoorRangeQuery(height=3, follow_current_version=True))
+    query_id = await publisher.register(
+        DoorRangeQuery(height=3, follow_current_version=True),
+        context=ActingContext.direct(Actor(is_bot_owner=True, account_id=7)),
+    )
     assert await publisher.process_queue() == (0, 1)
     publication = await publisher.get(query_id)
     assert publication is not None

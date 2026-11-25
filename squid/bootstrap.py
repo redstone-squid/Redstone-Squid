@@ -335,7 +335,8 @@ class _ServiceGraph:
     @cached_property
     def range_publication(self) -> RangePublicationService:
         return RangePublicationService(
-            RecordComputationService(uow_factory=self.uow_factory),
+            self.record_computation,
+            self.permissions,
             uow_factory=self.uow_factory,
             analyzer=SubprocessRangeAnalyzer(),
         )

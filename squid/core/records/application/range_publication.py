@@ -6,6 +6,9 @@ from datetime import UTC, datetime
 
 import anyio
 
+from squid.core.actors import ActingContext
+from squid.core.permissions.application.services import PermissionService
+from squid.core.permissions.domain.catalogue import RECORD_ENTRY_REBUILD
 from squid.core.records.application.expansion_regions import DoorRangeQuery
 from squid.core.records.application.ports import DoorRangeAnalyzer
 from squid.core.records.application.published_points import (
@@ -32,27 +35,33 @@ class RangePublicationService:
     def __init__(
         self,
         computation: RecordComputationService,
+        permissions: PermissionService,
         *,
         uow_factory: UnitOfWorkFactory[RangePublicationUnitOfWork],
         analyzer: DoorRangeAnalyzer,
     ) -> None:
         self._computation = computation
+        self._permissions = permissions
         self._uow_factory = uow_factory
         self._analyzer = analyzer
         self._limiter = anyio.CapacityLimiter(1)
 
-    async def register(self, query: DoorRangeQuery) -> int:
+    async def register(self, query: DoorRangeQuery, *, context: ActingContext) -> int:
         """Register a query and queue its initial computation; duplicates reuse its ID."""
-        async with self._uow_factory() as uow:
-            query_id = await uow.record_ranges.register(query)
-            await uow.commit()
+        with context.scope():
+            await self._permissions.require(context.effective, RECORD_ENTRY_REBUILD)
+            async with self._uow_factory() as uow:
+                query_id = await uow.record_ranges.register(query)
+                await uow.commit()
         return query_id
 
-    async def request_refresh(self, query_id: int) -> bool:
+    async def request_refresh(self, query_id: int, *, context: ActingContext) -> bool:
         """Queue existing registered ranges without running arithmetic in the request."""
-        async with self._uow_factory() as uow:
-            found = await uow.record_ranges.request_refresh(query_id)
-            await uow.commit()
+        with context.scope():
+            await self._permissions.require(context.effective, RECORD_ENTRY_REBUILD)
+            async with self._uow_factory() as uow:
+                found = await uow.record_ranges.request_refresh(query_id)
+                await uow.commit()
         return found
 
     async def get(self, query_id: int) -> RangePublication | None:

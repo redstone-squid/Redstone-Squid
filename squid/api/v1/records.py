@@ -175,13 +175,15 @@ class DoorRangeReference:
     security=[SERVICE, WEB_WRITE, DEVICE],
     opt=contract(cli=transport_only(), scopes=("record.entry.rebuild",)),
 )
-async def register_door_ranges(data: JSONBody[DoorRangeQuery], publications: RangePublications) -> DoorRangeReference:
+async def register_door_ranges(
+    data: JSONBody[DoorRangeQuery], publications: RangePublications, caller: CurrentCaller
+) -> DoorRangeReference:
     """Register a query for automatic publication, reusing equivalent registrations.
 
     Only a new registration queues initial computation. Use refresh to request
     another attempt for an existing query.
     """
-    return DoorRangeReference(await publications.register(data))
+    return DoorRangeReference(await publications.register(data, context=caller.context()))
 
 
 @post(
@@ -195,9 +197,11 @@ async def register_door_ranges(data: JSONBody[DoorRangeQuery], publications: Ran
     security=[SERVICE, WEB_WRITE, DEVICE],
     opt=contract(cli=transport_only(), scopes=("record.entry.rebuild",)),
 )
-async def refresh_door_ranges(query_id: FromPath[int], publications: RangePublications) -> DoorRangeReference:
+async def refresh_door_ranges(
+    query_id: FromPath[int], publications: RangePublications, caller: CurrentCaller
+) -> DoorRangeReference:
     """Queue recomputation; the current publication remains readable until replacement."""
-    if not await publications.request_refresh(query_id):
+    if not await publications.request_refresh(query_id, context=caller.context()):
         raise RecordNotFoundError(query_id)
     return DoorRangeReference(query_id)
 
