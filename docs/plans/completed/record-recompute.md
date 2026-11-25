@@ -2,6 +2,10 @@
 
 Status: implemented with the simpler design below. Database concurrency tests cover
 publication ordering for captured inputs and changes arriving during computation.
+[Incremental record computation](incremental-records.md) later replaced kind-wide runs
+with per-record results, so the publication and queue sections here describe the
+earlier design. Capture, computation outside a transaction, generation ordering and
+range publication still work as described.
 
 ## Behavior
 

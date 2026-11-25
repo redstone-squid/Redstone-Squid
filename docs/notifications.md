@@ -34,11 +34,12 @@ The envelope contains `event_type`, `schema_version`, aggregate identity, occurr
 | `guild.voting_changed` | 1 | Recalculate weights on open votes |
 | `build.confirmed` | 3 | Submitter outcome and first-confirmation creator subscriptions |
 | `build.denied` | 3 | Submitter outcome |
-| `record_run.activated` | 1 | Compare holders of each record with the previous active run |
+| `record_run.published` | 1 | Records whose holders changed, and records that retired or came back |
 | `vote_session.closed` | 1 | Existing vote outcome processing |
 
-The first active record run for a scope is a baseline and intentionally sends no record-gain notifications. Later
-runs group every record newly gained by the same build into one notification per recipient.
+The first batch to publish any record of a kind is a baseline and sends no notifications. Later batches group every
+record a build newly holds, including revived records, into one notification per recipient. Followers of a retired
+record, by its ID or a matching filter, get one notification listing the records that retired.
 
 ## Consent, preferences, and subscriptions
 

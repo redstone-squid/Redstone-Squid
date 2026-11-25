@@ -1,21 +1,10 @@
 # Incremental record computation
 
-Recompute only the records a change can affect. A full recompute is still
-available, but only as a backstop that finds and repairs drift.
-
-## Today
-
-`RecordComputationService` publishes one `ComputationRun` per build kind and
-version scope. A run holds a `RecordResult` for every record of that kind, and
-readers see whichever run is active. Every build change goes into
-`record_recompute_queue` keyed by kind (`scope_key = kind.value`), so the
-queue's `build_id` and `reasons` columns never narrow anything: editing one
-door recomputes and republishes every door record.
-
-Publishing a whole run per kind has one real benefit. When a build moves
-between categories, for example from 3x3 to 4x4, it leaves one record and joins
-the other in the same commit. This plan keeps that atomicity per change instead
-of per kind.
+Status: implemented. A build change recomputes and publishes only the records
+it can affect. A full recompute still runs after rules, version pin and tag
+changes, and as a scheduled backstop that reports drift. A property test
+checks that publishing incrementally gives the same result as a full
+recompute, for random sequences of edits.
 
 ## Terms
 
@@ -26,158 +15,83 @@ of per kind.
   scope. **Competitors** are the members that the criterion can compare. For
   example, `first` ignores builds without a completion date, and `smallest`
   ignores builds without a volume.
-- A record's **affected set** for a change is every record whose members or
-  competitors that change can alter.
+- A record is **live** while it has competitors, and **retired** otherwise.
 
 ## Affected sets
 
-A record's result depends on its members, the rules revision and the current
-version pin. For a change to build *b*, the affected set is the union of:
+`ScopeCategories.affected` works out, for each version scope, which category
+keys a batch of changed builds can affect:
 
-- **Old memberships.** Records *b* belonged to before the change. These are
-  read from a membership index (record ↔ build for every member, not only
-  holders), which is written whenever results are published.
-- **New memberships.** Categories the new candidate maps to, from `_base_key`,
-  `_restriction_choice_groups` and `_restriction_combinations`, plus any
-  requested categories it satisfies.
-- **Threshold changes.** `_observed_thresholds` builds threshold categories
-  from every build in the kind. If *b* adds or removes the only (tag, value)
-  pair of its kind, every category at that threshold appears or disappears,
-  along with its other members.
-- **Families.** A variable-size door projects onto every fixed size it can
-  reach, so a family change affects all of those categories. The first door of
-  a new fixed size likewise needs every family projected onto it.
+- **Old memberships.** Live categories the build was in, read from
+  `record_members`. That table indexes every member of every live record and
+  has no foreign key to builds, so a deleted build's rows survive until a
+  worker processes the deletion.
+- **New memberships.** Categories the build is in now, including requested
+  categories.
+- **Thresholds and sizes.** Thresholds come from values that builds actually
+  have, and families project onto the sizes that fixed doors make concrete.
+  When the set of observed thresholds or concrete sizes changes, every
+  category at that threshold or size is affected, at any size and with any
+  other restrictions. "Before" is the unchanged builds plus every threshold
+  and size in a live key. *b*'s own old memberships are not enough: a threshold
+  that only *b* had can live on in a category at another size that *b* was
+  never in.
 
-Each criterion of an affected category is recomputed in each version scope the
-old or new candidate belongs to.
-
-Some changes legitimately affect the whole kind: a new rules revision, a
-change of the current version pin, and a change to a tag's record operator or
-restriction flag. These queue a full recompute of the kind.
+A batch still loads every candidate of the kind and generates every category,
+but resolves and publishes only the affected ones. Only all-time and the
+pinned version are maintained. A full recompute retires records in any other
+version, so a pin change retires the old pin's records.
 
 ## Publication
 
-The current result becomes per record instead of per run. Each published
-result stores the input generation it was computed from, and a result from an
-older generation never replaces a newer one. A change publishes its whole
-affected set in one transaction, so a build moving between categories stays
-atomic without republishing the kind. Runs remain as a log of which records
-each batch touched.
+`title_results` holds one current result per record, updated in place, so a
+result ID is stable while its record lives. A batch publishes its whole
+affected set in one transaction under a per-kind advisory lock, so a build
+moving between categories is still atomic. Each record row stores the input
+generation it was last published or retired from, and an older batch leaves
+it alone. Unchanged results, compared by a per-record fingerprint, only record
+the check. `record_computation_runs` is a log of published batches. Results
+and drift rows name the run that wrote them.
 
-Queue items are keyed by build change and claimed one batch per kind at a
-time. A batch computes the union of the affected sets of every pending item,
-so overlapping work in one kind never races. The generation check is a second
-safeguard.
+A record with no competitors has no result. Retirement deletes the result and
+membership rows in the same transaction, closes the open holder period, and
+sets `retired_at`. The record row and its holder history remain, so former
+holders and subscriptions keep linking to it, and a later competitor revives
+it with the same public ID. `records_get` shows a retired record with its
+history. `ResolutionStatus` is gone. An empty `RecordResolution` means no
+competitor, which also covers live lookups and range regions.
 
-Publishing only changed records also removes most search projection churn.
-The November 22 findings in [Discord record search](discord-record-search.md)
-counted 126,734 queued jobs for inactive results.
+Each batch publishes one `record_run.published` event listing records that
+appeared, revived, retired, or changed holders. Notifications treat revivals as
+gains, and send `record_retired` to followers of retired records.
 
-## Retirement
+## Queue
 
-A record with no competitors has no current result. This covers both an empty
-category and a category whose members the criterion can't compare. It replaces
-`ResolutionStatus.NO_CANDIDATE`, which accounted for 33,841 of the 46,447 live
-results on November 22 and carries no holders or gaps.
-
-- When an affected record ends up with no competitors, the same transaction
-  deletes its result and membership rows and closes the open holder period.
-- The record row and its holder history stay. Former holders keep linking to
-  it, and subscriptions stay attached. A later competitor revives the same
-  record, with the same public ID.
-- `records_get` shows a retired record with its history and a retired state.
-  It doesn't return 404.
-- Retirement and revival are per-record change events, so subscribers hear
-  about both.
-- Remove `ResolutionStatus` entirely. That covers the enum, the
-  `title_results_status_check` constraint, the vocabulary entry and the
-  generated web type. `PublicRecordQueryService` checks that a result has at
-  least one holder.
-
-Members that can't compete are still worth showing to staff. For example,
-builds without a completion date could claim `first` if they were dated. If X7
-needs that, report them as gaps on the category rather than as a status.
-
-## Full recompute as a backstop
-
-The existing kind-wide path runs on a new rules revision, a version pin change,
-a schedule, and on demand. It computes every record and compares the result
-with what is published, then publishes the differences. In steady state the
-comparison should find none, so each difference is recorded as drift, with the
-record and the inputs that differed. Drift means the affected-set calculation
-missed a case.
-
-The test that keeps this honest: for random sequences of build edits,
-publishing incrementally must give the same results as a full recompute.
+Work items are keyed by target: `door` for a whole kind, `door:backstop`,
+`door:build:12` and `door:record:<uuid>`. A worker claims a batch of one kind
+at a time, and no other worker claims that kind while the claim lives. A full
+item in the batch recomputes every category. A backstop also reads every build
+with pending work, and reports as drift each changed record outside those
+builds' affected sets. Rules, pin and tag changes queue plain full items,
+because their differences are expected.
 
 ## Admin operations
 
-This replaces item 46 in [the web API gaps](web-components/api-gaps.md).
-
-- `POST /v1/records/{id}/recompute` queues an affected set of one record and
-  returns 202. It replaces `RecordService.materialize_definition`, which
-  rebuilds the whole kind inside the request.
+- `POST /v1/records/{id}/recompute` queues every criterion of the record's
+  category and returns 202. It replaces `RecordService.materialize_definition`.
 - `GET /v1/records/{id}/inspection` computes the record fresh without
-  publishing it and compares that with the published result: holders, gaps,
-  and members gained or lost.
-- `POST /v1/records/recomputes {kinds}` queues the full backstop recompute.
+  publishing it, and compares holders, gaps and members with what is stored.
+- `POST /v1/records/recomputes {kinds}` queues the backstop. The worker also
+  queues it daily.
 - `GET /v1/records/recompute-queue` lists pending and failed items with their
-  last error, which `fail_recompute` already stores.
-- `GET /v1/records/drift` lists differences found by the backstop.
+  last error.
+- `GET /v1/records/drift` lists differences the backstop found.
 
-## Implementation notes
-
-Decisions from surveying the code, before any implementation landed:
-
-- **Thresholds and families are the only cases where old and new memberships
-  are not enough.** A category at a new threshold, or at a new family
-  projection, always contains the build that created it. It can also have
-  siblings without that build. For example, (width ≤ 4, flush) can hold other
-  flush doors when *b* is not flush. Detect these cases by comparing what was
-  observed before the change with what is observed now, for each scope. The
-  "before" side is the unchanged builds plus the threshold triples and base
-  keys in the changed builds' old memberships. This holds because a category
-  with fewer restrictions has a superset of the members, so if any category at
-  a threshold is live, the plain threshold category is live too and contains
-  *b*.
-- **Load the live category keys for the kind** (one row per live record) to
-  find live records that a removed threshold or base key retires.
-- **Results.** `title_results` holds one current row per record
-  (`title_id` unique), updated in place so result IDs stay stable until the
-  record retires. Store `input_generation` on `record_titles` so a retirement
-  also fences out older batches. History rows are keyed by record rather than
-  by run, and survive retirement.
-- **`record_members (title_id, build_id)`** has no foreign key to `builds`, so
-  a deleted build's old memberships survive until a worker processes the
-  deletion. `record_recompute_queue.build_id` drops its foreign key for the
-  same reason.
-- **Queue targets:** whole kind (rules, pin and tag changes, so differences
-  are expected), backstop (records drift), build, and record. A backstop batch
-  also reads every pending item's build, so that their legitimate changes
-  aren't counted as drift.
-- **Maintained scopes** are all-time and the pinned version only. A pin change
-  retires the old pin's records. Lookups lose their `version_id`, because
-  requested categories apply in every maintained scope.
-- **`RecordResolution` loses `status`.** Empty `holder_ids` means no
-  competitors. Live lookups, range regions and the stored `door_evidence` and
-  `door_range_runs` JSON drop the key too. The search `status` field loses its
-  records scope.
-- **Events.** `record_run.activated` becomes one event per batch run, with a
-  per-record list of changes: holders changed, retired, or revived. The
-  aggregate is the run, because aggregate IDs are integers. Revival reaches
-  subscribers as a normal gain. Retirement needs a new `record_retired`
-  notification kind, with bot and web text.
-- **Other readers to update:** `BuildLoader.records`, search projection and
-  its triggers (drop the `record_computation_runs` trigger), the notification
-  repository, `RecordGap` and diagnostics queries, the API DTO, the bot
-  records screen (`materialize_definition` becomes queue-and-return) and the
-  web `RecordDetail` and `RecordCard`.
+The bot's staff rebuild still recomputes synchronously, without reporting drift.
 
 ## Open questions
 
-- **Candidate loading.** Thresholds and families need the kind-wide view, so
-  the first version can still load every candidate and only compute the
-  affected categories. Load targeted rows only if profiling shows the read is
-  the expensive part. Neither has been measured.
+- **Candidate loading.** Every batch reads the whole kind. Load targeted rows
+  only if profiling shows the read is the expensive part.
 - **Door range publications** have their own queue and runs. The same approach
-  applies, but they can follow once records work.
+  applies, but has not been done.
