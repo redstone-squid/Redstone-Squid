@@ -209,7 +209,7 @@ class MockCliAuthorization(CliAuthorizationService):
         raise InvalidCliEnrollmentError
 
     @override
-    async def approve_enrollment(self, *, user_code: str, account_id: int) -> CliDeviceEnrollment:
+    async def approve_enrollment(self, *, context: ActingContext, user_code: str) -> CliDeviceEnrollment:
         raise InvalidCliEnrollmentError
 
     @override
@@ -223,11 +223,11 @@ class MockCliAuthorization(CliAuthorizationService):
         raise InvalidCliEnrollmentError
 
     @override
-    async def list_devices(self, account_id: int) -> tuple[CliDevice, ...]:
+    async def list_devices(self, *, context: ActingContext) -> tuple[CliDevice, ...]:
         raise InvalidCliEnrollmentError
 
     @override
-    async def revoke_device(self, *, device_id: UUID, account_id: int) -> bool:
+    async def revoke_device(self, *, context: ActingContext, device_id: UUID) -> bool:
         raise InvalidCliEnrollmentError
 
     @override
@@ -243,7 +243,7 @@ class MockEditRunner(EditRunner):
     """No persisted targets exist in the default transport-only application."""
 
     @override
-    async def execute(self, command: EditCommand, actor: Actor) -> EditResult:
+    async def execute(self, command: EditCommand, *, context: ActingContext) -> EditResult:
         raise NotFoundError
 
 
@@ -300,15 +300,15 @@ class MockSearch(SearchService):
         """Index nothing, so every query is an empty page."""
 
     @override
-    async def search(self, request: SearchRequest) -> SearchPage:
+    async def search(self, request: SearchRequest, *, context: ActingContext) -> SearchPage:
         return SearchPage(hits=(), total=0, next=None, prev=None)
 
     @override
-    async def suggest(self, query: str | SearchQuery, *, limit: int = 5) -> tuple[str, ...]:
+    async def suggest(self, query: str | SearchQuery, *, limit: int = 5, context: ActingContext) -> tuple[str, ...]:
         return ()
 
     @override
-    async def fields(self):
+    async def fields(self, *, context: ActingContext):
         return DEFAULT_FIELD_REGISTRY
 
 
@@ -317,11 +317,11 @@ class MockTags(TagService):
         """Publish no tags."""
 
     @override
-    async def public_definitions(self) -> tuple[TagDefinition, ...]:
+    async def public_definitions(self, *, context: ActingContext) -> tuple[TagDefinition, ...]:
         return ()
 
     @override
-    async def public_definition(self, tag_id: int | str) -> TagDefinition | None:
+    async def public_definition(self, tag_id: int | str, *, context: ActingContext) -> TagDefinition | None:
         return None
 
 
@@ -330,7 +330,7 @@ class MockVersions(VersionService):
         """Know no game versions."""
 
     @override
-    async def list_all(self):
+    async def list_all(self, *, context: ActingContext):
         return []
 
 
@@ -384,26 +384,26 @@ class MockMinecraftInstallations(InstallationCredentialService):
 
     @override
     async def register(
-        self, *, owner_account_id: int, label: str, profile: PublicServerProfile | None = None
+        self, *, context: ActingContext, label: str, profile: PublicServerProfile | None = None
     ) -> IssuedInstallationCredential:
         raise InvalidInstallationCredentialError
 
     @override
-    async def list_owned(self, owner_account_id: int) -> tuple[PaperInstallation, ...]:
+    async def list_owned(self, *, context: ActingContext) -> tuple[PaperInstallation, ...]:
         raise InvalidInstallationCredentialError
 
     @override
-    async def rotate(self, *, installation_id: UUID, owner_account_id: int) -> IssuedInstallationCredential:
+    async def rotate(self, *, context: ActingContext, installation_id: UUID) -> IssuedInstallationCredential:
         raise InvalidInstallationCredentialError
 
     @override
     async def update_profile(
-        self, *, installation_id: UUID, owner_account_id: int, profile: PublicServerProfile
+        self, *, context: ActingContext, installation_id: UUID, profile: PublicServerProfile
     ) -> PaperInstallation:
         raise InvalidInstallationCredentialError
 
     @override
-    async def revoke(self, *, installation_id: UUID, owner_account_id: int) -> PaperInstallation:
+    async def revoke(self, *, context: ActingContext, installation_id: UUID) -> PaperInstallation:
         raise InvalidInstallationCredentialError
 
 
@@ -444,11 +444,11 @@ class MockMinecraftPlayerAuthorization(PlayerAuthorizationService):
         raise InvalidChallengeError
 
     @override
-    async def approve(self, *, user_code: str, account_id: int) -> PlayerAuthorizationChallenge:
+    async def approve(self, *, context: ActingContext, user_code: str) -> PlayerAuthorizationChallenge:
         raise InvalidChallengeError
 
     @override
-    async def revoke_grant(self, *, grant_id: UUID, account_id: int) -> bool:
+    async def revoke_grant(self, *, context: ActingContext, grant_id: UUID) -> bool:
         raise InvalidChallengeError
 
 

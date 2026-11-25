@@ -19,6 +19,7 @@ from squid.api.v1.cli_auth import (
     router,
 )
 from squid.api.v1.schemas.cli_auth import CliEnrollmentCreateRequest
+from squid.core.actors import ActingContext
 from squid.core.cli_auth.application import CliAuthorizationService
 from squid.core.cli_auth.domain import CliIdentity, IssuedCliEnrollment, IssuedCliSession, IssuedCliSessionChallenge
 from squid.core.cli_auth.errors import CliAuthorizationPendingError
@@ -117,7 +118,8 @@ class FakeCliAuthorization(CliAuthorizationService):
         return enrollment()
 
     @override
-    async def approve_enrollment(self, *, user_code: str, account_id: int) -> CliDeviceEnrollment:
+    async def approve_enrollment(self, *, context: ActingContext, user_code: str) -> CliDeviceEnrollment:
+        account_id = context.effective.require_account_id()
         assert user_code == USER_CODE
         self.approved_as = account_id
         return enrollment(approved=True)
@@ -157,12 +159,14 @@ class FakeCliAuthorization(CliAuthorizationService):
         return issued_session()
 
     @override
-    async def list_devices(self, account_id: int) -> tuple[CliDevice, ...]:
+    async def list_devices(self, *, context: ActingContext) -> tuple[CliDevice, ...]:
+        account_id = context.effective.require_account_id()
         assert account_id == ACCOUNT_ID
         return (device(),)
 
     @override
-    async def revoke_device(self, *, device_id: UUID, account_id: int) -> bool:
+    async def revoke_device(self, *, context: ActingContext, device_id: UUID) -> bool:
+        account_id = context.effective.require_account_id()
         self.revoked_device = (device_id, account_id)
         return True
 

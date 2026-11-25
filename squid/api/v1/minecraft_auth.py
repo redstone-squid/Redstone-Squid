@@ -27,7 +27,7 @@ from squid.api.dependencies import (
 )
 from squid.api.errors import responses
 from squid.api.idempotency import IdempotencyKey, reserve_idempotent_request, reserve_idempotent_request_for
-from squid.api.security import BrowserAccountId, current_browser_account_id, prevent_credential_storage
+from squid.api.security import BrowserContext, current_browser_context, prevent_credential_storage
 from squid.api.v1.schemas.minecraft_auth import (
     ChallengeApprovalRequest,
     ChallengeApprovalResponse,
@@ -126,7 +126,7 @@ async def enforce_fabric_request_idempotency(
     security=[WEB_WRITE],
     opt=contract(cli=browser_only()),
     dependencies={
-        "account_id": Provide(current_browser_account_id),
+        "context": Provide(current_browser_context),
         "_reservation": Provide(reserve_idempotent_request),
         "installation": Provide(authenticated_paper_installation),
         "verification_uri": Provide(get_minecraft_verification_uri),
@@ -135,7 +135,7 @@ async def enforce_fabric_request_idempotency(
 async def create_installation(
     data: JSONBody[InstallationCreateRequest],
     installations: MinecraftInstallations,
-    account_id: BrowserAccountId,
+    context: BrowserContext,
     *,
     _reservation: NamedDependency[SkipValidation[None]],
 ) -> IssuedInstallationResponse:
@@ -144,9 +144,7 @@ async def create_installation(
     Retrying with the same Idempotency-Key can replay this response. Installation
     listings omit the secret; rotate the credential if it is lost.
     """
-    issued = await installations.register(
-        owner_account_id=account_id, label=data.label, profile=data.profile.to_domain()
-    )
+    issued = await installations.register(label=data.label, profile=data.profile.to_domain(), context=context)
     return IssuedInstallationResponse.from_domain(issued)
 
 
@@ -158,16 +156,16 @@ async def create_installation(
     opt=contract(cli=browser_only()),
     status_code=200,
     dependencies={
-        "account_id": Provide(current_browser_account_id),
+        "context": Provide(current_browser_context),
         "installation": Provide(authenticated_paper_installation),
         "verification_uri": Provide(get_minecraft_verification_uri),
     },
 )
 async def list_installations(
-    installations: MinecraftInstallations, account_id: BrowserAccountId
+    installations: MinecraftInstallations, context: BrowserContext
 ) -> InstallationListResponse:
     """List only the signed-in account's Paper installations, without secrets or digests."""
-    owned = await installations.list_owned(account_id)
+    owned = await installations.list_owned(context=context)
     return InstallationListResponse(
         installations=[InstallationResponse.from_domain(installation) for installation in owned]
     )
@@ -181,7 +179,7 @@ async def list_installations(
     opt=contract(cli=browser_only()),
     status_code=200,
     dependencies={
-        "account_id": Provide(current_browser_account_id),
+        "context": Provide(current_browser_context),
         "_reservation": Provide(reserve_idempotent_request),
         "installation": Provide(authenticated_paper_installation),
         "verification_uri": Provide(get_minecraft_verification_uri),
@@ -190,12 +188,12 @@ async def list_installations(
 async def rotate_installation(
     installation_id: FromPath[UUID],
     installations: MinecraftInstallations,
-    account_id: BrowserAccountId,
+    context: BrowserContext,
     *,
     _reservation: NamedDependency[SkipValidation[None]],
 ) -> IssuedInstallationResponse:
     """Revoke an owned installation's old credential and return its replacement secret."""
-    issued = await installations.rotate(installation_id=installation_id, owner_account_id=account_id)
+    issued = await installations.rotate(installation_id=installation_id, context=context)
     return IssuedInstallationResponse.from_domain(issued)
 
 
@@ -207,7 +205,7 @@ async def rotate_installation(
     opt=contract(cli=browser_only()),
     status_code=200,
     dependencies={
-        "account_id": Provide(current_browser_account_id),
+        "context": Provide(current_browser_context),
         "_reservation": Provide(reserve_idempotent_request),
         "installation": Provide(authenticated_paper_installation),
         "verification_uri": Provide(get_minecraft_verification_uri),
@@ -217,13 +215,13 @@ async def update_installation_profile(
     installation_id: FromPath[UUID],
     data: JSONBody[ServerProfileSchema],
     installations: MinecraftInstallations,
-    account_id: BrowserAccountId,
+    context: BrowserContext,
     *,
     _reservation: NamedDependency[SkipValidation[None]],
 ) -> InstallationResponse:
     """Replace an owned server's explicit public-listing and sponsorship preferences."""
     installation = await installations.update_profile(
-        installation_id=installation_id, owner_account_id=account_id, profile=data.to_domain()
+        installation_id=installation_id, profile=data.to_domain(), context=context
     )
     return InstallationResponse.from_domain(installation)
 
@@ -236,7 +234,7 @@ async def update_installation_profile(
     security=[WEB_WRITE],
     opt=contract(cli=browser_only()),
     dependencies={
-        "account_id": Provide(current_browser_account_id),
+        "context": Provide(current_browser_context),
         "_reservation": Provide(reserve_idempotent_request),
         "installation": Provide(authenticated_paper_installation),
         "verification_uri": Provide(get_minecraft_verification_uri),
@@ -245,12 +243,12 @@ async def update_installation_profile(
 async def revoke_installation(
     installation_id: FromPath[UUID],
     installations: MinecraftInstallations,
-    account_id: BrowserAccountId,
+    context: BrowserContext,
     *,
     _reservation: NamedDependency[SkipValidation[None]],
 ) -> None:
     """Revoke an owned server and all pending or active authorization derived from it."""
-    await installations.revoke(installation_id=installation_id, owner_account_id=account_id)
+    await installations.revoke(installation_id=installation_id, context=context)
 
 
 @post(
@@ -261,7 +259,7 @@ async def revoke_installation(
     security=[PAPER],
     opt=contract(cli=transport_only()),
     dependencies={
-        "account_id": Provide(current_browser_account_id),
+        "context": Provide(current_browser_context),
         "_reservation": Provide(enforce_paper_request_idempotency),
         "installation": Provide(authenticated_paper_installation),
         "verification_uri": Provide(get_minecraft_verification_uri),
@@ -288,7 +286,7 @@ async def start_paper_challenge(
     opt=contract(cli=transport_only()),
     status_code=200,
     dependencies={
-        "account_id": Provide(current_browser_account_id),
+        "context": Provide(current_browser_context),
         "_reservation": Provide(enforce_paper_request_idempotency),
         "installation": Provide(authenticated_paper_installation),
         "verification_uri": Provide(get_minecraft_verification_uri),
@@ -314,7 +312,7 @@ async def exchange_paper_challenge(
     security=[ANONYMOUS],
     opt=contract(cli=transport_only()),
     dependencies={
-        "account_id": Provide(current_browser_account_id),
+        "context": Provide(current_browser_context),
         "_reservation": Provide(enforce_fabric_request_idempotency),
         "verification_uri": Provide(get_minecraft_verification_uri),
         "installation": Provide(authenticated_paper_installation),
@@ -346,7 +344,7 @@ async def start_fabric_challenge(
     opt=contract(cli=transport_only()),
     status_code=200,
     dependencies={
-        "account_id": Provide(current_browser_account_id),
+        "context": Provide(current_browser_context),
         "_reservation": Provide(enforce_fabric_request_idempotency),
         "installation": Provide(authenticated_paper_installation),
         "verification_uri": Provide(get_minecraft_verification_uri),
@@ -371,7 +369,7 @@ async def exchange_fabric_challenge(
     opt=contract(cli=browser_only()),
     status_code=200,
     dependencies={
-        "account_id": Provide(current_browser_account_id),
+        "context": Provide(current_browser_context),
         "_reservation": Provide(reserve_idempotent_request),
         "installation": Provide(authenticated_paper_installation),
         "verification_uri": Provide(get_minecraft_verification_uri),
@@ -380,12 +378,12 @@ async def exchange_fabric_challenge(
 async def approve_challenge(
     data: JSONBody[ChallengeApprovalRequest],
     players: MinecraftPlayerAuthorization,
-    account_id: BrowserAccountId,
+    context: BrowserContext,
     *,
     _reservation: NamedDependency[SkipValidation[None]],
 ) -> ChallengeApprovalResponse:
     """Approve only the Java UUID authoritatively attached to the signed-in account."""
-    challenge = await players.approve(user_code=data.user_code, account_id=account_id)
+    challenge = await players.approve(user_code=data.user_code, context=context)
     return ChallengeApprovalResponse.from_domain(challenge)
 
 
@@ -397,7 +395,7 @@ async def approve_challenge(
     security=[WEB_WRITE],
     opt=contract(cli=browser_only()),
     dependencies={
-        "account_id": Provide(current_browser_account_id),
+        "context": Provide(current_browser_context),
         "_reservation": Provide(reserve_idempotent_request),
         "installation": Provide(authenticated_paper_installation),
         "verification_uri": Provide(get_minecraft_verification_uri),
@@ -406,12 +404,12 @@ async def approve_challenge(
 async def revoke_grant(
     grant_id: FromPath[UUID],
     players: MinecraftPlayerAuthorization,
-    account_id: BrowserAccountId,
+    context: BrowserContext,
     *,
     _reservation: NamedDependency[SkipValidation[None]],
 ) -> None:
     """Revoke one grant only when it belongs to the signed-in account."""
-    revoked = await players.revoke_grant(grant_id=grant_id, account_id=account_id)
+    revoked = await players.revoke_grant(grant_id=grant_id, context=context)
     if not revoked:
         raise NotFoundError
 

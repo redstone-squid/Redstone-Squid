@@ -13,6 +13,7 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from whenever import Instant
 
+from squid.core.actors import ActingContext
 from squid.core.cli_auth.domain import CliIdentity, IssuedCliEnrollment, IssuedCliSession, IssuedCliSessionChallenge
 from squid.core.cli_auth.errors import (
     CliAuthorizationPendingError,
@@ -190,18 +191,20 @@ class CliAuthorizationService:
             self._ensure_approvable(enrollment, self._now())
             return enrollment
 
-    async def approve_enrollment(self, *, user_code: str, account_id: int) -> CliDeviceEnrollment:
+    async def approve_enrollment(self, *, context: ActingContext, user_code: str) -> CliDeviceEnrollment:
         """Bind one still-live enrollment to the approving browser account."""
-        async with self._uow_factory() as uow:
-            enrollment = await self._enrollment_for_user_code(uow, user_code)
-            self._ensure_approvable(enrollment, self._now(), account_id=account_id)
-            result = await uow.cli_authorization.approve_enrollment(
-                enrollment_id=enrollment.id,
-                account_id=account_id,
-                approved_at=self._now(),
-            )
-            await uow.commit()
-            return result
+        account_id = context.effective.require_account_id()
+        with context.scope():
+            async with self._uow_factory() as uow:
+                enrollment = await self._enrollment_for_user_code(uow, user_code)
+                self._ensure_approvable(enrollment, self._now(), account_id=account_id)
+                result = await uow.cli_authorization.approve_enrollment(
+                    enrollment_id=enrollment.id,
+                    account_id=account_id,
+                    approved_at=self._now(),
+                )
+                await uow.commit()
+                return result
 
     async def exchange_enrollment(self, *, device_code: str, signature: bytes) -> IssuedCliSession:
         """Prove the enrolled private key and exchange browser approval for a session."""
@@ -318,19 +321,23 @@ class CliAuthorizationService:
                 consent_pending=not await uow.accounts.has_current_consent(device.account_id),
             )
 
-    async def list_devices(self, account_id: int) -> tuple[CliDevice, ...]:
+    async def list_devices(self, *, context: ActingContext) -> tuple[CliDevice, ...]:
         """Return all devices for the account, including revoked devices, newest first."""
-        async with self._uow_factory() as uow:
-            return await uow.cli_authorization.list_devices(account_id)
+        account_id = context.effective.require_account_id()
+        with context.scope():
+            async with self._uow_factory() as uow:
+                return await uow.cli_authorization.list_devices(account_id)
 
-    async def revoke_device(self, *, device_id: UUID, account_id: int) -> bool:
+    async def revoke_device(self, *, context: ActingContext, device_id: UUID) -> bool:
         """Revoke a device and its sessions; return False if the account does not own it."""
-        async with self._uow_factory() as uow:
-            result = await uow.cli_authorization.revoke_device(
-                device_id=device_id, account_id=account_id, revoked_at=self._now()
-            )
-            await uow.commit()
-            return result
+        account_id = context.effective.require_account_id()
+        with context.scope():
+            async with self._uow_factory() as uow:
+                result = await uow.cli_authorization.revoke_device(
+                    device_id=device_id, account_id=account_id, revoked_at=self._now()
+                )
+                await uow.commit()
+                return result
 
     async def revoke_current_session(self, identity: CliIdentity) -> bool:
         """Revoke the exact session represented by a CLI caller."""

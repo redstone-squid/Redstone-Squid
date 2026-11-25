@@ -19,7 +19,7 @@ from pydantic import AnyHttpUrl
 from squid.api.contract import ANONYMOUS, DEVICE, WEB, WEB_WRITE, browser_only, cli_command, contract, transport_only
 from squid.api.errors import responses
 from squid.api.idempotency import IdempotencyKey, reserve_idempotent_request, reserve_idempotent_request_for
-from squid.api.security import BrowserAccountId, Caller, current_browser_account_id, prevent_credential_storage
+from squid.api.security import BrowserContext, Caller, current_browser_context, prevent_credential_storage
 from squid.api.v1.schemas.cli_auth import (
     CliDeviceListResponse,
     CliDeviceResponse,
@@ -34,6 +34,7 @@ from squid.api.v1.schemas.cli_auth import (
     IssuedCliSessionResponse,
     UserCode,
 )
+from squid.core.actors import ActingContext
 from squid.core.cli_auth.domain import CliIdentity, IssuedCliEnrollment, IssuedCliSession, IssuedCliSessionChallenge
 from squid.core.cli_auth.models import CliDevice, CliDeviceEnrollment
 from squid.core.errors import AuthenticationError, NotFoundError, ServiceUnavailableError
@@ -52,7 +53,7 @@ class CliAuthorizationHttpService(Protocol):
 
     async def preview_enrollment(self, user_code: str) -> CliDeviceEnrollment: ...
 
-    async def approve_enrollment(self, *, user_code: str, account_id: int) -> CliDeviceEnrollment: ...
+    async def approve_enrollment(self, *, context: ActingContext, user_code: str) -> CliDeviceEnrollment: ...
 
     async def exchange_enrollment(self, *, device_code: str, signature: bytes) -> IssuedCliSession: ...
 
@@ -67,9 +68,9 @@ class CliAuthorizationHttpService(Protocol):
         signature: bytes,
     ) -> IssuedCliSession: ...
 
-    async def list_devices(self, account_id: int) -> tuple[CliDevice, ...]: ...
+    async def list_devices(self, *, context: ActingContext) -> tuple[CliDevice, ...]: ...
 
-    async def revoke_device(self, *, device_id: UUID, account_id: int) -> bool: ...
+    async def revoke_device(self, *, context: ActingContext, device_id: UUID) -> bool: ...
 
     async def revoke_current_session(self, identity: CliIdentity) -> bool: ...
 
@@ -154,7 +155,7 @@ VerificationUri = NamedDependency[SkipValidation[AnyHttpUrl]]
         cli=cli_command("auth.login", features=("cli-device-auth",), interaction="browser-continuation"),
     ),
     dependencies={
-        "account_id": Provide(current_browser_account_id),
+        "context": Provide(current_browser_context),
         "_reservation": Provide(enforce_anonymous_cli_idempotency),
         "cli": Provide(get_cli_authorization_service, sync_to_thread=False),
         "verification_uri": Provide(get_cli_verification_uri, sync_to_thread=False),
@@ -183,7 +184,7 @@ async def start_enrollment(
     opt=contract(cli=transport_only()),
     status_code=200,
     dependencies={
-        "account_id": Provide(current_browser_account_id),
+        "context": Provide(current_browser_context),
         "_reservation": Provide(enforce_anonymous_cli_idempotency),
         "cli": Provide(get_cli_authorization_service, sync_to_thread=False),
         "verification_uri": Provide(get_cli_verification_uri, sync_to_thread=False),
@@ -209,14 +210,14 @@ async def exchange_enrollment(
     opt=contract(cli=browser_only()),
     status_code=200,
     dependencies={
-        "account_id": Provide(current_browser_account_id),
+        "context": Provide(current_browser_context),
         "cli": Provide(get_cli_authorization_service, sync_to_thread=False),
         "verification_uri": Provide(get_cli_verification_uri, sync_to_thread=False),
         "identity": Provide(current_cli_identity),
     },
 )
 async def preview_enrollment(
-    cli: CliAuthorization, account_id: BrowserAccountId, user_code: Annotated[UserCode, QueryParameter()]
+    cli: CliAuthorization, context: BrowserContext, user_code: Annotated[UserCode, QueryParameter()]
 ) -> CliEnrollmentApprovalResponse:
     """Show a device label and fingerprint before the browser grants access."""
     enrollment = await cli.preview_enrollment(user_code)
@@ -231,7 +232,7 @@ async def preview_enrollment(
     opt=contract(cli=browser_only()),
     status_code=200,
     dependencies={
-        "account_id": Provide(current_browser_account_id),
+        "context": Provide(current_browser_context),
         "_reservation": Provide(reserve_idempotent_request),
         "cli": Provide(get_cli_authorization_service, sync_to_thread=False),
         "verification_uri": Provide(get_cli_verification_uri, sync_to_thread=False),
@@ -241,12 +242,12 @@ async def preview_enrollment(
 async def approve_enrollment(
     data: JSONBody[CliEnrollmentApprovalRequest],
     cli: CliAuthorization,
-    account_id: BrowserAccountId,
+    context: BrowserContext,
     *,
     _reservation: NamedDependency[SkipValidation[None]],
 ) -> CliEnrollmentApprovalResponse:
     """Approve the previewed CLI device as the signed-in browser account."""
-    enrollment = await cli.approve_enrollment(user_code=data.user_code, account_id=account_id)
+    enrollment = await cli.approve_enrollment(user_code=data.user_code, context=context)
     return CliEnrollmentApprovalResponse.from_domain(enrollment)
 
 
@@ -258,7 +259,7 @@ async def approve_enrollment(
     security=[ANONYMOUS],
     opt=contract(cli=transport_only()),
     dependencies={
-        "account_id": Provide(current_browser_account_id),
+        "context": Provide(current_browser_context),
         "_reservation": Provide(enforce_anonymous_cli_idempotency),
         "cli": Provide(get_cli_authorization_service, sync_to_thread=False),
         "verification_uri": Provide(get_cli_verification_uri, sync_to_thread=False),
@@ -289,7 +290,7 @@ async def start_session_challenge(
     opt=contract(cli=transport_only()),
     status_code=200,
     dependencies={
-        "account_id": Provide(current_browser_account_id),
+        "context": Provide(current_browser_context),
         "_reservation": Provide(enforce_anonymous_cli_idempotency),
         "cli": Provide(get_cli_authorization_service, sync_to_thread=False),
         "verification_uri": Provide(get_cli_verification_uri, sync_to_thread=False),
@@ -317,15 +318,15 @@ async def exchange_session_challenge(
     opt=contract(cli=browser_only()),
     status_code=200,
     dependencies={
-        "account_id": Provide(current_browser_account_id),
+        "context": Provide(current_browser_context),
         "cli": Provide(get_cli_authorization_service, sync_to_thread=False),
         "verification_uri": Provide(get_cli_verification_uri, sync_to_thread=False),
         "identity": Provide(current_cli_identity),
     },
 )
-async def list_devices(cli: CliAuthorization, account_id: BrowserAccountId) -> CliDeviceListResponse:
+async def list_devices(cli: CliAuthorization, context: BrowserContext) -> CliDeviceListResponse:
     """List browser-account-owned devices without exposing public keys."""
-    devices = await cli.list_devices(account_id)
+    devices = await cli.list_devices(context=context)
     return CliDeviceListResponse(devices=[CliDeviceResponse.from_domain(device) for device in devices])
 
 
@@ -337,7 +338,7 @@ async def list_devices(cli: CliAuthorization, account_id: BrowserAccountId) -> C
     security=[WEB_WRITE],
     opt=contract(cli=browser_only()),
     dependencies={
-        "account_id": Provide(current_browser_account_id),
+        "context": Provide(current_browser_context),
         "_reservation": Provide(reserve_idempotent_request),
         "cli": Provide(get_cli_authorization_service, sync_to_thread=False),
         "verification_uri": Provide(get_cli_verification_uri, sync_to_thread=False),
@@ -347,12 +348,12 @@ async def list_devices(cli: CliAuthorization, account_id: BrowserAccountId) -> C
 async def revoke_device(
     device_id: FromPath[UUID],
     cli: CliAuthorization,
-    account_id: BrowserAccountId,
+    context: BrowserContext,
     *,
     _reservation: NamedDependency[SkipValidation[None]],
 ) -> None:
     """Revoke an account-owned device and every session issued beneath it."""
-    if not await cli.revoke_device(device_id=device_id, account_id=account_id):
+    if not await cli.revoke_device(device_id=device_id, context=context):
         raise NotFoundError
 
 
@@ -364,7 +365,7 @@ async def revoke_device(
     security=[DEVICE],
     opt=contract(cli=cli_command("auth.logout", features=("cli-device-auth",), interaction="direct")),
     dependencies={
-        "account_id": Provide(current_browser_account_id),
+        "context": Provide(current_browser_context),
         "_reservation": Provide(reserve_idempotent_request),
         "cli": Provide(get_cli_authorization_service, sync_to_thread=False),
         "identity": Provide(current_cli_identity),

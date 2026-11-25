@@ -322,6 +322,15 @@ async def current_browser_account_id(caller: NamedDependency[SkipValidation[Call
 BrowserAccountId = NamedDependency[int]
 
 
+async def current_browser_context(caller: NamedDependency[SkipValidation[Caller]]) -> ActingContext:
+    """Retain browser authority and operator attribution after the consent check."""
+    await current_browser_account_id(caller)
+    return caller.context()
+
+
+BrowserContext = NamedDependency[SkipValidation[ActingContext]]
+
+
 async def prevent_credential_storage(response: Response[Any]) -> Response[Any]:
     """Keep credential-bearing responses out of browser and intermediary caches."""
     response.headers["Cache-Control"] = "no-store"

@@ -23,6 +23,7 @@ from squid.api.v1.schemas.minecraft_auth import (
     PaperChallengeCreateRequest,
 )
 from squid.core.accounts.errors import ConsentRequiredError
+from squid.core.actors import ActingContext
 from squid.core.errors import AuthenticationError
 from squid.core.idempotency import IdempotencyService, PendingRequest
 from squid.core.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
@@ -108,12 +109,9 @@ class FakeInstallations(InstallationCredentialService):
 
     @override
     async def register(
-        self,
-        *,
-        owner_account_id: int,
-        label: str,
-        profile: PublicServerProfile | None = None,
+        self, *, context: ActingContext, label: str, profile: PublicServerProfile | None = None
     ) -> IssuedInstallationCredential:
+        owner_account_id = context.effective.require_account_id()
         self.owner_ids.append(owner_account_id)
         self.current = replace(self.current, label=label.strip(), profile=profile or PublicServerProfile())
         return IssuedInstallationCredential(
@@ -122,19 +120,22 @@ class FakeInstallations(InstallationCredentialService):
         )
 
     @override
-    async def list_owned(self, owner_account_id: int) -> tuple[PaperInstallation, ...]:
+    async def list_owned(self, *, context: ActingContext) -> tuple[PaperInstallation, ...]:
+        owner_account_id = context.effective.require_account_id()
         self.owner_ids.append(owner_account_id)
         return (self.current,)
 
     @override
-    async def rotate(self, *, installation_id: UUID, owner_account_id: int) -> IssuedInstallationCredential:
+    async def rotate(self, *, context: ActingContext, installation_id: UUID) -> IssuedInstallationCredential:
+        owner_account_id = context.effective.require_account_id()
         assert installation_id == self.current.id
         self.owner_ids.append(owner_account_id)
         self.current = replace(self.current, credential_version=2, rotated_at=NOW)
         return IssuedInstallationCredential(self.current, f"sqpi_{self.current.id.hex}_{ROTATED_SECRET}")
 
     @override
-    async def revoke(self, *, installation_id: UUID, owner_account_id: int) -> PaperInstallation:
+    async def revoke(self, *, context: ActingContext, installation_id: UUID) -> PaperInstallation:
+        owner_account_id = context.effective.require_account_id()
         assert installation_id == self.current.id
         self.owner_ids.append(owner_account_id)
         self.current = replace(self.current, revoked_at=NOW)
@@ -142,12 +143,9 @@ class FakeInstallations(InstallationCredentialService):
 
     @override
     async def update_profile(
-        self,
-        *,
-        installation_id: UUID,
-        owner_account_id: int,
-        profile: PublicServerProfile,
+        self, *, context: ActingContext, installation_id: UUID, profile: PublicServerProfile
     ) -> PaperInstallation:
+        owner_account_id = context.effective.require_account_id()
         assert installation_id == self.current.id
         self.owner_ids.append(owner_account_id)
         self.current = replace(self.current, profile=profile)
@@ -211,7 +209,8 @@ class FakePlayers(PlayerAuthorizationService):
         return challenge(origin=MinecraftClientOrigin.FABRIC)
 
     @override
-    async def approve(self, *, user_code: str, account_id: int) -> PlayerAuthorizationChallenge:
+    async def approve(self, *, context: ActingContext, user_code: str) -> PlayerAuthorizationChallenge:
+        account_id = context.effective.require_account_id()
         assert user_code == USER_CODE
         self.approved_as = account_id
         return PlayerAuthorizationChallenge(
@@ -246,7 +245,8 @@ class FakePlayers(PlayerAuthorizationService):
         return grant(origin=MinecraftClientOrigin.FABRIC)
 
     @override
-    async def revoke_grant(self, *, grant_id: UUID, account_id: int) -> bool:
+    async def revoke_grant(self, *, context: ActingContext, grant_id: UUID) -> bool:
+        account_id = context.effective.require_account_id()
         self.revoked_as = (grant_id, account_id)
         return True
 

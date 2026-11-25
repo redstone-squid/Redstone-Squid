@@ -21,6 +21,7 @@ from uuid import UUID, uuid4
 
 from whenever import Instant
 
+from squid.core.actors import ActingContext
 from squid.core.errors import InvalidStateError, ValidationError
 from squid.core.i18n import tr
 from squid.core.minecraft_auth.application.crypto import (
@@ -80,96 +81,98 @@ class InstallationCredentialService:
         self._new_uuid = new_uuid
 
     async def register(
-        self,
-        *,
-        owner_account_id: int,
-        label: str,
-        profile: PublicServerProfile | None = None,
+        self, *, context: ActingContext, label: str, profile: PublicServerProfile | None = None
     ) -> IssuedInstallationCredential:
         """Create an installation and disclose its high-entropy credential once."""
-        async with self._uow_factory() as uow:
-            if not await uow.accounts.has_current_consent(owner_account_id):
-                raise AccountConsentRequiredError
-            normalized_label = _installation_label(label)
-            issued_at = self._clock()
-            secret = self._codec.random_secret()
-            installation = await uow.minecraft_authorization.add_installation(
-                PaperInstallation(
-                    id=self._new_uuid(),
-                    owner_account_id=owner_account_id,
-                    label=normalized_label,
-                    secret_hash=self._codec.digest(SecretPurpose.INSTALLATION, secret),
-                    credential_version=1,
-                    profile=profile or PublicServerProfile(),
-                    created_at=issued_at,
+        owner_account_id = context.effective.require_account_id()
+        with context.scope():
+            async with self._uow_factory() as uow:
+                if not await uow.accounts.has_current_consent(owner_account_id):
+                    raise AccountConsentRequiredError
+                normalized_label = _installation_label(label)
+                issued_at = self._clock()
+                secret = self._codec.random_secret()
+                installation = await uow.minecraft_authorization.add_installation(
+                    PaperInstallation(
+                        id=self._new_uuid(),
+                        owner_account_id=owner_account_id,
+                        label=normalized_label,
+                        secret_hash=self._codec.digest(SecretPurpose.INSTALLATION, secret),
+                        credential_version=1,
+                        profile=profile or PublicServerProfile(),
+                        created_at=issued_at,
+                    )
                 )
-            )
-            result = IssuedInstallationCredential(
-                installation=installation,
-                token=self._codec.installation_token(installation.id, secret),
-            )
-            await uow.commit()
-            return result
+                result = IssuedInstallationCredential(
+                    installation=installation,
+                    token=self._codec.installation_token(installation.id, secret),
+                )
+                await uow.commit()
+                return result
 
-    async def rotate(self, *, installation_id: UUID, owner_account_id: int) -> IssuedInstallationCredential:
+    async def rotate(self, *, context: ActingContext, installation_id: UUID) -> IssuedInstallationCredential:
         """Replace the installation secret and invalidate its outstanding challenges and grants."""
-        async with self._uow_factory() as uow:
-            secret = self._codec.random_secret()
-            installation = await uow.minecraft_authorization.rotate_installation(
-                installation_id=installation_id,
-                owner_account_id=owner_account_id,
-                secret_hash=self._codec.digest(SecretPurpose.INSTALLATION, secret),
-                rotated_at=self._clock(),
-            )
-            if installation is None:
-                raise InstallationUnavailableError
-            result = IssuedInstallationCredential(
-                installation=installation,
-                token=self._codec.installation_token(installation.id, secret),
-            )
-            await uow.commit()
-            return result
+        owner_account_id = context.effective.require_account_id()
+        with context.scope():
+            async with self._uow_factory() as uow:
+                secret = self._codec.random_secret()
+                installation = await uow.minecraft_authorization.rotate_installation(
+                    installation_id=installation_id,
+                    owner_account_id=owner_account_id,
+                    secret_hash=self._codec.digest(SecretPurpose.INSTALLATION, secret),
+                    rotated_at=self._clock(),
+                )
+                if installation is None:
+                    raise InstallationUnavailableError
+                result = IssuedInstallationCredential(
+                    installation=installation,
+                    token=self._codec.installation_token(installation.id, secret),
+                )
+                await uow.commit()
+                return result
 
-    async def revoke(self, *, installation_id: UUID, owner_account_id: int) -> PaperInstallation:
+    async def revoke(self, *, context: ActingContext, installation_id: UUID) -> PaperInstallation:
         """Revoke an installation and every challenge or grant bound to it."""
-        async with self._uow_factory() as uow:
-            installation = await uow.minecraft_authorization.revoke_installation(
-                installation_id=installation_id,
-                owner_account_id=owner_account_id,
-                revoked_at=self._clock(),
-            )
-            if installation is None:
-                raise InstallationUnavailableError
-            await uow.commit()
-            return installation
+        owner_account_id = context.effective.require_account_id()
+        with context.scope():
+            async with self._uow_factory() as uow:
+                installation = await uow.minecraft_authorization.revoke_installation(
+                    installation_id=installation_id,
+                    owner_account_id=owner_account_id,
+                    revoked_at=self._clock(),
+                )
+                if installation is None:
+                    raise InstallationUnavailableError
+                await uow.commit()
+                return installation
 
-    async def list_owned(self, owner_account_id: int) -> tuple[PaperInstallation, ...]:
+    async def list_owned(self, *, context: ActingContext) -> tuple[PaperInstallation, ...]:
         """List the account's installations, including revoked entries, oldest first.
 
         Returned models contain credential digests. Use a response projection before
         sending them to a client.
         """
-        async with self._uow_factory() as uow:
-            return await uow.minecraft_authorization.list_installations(owner_account_id)
+        owner_account_id = context.effective.require_account_id()
+        with context.scope():
+            async with self._uow_factory() as uow:
+                return await uow.minecraft_authorization.list_installations(owner_account_id)
 
     async def update_profile(
-        self,
-        *,
-        installation_id: UUID,
-        owner_account_id: int,
-        profile: PublicServerProfile,
+        self, *, context: ActingContext, installation_id: UUID, profile: PublicServerProfile
     ) -> PaperInstallation:
         """Replace explicit public-profile and sponsor preferences without rotating credentials."""
-        async with self._uow_factory() as uow:
-            installation = await uow.minecraft_authorization.update_installation_profile(
-                installation_id=installation_id,
-                owner_account_id=owner_account_id,
-                profile=profile,
-            )
-            if installation is None:
-                raise InstallationUnavailableError
-            await uow.commit()
-            return installation
+        owner_account_id = context.effective.require_account_id()
+        with context.scope():
+            async with self._uow_factory() as uow:
+                installation = await uow.minecraft_authorization.update_installation_profile(
+                    installation_id=installation_id,
+                    owner_account_id=owner_account_id,
+                    profile=profile,
+                )
+                if installation is None:
+                    raise InstallationUnavailableError
+                await uow.commit()
+                return installation
 
     async def authenticate(self, token: str) -> AuthenticatedPaperInstallation:
         """Authenticate a Paper server without granting any player authority."""
@@ -290,30 +293,32 @@ class PlayerAuthorizationService:
             pkce_s256_challenge=challenge,
         )
 
-    async def approve(self, *, user_code: str, account_id: int) -> PlayerAuthorizationChallenge:
+    async def approve(self, *, context: ActingContext, user_code: str) -> PlayerAuthorizationChallenge:
         """Approve a challenge only if the account owns its verified Java UUID and passes the consent gate."""
-        async with self._uow_factory() as uow:
-            normalized_code = self._codec.normalize_user_code(user_code)
-            if not normalized_code:
-                raise InvalidChallengeError
-            challenge = await uow.minecraft_authorization.get_challenge_by_user_code_hash(
-                self._codec.digest(SecretPurpose.USER_CODE, normalized_code)
-            )
-            if challenge is None:
-                raise InvalidChallengeError
-            self._ensure_approvable(challenge, self._clock())
-            if not await uow.accounts.can_approve_minecraft_identity(
-                account_id=account_id,
-                java_uuid=challenge.java_uuid,
-            ):
-                raise ChallengeApprovalDeniedError
-            result = await uow.minecraft_authorization.approve_challenge(
-                challenge_id=challenge.id,
-                account_id=account_id,
-                approved_at=self._clock(),
-            )
-            await uow.commit()
-            return result
+        account_id = context.effective.require_account_id()
+        with context.scope():
+            async with self._uow_factory() as uow:
+                normalized_code = self._codec.normalize_user_code(user_code)
+                if not normalized_code:
+                    raise InvalidChallengeError
+                challenge = await uow.minecraft_authorization.get_challenge_by_user_code_hash(
+                    self._codec.digest(SecretPurpose.USER_CODE, normalized_code)
+                )
+                if challenge is None:
+                    raise InvalidChallengeError
+                self._ensure_approvable(challenge, self._clock())
+                if not await uow.accounts.can_approve_minecraft_identity(
+                    account_id=account_id,
+                    java_uuid=challenge.java_uuid,
+                ):
+                    raise ChallengeApprovalDeniedError
+                result = await uow.minecraft_authorization.approve_challenge(
+                    challenge_id=challenge.id,
+                    account_id=account_id,
+                    approved_at=self._clock(),
+                )
+                await uow.commit()
+                return result
 
     async def exchange_paper(
         self,
@@ -379,25 +384,29 @@ class PlayerAuthorizationService:
                 raise InvalidPlayerTokenError
             return context
 
-    async def revoke_grant(self, *, grant_id: UUID, account_id: int) -> bool:
+    async def revoke_grant(self, *, context: ActingContext, grant_id: UUID) -> bool:
         """Revoke one player grant if it belongs to the signed-in account."""
-        async with self._uow_factory() as uow:
-            result = await uow.minecraft_authorization.revoke_grant(
-                grant_id=grant_id,
-                account_id=account_id,
-                revoked_at=self._clock(),
-            )
-            await uow.commit()
-            return result
+        account_id = context.effective.require_account_id()
+        with context.scope():
+            async with self._uow_factory() as uow:
+                result = await uow.minecraft_authorization.revoke_grant(
+                    grant_id=grant_id,
+                    account_id=account_id,
+                    revoked_at=self._clock(),
+                )
+                await uow.commit()
+                return result
 
-    async def revoke_account_grants(self, account_id: int) -> int:
+    async def revoke_account_grants(self, *, context: ActingContext) -> int:
         """Revoke every outstanding Minecraft player grant for an account."""
-        async with self._uow_factory() as uow:
-            result = await uow.minecraft_authorization.revoke_account_grants(
-                account_id=account_id, revoked_at=self._clock()
-            )
-            await uow.commit()
-            return result
+        account_id = context.effective.require_account_id()
+        with context.scope():
+            async with self._uow_factory() as uow:
+                result = await uow.minecraft_authorization.revoke_account_grants(
+                    account_id=account_id, revoked_at=self._clock()
+                )
+                await uow.commit()
+                return result
 
     async def _start_challenge(
         self,

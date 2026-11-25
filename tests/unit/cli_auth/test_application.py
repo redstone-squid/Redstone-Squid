@@ -9,6 +9,7 @@ from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from whenever import Instant
 
+from squid.core.actors import ActingContext, Actor
 from squid.core.cli_auth.application import (
     CliAuthorizationService,
     CliSecretCodec,
@@ -172,7 +173,7 @@ async def _enrolled_service() -> tuple[
     )
     preview = await service.preview_enrollment(issued.user_code.lower())
     assert preview.label == "Workstation CLI"
-    await service.approve_enrollment(user_code=issued.user_code, account_id=42)
+    await service.approve_enrollment(user_code=issued.user_code, context=ActingContext.direct(Actor(account_id=42)))
     signature = private_key.sign(enrollment_proof_message(issued.enrollment.id, issued.device_code))
     session = await service.exchange_enrollment(device_code=issued.device_code, signature=signature)
     return service, repository, private_key, session.token
@@ -200,7 +201,7 @@ async def test_enrollment_rejects_signature_from_another_key() -> None:
     _private_key, public_key = _key_pair()
     wrong_key, _wrong_public_key = _key_pair()
     issued = await service.start_enrollment(public_key=public_key, client_instance_id=uuid4(), label="Laptop")
-    await service.approve_enrollment(user_code=issued.user_code, account_id=7)
+    await service.approve_enrollment(user_code=issued.user_code, context=ActingContext.direct(Actor(account_id=7)))
 
     with pytest.raises(InvalidCliDeviceProofError):
         await service.exchange_enrollment(
