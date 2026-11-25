@@ -138,8 +138,6 @@ class BuildHistoryQueries:
             selector=PageSelector(offset=offset),
             page_size=page_size,
             total=total or 0,
-            keyset=False,
-            id_of=lambda item: item.revision,
         )
 
     @staticmethod
@@ -233,9 +231,7 @@ class BuildHistoryQueries:
         total = await session.scalar(
             select(func.count()).select_from(BuildHistoryEntry).where(BuildHistoryEntry.build_id == build_id)
         )
-        return keyset_page(
-            items, selector=selector, page_size=page_size, total=total or 0, keyset=True, id_of=lambda item: item.id
-        )
+        return keyset_page(items, selector=selector, page_size=page_size, total=total or 0, id_of=lambda item: item.id)
 
     async def get_history_entry(self, build_id: int, entry_id: int) -> BuildHistoryDetail | None:
         session = self._session()

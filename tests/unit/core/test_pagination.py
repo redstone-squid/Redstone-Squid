@@ -20,7 +20,6 @@ def assemble(page_rows: list[Row], *, selector: PageSelector = FIRST_PAGE, page_
         selector=selector,
         page_size=page_size,
         total=total,
-        keyset=True,
         id_of=lambda row: row.id,
     )
 
@@ -96,8 +95,6 @@ def test_an_unanchorable_order_is_answered_with_offsets() -> None:
         selector=FIRST_PAGE,
         page_size=2,
         total=9,
-        keyset=False,
-        id_of=lambda row: row.id,
     )
 
     assert page.next == PageAnchor(offset=2)

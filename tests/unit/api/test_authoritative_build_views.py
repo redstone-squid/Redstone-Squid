@@ -65,7 +65,6 @@ class BuildQueryRecorder(BuildQueryService):
             selector=selector,
             page_size=page_size,
             total=len(self.builds),
-            keyset=True,
             id_of=lambda build: build.id or 0,
         )
 

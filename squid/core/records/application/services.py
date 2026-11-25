@@ -499,7 +499,6 @@ class RecordService:
                 total=await uow.records.count_published_records(
                     resolved_only=resolved_only, version_scope=version_scope
                 ),
-                keyset=True,
                 id_of=lambda record: record.result_id,
             )
 

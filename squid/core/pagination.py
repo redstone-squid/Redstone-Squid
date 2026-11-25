@@ -87,8 +87,7 @@ def keyset_page[ItemT](
     selector: PageSelector,
     page_size: int,
     total: int,
-    keyset: bool,
-    id_of: Callable[[ItemT], int],
+    id_of: Callable[[ItemT], int] | None = None,
 ) -> Page[ItemT]:
     """Assemble a page from at most `page_size + 1` rows in display order.
 
@@ -97,14 +96,14 @@ def keyset_page[ItemT](
     helper; their extra row is removed from the front. Forward queries lose the
     extra row at the end.
 
-    Set `keyset` only when identifier anchors match the display order. A nonzero
-    offset or `keyset=False` produces offset anchors. With `keyset=True`, a zero
-    offset is treated as the first identifier-based page.
+    Pass `id_of` only when identifier anchors match the display order. Without it,
+    or with a nonzero offset, the page links its neighbours by offset. With it, a
+    zero offset is treated as the first identifier-based page.
     """
     overflow = len(rows) > page_size
     backward = selector.before_id is not None
     selected = tuple(rows[-page_size:] if backward else rows[:page_size]) if overflow else tuple(rows)
-    if not keyset or selector.offset:
+    if id_of is None or selector.offset:
         return Page(
             items=selected,
             total=total,

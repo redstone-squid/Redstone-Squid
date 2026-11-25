@@ -184,7 +184,6 @@ class NotificationService:
                 selector=selector,
                 page_size=page_size,
                 total=await uow.notifications.count_inbox(account_id, visibility=visibility),
-                keyset=True,
                 id_of=lambda item: item.id,
             )
 
