@@ -61,6 +61,7 @@
         labels={suggestions.labels}
         clearable
         {clearLabel}
+        icon={compact ? undefined : Search}
       />
     {:else}
       <TextField

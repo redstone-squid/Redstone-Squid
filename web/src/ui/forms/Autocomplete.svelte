@@ -1,5 +1,6 @@
 <script lang="ts">
   import X from "@lucide/svelte/icons/x";
+  import type { LucideIcon } from "@lucide/svelte";
   import { onMount, tick } from "svelte";
   import { cn } from "@/ui/cn";
   import Spinner from "@/ui/feedback/Spinner.svelte";
@@ -19,7 +20,8 @@
    * Arrow keys move through suggestions, Enter takes the active one (otherwise it submits the
    * form), and Escape closes the list. Nothing loads while an input method is composing. The
    * number of suggestions is announced politely. Without JavaScript it is a plain input.
-   * `clearable` adds a button named `clearLabel` that empties a single-line field.
+   * `clearable` adds a button named `clearLabel` that empties a single-line field, and `icon`
+   * shows a decorative glyph before its text, placed as in `TextField`.
    */
   type Props = Omit<FieldMessages, "width"> & {
     name: string;
@@ -37,6 +39,7 @@
     width?: FieldMessages["width"];
     clearable?: boolean;
     clearLabel?: string;
+    icon?: LucideIcon;
     class?: string;
   };
   let {
@@ -53,6 +56,7 @@
     load,
     clearable = false,
     clearLabel,
+    icon: Glyph,
     ...frame
   }: Props = $props();
   const fieldId = $props.id();
@@ -188,10 +192,19 @@
           bind:this={input}
           rows="3"></textarea>{:else}<input
           {...attributes}
-          class={cn(inputClass, "min-h-control w-full ps-3", clearable ? "pe-control" : "pe-3")}
+          class={cn(
+            inputClass,
+            "min-h-control w-full",
+            Glyph ? "ps-10" : "ps-3",
+            clearable ? "pe-control" : "pe-3",
+          )}
           bind:value
           bind:this={input}
         />{/if}
+      {#if Glyph && !multiline}<span
+          class="pointer-events-none absolute inset-y-0 start-3 flex items-center text-fg-muted"
+          ><Glyph class="size-4" aria-hidden="true" /></span
+        >{/if}
       {#if showClear}<button
           type="button"
           class="absolute inset-y-0 end-0 grid w-control cursor-pointer place-items-center text-fg-muted hover:text-fg focus-visible:-outline-offset-3"
