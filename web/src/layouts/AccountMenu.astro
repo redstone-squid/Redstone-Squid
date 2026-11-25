@@ -1,0 +1,45 @@
+---
+import CircleUser from "@lucide/svelte/icons/circle-user";
+import LogOut from "@lucide/svelte/icons/log-out";
+import ShieldCheck from "@lucide/svelte/icons/shield-check";
+import { localizePath, unprefixedPath } from "@/locales/locale";
+import * as m from "@/locales/messages.gen";
+import Button from "@/ui/actions/Button.svelte";
+import Menu from "@/ui/overlays/Menu.svelte";
+
+/**
+ * The header's account entry: a sign-in link, or a menu of the signed-in visitor's actions.
+ * The menu is a native popover of links and forms, so it needs no JavaScript or hydration.
+ * The sign-in and consent pages leave it out, since they are that flow.
+ */
+const { session, requestedPath } = Astro.locals;
+const user = session?.user ?? null;
+const back = encodeURIComponent(requestedPath);
+const inFlow = ["/sign-in", "/consent"].includes(unprefixedPath(Astro.url.pathname));
+---
+
+{inFlow ? null : user === null ? (
+  <Button href={`${localizePath("/sign-in")}?redirect_to=${back}`}>{m.navSignIn()}</Button>
+) : (
+  <Menu
+    nojs
+    label={m.navAccount()}
+    trigger={{ label: user.display_name ?? m.navAccount(), icon: CircleUser }}
+    items={[
+      ...(session?.consent_pending === true
+        ? [
+            {
+              label: m.navReviewConsent(),
+              href: `${localizePath("/consent")}?redirect_to=${back}`,
+              icon: ShieldCheck,
+            },
+          ]
+        : []),
+      {
+        label: m.navSignOut(),
+        action: `${localizePath("/sign-out")}?return=${back}`,
+        icon: LogOut,
+      },
+    ]}
+  />
+)}

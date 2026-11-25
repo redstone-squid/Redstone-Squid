@@ -4,6 +4,7 @@ import { DEFAULT_LOCALE, localeFromPath, localizePath, unprefixedPath } from "@/
 import { createApiClient } from "@/server/api";
 import { readPreference } from "@/server/cookies";
 import { getRuntimeConfig } from "@/server/config";
+import { loadSession } from "@/server/session";
 import { findRedirect } from "@/server/redirects";
 import { withRequestLocale } from "@/server/request-locale";
 import { traceHttp } from "@/server/telemetry";
@@ -75,9 +76,14 @@ const catalogueRequest = defineMiddleware(async (context, next) => {
   try {
     context.locals.config = getRuntimeConfig();
     context.locals.api = createApiClient(locale, context.locals.config);
+    // A rewrite to an error page keeps the session the first pass loaded.
+    context.locals.session =
+      inherited.session === undefined ? await loadSession(context) : inherited.session;
     const response = await withRequestLocale(locale, () =>
       prefixed === undefined ? next() : next(unprefixedPath(pathname) + search),
     );
+    // A page that knows who is signed in must not be stored by a shared cache.
+    if (context.locals.session !== null) response.headers.set("Cache-Control", "private, no-store");
     console.info(log("http_request", { status: response.status }));
     return response;
   } catch (error) {

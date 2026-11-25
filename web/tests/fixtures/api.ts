@@ -12,6 +12,9 @@ import type {
   ProblemDetail,
   PublicRecordDetail,
   PublishedRecordResult,
+  BrowserProvider,
+  PrivacyNoticeDetail,
+  SessionSnapshot,
   SearchSuggestions,
   SuggestionPage,
 } from "@/generated/types.gen";
@@ -235,9 +238,70 @@ function recordPage(url: URL): RecordsListResponse {
   };
 }
 
+/**
+ * Browser sessions are named by their cookie value, so tests pick a state by setting it:
+ * `member` has accepted the notice, `pending` and `stale` have not, and `stale` fails to
+ * accept because the notice changed. Anything else is an expired session.
+ */
+const sessionUsers = { member: "Copper Fan", pending: "New Member", stale: "Slow Reader" };
+
+function cookie(request: Request, name: string): string | undefined {
+  for (const pair of (request.headers.get("Cookie") ?? "").split(";")) {
+    const [key, ...value] = pair.trim().split("=");
+    if (key === name) return value.join("=");
+  }
+  return undefined;
+}
+
+function session(request: Request): SessionSnapshot {
+  const name = cookie(request, "__Host-squid_session") ?? "";
+  const display = Object.hasOwn(sessionUsers, name)
+    ? sessionUsers[name as keyof typeof sessionUsers]
+    : null;
+  return {
+    user:
+      display === null
+        ? null
+        : { id: 7, creator_id: "creator-7", display_name: display, avatar_url: null },
+    consent_pending: display !== null && name !== "member",
+    permissions: [],
+    counts: { unread_notifications: 0, drafts: 0, drafts_needing_attention: 0, review_queue: null },
+  };
+}
+
+/** Browser writes need the CSRF cookie echoed in the header, as the API checks. */
+function csrfMatches(request: Request): boolean {
+  const token = cookie(request, "squid_csrf");
+  return token !== undefined && request.headers.get("CSRF-Token") === token;
+}
+
 async function routeRequest(request: Request): Promise<Response> {
   const url = new URL(request.url);
   if (url.pathname === "/livez") return new Response("ok");
+
+  if (url.pathname === "/v1/session") return json(session(request));
+  if (url.pathname === "/v1/auth/providers") {
+    return json([{ id: "discord" }] satisfies BrowserProvider[]);
+  }
+  if (url.pathname === "/v1/consent/notice") {
+    return json({
+      version: "2026-08-18",
+      locale: "en",
+      title: "Privacy notice",
+      body: "Redstone Squid stores your Discord user ID.\n\nAgreeing records this notice's version.",
+    } satisfies PrivacyNoticeDetail);
+  }
+  if (url.pathname === "/v1/users/me/consent" && request.method === "POST") {
+    if (session(request).user === null) return problem(request, 401, "AUTHENTICATION_REQUIRED");
+    if (!csrfMatches(request)) return problem(request, 403, "FORBIDDEN");
+    if (cookie(request, "__Host-squid_session") === "stale")
+      return problem(request, 409, "CONSENT_VERSION_STALE");
+    return json({});
+  }
+  if (url.pathname === "/v1/auth/logout" && request.method === "POST") {
+    if (!csrfMatches(request)) return problem(request, 403, "FORBIDDEN");
+    return new Response(null, { status: 204 });
+  }
 
   if (url.pathname.startsWith("/v1/tags/by-slug/")) {
     if (["zero-tick", "old-name"].includes(url.pathname.split("/").at(-1) ?? "")) {

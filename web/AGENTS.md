@@ -27,7 +27,7 @@ move the code to the right layer rather than working around the rule.
 
 ## Requests
 
-Middleware (`src/middleware.ts`) runs first and sets six request locals:
+Middleware (`src/middleware.ts`) runs first and sets seven request locals:
 
 - `Astro.locals.locale`: `en` or `zh-CN`. Every route exists once, without a locale prefix.
   Middleware rewrites `/zh-cn/records` to `/records`, so never add a `zh-cn` directory or read
@@ -43,6 +43,9 @@ Middleware (`src/middleware.ts`) runs first and sets six request locals:
   workbench also takes `?theme=`, which wins so screenshots are repeatable.
 - `Astro.locals.config`: validated runtime URLs.
 - `Astro.locals.api`: a generated SDK client that sends the request locale.
+- `Astro.locals.session`: the `/v1/session` snapshot, loaded only when the visitor sends a
+  session cookie; such responses are `Cache-Control: private, no-store`. Calls made for the
+  visitor, such as sign-out, go through `src/server/session.ts`, which forwards their cookies.
 
 Pages load data in frontmatter and pass plain props down. Feature components never fetch
 or read `Astro.locals`. `src/pages/records/` is the reference: copy it for a new screen.

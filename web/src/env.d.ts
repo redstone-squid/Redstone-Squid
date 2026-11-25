@@ -27,5 +27,10 @@ declare namespace App {
     config: import("@/server/config").RuntimeConfig;
     /** Generated SDK client for this request's locale; pass it as `client` to SDK functions. */
     api: import("@/generated/client").Client;
+    /**
+     * Who is signed in, from `GET /v1/session`; null when the visitor sent no session cookie.
+     * A snapshot with a null user means the cookie expired.
+     */
+    session: import("@/generated/types.gen").SessionSnapshot | null;
   }
 }

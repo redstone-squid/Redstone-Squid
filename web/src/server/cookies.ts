@@ -31,3 +31,31 @@ export function writePreference(
     // Not `secure`: it holds a display preference, and the test server is plain HTTP.
   });
 }
+
+/**
+ * The cookies the API sets at sign-in: the session and the token that browser writes echo in
+ * a `CSRF-Token` header. The site forwards them when it calls the API for the visitor and
+ * never sets them itself, but clears them on sign-out, since the API's own clearing headers
+ * reach the server rather than the browser.
+ */
+const API_SESSION = "__Host-squid_session";
+const API_CSRF = "squid_csrf";
+
+/** The visitor's API cookies as a `Cookie` header, or undefined when they have no session. */
+export function apiSessionCookie({ cookies }: Cookies): string | undefined {
+  const session = cookies.get(API_SESSION)?.value;
+  if (session === undefined) return undefined;
+  const csrf = cookies.get(API_CSRF)?.value;
+  return csrf === undefined
+    ? `${API_SESSION}=${session}`
+    : `${API_SESSION}=${session}; ${API_CSRF}=${csrf}`;
+}
+
+export function apiCsrfToken({ cookies }: Cookies): string | undefined {
+  return cookies.get(API_CSRF)?.value;
+}
+
+export function clearApiSession({ cookies }: Cookies): void {
+  cookies.delete(API_SESSION, { path: "/", secure: true, httpOnly: true, sameSite: "lax" });
+  cookies.delete(API_CSRF, { path: "/", secure: true, sameSite: "lax" });
+}
