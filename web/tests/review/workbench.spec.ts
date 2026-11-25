@@ -78,7 +78,7 @@ test.describe("with JavaScript disabled", () => {
     await page.getByRole("link", { name: m.workbenchLightTheme("en") }).click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
     await expect(page).toHaveURL(/\?theme=light$/);
-    const contrast = page.getByRole("group", { name: m.footerContrast("en"), exact: true });
+    const contrast = page.getByRole("navigation", { name: m.footerContrast("en"), exact: true });
     await contrast.getByRole("link", { name: m.footerContrastMore("en") }).click();
     await expect(page.locator("html")).toHaveAttribute("data-contrast", "more");
     await page

@@ -11,6 +11,7 @@ import "@fontsource/noto-sans-sc/600.css";
 import "@/ui/app.css";
 import SkipLink from "@/ui/content/SkipLink.svelte";
 import NavList from "@/ui/navigation/NavList.svelte";
+import SegmentedControl from "@/ui/navigation/SegmentedControl.svelte";
 import { workbenchAppearance } from "./appearance";
 import { GROUPS } from "./groups";
 type Props = { title: string };
@@ -90,21 +91,18 @@ const groups = [
       <aside class="border-b border-line bg-surface px-gutter py-4 md:sticky md:top-0 md:w-52 md:shrink-0 md:self-start md:border-e md:border-b-0 md:px-4 md:py-10">
         <div class="mb-5 grid gap-3">
           {controls.map(({ key, label, current, options }) => (
-            <div role="group" aria-labelledby={`preview-${key}`}>
-              <span id={`preview-${key}`} class="text-sm text-fg-muted">
+            <div class="grid gap-1">
+              <span class="text-sm text-fg-muted" aria-hidden="true">
                 {label}
               </span>
-              <div class="mt-1 flex w-fit flex-wrap rounded-sm border border-line-strong bg-surface p-0.5">
-                {options.map(([value, text]) => (
-                  <a
-                    href={choiceHref(key, value)}
-                    aria-current={value === current ? "true" : undefined}
-                    class="inline-flex min-h-control-sm items-center rounded-xs px-2 text-sm font-semibold text-fg-muted no-underline hover:text-fg aria-current:forced-highlight aria-current:bg-accent-soft aria-current:text-fg aria-current:underline"
-                  >
-                    {text}
-                  </a>
-                ))}
-              </div>
+              <SegmentedControl
+                {label}
+                items={options.map(([value, text]) => ({
+                  label: text,
+                  href: choiceHref(key, value),
+                  current: value === current,
+                }))}
+              />
             </div>
           ))}
         </div>
