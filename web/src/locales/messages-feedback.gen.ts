@@ -338,19 +338,15 @@ export function storyTheCatalogueApiDidNotAnswerInTime(locale: Locale = getLocal
   }
 }
 
-/** The page's one polite live region, for island messages with no visible home. It is visually hidden; this demo echoes what it reads. */
+/** Announces messages that have no visible place. */
 export function storyAnnouncerDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "The page's one polite live region, for island messages with no visible home. It is visually hidden; this demo echoes what it reads.";
+      return "Announces messages that have no visible place.";
     case "zh-CN":
-      return "页面共用一个读屏播报区域，用于没有可见提示的消息。该区域在视觉上隐藏，本示例同时显示播报内容。";
+      return "播报没有可见显示位置的消息。";
     case "en-XA":
-      return (
-        "[" +
-        "Ţĥé þåĝé'š öñé þöļîţé ļîṽé ŕéĝîöñ, ƒöŕ îšļåñđ ɱéššåĝéš ŵîţĥ ñö ṽîšîƀļé ĥöɱé. Îţ îš ṽîšûåļļý ĥîđđéñ; ţĥîš đéɱö éçĥöéš ŵĥåţ îţ ŕéåđš." +
-        "·····················································]"
-      );
+      return "[" + "Åññöûñçéš ɱéššåĝéš ţĥåţ ĥåṽé ñö ṽîšîƀļé þļåçé." + "···················]";
   }
 }
 

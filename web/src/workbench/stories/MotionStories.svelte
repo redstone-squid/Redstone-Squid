@@ -96,7 +96,7 @@
   name="Tokens"
   heading="Motion tokens"
   source="app.css"
-  description="Durations and easings from app.css. Motion only explains a change: something entering, leaving, or moving to a new choice. Everything stops under prefers-reduced-motion."
+  description="Durations and easings for every transition."
 >
   {@render reducedNote()}
   <div class="flex flex-wrap items-center gap-6">
@@ -141,7 +141,7 @@
   name="Overlays"
   heading="Overlays enter and leave"
   source="overlays/Dialog"
-  description="Dialog, Sheet, Popover, Menu and Tooltip fade or slide in, and leave the way they came. The no-JavaScript menu is a native popover that stays in the top layer until its fade ends."
+  description="Dialogs, sheets, popovers, menus, and tooltips opening and closing."
 >
   {@render reducedNote()}
   <div class="flex flex-wrap items-center gap-3">
@@ -172,7 +172,7 @@
   name="Disclosure"
   heading="Disclosure grows to its content"
   source="data/Disclosure"
-  description="Where interpolate-size is supported, the content grows to its height and shrinks back; elsewhere it opens at once. DataTable's grouped rows fade in when opened, on the table page."
+  description="Opened content growing to its full height."
 >
   {@render reducedNote()}
   <Disclosure summary="Door evidence" variant="card">
@@ -185,7 +185,7 @@
   name="Selection"
   heading="Indicators move to the new choice"
   source="navigation/Tabs"
-  description="In panel tabs and radio segmented controls the indicator slides to the new choice where CSS anchor positioning is available, and moves at once elsewhere. Link modes load a new page instead."
+  description="The indicator in panel tabs and radio segmented controls."
 >
   {@render reducedNote()}
   <Tabs mode="panel" label="Record details" items={tabs}>
@@ -208,7 +208,7 @@
   name="Loading"
   heading="Content replaces skeletons"
   source="patterns/ResultsView"
-  description="Results, table rows and chart plots that replace their skeletons fade in, and each SaveStatus state fades in over the last. Content rendered on the server never fades."
+  description="Results and save states fading in as they arrive."
 >
   {@render reducedNote()}
   <Variant label="ResultsView">

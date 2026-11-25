@@ -294,15 +294,15 @@ export function storyPressTabFromTheTopOfThePage(locale: Locale = getLocale()): 
   }
 }
 
-/** The level sets the outline; the size sets the look. */
+/** A page, section, or card title. */
 export function storyHeadingDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "The level sets the outline; the size sets the look.";
+      return "A page, section, or card title.";
     case "zh-CN":
-      return "层级决定标题结构，字号决定外观。";
+      return "页面、区块或卡片的标题。";
     case "en-XA":
-      return "[" + "Ţĥé ļéṽéļ šéţš ţĥé öûţļîñé; ţĥé šîžé šéţš ţĥé ļööķ." + "·····················]";
+      return "[" + "Å þåĝé, šéçţîöñ, öŕ çåŕđ ţîţļé." + "·············]";
   }
 }
 
@@ -500,19 +500,15 @@ export function storyVisuallyHiddenDescription(locale: Locale = getLocale()): st
   }
 }
 
-/** Hidden until focused; the page layouts render one first. */
+/** Lets keyboard users jump past the header. */
 export function storySkipLinkDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Hidden until focused; the page layouts render one first.";
+      return "Lets keyboard users jump past the header.";
     case "zh-CN":
-      return "获得焦点后显示，是页面布局中的第一个控件。";
+      return "让键盘用户跳过页眉。";
     case "en-XA":
-      return (
-        "[" +
-        "Ĥîđđéñ ûñţîļ ƒöçûšéđ; ţĥé þåĝé ļåýöûţš ŕéñđéŕ öñé ƒîŕšţ." +
-        "·······················]"
-      );
+      return "[" + "Ļéţš ķéýƀöåŕđ ûšéŕš ĵûɱþ þåšţ ţĥé ĥéåđéŕ." + "·················]";
   }
 }
 

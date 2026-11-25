@@ -1178,19 +1178,15 @@ export function storyThisCodeHasExpiredAskForANew(locale: Locale = getLocale()):
   }
 }
 
-/** Lists submission errors and focuses the first invalid field. */
+/** The problems that stopped a submit. */
 export function storyErrorSummaryDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Lists submission errors and focuses the first invalid field.";
+      return "The problems that stopped a submit.";
     case "zh-CN":
-      return "列出提交错误，并将焦点移至第一个无效字段。";
+      return "阻止提交的问题列表。";
     case "en-XA":
-      return (
-        "[" +
-        "Ļîšţš šûƀɱîššîöñ éŕŕöŕš åñđ ƒöçûšéš ţĥé ƒîŕšţ îñṽåļîđ ƒîéļđ." +
-        "························]"
-      );
+      return "[" + "Ţĥé þŕöƀļéɱš ţĥåţ šţöþþéđ å šûƀɱîţ." + "··············]";
   }
 }
 

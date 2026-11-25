@@ -86,19 +86,15 @@ export function storyAModeratorChecksTheEvidenceBeforeTheRecord(
   }
 }
 
-/** Modal task with a focus trap; focus returns to the trigger on close. Before hydration a trigger with fallbackHref is a link. */
+/** A modal task, such as a confirmation or short form. */
 export function storyDialogDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Modal task with a focus trap; focus returns to the trigger on close. Before hydration a trigger with fallbackHref is a link.";
+      return "A modal task, such as a confirmation or short form.";
     case "zh-CN":
-      return "模态任务将焦点限制在对话框内，关闭后焦点返回触发控件。交互就绪前，设置了 fallbackHref 的触发控件显示为链接。";
+      return "模态任务，例如确认或简短表单。";
     case "en-XA":
-      return (
-        "[" +
-        "Ṁöđåļ ţåšķ ŵîţĥ å ƒöçûš ţŕåþ; ƒöçûš ŕéţûŕñš ţö ţĥé ţŕîĝĝéŕ öñ çļöšé. Ɓéƒöŕé ĥýđŕåţîöñ å ţŕîĝĝéŕ ŵîţĥ ƒåļļƀåçķĤŕéƒ îš å ļîñķ." +
-        "··················································]"
-      );
+      return "[" + "Å ɱöđåļ ţåšķ, šûçĥ åš å çöñƒîŕɱåţîöñ öŕ šĥöŕţ ƒöŕɱ." + "·····················]";
   }
 }
 
@@ -258,19 +254,15 @@ export function storySurvivalFriendlyLabel(locale: Locale = getLocale()): string
   }
 }
 
-/** Actions or links behind a button. nojs is a native popover of links and forms. */
+/** Actions or links behind a button. */
 export function storyMenuDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Actions or links behind a button. nojs is a native popover of links and forms.";
+      return "Actions or links behind a button.";
     case "zh-CN":
-      return "按钮可展开操作或链接。nojs 模式使用原生弹出层显示链接和表单。";
+      return "收在按钮后的操作或链接。";
     case "en-XA":
-      return (
-        "[" +
-        "Åçţîöñš öŕ ļîñķš ƀéĥîñđ å ƀûţţöñ. ñöĵš îš å ñåţîṽé þöþöṽéŕ öƒ ļîñķš åñđ ƒöŕɱš." +
-        "································]"
-      );
+      return "[" + "Åçţîöñš öŕ ļîñķš ƀéĥîñđ å ƀûţţöñ." + "··············]";
   }
 }
 
@@ -322,19 +314,15 @@ export function storyNojsLinksWithTheCurrentChoice(locale: Locale = getLocale())
   }
 }
 
-/** Non-modal help beside its trigger; the page stays usable. */
+/** Non-modal help beside its trigger. */
 export function storyPopoverDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Non-modal help beside its trigger; the page stays usable.";
+      return "Non-modal help beside its trigger.";
     case "zh-CN":
-      return "在触发控件旁显示非模态帮助，页面仍可操作。";
+      return "在触发控件旁显示的非模态帮助。";
     case "en-XA":
-      return (
-        "[" +
-        "Ñöñ-ɱöđåļ ĥéļþ ƀéšîđé îţš ţŕîĝĝéŕ; ţĥé þåĝé šţåýš ûšåƀļé." +
-        "·······················]"
-      );
+      return "[" + "Ñöñ-ɱöđåļ ĥéļþ ƀéšîđé îţš ţŕîĝĝéŕ." + "··············]";
   }
 }
 
@@ -350,19 +338,15 @@ export function storyWhatPendingMeans(locale: Locale = getLocale()): string {
   }
 }
 
-/** Shown on hover or focus. It repeats the trigger's name, never adds to it. */
+/** Names an icon-only button. */
 export function storyTooltipDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Shown on hover or focus. It repeats the trigger's name, never adds to it.";
+      return "Names an icon-only button.";
     case "zh-CN":
-      return "悬停或聚焦时显示，内容与触发控件名称一致。";
+      return "为仅含图标的按钮显示名称。";
     case "en-XA":
-      return (
-        "[" +
-        "Šĥöŵñ öñ ĥöṽéŕ öŕ ƒöçûš. Îţ ŕéþéåţš ţĥé ţŕîĝĝéŕ'š ñåɱé, ñéṽéŕ åđđš ţö îţ." +
-        "······························]"
-      );
+      return "[" + "Ñåɱéš åñ îçöñ-öñļý ƀûţţöñ." + "···········]";
   }
 }
 

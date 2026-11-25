@@ -9,8 +9,8 @@
    * `returnFocus`.
    *
    * With `trigger`, the dialog renders its own button; without it, open it through `open`.
-   * Give a trigger `fallbackHref` so the page works before and without hydration. `full-mobile`
-   * turns the dialog into a sheet rising from the bottom on narrow screens.
+   * Give a trigger `fallbackHref` so the page works before and without hydration. `sm` suits
+   * confirmations and `lg` pickers; `full-mobile` rises from the bottom on narrow screens.
    */
   type Props = ModalProps & { size?: "sm" | "md" | "lg" | "full-mobile" };
   let { open = $bindable(false), size = "md", ...rest }: Props = $props();

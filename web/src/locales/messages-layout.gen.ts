@@ -13,18 +13,16 @@ export function storyCentered(locale: Locale = getLocale()): string {
   }
 }
 
-/** Stack, cluster, split, grid, and center, each with a default gap. */
+/** Stack, cluster, split, grid, and center arrangements. */
 export function storyLayoutDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Stack, cluster, split, grid, and center, each with a default gap.";
+      return "Stack, cluster, split, grid, and center arrangements.";
     case "zh-CN":
-      return "堆叠、成组、两端对齐、网格和居中布局均有默认间距。";
+      return "堆叠、成组、两端对齐、网格和居中排列。";
     case "en-XA":
       return (
-        "[" +
-        "Šţåçķ, çļûšţéŕ, šþļîţ, ĝŕîđ, åñđ çéñţéŕ, éåçĥ ŵîţĥ å đéƒåûļţ ĝåþ." +
-        "··························]"
+        "[" + "Šţåçķ, çļûšţéŕ, šþļîţ, ĝŕîđ, åñđ çéñţéŕ åŕŕåñĝéɱéñţš." + "······················]"
       );
   }
 }

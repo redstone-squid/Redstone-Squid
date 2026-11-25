@@ -2,19 +2,15 @@
 import { getLocale, type Locale } from "./locale";
 import { formatValue } from "./format";
 
-/** The server sorts: headers are links, and aria-sort marks the sorted column. The first column stays pinned when the table scrolls. */
+/** A table of rows sorted by the server. */
 export function storyDataTableDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "The server sorts: headers are links, and aria-sort marks the sorted column. The first column stays pinned when the table scrolls.";
+      return "A table of rows sorted by the server.";
     case "zh-CN":
-      return "由服务器排序。表头是链接，aria-sort 标出排序列。横向滚动时第一列保持固定。";
+      return "由服务器排序的表格。";
     case "en-XA":
-      return (
-        "[" +
-        "Ţĥé šéŕṽéŕ šöŕţš: ĥéåđéŕš åŕé ļîñķš, åñđ åŕîå-šöŕţ ɱåŕķš ţĥé šöŕţéđ çöļûɱñ. Ţĥé ƒîŕšţ çöļûɱñ šţåýš þîññéđ ŵĥéñ ţĥé ţåƀļé šçŕöļļš." +
-        "····················································]"
-      );
+      return "[" + "Å ţåƀļé öƒ ŕöŵš šöŕţéđ ƀý ţĥé šéŕṽéŕ." + "···············]";
   }
 }
 

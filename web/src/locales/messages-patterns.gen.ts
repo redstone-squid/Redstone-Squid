@@ -140,19 +140,15 @@ export function storyCatalogueCards(locale: Locale = getLocale()): string {
   }
 }
 
-/** The site header body. The links collapse into a popover when the bar is narrow. */
+/** The site header's home link, sections, and actions. */
 export function storyNavbarDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "The site header body. The links collapse into a popover when the bar is narrow.";
+      return "The site header's home link, sections, and actions.";
     case "zh-CN":
-      return "站点页眉的主体。栏位变窄时，链接收进弹出菜单。";
+      return "站点页眉中的首页链接、栏目和操作。";
     case "en-XA":
-      return (
-        "[" +
-        "Ţĥé šîţé ĥéåđéŕ ƀöđý. Ţĥé ļîñķš çöļļåþšé îñţö å þöþöṽéŕ ŵĥéñ ţĥé ƀåŕ îš ñåŕŕöŵ." +
-        "································]"
-      );
+      return "[" + "Ţĥé šîţé ĥéåđéŕ'š ĥöɱé ļîñķ, šéçţîöñš, åñđ åçţîöñš." + "·····················]";
   }
 }
 
@@ -204,17 +200,15 @@ export function storyNarrowStoryNavigation(locale: Locale = getLocale()): string
   }
 }
 
-/** A GET search form that keeps other query parameters. */
+/** A search form for a page or the header. */
 export function storySearchboxDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "A GET search form that keeps other query parameters.";
+      return "A search form for a page or the header.";
     case "zh-CN":
-      return "以 GET 提交的搜索表单，保留其他查询参数。";
+      return "用于页面或页眉的搜索表单。";
     case "en-XA":
-      return (
-        "[" + "Å ĜÉŢ šéåŕçĥ ƒöŕɱ ţĥåţ ķééþš öţĥéŕ ǫûéŕý þåŕåɱéţéŕš." + "·····················]"
-      );
+      return "[" + "Å šéåŕçĥ ƒöŕɱ ƒöŕ å þåĝé öŕ ţĥé ĥéåđéŕ." + "················]";
   }
 }
 
@@ -338,19 +332,15 @@ export function storyRecordHoldersOnly(locale: Locale = getLocale()): string {
   }
 }
 
-/** Filters in a GET form; auto-apply navigates after a change once hydrated. */
+/** Filter fields for a listing. */
 export function storyFilterpanelDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Filters in a GET form; auto-apply navigates after a change once hydrated.";
+      return "Filter fields for a listing.";
     case "zh-CN":
-      return "GET 表单中的筛选条件；水合后，自动应用会在更改后跳转。";
+      return "列表的筛选字段。";
     case "en-XA":
-      return (
-        "[" +
-        "Ƒîļţéŕš îñ å ĜÉŢ ƒöŕɱ; åûţö-åþþļý ñåṽîĝåţéš åƒţéŕ å çĥåñĝé öñçé ĥýđŕåţéđ." +
-        "······························]"
-      );
+      return "[" + "Ƒîļţéŕ ƒîéļđš ƒöŕ å ļîšţîñĝ." + "············]";
   }
 }
 
@@ -450,19 +440,15 @@ export function storyResults(locale: Locale = getLocale()): string {
   }
 }
 
-/** Removable chips for applied filters, each a link to the URL without it. */
+/** The filters applied to a listing, each removable. */
 export function storyActivefiltersDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Removable chips for applied filters, each a link to the URL without it.";
+      return "The filters applied to a listing, each removable.";
     case "zh-CN":
-      return "已应用筛选的可移除标签，每个都链接到去掉它后的网址。";
+      return "列表已应用的筛选，每项都可移除。";
     case "en-XA":
-      return (
-        "[" +
-        "Ŕéɱöṽåƀļé çĥîþš ƒöŕ åþþļîéđ ƒîļţéŕš, éåçĥ å ļîñķ ţö ţĥé ÛŔĻ ŵîţĥöûţ îţ." +
-        "·····························]"
-      );
+      return "[" + "Ţĥé ƒîļţéŕš åþþļîéđ ţö å ļîšţîñĝ, éåçĥ ŕéɱöṽåƀļé." + "····················]";
   }
 }
 
@@ -538,19 +524,15 @@ export function storyClearAllFilters(locale: Locale = getLocale()): string {
   }
 }
 
-/** Count, sort menu, view switch and extra actions, all links. */
+/** Count, sort, and view controls above a listing. */
 export function storyResultstoolbarDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Count, sort menu, view switch and extra actions, all links.";
+      return "Count, sort, and view controls above a listing.";
     case "zh-CN":
-      return "数量、排序菜单、视图切换和其他操作，全部是链接。";
+      return "列表上方的数量、排序和视图控件。";
     case "en-XA":
-      return (
-        "[" +
-        "Çöûñţ, šöŕţ ɱéñû, ṽîéŵ šŵîţçĥ åñđ éẋţŕå åçţîöñš, åļļ ļîñķš." +
-        "························]"
-      );
+      return "[" + "Çöûñţ, šöŕţ, åñđ ṽîéŵ çöñţŕöļš åƀöṽé å ļîšţîñĝ." + "···················]";
   }
 }
 
@@ -638,19 +620,15 @@ export function storyOneRecord(locale: Locale = getLocale()): string {
   }
 }
 
-/** Cards or table by view, with loading, refreshing, empty and error states. */
+/** A listing's cards or table, and its loading states. */
 export function storyResultsviewDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Cards or table by view, with loading, refreshing, empty and error states.";
+      return "A listing's cards or table, and its loading states.";
     case "zh-CN":
-      return "按视图显示卡片或表格，包含加载、刷新、空和错误状态。";
+      return "列表的卡片或表格，以及加载状态。";
     case "en-XA":
-      return (
-        "[" +
-        "Çåŕđš öŕ ţåƀļé ƀý ṽîéŵ, ŵîţĥ ļöåđîñĝ, ŕéƒŕéšĥîñĝ, éɱþţý åñđ éŕŕöŕ šţåţéš." +
-        "······························]"
-      );
+      return "[" + "Å ļîšţîñĝ'š çåŕđš öŕ ţåƀļé, åñđ îţš ļöåđîñĝ šţåţéš." + "·····················]";
   }
 }
 
@@ -762,19 +740,15 @@ export function storyReady(locale: Locale = getLocale()): string {
   }
 }
 
-/** Confirms an irreversible action; danger starts focus on Cancel. */
+/** Asks before an action that cannot be undone. */
 export function storyConfirmdialogDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Confirms an irreversible action; danger starts focus on Cancel.";
+      return "Asks before an action that cannot be undone.";
     case "zh-CN":
-      return "确认不可撤销的操作；危险操作的焦点从“取消”开始。";
+      return "在执行无法撤销的操作前确认。";
     case "en-XA":
-      return (
-        "[" +
-        "Çöñƒîŕɱš åñ îŕŕéṽéŕšîƀļé åçţîöñ; đåñĝéŕ šţåŕţš ƒöçûš öñ Çåñçéļ." +
-        "··························]"
-      );
+      return "[" + "Åšķš ƀéƒöŕé åñ åçţîöñ ţĥåţ çåññöţ ƀé ûñđöñé." + "··················]";
   }
 }
 
@@ -1086,19 +1060,15 @@ export function storyDiscordDmsClosed(locale: Locale = getLocale()): string {
   }
 }
 
-/** Settings that save on change, each with its own status. Toggle them to see saving. */
+/** Settings that save as soon as they change. */
 export function storySettingslistDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Settings that save on change, each with its own status. Toggle them to see saving.";
+      return "Settings that save as soon as they change.";
     case "zh-CN":
-      return "更改即保存的设置，每项都有自己的状态。切换它们即可看到保存过程。";
+      return "更改后立即保存的设置。";
     case "en-XA":
-      return (
-        "[" +
-        "Šéţţîñĝš ţĥåţ šåṽé öñ çĥåñĝé, éåçĥ ŵîţĥ îţš öŵñ šţåţûš. Ţöĝĝļé ţĥéɱ ţö šéé šåṽîñĝ." +
-        "·································]"
-      );
+      return "[" + "Šéţţîñĝš ţĥåţ šåṽé åš šööñ åš ţĥéý çĥåñĝé." + "·················]";
   }
 }
 
@@ -1114,19 +1084,15 @@ export function storyChangesSaveAsYouMakeThem(locale: Locale = getLocale()): str
   }
 }
 
-/** Files with status, progress, retry, primary and an inline undo for removal. */
+/** Files attached to a draft, each with its status. */
 export function storyMediauploaderDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Files with status, progress, retry, primary and an inline undo for removal.";
+      return "Files attached to a draft, each with its status.";
     case "zh-CN":
-      return "带状态、进度、重试、封面选择和就地撤销移除的文件列表。";
+      return "附加到草稿的文件及各自状态。";
     case "en-XA":
-      return (
-        "[" +
-        "Ƒîļéš ŵîţĥ šţåţûš, þŕöĝŕéšš, ŕéţŕý, þŕîɱåŕý åñđ åñ îñļîñé ûñđö ƒöŕ ŕéɱöṽåļ." +
-        "······························]"
-      );
+      return "[" + "Ƒîļéš åţţåçĥéđ ţö å đŕåƒţ, éåçĥ ŵîţĥ îţš šţåţûš." + "····················]";
   }
 }
 
@@ -1238,19 +1204,15 @@ export function storyProcessing(locale: Locale = getLocale()): string {
   }
 }
 
-/** A secret shown once, with copy and an acknowledgement; leaving early asks first. */
+/** A secret shown once, such as an installation key. */
 export function storyOnetimesecretDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "A secret shown once, with copy and an acknowledgement; leaving early asks first.";
+      return "A secret shown once, such as an installation key.";
     case "zh-CN":
-      return "只显示一次的密钥，可复制并需确认；提前离开会先询问。";
+      return "只显示一次的密钥，例如安装密钥。";
     case "en-XA":
-      return (
-        "[" +
-        "Å šéçŕéţ šĥöŵñ öñçé, ŵîţĥ çöþý åñđ åñ åçķñöŵļéđĝéɱéñţ; ļéåṽîñĝ éåŕļý åšķš ƒîŕšţ." +
-        "································]"
-      );
+      return "[" + "Å šéçŕéţ šĥöŵñ öñçé, šûçĥ åš åñ îñšţåļļåţîöñ ķéý." + "····················]";
   }
 }
 
@@ -1314,19 +1276,15 @@ export function storyISavedTheSecret(locale: Locale = getLocale()): string {
   }
 }
 
-/** Steps with the current one marked; moving between steps focuses the step heading. */
+/** A task split into ordered steps. */
 export function storyStepflowDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Steps with the current one marked; moving between steps focuses the step heading.";
+      return "A task split into ordered steps.";
     case "zh-CN":
-      return "标出当前步骤的步骤列表；切换步骤时焦点移到步骤标题。";
+      return "分为若干有序步骤的任务。";
     case "en-XA":
-      return (
-        "[" +
-        "Šţéþš ŵîţĥ ţĥé çûŕŕéñţ öñé ɱåŕķéđ; ɱöṽîñĝ ƀéţŵééñ šţéþš ƒöçûšéš ţĥé šţéþ ĥéåđîñĝ." +
-        "·································]"
-      );
+      return "[" + "Å ţåšķ šþļîţ îñţö öŕđéŕéđ šţéþš." + "·············]";
   }
 }
 
@@ -1486,19 +1444,15 @@ export function storyCurrentStep(locale: Locale = getLocale()): string {
   }
 }
 
-/** The outcome of a server-handled form after its redirect, announced once hydrated. */
+/** The outcome of a form, shown after its redirect. */
 export function storyFlashnoticeDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "The outcome of a server-handled form after its redirect, announced once hydrated.";
+      return "The outcome of a form, shown after its redirect.";
     case "zh-CN":
-      return "服务器处理表单并重定向后的结果，水合后会朗读。";
+      return "表单提交并重定向后显示的结果。";
     case "en-XA":
-      return (
-        "[" +
-        "Ţĥé öûţçöɱé öƒ å šéŕṽéŕ-ĥåñđļéđ ƒöŕɱ åƒţéŕ îţš ŕéđîŕéçţ, åññöûñçéđ öñçé ĥýđŕåţéđ." +
-        "·································]"
-      );
+      return "[" + "Ţĥé öûţçöɱé öƒ å ƒöŕɱ, šĥöŵñ åƒţéŕ îţš ŕéđîŕéçţ." + "····················]";
   }
 }
 
@@ -1562,19 +1516,15 @@ export function storyCredits(locale: Locale = getLocale()): string {
   }
 }
 
-/** A sidebar beside the content, sized by its own width. Narrow it to see the collapse. */
+/** A sidebar beside the main content. */
 export function storySplitlayoutDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "A sidebar beside the content, sized by its own width. Narrow it to see the collapse.";
+      return "A sidebar beside the main content.";
     case "zh-CN":
-      return "内容旁的侧栏，按自身宽度布局。缩窄即可看到折叠效果。";
+      return "主内容旁的侧栏。";
     case "en-XA":
-      return (
-        "[" +
-        "Å šîđéƀåŕ ƀéšîđé ţĥé çöñţéñţ, šîžéđ ƀý îţš öŵñ ŵîđţĥ. Ñåŕŕöŵ îţ ţö šéé ţĥé çöļļåþšé." +
-        "··································]"
-      );
+      return "[" + "Å šîđéƀåŕ ƀéšîđé ţĥé ɱåîñ çöñţéñţ." + "··············]";
   }
 }
 
@@ -1760,19 +1710,15 @@ export function storyBuildFilters(locale: Locale = getLocale()): string {
   }
 }
 
-/** Counts of related records in a fixed row under the page header. Every item shows, even at zero, so the row never reshuffles. */
+/** Counts of related records, under the page header. */
 export function storyRelatedlinksDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Counts of related records in a fixed row under the page header. Every item shows, even at zero, so the row never reshuffles.";
+      return "Counts of related records, under the page header.";
     case "zh-CN":
-      return "页面标题下固定一行的相关纪录计数。每一项都会显示，即使为零，这一行也不会重新排列。";
+      return "页面标题下的相关纪录计数。";
     case "en-XA":
-      return (
-        "[" +
-        "Çöûñţš öƒ ŕéļåţéđ ŕéçöŕđš îñ å ƒîẋéđ ŕöŵ ûñđéŕ ţĥé þåĝé ĥéåđéŕ. Éṽéŕý îţéɱ šĥöŵš, éṽéñ åţ žéŕö, šö ţĥé ŕöŵ ñéṽéŕ ŕéšĥûƒƒļéš." +
-        "··················································]"
-      );
+      return "[" + "Çöûñţš öƒ ŕéļåţéđ ŕéçöŕđš, ûñđéŕ ţĥé þåĝé ĥéåđéŕ." + "····················]";
   }
 }
 

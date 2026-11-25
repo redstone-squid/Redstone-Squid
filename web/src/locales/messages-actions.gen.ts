@@ -98,19 +98,15 @@ export function storyLinkDisabledLinkDisabled(locale: Locale = getLocale()): str
   }
 }
 
-/** Shows and announces the outcome for two seconds. Hidden until hydrated, so keep the value selectable beside it. */
+/** Copies a value, such as a server address. */
 export function storyCopyButtonDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Shows and announces the outcome for two seconds. Hidden until hydrated, so keep the value selectable beside it.";
+      return "Copies a value, such as a server address.";
     case "zh-CN":
-      return "显示并播报结果两秒。交互就绪前隐藏，请让旁边的原文保持可选中。";
+      return "复制一个值，例如服务器地址。";
     case "en-XA":
-      return (
-        "[" +
-        "Šĥöŵš åñđ åññöûñçéš ţĥé öûţçöɱé ƒöŕ ţŵö šéçöñđš. Ĥîđđéñ ûñţîļ ĥýđŕåţéđ, šö ķééþ ţĥé ṽåļûé šéļéçţåƀļé ƀéšîđé îţ." +
-        "·············································]"
-      );
+      return "[" + "Çöþîéš å ṽåļûé, šûçĥ åš å šéŕṽéŕ åđđŕéšš." + "·················]";
   }
 }
 

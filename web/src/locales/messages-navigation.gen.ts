@@ -146,15 +146,15 @@ export function storyYourVote(locale: Locale = getLocale()): string {
   }
 }
 
-/** Hidden when there is one page. */
+/** Links between pages of a listing. */
 export function storyPaginationDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Hidden when there is one page.";
+      return "Links between pages of a listing.";
     case "zh-CN":
-      return "仅有一页时隐藏。";
+      return "列表各页之间的链接。";
     case "en-XA":
-      return "[" + "Ĥîđđéñ ŵĥéñ ţĥéŕé îš öñé þåĝé." + "············]";
+      return "[" + "Ļîñķš ƀéţŵééñ þåĝéš öƒ å ļîšţîñĝ." + "··············]";
   }
 }
 

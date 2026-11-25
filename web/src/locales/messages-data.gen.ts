@@ -80,19 +80,15 @@ export function storyShownAboveUnreadLeadingMetaTrailingAndCompact(
   }
 }
 
-/** With a title and href, the whole card links; inner controls stay clickable. */
+/** A surface for one item, linked or plain. */
 export function storyCardDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "With a title and href, the whole card links; inner controls stay clickable.";
+      return "A surface for one item, linked or plain.";
     case "zh-CN":
-      return "设置标题和 href 后，整张卡片均可点击，内部控件仍可单独操作。";
+      return "展示单个条目的卡片，可带链接。";
     case "en-XA":
-      return (
-        "[" +
-        "Ŵîţĥ å ţîţļé åñđ ĥŕéƒ, ţĥé ŵĥöļé çåŕđ ļîñķš; îññéŕ çöñţŕöļš šţåý çļîçķåƀļé." +
-        "······························]"
-      );
+      return "[" + "Å šûŕƒåçé ƒöŕ öñé îţéɱ, ļîñķéđ öŕ þļåîñ." + "················]";
   }
 }
 
@@ -240,19 +236,15 @@ export function storyMissingPreview(locale: Locale = getLocale()): string {
   }
 }
 
-/** Thumbnails link to the full files without JavaScript; hydrated, they switch the viewer and the lightbox pages with arrow keys. */
+/** Images and videos with a full-size lightbox. */
 export function storyGalleryDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Thumbnails link to the full files without JavaScript; hydrated, they switch the viewer and the lightbox pages with arrow keys.";
+      return "Images and videos with a full-size lightbox.";
     case "zh-CN":
-      return "未启用 JavaScript 时，缩略图链接到完整文件。交互就绪后可切换预览，并用方向键在灯箱中翻页。";
+      return "带全尺寸灯箱的图片和视频。";
     case "en-XA":
-      return (
-        "[" +
-        "Ţĥûɱƀñåîļš ļîñķ ţö ţĥé ƒûļļ ƒîļéš ŵîţĥöûţ ĴåṽåŠçŕîþţ; ĥýđŕåţéđ, ţĥéý šŵîţçĥ ţĥé ṽîéŵéŕ åñđ ţĥé ļîĝĥţƀöẋ þåĝéš ŵîţĥ åŕŕöŵ ķéýš." +
-        "···················································]"
-      );
+      return "[" + "Îɱåĝéš åñđ ṽîđéöš ŵîţĥ å ƒûļļ-šîžé ļîĝĥţƀöẋ." + "··················]";
   }
 }
 
@@ -268,15 +260,15 @@ export function storyAvatarDescription(locale: Locale = getLocale()): string {
   }
 }
 
-/** Native details; works without JavaScript. */
+/** Extra detail that stays closed until opened. */
 export function storyDisclosureDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Native details; works without JavaScript.";
+      return "Extra detail that stays closed until opened.";
     case "zh-CN":
-      return "原生折叠面板，无需 JavaScript。";
+      return "展开后才显示的补充内容。";
     case "en-XA":
-      return "[" + "Ñåţîṽé đéţåîļš; ŵöŕķš ŵîţĥöûţ ĴåṽåŠçŕîþţ." + "·················]";
+      return "[" + "Éẋţŕå đéţåîļ ţĥåţ šţåýš çļöšéđ ûñţîļ öþéñéđ." + "··················]";
   }
 }
 
@@ -364,15 +356,15 @@ export function storyCompactRow(locale: Locale = getLocale()): string {
   }
 }
 
-/** Rows of a List; see the List story. */
+/** One row of a List. */
 export function storyListItemDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Rows of a List; see the List story.";
+      return "One row of a List.";
     case "zh-CN":
-      return "列表中的行，参见 List 示例。";
+      return "列表中的一行。";
     case "en-XA":
-      return "[" + "Ŕöŵš öƒ å Ļîšţ; šéé ţĥé Ļîšţ šţöŕý." + "··············]";
+      return "[" + "Öñé ŕöŵ öƒ å Ļîšţ." + "········]";
   }
 }
 

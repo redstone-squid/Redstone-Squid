@@ -6,7 +6,7 @@
   /**
    * A short label shown on hover or focus, such as the name of an icon-only button. Render the
    * trigger in `children` and spread the props it receives onto it. The tooltip is a visual aid
-   * and needs JavaScript: the trigger must already carry the same text as its accessible name.
+   * and needs JavaScript, so it repeats the trigger's accessible name and never adds to it.
    */
   type Props = {
     content: string;

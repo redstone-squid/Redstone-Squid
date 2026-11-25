@@ -14,18 +14,18 @@ export function storyUnused(locale: Locale = getLocale()): string {
   }
 }
 
-/** Lines, steps and bars from one baseline. Every chart ships its data as a table; interactive plots add a tooltip and arrow-key navigation once hydrated. */
+/** Values over time or categories, as lines, steps, or bars. */
 export function storySeriesChartDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Lines, steps and bars from one baseline. Every chart ships its data as a table; interactive plots add a tooltip and arrow-key navigation once hydrated.";
+      return "Values over time or categories, as lines, steps, or bars.";
     case "zh-CN":
-      return "共用基线的折线图、阶梯图和柱状图。每张图均附数据表，交互就绪后可查看提示并使用方向键导航。";
+      return "随时间或类别变化的数值，以折线、阶梯或柱状显示。";
     case "en-XA":
       return (
         "[" +
-        "Ļîñéš, šţéþš åñđ ƀåŕš ƒŕöɱ öñé ƀåšéļîñé. Éṽéŕý çĥåŕţ šĥîþš îţš đåţå åš å ţåƀļé; îñţéŕåçţîṽé þļöţš åđđ å ţööļţîþ åñđ åŕŕöŵ-ķéý ñåṽîĝåţîöñ öñçé ĥýđŕåţéđ." +
-        "·····························································]"
+        "Ṽåļûéš öṽéŕ ţîɱé öŕ çåţéĝöŕîéš, åš ļîñéš, šţéþš, öŕ ƀåŕš." +
+        "·······················]"
       );
   }
 }
@@ -178,18 +178,18 @@ export function storyBuildsSubmittedAndConfirmedEachMonth(locale: Locale = getLo
   }
 }
 
-/** Runs of widths, each held by one build. Odd-only runs draw only the widths that count; the last run is unbounded. */
+/** Values across runs of whole numbers, such as door widths. */
 export function storyRangeChartDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Runs of widths, each held by one build. Odd-only runs draw only the widths that count; the last run is unbounded.";
+      return "Values across runs of whole numbers, such as door widths.";
     case "zh-CN":
-      return "每段宽度范围对应一个作品。仅限奇数的范围只绘制符合条件的宽度，最后一段没有上限。";
+      return "按整数区间显示的数值，例如门的宽度。";
     case "en-XA":
       return (
         "[" +
-        "Ŕûñš öƒ ŵîđţĥš, éåçĥ ĥéļđ ƀý öñé ƀûîļđ. Öđđ-öñļý ŕûñš đŕåŵ öñļý ţĥé ŵîđţĥš ţĥåţ çöûñţ; ţĥé ļåšţ ŕûñ îš ûñƀöûñđéđ." +
-        "··············································]"
+        "Ṽåļûéš åçŕöšš ŕûñš öƒ ŵĥöļé ñûɱƀéŕš, šûçĥ åš đööŕ ŵîđţĥš." +
+        "·······················]"
       );
   }
 }
