@@ -5,7 +5,7 @@
 
   /**
    * A secret shown once, such as an installation key or a merge code. The value sits in a
-   * selectable value with a copy button inside its box, under a `warning` that it cannot be shown again.
+   * selectable value with a copy button at its end, under a `warning` that it cannot be shown again.
    *
    * Until the user presses the acknowledge button, leaving the page asks for confirmation.
    * The button links to `acknowledgeHref` when given, so it also works without JavaScript.
@@ -47,10 +47,10 @@
   <Notice tone="warning">{warning}</Notice>
   <div class="grid min-w-0 gap-2">
     <p class="text-sm font-semibold">{label}</p>
-    <!-- The copy button sits inside the value's box, as a field's adornment would. One line of
-         the value is exactly as tall as the button, so the box is a control's height. -->
+    <!-- Shaped like a read-only field with a copy icon at its end, as token pages usually
+         are. One line of the value is exactly as tall as the button. -->
     <div
-      class="flex min-h-control min-w-0 items-start gap-2 rounded-sm border border-line-strong bg-surface-muted p-1 ps-3"
+      class="flex min-h-control min-w-0 items-start gap-2 rounded-sm border border-line-strong bg-surface p-1 ps-3"
     >
       <code class="min-w-0 flex-1 py-2 font-mono text-sm break-all select-all">{value}</code>
       <CopyButton
@@ -58,6 +58,8 @@
         label={copyLabels.label}
         copiedLabel={copyLabels.copied}
         failedLabel={copyLabels.failed}
+        variant="quiet"
+        iconOnly
       />
     </div>
     {#if detail !== undefined}<p class="text-sm text-fg-muted">{detail}</p>{/if}

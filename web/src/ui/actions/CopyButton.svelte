@@ -15,6 +15,7 @@
     label: string;
     copiedLabel: string;
     failedLabel: string;
+    variant?: "secondary" | "quiet";
     size?: "sm" | "md";
     iconOnly?: boolean;
     class?: string;
@@ -24,6 +25,7 @@
     label,
     copiedLabel,
     failedLabel,
+    variant = "secondary",
     size = "sm",
     iconOnly = false,
     class: className,
@@ -60,7 +62,7 @@
 
 <Button
   hidden={!hydrated}
-  variant="secondary"
+  {variant}
   {size}
   {iconOnly}
   {label}
