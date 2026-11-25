@@ -10,6 +10,7 @@ from typing import override
 
 import pytest
 
+from squid.core.actors import ActingContext
 from squid.core.artifacts.infrastructure import LocalArtifactStore
 from squid.core.schematics.application import ClaimedRenderJob, SchematicPreviewService, SchematicRenderJobService
 from squid.core.schematics.application.previews import (
@@ -150,7 +151,7 @@ def preview(tmp_path: Path) -> Iterator[PreviewScenario]:
 
 
 async def test_fresh_render_is_stored_published_and_notifies_build_subscribers(preview: PreviewScenario) -> None:
-    await preview.worker().process_batch()
+    await preview.worker().process_batch(context=ActingContext.worker("test-worker"))
 
     assert await preview.artifacts.get(OBJECT_KEY, max_bytes=len(PNG)) == PNG
     assert len(preview.schematics.reservations) == 1
@@ -167,7 +168,7 @@ async def test_ready_reserved_object_is_reused_without_another_upload(preview: P
     identity = stored.stat().st_ino
     preview.schematics.upload_required = False
 
-    await preview.worker().process_batch()
+    await preview.worker().process_batch(context=ActingContext.worker("test-worker"))
 
     assert stored.stat().st_ino == identity
     assert stored.read_bytes() == PNG
@@ -179,7 +180,7 @@ async def test_ready_reserved_object_is_reused_without_another_upload(preview: P
 async def test_render_failure_is_released_for_retry(preview: PreviewScenario) -> None:
     preview.schematics.prepared = RuntimeError("renderer unavailable")
 
-    await preview.worker().process_batch()
+    await preview.worker().process_batch(context=ActingContext.worker("test-worker"))
 
     assert preview.jobs.failed == [(preview.jobs.job, "renderer unavailable")]
     assert preview.jobs.completed == []
@@ -190,10 +191,10 @@ async def test_failure_after_object_upload_retries_the_same_recipe_and_publishes
     preview.schematics.publication_failures = [RuntimeError("database unavailable after upload")]
     worker = preview.worker()
 
-    await worker.process_batch()
+    await worker.process_batch(context=ActingContext.worker("test-worker"))
     assert await preview.artifacts.get(OBJECT_KEY, max_bytes=len(PNG)) == PNG
     assert preview.schematics.published_urls == []
-    await worker.process_batch()
+    await worker.process_batch(context=ActingContext.worker("test-worker"))
 
     assert await preview.artifacts.get(OBJECT_KEY, max_bytes=len(PNG)) == PNG
     assert preview.jobs.failed == [(preview.jobs.job, "database unavailable after upload")]
@@ -207,8 +208,8 @@ async def test_exhausted_publication_failure_leaves_reserved_object_for_cleanup(
     preview.schematics.publication_failures = [RuntimeError("database unavailable after upload")]
     worker = preview.worker()
 
-    await worker.process_batch()
-    await worker.cleanup(retention_hours=24, limit=50)
+    await worker.process_batch(context=ActingContext.worker("test-worker"))
+    await worker.cleanup(retention_hours=24, limit=50, context=ActingContext.worker("test-worker"))
 
     assert preview.jobs.failed == [(preview.jobs.job, "database unavailable after upload")]
     assert await preview.artifacts.get(OBJECT_KEY, max_bytes=len(PNG)) == PNG
@@ -220,8 +221,8 @@ async def test_replaced_primary_cannot_publish_its_completed_render(preview: Pre
     preview.schematics.current = False
     worker = preview.worker()
 
-    await worker.process_batch()
-    await worker.cleanup(retention_hours=24, limit=50)
+    await worker.process_batch(context=ActingContext.worker("test-worker"))
+    await worker.cleanup(retention_hours=24, limit=50, context=ActingContext.worker("test-worker"))
 
     assert preview.schematics.published_urls == []
     assert preview.schematics.ready == preview.schematics.reservations
@@ -234,7 +235,7 @@ async def test_cached_render_is_rechecked_before_publication(preview: PreviewSce
     preview.schematics.prepared = prepared
     preview.schematics.current = False
 
-    await preview.worker().process_batch()
+    await preview.worker().process_batch(context=ActingContext.worker("test-worker"))
 
     assert preview.schematics.published_cached == [prepared]
     assert preview.schematics.published_urls == []
@@ -248,7 +249,7 @@ async def test_a_permanent_skip_acknowledges_without_upload_or_notification(
 ) -> None:
     preview.schematics.prepared = SkippedRender(reason)
 
-    await preview.worker().process_batch()
+    await preview.worker().process_batch(context=ActingContext.worker("test-worker"))
 
     assert list(preview.directory.iterdir()) == []
     assert preview.schematics.recorded == []
@@ -259,7 +260,7 @@ async def test_a_permanent_skip_acknowledges_without_upload_or_notification(
 
 
 async def test_disabled_rendering_leaves_durable_intents_unclaimed(preview: PreviewScenario) -> None:
-    await preview.worker(enabled=False).process_batch()
+    await preview.worker(enabled=False).process_batch(context=ActingContext.worker("test-worker"))
 
     assert preview.jobs.claims == 0
     assert preview.jobs.completed == []
@@ -267,7 +268,7 @@ async def test_disabled_rendering_leaves_durable_intents_unclaimed(preview: Prev
 
 
 async def test_preview_cleanup_delegates_reference_safe_retention_policy(preview: PreviewScenario) -> None:
-    removed = await preview.worker().cleanup(retention_hours=48, limit=7)
+    removed = await preview.worker().cleanup(retention_hours=48, limit=7, context=ActingContext.worker("test-worker"))
 
     assert removed == 1
     assert preview.schematics.cleanup_calls == [(48, 7)]

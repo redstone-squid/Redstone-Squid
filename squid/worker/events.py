@@ -114,4 +114,4 @@ class MaterializeNotificationHandler:
         if event.schema_version not in _NOTIFICATION_EVENT_SCHEMA_VERSIONS.get(event.event_type, frozenset()):
             msg = f"Unsupported {event.event_type} schema version {event.schema_version}"
             raise UnsupportedEventVersionError(msg)
-        await self._notifications.materialize(event)
+        await self._notifications.materialize(event, context=ActingContext.current())

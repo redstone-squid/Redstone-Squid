@@ -943,7 +943,7 @@ async def test_a_due_poll_without_a_card_still_has_its_weights_recomputed() -> N
     resolver = RecordingActorResolver()
     service = VoteService(actor_resolver=resolver, uow_factory=lambda: VoteUnitOfWork(repository))
 
-    await service.close_due()
+    await service.close_due(context=ActingContext.worker("test-worker"))
 
     assert resolver.calls == [(7, 77)]
 
@@ -1019,7 +1019,7 @@ async def test_a_due_poll_is_recounted_before_it_closes_only_if_the_recount_succ
             raise RuntimeError("Discord is down")
         return False, ()
 
-    await service.close_due(recount=recount)
+    await service.close_due(recount=recount, context=ActingContext.worker("test-worker"))
 
     assert recounted == [poll.id]
     assert repository.session is not None
@@ -1067,7 +1067,7 @@ async def test_failed_final_counts_pause_for_review_and_finalize_uses_collected_
     for _ in range(3):
         assert repository.session is not None
         repository.due = [repository.session]
-        assert not await service.close_due(recount=recount)
+        assert not await service.close_due(recount=recount, context=ActingContext.worker("test-worker"))
 
     review = repository.session
     assert review

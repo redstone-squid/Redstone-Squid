@@ -49,7 +49,7 @@ from squid.core.submissions.errors import (
 )
 from squid.core.unit_of_work import UnitOfWorkFactory
 from squid.core.validation import RuleIssue
-from squid.core.worker_context import worker_execution
+from squid.core.worker_context import worker_execution, worker_scope
 from squid_i18n import md_tr
 
 MAX_FINALIZATION_JOB_CLAIM = 32
@@ -338,34 +338,35 @@ class SubmissionFinalizationService:
             await uow.commit()
             return result
 
-    async def resume_waiting(self, *, now: Instant, limit: int = 8) -> None:
+    async def resume_waiting(self, *, context: ActingContext, now: Instant, limit: int = 8) -> None:
         """Recheck reserved attachment waits without renewing their retention period."""
-        async with self._uow_factory() as uow:
-            drafts = await uow.finalization_jobs.reserve_preparations(now=now, limit=limit)
-            await uow.commit()
-        for draft in drafts:
-            with worker_execution("submission-preparation", draft.preparation_attempt):
-                try:
-                    await self._submit(
-                        draft,
-                        Actor(account_id=draft.submission_actor_account_id),
-                        locale=None,
-                        now=now,
-                        refresh_retention=False,
-                    )
-                except DraftAccessDeniedError, PermissionDeniedError:
-                    async with self._uow_factory() as uow:
-                        await uow.finalization_jobs.record_preparation_attention(
+        with worker_scope(context):
+            async with self._uow_factory() as uow:
+                drafts = await uow.finalization_jobs.reserve_preparations(now=now, limit=limit)
+                await uow.commit()
+            for draft in drafts:
+                with worker_execution("submission-preparation", draft.preparation_attempt):
+                    try:
+                        await self._submit(
                             draft,
-                            (SubmissionAttentionIssue("submission", SubmissionAttentionReason.PERMISSION_REVOKED),),
+                            Actor(account_id=draft.submission_actor_account_id),
+                            locale=None,
                             now=now,
-                            expires_at=draft.expires_at,
-                            actor_account_id=draft.submission_actor_account_id,
+                            refresh_retention=False,
                         )
-                        await uow.commit()
-                except DraftRevisionConflictError, DraftNotFoundError, DraftStateConflictError:
-                    # Edits, deletion, expiry, or account merges invalidate this reservation.
-                    continue
+                    except DraftAccessDeniedError, PermissionDeniedError:
+                        async with self._uow_factory() as uow:
+                            await uow.finalization_jobs.record_preparation_attention(
+                                draft,
+                                (SubmissionAttentionIssue("submission", SubmissionAttentionReason.PERMISSION_REVOKED),),
+                                now=now,
+                                expires_at=draft.expires_at,
+                                actor_account_id=draft.submission_actor_account_id,
+                            )
+                            await uow.commit()
+                    except DraftRevisionConflictError, DraftNotFoundError, DraftStateConflictError:
+                        # Edits, deletion, expiry, or account merges invalidate this reservation.
+                        continue
 
     async def status(self, draft_id: UUID, *, context: ActingContext) -> SubmissionRequestResult | None:
         """Return retained finalization state after checking owner or staff access."""
@@ -427,29 +428,30 @@ class SubmissionFinalizationWorker:
         self._retention_days = retention_days
         self._preparation = preparation
 
-    async def process_batch(self, *, limit: int = 8, now: Instant | None = None) -> None:
+    async def process_batch(self, *, context: ActingContext, limit: int = 8, now: Instant | None = None) -> None:
         """Recheck attachment waits, then claim and process up to limit jobs in order.
 
         Commit claims before running the executor. Unexpected exceptions are
         recorded for retry; cancellations leave the lease to expire. Successful
         execution has already committed its build and receipt.
         """
-        if not 1 <= limit <= MAX_FINALIZATION_JOB_CLAIM:
-            maximum = MAX_FINALIZATION_JOB_CLAIM
-            raise InvalidStateError(
-                md_tr(
-                    t"submissions-claim-limit = finalization claim limit must be between 1 and {maximum}",
+        with worker_scope(context):
+            if not 1 <= limit <= MAX_FINALIZATION_JOB_CLAIM:
+                maximum = MAX_FINALIZATION_JOB_CLAIM
+                raise InvalidStateError(
+                    md_tr(
+                        t"submissions-claim-limit = finalization claim limit must be between 1 and {maximum}",
+                    )
                 )
-            )
-        claimed_at = now or Instant.now()
-        if self._preparation is not None:
-            await self._preparation.resume_waiting(now=claimed_at, limit=limit)
-        async with self._uow_factory() as uow:
-            jobs = await uow.finalization_jobs.claim(now=claimed_at, limit=limit)
-            await uow.commit()
-        for job in jobs:
-            with worker_execution("submission-finalization", job.claim_token):
-                await self._process(job, now=claimed_at)
+            claimed_at = now or Instant.now()
+            if self._preparation is not None:
+                await self._preparation.resume_waiting(now=claimed_at, limit=limit, context=context)
+            async with self._uow_factory() as uow:
+                jobs = await uow.finalization_jobs.claim(now=claimed_at, limit=limit)
+                await uow.commit()
+            for job in jobs:
+                with worker_execution("submission-finalization", job.claim_token):
+                    await self._process(job, now=claimed_at)
 
     async def _process(self, job: ClaimedFinalizationJob, *, now: Instant) -> None:
         expires_at = now.add(days=self._retention_days, days_assumed_24h_ok=True)

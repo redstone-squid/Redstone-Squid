@@ -687,7 +687,7 @@ async def test_worker_delegates_successful_completion_to_the_executor() -> None:
     executor = FakeWriter(target_result)
     worker = SubmissionFinalizationWorker(executor, uow_factory=partial(FinalizationScope, jobs))
 
-    await worker.process_batch(now=NOW)
+    await worker.process_batch(now=NOW, context=ActingContext.worker("test-worker"))
 
     assert executor.payloads == [payload]
     assert jobs.failures == []
@@ -705,7 +705,7 @@ async def test_actionable_target_failure_returns_draft_to_attention() -> None:
         uow_factory=partial(FinalizationScope, jobs),
     )
 
-    await worker.process_batch(now=NOW)
+    await worker.process_batch(now=NOW, context=ActingContext.worker("test-worker"))
 
     assert jobs.worker_attention == (issue,)
 
@@ -720,7 +720,7 @@ async def test_unexpected_failure_retries_then_dead_letters(caplog: pytest.LogCa
         FakeWriter(RuntimeError("secret")), uow_factory=partial(FinalizationScope, jobs)
     )
 
-    await worker.process_batch(now=NOW)
+    await worker.process_batch(now=NOW, context=ActingContext.worker("test-worker"))
 
     assert jobs.failures == ["RuntimeError"]
     record = next(record for record in caplog.records if "Submission finalization failed" in record.message)
@@ -749,7 +749,7 @@ async def test_attachment_wait_resumes_without_extending_retention() -> None:
 
     jobs.waiting_drafts = (replace(draft, submission_actor_account_id=7),)
     artifacts.readiness = SubmissionArtifactReadiness()
-    await service.resume_waiting(now=NOW.add(seconds=31))
+    await service.resume_waiting(now=NOW.add(seconds=31), context=ActingContext.worker("test-worker"))
     assert jobs.enqueued is not None
     assert jobs.enqueued_expiry == draft.expires_at
 
@@ -764,7 +764,7 @@ async def test_edit_after_wait_reservation_prevents_automatic_submission() -> No
         SubmissionPreparation(FakeArtifacts(SubmissionArtifactReadiness())),
         uow_factory=partial(FinalizationScope, jobs, repository),
     )
-    await service.resume_waiting(now=NOW)
+    await service.resume_waiting(now=NOW, context=ActingContext.worker("test-worker"))
     assert jobs.enqueued is None
 
 

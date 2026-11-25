@@ -11,6 +11,7 @@ import pytest
 from whenever import Instant
 
 from squid.config import SchematicConfig
+from squid.core.actors import ActingContext
 from squid.core.artifacts.infrastructure import LocalArtifactStore
 from squid.core.schematics.application.jobs import (
     ClaimedSchematicJob,
@@ -116,7 +117,7 @@ async def test_a_missing_input_artifact_is_classified_and_failed_terminally(
         SchematicConfig(),
     )
 
-    await runner.process_batch()
+    await runner.process_batch(context=ActingContext.worker("test-worker"))
 
     assert len(repository.failures) == 1
     failure = repository.failures[0]

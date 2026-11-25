@@ -18,6 +18,7 @@ from anyio import CancelScope, Event, create_task_group, fail_after, sleep
 from whenever import Instant
 
 import squid.core.media.application.jobs as media_jobs
+from squid.core.actors import ActingContext
 from squid.core.artifacts import ArtifactMetadata
 from squid.core.media.application.commands import MediaProcessingRequest
 from squid.core.media.application.jobs import (
@@ -723,7 +724,7 @@ async def test_runner_keeps_legacy_poster_writes_during_dual_reader_rollout(tmp_
     processor = WritingProcessor(MediaKind.VIDEO)
     runner = make_runner(jobs, artifacts, processor, tmp_path)
 
-    await runner.process_batch()
+    await runner.process_batch(context=ActingContext.worker("test-worker"))
 
     before_cleanup = await jobs.get(UPLOAD_ID)
     assert before_cleanup is not None
@@ -776,7 +777,7 @@ async def test_runner_heartbeats_while_processing_is_still_running(tmp_path: Pat
 
     with fail_after(1):
         async with create_task_group() as tasks:
-            tasks.start_soon(runner.process_batch)
+            tasks.start_soon(partial(runner.process_batch, context=ActingContext.worker("test-worker")))
             await processor.started.wait()
             await sleep(0.035)
             assert repository.heartbeat_calls >= 2
@@ -805,7 +806,7 @@ async def test_runner_stops_before_publication_after_heartbeat_loses_the_claim(t
 
     with fail_after(1):
         async with create_task_group() as tasks:
-            tasks.start_soon(runner.process_batch)
+            tasks.start_soon(partial(runner.process_batch, context=ActingContext.worker("test-worker")))
             await processor.started.wait()
             assert await jobs.discard(DRAFT_ID, UPLOAD_ID)
             await sleep(0.02)
@@ -837,7 +838,7 @@ async def test_cancelling_runner_stops_heartbeat_and_cleans_private_working_tree
 
     with fail_after(1):
         async with create_task_group() as tasks:
-            tasks.start_soon(runner.process_batch)
+            tasks.start_soon(partial(runner.process_batch, context=ActingContext.worker("test-worker")))
             await processor.started.wait()
             await sleep(0.025)
             tasks.cancel_scope.cancel()
@@ -863,7 +864,7 @@ async def test_cleanup_contention_defers_without_consuming_an_attempt(tmp_path: 
     )
     runner = make_runner(jobs, artifacts, WritingProcessor(MediaKind.IMAGE), tmp_path)
 
-    await runner.process_batch()
+    await runner.process_batch(context=ActingContext.worker("test-worker"))
 
     snapshot = await jobs.get(UPLOAD_ID)
     assert snapshot is not None
@@ -890,7 +891,7 @@ async def test_runner_cleans_outputs_rejected_by_the_claim_fence(tmp_path: Path)
     )
     runner = make_runner(jobs, artifacts, WritingProcessor(MediaKind.IMAGE), tmp_path)
 
-    await runner.process_batch()
+    await runner.process_batch(context=ActingContext.worker("test-worker"))
     cleanup = MediaStorageCleanup(jobs, artifacts)
     await cleanup.cleanup_terminal_sources()
     await cleanup.cleanup_terminal_artifacts()
@@ -918,7 +919,7 @@ async def test_discarded_artifact_cleanup_retries_without_losing_tombstone_metad
         )
     )
     runner = make_runner(jobs, artifacts, WritingProcessor(MediaKind.IMAGE), tmp_path)
-    await runner.process_batch()
+    await runner.process_batch(context=ActingContext.worker("test-worker"))
     completed = await jobs.get(UPLOAD_ID)
     assert completed is not None
     object_keys = {artifact.object_key for artifact in completed.artifacts}
@@ -960,7 +961,7 @@ async def test_terminal_validation_failure_cleans_raw_while_retryable_failure_ke
         processor = WritingProcessor(MediaKind.IMAGE, failure=failure)
         runner = make_runner(jobs, artifacts, processor, tmp_path)
 
-        await runner.process_batch()
+        await runner.process_batch(context=ActingContext.worker("test-worker"))
         cleanup = MediaStorageCleanup(jobs, artifacts)
         await cleanup.cleanup_terminal_sources()
 
@@ -991,7 +992,7 @@ async def test_processing_failure_logs_operation_reason_and_exit_code(
     runner = make_runner(jobs, artifacts, WritingProcessor(MediaKind.IMAGE, failure=failure), tmp_path)
 
     with caplog.at_level(logging.WARNING, logger="squid.core.media.application.jobs"):
-        await runner.process_batch()
+        await runner.process_batch(context=ActingContext.worker("test-worker"))
 
     [record] = [item for item in caplog.records if "Media processing failed for upload" in item.getMessage()]
     assert str(UPLOAD_ID) in record.getMessage()
@@ -1064,7 +1065,7 @@ async def test_runner_finishes_the_rest_of_the_batch_when_one_job_cannot_be_fail
 
     # The batch still reports its failure, but only once every job has settled.
     with pytest.raises(RuntimeError):
-        await runner.process_batch()
+        await runner.process_batch(context=ActingContext.worker("test-worker"))
 
     sibling = await jobs.get(sibling_id)
     assert sibling is not None

@@ -3,12 +3,13 @@
 import hashlib
 import logging
 
+from squid.core.actors import ActingContext
 from squid.core.artifacts import ArtifactStore
 from squid.core.diagnostics.log_capture import work_lost
 from squid.core.posts.topics import TopicPublisher, resource_topic
 from squid.core.schematics.application import SchematicPreviewService, SchematicRenderJobService
 from squid.core.schematics.application.previews import CachedRender, FreshRender, SkippedRender
-from squid.core.worker_context import worker_execution
+from squid.core.worker_context import worker_execution, worker_scope
 
 logger = logging.getLogger(__name__)
 
@@ -39,23 +40,24 @@ class SchematicPreviewWorker:
         self._enabled = enabled
         self._topics = topics
 
-    async def process_batch(self) -> None:
+    async def process_batch(self, *, context: ActingContext) -> None:
         """Process one bounded batch and retain exhausted work as dead letters."""
-        if not self._enabled:
-            return
-        for job in await self._jobs.claim():
-            with worker_execution("schematic-renders", job.claim_token):
-                try:
-                    await self._publish_preview(job.build_id)
-                except Exception as error:
-                    dead = await self._jobs.fail(job, error)
-                    if dead:
-                        logger.exception(
-                            "Dead-lettered schematic preview publication",
-                            extra={"squid.build.id": job.build_id, **work_lost()},
-                        )
-                    continue
-                await self._jobs.complete(job)
+        with worker_scope(context):
+            if not self._enabled:
+                return
+            for job in await self._jobs.claim():
+                with worker_execution("schematic-renders", job.claim_token):
+                    try:
+                        await self._publish_preview(job.build_id)
+                    except Exception as error:
+                        dead = await self._jobs.fail(job, error)
+                        if dead:
+                            logger.exception(
+                                "Dead-lettered schematic preview publication",
+                                extra={"squid.build.id": job.build_id, **work_lost()},
+                            )
+                        continue
+                    await self._jobs.complete(job)
 
     async def _publish_preview(self, build_id: int) -> None:
         """Apply the preparation decision, acknowledging skips without an upload.
@@ -104,6 +106,7 @@ class SchematicPreviewWorker:
         url = f"{self._public_base_url}/v1/schematic-renders/{render.recipe_hash}/content"
         await self._schematics.publish_fresh_preview(render, url, object_key)
 
-    async def cleanup(self, *, retention_hours: int = 24, limit: int = 50) -> int:
+    async def cleanup(self, *, context: ActingContext, retention_hours: int = 24, limit: int = 50) -> int:
         """Delete up to limit old preview objects that no stored render still references."""
-        return await self._schematics.cleanup_preview_objects(retention_hours=retention_hours, limit=limit)
+        with worker_scope(context):
+            return await self._schematics.cleanup_preview_objects(retention_hours=retention_hours, limit=limit)

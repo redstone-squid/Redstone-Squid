@@ -37,6 +37,7 @@ from squid.core.voting.domain import (
 )
 from squid.core.voting.domain.models import VoteConfiguration
 from squid.core.voting.errors import InvalidVoteConfigurationError
+from squid.core.worker_context import worker_scope
 
 logger = logging.getLogger(__name__)
 
@@ -465,17 +466,18 @@ class VoteService:
         return CastVoteResult(result, just_closed=status is VoteStatus.CLOSED)
 
     async def close_due(
-        self, now: Instant | None = None, *, recount: FinalRecount | None = None
+        self, now: Instant | None = None, *, context: ActingContext, recount: FinalRecount | None = None
     ) -> Sequence[VoteSessionSnapshot]:
         """Count due polls and resume interrupted counts after their retry time."""
-        async with self._uow_factory() as uow:
-            due = await uow.votes.list_due(now or Instant.now())
-        closed: list[VoteSessionSnapshot] = []
-        for snapshot in due:
-            result = await self._count_and_close(snapshot, recount)
-            if result.just_closed and result.session is not None:
-                closed.append(result.session)
-        return closed
+        with worker_scope(context):
+            async with self._uow_factory() as uow:
+                due = await uow.votes.list_due(now or Instant.now())
+            closed: list[VoteSessionSnapshot] = []
+            for snapshot in due:
+                result = await self._count_and_close(snapshot, recount)
+                if result.just_closed and result.session is not None:
+                    closed.append(result.session)
+            return closed
 
     async def pending_reviews(self, guild_id: int) -> Sequence[int]:
         async with self._uow_factory() as uow:

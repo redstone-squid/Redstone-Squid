@@ -12,7 +12,7 @@ import anyio
 import pytest
 from whenever import Instant
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.builds.application import BuildEditPatch, RestrictionDefinition
 from squid.core.builds.application.services import (
     BuildService,
@@ -155,7 +155,7 @@ class FakeBuildLocks:
 
 
 class FakeVersions:
-    async def newest(self, edition: Literal["Java", "Bedrock"]) -> str:
+    async def newest(self, edition: Literal["Java", "Bedrock"], *, context: ActingContext) -> str:
         return f"{edition} 1.21.0"
 
 
@@ -450,7 +450,7 @@ async def test_status_changes_and_cleanup_use_lock_manager(existing_build: DoorB
 
     await service.approve(42, actor="test", operation="edit", source="test")
     await service.reject(42, actor="test", operation="edit", source="test")
-    await service.clean_stale_locks(older_than=cutoff)
+    await service.clean_stale_locks(older_than=cutoff, context=ActingContext.worker("test-worker"))
 
     assert [build.id for build in repository.confirmed] == [existing_build.id]
     assert [build.id for build in repository.denied] == [existing_build.id]

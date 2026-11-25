@@ -22,6 +22,7 @@ import anyio
 from anyio.abc import TaskGroup
 
 from squid.config import SchematicConfig
+from squid.core.actors import ActingContext
 from squid.core.artifacts import ArtifactStore
 from squid.core.concurrency import run_all, run_all_settled
 from squid.core.errors import InfrastructureError, SquidError
@@ -58,7 +59,7 @@ from squid.core.schematics.errors import (
 )
 from squid.core.schematics.infrastructure import wire
 from squid.core.schematics.infrastructure.worker import current_schematic_job_id
-from squid.core.worker_context import worker_execution
+from squid.core.worker_context import worker_execution, worker_scope
 
 logger = logging.getLogger(__name__)
 
@@ -284,15 +285,17 @@ class SchematicJobRunner:
         self._analyzer = analyzer
         self._config = config
 
-    async def process_batch(self, *, limit: int = 8) -> None:
+    async def process_batch(self, *, context: ActingContext, limit: int = 8) -> None:
         """Claim jobs and let each finish recording its own outcome before reporting batch failures."""
-        jobs = await self._jobs.claim(limit=limit)
-        # Jobs are independent. Let each record its outcome even if another job's handler
-        # fails; cancelling it here would leave its claim reserved until the lease expires.
-        await run_all_settled([partial(self._process, job) for job in jobs])
+        with worker_scope(context):
+            jobs = await self._jobs.claim(limit=limit)
+            # Jobs are independent. Let each record its outcome even if another job's handler
+            # fails; cancelling it here would leave its claim reserved until the lease expires.
+            await run_all_settled([partial(self._process, job) for job in jobs])
 
-    async def cleanup(self) -> None:
-        await self._jobs.cleanup(self._artifacts.delete)
+    async def cleanup(self, *, context: ActingContext) -> None:
+        with worker_scope(context):
+            await self._jobs.cleanup(self._artifacts.delete)
 
     async def _process(self, job: ClaimedSchematicJob) -> None:
         with worker_execution("schematic-jobs", job.claim_token):

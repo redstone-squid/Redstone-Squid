@@ -482,7 +482,7 @@ async def test_expiry_batch_uses_the_service_clock_and_a_bounded_limit() -> None
             expires_at=NOW.add(days=7, days_assumed_24h_ok=True),
         )
 
-    assert await service.expire_due(limit=1) == 1
+    assert await service.expire_due(limit=1, context=ActingContext.worker("test-worker")) == 1
     assert sum(draft.snapshot.status is DraftStatus.EXPIRED for draft in repository.drafts.values()) == 1
 
 

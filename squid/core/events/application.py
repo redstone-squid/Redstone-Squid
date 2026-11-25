@@ -7,10 +7,12 @@ from uuid import UUID
 
 from whenever import Instant
 
+from squid.core.actors import ActingContext
 from squid.core.errors import DataIntegrityError, InvalidStateError
 from squid.core.events.models import DomainEvent
 from squid.core.i18n import tr
 from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
+from squid.core.worker_context import worker_scope
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,51 +64,55 @@ class DomainEventService:
         self._uow_factory = uow_factory
         self._max_attempts = max_attempts
 
-    async def claim(self, consumer: str, limit: int = 20) -> Sequence[DomainEventDelivery]:
+    async def claim(self, consumer: str, limit: int = 20, *, context: ActingContext) -> Sequence[DomainEventDelivery]:
         """Claim ready deliveries and commit their leases before returning.
 
         Expired leases can be reclaimed even if the previous worker is still
         running. An empty consumer name or a limit outside 1 to 100 raises
         InvalidStateError.
         """
-        async with self._uow_factory() as uow:
-            if not consumer:
-                msg = tr(t"events-consumer-non-empty = consumer must be a non-empty name")
-                raise InvalidStateError(msg)
-            if not 1 <= limit <= 100:
-                msg = tr(t"events-claim-limit-out-of-range = claim limit must be between 1 and 100")
-                raise InvalidStateError(msg)
-            result = await uow.domain_events.claim(consumer=consumer, limit=limit)
-            await uow.commit()
-            return result
+        with worker_scope(context):
+            async with self._uow_factory() as uow:
+                if not consumer:
+                    msg = tr(t"events-consumer-non-empty = consumer must be a non-empty name")
+                    raise InvalidStateError(msg)
+                if not 1 <= limit <= 100:
+                    msg = tr(t"events-claim-limit-out-of-range = claim limit must be between 1 and 100")
+                    raise InvalidStateError(msg)
+                result = await uow.domain_events.claim(consumer=consumer, limit=limit)
+                await uow.commit()
+                return result
 
-    async def complete(self, delivery: DomainEventDelivery) -> bool:
+    async def complete(self, delivery: DomainEventDelivery, *, context: ActingContext) -> bool:
         """Remove a delivery and return True only if its claim still matches."""
-        async with self._uow_factory() as uow:
-            result = await uow.domain_events.complete(delivery)
-            await uow.commit()
-            return result
+        with worker_scope(context):
+            async with self._uow_factory() as uow:
+                result = await uow.domain_events.complete(delivery)
+                await uow.commit()
+                return result
 
-    async def fail(self, delivery: DomainEventDelivery, error: Exception) -> bool:
+    async def fail(self, delivery: DomainEventDelivery, error: Exception, *, context: ActingContext) -> bool:
         """Retry a failed delivery with backoff, or dead-letter it at the attempt ceiling.
 
         Return True if this call stops further retries. False can mean that a
         retry was scheduled or that the claim no longer matches.
         """
-        async with self._uow_factory() as uow:
-            result = await uow.domain_events.fail(delivery, str(error)[:4000], max_attempts=self._max_attempts)
-            await uow.commit()
-            return result
+        with worker_scope(context):
+            async with self._uow_factory() as uow:
+                result = await uow.domain_events.fail(delivery, str(error)[:4000], max_attempts=self._max_attempts)
+                await uow.commit()
+                return result
 
-    async def reject(self, delivery: DomainEventDelivery, error: Exception) -> bool:
+    async def reject(self, delivery: DomainEventDelivery, error: Exception, *, context: ActingContext) -> bool:
         """Stop retries for an event the consumer cannot interpret.
 
         Return False if the claim is missing or has been replaced.
         """
-        async with self._uow_factory() as uow:
-            result = await uow.domain_events.reject(delivery, str(error)[:4000])
-            await uow.commit()
-            return result
+        with worker_scope(context):
+            async with self._uow_factory() as uow:
+                result = await uow.domain_events.reject(delivery, str(error)[:4000])
+                await uow.commit()
+                return result
 
 
 class DomainEventUnitOfWork(UnitOfWork, Protocol):

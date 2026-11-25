@@ -8,23 +8,26 @@ and queue acknowledgements together so a rollback leaves the work available.
 
 from typing import Protocol
 
+from squid.core.actors import ActingContext
 from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
+from squid.core.worker_context import worker_scope
 
 
 class SearchProjectionRepository(Protocol):
     """Refresh queued documents in the caller's transaction."""
 
-    async def process_batch(self, *, limit: int = 50) -> tuple[int, int]: ...
+    async def process_batch(self, *, context: ActingContext, limit: int = 50) -> tuple[int, int]: ...
 
 
 async def refresh_search_index(
-    uow_factory: UnitOfWorkFactory[SearchProjectionUnitOfWork], *, limit: int = 50
+    uow_factory: UnitOfWorkFactory[SearchProjectionUnitOfWork], *, context: ActingContext, limit: int = 50
 ) -> tuple[int, int]:
     """Commit up to limit document refreshes and queue updates; return (succeeded, failed)."""
-    async with uow_factory() as uow:
-        result = await uow.search_projection.process_batch(limit=limit)
-        await uow.commit()
-        return result
+    with worker_scope(context):
+        async with uow_factory() as uow:
+            result = await uow.search_projection.process_batch(limit=limit, context=context)
+            await uow.commit()
+            return result
 
 
 class SearchProjectionUnitOfWork(UnitOfWork, Protocol):

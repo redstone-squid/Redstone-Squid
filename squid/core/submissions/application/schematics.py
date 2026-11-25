@@ -31,6 +31,7 @@ from squid.core.submissions.application.schematic_inference import (
 )
 from squid.core.submissions.domain.schematics import DraftSchematic, DraftSchematicState
 from squid.core.unit_of_work import UnitOfWorkFactory
+from squid.core.worker_context import worker_scope
 
 logger = logging.getLogger(__name__)
 
@@ -224,7 +225,7 @@ class DraftSchematicService:
                 await uow.draft_schematics.attach(source, destination, upload_id)
                 await uow.commit()
 
-    async def process_pending(self, *, limit: int = 4) -> None:
+    async def process_pending(self, *, context: ActingContext, limit: int = 4) -> None:
         """Analyze retained uploads outside transactions, including uploads from older releases.
 
         Pending rows are durable work. A cancelled worker leaves them pending; duplicate
@@ -232,29 +233,30 @@ class DraftSchematicService:
         completion only updates pending rows. Invalid files become actionable rejections.
         Infrastructure failures remain pending and do not prevent later files progressing.
         """
-        if self._ingestor is None:
-            return
-        async with self._uow_factory() as uow:
-            sources = await uow.draft_schematics.pending(limit=limit)
-        for source in sources:
-            result = None
-            error = None
-            retry = False
-            try:
-                data = await self._source_bytes(source)
-                result = await self._ingestor.ingest(IngestRequest(data, source.filename))
-            except (InvalidSchematicError, SchematicTooLargeError, SchematicWorkerCrashedError) as exc:
-                error = str(exc)
-                logger.warning("Rejected draft schematic %s: %s", source.id, error)
-            except Exception as exc:
-                logger.exception("Could not process draft schematic %s; will retry", source.id)
-                error = str(exc)
-                retry = True
+        with worker_scope(context):
+            if self._ingestor is None:
+                return
             async with self._uow_factory() as uow:
-                await uow.draft_schematics.finish_analysis(source, result, error=error, retry=retry)
-                await uow.commit()
-            if result is not None:
-                logger.info("Processed draft schematic %s", source.id)
+                sources = await uow.draft_schematics.pending(limit=limit)
+            for source in sources:
+                result = None
+                error = None
+                retry = False
+                try:
+                    data = await self._source_bytes(source)
+                    result = await self._ingestor.ingest(IngestRequest(data, source.filename))
+                except (InvalidSchematicError, SchematicTooLargeError, SchematicWorkerCrashedError) as exc:
+                    error = str(exc)
+                    logger.warning("Rejected draft schematic %s: %s", source.id, error)
+                except Exception as exc:
+                    logger.exception("Could not process draft schematic %s; will retry", source.id)
+                    error = str(exc)
+                    retry = True
+                async with self._uow_factory() as uow:
+                    await uow.draft_schematics.finish_analysis(source, result, error=error, retry=retry)
+                    await uow.commit()
+                if result is not None:
+                    logger.info("Processed draft schematic %s", source.id)
 
     async def _source_bytes(self, source: DraftSchematic) -> bytes:
         data = await self._artifacts.get(source.object_key, max_bytes=self.max_bytes)
@@ -263,16 +265,17 @@ class DraftSchematicService:
             raise DataIntegrityError(message)
         return data
 
-    async def cleanup(self, *, limit: int = 20) -> None:
+    async def cleanup(self, *, context: ActingContext, limit: int = 20) -> None:
         """Delete unreferenced quarantine objects, retaining failed deletions for the next pass."""
-        async with self._uow_factory() as uow:
-            upload_ids = await uow.draft_schematics.cleanup_candidates(limit=limit)
-            await uow.commit()
-        for upload_id in upload_ids:
-            await self._artifacts.delete(f"submissions/quarantine/{upload_id}")
+        with worker_scope(context):
             async with self._uow_factory() as uow:
-                await uow.draft_schematics.mark_deleted(upload_id)
+                upload_ids = await uow.draft_schematics.cleanup_candidates(limit=limit)
                 await uow.commit()
+            for upload_id in upload_ids:
+                await self._artifacts.delete(f"submissions/quarantine/{upload_id}")
+                async with self._uow_factory() as uow:
+                    await uow.draft_schematics.mark_deleted(upload_id)
+                    await uow.commit()
 
     async def _finish_upload(self, upload_id: UUID, *, succeeded: bool) -> None:
         async with self._uow_factory() as uow:

@@ -19,6 +19,8 @@ from collections.abc import Callable
 from functools import cache
 from typing import Any, NoReturn, cast, get_args, get_origin, get_type_hints
 
+from squid.core.actors import ActingContext
+from squid.core.worker_context import WorkerOperation
 from squid.runtime import BotServices, WorkerServices
 
 
@@ -65,7 +67,7 @@ def is_configured(service: object) -> bool:
 
 
 def _declared_types(annotation: object) -> list[type]:
-    if get_origin(annotation) is Callable:
+    if get_origin(annotation) in {Callable, WorkerOperation}:
         # A factory's argument and return types are not the field's type; leave it to the type checker.
         return []
     return [arg for arg in get_args(annotation) or (annotation,) if inspect.isclass(arg) and arg is not type(None)]
@@ -135,7 +137,7 @@ def bot_services(**overrides: object) -> BotServices:
     return _build(BotServices, {"schematic_summaries": None, "open_topic_bridge": None}, overrides)
 
 
-async def _unconfigured_job() -> NoReturn:
+async def _unconfigured_job(*, context: ActingContext) -> NoReturn:
     raise AssertionError("the test did not configure this worker maintenance job")
 
 

@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from squid.core.actors import ActingContext
 from squid.core.persistence.base import Base
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.schematics.application import (
@@ -90,7 +91,7 @@ async def test_a_permanent_render_skip_acknowledges_and_removes_the_intent(
         SkippedRender(RenderSkipReason.NO_PRIMARY_SCHEMATIC),
     )
 
-    await worker.process_batch()
+    await worker.process_batch(context=ActingContext.worker("test-worker"))
 
     assert await _row(async_session_factory) is None
 
@@ -103,12 +104,12 @@ async def test_a_transient_render_failure_backs_off_then_is_retained_as_a_dead_l
     await _enqueue(async_session_factory)
     worker = _preview_worker(async_session_factory, RuntimeError("renderer unavailable"))
 
-    await worker.process_batch()
+    await worker.process_batch(context=ActingContext.worker("test-worker"))
 
     assert await _row(async_session_factory) == (1, None, False, True, "renderer unavailable")
 
     async with async_session_factory.begin() as session:
         await session.execute(text("UPDATE schematic_render_queue SET available_at = now() WHERE build_id = 7"))
-    await worker.process_batch()
+    await worker.process_batch(context=ActingContext.worker("test-worker"))
 
     assert await _row(async_session_factory) == (2, None, True, False, "renderer unavailable")

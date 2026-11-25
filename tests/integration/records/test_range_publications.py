@@ -212,7 +212,7 @@ async def test_publication_uses_saved_inputs_despite_live_edits_and_queue_refres
         assert saved is not None
         assert saved.sources[0].expansion is not None
         assert saved.sources[0].expansion.branches[0].volume == "10n"
-    await publisher.process_queue()
+    await publisher.process_queue(context=ActingContext.worker("test-worker"))
     refreshed = await publisher.get(first.query_id)
     assert refreshed is not None
     assert refreshed.active is not None
@@ -364,7 +364,7 @@ async def test_refresh_attempts_every_query_before_reporting_a_failure(
         return analyze_door_widths((), height=query.height)
 
     analyzer.analyze.side_effect = analyze
-    assert await publisher.process_queue() == (1, 1)
+    assert await publisher.process_queue(context=ActingContext.worker("test-worker")) == (1, 1)
     failed = await publisher.get(broken)
     refreshed = await publisher.get(healthy)
     assert failed is not None
@@ -423,14 +423,14 @@ async def test_inexact_refresh_keeps_publication_and_retries_only_that_query(
         analyzer=analyzer,
     )
     query_id = await publisher.register(DoorRangeQuery(height=3), context=ADMIN)
-    assert await publisher.process_queue() == (1, 0)
+    assert await publisher.process_queue(context=ActingContext.worker("test-worker")) == (1, 0)
     first = await publisher.get(query_id)
     assert first is not None
     assert first.active is not None
 
     analyzer.analyze.return_value = failed_analysis(RegionAnalysisStatus.TIMED_OUT, "timeout")
     await publisher.request_refresh(query_id, context=ADMIN)
-    assert await publisher.process_queue() == (0, 1)
+    assert await publisher.process_queue(context=ActingContext.worker("test-worker")) == (0, 1)
 
     current = await publisher.get(query_id)
     assert current is not None
@@ -442,7 +442,7 @@ async def test_inexact_refresh_keeps_publication_and_retries_only_that_query(
         assert pending.attempts == 1
         assert pending.last_error == RegionAnalysisStatus.TIMED_OUT.value
         assert pending.claim_token is None
-    assert await publisher.process_queue() == (0, 0)
+    assert await publisher.process_queue(context=ActingContext.worker("test-worker")) == (0, 0)
 
 
 async def test_unchanged_range_keeps_publication_and_advances_last_checked(
@@ -458,7 +458,7 @@ async def test_unchanged_range_keeps_publication_and_advances_last_checked(
         analyzer=analyzer,
     )
     query_id = await publisher.register(DoorRangeQuery(height=3), context=ADMIN)
-    assert await publisher.process_queue() == (1, 0)
+    assert await publisher.process_queue(context=ActingContext.worker("test-worker")) == (1, 0)
     first = await publisher.get(query_id)
     assert first is not None
     assert first.active is not None
@@ -469,7 +469,7 @@ async def test_unchanged_range_keeps_publication_and_advances_last_checked(
     pending = await publisher.get(query_id)
     assert pending is not None
     assert pending.refresh_pending
-    assert await publisher.process_queue() == (1, 0)
+    assert await publisher.process_queue(context=ActingContext.worker("test-worker")) == (1, 0)
 
     checked = await publisher.get(query_id)
     assert checked is not None

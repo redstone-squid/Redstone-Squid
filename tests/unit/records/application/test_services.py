@@ -692,7 +692,7 @@ async def test_process_queue_rebuilds_and_acknowledges_claimed_kinds() -> None:
     runs.queued = (BuildKind.DOOR, BuildKind.EXTENDER)
     computation = RecordComputationService(uow_factory=lambda: RecordScope(FakeCandidates(()), runs))
 
-    result = await computation.process_queue()
+    result = await computation.process_queue(context=ActingContext.worker("test-worker"))
 
     assert result.kinds == (BuildKind.DOOR, BuildKind.EXTENDER)
     assert result.rebuild is not None
@@ -707,7 +707,7 @@ async def test_process_queue_preserves_the_pinned_current_version() -> None:
     runs.current_version_id = 3
     computation = RecordComputationService(uow_factory=lambda: RecordScope(FakeCandidates(()), runs))
 
-    result = await computation.process_queue()
+    result = await computation.process_queue(context=ActingContext.worker("test-worker"))
 
     assert result.rebuild is not None
     assert result.rebuild.run_ids == (1, 2)
@@ -722,7 +722,7 @@ async def test_holder_measurement_backfill_refreshes_already_published_versions(
     runs.refresh_active_versions = True
     computation = RecordComputationService(uow_factory=lambda: RecordScope(FakeCandidates(()), runs))
 
-    await computation.process_queue()
+    await computation.process_queue(context=ActingContext.worker("test-worker"))
 
     assert [batch.version_id for batch in runs.batches] == [None, 3, 2]
     assert runs.completed == (BuildKind.DOOR,)
@@ -895,7 +895,7 @@ async def test_concrete_queue_completes_without_range_work() -> None:
     runs.queued = (BuildKind.DOOR,)
     computation = RecordComputationService(uow_factory=lambda: RecordScope(FakeCandidates(()), runs))
 
-    await computation.process_queue()
+    await computation.process_queue(context=ActingContext.worker("test-worker"))
 
     assert runs.completed == (BuildKind.DOOR,)
     assert runs.failed is None
@@ -1057,7 +1057,7 @@ async def test_failed_kind_does_not_roll_back_other_kind_publication() -> None:
     service = RecordComputationService(uow_factory=lambda: RecordScope(FakeCandidates(()), runs))
 
     with pytest.raises(RuntimeError, match="door computation failed"):
-        await service.process_queue()
+        await service.process_queue(context=ActingContext.worker("test-worker"))
 
     assert runs.completed == (BuildKind.EXTENDER,)
     assert runs.failed == ((BuildKind.DOOR,), "door computation failed")

@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.core.accounts.models import Account
+from squid.core.actors import ActingContext, Actor
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import OtherBuild
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
@@ -37,7 +38,9 @@ from tests.support.build_edits import build_edit_session
 async def _refresh(sessions: async_sessionmaker[AsyncSession]) -> None:
     async with sessions.begin() as session:
         while True:
-            succeeded, failed = await SearchProjectionWorker(session).process_batch()
+            succeeded, failed = await SearchProjectionWorker(session).process_batch(
+                context=ActingContext.worker("test-worker")
+            )
             assert failed == 0
             if succeeded == 0:
                 break
@@ -102,7 +105,10 @@ async def test_keyword_aliases_and_exact_filters_keep_display_names(
 ) -> None:
     target_id, textual_id, _ = catalogue
     service = SearchService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
-    page = await service.search(SearchRequest("observerless", scope=SearchScope.BUILDS, group_by_build=True))
+    page = await service.search(
+        SearchRequest("observerless", scope=SearchScope.BUILDS, group_by_build=True),
+        context=ActingContext.direct(Actor()),
+    )
     assert _ids(page) == {target_id, textual_id}
     target = next(hit for hit in page.hits if hit.source_id == str(target_id))
     assert isinstance(target, BuildSearchHit)
@@ -123,25 +129,41 @@ async def test_keyword_aliases_and_exact_filters_keep_display_names(
         "restriction:observerless AND pattern:laced",
         "restriction:observerless OR pattern:missing",
     ):
-        page = await service.search(SearchRequest(query, scope=SearchScope.BUILDS, group_by_build=True))
+        page = await service.search(
+            SearchRequest(query, scope=SearchScope.BUILDS, group_by_build=True), context=ActingContext.direct(Actor())
+        )
         assert _ids(page) == {target_id}, query
         assert page.total == 1
 
     for query in ('"pocket sized"', "laced"):
-        page = await service.search(SearchRequest(query, scope=SearchScope.BUILDS))
+        page = await service.search(
+            SearchRequest(query, scope=SearchScope.BUILDS), context=ActingContext.direct(Actor())
+        )
         assert _ids(page) == {target_id}, query
 
     for query in ("NOT restriction:observerless", "NOT restriction:observerless AND NOT pattern:laced"):
-        assert _ids(await service.search(SearchRequest(query, scope=SearchScope.BUILDS))) == {textual_id}
+        assert _ids(
+            await service.search(SearchRequest(query, scope=SearchScope.BUILDS), context=ActingContext.direct(Actor()))
+        ) == {textual_id}
 
     for query in ("ghostkeyword", "restriction:ghostkeyword", "tag:ghostkeyword", "restriction:observers"):
-        assert _ids(await service.search(SearchRequest(query, scope=SearchScope.BUILDS))) == set(), query
+        assert (
+            _ids(
+                await service.search(
+                    SearchRequest(query, scope=SearchScope.BUILDS), context=ActingContext.direct(Actor())
+                )
+            )
+            == set()
+        ), query
 
     sorted_page = await service.search(
-        SearchRequest("restriction:observerless", scope=SearchScope.BUILDS, sort=SearchSort("created_at"))
+        SearchRequest("restriction:observerless", scope=SearchScope.BUILDS, sort=SearchSort("created_at")),
+        context=ActingContext.direct(Actor()),
     )
     assert _ids(sorted_page) == {target_id}
-    metadata = await service.search(SearchRequest("restriction:observerless", scope=SearchScope.METADATA))
+    metadata = await service.search(
+        SearchRequest("restriction:observerless", scope=SearchScope.METADATA), context=ActingContext.direct(Actor())
+    )
     assert [hit.title for hit in metadata.hits] == ["No Observers"]
 
 
@@ -185,9 +207,21 @@ async def test_alias_addition_rename_and_removal_refresh_assigned_builds(
         await _refresh(migrated_session_factory)
         if new is not None:
             for query in (f'"{new}"', f'restriction:"{new}"'):
-                assert _ids(await service.search(SearchRequest(query, scope=SearchScope.BUILDS))) == {target_id}
+                assert _ids(
+                    await service.search(
+                        SearchRequest(query, scope=SearchScope.BUILDS), context=ActingContext.direct(Actor())
+                    )
+                ) == {target_id}
         if old is not None:
-            assert _ids(await service.search(SearchRequest(f'restriction:"{old}"', scope=SearchScope.BUILDS))) == set()
+            assert (
+                _ids(
+                    await service.search(
+                        SearchRequest(f'restriction:"{old}"', scope=SearchScope.BUILDS),
+                        context=ActingContext.direct(Actor()),
+                    )
+                )
+                == set()
+            )
             # Check the indexed text too: fuzzy matching could still find the renamed synonym.
             async with migrated_session_factory() as session:
                 document = await session.scalar(
@@ -223,9 +257,11 @@ async def test_migration_requeues_existing_builds_and_tag_metadata(
         assert {("build", str(target_id)), ("build", str(textual_id)), ("metadata", f"tag:{tag_id}")} <= queued
     await _refresh(migrated_session_factory)
     service = SearchService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
-    assert _ids(await service.search(SearchRequest("restriction:observerless", scope=SearchScope.BUILDS))) == {
-        target_id
-    }
+    assert _ids(
+        await service.search(
+            SearchRequest("restriction:observerless", scope=SearchScope.BUILDS), context=ActingContext.direct(Actor())
+        )
+    ) == {target_id}
 
 
 async def test_record_category_filters_match_without_holders_and_refresh_aliases(
@@ -280,7 +316,9 @@ async def test_record_category_filters_match_without_holders_and_refresh_aliases
     service = SearchService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
 
     async def matches(query: str) -> set[str]:
-        page = await service.search(SearchRequest(query, scope=SearchScope.RECORDS))
+        page = await service.search(
+            SearchRequest(query, scope=SearchScope.RECORDS), context=ActingContext.direct(Actor())
+        )
         return {hit.source_id for hit in page.hits}
 
     door, thick_door, extender = result_ids

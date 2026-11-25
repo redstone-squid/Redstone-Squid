@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, override
 
 from discord.ext.commands import Cog
 
+from squid.core.actors import ActingContext
 from squid.core.observability import TraceSurface, trace_span
 from squid.core.posts.topics import resource_topic
 from squid.core.sync import ReconciliationJob
@@ -41,7 +42,7 @@ class ReconciliationCog[BotT: squid.bot.app.RedstoneSquid](Cog):
         """Drain bounded Discord refresh work."""
         await self.bot.wait_until_ready()
         with trace_span("squid.background.reconciliation", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
-            for job in await self.bot.services.discord_reconciliation.claim():
+            for job in await self.bot.services.discord_reconciliation.claim(context=ActingContext.current()):
                 with worker_execution("discord-reconciliation", job.claim_token):
                     await self._process_job(job)
 
@@ -57,7 +58,9 @@ class ReconciliationCog[BotT: squid.bot.app.RedstoneSquid](Cog):
             if job.resource_kind.post_kind != "submission_draft":
                 await self.bot.post_reconciler.reconcile(job.resource_kind.post_kind, job.source_key, job.generation)
         except Exception as error:
-            dead_lettered = await self.bot.services.discord_reconciliation.fail(job, error)
+            dead_lettered = await self.bot.services.discord_reconciliation.fail(
+                job, error, context=ActingContext.current()
+            )
             if dead_lettered:
                 logger.exception(
                     "Dead-lettered Discord reconciliation job after repeated failures",
@@ -65,7 +68,7 @@ class ReconciliationCog[BotT: squid.bot.app.RedstoneSquid](Cog):
                 )
             return
         self.bot.topic_publisher.publish(resource_topic(job.resource_kind.post_kind, job.source_key))
-        await self.bot.services.discord_reconciliation.complete(job)
+        await self.bot.services.discord_reconciliation.complete(job, context=ActingContext.current())
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:

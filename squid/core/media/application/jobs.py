@@ -30,6 +30,7 @@ import anyio.to_thread
 from pydantic import BaseModel, ConfigDict, Field
 from whenever import Instant
 
+from squid.core.actors import ActingContext
 from squid.core.artifacts import ArtifactStore
 from squid.core.concurrency import run_all_settled, task_group
 from squid.core.errors import InvalidStateError, SquidError, ValidationError
@@ -58,7 +59,7 @@ from squid.core.media.errors import (
     MediaUploadConflictError,
 )
 from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
-from squid.core.worker_context import worker_execution
+from squid.core.worker_context import worker_execution, worker_scope
 from squid_i18n import md_tr
 
 logger = logging.getLogger(__name__)
@@ -621,10 +622,11 @@ class MediaStorageCleanup:
         self._jobs = jobs
         self._artifacts = artifacts
 
-    async def process_batch(self, *, limit: int = 100) -> None:
+    async def process_batch(self, *, context: ActingContext, limit: int = 100) -> None:
         """Retry deletion of finished jobs' source files and unreferenced normalized objects."""
-        await self.cleanup_terminal_sources(limit=limit)
-        await self.cleanup_terminal_artifacts(limit=limit)
+        with worker_scope(context):
+            await self.cleanup_terminal_sources(limit=limit)
+            await self.cleanup_terminal_artifacts(limit=limit)
 
     async def cleanup_terminal_sources(self, *, limit: int = 100) -> None:
         """Retry idempotent deletion of raw objects committed to terminal states."""
@@ -676,13 +678,14 @@ class MediaProcessingJobRunner:
         self._working_directory = working_directory
         self._heartbeat_interval_seconds = heartbeat_interval_seconds
 
-    async def process_batch(self, *, limit: int = 8) -> None:
+    async def process_batch(self, *, context: ActingContext, limit: int = 8) -> None:
         """Claim and process a bounded batch without coupling work to storage cleanup."""
-        claimed = await self._jobs.claim(limit=limit)
-        # Let independent jobs finish if one fails. Cancelling siblings would skip
-        # their failure transitions and leave their database claims until expiry.
-        # Unexpected failures are raised after every job has settled.
-        await run_all_settled([partial(self._process, job) for job in claimed])
+        with worker_scope(context):
+            claimed = await self._jobs.claim(limit=limit)
+            # Let independent jobs finish if one fails. Cancelling siblings would skip
+            # their failure transitions and leave their database claims until expiry.
+            # Unexpected failures are raised after every job has settled.
+            await run_all_settled([partial(self._process, job) for job in claimed])
 
     async def _process(self, job: ClaimedMediaJob) -> None:
         with worker_execution("media-processing", job.claim_token):

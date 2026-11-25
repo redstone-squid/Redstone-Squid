@@ -11,6 +11,7 @@ from sqlalchemy import func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from squid.config import SchematicConfig
+from squid.core.actors import ActingContext
 from squid.core.artifacts.application import ArtifactMetadata
 from squid.core.artifacts.infrastructure import LocalArtifactStore
 from squid.core.errors import RateLimitedError
@@ -79,7 +80,7 @@ async def _with_runner[ResultT](runner: SchematicJobRunner, request: Coroutine[A
     async with anyio.create_task_group() as tasks:
         tasks.start_soon(execute)
         while not finished.is_set():
-            await runner.process_batch()
+            await runner.process_batch(context=ActingContext.worker("test-worker"))
             await anyio.sleep(0.005)
 
     if failures:
@@ -174,7 +175,7 @@ async def test_ambiguous_simulation_inputs_survive_the_durable_worker_boundary(
     assert snapshot.dead_at is not None
     assert snapshot.error_kind == "ambiguous_simulation_input"
     assert snapshot.error_context == {"candidates": [[0, 1, 2], [12, 5, -3]], "rejected": [9, 9, 9]}
-    await runner.process_batch()
+    await runner.process_batch(context=ActingContext.worker("test-worker"))
     assert native.simulate_calls == [(b"schematic", request)]
 
 
@@ -212,7 +213,7 @@ async def test_stale_workers_cannot_overwrite_or_delete_a_reclaimed_jobs_result(
     completed = None
     with anyio.fail_after(5):
         async with anyio.create_task_group() as tasks:
-            tasks.start_soon(stale.process_batch)
+            tasks.start_soon(partial(stale.process_batch, context=ActingContext.worker("test-worker")))
             await started.wait()
             async with async_session_factory.begin() as session:
                 await session.execute(
@@ -220,7 +221,7 @@ async def test_stale_workers_cannot_overwrite_or_delete_a_reclaimed_jobs_result(
                     .where(SchematicJob.id == job_id)
                     .values(claimed_at=text("now() - interval '6 minutes'"))
                 )
-            await current.process_batch()
+            await current.process_batch(context=ActingContext.worker("test-worker"))
             completed = await jobs.get(job_id)
             assert completed is not None
             assert completed.completed_at is not None
@@ -236,7 +237,7 @@ async def test_stale_workers_cannot_overwrite_or_delete_a_reclaimed_jobs_result(
         await session.execute(
             update(SchematicJob).where(SchematicJob.id == job_id).values(expires_at=text("now() - interval '1 hour'"))
         )
-    await current.cleanup()
+    await current.cleanup(context=ActingContext.worker("test-worker"))
     assert await jobs.get(job_id) is None
     assert await artifacts.get(completed.result_object_key, max_bytes=1024) is None
 
@@ -291,11 +292,11 @@ async def test_attempt_outputs_survive_failed_acknowledgements_and_cleanup_retri
     if interruption == "cancelled":
         with anyio.fail_after(5):
             async with anyio.create_task_group() as tasks:
-                tasks.start_soon(runner.process_batch)
+                tasks.start_soon(partial(runner.process_batch, context=ActingContext.worker("test-worker")))
                 await completion_started.wait()
                 tasks.cancel_scope.cancel()
     else:
-        await runner.process_batch()
+        await runner.process_batch(context=ActingContext.worker("test-worker"))
 
     async with sessions() as session:
         row = await session.get(SchematicJob, job_id)
@@ -313,7 +314,7 @@ async def test_attempt_outputs_survive_failed_acknowledgements_and_cleanup_retri
                     claim_token=func.gen_random_uuid(),
                 )
             )
-        await runner.process_batch()
+        await runner.process_batch(context=ActingContext.worker("test-worker"))
     completed = await jobs.get(job_id)
     assert completed is not None
     assert completed.completed_at is not None
@@ -340,12 +341,12 @@ async def test_attempt_outputs_survive_failed_acknowledgements_and_cleanup_retri
         )
     artifacts.fail_key = winning_key
     with pytest.raises(OSError, match="object storage unavailable"):
-        await runner.cleanup()
+        await runner.cleanup(context=ActingContext.worker("test-worker"))
     assert await jobs.get(job_id) is not None
     assert await jobs.get(legacy_id) is not None
     if first_key != winning_key:
         assert await artifacts.get(first_key, max_bytes=1024) is None
-    await runner.cleanup()
+    await runner.cleanup(context=ActingContext.worker("test-worker"))
     assert await jobs.get(job_id) is None
     assert await jobs.get(legacy_id) is None
     for key in {first_key, winning_key, "legacy-output"}:

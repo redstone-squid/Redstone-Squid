@@ -5,11 +5,11 @@ from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
 
+from squid.core.actors import ActingContext, application_operation
 from squid.core.errors import InvalidStateError
 from squid.core.events import DomainEvent
 from squid.core.i18n import tr
 from squid.core.notifications.domain import (
-    DEFAULT_INBOX_VISIBILITY,
     InboxVisibility,
     NotificationPreferences,
     PendingNotificationDelivery,
@@ -19,8 +19,11 @@ from squid.core.notifications.domain import (
 )
 from squid.core.notifications.models import InboxNotification, NotificationSubscription
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
+from squid.core.permissions.application.services import PermissionService
+from squid.core.permissions.domain.catalogue import ACCOUNT_SELF_READ, BUILD_SUBMISSION_VIEW_PENDING
 from squid.core.settings.domain.runtime import RuntimeSettings
 from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
+from squid.core.worker_context import worker_scope
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,14 +85,14 @@ class NotificationService:
     success or failure here. Every write commits before returning, so the bot
     holds no database transaction open while sending a message.
 
-    Inbox visibility is supplied by the authenticated caller's adapter; staff
-    messages require its permission check as well as the account's preferences.
+    Inbox reads derive the account and staff visibility from the effective actor.
     """
 
     def __init__(
         self,
         *,
         uow_factory: UnitOfWorkFactory[NotificationUnitOfWork],
+        permissions: PermissionService,
         retention_days: int = 90,
         runtime_settings: Callable[[], Awaitable[RuntimeSettings]] | None = None,
     ) -> None:
@@ -97,10 +100,18 @@ class NotificationService:
             msg = tr(t"notifications-retention-days-positive = retention_days must be positive")
             raise InvalidStateError(msg)
         self._uow_factory = uow_factory
+        self._permissions = permissions
         self._retention_days = retention_days
         self._runtime_settings = runtime_settings
 
-    async def editor_snapshot(self, account_id: int) -> NotificationEditorSnapshot:
+    async def _reader_account(self, context: ActingContext) -> int:
+        account_id = context.effective.require_account_id()
+        await self._permissions.require(context.effective, ACCOUNT_SELF_READ)
+        return account_id
+
+    @application_operation
+    async def editor_snapshot(self, *, context: ActingContext) -> NotificationEditorSnapshot:
+        account_id = await self._reader_account(context)
         async with self._uow_factory() as uow:
             await uow.notifications.lock_settings(account_id)
             return NotificationEditorSnapshot(
@@ -109,15 +120,17 @@ class NotificationService:
                 tuple(await uow.notifications.subscription_labels(account_id)),
             )
 
+    @application_operation
     async def subscription_snapshot(
         self,
-        account_id: int,
         *,
+        context: ActingContext,
         kind: SubscriptionKind,
         subject_id: UUID | None,
         record_filter: RecordSubscriptionFilter | None,
     ) -> tuple[NotificationSubscription | None, int]:
         """Find a stable follow identity, including one disabled since a lost creation response."""
+        account_id = await self._reader_account(context)
         async with self._uow_factory() as uow:
             revision = await uow.notifications.lock_settings(account_id)
             row = await uow.notifications.matching_subscription(
@@ -126,25 +139,33 @@ class NotificationService:
             )
             return row, revision
 
-    async def preferences(self, account_id: int) -> NotificationPreferences:
+    @application_operation
+    async def preferences(self, *, context: ActingContext) -> NotificationPreferences:
         """Return preferences, including an implicit disabled profile when absent."""
+        account_id = await self._reader_account(context)
         async with self._uow_factory() as uow:
             return await uow.notifications.get_preferences(account_id)
 
-    async def subscriptions(self, account_id: int) -> Sequence[NotificationSubscription]:
+    @application_operation
+    async def subscriptions(self, *, context: ActingContext) -> Sequence[NotificationSubscription]:
         """List the caller's enabled subscriptions."""
+        account_id = await self._reader_account(context)
         async with self._uow_factory() as uow:
             return await uow.notifications.list_subscriptions(account_id)
 
+    @application_operation
     async def inbox(
         self,
-        account_id: int,
         *,
+        context: ActingContext,
         selector: PageSelector = FIRST_PAGE,
         page_size: int = 20,
-        visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY,
     ) -> Page[InboxNotification]:
         """Return one page of web-visible inbox items in newest-first display order."""
+        account_id = await self._reader_account(context)
+        visibility = InboxVisibility(
+            include_staff=(await self._permissions.check(context.effective, BUILD_SUBMISSION_VIEW_PENDING)).allowed
+        )
         async with self._uow_factory() as uow:
             if not 1 <= page_size <= 100:
                 msg = tr(t"notifications-page-size = page_size must be between 1 and 100")
@@ -167,7 +188,8 @@ class NotificationService:
                 id_of=lambda item: item.id,
             )
 
-    async def materialize(self, event: DomainEvent) -> None:
+    @application_operation
+    async def materialize(self, event: DomainEvent, *, context: ActingContext) -> None:
         """Create eligible recipients' stored notifications and queue their DMs.
 
         Existing source keys are reused when the event is delivered again.
@@ -176,56 +198,67 @@ class NotificationService:
             await uow.notifications.materialize(event)
             await uow.commit()
 
-    async def cleanup(self) -> int:
+    async def cleanup(self, *, context: ActingContext) -> int:
         """Remove expired inbox items and return their count.
 
         Old source events are also removed when no inbox item or event-delivery
         record still references them.
         """
-        retention_days = (
-            (await self._runtime_settings()).notification_retention_days
-            if self._runtime_settings is not None
-            else self._retention_days
-        )
-        async with self._uow_factory() as uow:
-            result = await uow.notifications.cleanup(retention_days=retention_days)
-            await uow.commit()
-            return result
+        with worker_scope(context):
+            retention_days = (
+                (await self._runtime_settings()).notification_retention_days
+                if self._runtime_settings is not None
+                else self._retention_days
+            )
+            async with self._uow_factory() as uow:
+                result = await uow.notifications.cleanup(retention_days=retention_days)
+                await uow.commit()
+                return result
 
-    async def claim_deliveries(self, *, limit: int = 20) -> Sequence[PendingNotificationDelivery]:
+    async def claim_deliveries(
+        self, *, context: ActingContext, limit: int = 20
+    ) -> Sequence[PendingNotificationDelivery]:
         """Reserve ready Discord DMs and commit their claim tokens before returning."""
-        async with self._uow_factory() as uow:
-            if not 1 <= limit <= 100:
-                msg = tr(t"notifications-delivery-claim-limit = delivery claim limit must be between 1 and 100")
-                raise InvalidStateError(msg)
-            result = await uow.notifications.claim_deliveries(limit=limit)
-            await uow.commit()
-            return result
+        with worker_scope(context):
+            async with self._uow_factory() as uow:
+                if not 1 <= limit <= 100:
+                    msg = tr(t"notifications-delivery-claim-limit = delivery claim limit must be between 1 and 100")
+                    raise InvalidStateError(msg)
+                result = await uow.notifications.claim_deliveries(limit=limit)
+                await uow.commit()
+                return result
 
-    async def complete_delivery(self, delivery: PendingNotificationDelivery) -> bool:
+    async def complete_delivery(self, delivery: PendingNotificationDelivery, *, context: ActingContext) -> bool:
         """Mark a DM sent only while this claim still owns its generation."""
-        async with self._uow_factory() as uow:
-            result = await uow.notifications.complete_delivery(delivery)
-            await uow.commit()
-            return result
+        with worker_scope(context):
+            async with self._uow_factory() as uow:
+                result = await uow.notifications.complete_delivery(delivery)
+                await uow.commit()
+                return result
 
-    async def fail_delivery(self, delivery: PendingNotificationDelivery, error: Exception) -> bool:
+    async def fail_delivery(
+        self, delivery: PendingNotificationDelivery, error: Exception, *, context: ActingContext
+    ) -> bool:
         """Retry a failed send, or stop after eight attempts; return whether it became dead.
 
         Stale claims do nothing and return False. A timeout may occur after Discord
         accepted the message, so retrying can produce a duplicate.
         """
-        async with self._uow_factory() as uow:
-            result = await uow.notifications.fail_delivery(delivery, str(error)[:4000], max_attempts=8)
-            await uow.commit()
-            return result
+        with worker_scope(context):
+            async with self._uow_factory() as uow:
+                result = await uow.notifications.fail_delivery(delivery, str(error)[:4000], max_attempts=8)
+                await uow.commit()
+                return result
 
-    async def suspend_dm(self, delivery: PendingNotificationDelivery, error: Exception) -> bool:
+    async def suspend_dm(
+        self, delivery: PendingNotificationDelivery, error: Exception, *, context: ActingContext
+    ) -> bool:
         """Disable DMs after Discord rejects a send, returning False if its claim is stale."""
-        async with self._uow_factory() as uow:
-            result = await uow.notifications.suspend_dm(delivery, str(error)[:4000])
-            await uow.commit()
-            return result
+        with worker_scope(context):
+            async with self._uow_factory() as uow:
+                result = await uow.notifications.suspend_dm(delivery, str(error)[:4000])
+                await uow.commit()
+                return result
 
 
 __all__ = ["NotificationRepository", "NotificationService"]

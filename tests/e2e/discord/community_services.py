@@ -36,7 +36,7 @@ from tests.support.settings import RuntimeSettingsStub
 
 class CommunitySettings(RuntimeSettingsStub):
     @override
-    async def get_locale(self, server_id: int) -> str | None:
+    async def get_locale(self, server_id: int, *, context: ActingContext) -> str | None:
         return None
 
 
@@ -45,7 +45,7 @@ class EmptyDomainEvents(DomainEventService):
         pass
 
     @override
-    async def claim(self, consumer: str, limit: int = 20) -> Sequence[DomainEventDelivery]:
+    async def claim(self, consumer: str, limit: int = 20, *, context: ActingContext) -> Sequence[DomainEventDelivery]:
         return ()
 
 
@@ -130,13 +130,16 @@ class VotePosts(PostService):
         resource_key: str,
         surface: Surface,
         applied_revision: int,
+        context: ActingContext,
     ) -> None:
         assert resource_kind == "vote_session"
         assert surface == "vote_card"
         self.cards[resource_key] = channel_id, message_id
 
     @override
-    async def pending_generation(self, resource_kind: ResourceKind, resource_key: str) -> int | None:
+    async def pending_generation(
+        self, resource_kind: ResourceKind, resource_key: str, *, context: ActingContext
+    ) -> int | None:
         return None
 
 
@@ -145,7 +148,7 @@ class ObservedMessages(MessageService):
         self.observed: list[MessageSnapshot] = []
 
     @override
-    async def observe(self, snapshot: MessageSnapshot) -> None:
+    async def observe(self, snapshot: MessageSnapshot, *, context: ActingContext) -> None:
         self.observed.append(snapshot)
 
 
@@ -154,11 +157,11 @@ class Boards(StarboardService):
         self.boards: dict[int, tuple[StarboardConfig, ...]] = {}
 
     @override
-    async def list_for_guild(self, guild_id: int) -> tuple[StarboardConfig, ...]:
+    async def list_for_guild(self, guild_id: int, *, context: ActingContext) -> tuple[StarboardConfig, ...]:
         return self.boards[guild_id]
 
     @override
-    async def snapshot(self, starboard_id: int) -> StarboardSnapshot:
+    async def snapshot(self, starboard_id: int, *, context: ActingContext) -> StarboardSnapshot:
         (board,) = (board for boards in self.boards.values() for board in boards if board.id == starboard_id)
         return StarboardSnapshot.capture(board, {})
 
@@ -188,7 +191,7 @@ class PublishedTags(TagService):
         pass
 
     @override
-    async def public_definitions(self) -> Sequence[TagDefinition]:
+    async def public_definitions(self, *, context: ActingContext) -> Sequence[TagDefinition]:
         return (
             TagDefinition(
                 id=4,

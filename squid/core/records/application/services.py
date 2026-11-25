@@ -66,7 +66,7 @@ from squid.core.records.domain.models import DOOR_TIMING_METHODS, EXTENDER_TIMIN
 from squid.core.records.domain.resolution import resolve_record
 from squid.core.records.errors import NoMatchingRecordCategoryError, RecordDefinitionNotFoundError
 from squid.core.unit_of_work import UnitOfWorkFactory
-from squid.core.worker_context import worker_execution
+from squid.core.worker_context import worker_execution, worker_scope
 from squid_i18n import md_tr
 
 
@@ -267,55 +267,53 @@ class RecordComputationService:
         )
 
     async def process_queue(
-        self,
-        *,
-        current_version_id: int | None = None,
-        limit: int = 20,
+        self, *, context: ActingContext, current_version_id: int | None = None, limit: int = 20
     ) -> QueueProcessSummary:
         """Process each claimed scope independently; publication also acknowledges it.
 
         Failed scopes back off while other due kinds continue. New source changes
         replace the claim token and therefore survive the atomic acknowledgement.
         """
-        kinds: list[BuildKind] = []
-        summaries: list[RebuildSummary] = []
-        failures: list[Exception] = []
-        for _ in range(limit):
-            async with self._uow_factory() as uow:
-                lease = await uow.records.claim_recompute_kinds(limit=1)
-                version_id = (
-                    current_version_id
-                    if current_version_id is not None
-                    else await uow.records.active_current_version_id()
+        with worker_scope(context):
+            kinds: list[BuildKind] = []
+            summaries: list[RebuildSummary] = []
+            failures: list[Exception] = []
+            for _ in range(limit):
+                async with self._uow_factory() as uow:
+                    lease = await uow.records.claim_recompute_kinds(limit=1)
+                    version_id = (
+                        current_version_id
+                        if current_version_id is not None
+                        else await uow.records.active_current_version_id()
+                    )
+                    await uow.commit()
+                if not lease:
+                    break
+                # Recompute claims one queue item per iteration.
+                with worker_execution("record-maintenance", next(iter(lease.claim_tokens), None)):
+                    try:
+                        summary = await self._rebuild(current_version_id=version_id, kinds=lease.kinds, lease=lease)
+                    except Exception as error:
+                        async with self._uow_factory() as uow:
+                            await uow.records.fail_recompute(lease, str(error))
+                            await uow.commit()
+                        failures.append(error)
+                        continue
+                    kinds.extend(lease.kinds)
+                    summaries.append(summary)
+            if failures:
+                raise failures[0]
+            return QueueProcessSummary(
+                kinds=tuple(dict.fromkeys(kinds)),
+                rebuild=RebuildSummary(
+                    run_ids=tuple(run_id for summary in summaries for run_id in summary.run_ids),
+                    definitions=sum(summary.definitions for summary in summaries),
+                    resolved=sum(summary.resolved for summary in summaries),
+                    unresolved=sum(summary.unresolved for summary in summaries),
                 )
-                await uow.commit()
-            if not lease:
-                break
-            # Recompute claims one queue item per iteration.
-            with worker_execution("record-maintenance", next(iter(lease.claim_tokens), None)):
-                try:
-                    summary = await self._rebuild(current_version_id=version_id, kinds=lease.kinds, lease=lease)
-                except Exception as error:
-                    async with self._uow_factory() as uow:
-                        await uow.records.fail_recompute(lease, str(error))
-                        await uow.commit()
-                    failures.append(error)
-                    continue
-                kinds.extend(lease.kinds)
-                summaries.append(summary)
-        if failures:
-            raise failures[0]
-        return QueueProcessSummary(
-            kinds=tuple(dict.fromkeys(kinds)),
-            rebuild=RebuildSummary(
-                run_ids=tuple(run_id for summary in summaries for run_id in summary.run_ids),
-                definitions=sum(summary.definitions for summary in summaries),
-                resolved=sum(summary.resolved for summary in summaries),
-                unresolved=sum(summary.unresolved for summary in summaries),
+                if summaries
+                else None,
             )
-            if summaries
-            else None,
-        )
 
     def _eager_categories(
         self,

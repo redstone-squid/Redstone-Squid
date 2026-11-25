@@ -7,6 +7,7 @@ from whenever import Instant
 
 from squid.bot.app import RedstoneSquid
 from squid.bot.events.cog import CONSUMER, DELIVERY_REQUIRED_EVENTS, DomainEventCog
+from squid.core.actors import ActingContext
 from squid.core.events import DomainEvent, DomainEventDelivery, DomainEventService, UnsupportedEventVersionError
 from squid.core.events.dispatcher import DomainEventRunner
 from tests.support.discord import make_layout_bot
@@ -34,24 +35,24 @@ class EventServiceRecorder(DomainEventService):
     rejected: list[tuple[DomainEventDelivery, Exception]] = field(default_factory=list)
 
     @override
-    async def claim(self, consumer: str, limit: int = 20) -> tuple[DomainEventDelivery, ...]:
+    async def claim(self, consumer: str, limit: int = 20, *, context: ActingContext) -> tuple[DomainEventDelivery, ...]:
         assert consumer == CONSUMER
         deliveries = tuple(self.pending[:limit])
         del self.pending[:limit]
         return deliveries
 
     @override
-    async def complete(self, delivery: DomainEventDelivery) -> bool:
+    async def complete(self, delivery: DomainEventDelivery, *, context: ActingContext) -> bool:
         self.completed.append(delivery)
         return True
 
     @override
-    async def fail(self, delivery: DomainEventDelivery, error: Exception) -> bool:
+    async def fail(self, delivery: DomainEventDelivery, error: Exception, *, context: ActingContext) -> bool:
         self.failed.append((delivery, error))
         return False
 
     @override
-    async def reject(self, delivery: DomainEventDelivery, error: Exception) -> bool:
+    async def reject(self, delivery: DomainEventDelivery, error: Exception, *, context: ActingContext) -> bool:
         self.rejected.append((delivery, error))
         return True
 
@@ -78,7 +79,7 @@ async def test_a_handled_event_is_acknowledged() -> None:
     runner, events = _runner(handler)
     delivery = _delivery()
 
-    await runner.process(delivery)
+    await runner.process(delivery, context=ActingContext.worker("test-worker"))
 
     assert handler.events == [delivery.event]
     assert events.completed == [delivery]
@@ -90,7 +91,7 @@ async def test_an_unhandled_event_type_is_acknowledged_rather_than_retried() -> 
     runner, events = _runner()
     delivery = _delivery("vote_session.closed")
 
-    await runner.process(delivery)
+    await runner.process(delivery, context=ActingContext.worker("test-worker"))
 
     assert events.completed == [delivery]
     assert events.failed == []
@@ -100,7 +101,7 @@ async def test_missing_submission_delivery_handler_is_not_acknowledged() -> None
     runner, events = _runner()
     delivery = _delivery("build.submitted")
 
-    await runner.process(delivery)
+    await runner.process(delivery, context=ActingContext.worker("test-worker"))
 
     assert len(events.failed) == 1
     assert events.failed[0][0] == delivery
@@ -112,7 +113,7 @@ async def test_a_failing_handler_is_retried_and_not_acknowledged() -> None:
     runner, events = _runner(handler)
     delivery = _delivery()
 
-    await runner.process(delivery)
+    await runner.process(delivery, context=ActingContext.worker("test-worker"))
 
     assert len(events.failed) == 1
     assert events.completed == []
@@ -123,7 +124,7 @@ async def test_an_unsupported_event_version_is_rejected() -> None:
     runner, events = _runner(handler)
     delivery = _delivery(schema_version=99)
 
-    await runner.process(delivery)
+    await runner.process(delivery, context=ActingContext.worker("test-worker"))
 
     assert len(events.rejected) == 1
     assert events.failed == []
@@ -135,7 +136,7 @@ async def test_every_handler_for_one_event_type_runs() -> None:
     runner, events = _runner(first, second)
     delivery = _delivery()
 
-    await runner.process(delivery)
+    await runner.process(delivery, context=ActingContext.worker("test-worker"))
 
     assert first.events == [delivery.event]
     assert second.events == [delivery.event]
@@ -147,7 +148,7 @@ async def test_a_failing_handler_stops_the_ones_after_it_and_retries_the_deliver
     failing, later = HandlerRecorder(RuntimeError("boom")), HandlerRecorder()
     runner, events = _runner(failing, later)
 
-    await runner.process(_delivery())
+    await runner.process(_delivery(), context=ActingContext.worker("test-worker"))
 
     assert later.events == []
     assert len(events.failed) == 1

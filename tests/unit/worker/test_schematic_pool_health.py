@@ -24,7 +24,7 @@ async def test_pool_reports_idle_in_flight_and_waiting_counts(mocker: MockerFixt
     assert recorded["squid.schematic.pool.breaker_open"] == 0
 
 
-async def test_worker_samples_pool_health_only_when_a_pool_exists() -> None:
+async def test_worker_samples_pool_health_only_when_a_pool_exists(mocker: MockerFixture) -> None:
     supervisor = SupervisorRecorder()
     pool = SchematicWorkerPool(SchematicConfig(workers=1))
     worker = make_worker(
@@ -38,7 +38,9 @@ async def test_worker_samples_pool_health_only_when_a_pool_exists() -> None:
 
     health_job = supervisor.job("schematic-pool-health")
     assert health_job.interval == 11
-    assert health_job.operation == pool.record_health
+    gauge = mocker.patch.object(worker_module, "record_gauge")
+    await health_job.operation()
+    gauge.assert_any_call("squid.schematic.pool.idle_workers", 1)
 
 
 async def test_worker_skips_pool_health_without_the_native_pool() -> None:

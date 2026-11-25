@@ -35,6 +35,7 @@ from squid.core.submissions.errors import (
 )
 from squid.core.unit_of_work import UnitOfWorkFactory
 from squid.core.validation import FieldErrorCode, SimpleIssue
+from squid.core.worker_context import worker_scope
 from squid_i18n import md_tr
 
 DEFAULT_DRAFT_RETENTION_DAYS = 7
@@ -439,15 +440,16 @@ class SubmissionDraftService:
                 raise DraftNotFoundError(draft_id)
             await uow.commit()
 
-    async def expire_due(self, *, limit: int = 100, now: Instant | None = None) -> int:
+    async def expire_due(self, *, context: ActingContext, limit: int = 100, now: Instant | None = None) -> int:
         """Expire one bounded batch using the same authoritative service clock."""
-        async with self._uow_factory() as uow:
-            if not 1 <= limit <= 1_000:
-                msg = tr(t"submissions-draft-expiry-limit = draft expiry limit must be between 1 and 1000")
-                raise InvalidStateError(msg)
-            result = await uow.submission_drafts.expire_due(now=now or self._now(), limit=limit)
-            await uow.commit()
-            return result
+        with worker_scope(context):
+            async with self._uow_factory() as uow:
+                if not 1 <= limit <= 1_000:
+                    msg = tr(t"submissions-draft-expiry-limit = draft expiry limit must be between 1 and 1000")
+                    raise InvalidStateError(msg)
+                result = await uow.submission_drafts.expire_due(now=now or self._now(), limit=limit)
+                await uow.commit()
+                return result
 
     async def apply_change(
         self,

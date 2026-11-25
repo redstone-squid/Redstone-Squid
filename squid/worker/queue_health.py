@@ -10,6 +10,7 @@ from typing import Any
 from sqlalchemy import Select, extract, func, literal, select, union_all
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from squid.core.actors import ActingContext
 from squid.core.events.infrastructure.repository import DOMAIN_EVENT_DELIVERY_SPEC
 from squid.core.observability import record_gauge
 from squid.core.persistence.queue import VISIBILITY_TIMEOUT, ClaimedRowQueue, QueueSpec
@@ -20,6 +21,7 @@ from squid.core.schematics.infrastructure.render_jobs import SCHEMATIC_RENDER_QU
 from squid.core.search.infrastructure.embeddings import SEARCH_EMBEDDING_QUEUE_SPEC
 from squid.core.search.infrastructure.projection import SEARCH_PROJECTION_QUEUE_SPEC
 from squid.core.sync.infrastructure.repository import DISCORD_SYNC_QUEUE_SPEC
+from squid.core.worker_context import worker_scope
 
 VISIBILITY_TIMEOUT_SECONDS = int(VISIBILITY_TIMEOUT.total_seconds())
 
@@ -102,19 +104,20 @@ class PostgresQueueHealthMonitor:
     def __init__(self, session_factory: async_sessionmaker[AsyncSession]) -> None:
         self._session_factory = session_factory
 
-    async def record(self) -> None:
-        async with self._session_factory() as session:
-            rows = (await session.execute(QUEUE_HEALTH_STATEMENT)).mappings().all()
-        for row in rows:
-            emit_queue_health(
-                QueueHealthSnapshot(
-                    queue=str(row["queue"]),
-                    ready=int(row["ready"]),
-                    in_flight=int(row["in_flight"]),
-                    dead_letters=int(row["dead_letters"]),
-                    oldest_ready_age=float(row["oldest_ready_age"] or 0.0),
+    async def record(self, *, context: ActingContext) -> None:
+        with worker_scope(context):
+            async with self._session_factory() as session:
+                rows = (await session.execute(QUEUE_HEALTH_STATEMENT)).mappings().all()
+            for row in rows:
+                emit_queue_health(
+                    QueueHealthSnapshot(
+                        queue=str(row["queue"]),
+                        ready=int(row["ready"]),
+                        in_flight=int(row["in_flight"]),
+                        dead_letters=int(row["dead_letters"]),
+                        oldest_ready_age=float(row["oldest_ready_age"] or 0.0),
+                    )
                 )
-            )
 
 
 def emit_queue_health(snapshot: QueueHealthSnapshot) -> None:

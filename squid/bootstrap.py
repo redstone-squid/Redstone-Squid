@@ -32,6 +32,7 @@ from squid.core.accounts.application.edits import (
 )
 from squid.core.accounts.application.services import generate_verification_code
 from squid.core.accounts.infrastructure.mojang import MojangClient
+from squid.core.actors import ActingContext
 from squid.core.artifacts import ArtifactStore
 from squid.core.artifacts.infrastructure import create_artifact_store
 from squid.core.auth.application import ApiKeyService
@@ -324,6 +325,7 @@ class _ServiceGraph:
     @cached_property
     def notifications(self) -> NotificationService:
         return NotificationService(
+            permissions=self.permissions,
             uow_factory=self.uow_factory,
             runtime_settings=self.settings.get_runtime,
         )
@@ -757,8 +759,8 @@ def create_worker_services(
     graph = _ServiceGraph(db, config, resources_stack)
     idempotency = IdempotencyService(uow_factory=graph.uow_factory)
 
-    async def purge_mutation_outcomes() -> int:
-        removed = await idempotency.purge_expired()
+    async def purge_mutation_outcomes(*, context: ActingContext) -> int:
+        removed = await idempotency.purge_expired(context=context)
         async with graph.uow_factory() as uow:
             await uow.edits.purge_expired(now=Instant.now())
             await uow.commit()

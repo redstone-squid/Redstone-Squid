@@ -48,8 +48,7 @@ async def test_worker_effect_traces_to_impersonated_request_after_acknowledgemen
     runner = DomainEventRunner(
         DomainEventService(uow_factory=factory), "audit_test", {"test.cause": (publish_followup,)}
     )
-    with ActingContext.worker("dispatcher").scope():
-        await runner.process_batch()
+    await runner.process_batch(context=ActingContext.worker("dispatcher"))
 
     async with migrated_session_factory() as session:
         (effect,) = (
@@ -67,6 +66,7 @@ async def test_worker_effect_traces_to_impersonated_request_after_acknowledgemen
         assert history[0]["effective"] == "account:34"
         assert history[0]["invocation_id"] == context.invocation_id
         assert history[0]["impersonation_session_id"] == context.session_id
+        assert history[1]["operator"] == "worker:dispatcher"
         assert history[1]["acquired_claim"] == history[2]["parent_claim"]
         assert history[1]["invocation_id"] != effect.invocation_id
         assert history[2]["impersonation_session_id"] is None

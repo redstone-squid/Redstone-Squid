@@ -19,7 +19,7 @@ from squid.core.records.application.range_snapshots import RangePublication, Ran
 from squid.core.records.application.services import RecordComputationService
 from squid.core.records.domain.regions import DEFAULT_REGION_LIMITS, RegionAnalysisStatus
 from squid.core.unit_of_work import UnitOfWorkFactory
-from squid.core.worker_context import worker_execution
+from squid.core.worker_context import worker_execution, worker_scope
 
 logger = logging.getLogger(__name__)
 
@@ -75,41 +75,42 @@ class RangePublicationService:
         publication = await self.get(query_id)
         return None if publication is None else PublishedDoorPoint.from_publication(publication, width)
 
-    async def process_queue(self, *, limit: int = 20) -> tuple[int, int]:
+    async def process_queue(self, *, context: ActingContext, limit: int = 20) -> tuple[int, int]:
         """Attempt due ranges independently, retaining failed work for retry."""
         # Revision activation may enqueue every range. Do it before claiming,
         # so initial activation cannot invalidate the claim we are about to use.
-        async with self._uow_factory() as uow:
-            await uow.records.active_rules_revision_id()
-            await uow.commit()
-        succeeded = failed = 0
-        for _ in range(limit):
+        with worker_scope(context):
             async with self._uow_factory() as uow:
-                claim = await uow.record_ranges.claim_refresh()
+                await uow.records.active_rules_revision_id()
                 await uow.commit()
-            if claim is None:
-                break
-            with worker_execution("record-ranges", claim.token):
-                error: str | None = None
-                try:
-                    publication = await self.publish(claim.query)
-                    latest = publication.latest
-                    if latest is None or latest.error is not None:
-                        error = latest.error if latest is not None else "missing_attempt"
-                    elif latest.result is None or latest.result.analysis.status is not RegionAnalysisStatus.EXACT:
-                        error = "inexact_analysis" if latest.result is None else latest.result.analysis.status.value
-                except Exception as exc:
-                    logger.exception("Range query %s failed to refresh", claim.query_id)
-                    error = type(exc).__name__
+            succeeded = failed = 0
+            for _ in range(limit):
                 async with self._uow_factory() as uow:
-                    if error is None:
-                        await uow.record_ranges.complete_refresh(claim)
-                        succeeded += 1
-                    else:
-                        await uow.record_ranges.fail_refresh(claim, error)
-                        failed += 1
+                    claim = await uow.record_ranges.claim_refresh()
                     await uow.commit()
-        return succeeded, failed
+                if claim is None:
+                    break
+                with worker_execution("record-ranges", claim.token):
+                    error: str | None = None
+                    try:
+                        publication = await self.publish(claim.query)
+                        latest = publication.latest
+                        if latest is None or latest.error is not None:
+                            error = latest.error if latest is not None else "missing_attempt"
+                        elif latest.result is None or latest.result.analysis.status is not RegionAnalysisStatus.EXACT:
+                            error = "inexact_analysis" if latest.result is None else latest.result.analysis.status.value
+                    except Exception as exc:
+                        logger.exception("Range query %s failed to refresh", claim.query_id)
+                        error = type(exc).__name__
+                    async with self._uow_factory() as uow:
+                        if error is None:
+                            await uow.record_ranges.complete_refresh(claim)
+                            succeeded += 1
+                        else:
+                            await uow.record_ranges.fail_refresh(claim, error)
+                            failed += 1
+                        await uow.commit()
+            return succeeded, failed
 
     async def publish(self, query: DoorRangeQuery) -> RangePublication:
         """Capture and compute a fresh attempt, returning active and latest outcomes."""

@@ -9,6 +9,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.accounts.models import Account
+from squid.core.actors import ActingContext
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import DoorBuild
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
@@ -120,7 +121,7 @@ async def test_source_edit_during_computation_survives_atomic_acknowledgement(
             return await super()._compute_snapshot(snapshot)
 
     computation = EditingComputation(uow_factory=factory)
-    await computation.process_queue(limit=1)
+    await computation.process_queue(limit=1, context=ActingContext.worker("test-worker"))
     async with sessions() as session:
         pending = (
             await session.scalars(
@@ -145,7 +146,7 @@ async def test_source_edit_during_computation_survives_atomic_acknowledgement(
         assert records
         assert all(record.refresh_pending for record in records)
 
-    await computation.process_queue()
+    await computation.process_queue(context=ActingContext.worker("test-worker"))
     async with factory() as uow:
         records = await uow.records.list_published_records(
             offset=0, after_id=None, before_id=None, descending=False, limit=100

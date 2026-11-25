@@ -5,6 +5,7 @@ from typing import Protocol
 
 from whenever import Instant
 
+from squid.core.actors import ActingContext
 from squid.core.errors import InvalidStateError
 from squid.core.i18n import tr
 from squid.core.idempotency.domain import (
@@ -18,6 +19,7 @@ from squid.core.idempotency.domain import (
 )
 from squid.core.replay import REPLAY_RETENTION_HOURS
 from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
+from squid.core.worker_context import worker_scope
 
 
 class IdempotencyRepository(Protocol):
@@ -116,12 +118,13 @@ class IdempotencyService:
             await uow.commit()
             return stored
 
-    async def purge_expired(self) -> int:
+    async def purge_expired(self, *, context: ActingContext) -> int:
         """Remove expired reservations and responses, returning the number deleted."""
-        async with self._uow_factory() as uow:
-            result = await uow.idempotency.purge_expired(now=self._now())
-            await uow.commit()
-            return result
+        with worker_scope(context):
+            async with self._uow_factory() as uow:
+                result = await uow.idempotency.purge_expired(now=self._now())
+                await uow.commit()
+                return result
 
     @staticmethod
     def _validate_existing(existing: ExistingRequest, fingerprint: bytes) -> None:

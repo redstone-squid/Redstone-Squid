@@ -7,7 +7,7 @@ import pytest
 from pydantic import JsonValue
 
 from squid.core.accounts.errors import ConsentRequiredError
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.edits.domain import EditCommand, EditValues, Revision
 from squid.core.notifications import NotificationPreferences, NotificationService
 from squid.core.notifications.application import NotificationRepository
@@ -82,10 +82,11 @@ async def test_cleanup_reads_retention_each_time() -> None:
     repository = Repository()
     settings = RuntimeSettingsStub()
     service = NotificationService(
+        permissions=AsyncMock(spec=PermissionService),
         uow_factory=lambda: NotificationUnitOfWork(cast(NotificationRepository, repository)),
         runtime_settings=settings.get_runtime,
     )
-    assert await service.cleanup() == 1
+    assert await service.cleanup(context=ActingContext.worker("test-worker")) == 1
     settings.value = RuntimeSettings(notification_retention_days=7)
-    assert await service.cleanup() == 1
+    assert await service.cleanup(context=ActingContext.worker("test-worker")) == 1
     assert repository.days == [90, 7]

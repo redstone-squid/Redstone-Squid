@@ -85,13 +85,13 @@ async def test_original_upload_reaches_build_and_preview_queue(
 
         async def pump() -> None:
             while True:
-                await runner.process_batch()
+                await runner.process_batch(context=ActingContext.worker("test-worker"))
                 await anyio.sleep(0.01)
 
         with anyio.fail_after(20):
             async with anyio.create_task_group() as tasks:
                 tasks.start_soon(pump)
-                await uploads.process_pending()
+                await uploads.process_pending(context=ActingContext.worker("test-worker"))
                 tasks.cancel_scope.cancel()
     ready = await uploads.read_for_draft(draft.snapshot.id)
     assert ready.artifact_id == source.id
@@ -194,7 +194,7 @@ async def test_processing_rejects_invalid_files_but_retries_infrastructure_failu
         filename="source.schem",
         data=b"original bytes",
     )
-    await uploads.process_pending()
+    await uploads.process_pending(context=ActingContext.worker("test-worker"))
     state = (await uploads.list(draft.snapshot.id, context=ActingContext.for_actor(Actor(account_id=owner))))[0].state
     assert state is (DraftSchematicState.REJECTED if invalid else DraftSchematicState.PENDING)
     async with sessions() as session:
@@ -202,7 +202,7 @@ async def test_processing_rejects_invalid_files_but_retries_infrastructure_failu
         assert stored is not None
         assert stored.last_error
     ingestor.failure = None
-    await uploads.process_pending()
+    await uploads.process_pending(context=ActingContext.worker("test-worker"))
     assert ingestor.calls == (1 if invalid else 2)
     ready = await uploads.read_for_draft(draft.snapshot.id)
     assert ready.state is (SchematicArtifactState.REJECTED if invalid else SchematicArtifactState.READY)
@@ -229,7 +229,7 @@ async def test_late_analysis_cannot_resurrect_a_deleted_source(
     async with sessions.begin() as session:
         await session.execute(update(SubmissionDraft).values(status=DraftStatus.EXPIRED))
         await session.execute(update(DraftSchematicSource).values(updated_at=Instant.now().subtract(minutes=10)))
-    await uploads.cleanup()
+    await uploads.cleanup(context=ActingContext.worker("test-worker"))
     source_sha256 = source.sha256
     assert source_sha256 is not None
     await transact(

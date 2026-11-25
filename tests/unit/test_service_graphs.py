@@ -4,6 +4,7 @@ from typing import override
 
 import pytest
 
+from squid.core.actors import ActingContext
 from squid.core.diagnostics.application import ErrorReportService
 from squid.runtime import BotServices, WorkerServices
 from tests.support.services import bot_services, is_configured, worker_services
@@ -71,7 +72,7 @@ def test_using_an_unconfigured_service_fails_naming_it() -> None:
 
 async def test_an_unconfigured_maintenance_job_fails_when_run() -> None:
     with pytest.raises(AssertionError, match="did not configure this worker maintenance job"):
-        await worker_services().purge_idempotency()
+        await worker_services().purge_idempotency(context=ActingContext.worker("test-worker"))
 
 
 def test_an_unconfigured_service_still_answers_isinstance() -> None:

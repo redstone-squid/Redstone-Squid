@@ -27,6 +27,7 @@ from whenever import Instant
 
 from squid.core.accounts.infrastructure.attribution import attributed_credits, public_creator_ids
 from squid.core.accounts.models import CreatorAlias
+from squid.core.actors import ActingContext
 from squid.core.builds.domain.titles import format_build_category
 from squid.core.builds.errors import InvalidBuildError
 from squid.core.builds.infrastructure.loading import BuildLoader
@@ -62,7 +63,7 @@ from squid.core.tags.infrastructure.loading import assignment_units
 from squid.core.tags.models import TagAlias, TagDefinition
 from squid.core.tags.models import TagAssignment as TagAssignment
 from squid.core.versions.models import Version
-from squid.core.worker_context import worker_execution
+from squid.core.worker_context import worker_execution, worker_scope
 
 logger = logging.getLogger(__name__)
 PROJECTION_MAX_ATTEMPTS = 5
@@ -697,78 +698,79 @@ class SearchProjectionWorker:
         self._store = SearchProjectionRepository(session)
         self._loader = SearchProjectionLoader(session)
 
-    async def process_batch(self, *, limit: int = 50) -> tuple[int, int]:
+    async def process_batch(self, *, context: ActingContext, limit: int = 50) -> tuple[int, int]:
         """Process queue items and return successful and failed counts."""
-        succeeded = 0
-        failed = 0
-        for item in await self._store.claim(limit=limit):
-            # Keep plain values for retry handling. Rolling back the savepoint can
-            # expire ORM attributes, whose later access would require an async reload.
-            item_id = item.id
-            token = self._store.token_of(item)
-            attempts = item.attempts
-            resource_kind = item.resource_kind
-            source_key = item.source_key
-            with worker_execution("search-projections", token):
-                await bind_work_attribution(self._session)
-                try:
-                    async with self._session.begin_nested():
-                        if item.action == "delete":
-                            await self._store.delete_document(resource_kind, source_key)
-                        else:
-                            projection = await self._loader.load(resource_kind, source_key)
-                            if projection is None:
+        with worker_scope(context):
+            succeeded = 0
+            failed = 0
+            for item in await self._store.claim(limit=limit):
+                # Keep plain values for retry handling. Rolling back the savepoint can
+                # expire ORM attributes, whose later access would require an async reload.
+                item_id = item.id
+                token = self._store.token_of(item)
+                attempts = item.attempts
+                resource_kind = item.resource_kind
+                source_key = item.source_key
+                with worker_execution("search-projections", token):
+                    await bind_work_attribution(self._session)
+                    try:
+                        async with self._session.begin_nested():
+                            if item.action == "delete":
                                 await self._store.delete_document(resource_kind, source_key)
                             else:
-                                await self._store.replace(projection)
-                        if resource_kind == "build" and source_key.isdecimal():
-                            await self._session.execute(
-                                select(
-                                    func.upsert_search_projection_request(
-                                        "record", func.concat("result:", RecordResult.id), "upsert"
-                                    )
-                                )
-                                .select_from(RecordResult)
-                                .join(RecordHolder, RecordHolder.result_id == RecordResult.id)
-                                .join(ComputationRun, ComputationRun.id == RecordResult.run_id)
-                                .where(RecordHolder.build_id == int(source_key), ComputationRun.is_active.is_(True))
-                                .order_by(RecordResult.id)
-                            )
-                        if resource_kind == "metadata" and (key := parse_projection_key(resource_kind, source_key)):
-                            subtype, tag_id = key
-                            if subtype == "tag":
+                                projection = await self._loader.load(resource_kind, source_key)
+                                if projection is None:
+                                    await self._store.delete_document(resource_kind, source_key)
+                                else:
+                                    await self._store.replace(projection)
+                            if resource_kind == "build" and source_key.isdecimal():
                                 await self._session.execute(
                                     select(
                                         func.upsert_search_projection_request(
-                                            "record", SearchDocument.source_key, "upsert"
+                                            "record", func.concat("result:", RecordResult.id), "upsert"
                                         )
                                     )
-                                    .select_from(SearchDocumentFilter)
-                                    .join(SearchDocument, SearchDocument.id == SearchDocumentFilter.document_id)
-                                    .where(
-                                        SearchDocument.resource_kind == "record",
-                                        SearchDocumentFilter.field_name == "category_tag_id",
-                                        SearchDocumentFilter.numeric_value == Decimal(tag_id),
-                                    )
-                                    .order_by(SearchDocument.source_key)
+                                    .select_from(RecordResult)
+                                    .join(RecordHolder, RecordHolder.result_id == RecordResult.id)
+                                    .join(ComputationRun, ComputationRun.id == RecordResult.run_id)
+                                    .where(RecordHolder.build_id == int(source_key), ComputationRun.is_active.is_(True))
+                                    .order_by(RecordResult.id)
                                 )
-                        await self._store.complete(item_id, token)
-                    succeeded += 1
-                except Exception as error:
-                    dead_lettered = await self._store.retry(item_id, token, attempts, error)
-                    if dead_lettered:
-                        logger.exception(
-                            "Dead-lettered a search projection after repeated failures",
-                            extra={
-                                "squid.search.resource_kind": resource_kind,
-                                "squid.search.source_key": source_key,
-                                **work_lost(),
-                            },
-                        )
-                    failed += 1
-        if succeeded or failed:
-            await bind_work_attribution(self._session, reset=True)
-        return succeeded, failed
+                            if resource_kind == "metadata" and (key := parse_projection_key(resource_kind, source_key)):
+                                subtype, tag_id = key
+                                if subtype == "tag":
+                                    await self._session.execute(
+                                        select(
+                                            func.upsert_search_projection_request(
+                                                "record", SearchDocument.source_key, "upsert"
+                                            )
+                                        )
+                                        .select_from(SearchDocumentFilter)
+                                        .join(SearchDocument, SearchDocument.id == SearchDocumentFilter.document_id)
+                                        .where(
+                                            SearchDocument.resource_kind == "record",
+                                            SearchDocumentFilter.field_name == "category_tag_id",
+                                            SearchDocumentFilter.numeric_value == Decimal(tag_id),
+                                        )
+                                        .order_by(SearchDocument.source_key)
+                                    )
+                            await self._store.complete(item_id, token)
+                        succeeded += 1
+                    except Exception as error:
+                        dead_lettered = await self._store.retry(item_id, token, attempts, error)
+                        if dead_lettered:
+                            logger.exception(
+                                "Dead-lettered a search projection after repeated failures",
+                                extra={
+                                    "squid.search.resource_kind": resource_kind,
+                                    "squid.search.source_key": source_key,
+                                    **work_lost(),
+                                },
+                            )
+                        failed += 1
+            if succeeded or failed:
+                await bind_work_attribution(self._session, reset=True)
+            return succeeded, failed
 
 
 class PostgresSearchProjection:
@@ -777,8 +779,9 @@ class PostgresSearchProjection:
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
 
-    async def process_batch(self, *, limit: int = 50) -> tuple[int, int]:
-        return await SearchProjectionWorker(self._session()).process_batch(limit=limit)
+    async def process_batch(self, *, context: ActingContext, limit: int = 50) -> tuple[int, int]:
+        with worker_scope(context):
+            return await SearchProjectionWorker(self._session()).process_batch(limit=limit, context=context)
 
 
 def parse_projection_key(resource_kind: str, source_key: str) -> tuple[str, int] | None:

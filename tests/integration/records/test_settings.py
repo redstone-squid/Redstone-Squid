@@ -104,7 +104,7 @@ async def test_current_ranges_follow_the_pin_without_changing_fixed_queries(
     assert fixed.active is not None
     assert fixed.active.resolved_version_id == first_id
 
-    await publisher.process_queue()
+    await publisher.process_queue(context=ActingContext.worker("test-worker"))
 
     current = await publisher.get(current.query_id)
     fixed = await publisher.get(fixed.query_id)
@@ -130,7 +130,7 @@ async def test_current_range_without_a_pin_stays_pending(
         DoorRangeQuery(height=3, follow_current_version=True),
         context=ActingContext.direct(Actor(is_bot_owner=True, account_id=7)),
     )
-    assert await publisher.process_queue() == (0, 1)
+    assert await publisher.process_queue(context=ActingContext.worker("test-worker")) == (0, 1)
     publication = await publisher.get(query_id)
     assert publication is not None
     assert publication.active is None

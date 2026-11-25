@@ -17,6 +17,7 @@ from squid.core.permissions.application.ports import PermissionUnitOfWork
 from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 from squid.core.submissions.domain.source_files import SubmissionSourceFile
 from squid.core.unit_of_work import UnitOfWorkFactory
+from squid.core.worker_context import worker_scope
 
 
 @dataclass(frozen=True, slots=True)
@@ -237,16 +238,17 @@ class SubmissionInferenceRuns:
         async with self._uow_factory() as uow:
             return await uow.inference_runs.public_status(run_id)
 
-    async def cleanup(self) -> None:
+    async def cleanup(self, *, context: ActingContext) -> None:
         """Delete expired private images before releasing their retained database inventory."""
-        async with self._uow_factory() as uow:
-            expired = await uow.inference_runs.expired()
-        for run_id, image_count in expired:
-            for index in range(image_count):
-                await self._artifacts.delete(f"submission-inference/{run_id}/{index}")
+        with worker_scope(context):
             async with self._uow_factory() as uow:
-                await uow.inference_runs.delete_expired(run_id)
-                await uow.commit()
+                expired = await uow.inference_runs.expired()
+            for run_id, image_count in expired:
+                for index in range(image_count):
+                    await self._artifacts.delete(f"submission-inference/{run_id}/{index}")
+                async with self._uow_factory() as uow:
+                    await uow.inference_runs.delete_expired(run_id)
+                    await uow.commit()
 
 
 def candidate_id(run_id: UUID, index: int) -> UUID:

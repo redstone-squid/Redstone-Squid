@@ -79,21 +79,21 @@ class EventRecorder(DomainEventService):
         self.rejected: list[tuple[DomainEventDelivery, Exception]] = []
 
     @override
-    async def claim(self, consumer: str, limit: int = 20) -> tuple[DomainEventDelivery, ...]:
+    async def claim(self, consumer: str, limit: int = 20, *, context: ActingContext) -> tuple[DomainEventDelivery, ...]:
         return self.deliveries
 
     @override
-    async def complete(self, delivery: DomainEventDelivery) -> bool:
+    async def complete(self, delivery: DomainEventDelivery, *, context: ActingContext) -> bool:
         self.completed.append(delivery)
         return True
 
     @override
-    async def fail(self, delivery: DomainEventDelivery, error: Exception) -> bool:
+    async def fail(self, delivery: DomainEventDelivery, error: Exception, *, context: ActingContext) -> bool:
         self.failed.append((delivery, error))
         return False
 
     @override
-    async def reject(self, delivery: DomainEventDelivery, error: Exception) -> bool:
+    async def reject(self, delivery: DomainEventDelivery, error: Exception, *, context: ActingContext) -> bool:
         self.rejected.append((delivery, error))
         return True
 
@@ -111,7 +111,7 @@ class NotificationRecorder(NotificationService):
         self.materialized: list[DomainEvent] = []
 
     @override
-    async def materialize(self, event: DomainEvent) -> None:
+    async def materialize(self, event: DomainEvent, *, context: ActingContext) -> None:
         self.materialized.append(event)
 
 
@@ -155,7 +155,7 @@ async def test_core_runner_acknowledges_unhandled_events() -> None:
     events = EventRecorder(delivery)
     runner = DomainEventRunner(events, "core", {})
 
-    await runner.process_batch()
+    await runner.process_batch(context=ActingContext.worker("test-worker"))
 
     assert events.completed == [delivery]
     assert events.failed == []
@@ -167,7 +167,7 @@ async def test_core_runner_retries_handler_failure() -> None:
     handler = FailingHandler(RuntimeError("boom"))
     runner = DomainEventRunner(events, "core", {"vote_session.closed": (handler.handle,)})
 
-    await runner.process_batch()
+    await runner.process_batch(context=ActingContext.worker("test-worker"))
 
     assert len(events.failed) == 1
     assert events.failed[0][0] == delivery
@@ -182,7 +182,7 @@ async def test_core_runner_rejects_unsupported_event_versions_without_retry() ->
     handler = FailingHandler(error)
     runner = DomainEventRunner(events, "core", {"vote_session.closed": (handler.handle,)})
 
-    await runner.process_batch()
+    await runner.process_batch(context=ActingContext.worker("test-worker"))
 
     assert events.rejected == [(delivery, error)]
     assert events.failed == []

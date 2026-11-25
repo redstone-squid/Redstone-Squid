@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import cast, override
 
 from squid.config import WorkerConfig
+from squid.core.actors import ActingContext
 from squid.core.diagnostics.application import ErrorReportService
 from squid.core.events import DomainEventService
 from squid.core.media.application.jobs import MediaStorageCleanup
@@ -49,7 +50,7 @@ class MediaCleanupRecorder(MediaStorageCleanup):
         self.processed = 0
 
     @override
-    async def process_batch(self, *, limit: int = 100) -> None:
+    async def process_batch(self, *, context: ActingContext, limit: int = 100) -> None:
         self.processed += 1
 
 
@@ -63,23 +64,23 @@ class MaintenanceRecorder:
     purge_calls: int = 0
     expiry_calls: int = 0
 
-    async def record_queue_health(self) -> None:
+    async def record_queue_health(self, *, context: ActingContext) -> None:
         self.queue_health_calls += 1
 
-    async def purge_idempotency(self) -> int:
+    async def purge_idempotency(self, *, context: ActingContext) -> int:
         self.purge_calls += 1
         return self.purge_result
 
-    async def process_submission_schematics(self) -> None:
+    async def process_submission_schematics(self, *, context: ActingContext) -> None:
         pass
 
-    async def cleanup_submission_schematics(self) -> None:
+    async def cleanup_submission_schematics(self, *, context: ActingContext) -> None:
         pass
 
-    async def cleanup_submission_inference(self) -> None:
+    async def cleanup_submission_inference(self, *, context: ActingContext) -> None:
         pass
 
-    async def expire_submission_drafts(self) -> int:
+    async def expire_submission_drafts(self, *, context: ActingContext) -> int:
         self.expiry_calls += 1
         return self.expiry_result
 

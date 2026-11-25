@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, override
 from discord.ext.commands import Cog
 
 from squid.bot.events.spec import extension
+from squid.core.actors import ActingContext
 from squid.core.events.dispatcher import DomainEventRunner, EventHandler
 from squid.core.observability import TraceSurface, trace_span
 from squid.runtime import JobHandle
@@ -74,7 +75,7 @@ class DomainEventCog[BotT: squid.bot.app.RedstoneSquid](Cog):
         await self.bot.wait_until_ready()
         with trace_span("squid.background.domain_events", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             async with self._batch_lock:
-                await self._runner.process_batch()
+                await self._runner.process_batch(context=ActingContext.worker("discord-domain-events"))
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:

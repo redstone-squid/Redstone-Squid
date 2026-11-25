@@ -7,7 +7,8 @@ from typing import override
 import pytest
 from whenever import Instant
 
-from squid.core.errors import InvalidStateError
+from squid.core.actors import ActingContext, Actor
+from squid.core.errors import AuthorizationError, InvalidStateError
 from squid.core.events import DomainEvent, DomainEventDelivery, DomainEventRepository, DomainEventService
 from tests.support.delivery_uow import DomainEventUnitOfWork
 
@@ -54,7 +55,7 @@ async def test_service_truncates_failure_and_applies_attempt_ceiling() -> None:
 
     assert (
         await DomainEventService(max_attempts=3, uow_factory=lambda: DomainEventUnitOfWork(repository)).fail(
-            delivery, RuntimeError("x" * 5000)
+            delivery, RuntimeError("x" * 5000), context=ActingContext.worker("test-worker")
         )
         is False
     )
@@ -67,7 +68,7 @@ async def test_service_truncates_permanent_rejection_details() -> None:
 
     assert (
         await DomainEventService(uow_factory=lambda: DomainEventUnitOfWork(repository)).reject(
-            delivery, ValueError("x" * 5000)
+            delivery, ValueError("x" * 5000), context=ActingContext.worker("test-worker")
         )
         is True
     )
@@ -78,15 +79,23 @@ async def test_service_truncates_permanent_rejection_details() -> None:
 async def test_claim_rejects_unsafe_batch_sizes(limit: int) -> None:
     with pytest.raises(InvalidStateError, match="between 1 and 100"):
         await DomainEventService(uow_factory=lambda: DomainEventUnitOfWork(EventRepositoryRecorder())).claim(
-            "discord", limit
+            "discord", limit, context=ActingContext.worker("test-worker")
         )
 
 
 async def test_claim_rejects_an_empty_consumer() -> None:
     with pytest.raises(InvalidStateError, match="non-empty name"):
-        await DomainEventService(uow_factory=lambda: DomainEventUnitOfWork(EventRepositoryRecorder())).claim("")
+        await DomainEventService(uow_factory=lambda: DomainEventUnitOfWork(EventRepositoryRecorder())).claim(
+            "", context=ActingContext.worker("test-worker")
+        )
 
 
 def test_service_rejects_a_non_positive_attempt_ceiling() -> None:
     with pytest.raises(InvalidStateError, match="must be positive"):
         DomainEventService(max_attempts=0, uow_factory=lambda: DomainEventUnitOfWork(EventRepositoryRecorder()))
+
+
+async def test_user_cannot_lease_worker_deliveries() -> None:
+    service = DomainEventService(uow_factory=lambda: DomainEventUnitOfWork(EventRepositoryRecorder()))
+    with pytest.raises(AuthorizationError):
+        await service.claim("discord", context=ActingContext.direct(Actor(account_id=42)))

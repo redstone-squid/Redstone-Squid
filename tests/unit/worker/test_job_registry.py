@@ -6,6 +6,7 @@ from typing import override
 import pytest
 
 from squid.config import WorkerConfig
+from squid.core.actors import ActingContext
 from squid.core.media.application.jobs import MediaProcessingJobRunner
 from squid.worker.app import WorkerJobSpec
 from squid.worker.rendering import SchematicPreviewWorker
@@ -19,7 +20,7 @@ class MediaRunnerRecorder(MediaProcessingJobRunner):
         self.limits: list[int] = []
 
     @override
-    async def process_batch(self, *, limit: int = 8) -> None:
+    async def process_batch(self, *, context: ActingContext, limit: int = 8) -> None:
         self.limits.append(limit)
 
 
@@ -28,7 +29,7 @@ class PreviewCleanupRecorder(SchematicPreviewWorker):
         self.calls = 0
 
     @override
-    async def cleanup(self, *, retention_hours: int = 24, limit: int = 50) -> int:
+    async def cleanup(self, *, context: ActingContext, retention_hours: int = 24, limit: int = 50) -> int:
         self.calls += 1
         return 1
 
@@ -59,10 +60,10 @@ def test_worker_scheduling_and_readiness_derive_from_the_same_registry(media_ena
 
 
 def test_worker_job_specs_are_frozen_values() -> None:
-    async def run() -> None:
+    async def run(*, context: ActingContext) -> None:
         pass
 
-    spec = WorkerJobSpec("example", 1, critical=True, run=run)
+    spec = WorkerJobSpec("example", 1, critical=True, operation=run)
 
     with pytest.raises(FrozenInstanceError):
         spec.name = "changed"  # type: ignore[misc]
@@ -100,7 +101,7 @@ async def test_preview_cleanup_is_registered_with_worker_maintenance() -> None:
 async def test_draft_schematic_processing_runs_independently_of_native_jobs() -> None:
     calls: list[str] = []
 
-    async def process() -> None:
+    async def process(*, context: ActingContext) -> None:
         calls.append("processed")
 
     worker = make_worker(replace(worker_services(), process_submission_schematics=process))

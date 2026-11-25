@@ -87,7 +87,7 @@ from squid.core.versions.application.services import VersionService
 from squid.core.voting.application import VoteService
 from squid.core.voting.application.ports import InteractiveVoteActorResolver
 from squid.core.voting.application.recount import BallotRecounter, VoteCardReactions
-from squid.core.worker_context import worker_execution
+from squid.core.worker_context import WorkerOperation, worker_execution
 from squid_reactivity import TopicBus
 from squid_storage import PostgresTopicBridge
 
@@ -223,13 +223,13 @@ class WorkerServices:
     submission_finalization: SubmissionFinalizationWorker
     index_build_embedding: Callable[[DomainEvent], Awaitable[None]]
     search_embeddings: SearchEmbeddingService
-    refresh_search_index: Callable[[], Awaitable[tuple[int, int]]]
-    record_queue_health: Callable[[], Awaitable[None]]
-    purge_idempotency: Callable[[], Awaitable[int]]
-    expire_submission_drafts: Callable[[], Awaitable[int]]
-    process_submission_schematics: Callable[[], Awaitable[None]]
-    cleanup_submission_schematics: Callable[[], Awaitable[None]]
-    cleanup_submission_inference: Callable[[], Awaitable[None]]
+    refresh_search_index: WorkerOperation[tuple[int, int]]
+    record_queue_health: WorkerOperation[None]
+    purge_idempotency: WorkerOperation[int]
+    expire_submission_drafts: WorkerOperation[int]
+    process_submission_schematics: WorkerOperation[None]
+    cleanup_submission_schematics: WorkerOperation[None]
+    cleanup_submission_inference: WorkerOperation[None]
     open_topic_bridge: TopicBridgeFactory | None = None
 
 

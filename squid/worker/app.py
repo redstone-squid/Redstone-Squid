@@ -14,12 +14,14 @@ from whenever import Instant
 
 from squid.bootstrap import create_worker_runtime
 from squid.config import WorkerConfig, WorkerProcessConfig, load_or_exit, load_worker_process_config
+from squid.core.actors import ActingContext
 from squid.core.events.dispatcher import DomainEventRunner
 from squid.core.media.application.jobs import MediaProcessingJobRunner
 from squid.core.observability import TraceSurface, record_histogram, trace_span
 from squid.core.schematics.infrastructure.capability import NullSchematicAnalyzer, engine_installed
 from squid.core.schematics.infrastructure.durable import SchematicJobRunner
 from squid.core.schematics.infrastructure.worker import SchematicWorkerPool
+from squid.core.worker_context import WorkerOperation, worker_execution
 from squid.health import ProcessHealthServer
 from squid.logging_config import configure_service_worker_logging
 from squid.observability import configure_observability
@@ -42,8 +44,12 @@ class WorkerJobSpec:
     name: str
     interval_seconds: float
     critical: bool
-    run: Callable[[], Awaitable[None]]
+    operation: WorkerOperation[None]
     run_immediately: bool = True
+
+    async def run(self) -> None:
+        with worker_execution(self.name) as context:
+            await self.operation(context=context)
 
 
 class DatabaseWorker:
@@ -114,8 +120,9 @@ class DatabaseWorker:
                 run_immediately=spec.run_immediately,
             )
         if self._services.event_wake_listener is not None:
+            event_job = next(spec for spec in self._job_specs if spec.name == "core-domain-events")
             self._supervisor.start(
-                self._services.event_wake_listener.run(self._process_events),
+                self._services.event_wake_listener.run(event_job.run),
                 name="domain-event-listener",
             )
 
@@ -148,7 +155,7 @@ class DatabaseWorker:
         def job(
             name: str,
             interval_seconds: float,
-            run: Callable[[], Awaitable[None]],
+            run: WorkerOperation[None],
             *,
             critical: bool = True,
             run_immediately: bool = True,
@@ -157,7 +164,7 @@ class DatabaseWorker:
                 name=name,
                 interval_seconds=interval_seconds,
                 critical=critical,
-                run=run,
+                operation=run,
                 run_immediately=run_immediately,
             )
 
@@ -219,8 +226,8 @@ class DatabaseWorker:
                 job("queue-health", maintenance_interval, self._services.record_queue_health),
             )
         )
-        if self._schematic_pool is not None:
-            jobs.append(job("schematic-pool-health", maintenance_interval, self._schematic_pool.record_health))
+        if (pool := self._schematic_pool) is not None:
+            jobs.append(job("schematic-pool-health", maintenance_interval, lambda *, context: pool.record_health()))
         jobs.extend(
             (
                 job(
@@ -247,7 +254,7 @@ class DatabaseWorker:
                 job(
                     "database-keepalive",
                     self._config.keepalive_interval_seconds,
-                    self._keep_database_active,
+                    lambda *, context: self._keep_database_active(),
                     critical=False,
                     run_immediately=False,
                 ),
@@ -255,64 +262,64 @@ class DatabaseWorker:
         )
         return tuple(jobs)
 
-    async def _process_events(self) -> None:
+    async def _process_events(self, *, context: ActingContext) -> None:
         # Polling and database wake hints share this path; only one batch runs at a time.
         async with self._event_lock:
             with trace_span("squid.worker.domain_events", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
-                await self._events.process_batch()
+                await self._events.process_batch(context=context)
 
-    async def _process_schematic_jobs(self) -> None:
+    async def _process_schematic_jobs(self, *, context: ActingContext) -> None:
         with trace_span("squid.worker.schematic_jobs", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
-            await self._schematic_jobs.process_batch()
+            await self._schematic_jobs.process_batch(context=context)
 
-    async def _process_schematic_renders(self) -> None:
+    async def _process_schematic_renders(self, *, context: ActingContext) -> None:
         with trace_span("squid.worker.schematic_renders", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
-            await self._schematic_renders.process_batch()
+            await self._schematic_renders.process_batch(context=context)
 
-    async def _process_media_jobs(self, runner: MediaProcessingJobRunner) -> None:
+    async def _process_media_jobs(self, runner: MediaProcessingJobRunner, *, context: ActingContext) -> None:
         with trace_span("squid.worker.media_processing", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
-            await runner.process_batch(limit=self._config.media_job_concurrency)
+            await runner.process_batch(limit=self._config.media_job_concurrency, context=context)
 
-    async def _cleanup_media_storage(self) -> None:
+    async def _cleanup_media_storage(self, *, context: ActingContext) -> None:
         with trace_span("squid.worker.media_storage_cleanup", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
-            await self._services.media_cleanup.process_batch()
+            await self._services.media_cleanup.process_batch(context=context)
 
-    async def _process_submission_finalization(self) -> None:
+    async def _process_submission_finalization(self, *, context: ActingContext) -> None:
         with trace_span("squid.worker.submission_finalization", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
-            await self._services.submission_finalization.process_batch()
+            await self._services.submission_finalization.process_batch(context=context)
 
-    async def _refresh_search(self) -> None:
+    async def _refresh_search(self, *, context: ActingContext) -> None:
         with trace_span("squid.worker.search_projection", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
-            succeeded, failed = await self._services.refresh_search_index()
+            succeeded, failed = await self._services.refresh_search_index(context=context)
         if failed:
             logger.warning(
                 "Search projection batch completed with failures",
                 extra={"squid.queue.succeeded": succeeded, "squid.queue.failed": failed},
             )
 
-    async def _process_search_embeddings(self) -> None:
+    async def _process_search_embeddings(self, *, context: ActingContext) -> None:
         with trace_span("squid.worker.search_embeddings", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
-            succeeded, failed = await self._services.search_embeddings.process_batch()
+            succeeded, failed = await self._services.search_embeddings.process_batch(context=context)
         if failed:
             logger.warning(
                 "Search embedding batch completed with failures",
                 extra={"squid.queue.succeeded": succeeded, "squid.queue.failed": failed},
             )
 
-    async def _process_records(self) -> None:
+    async def _process_records(self, *, context: ActingContext) -> None:
         with trace_span("squid.worker.record_maintenance", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
-            await self._services.records.process_queue()
+            await self._services.records.process_queue(context=context)
 
-    async def _process_record_ranges(self) -> None:
+    async def _process_record_ranges(self, *, context: ActingContext) -> None:
         with trace_span("squid.worker.record_ranges", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
-            await self._services.range_publication.process_queue()
+            await self._services.range_publication.process_queue(context=context)
 
-    async def _close_due_votes(self) -> None:
+    async def _close_due_votes(self, *, context: ActingContext) -> None:
         with trace_span("squid.worker.close_due_votes", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
             now = Instant.now()
             recounter = self._services.ballot_recounter
             snapshots = await self._services.votes.close_due(
-                now, recount=None if recounter is None else recounter.count_cards
+                now, recount=None if recounter is None else recounter.count_cards, context=context
             )
         for snapshot in snapshots:
             if snapshot.poll is not None:
@@ -322,45 +329,45 @@ class DatabaseWorker:
                     attributes={"squid.vote.kind": snapshot.kind},
                 )
 
-    async def _clean_stale_build_locks(self) -> None:
+    async def _clean_stale_build_locks(self, *, context: ActingContext) -> None:
         with trace_span("squid.worker.stale_build_locks", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
-            await self._services.builds.clean_stale_locks(older_than=Instant.now().subtract(minutes=5))
+            await self._services.builds.clean_stale_locks(older_than=Instant.now().subtract(minutes=5), context=context)
 
-    async def _cleanup_schematic_jobs(self) -> None:
+    async def _cleanup_schematic_jobs(self, *, context: ActingContext) -> None:
         with trace_span("squid.worker.schematic_job_cleanup", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
-            await self._schematic_jobs.cleanup()
+            await self._schematic_jobs.cleanup(context=context)
 
-    async def _cleanup_schematic_previews(self) -> None:
+    async def _cleanup_schematic_previews(self, *, context: ActingContext) -> None:
         with trace_span("squid.worker.schematic_preview_cleanup", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
-            await self._schematic_renders.cleanup()
+            await self._schematic_renders.cleanup(context=context)
 
-    async def _cleanup_notifications(self) -> None:
+    async def _cleanup_notifications(self, *, context: ActingContext) -> None:
         with trace_span("squid.worker.notification_retention", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
-            await self._services.notifications.cleanup()
+            await self._services.notifications.cleanup(context=context)
 
-    async def _cleanup_idempotency(self) -> None:
+    async def _cleanup_idempotency(self, *, context: ActingContext) -> None:
         with trace_span("squid.worker.idempotency_retention", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
-            deleted = await self._services.purge_idempotency()
+            deleted = await self._services.purge_idempotency(context=context)
         if deleted:
             logger.info(
                 "Expired idempotency requests removed",
                 extra={"squid.idempotency.deleted": deleted},
             )
 
-    async def _expire_submission_drafts(self) -> None:
+    async def _expire_submission_drafts(self, *, context: ActingContext) -> None:
         with trace_span("squid.worker.submission_draft_expiry", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
-            expired = await self._services.expire_submission_drafts()
-            await self._services.cleanup_submission_schematics()
-            await self._services.cleanup_submission_inference()
+            expired = await self._services.expire_submission_drafts(context=context)
+            await self._services.cleanup_submission_schematics(context=context)
+            await self._services.cleanup_submission_inference(context=context)
         if expired:
             logger.info(
                 "Expired inactive submission drafts",
                 extra={"squid.submissions.drafts_expired": expired},
             )
 
-    async def _cleanup_error_reports(self) -> None:
+    async def _cleanup_error_reports(self, *, context: ActingContext) -> None:
         with trace_span("squid.worker.error_report_retention", {"squid.surface": TraceSurface.BACKGROUND_LOOP}):
-            deleted = await self._services.error_reports.purge_expired()
+            deleted = await self._services.error_reports.purge_expired(context=context)
         if deleted:
             logger.info(
                 "Expired error reports removed",

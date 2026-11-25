@@ -6,7 +6,7 @@ from uuid import UUID
 
 from whenever import Instant
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.builds.application.edit_values import build_values, changed_build_values
 from squid.core.builds.application.editing import BuildEditPatch
 from squid.core.builds.application.ports import (
@@ -30,6 +30,7 @@ from squid.core.submissions.application.forms import build_edit_manifest
 from squid.core.submissions.domain import SubmissionOrigin
 from squid.core.unit_of_work import UnitOfWorkFactory
 from squid.core.voting.domain import BuildEditVoteTarget
+from squid.core.worker_context import worker_scope
 
 _edit_manifest = cache(build_edit_manifest)
 
@@ -96,9 +97,10 @@ class BuildService:
         await self._persist(build, context=context)
         return build
 
-    async def clean_stale_locks(self, *, older_than: Instant) -> None:
+    async def clean_stale_locks(self, *, context: ActingContext, older_than: Instant) -> None:
         """Ask the lock manager to reclaim expired leases."""
-        await self._locks.clean_stale(older_than=older_than)
+        with worker_scope(context):
+            await self._locks.clean_stale(older_than=older_than)
 
     async def classify_restrictions[BuildT: (Build, BuildInput)](
         self, build: BuildT, restrictions: Sequence[str]

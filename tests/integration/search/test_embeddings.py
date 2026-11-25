@@ -14,6 +14,7 @@ import pytest
 from sqlalchemy import func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from squid.core.actors import ActingContext
 from squid.core.persistence.base import Base
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.search.application import SearchEmbeddingService, SearchQueryParser
@@ -77,7 +78,7 @@ async def test_worker_embeds_the_exact_claimed_source_revision(
     model = FakeEmbeddingModel([1.0] + [0.0] * 1535)
     service = SearchEmbeddingService(model, uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory))
 
-    assert await service.process_batch() == (1, 0)
+    assert await service.process_batch(context=ActingContext.worker("test-worker")) == (1, 0)
 
     async with async_session_factory() as session:
         document = await session.get(SearchDocument, document_id)
@@ -132,7 +133,7 @@ async def test_exhausted_embedding_work_is_retained_as_a_dead_letter(
         FakeEmbeddingModel(None), uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory), max_attempts=1
     )
 
-    assert await service.process_batch() == (0, 1)
+    assert await service.process_batch(context=ActingContext.worker("test-worker")) == (0, 1)
 
     async with async_session_factory() as session:
         queue_item = await session.get(SearchEmbeddingQueueItem, document_id)
