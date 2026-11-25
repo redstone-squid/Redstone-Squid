@@ -87,7 +87,7 @@ async def test_service_uses_the_scoped_tree_without_reparsing_display_text() -> 
         SearchRequest("as typed", scope=SearchScope.RECORDS, parsed_query=parsed)
 
 
-@pytest.mark.parametrize("field", ["volume", "nonexistent"])
+@pytest.mark.parametrize("field", ["orientation", "nonexistent"])
 async def test_service_rejects_unsortable_and_unknown_sort_fields(field: str) -> None:
     backend = FakeSearchBackend()
     service = SearchService(uow_factory=partial(SearchUnitOfWork, backend))
