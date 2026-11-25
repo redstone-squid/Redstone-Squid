@@ -66,8 +66,8 @@
               aria-current={link.current === true ? "page" : undefined}
               class={cn(
                 "flex min-h-control-sm items-center rounded-xs px-3 py-2 text-base text-fg-muted no-underline hover:bg-surface-muted hover:text-fg",
-                "aria-[current=page]:forced-highlight aria-[current=page]:font-semibold aria-[current=page]:text-fg",
-                "border-s-2 border-transparent aria-[current=page]:border-accent",
+                "current:forced-highlight current:font-semibold current:text-fg",
+                "border-s-2 border-transparent current:border-accent",
                 "@4xl:min-h-0 @4xl:rounded-none @4xl:border-s-0 @4xl:border-b-2 @4xl:px-0 @4xl:hover:bg-transparent",
               )}>{link.label}</a
             >

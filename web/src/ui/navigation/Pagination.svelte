@@ -50,7 +50,7 @@
                 size="sm"
                 variant={page.current === true ? "primary" : "quiet"}
                 href={page.href}
-                class="aria-[current=page]:forced-highlight"
+                class="current:forced-highlight"
                 aria-label={page.name}
                 aria-current={page.current === true ? "page" : undefined}>{page.label}</Button
               >

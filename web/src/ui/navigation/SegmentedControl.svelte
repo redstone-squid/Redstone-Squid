@@ -101,7 +101,7 @@
             aria-current={item.current === true ? "true" : undefined}
             class={cn(
               segmentClass,
-              "aria-[current=true]:forced-highlight aria-[current=true]:bg-accent-soft aria-[current=true]:text-fg",
+              "current:forced-highlight current:bg-accent-soft current:text-fg",
             )}>{@render segment(item)}</a
           >
         </li>

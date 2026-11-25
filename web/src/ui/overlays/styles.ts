@@ -12,7 +12,7 @@ export const floatingPanelClass = cn(
 export const menuItemClass = cn(
   "flex min-h-control-sm w-full cursor-pointer items-center gap-3 rounded-xs px-3 py-2 text-start text-fg no-underline",
   "hover:bg-surface-muted focus-visible:bg-surface-muted data-highlighted:bg-surface-muted",
-  "aria-[current=true]:forced-highlight aria-[current=true]:bg-surface-muted",
+  "current:forced-highlight current:bg-surface-muted",
   "data-disabled:cursor-not-allowed data-disabled:text-fg-muted",
 );
 

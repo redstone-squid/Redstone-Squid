@@ -29,7 +29,7 @@
 
   const tabClass = cn(
     "flex min-h-control shrink-0 cursor-pointer items-center gap-2 border-b-2 border-transparent px-3 text-sm font-semibold whitespace-nowrap text-fg-muted no-underline hover:text-fg",
-    "aria-[current=page]:border-accent aria-[current=page]:forced-highlight aria-[current=page]:text-fg",
+    "current:border-accent current:forced-highlight current:text-fg",
     "aria-selected:border-accent aria-selected:forced-highlight aria-selected:text-fg",
     "disabled:cursor-not-allowed disabled:opacity-60",
   );

@@ -129,6 +129,9 @@
   }
 }
 
+/* The current page, tab, or option: any `aria-current` but "false" (page, true, step...). */
+@custom-variant current (&[aria-current]:not([aria-current="false"]));
+
 /* Columns at least one container width wide, as many as fit: `grid-cols-fill-card`. */
 @utility grid-cols-fill-* {
   grid-template-columns: repeat(auto-fill, minmax(min(100%, --value(--container-*)), 1fr));
