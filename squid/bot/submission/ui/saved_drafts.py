@@ -9,6 +9,7 @@ from squid.bot.accounts.consent import ensure_consented_account
 from squid.bot.routes import AppRequest, AppRoutes, ScreenUnavailable
 from squid.bot.submission.ui.drafts import DraftEditorScreen
 from squid.bot.submission.ui.inference import reopen_inference
+from squid.core.actors import ActingContext
 from squid.core.i18n import tr
 from squid.core.submissions.application import StoredDraft
 from squid.core.submissions.domain import (
@@ -35,13 +36,13 @@ class SavedDraftsScreen(sd.Screen):
         account_id = await ensure_consented_account(request, request.client.services.accounts)
         if account_id is None:
             return None
-        actor = await request.client.actors.resolve(request)
+        context = ActingContext.for_actor(await request.client.actors.resolve(request))
         drafts = (
-            await request.client.services.submission_drafts.attention_inbox(actor, limit=10)
+            await request.client.services.submission_drafts.attention_inbox(limit=10, context=context)
             if inbox
             else await request.client.services.submission_drafts.list_active(account_id)
         )
-        runs = await request.client.services.submission_inference.list_active(actor, inbox=inbox)
+        runs = await request.client.services.submission_inference.list_active(inbox=inbox, context=context)
         nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request]] = [
             primitives.Section(
                 (primitives.Text(_draft_line(draft)),),

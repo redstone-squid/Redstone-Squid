@@ -17,7 +17,7 @@ from squid.bot.utils.permissions import PermissionNodeRequired
 from squid.core.accounts.application import AccountService
 from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, IdentityProvider
 from squid.core.accounts.models import Account
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.builds.application.inference import BuildInferenceInput
 from squid.core.builds.domain import BuildCategory, BuildInput
 from squid.core.permissions.application import PermissionService
@@ -268,10 +268,10 @@ class Proposals(RecalculationProposalService):
     async def create(
         self,
         *,
+        context: ActingContext,
         run_id: UUID,
         index: int,
         owner_account_id: int,
-        actor: Actor,
         source_message_id: int,
         candidate: BuildInput,
     ) -> RecalculationProposal:
@@ -279,7 +279,7 @@ class Proposals(RecalculationProposalService):
             run_id=run_id,
             index=index,
             owner_account_id=owner_account_id,
-            actor=actor,
+            actor=context.effective,
             source_message_id=source_message_id,
             candidate=candidate,
         )

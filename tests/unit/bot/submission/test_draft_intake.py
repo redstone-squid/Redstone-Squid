@@ -17,7 +17,7 @@ import pytest
 import wrapture
 
 from squid.bot.submission.draft_intake import receive_attachments, receive_retained_file, register_uploaded_file
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.errors import ValidationError
 from squid.core.media.application.jobs import MediaProcessingJobService
 from squid.core.media.domain import MediaLimits
@@ -39,24 +39,24 @@ class Intake(SubmissionAttachmentIntake):
 
     @override
     async def reserve(
-        self, draft_id: UUID, actor: Actor, source_id: UUID, filename: str, content_type: str | None
+        self, draft_id: UUID, source_id: UUID, filename: str, content_type: str | None, *, context: ActingContext
     ) -> SuppliedAttachment:
         self.files[source_id] = SuppliedAttachment(source_id, filename, "image", IntakeStatus.PENDING)
         return self.files[source_id]
 
     @override
-    async def list(self, draft_id: UUID, actor: Actor) -> tuple[SuppliedAttachment, ...]:
+    async def list(self, draft_id: UUID, *, context: ActingContext) -> tuple[SuppliedAttachment, ...]:
         return tuple(self.files.values())
 
     @override
     async def register_file(
-        self, draft_id: UUID, actor: Actor, source_id: UUID, path: Path, content_type: str | None
+        self, draft_id: UUID, source_id: UUID, path: Path, content_type: str | None, *, context: ActingContext
     ) -> None:
         self.registered.append(path.read_bytes())
         self.files[source_id] = replace(self.files[source_id], status=IntakeStatus.READY)
 
     @override
-    async def fail(self, draft_id: UUID, actor: Actor, source_id: UUID) -> None:
+    async def fail(self, draft_id: UUID, source_id: UUID, *, context: ActingContext) -> None:
         self.files[source_id] = replace(self.files[source_id], status=IntakeStatus.FAILED)
 
 
@@ -178,7 +178,9 @@ async def test_uploaded_video_larger_than_schematic_limit_is_registered() -> Non
         return data
 
     source = UploadedFile("clip.mp4", "video/mp4", len(data), "", read)
-    await intake.reserve(draft_id, Actor(account_id=7), source_id, source.name, source.media_type)
+    await intake.reserve(
+        draft_id, source_id, source.name, source.media_type, context=ActingContext.for_actor(Actor(account_id=7))
+    )
     await register_uploaded_file(
         bot_services(submission_intake=intake), draft_id, Actor(account_id=7), source_id, source
     )

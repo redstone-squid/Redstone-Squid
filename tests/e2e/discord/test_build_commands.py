@@ -11,7 +11,7 @@ import simcord
 
 from squid.core.accounts.domain import AccountConsent
 from squid.core.accounts.models import Account
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext
 from squid.core.builds.application import BuildQueryService, BuildService
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build, DoorBuild
@@ -41,7 +41,7 @@ class EmptyInference(SubmissionInferenceRuns):
         pass
 
     @override
-    async def list_active(self, actor: Actor, *, inbox: bool = False) -> tuple[UUID, ...]:
+    async def list_active(self, *, context: ActingContext, inbox: bool = False) -> tuple[UUID, ...]:
         return ()
 
 

@@ -6,7 +6,7 @@ from uuid import UUID
 
 from whenever import Instant
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext
 from squid.core.builds.domain.expansion import DoorExpansion
 from squid.core.messages.domain import MessageSnapshot
 from squid.core.schematics.application.services import SchematicService
@@ -97,9 +97,9 @@ class Drafts(SubmissionDraftService):
     async def apply_change(
         self,
         draft_id: UUID,
-        actor: Actor,
         change: DraftChange,
         *,
+        context: ActingContext,
         locale: str | None,
         now: Instant | None = None,
     ) -> AppliedDraftChange:
@@ -108,7 +108,7 @@ class Drafts(SubmissionDraftService):
         return AppliedDraftChange(self.current)
 
     @override
-    async def get_accessible(self, draft_id: UUID, actor: Actor) -> StoredDraft:
+    async def get_accessible(self, draft_id: UUID, *, context: ActingContext) -> StoredDraft:
         assert self.current is not None
         return self.current
 
@@ -124,7 +124,7 @@ class Finalization(SubmissionFinalizationService):
         pass
 
     @override
-    async def status(self, draft_id: UUID, actor: Actor) -> SubmissionRequestResult | None:
+    async def status(self, draft_id: UUID, *, context: ActingContext) -> SubmissionRequestResult | None:
         return None
 
 
@@ -133,5 +133,5 @@ class Intake(SubmissionAttachmentIntake):
         pass
 
     @override
-    async def list(self, draft_id: UUID, actor: Actor) -> tuple[SuppliedAttachment, ...]:
+    async def list(self, draft_id: UUID, *, context: ActingContext) -> tuple[SuppliedAttachment, ...]:
         return ()

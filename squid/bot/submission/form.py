@@ -16,6 +16,7 @@ from squid.bot.submission.input import optional_text, split_values
 from squid.bot.submission.parse import parse_dimensions, parse_hallway_dimensions
 from squid.bot.submission.ui.drafts import DraftEditorScreen, field_names
 from squid.bot.ui import error_node
+from squid.core.actors import ActingContext
 from squid.core.builds.domain import BuildCategory, BuildInput, DoorDraftDetails, DoorOrientationLiteral
 from squid.core.builds.domain.models import BuildCategoryLiteral
 from squid.core.submissions.application.credit_text import parse_credit_lines
@@ -134,7 +135,6 @@ async def open_submission_form(
         unresolved = prefill.unresolved
         await services.submission_drafts.apply_change(
             draft_id,
-            actor,
             DraftChange(
                 0,
                 "discord-intake",
@@ -145,6 +145,7 @@ async def open_submission_form(
                 ),
             ),
             locale=None,
+            context=ActingContext.for_actor(actor),
         )
     await receive_attachments(
         services,

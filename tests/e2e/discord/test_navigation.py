@@ -14,7 +14,7 @@ from squid.bot.routes import AppRequest, AppRoutes
 from squid.bot.submission.ui.drafts import DraftEditorScreen
 from squid.core.accounts.domain import AccountConsent
 from squid.core.accounts.models import Account
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext
 from squid.core.builds.application import BuildQueryService
 from squid.core.builds.domain import BuildStatus, Credit
 from squid.core.builds.models import Build, DoorBuild
@@ -63,6 +63,7 @@ async def test_build_visibility_is_checked_before_opening(status: BuildStatus | 
         build_queries=BuildQueries(status),
         search=SearchFields(),
         schematics=Schematics(),
+        published_build_media=None,
     )
     async with command_environment(NAVIGATION, services=services) as (bot, env):
         bot.ui_router.mount("builds", BuildBrowseScreen.open_detail)
@@ -114,8 +115,8 @@ class UnavailableDrafts(SubmissionDraftService):
         self.lookups: list[tuple[UUID, int | None]] = []
 
     @override
-    async def get_accessible(self, draft_id: UUID, actor: Actor) -> StoredDraft:
-        self.lookups.append((draft_id, actor.account_id))
+    async def get_accessible(self, draft_id: UUID, *, context: ActingContext) -> StoredDraft:
+        self.lookups.append((draft_id, context.effective.account_id))
         raise self.error
 
 

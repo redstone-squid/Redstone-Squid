@@ -17,6 +17,7 @@ from squid.bot.ui import error_node, text_node
 from squid.bot.utils.permissions import enforce
 from squid.bot.utils.sticky_message import StickyMessage
 from squid.core.accounts.domain import IdentityProvider
+from squid.core.actors import ActingContext
 from squid.core.i18n import tr
 from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_RECALC
 from squid.core.submissions.errors import DraftCapacityExceededError
@@ -155,9 +156,9 @@ class BuildMessageIntake[BotT: squid.bot.app.RedstoneSquid]:
                 run_id=run_id,
                 index=index,
                 owner_account_id=owner_account_id,
-                actor=actor,
                 source_message_id=message.id,
                 candidate=candidate.facts,
+                context=ActingContext.for_actor(actor),
             )
             for index, candidate in enumerate(candidates)
         ]

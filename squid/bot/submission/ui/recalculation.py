@@ -6,6 +6,7 @@ from uuid import UUID
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.ui import tr
+from squid.core.actors import ActingContext
 from squid.core.errors import SquidError
 from squid.core.submissions.application.recalculation_values import RecalculationProposal
 from squid.runtime import BotServices
@@ -37,7 +38,7 @@ class RecalculationProposalScreen(sd.Screen[None, Any, "RedstoneSquid"]):
     async def load(cls, services: BotServices, proposal_id: UUID, request: sd.Request[Any, RedstoneSquid]) -> Self:
         """Reload retained review state and current target choices after restart."""
         actor = await request.client.actors.resolve(request)
-        proposal = await services.submission_recalculations.get(proposal_id, actor)
+        proposal = await services.submission_recalculations.get(proposal_id, context=ActingContext.for_actor(actor))
         targets = tuple(await services.builds.list_ids_for_source_message(proposal.source_message_id))
         return cls(services, proposal, targets)
 
@@ -95,7 +96,7 @@ class RecalculationProposalScreen(sd.Screen[None, Any, "RedstoneSquid"]):
         actor = await event.context.client.actors.resolve(event.context)
         try:
             self.proposal = await self.services.submission_recalculations.match(
-                self.proposal.id, int(event.selected[0]), actor
+                self.proposal.id, int(event.selected[0]), context=ActingContext.for_actor(actor)
             )
         except SquidError as error:
             self.notice = error.public_text()
@@ -104,7 +105,9 @@ class RecalculationProposalScreen(sd.Screen[None, Any, "RedstoneSquid"]):
         await event.acknowledge()
         actor = await event.context.client.actors.resolve(event.context)
         try:
-            self.proposal = await self.services.submission_recalculations.approve(self.proposal.id, actor)
+            self.proposal = await self.services.submission_recalculations.approve(
+                self.proposal.id, context=ActingContext.for_actor(actor)
+            )
         except SquidError as error:
             self.notice = error.public_text()
 
@@ -112,6 +115,6 @@ class RecalculationProposalScreen(sd.Screen[None, Any, "RedstoneSquid"]):
         actor = await event.context.client.actors.resolve(event.context)
         if self.proposal.build_id is not None:
             self.proposal = await self.services.submission_recalculations.match(
-                self.proposal.id, self.proposal.build_id, actor, renew=True
+                self.proposal.id, self.proposal.build_id, renew=True, context=ActingContext.for_actor(actor)
             )
             self.notice = tr(t"recalculation-renewed = Review the refreshed diff before approving.")

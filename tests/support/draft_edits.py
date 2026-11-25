@@ -3,7 +3,7 @@
 from typing import Protocol, override
 from uuid import UUID
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext
 from squid.core.edits.application import EditRunner
 from squid.core.edits.domain import (
     EditCommand,
@@ -20,10 +20,10 @@ from tests.support.edits import bound_revisions
 
 
 class RecordedDrafts(Protocol):
-    async def get_accessible(self, draft_id: UUID, actor: Actor, /) -> StoredDraft: ...
+    async def get_accessible(self, draft_id: UUID, *, context: ActingContext) -> StoredDraft: ...
 
     async def apply_change(
-        self, draft_id: UUID, actor: Actor, change: DraftChange, /, *, locale: str | None
+        self, draft_id: UUID, change: DraftChange, *, context: ActingContext, locale: str | None
     ) -> AppliedDraftChange: ...
 
 
@@ -32,16 +32,17 @@ class DraftEditRecorder(EditRunner):
         self.drafts = drafts
 
     @override
-    async def execute(self, command: EditCommand, actor: Actor) -> EditResult:
+    async def execute(self, command: EditCommand, *, context: ActingContext) -> EditResult:
+        actor = context.effective
         expected = bound_revisions(command)[0]
         draft_id = UUID(expected.target.key)
-        current = await self.drafts.get_accessible(draft_id, actor)
+        current = await self.drafts.get_accessible(draft_id, context=context)
         if expected.value != current.snapshot.revision:
             raise RevisionConflictError(expected, current.snapshot.revision)
         change = answer_change(command, expected.value)
         fields = tuple(op.field_id for op in change.operations)
         before = captured_answers(current.snapshot.answers, fields)
-        result = await self.drafts.apply_change(draft_id, actor, change, locale=None)
+        result = await self.drafts.apply_change(draft_id, change, locale=None, context=context)
         revisions = (Revision(expected.target, result.draft.snapshot.revision),)
         after = captured_answers(result.draft.snapshot.answers, fields)
         receipt = EditReceipt(command, before, after, revisions)

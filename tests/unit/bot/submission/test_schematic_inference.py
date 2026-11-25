@@ -7,7 +7,7 @@ from uuid import uuid4
 
 import pytest
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.schematics.domain.doors.detection import detect_cycle
 from squid.core.submissions.application.intake import SuppliedAttachment
 from squid.core.submissions.application.schematic_inference import (
@@ -62,7 +62,9 @@ async def test_submit_panel_infers_missing_values_without_overwriting_command_op
     assert report.name == f"hallways-{source_id}.json"
     assert "Hallway candidates and block coordinates" in labels(editor.render())
     assert len(editor.workspace.edits.undoable) == 1
-    schematics.suggestions.assert_awaited_once_with(drafts.current.snapshot.id, Actor(account_id=7), source_id)
+    schematics.suggestions.assert_awaited_once_with(
+        drafts.current.snapshot.id, source_id, context=ActingContext.direct(Actor(account_id=7))
+    )
 
 
 @pytest.mark.parametrize("state", [DraftSchematicState.PENDING, DraftSchematicState.REJECTED])
@@ -91,7 +93,7 @@ async def test_discord_suggestions_cannot_overwrite_an_intervening_edit() -> Non
         return_value=(DraftSchematic(source_id, "door.schem", "a" * 64, 1, DraftSchematicState.READY),)
     )
 
-    async def suggestions(*_args: object) -> SchematicSubmissionSuggestions:
+    async def suggestions(*_args: object, context: ActingContext) -> SchematicSubmissionSuggestions:
         drafts.current = replace(
             drafts.current, snapshot=replace(drafts.current.snapshot, revision=1, answers={"display_name": "New title"})
         )

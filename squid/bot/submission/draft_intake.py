@@ -19,7 +19,7 @@ import anyio
 import discord
 
 from squid.bot.edit_controller import EditController
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.errors import ValidationError
 from squid.core.submissions.application.attachment_edits import DRAFT_ATTACHMENTS, AttachmentValues, FileMembership
 from squid.core.submissions.application.edits import draft_target
@@ -50,7 +50,9 @@ class DraftUploads:
             )
             for file in files
         )
-        await self.services.submission_uploads.stage(self.draft_id, await self.resolve_actor(), revision, memberships)
+        await self.services.submission_uploads.stage(
+            self.draft_id, revision, memberships, context=ActingContext.for_actor(await self.resolve_actor())
+        )
         return memberships
 
     async def add(self, files: Sequence[UploadedFile], revision: int, label: TextLike) -> int:
@@ -63,7 +65,9 @@ class DraftUploads:
                     self.services, self.draft_id, await self.resolve_actor(), item.source_id, file
                 )
             except Exception:
-                await self.services.submission_intake.fail(self.draft_id, await self.resolve_actor(), item.source_id)
+                await self.services.submission_intake.fail(
+                    self.draft_id, item.source_id, context=ActingContext.for_actor(await self.resolve_actor())
+                )
                 failed += 1
         await self.edits.bind(DRAFT_ATTACHMENTS, draft_target(self.draft_id), revision).save(
             AttachmentValues(files=memberships).edit_values(), label
@@ -92,7 +96,11 @@ async def receive_attachments(
     """Reserve every source before downloading so an interrupted bundle stays incomplete."""
     for attachment in attachments:
         await services.submission_intake.reserve(
-            draft_id, actor, uuid5(draft_id, str(attachment.id)), attachment.filename, attachment.content_type
+            draft_id,
+            uuid5(draft_id, str(attachment.id)),
+            attachment.filename,
+            attachment.content_type,
+            context=ActingContext.for_actor(actor),
         )
     for attachment in attachments:
         await receive_attachment(services, draft_id, actor, uuid5(draft_id, str(attachment.id)), attachment)
@@ -106,13 +114,17 @@ async def receive_attachment(
     Download and registration failures are recorded and logged instead of raised,
     allowing the rest of an attachment bundle to continue. Cancellation propagates.
     """
-    retained = next(item for item in await services.submission_intake.list(draft_id, actor) if item.id == source_id)
+    retained = next(
+        item
+        for item in await services.submission_intake.list(draft_id, context=ActingContext.for_actor(actor))
+        if item.id == source_id
+    )
     if retained.status is IntakeStatus.READY:
         return
     try:
         await _download_and_register(services, draft_id, actor, source_id, attachment)
     except Exception:
-        await services.submission_intake.fail(draft_id, actor, source_id)
+        await services.submission_intake.fail(draft_id, source_id, context=ActingContext.for_actor(actor))
         logger.warning("Submission attachment intake failed for source %s", source_id, exc_info=True)
 
 
@@ -130,7 +142,9 @@ async def _download_and_register(
         if path.stat().st_size > max_bytes:
             message = "Downloaded attachment exceeds the intake limit."
             raise ValidationError(message)
-        await services.submission_intake.register_file(draft_id, actor, source_id, path, attachment.content_type)
+        await services.submission_intake.register_file(
+            draft_id, source_id, path, attachment.content_type, context=ActingContext.for_actor(actor)
+        )
 
 
 async def register_uploaded_file(
@@ -148,7 +162,9 @@ async def register_uploaded_file(
             message = "Downloaded file exceeds the intake limit."
             raise ValidationError(message)
         path.write_bytes(data)
-        await services.submission_intake.register_file(draft_id, actor, source_id, path, source.media_type)
+        await services.submission_intake.register_file(
+            draft_id, source_id, path, source.media_type, context=ActingContext.for_actor(actor)
+        )
 
 
 async def receive_retained_file(services: BotServices, draft_id: UUID, actor: Actor, source_id: UUID) -> None:
@@ -157,18 +173,24 @@ async def receive_retained_file(services: BotServices, draft_id: UUID, actor: Ac
     Ready and discarded sources need no work. Download failures are recorded and
     re-raised so the caller can offer replacement or discard controls.
     """
-    attachment = next(item for item in await services.submission_intake.list(draft_id, actor) if item.id == source_id)
+    attachment = next(
+        item
+        for item in await services.submission_intake.list(draft_id, context=ActingContext.for_actor(actor))
+        if item.id == source_id
+    )
     source = attachment.source
     if source is None:
         message = "Upload a replacement for this file."
         raise ValidationError(message)
     if attachment.status in {IntakeStatus.READY, IntakeStatus.DISCARDED}:
         return
-    await services.submission_intake.reserve(draft_id, actor, source.id, source.filename, source.content_type)
+    await services.submission_intake.reserve(
+        draft_id, source.id, source.filename, source.content_type, context=ActingContext.for_actor(actor)
+    )
     try:
         await _download_retained_file(services, draft_id, actor, source)
     except Exception:
-        await services.submission_intake.fail(draft_id, actor, source.id)
+        await services.submission_intake.fail(draft_id, source.id, context=ActingContext.for_actor(actor))
         raise
 
 
@@ -196,4 +218,6 @@ async def _download_retained_file(
                             message = "Downloaded source exceeds the intake limit."
                             raise ValidationError(message)
                         output.write(chunk)
-        await services.submission_intake.register_file(draft_id, actor, source.id, path, source.content_type)
+        await services.submission_intake.register_file(
+            draft_id, source.id, path, source.content_type, context=ActingContext.for_actor(actor)
+        )

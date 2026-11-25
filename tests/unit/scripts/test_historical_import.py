@@ -18,7 +18,7 @@ import wrapture
 from scripts import populate_db_with_logs_historical_messages as importer
 from squid.core.accounts.domain import AccountConsent
 from squid.core.accounts.models import Account
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.builds.application import BuildInferenceInput
 from squid.core.builds.domain import BuildInput
 from squid.core.submissions.application.inference_runs import InferenceCandidate, InferenceStatus
@@ -136,7 +136,9 @@ async def test_real_import_uses_the_shared_retained_run() -> None:
 
     assert result.processed == 1
     assert result.inferred_candidates == 2
-    cast(AsyncMock, runtime.submission_inference.resume).assert_awaited_once_with(run_id, Actor(account_id=7))
+    cast(AsyncMock, runtime.submission_inference.resume).assert_awaited_once_with(
+        run_id, context=ActingContext(Actor(worker_name="historical-import"), Actor(account_id=7, discord_user_id=1))
+    )
     infer = cast(AsyncMock, runtime.submission_inference.infer)
     infer.assert_awaited_once()
     call = infer.await_args

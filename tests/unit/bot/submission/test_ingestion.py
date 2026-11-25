@@ -9,7 +9,7 @@ import pytest
 from whenever import Instant
 
 from squid.bot.submission import ingestion
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.builds.application.inference import BuildInferenceInput
 from squid.core.builds.domain import BuildCategory, BuildInput
 from squid.core.submissions.application.drafts import StoredDraft
@@ -62,8 +62,8 @@ class InferenceRecorder(SubmissionInferenceRuns):
         )
 
     @override
-    async def resume(self, run_id: UUID, actor: Actor) -> tuple[InferenceCandidate, ...] | None:
-        return await self.resume_calls(run_id, actor)
+    async def resume(self, run_id: UUID, *, context: ActingContext) -> tuple[InferenceCandidate, ...] | None:
+        return await self.resume_calls(run_id, context.effective)
 
 
 class FinalizationRecorder(SubmissionFinalizationService):
@@ -72,14 +72,9 @@ class FinalizationRecorder(SubmissionFinalizationService):
 
     @override
     async def submit(
-        self,
-        draft_id: UUID,
-        actor: Actor,
-        *,
-        locale: str | None,
-        now: Instant | None = None,
+        self, draft_id: UUID, *, context: ActingContext, locale: str | None, now: Instant | None = None
     ) -> FinalizationJobSnapshot:
-        await self.submit_calls(draft_id, actor, locale=locale)
+        await self.submit_calls(draft_id, context.effective, locale=locale)
         return FinalizationJobSnapshot(uuid4(), draft_id, 1, FinalizationJobStatus.PENDING, 0, now or Instant.now())
 
 
@@ -137,7 +132,7 @@ class Attachment:
 
 def message(*, files: bool = False) -> discord.Message:
     source = MessageHarness(message_id=10).source
-    source.author = object()
+    source.author = discord.Object(42)
     source.attachments = []
     if files:
         source.attachments.append(Attachment())
@@ -153,7 +148,9 @@ async def test_complete_candidate_uses_shared_finalization(monkeypatch: pytest.M
     h = setup(monkeypatch, (item,))
     await ingestion.ingest_message_bundle([message()], [], h.services, model="test")
     h.materialize.assert_awaited_once()
-    h.finalization.submit_calls.assert_awaited_once_with(item.id, Actor(account_id=7), locale=None)
+    h.finalization.submit_calls.assert_awaited_once_with(
+        item.id, Actor(account_id=7, discord_user_id=42, guild_id=7), locale=None
+    )
 
 
 async def test_unknown_category_is_retained_without_inventing_a_door(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -263,7 +260,9 @@ async def test_explicit_retry_resubmits_a_dead_job_without_another_model_call(mo
 
     h.inference.infer_calls.assert_not_awaited()
     cast(Any, ingestion.assemble_bundle).assert_not_awaited()
-    h.finalization.submit_calls.assert_awaited_once_with(item.id, Actor(account_id=7), locale=None)
+    h.finalization.submit_calls.assert_awaited_once_with(
+        item.id, Actor(account_id=7, discord_user_id=42, guild_id=7), locale=None
+    )
 
 
 @pytest.mark.parametrize(

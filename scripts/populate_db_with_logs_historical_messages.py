@@ -28,6 +28,7 @@ from squid.bot.submission.ingestion import ingest_message_bundle, message_bundle
 from squid.bot.submission.message_context import assemble_bundle
 from squid.config import load_bot_process_config
 from squid.core.accounts.domain import IdentityProvider
+from squid.core.actors import ActingContext, Actor
 from squid.runtime import BotServices
 
 logger = logging.getLogger(__name__)
@@ -127,57 +128,64 @@ async def iter_bundles(channel: discord.TextChannel, options: ImportOptions) -> 
 async def process_group(bundle: MessageBundle, services: BotServices, options: ImportOptions) -> ImportSummary:
     """Check consent and existing builds before inference; isolate failures per bundle."""
     primary = bundle.primary
-    try:
-        if not options.channel_consent:
-            account = await services.accounts.get_account_by_identity(
-                IdentityProvider.DISCORD, str(primary[0].author.id)
-            )
-            if (
-                account is None
-                or account.id is None  # pyright: ignore[reportUnnecessaryComparison]  # Unflushed identity.
-                or account.needs_consent_refresh
-            ):
-                return ImportSummary(groups=1, skipped_consent=1)
-        retained = await services.submission_inference.public_status(message_bundle_run_id(primary))
-        # A saved build may be only one candidate of a retained run. Resume its other
-        # candidates before consulting the legacy source-message duplicate guard.
-        if retained is None:
-            existing = [bool(await services.builds.list_ids_for_source_message(message.id)) for message in primary]
-            if all(existing):
-                return ImportSummary(groups=1, skipped_existing=1)
-            if any(existing):
-                logger.error(
-                    "Partially imported bundle %s; rerun with narrower bounds", [message.id for message in primary]
+    author = Actor(discord_user_id=primary[0].author.id)
+    with ActingContext(operator=Actor(worker_name="historical-import"), effective=author).scope():
+        try:
+            if not options.channel_consent:
+                account = await services.accounts.get_account_by_identity(
+                    IdentityProvider.DISCORD, str(primary[0].author.id)
                 )
-                return ImportSummary(groups=1, failed=1)
-        if options.dry_run:
-            inputs = await assemble_bundle(primary, preceding=bundle.preceding, include_images=options.include_images)
-            candidates = await services.build_inference.infer(
-                inputs, model=options.model, reasoning_effort=options.reasoning_effort
+                if (
+                    account is None
+                    or account.id is None  # pyright: ignore[reportUnnecessaryComparison]  # Unflushed identity.
+                    or account.needs_consent_refresh
+                ):
+                    return ImportSummary(groups=1, skipped_consent=1)
+            retained = await services.submission_inference.public_status(message_bundle_run_id(primary))
+            # A saved build may be only one candidate of a retained run. Resume its other
+            # candidates before consulting the legacy source-message duplicate guard.
+            if retained is None:
+                existing = [bool(await services.builds.list_ids_for_source_message(message.id)) for message in primary]
+                if all(existing):
+                    return ImportSummary(groups=1, skipped_existing=1)
+                if any(existing):
+                    logger.error(
+                        "Partially imported bundle %s; rerun with narrower bounds", [message.id for message in primary]
+                    )
+                    return ImportSummary(groups=1, failed=1)
+            if options.dry_run:
+                inputs = await assemble_bundle(
+                    primary, preceding=bundle.preceding, include_images=options.include_images
+                )
+                candidates = await services.build_inference.infer(
+                    inputs, model=options.model, reasoning_effort=options.reasoning_effort
+                )
+                logger.info("Dry run group %s: %r", [message.id for message in primary], candidates)
+                return ImportSummary(groups=1, processed=1, inferred_candidates=len(candidates))
+            run_id = await ingest_message_bundle(
+                primary,
+                bundle.preceding,
+                services,
+                model=options.model,
+                reasoning_effort=options.reasoning_effort,
+                include_images=options.include_images,
+                retry_failed=options.retry_failed,
             )
-            logger.info("Dry run group %s: %r", [message.id for message in primary], candidates)
-            return ImportSummary(groups=1, processed=1, inferred_candidates=len(candidates))
-        run_id = await ingest_message_bundle(
-            primary,
-            bundle.preceding,
-            services,
-            model=options.model,
-            reasoning_effort=options.reasoning_effort,
-            include_images=options.include_images,
-            retry_failed=options.retry_failed,
-        )
-        status = await services.submission_inference.public_status(run_id)
-        if status is None:
-            logger.error("The imported inference run %s has no retained status", run_id)
+            status = await services.submission_inference.public_status(run_id)
+            if status is None:
+                logger.error("The imported inference run %s has no retained status", run_id)
+                return ImportSummary(groups=1, failed=1)
+            count = len(status.candidates)
+            logger.info(
+                "Retained group %s as inference run %s: %s candidates",
+                [message.id for message in primary],
+                run_id,
+                count,
+            )
+            return ImportSummary(groups=1, processed=1, inferred_candidates=count)
+        except Exception:
+            logger.exception("Failed to import message group beginning at %s", primary[0].id)
             return ImportSummary(groups=1, failed=1)
-        count = len(status.candidates)
-        logger.info(
-            "Retained group %s as inference run %s: %s candidates", [message.id for message in primary], run_id, count
-        )
-        return ImportSummary(groups=1, processed=1, inferred_candidates=count)
-    except Exception:
-        logger.exception("Failed to import message group beginning at %s", primary[0].id)
-        return ImportSummary(groups=1, failed=1)
 
 
 async def process_channel(channel: discord.TextChannel, services: BotServices, options: ImportOptions) -> ImportSummary:

@@ -12,7 +12,7 @@ from squid.bot.submission.ui.drafts import DraftEditorScreen
 from squid.bot.submission.ui.inference import reopen_inference
 from squid.core.accounts.domain import AccountConsent
 from squid.core.accounts.models import Account
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.permissions.application import PermissionService, SubjectRecords
 from squid.core.permissions.domain import Effect
 from squid.core.permissions.models import PermissionGrant
@@ -41,9 +41,9 @@ class DraftListing(SubmissionDraftService):
 
     @override
     async def attention_inbox(
-        self, actor: Actor, *, after: UUID | None = None, limit: int = 20
+        self, *, context: ActingContext, after: UUID | None = None, limit: int = 20
     ) -> tuple[StoredDraft, ...]:
-        self.staff.append(actor)
+        self.staff.append(context.effective)
         return self.drafts
 
 
@@ -53,8 +53,8 @@ class InferenceListing(SubmissionInferenceRuns):
         self.requests: list[tuple[Actor, bool]] = []
 
     @override
-    async def list_active(self, actor: Actor, *, inbox: bool = False) -> tuple[UUID, ...]:
-        self.requests.append((actor, inbox))
+    async def list_active(self, *, context: ActingContext, inbox: bool = False) -> tuple[UUID, ...]:
+        self.requests.append((context.effective, inbox))
         return self.runs
 
 

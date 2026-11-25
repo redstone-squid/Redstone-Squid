@@ -17,7 +17,7 @@ import discord
 from squid.bot.submission.draft_intake import receive_retained_file
 from squid.bot.submission.message_context import assemble_bundle
 from squid.bot.utils.accounts import get_or_create_discord_account_id
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.errors import SquidError
 from squid.core.submissions.application.drafts import INGESTION_OPTIONAL_FIELDS
 from squid.core.submissions.application.finalization import DraftPreparationSnapshot
@@ -54,30 +54,36 @@ async def ingest_message_bundle(
     """
     run_id = message_bundle_run_id(primary)
     owner = await get_or_create_discord_account_id(services.accounts, primary[0].author)
-    candidates = await services.submission_inference.resume(run_id, Actor(account_id=owner))
-    if candidates is None:
-        source_files = tuple(
-            SubmissionSourceFile(
-                uuid5(run_id, str(attachment.id)),
-                attachment.filename,
-                attachment.content_type,
-                attachment.url,
-                attachment.size,
-                source_message_id=message.id,
+    source = primary[0]
+    author = Actor(
+        account_id=owner, discord_user_id=source.author.id, guild_id=source.guild.id if source.guild else None
+    )
+    context = ActingContext.for_actor(author)
+    with context.scope():
+        candidates = await services.submission_inference.resume(run_id, context=context)
+        if candidates is None:
+            source_files = tuple(
+                SubmissionSourceFile(
+                    uuid5(run_id, str(attachment.id)),
+                    attachment.filename,
+                    attachment.content_type,
+                    attachment.url,
+                    attachment.size,
+                    source_message_id=message.id,
+                )
+                for message in primary
+                for attachment in message.attachments
             )
-            for message in primary
-            for attachment in message.attachments
-        )
-        bundle = await assemble_bundle(primary, preceding=preceding, include_images=include_images)
-        candidates = await services.submission_inference.infer(
-            run_id,
-            owner,
-            bundle,
-            model=model,
-            reasoning_effort=reasoning_effort,
-            source_files=source_files,
-        )
-    await admit_candidates(services, candidates, actor=Actor(account_id=owner), retry_failed=retry_failed)
+            bundle = await assemble_bundle(primary, preceding=preceding, include_images=include_images)
+            candidates = await services.submission_inference.infer(
+                run_id,
+                owner,
+                bundle,
+                model=model,
+                reasoning_effort=reasoning_effort,
+                source_files=source_files,
+            )
+        await admit_candidates(services, candidates, actor=context.effective, retry_failed=retry_failed)
     return run_id
 
 
@@ -143,7 +149,9 @@ async def admit_candidates(
                     await receive_retained_file(services, candidate.id, actor, source.id)
                 except Exception:
                     logger.warning("Could not receive inferred source %s", source.id, exc_info=True)
-            outcome = await services.submission_finalization.submit(candidate.id, actor, locale=None)
+            outcome = await services.submission_finalization.submit(
+                candidate.id, locale=None, context=ActingContext.for_actor(actor)
+            )
             if isinstance(outcome, DraftPreparationSnapshot):
                 logger.warning(
                     "Candidate %s needs attention: %s",

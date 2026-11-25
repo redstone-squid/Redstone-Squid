@@ -24,7 +24,7 @@ from squid.bot.submission.ui.drafts import (
     Phase,
 )
 from squid.bot.submission.ui.sections import SectionEditorScreen, _DimensionsField, modal_chunks, present_chunk_form
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.builds.application.input import parse_build_ticks
 from squid.core.builds.domain.credits import Credit, CreditAttribution, CreditKind, CreditRole
 from squid.core.builds.models import Build, DoorBuild
@@ -99,24 +99,24 @@ class Drafts(SubmissionDraftService):
         self.required_actor: Actor | None = None
 
     @override
-    async def get_accessible(self, draft_id: UUID, actor: Actor) -> StoredDraft:
+    async def get_accessible(self, draft_id: UUID, *, context: ActingContext) -> StoredDraft:
         assert draft_id == self.current.snapshot.id
-        if self.required_actor is not None and actor != self.required_actor:
+        if self.required_actor is not None and context.effective != self.required_actor:
             raise DraftAccessDeniedError
-        self.actors.append(actor)
+        self.actors.append(context.effective)
         return self.current
 
     @override
     async def apply_change(
         self,
         draft_id: UUID,
-        actor: Actor,
         change: DraftChange,
         *,
+        context: ActingContext,
         locale: str | None,
         now: Instant | None = None,
     ) -> AppliedDraftChange:
-        self.actors.append(actor)
+        self.actors.append(context.effective)
         self.changes.append(change)
         self.current = replace(self.current, snapshot=self.current.snapshot.apply(change))
         return AppliedDraftChange(self.current)
@@ -145,7 +145,7 @@ class Intake(SubmissionAttachmentIntake):
         self.files: tuple[SuppliedAttachment, ...] = ()
 
     @override
-    async def list(self, draft_id: UUID, actor: Actor) -> tuple[SuppliedAttachment, ...]:
+    async def list(self, draft_id: UUID, *, context: ActingContext) -> tuple[SuppliedAttachment, ...]:
         return self.files
 
 
@@ -173,7 +173,7 @@ class Finalization(SubmissionFinalizationService):
         self.result: SubmissionRequestResult | None = None
 
     @override
-    async def status(self, draft_id: UUID, actor: Actor) -> SubmissionRequestResult | None:
+    async def status(self, draft_id: UUID, *, context: ActingContext) -> SubmissionRequestResult | None:
         return self.result
 
 
@@ -272,8 +272,9 @@ async def test_staff_authority_survives_open_refresh_save_and_submit(
     assert all(seen == actor for seen in drafts.actors)
     assert drafts.changes[0].client_instance_id == "versioned-editor"
     for call in (*files.await_args_list, *status.await_args_list):
-        assert call.args == (draft_id, actor)
-    submit.assert_awaited_once_with(draft_id, actor, locale=None)
+        assert call.args == (draft_id,)
+        assert call.kwargs["context"].effective == actor
+    submit.assert_awaited_once_with(draft_id, context=ActingContext.direct(actor), locale=None)
 
     # The same open workspace must stop using staff authority after it is revoked.
     resolve_actor.return_value = Actor(account_id=99, discord_user_id=123, guild_id=456)
@@ -735,19 +736,19 @@ class FileActionIntake(Intake):
 
     @override
     async def reserve(
-        self, draft_id: UUID, actor: Actor, source_id: UUID, filename: str, content_type: str | None
+        self, draft_id: UUID, source_id: UUID, filename: str, content_type: str | None, *, context: ActingContext
     ) -> SuppliedAttachment:
         return next(file for file in self.files if file.id == source_id)
 
     @override
     async def register_file(
-        self, draft_id: UUID, actor: Actor, source_id: UUID, path: Path, content_type: str | None
+        self, draft_id: UUID, source_id: UUID, path: Path, content_type: str | None, *, context: ActingContext
     ) -> None:
-        self.registered.append((draft_id, actor, source_id, path.read_bytes()))
+        self.registered.append((draft_id, context.effective, source_id, path.read_bytes()))
 
     @override
-    async def fail(self, draft_id: UUID, actor: Actor, source_id: UUID) -> None:
-        self.failed.append((draft_id, actor, source_id))
+    async def fail(self, draft_id: UUID, source_id: UUID, *, context: ActingContext) -> None:
+        self.failed.append((draft_id, context.effective, source_id))
 
 
 class AttachmentEditRecorder(EditRunner):
@@ -756,10 +757,11 @@ class AttachmentEditRecorder(EditRunner):
         self.commands: list[tuple[EditCommand, Actor]] = []
 
     @override
-    async def execute(self, command: EditCommand, actor: Actor) -> EditResult:
+    async def execute(self, command: EditCommand, *, context: ActingContext) -> EditResult:
+        actor = context.effective
         assert command.kind == DRAFT_ATTACHMENTS
         (expected,) = bound_revisions(command)
-        current = await self.drafts.get_accessible(UUID(expected.target.key), actor)
+        current = await self.drafts.get_accessible(UUID(expected.target.key), context=ActingContext.for_actor(actor))
         require_revision(expected, current.snapshot.revision)
         self.commands.append((command, actor))
         snapshot = replace(current.snapshot, revision=expected.value + 1)
@@ -818,7 +820,8 @@ async def test_file_actions_refresh_staff_authority(operation: str) -> None:
         replacement = await ws.replace_file(file_id, uploaded)
 
     uploads.stage.assert_awaited_once()
-    staged_draft, staged_actor, staged_revision, (membership,) = uploads.stage.await_args.args
+    staged_draft, staged_revision, (membership,) = uploads.stage.await_args.args
+    staged_actor = uploads.stage.await_args.kwargs["context"].effective
     assert (staged_draft, staged_actor, staged_revision) == (draft_id, staff, revision)
     if operation == "failed-replace":
         assert replacement is None

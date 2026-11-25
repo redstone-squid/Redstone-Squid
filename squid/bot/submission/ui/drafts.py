@@ -54,7 +54,7 @@ from squid.bot.submission.ui.sections import (
     problem_text,
     section_text,
 )
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.builds.models import Build
 from squid.core.errors import JSONValue, SquidError
 from squid.core.i18n import tr
@@ -294,10 +294,10 @@ class DraftWorkspace(sl.Reactive):
             self.projection.replace(current)
 
     async def _read(self) -> DraftProjection:
-        actor = await self.resolve_actor()
-        draft = await self.services.submission_drafts.get_accessible(self._draft_id, actor)
-        attachments = await self.services.submission_intake.list(self._draft_id, actor)
-        result = await self.services.submission_finalization.status(self._draft_id, actor)
+        context = ActingContext.for_actor(await self.resolve_actor())
+        draft = await self.services.submission_drafts.get_accessible(self._draft_id, context=context)
+        attachments = await self.services.submission_intake.list(self._draft_id, context=context)
+        result = await self.services.submission_finalization.status(self._draft_id, context=context)
         return DraftProjection(draft, attachments, result if isinstance(result, FinalizationJobSnapshot) else None)
 
     async def load_options(self, fields: Iterable[FormField]) -> None:
@@ -327,14 +327,18 @@ class DraftWorkspace(sl.Reactive):
 
     async def may_edit(self) -> bool:
         try:
-            current = await self.services.submission_drafts.get_accessible(self._draft_id, await self.resolve_actor())
+            current = await self.services.submission_drafts.get_accessible(
+                self._draft_id, context=ActingContext.for_actor(await self.resolve_actor())
+            )
         except SquidError:
             return False
         return current.snapshot.status in {DraftStatus.EDITING, DraftStatus.PROCESSING, DraftStatus.NEEDS_ATTENTION}
 
     async def submit(self) -> None:
         try:
-            await self.services.submission_finalization.submit(self._draft_id, await self.resolve_actor(), locale=None)
+            await self.services.submission_finalization.submit(
+                self._draft_id, locale=None, context=ActingContext.for_actor(await self.resolve_actor())
+            )
         except SquidError as error:
             self.notice = error.public_text()
         else:
@@ -376,10 +380,10 @@ class DraftWorkspace(sl.Reactive):
         self.hallway_report = None
         try:
             await self.reload()
-            actor = await self.resolve_actor()
+            context = ActingContext.for_actor(await self.resolve_actor())
             sources = tuple(
                 source
-                for source in await self.services.submission_schematics.list(self._draft_id, actor)
+                for source in await self.services.submission_schematics.list(self._draft_id, context=context)
                 if not source.discarded
             )
             primary = next((source for source in sources if source.primary or len(sources) == 1), None)
@@ -388,7 +392,7 @@ class DraftWorkspace(sl.Reactive):
                     t"draft-inference-choose-source = Add a schematic under Files and choose the main schematic first."
                 )
                 return
-            result = await self.services.submission_schematics.suggestions(self._draft_id, actor, primary.id)
+            result = await self.services.submission_schematics.suggestions(self._draft_id, primary.id, context=context)
             if result.state is not DraftSchematicState.READY:
                 self.notice = tr(
                     t"draft-inference-not-ready = The schematic is not ready for inference. "
@@ -510,7 +514,9 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
         Raises:
             ValueError: This server can no longer read the draft's form revision.
         """
-        draft = await services.submission_drafts.get_accessible(draft_id, await resolve_actor())
+        draft = await services.submission_drafts.get_accessible(
+            draft_id, context=ActingContext.for_actor(await resolve_actor())
+        )
         manifest = await services.submission_forms.manifest_revision(
             draft.snapshot.schema_id, draft.snapshot.schema_revision, locale=None
         )

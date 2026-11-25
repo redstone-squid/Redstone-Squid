@@ -11,6 +11,7 @@ from squid.bot.submission.ingestion import admit_candidates
 from squid.bot.submission.ui import controls as build_controls
 from squid.bot.submission.ui.drafts import DraftEditorScreen
 from squid.bot.ui import tr
+from squid.core.actors import ActingContext
 from squid.core.builds.domain import BuildCategory
 from squid.core.errors import SquidError
 from squid.core.submissions.application.inference_runs import InferenceCandidate
@@ -141,7 +142,9 @@ class InferenceCandidatesScreen(sd.Screen[None, Any, "RedstoneSquid"]):
         await event.acknowledge()
         actor = await event.context.client.actors.resolve(event.context)
         try:
-            candidates = await self.services.submission_inference.resume(self.run_id, actor)
+            candidates = await self.services.submission_inference.resume(
+                self.run_id, context=ActingContext.for_actor(actor)
+            )
             if candidates is not None:
                 self.candidates = candidates
                 await admit_candidates(self.services, candidates, actor=actor)
@@ -161,7 +164,7 @@ class InferenceCandidatesScreen(sd.Screen[None, Any, "RedstoneSquid"]):
 
     async def _open(self, event: sd.PressEvent[RedstoneSquid]) -> None:
         actor = await event.context.client.actors.resolve(event.context)
-        candidates = await self.services.submission_inference.get(self.run_id, actor)
+        candidates = await self.services.submission_inference.get(self.run_id, context=ActingContext.for_actor(actor))
         current = next((item for item in candidates if str(item.id) == self.selected), None)
         if current is None:
             return
@@ -192,5 +195,5 @@ async def reopen_inference(request: AppRequest, run_id: UUID) -> InferenceCandid
     if await ensure_consented_account(request, request.client.services.accounts) is None:
         return None
     actor = await request.client.actors.resolve(request)
-    candidates = await request.client.services.submission_inference.get(run_id, actor)
+    candidates = await request.client.services.submission_inference.get(run_id, context=ActingContext.for_actor(actor))
     return InferenceCandidatesScreen(request.client.services, run_id, candidates)
