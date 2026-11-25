@@ -18,6 +18,7 @@ from squid.bot.accounts.profile_render import present_claimant
 from squid.core.accounts.application.presentation import claimant_label
 from squid.core.accounts.domain import ClaimStatus, IdentityRefresh, LinkPreview
 from squid.core.accounts.models import Account, AccountIdentity, AliasClaim, CreatorAlias
+from squid.core.actors import ActingContext
 from squid.core.suggestions.domain import SuggestionRequest
 from squid.core.suggestions.infrastructure.providers.records import AliasClaimProvider
 from squid_i18n import NEUTRAL, discord_text, resolve_text
@@ -256,7 +257,9 @@ async def test_registered_claim_provider_uses_full_plain_labels(java_name: str |
     claim = _claim(Account(identities=(identity,), consent=None, id=42, created_at=NOW, public_creator_id=OTHER_UUID))
 
     class Claims:
-        async def pending_alias_claims(self, *, with_claimants: bool = False) -> tuple[AliasClaim, ...]:
+        async def pending_alias_claims(
+            self, *, context: ActingContext, with_claimants: bool = False
+        ) -> tuple[AliasClaim, ...]:
             assert with_claimants
             return (claim,)
 

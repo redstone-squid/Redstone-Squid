@@ -29,6 +29,7 @@ from squid.core.accounts.models import (
     MergeTicket,
 )
 from squid.core.builds.application.ports import BuildEditingUnitOfWork
+from squid.core.permissions.application.ports import PermissionUnitOfWork
 
 
 @dataclass(frozen=True, slots=True)
@@ -176,6 +177,6 @@ class AccountRepository(Protocol):
     async def clear_verification_failures(self, provider: IdentityProvider, subject: str) -> None: ...
 
 
-class AccountUnitOfWork(BuildEditingUnitOfWork, Protocol):
+class AccountUnitOfWork(BuildEditingUnitOfWork, PermissionUnitOfWork, Protocol):
     @property
     def accounts(self) -> AccountRepository: ...

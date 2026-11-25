@@ -1,6 +1,6 @@
 """The semantic review workspace for creator credit claims."""
 
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from typing import Any, override
 
 import squid_ui as sl
@@ -12,6 +12,8 @@ from squid.bot.utils.permissions import Grants
 from squid.core.accounts.application import AccountService
 from squid.core.accounts.errors import AliasAlreadyClaimedError
 from squid.core.accounts.models import AliasClaim
+from squid.core.actors import ActingContext, Actor
+from squid.core.errors import AuthorizationError
 from squid.core.permissions.domain.catalogue import ACCOUNT_CLAIM_APPROVE, ACCOUNT_CLAIM_REJECT
 from squid_i18n import md_tr
 from squid_ui.ext.discord import primitives
@@ -39,11 +41,13 @@ class ClaimReviewComponent(sl.Component[ComponentsV2Target, sd.Request]):
         accounts: AccountService,
         claims: Sequence[AliasClaim],
         *,
+        actor: Callable[[], Awaitable[Actor]],
         author_id: int,
         grants: Grants,
         timeout: float = REVIEW_SECONDS,
     ) -> None:
         self._accounts = accounts
+        self._actor = actor
         self._claims = tuple(claims)
         self._author_id = author_id
         self.grants = grants
@@ -162,15 +166,16 @@ class ClaimReviewComponent(sl.Component[ComponentsV2Target, sd.Request]):
         approve: bool,
     ) -> None:
         """Resolve the selected claim or arm explicit reassignment after an ownership conflict."""
+        context = ActingContext.for_actor(await self._actor())
+        if context.effective.require_account_id() != staff_account_id:
+            raise AuthorizationError
         try:
             if approve:
                 resolved = await self._accounts.approve_alias_claim(
-                    claim.id,
-                    staff_account_id=staff_account_id,
-                    reassign=self.reassign_armed == claim.id,
+                    claim.id, reassign=self.reassign_armed == claim.id, context=context
                 )
             else:
-                resolved = await self._accounts.reject_alias_claim(claim.id, staff_account_id=staff_account_id)
+                resolved = await self._accounts.reject_alias_claim(claim.id, context=context)
         except AliasAlreadyClaimedError as conflict:
             self.reassign_armed = claim.id
             await event.notice(_conflict_text(conflict), visibility=sl.interactions.Visibility.PUBLIC)
@@ -188,7 +193,11 @@ class ClaimReviewComponent(sl.Component[ComponentsV2Target, sd.Request]):
         await event.notice(message, visibility=sl.interactions.Visibility.PUBLIC)
 
     async def _reload(self) -> None:
-        self._claims = tuple(await self._accounts.pending_alias_claims(with_claimants=True))
+        self._claims = tuple(
+            await self._accounts.pending_alias_claims(
+                with_claimants=True, context=ActingContext.for_actor(await self._actor())
+            )
+        )
         self.selected_id = None
         self.reassign_armed = None
 

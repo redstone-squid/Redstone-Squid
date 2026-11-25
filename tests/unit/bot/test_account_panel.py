@@ -38,7 +38,7 @@ from squid.core.accounts.domain import (
 )
 from squid.core.accounts.errors import AccountNotFoundError
 from squid.core.accounts.models import Account, AccountIdentity, AccountProfile, AliasClaim, CreatorAlias
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.notifications import NotificationPreferences, NotificationService
 from squid.core.notifications.application import NotificationEditorSnapshot
 from squid.core.pagination import Page
@@ -217,7 +217,8 @@ class LinkAccountService(SnapshotAccountService):
         return Account(identities=(AccountIdentity.discord(AUTHOR_ID),), consent=consent, id=ACCOUNT_ID, created_at=NOW)
 
     @override
-    async def grant_current_consent(self, account_id: int) -> Account:
+    async def grant_current_consent(self, *, context: ActingContext) -> Account:
+        account_id = context.effective.require_account_id()
         self.granted.append(account_id)
         return Account(identities=(DISCORD,), consent=AccountConsent.grant_current(), id=account_id, created_at=NOW)
 
@@ -268,7 +269,9 @@ class StaffRefreshService(SnapshotAccountService):
         return self.target
 
     @override
-    async def refresh_java_identity(self, account_id: int, *, java_uuid: UUID | None = None) -> IdentityRefresh:
+    async def refresh_java_identity(
+        self, account_id: int, *, context: ActingContext, java_uuid: UUID | None = None
+    ) -> IdentityRefresh:
         del java_uuid
         self.refreshed.append(account_id)
         return self.refresh
@@ -279,12 +282,14 @@ class MergeAccountService(SnapshotAccountService):
         self.completed: list[tuple[int, str]] = []
 
     @override
-    async def preview_merge(self, surviving_account_id: int, code: str) -> MergePreview:
+    async def preview_merge(self, code: str, *, context: ActingContext) -> MergePreview:
+        surviving_account_id = context.effective.require_account_id()
         del surviving_account_id, code
         return MergePreview(UUID(int=8), ("Notch",), identity_count=2, build_count=3)
 
     @override
-    async def complete_merge(self, surviving_account_id: int, code: str, *, now: Instant | None = None) -> AccountMerge:
+    async def complete_merge(self, code: str, *, context: ActingContext, now: Instant | None = None) -> AccountMerge:
+        surviving_account_id = context.effective.require_account_id()
         del now
         self.completed.append((surviving_account_id, code))
         return AccountMerge(surviving_account_id, 9, UUID(int=8), UUID(int=9))
@@ -308,7 +313,8 @@ class AccountMutationService(SnapshotAccountService):
         return AccountProfile.empty(account_id)
 
     @override
-    async def grant_current_consent(self, account_id: int) -> Account:
+    async def grant_current_consent(self, *, context: ActingContext) -> Account:
+        account_id = context.effective.require_account_id()
         self.consent_grants.append(account_id)
         account = Account(identities=(), consent=AccountConsent.grant_current(), id=account_id, created_at=NOW)
         account.revision = 2

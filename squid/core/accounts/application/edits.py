@@ -15,7 +15,6 @@ from squid.core.edits.application import EditUnitOfWork
 from squid.core.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit, Revision
 from squid.core.edits.fields import Aggregate, FieldCommand
 from squid.core.errors import AccountRequiredError, OwnershipRequiredError, ValidationError
-from squid.core.permissions.application.ports import PermissionUnitOfWork
 from squid.core.permissions.application.services import PermissionService
 from squid.core.permissions.domain.catalogue import ACCOUNT_PROFILE_MODERATE, ACCOUNT_SELF_MANAGE
 from squid.core.sentinel import UNSET
@@ -70,7 +69,7 @@ class AccountEditRepository(AccountRepository, Protocol):
     async def flush_edit_revision(self, account: Account, expected: Revision) -> Revision: ...
 
 
-class AccountEditUnitOfWork(AccountUnitOfWork, EditUnitOfWork, PermissionUnitOfWork, Protocol):
+class AccountEditUnitOfWork(AccountUnitOfWork, EditUnitOfWork, Protocol):
     @property
     @override
     def accounts(self) -> AccountEditRepository: ...

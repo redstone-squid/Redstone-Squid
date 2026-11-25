@@ -17,7 +17,7 @@ from squid.bot.accounts.presentation import link_conflict, link_message, refresh
 from squid.bot.app import RedstoneSquid
 from squid.bot.catalogue.browse import BuildBrowseScreen
 from squid.bot.lookup import pick
-from squid.bot.notifications_view import NotificationPanel, VisibilityResolver
+from squid.bot.notifications_view import NotificationPanel
 from squid.bot.routes import AppRequest, AppRoutes, ScreenUnavailable
 from squid.bot.ui import tr
 from squid.bot.utils.permissions import Grants, requires_grant
@@ -26,16 +26,15 @@ from squid.core.accounts.application.edits import account_target
 from squid.core.accounts.domain import AccountConsent, IdentityProvider, LinkPreview
 from squid.core.accounts.errors import AccountAlreadyLinkedError, AccountNotFoundError
 from squid.core.accounts.models import Account
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.edits.application import EditRunner
-from squid.core.notifications import InboxVisibility, NotificationService
+from squid.core.notifications import NotificationService
 from squid.core.permissions.domain.catalogue import (
     ACCOUNT_CLAIM_APPROVE,
     ACCOUNT_CLAIM_LIST,
     ACCOUNT_CLAIM_REJECT,
     ACCOUNT_IDENTITY_REFRESH,
     ACCOUNT_IDENTITY_REFRESH_ANY,
-    BUILD_SUBMISSION_VIEW_PENDING,
 )
 from squid.core.suggestions.domain import Suggestion
 from squid_i18n import md_tr
@@ -75,11 +74,9 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
         request_consent: ConsentRequest,
         grants: Grants,
         discord_username: str | None = None,
-        inbox_visibility: VisibilityResolver | None = None,
     ) -> None:
         self._accounts = accounts
         self._notification_service = notifications
-        self._inbox_visibility = inbox_visibility
         self._edits = edits
         self._edit_actor = actor
         self._actor_id = actor_id
@@ -127,11 +124,6 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
         async def edit_actor() -> Actor:
             return await request.client.actors.resolve(request, refresh=True)
 
-        async def inbox_visibility() -> InboxVisibility:
-            current = await edit_actor()
-            decision = await request.client.services.permissions.check(current, BUILD_SUBMISSION_VIEW_PENDING)
-            return InboxVisibility(include_staff=decision.allowed)
-
         return cls(
             accounts=request.client.services.accounts,
             notifications=request.client.services.notifications,
@@ -139,7 +131,6 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
             actor=edit_actor,
             actor_id=actor.id,
             discord_username=actor.name,
-            inbox_visibility=inbox_visibility,
             account=account,
             request_consent=open_consent,
             grants=await Grants.load(
@@ -221,7 +212,6 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
                 edits=self._edits,
                 actor=self._edit_actor,
                 account_id=account_id,
-                visibility_resolver=self._inbox_visibility,
             )
         setup = self._setup_nodes(
             tr(t"account-workspace-set-up-profile = Set up your account"),
@@ -248,8 +238,12 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
             sp.Tab("notifications", tr(t"account-workspace-notifications = Notifications"), notifications),
         ]
         if ACCOUNT_CLAIM_LIST in self.grants:
-            claims = await self._accounts.pending_alias_claims(with_claimants=True)
-            review = ClaimReviewComponent(self._accounts, claims, author_id=self._actor_id, grants=self.grants)
+            claims = await self._accounts.pending_alias_claims(
+                with_claimants=True, context=ActingContext.for_actor(await self._edit_actor())
+            )
+            review = ClaimReviewComponent(
+                self._accounts, claims, actor=self._edit_actor, author_id=self._actor_id, grants=self.grants
+            )
             tabs.append(sp.Tab("review", tr(t"account-workspace-review-claims = Review claims"), review))
         selected: str | None = self._pending_focus
         if selected is None and self._tabs is not None:
@@ -407,7 +401,7 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
                     consent=consent,
                 )
             else:
-                await self._accounts.grant_current_consent(account.id)
+                await self._accounts.grant_current_consent(context=ActingContext.for_actor(await self._edit_actor()))
             await self._rebuild(changed_account_id=None if account is None else account.id)
 
         await self._request_consent(event, answered)
@@ -459,7 +453,9 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
                     consent=consent,
                 )
             elif linked_account.consent is None or linked_account.needs_consent_refresh:
-                linked_account = await self._accounts.grant_current_consent(linked_account.id)
+                linked_account = await self._accounts.grant_current_consent(
+                    context=ActingContext.for_actor(await self._edit_actor())
+                )
             account_id = linked_account.id
             if account_id is None:  # pyright: ignore[reportUnnecessaryComparison]
                 raise AccountNotFoundError(provider=IdentityProvider.DISCORD, subject=str(self._actor_id))
@@ -511,7 +507,9 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
     )
     async def _refresh_identity(self, event: sd.PressEvent) -> None:
         account_id = self._account_id()
-        refresh = await self._accounts.refresh_java_identity(account_id)
+        refresh = await self._accounts.refresh_java_identity(
+            account_id, context=ActingContext.for_actor(await self._edit_actor())
+        )
         await self._rebuild(changed_account_id=account_id)
         await event.notice(refresh_message(refresh))
 
@@ -528,7 +526,9 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
         account = await self._accounts.get_account_by_identity(IdentityProvider.DISCORD, str(member.id))
         if account is None or account.id is None:  # pyright: ignore[reportUnnecessaryComparison]
             raise AccountNotFoundError(provider=IdentityProvider.DISCORD, subject=str(member.id))
-        refresh = await self._accounts.refresh_java_identity(account.id)
+        refresh = await self._accounts.refresh_java_identity(
+            account.id, context=ActingContext.for_actor(await self._edit_actor())
+        )
         await self._rebuild(changed_account_id=account.id)
         await event.notice(refresh_message(refresh))
 
@@ -549,7 +549,9 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
         await self._submit_claim(event, item.value)
 
     async def _submit_claim(self, event: sd.ActionEvent, name: str) -> None:
-        claim = await self._accounts.request_alias_claim(self._account_id(), name)
+        claim = await self._accounts.request_alias_claim(
+            name, context=ActingContext.for_actor(await self._edit_actor())
+        )
         claim_id = claim.id
         alias_name = claim.alias_name
         await event.notice(
@@ -559,7 +561,7 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
         )
 
     async def _create_merge_code(self, event: sd.PressEvent) -> None:
-        code, ticket = await self._accounts.create_merge_code(self._account_id())
+        code, ticket = await self._accounts.create_merge_code(context=ActingContext.for_actor(await self._edit_actor()))
         expiry = sl.md(discord.utils.format_dt(ticket.expires_at.to_stdlib(), style="R"))
         await event.notice(
             md_tr(
@@ -572,7 +574,7 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
         """Preview the merge and retain its code until the user confirms or cancels."""
         form = _MergeForm.from_submission(event)
         code = form.code
-        preview = await self._accounts.preview_merge(self._account_id(), code)
+        preview = await self._accounts.preview_merge(code, context=ActingContext.for_actor(await self._edit_actor()))
         aliases = len(preview.alias_names)
         identities = preview.identity_count
         builds = preview.build_count
@@ -595,7 +597,7 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
             self._merge_code = None
             self._merge_decision = None
             return
-        result = await self._accounts.complete_merge(self._account_id(), code)
+        result = await self._accounts.complete_merge(code, context=ActingContext.for_actor(await self._edit_actor()))
         self._merge_code = None
         self._merge_decision = None
         await self._rebuild(changed_account_id=result.surviving_account_id)

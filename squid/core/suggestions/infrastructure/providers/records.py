@@ -5,6 +5,7 @@ from typing import Protocol
 
 from squid.core.accounts.application.presentation import claimant_label
 from squid.core.accounts.models import AliasClaim
+from squid.core.actors import ActingContext
 from squid.core.permissions.domain.catalogue import ACCOUNT_CLAIM_LIST
 from squid.core.suggestions.application import Candidate
 from squid.core.suggestions.application.queries import SuggestionRepository
@@ -92,7 +93,9 @@ class RecordTitleProvider:
 class PendingAliasClaims(Protocol):
     """Read creator credit claims awaiting staff review."""
 
-    async def pending_alias_claims(self, *, with_claimants: bool = False) -> Sequence[AliasClaim]: ...
+    async def pending_alias_claims(
+        self, *, context: ActingContext, with_claimants: bool = False
+    ) -> Sequence[AliasClaim]: ...
 
 
 class AliasClaimProvider:
@@ -102,7 +105,6 @@ class AliasClaimProvider:
         self._accounts = accounts
 
     async def candidates(self, request: SuggestionRequest) -> tuple[Candidate, ...]:
-        del request
         # Uncached for the same reason as pending tags: a reviewer works down this list, and a
         # claim they just resolved must stop being offered.
         return tuple(
@@ -113,7 +115,9 @@ class AliasClaimProvider:
                 kind="claim",
                 terms=(claim.alias_name, str(claim.id)),
             )
-            for claim in await self._accounts.pending_alias_claims(with_claimants=True)
+            for claim in await self._accounts.pending_alias_claims(
+                with_claimants=True, context=ActingContext.for_actor(request.viewer)
+            )
         )
 
 

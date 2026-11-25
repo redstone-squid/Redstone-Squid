@@ -527,7 +527,11 @@ async def list_my_builds(
     selector = resolve_selector(offset=offset, after_id=after_id, before_id=before_id)
     statuses = _ALL_STATUSES if status is None else frozenset({status.to_domain()})
     page = await build_queries.list_page(
-        statuses=statuses, submitter_account_id=caller.account_id, selector=selector, page_size=page_size
+        statuses=statuses,
+        submitter_account_id=caller.account_id,
+        selector=selector,
+        page_size=page_size,
+        context=caller.context(),
     )
     return Page[PublicBuildSummary].from_domain(page, PublicBuildSummary.from_build)
 

@@ -33,7 +33,7 @@ from squid.core.accounts.domain import (
     ProfileUpdate,
 )
 from squid.core.accounts.models import AccountIdentity, AccountProfile
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.edits.application import EditRunner
 from squid.core.edits.domain import EditValues, Revision, RevisionConflictError
 from squid_i18n import md_tr
@@ -95,6 +95,7 @@ class AccountOverview(sl.Component[ComponentsV2Target, sd.Request]):
         self._request_consent = request_consent
         self._profile = AccountProfile.empty(account_id)
         self._profile_editor = None
+        self._edit_actor = actor
         self.edits = EditController(edits, actor, self._reload)
 
     @override
@@ -287,7 +288,9 @@ class AccountOverview(sl.Component[ComponentsV2Target, sd.Request]):
             if consent is None:
                 # Cancelling leaves the account and the displayed panel unchanged.
                 return
-            granted = await self._accounts.grant_current_consent(self._account_id)
+            granted = await self._accounts.grant_current_consent(
+                context=ActingContext.for_actor(await self._edit_actor())
+            )
             # Consent is saved outside session history, so its entries for this account
             # now expect an old revision and could only fail. Drop them.
             self.edits.forget({account_target(self._account_id).identity})

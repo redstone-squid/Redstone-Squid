@@ -20,6 +20,7 @@ from squid.core.accounts.domain import (
     IdentityRefresh,
 )
 from squid.core.accounts.models import Account, AccountIdentity, AccountProfile, AliasClaim, CreatorAlias
+from squid.core.actors import ActingContext
 from squid.core.errors import AuthenticationError
 from tests.support.account_edits import SnapshotAccountService
 
@@ -67,17 +68,21 @@ class AccountRecorder(SnapshotAccountService):
         return self.profile
 
     @override
-    async def list_identities(self, account_id: int) -> tuple[AccountIdentity, ...]:
+    async def list_identities(self, *, context: ActingContext) -> tuple[AccountIdentity, ...]:
+        account_id = context.effective.require_account_id()
         assert account_id == 1
         return self.account.identities
 
     @override
-    async def grant_current_consent(self, account_id: int) -> Account:
+    async def grant_current_consent(self, *, context: ActingContext) -> Account:
+        account_id = context.effective.require_account_id()
         self.consent_grants.append(account_id)
         return self.account
 
     @override
-    async def refresh_java_identity(self, account_id: int, *, java_uuid: UUID | None = None) -> IdentityRefresh:
+    async def refresh_java_identity(
+        self, account_id: int, *, context: ActingContext, java_uuid: UUID | None = None
+    ) -> IdentityRefresh:
         self.refreshes.append((account_id, java_uuid))
         assert self.refresh is not None
         return self.refresh
@@ -206,6 +211,6 @@ async def test_refresh_reports_an_unchanged_name() -> None:
 async def test_staff_refresh_targets_the_named_account() -> None:
     refresh = IdentityRefresh(account_id=42, java_uuid=JAVA_UUID, current_name="Steve", previous_name="Steve")
     accounts = _accounts(refresh=refresh)
-    response = await refresh_minecraft_identity_for.fn(42, accounts, _reservation=None)
+    response = await refresh_minecraft_identity_for.fn(_caller(), 42, accounts, _reservation=None)
     assert accounts.refreshes == [(42, None)]
     assert response.ign == "Steve"

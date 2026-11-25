@@ -165,7 +165,7 @@ class MockAccountManager(AccountService):
         return AccountProfile.empty(account_id)
 
     @override
-    async def list_identities(self, account_id: int) -> tuple[AccountIdentity, ...]:
+    async def list_identities(self, *, context: ActingContext) -> tuple[AccountIdentity, ...]:
         return ()
 
     @override
@@ -271,21 +271,22 @@ class MockBuildQueries(BuildQueryService):
         """Answer every read as a miss; no repository is attached."""
 
     @override
-    async def get(self, build_id: int) -> Build | None:
+    async def get(self, build_id: int, *, context: ActingContext) -> Build | None:
         return None
 
     @override
-    async def get_public(self, build_id: int) -> Build:
+    async def get_public(self, build_id: int, *, context: ActingContext) -> Build:
         raise BuildNotFoundError(build_id)
 
     @override
-    async def get_many(self, build_ids: Sequence[int]) -> list[Build]:
+    async def get_many(self, build_ids: Sequence[int], *, context: ActingContext) -> list[Build]:
         return []
 
     @override
     async def list_page(
         self,
         *,
+        context: ActingContext,
         statuses: frozenset[BuildStatus],
         submitter_account_id: int | None = None,
         sort: BuildListSort = DEFAULT_BUILD_LIST_SORT,
@@ -353,20 +354,26 @@ class MockSchematics(SchematicService):
 
     @override
     async def list_public_page(
-        self, build_id: int, *, selector: PageSelector = FIRST_PAGE, page_size: int = 50
+        self, build_id: int, *, context: ActingContext, selector: PageSelector = FIRST_PAGE, page_size: int = 50
     ) -> Page[StoredSchematic]:
         return cast(Page[StoredSchematic], _EMPTY_PAGE)
 
     @override
-    async def public_download(self, build_id: int, schematic_id: int) -> PublicSchematicDownload:
+    async def public_download(
+        self, build_id: int, schematic_id: int, *, context: ActingContext
+    ) -> PublicSchematicDownload:
         raise SchematicNotFoundError
 
     @override
-    async def render_now(self, build_id: int, *, request: RenderRequest | None = None) -> RenderedSchematic:
+    async def render_now(
+        self, build_id: int, *, context: ActingContext, request: RenderRequest | None = None
+    ) -> RenderedSchematic:
         raise SchematicNotFoundError
 
     @override
-    async def render_content(self, recipe_hash: str, *, max_bytes: int = 8 * 1024 * 1024) -> bytes:
+    async def render_content(
+        self, recipe_hash: str, *, context: ActingContext, max_bytes: int = 8 * 1024 * 1024
+    ) -> bytes:
         raise SchematicNotFoundError
 
 
@@ -468,20 +475,21 @@ class MockMediaJobs(MediaProcessingJobService):
         self,
         submission: StagedMediaUploadSubmission,
         *,
+        context: ActingContext,
         authorization: MediaDraftUploadAuthorization | None = None,
     ) -> UUID:
         return submission.upload_id or uuid.uuid4()
 
     @override
-    async def get(self, upload_id: UUID) -> MediaJobSnapshot | None:
+    async def get(self, upload_id: UUID, *, context: ActingContext) -> MediaJobSnapshot | None:
         return None
 
     @override
-    async def list_for_draft(self, draft_id: UUID) -> Sequence[MediaJobSnapshot]:
+    async def list_for_draft(self, draft_id: UUID, *, context: ActingContext) -> Sequence[MediaJobSnapshot]:
         return ()
 
     @override
-    async def discard(self, draft_id: UUID, upload_id: UUID) -> bool:
+    async def discard(self, draft_id: UUID, upload_id: UUID, *, context: ActingContext) -> bool:
         return False
 
 

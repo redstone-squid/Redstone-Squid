@@ -3,6 +3,7 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import override
+from unittest.mock import AsyncMock
 
 import discord
 import pytest
@@ -17,6 +18,7 @@ from squid.core.accounts.application import AccountService
 from squid.core.accounts.domain import ClaimStatus
 from squid.core.accounts.errors import AliasAlreadyClaimedError
 from squid.core.accounts.models import Account, AccountIdentity, AliasClaim
+from squid.core.actors import ActingContext, Actor
 from squid.core.permissions.domain.catalogue import ACCOUNT_CLAIM_APPROVE, ACCOUNT_CLAIM_REJECT
 from squid_ui.ext.discord.testing import (
     AsyncCallRecorder,
@@ -54,19 +56,23 @@ class AccountRecorder(AccountService):
         self.decisions: list[tuple[str, int, int, bool]] = []
 
     @override
-    async def pending_alias_claims(self, *, with_claimants: bool = False) -> Sequence[AliasClaim]:
+    async def pending_alias_claims(
+        self, *, context: ActingContext, with_claimants: bool = False
+    ) -> Sequence[AliasClaim]:
         assert with_claimants is True
         return self.claims
 
     @override
-    async def approve_alias_claim(self, claim_id: int, *, staff_account_id: int, reassign: bool = False) -> AliasClaim:
+    async def approve_alias_claim(self, claim_id: int, *, context: ActingContext, reassign: bool = False) -> AliasClaim:
+        staff_account_id = context.effective.require_account_id()
         self.decisions.append(("approve", claim_id, staff_account_id, reassign))
         if self.conflict and not reassign:
             raise AliasAlreadyClaimedError("Notch").with_holder_name("Builder")
         return next(claim for claim in self.claims if claim.id == claim_id)
 
     @override
-    async def reject_alias_claim(self, claim_id: int, *, staff_account_id: int) -> AliasClaim:
+    async def reject_alias_claim(self, claim_id: int, *, context: ActingContext) -> AliasClaim:
+        staff_account_id = context.effective.require_account_id()
         self.decisions.append(("reject", claim_id, staff_account_id, False))
         return next(claim for claim in self.claims if claim.id == claim_id)
 
@@ -84,6 +90,7 @@ def make_component(claims: tuple[AliasClaim, ...], *, conflict: bool = False) ->
         ClaimReviewComponent(
             accounts,
             claims,
+            actor=AsyncMock(return_value=Actor(account_id=AUTHOR_ID)),
             author_id=AUTHOR_ID,
             grants=grants(ACCOUNT_CLAIM_APPROVE, ACCOUNT_CLAIM_REJECT),
         ),
@@ -206,7 +213,7 @@ async def test_approving_through_the_panel_removes_the_claim(monkeypatch: pytest
     await message_root.send(delivered_to(message_harness()))
     approve = next(key for key in message_root.snapshot().handler_keys if key.endswith("approve"))
 
-    async def nothing_pending(*, with_claimants: bool = False) -> Sequence[AliasClaim]:
+    async def nothing_pending(*, context: ActingContext, with_claimants: bool = False) -> Sequence[AliasClaim]:
         del with_claimants
         return ()
 

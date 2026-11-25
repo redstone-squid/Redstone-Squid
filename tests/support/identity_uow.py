@@ -7,10 +7,22 @@ repository. WebScope also publishes account changes when it commits.
 from copy import deepcopy
 from typing import override
 
+from squid.core.actors import Actor
+from squid.core.permissions.application.ports import PermissionRepository, SubjectRecords
 from tests.support.unit_of_work import PublishingFakeUnitOfWork
 
 
 class AccountScope[AccountsT](PublishingFakeUnitOfWork[AccountsT]):
+    @property
+    def permissions(self) -> PermissionRepository:
+        return self
+
+    async def load_for_subject(self, subject: Actor) -> SubjectRecords:
+        return SubjectRecords(0, subject)
+
+    async def epoch(self) -> int:
+        return 0
+
     @property
     def accounts(self) -> AccountsT:
         return self.state

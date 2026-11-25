@@ -19,6 +19,7 @@ from squid.core.accounts.errors import AccountNotFoundError
 from squid.core.accounts.infrastructure.repository import AccountRepository
 from squid.core.accounts.models import AccountIdentity as AccountIdentityValue
 from squid.core.accounts.models import MergeTicket as AccountMergeTicketModel
+from squid.core.actors import ActingContext, Actor
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.unit_of_work import UnitOfWorkFactory
 from tests.support.build_edits import build_edit_session
@@ -189,7 +190,7 @@ async def test_failed_merge_restores_the_ticket_and_account_resources(
         return None
 
     service = AccountService(unused_lookup, lambda: 123456, uow_factory=repository)
-    code, _ticket = await service.create_merge_code(absorbed.id)
+    code, _ticket = await service.create_merge_code(context=ActingContext.direct(Actor(account_id=absorbed.id)))
     merge = AccountRepository.merge
 
     async def fail_after_merge(self: AccountRepository, surviving_id: int, absorbed_id: int) -> AccountMerge:
@@ -199,10 +200,10 @@ async def test_failed_merge_restores_the_ticket_and_account_resources(
     with monkeypatch.context() as patch:
         patch.setattr(AccountRepository, "merge", fail_after_merge)
         with pytest.raises(RuntimeError, match="transferring account resources"):
-            await service.complete_merge(survivor.id, code)
+            await service.complete_merge(code, context=ActingContext.direct(Actor(account_id=survivor.id)))
 
     assert await service.get_account_by_id(absorbed.id) is not None
     assert await transact(repository, lambda uow: uow.accounts.peek_merge_ticket(code)) is not None
-    await service.complete_merge(survivor.id, code)
+    await service.complete_merge(code, context=ActingContext.direct(Actor(account_id=survivor.id)))
     assert await service.get_account_by_id(absorbed.id) is None
     assert await transact(repository, lambda uow: uow.accounts.peek_merge_ticket(code)) is None

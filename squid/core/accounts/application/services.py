@@ -47,7 +47,18 @@ from squid.core.accounts.models import (
     CreatorAlias,
     MergeTicket,
 )
+from squid.core.actors import ActingContext, Actor
 from squid.core.errors import ConflictError, InvalidStateError
+from squid.core.permissions.application import PermissionService
+from squid.core.permissions.domain.catalogue import (
+    ACCOUNT_CLAIM_APPROVE,
+    ACCOUNT_CLAIM_LIST,
+    ACCOUNT_CLAIM_REJECT,
+    ACCOUNT_IDENTITY_REFRESH,
+    ACCOUNT_IDENTITY_REFRESH_ANY,
+    ACCOUNT_SELF_MANAGE,
+    ACCOUNT_SELF_READ,
+)
 from squid.core.unit_of_work import UnitOfWorkFactory
 
 logger = logging.getLogger(__name__)
@@ -103,6 +114,7 @@ class AccountService:
         uow_factory: UnitOfWorkFactory[AccountUnitOfWork],
     ):
         self._uow_factory = uow_factory
+        self._permissions = PermissionService(uow_factory=uow_factory)
         self._minecraft_username_lookup = minecraft_username_lookup
         self._verification_code_factory = verification_code_factory
 
@@ -144,12 +156,15 @@ class AccountService:
             await uow.commit()
             return result
 
-    async def grant_current_consent(self, account_id: int) -> Account:
+    async def grant_current_consent(self, *, context: ActingContext) -> Account:
         """Record consent for any authenticated caller, however they proved their identity."""
-        async with self._uow_factory() as uow:
-            result = await uow.accounts.update_consent(account_id, AccountConsent.grant_current())
-            await uow.commit()
-            return result
+        account_id = context.effective.require_account_id()
+        with context.scope():
+            async with self._uow_factory() as uow:
+                await self._permissions.require(context.effective, ACCOUNT_SELF_READ, uow=uow)
+                result = await uow.accounts.update_consent(account_id, AccountConsent.grant_current())
+                await uow.commit()
+                return result
 
     async def merge_accounts(
         self,
@@ -174,69 +189,78 @@ class AccountService:
             await uow.commit()
             return result
 
-    async def create_merge_code(self, account_id: int) -> tuple[str, MergeTicket]:
+    async def create_merge_code(self, *, context: ActingContext) -> tuple[str, MergeTicket]:
         """Create a single-use code for the account that will be absorbed in a merge.
 
         The caller must authenticate that account. Creation replaces any earlier ticket
         and records the proof timestamp used at redemption. The plaintext code is
         returned once; only its digest is stored.
         """
-        async with self._uow_factory() as uow:
-            code = base64.b32encode(secrets.token_bytes(MERGE_CODE_BYTES)).decode("ascii").rstrip("=")
-            # The pepper stays in infrastructure: the repository hashes, exactly as it does for a
-            # verification code, so no application-layer value is ever the stored one.
-            ticket = await uow.accounts.replace_merge_ticket(account_id, code, MERGE_TICKET_TTL_SECONDS)
-            result = code, ticket
-            await uow.commit()
-            return result
+        account_id = context.effective.require_account_id()
+        with context.scope():
+            async with self._uow_factory() as uow:
+                await self._permissions.require(context.effective, ACCOUNT_SELF_MANAGE, uow=uow)
+                code = base64.b32encode(secrets.token_bytes(MERGE_CODE_BYTES)).decode("ascii").rstrip("=")
+                # The pepper stays in infrastructure: the repository hashes, exactly as it does for a
+                # verification code, so no application-layer value is ever the stored one.
+                ticket = await uow.accounts.replace_merge_ticket(account_id, code, MERGE_TICKET_TTL_SECONDS)
+                result = code, ticket
+                await uow.commit()
+                return result
 
-    async def preview_merge(self, surviving_account_id: int, code: str) -> MergePreview:
+    async def preview_merge(self, code: str, *, context: ActingContext) -> MergePreview:
         """Describe the account and credits a code would merge, without consuming the code.
 
         Show this before confirmation: completion deletes the absorbed account and
         turns its public creator ID into a permanent redirect.
         """
-        async with self._uow_factory() as uow:
-            ticket = await uow.accounts.peek_merge_ticket(code)
-            if ticket is None or ticket.account_id == surviving_account_id:
-                # Self-merge is refused here as well as in `merge_accounts`, so the preview never
-                # renders a confirmation for something that cannot commit.
-                raise InvalidMergeCodeError
-            absorbed = await uow.accounts.get_by_id(ticket.account_id)
-            # ORM identity columns may still be None before flush.
-            if absorbed is None or absorbed.public_creator_id is None:  # pyright: ignore[reportUnnecessaryComparison]
-                raise InvalidMergeCodeError
-            record = await uow.accounts.get_creator_profile_record(absorbed.public_creator_id)
-            aliases = () if record is None else record.aliases
-            return MergePreview(
-                absorbed_public_creator_id=absorbed.public_creator_id,
-                alias_names=tuple(alias.name for alias in aliases),
-                identity_count=len(absorbed.identities),
-                build_count=sum(alias.build_count for alias in aliases),
-            )
+        surviving_account_id = context.effective.require_account_id()
+        with context.scope():
+            async with self._uow_factory() as uow:
+                await self._permissions.require(context.effective, ACCOUNT_SELF_MANAGE, uow=uow)
+                ticket = await uow.accounts.peek_merge_ticket(code)
+                if ticket is None or ticket.account_id == surviving_account_id:
+                    # Self-merge is refused here as well as in `merge_accounts`, so the preview never
+                    # renders a confirmation for something that cannot commit.
+                    raise InvalidMergeCodeError
+                absorbed = await uow.accounts.get_by_id(ticket.account_id)
+                # ORM identity columns may still be None before flush.
+                if absorbed is None or absorbed.public_creator_id is None:  # pyright: ignore[reportUnnecessaryComparison]
+                    raise InvalidMergeCodeError
+                record = await uow.accounts.get_creator_profile_record(absorbed.public_creator_id)
+                aliases = () if record is None else record.aliases
+                return MergePreview(
+                    absorbed_public_creator_id=absorbed.public_creator_id,
+                    alias_names=tuple(alias.name for alias in aliases),
+                    identity_count=len(absorbed.identities),
+                    build_count=sum(alias.build_count for alias in aliases),
+                )
 
-    async def complete_merge(self, surviving_account_id: int, code: str, *, now: Instant | None = None) -> AccountMerge:
+    async def complete_merge(self, code: str, *, context: ActingContext, now: Instant | None = None) -> AccountMerge:
         """Merge the account named by the code into the caller's account.
 
         The caller must authenticate the surviving account. The ticket's creation time
         supplies recent proof for the absorbed account. Ticket consumption and the merge
         share a transaction, so a failed merge does not spend the code.
         """
-        async with (
-            self._uow_factory() as uow,
-            uow.builds.editing(actor=surviving_account_id, operation="account_merge", source="account_merge"),
-        ):
-            ticket = await uow.accounts.consume_merge_ticket(code)
-            checked_at = now or Instant.now()
-            if ticket is None:
-                raise InvalidMergeCodeError
-            if ticket.account_id == surviving_account_id or not RecentAccountProof(
-                ticket.account_id, ticket.created_at
-            ).is_recent_at(checked_at):
-                raise InvalidMergeProofError
-            result = await uow.accounts.merge(surviving_account_id, ticket.account_id)
-            await uow.commit()
-            return result
+        surviving_account_id = context.effective.require_account_id()
+        with context.scope():
+            async with (
+                self._uow_factory() as uow,
+                uow.builds.editing(actor=surviving_account_id, operation="account_merge", source="account_merge"),
+            ):
+                await self._permissions.require(context.effective, ACCOUNT_SELF_MANAGE, uow=uow)
+                ticket = await uow.accounts.consume_merge_ticket(code)
+                checked_at = now or Instant.now()
+                if ticket is None:
+                    raise InvalidMergeCodeError
+                if ticket.account_id == surviving_account_id or not RecentAccountProof(
+                    ticket.account_id, ticket.created_at
+                ).is_recent_at(checked_at):
+                    raise InvalidMergeProofError
+                result = await uow.accounts.merge(surviving_account_id, ticket.account_id)
+                await uow.commit()
+                return result
 
     async def get_creator_alias(self, name: str) -> CreatorAlias | None:
         """Return a creator credit by name without loading its linked account."""
@@ -370,13 +394,15 @@ class AccountService:
                 )
             await uow.commit()
 
-    async def list_identities(self, account_id: int) -> tuple[AccountIdentity, ...]:
+    async def list_identities(self, *, context: ActingContext) -> tuple[AccountIdentity, ...]:
         """Return every identity linked to the account, including hidden ones."""
-        async with self._uow_factory() as uow:
-            account = await uow.accounts.get_by_id(account_id)
-            if account is None:
-                raise AccountNotFoundError(account_id)
-            return account.identities
+        account_id = context.effective.require_account_id()
+        with context.scope():
+            async with self._uow_factory() as uow:
+                account = await uow.accounts.get_by_id(account_id)
+                if account is None:
+                    raise AccountNotFoundError(account_id)
+                return account.identities
 
     async def record_identity_avatar_key(self, account_id: int, identity_id: int, avatar_key: str | None) -> None:
         """Store the provider key an avatar URL needs, when a caller happens to hold a fresh one."""
@@ -414,7 +440,9 @@ class AccountService:
         async with self._uow_factory() as uow:
             return await uow.accounts.credit_owners(build_id)
 
-    async def refresh_java_identity(self, account_id: int, *, java_uuid: UUID | None = None) -> IdentityRefresh:
+    async def refresh_java_identity(
+        self, account_id: int, *, context: ActingContext, java_uuid: UUID | None = None
+    ) -> IdentityRefresh:
         """Fetch a linked Java identity's current name from Mojang and reconcile its credit.
 
         An explicit java_uuid selects that identity. Otherwise choose the most recently
@@ -424,48 +452,59 @@ class AccountService:
         MinecraftAccountNotFoundError if Mojang has no profile for it, or
         MinecraftServiceUnavailableError if the lookup fails.
         """
-        account = await self.get_account_by_id(account_id)
-        if account is None:
-            raise AccountNotFoundError(account_id)
-        identity = (
-            account.most_recent_identity_for(IdentityProvider.JAVA)
-            if java_uuid is None
-            else account.identity_for(IdentityProvider.JAVA, str(java_uuid))
-        )
-        if identity is None or identity.java_uuid is None:
-            raise NoLinkedMinecraftAccountError(account_id=account_id)
-        username = await self._minecraft_username_lookup(identity.java_uuid)
-        if username is None:
-            raise MinecraftAccountNotFoundError(identity.java_uuid)
-        async with (
-            self._uow_factory() as uow,
-            uow.builds.editing(actor=account_id, operation="edit", source="identity_refresh"),
-        ):
-            result = await uow.accounts.refresh_java_identity(
-                account_id=account_id,
-                java_uuid=identity.java_uuid,
-                username=username,
-            )
-            await uow.commit()
-            return result
-
-    async def request_alias_claim(self, account_id: int, name: str) -> AliasClaim:
-        """Open a staff-reviewed request to be credited under a creator name."""
-        async with (
-            self._uow_factory() as uow,
-            uow.builds.editing(actor=account_id, operation="edit", source="alias_claim"),
-        ):
-            account = await uow.accounts.get_by_id(account_id)
-            if account is None or account.id is None:  # pyright: ignore[reportUnnecessaryComparison]
+        subject = context.effective
+        permission = ACCOUNT_IDENTITY_REFRESH if subject.account_id == account_id else ACCOUNT_IDENTITY_REFRESH_ANY
+        with context.scope():
+            await self._permissions.require(subject, permission)
+            account = await self.get_account_by_id(account_id)
+            if account is None:
                 raise AccountNotFoundError(account_id)
-            if account.needs_consent_refresh:
-                raise ConsentRequiredError(account_id=account_id)
-            try:
-                result = await uow.accounts.request_claim(name=name, account_id=account.id)
-            except AliasAlreadyClaimedError as conflict:
-                raise await self._name_the_holder(uow, conflict) from None
-            await uow.commit()
-            return result
+            identity = (
+                account.most_recent_identity_for(IdentityProvider.JAVA)
+                if java_uuid is None
+                else account.identity_for(IdentityProvider.JAVA, str(java_uuid))
+            )
+            if identity is None or identity.java_uuid is None:
+                raise NoLinkedMinecraftAccountError(account_id=account_id)
+            username = await self._minecraft_username_lookup(identity.java_uuid)
+            if username is None:
+                raise MinecraftAccountNotFoundError(identity.java_uuid)
+            async with (
+                self._uow_factory() as uow,
+                uow.builds.editing(
+                    actor=subject.account_id if subject.account_id is not None else subject.reference,
+                    operation="edit",
+                    source="identity_refresh",
+                ),
+            ):
+                await self._permissions.require(subject, permission, uow=uow)
+                result = await uow.accounts.refresh_java_identity(
+                    account_id=account_id,
+                    java_uuid=identity.java_uuid,
+                    username=username,
+                )
+                await uow.commit()
+                return result
+
+    async def request_alias_claim(self, name: str, *, context: ActingContext) -> AliasClaim:
+        """Open a staff-reviewed request to be credited under a creator name."""
+        account_id = context.effective.require_account_id()
+        with context.scope():
+            async with (
+                self._uow_factory() as uow,
+                uow.builds.editing(actor=account_id, operation="edit", source="alias_claim"),
+            ):
+                account = await uow.accounts.get_by_id(account_id)
+                if account is None or account.id is None:  # pyright: ignore[reportUnnecessaryComparison]
+                    raise AccountNotFoundError(account_id)
+                if account.needs_consent_refresh:
+                    raise ConsentRequiredError(account_id=account_id)
+                try:
+                    result = await uow.accounts.request_claim(name=name, account_id=account.id)
+                except AliasAlreadyClaimedError as conflict:
+                    raise await self._name_the_holder(uow, conflict) from None
+                await uow.commit()
+                return result
 
     async def _name_the_holder(
         self, uow: AccountUnitOfWork, conflict: AliasAlreadyClaimedError
@@ -483,34 +522,43 @@ class AccountService:
             return conflict
         return conflict.with_holder_name(profile.aliases[0])
 
-    async def pending_alias_claims(self, *, with_claimants: bool = False) -> Sequence[AliasClaim]:
+    async def pending_alias_claims(
+        self, *, context: ActingContext, with_claimants: bool = False
+    ) -> Sequence[AliasClaim]:
         """List creator credit claims awaiting staff review.
 
         *with_claimants* loads each claimant's account for presentation, at a fixed cost
         rather than one query per claim.
         """
-        async with self._uow_factory() as uow:
-            return await uow.accounts.pending_claims(with_claimants=with_claimants)
+        with context.scope():
+            async with self._uow_factory() as uow:
+                await self._permissions.require(context.effective, ACCOUNT_CLAIM_LIST, uow=uow)
+                return await uow.accounts.pending_claims(with_claimants=with_claimants)
 
-    async def approve_alias_claim(self, claim_id: int, *, staff_account_id: int, reassign: bool = False) -> AliasClaim:
+    async def approve_alias_claim(self, claim_id: int, *, context: ActingContext, reassign: bool = False) -> AliasClaim:
         """Credit the claimant with the alias and close the request.
 
         *reassign* is required to take a name that is currently credited to someone else, which
         is what a rename into a contested name produces.
         """
-        return await self._resolve_claim(claim_id, ClaimStatus.APPROVED, staff_account_id, reassign=reassign)
+        with context.scope():
+            return await self._resolve_claim(claim_id, ClaimStatus.APPROVED, context.effective, reassign=reassign)
 
-    async def reject_alias_claim(self, claim_id: int, *, staff_account_id: int) -> AliasClaim:
+    async def reject_alias_claim(self, claim_id: int, *, context: ActingContext) -> AliasClaim:
         """Close the request without crediting the claimant."""
-        return await self._resolve_claim(claim_id, ClaimStatus.REJECTED, staff_account_id)
+        with context.scope():
+            return await self._resolve_claim(claim_id, ClaimStatus.REJECTED, context.effective)
 
     async def _resolve_claim(
-        self, claim_id: int, status: ClaimStatus, staff_account_id: int, *, reassign: bool = False
+        self, claim_id: int, status: ClaimStatus, actor: Actor, *, reassign: bool = False
     ) -> AliasClaim:
+        staff_account_id = actor.require_account_id()
         async with (
             self._uow_factory() as uow,
             uow.builds.editing(actor=staff_account_id, operation="edit", source="alias_claim"),
         ):
+            node = ACCOUNT_CLAIM_APPROVE if status is ClaimStatus.APPROVED else ACCOUNT_CLAIM_REJECT
+            await self._permissions.require(actor, node, uow=uow)
             claim = await uow.accounts.get_claim(claim_id)
             if claim is None or claim.status is not ClaimStatus.PENDING:
                 raise ClaimNotFoundError(claim_id)
