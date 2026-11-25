@@ -207,6 +207,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
         draft_model.updated_at = now
         draft_model.expires_at = expires_at
         draft_model.preparation_issues = encode_issues(normalized_issues)
+        draft_model.preparation_attempt = None
         draft_model.preparation_retry_at = now.add(seconds=30) if waiting_for_artifacts else None
         draft_model.submission_actor_account_id = actor_account_id
         return DraftPreparationSnapshot(
@@ -235,6 +236,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
         )
         for draft in drafts:
             draft.preparation_retry_at = now.add(seconds=30)
+            draft.preparation_attempt = uuid4()
         return tuple(_to_stored(draft) for draft in drafts)
 
     @override

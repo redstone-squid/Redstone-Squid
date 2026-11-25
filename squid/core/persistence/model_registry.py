@@ -15,6 +15,7 @@ from squid.core.messages import models as message_models
 from squid.core.minecraft_auth import models as minecraft_auth_models
 from squid.core.notifications import models as notification_models
 from squid.core.permissions import models as permission_models
+from squid.core.persistence import provenance as provenance_models
 from squid.core.posts import models as post_models
 from squid.core.records import models as record_models
 from squid.core.schematics import models as schematic_models
@@ -48,6 +49,7 @@ __all__ = [
     "notification_models",
     "permission_models",
     "post_models",
+    "provenance_models",
     "record_models",
     "schematic_models",
     "search_models",

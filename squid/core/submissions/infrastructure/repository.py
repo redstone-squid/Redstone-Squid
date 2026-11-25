@@ -417,6 +417,7 @@ def _to_model(draft: StoredDraft) -> SubmissionDraft:
         answers=_json_object(snapshot.answers),
         preparation_issues=encode_issues(draft.preparation_issues),
         preparation_retry_at=draft.preparation_retry_at,
+        preparation_attempt=draft.preparation_attempt,
         inferred=draft.inferred,
         submission_actor_account_id=draft.submission_actor_account_id,
         origin=draft.origin,
@@ -456,6 +457,7 @@ def _to_stored(model: SubmissionDraft) -> StoredDraft:
         inference_run_id=model.inference_run_id,
         preparation_issues=decode_issues(model.preparation_issues),
         preparation_retry_at=model.preparation_retry_at,
+        preparation_attempt=model.preparation_attempt,
         inferred=model.inferred,
         submission_actor_account_id=model.submission_actor_account_id,
     )

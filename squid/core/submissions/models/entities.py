@@ -109,6 +109,7 @@ class SubmissionDraft(Base, kw_only=True):
         JSONB, nullable=False, default_factory=list, server_default=text("'[]'::jsonb")
     )
     preparation_retry_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    preparation_attempt: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), default=None)
     submission_actor_account_id: Mapped[int | None] = mapped_column(
         Integer,
         ForeignKey("accounts.id", ondelete="RESTRICT"),

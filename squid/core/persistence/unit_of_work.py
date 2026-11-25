@@ -35,6 +35,7 @@ from squid.core.permissions.infrastructure.repository import (
     PostgresPermissionAdminRepository,
     PostgresPermissionRepository,
 )
+from squid.core.persistence.provenance import bind_work_attribution
 from squid.core.posts.infrastructure.repository import PostRepository
 from squid.core.records.infrastructure.range_publications import PostgresRangePublicationRepository
 from squid.core.records.infrastructure.repository import PostgresRecordRepository
@@ -384,6 +385,7 @@ class SqlAlchemyUnitOfWork:
         self._session = self._sessions(expire_on_commit=False)
         try:
             await self._session.begin()
+            await bind_work_attribution(self._session)
         except BaseException:
             await self._close()
             raise

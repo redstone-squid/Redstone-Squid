@@ -24,3 +24,19 @@ Guild flags require running the command in a guild. Explicit guild IDs take
 precedence over flags. Guild synchronization does not publish changes globally.
 Development layout demos and deliberate error triggers are excluded from ordinary
 user workflows.
+
+## Trace a worker change
+
+In the application database, look up a retained queue item, domain event, build history entry or edit by its table and primary key. The trace includes earlier requests coalesced into the same work item and the chain of workers that produced it.
+
+```sql
+SELECT t.occurred_at, t.relation, t.item, t.transition, t.invocation_id,
+       t.operator, t.effective, t.impersonation_session_id
+FROM trace_work_activity((
+    SELECT max(id) FROM work_activity
+    WHERE relation = 'domain_events' AND item = '{"id": 42}'::jsonb
+)) AS t
+ORDER BY t.id;
+```
+
+The operator and effective actor identify the caller of each transition. A new worker execution gets its own invocation ID on every attempt. Missing identity denotes work outside an attributed invocation, including older producers during rollout. Collection starts when the migration runs. Access to these records belongs with internal audit access.
