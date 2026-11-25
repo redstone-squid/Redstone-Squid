@@ -8,13 +8,19 @@ from squid.core.records.application.models import (
     RecordLookupRequest,
     RecordNameDiagnostic,
 )
-from squid.core.records.application.services import PublicRecordQueryService, RecordComputationService, RecordService
+from squid.core.records.application.services import (
+    PublicRecordQueryService,
+    RecordAdministrationService,
+    RecordComputationService,
+    RecordService,
+)
 
 __all__ = [
     "PublicRecordDetail",
     "PublicRecordQueryService",
     "QueueProcessSummary",
     "RebuildSummary",
+    "RecordAdministrationService",
     "RecordComputationService",
     "RecordGap",
     "RecordLookupRequest",

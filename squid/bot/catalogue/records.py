@@ -18,6 +18,7 @@ from squid.bot.app import RedstoneSquid
 from squid.bot.lookup import pick
 from squid.bot.ui import tr, truncate_display_text
 from squid.bot.utils.permissions import Grants, requires_grant
+from squid.core.actors import ActingContext
 from squid.core.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD
 from squid.core.records.application import RebuildSummary, RecordGap, RecordLookupRequest, RecordNameDiagnostic
 from squid.core.records.domain import BuildKind
@@ -44,14 +45,13 @@ class RecordOperations(Protocol):
     async def lookup_or_materialize(self, request: RecordLookupRequest) -> RebuildSummary: ...
 
 
-class RecordComputationOperations(Protocol):
+class RecordAdministration(Protocol):
     """Record rebuild operation exposed by the maintenance tab."""
-
-    async def pin_current_version(self, version_id: int | None) -> None: ...
 
     async def rebuild(
         self,
         *,
+        context: ActingContext,
         current_version_id: int | None,
         kinds: Sequence[BuildKind],
     ) -> RebuildSummary: ...
@@ -93,12 +93,12 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
     def __init__(
         self,
         records: RecordOperations,
-        computation: RecordComputationOperations,
+        administration: RecordAdministration,
         *,
         grants: Grants,
     ) -> None:
         self._records = records
-        self._computation = computation
+        self._administration = administration
         self.grants = grants
         self.open_build: BuildOpener | None = None
         """Opens a build from a gap's details; set by a host that can show builds."""
@@ -451,9 +451,9 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
             form.version_id if form.version_id is not None else (int(self._version.value) if self._version else None)
         )
         kinds = (kind,) if kind is not None else (BuildKind.DOOR, BuildKind.EXTENDER)
-        if version_id is not None:
-            await self._computation.pin_current_version(version_id)
-        summary = await self._computation.rebuild(current_version_id=version_id, kinds=kinds)
+        summary = await self._administration.rebuild(
+            context=ActingContext.current(), current_version_id=version_id, kinds=kinds
+        )
         if RECORD_ENTRY_INSPECT in self.grants:
             await self._refresh_diagnostics()
             self._build_tabs()

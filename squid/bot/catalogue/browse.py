@@ -502,7 +502,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             await request.client.refresh_posts("build", str(build_id))
 
         record_tools = (
-            RecordsScreen(request.client.services.records, request.client.services.record_computation, grants=grants)
+            RecordsScreen(request.client.services.records, request.client.services.record_administration, grants=grants)
             if request.guild is not None and (RECORD_ENTRY_INSPECT in grants or RECORD_ENTRY_REBUILD in grants)
             else None
         )

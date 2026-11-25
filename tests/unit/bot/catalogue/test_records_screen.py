@@ -10,11 +10,12 @@ import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.catalogue.records import RecordsScreen
 from squid.bot.utils.permissions import Grants
+from squid.core.actors import ActingContext, Actor
 from squid.core.permissions.domain import PermissionNode
 from squid.core.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD
 from squid.core.records.application import (
     RebuildSummary,
-    RecordComputationService,
+    RecordAdministrationService,
     RecordGap,
     RecordLookupRequest,
     RecordNameDiagnostic,
@@ -57,22 +58,20 @@ class RecordRecorder(RecordService):
         return RebuildSummary((), 1, 1, 0)
 
 
-class ComputationRecorder(RecordComputationService):
+class ComputationRecorder(RecordAdministrationService):
     def __init__(self) -> None:
         self.rebuild_calls: list[tuple[int | None, tuple[BuildKind, ...]]] = []
-        self.pin_calls: list[int | None] = []
-
-    @override
-    async def pin_current_version(self, version_id: int | None) -> None:
-        self.pin_calls.append(version_id)
+        self.contexts: list[ActingContext] = []
 
     @override
     async def rebuild(
         self,
         *,
+        context: ActingContext,
         current_version_id: int | None = None,
         kinds: Sequence[BuildKind] = (BuildKind.DOOR, BuildKind.EXTENDER),
     ) -> RebuildSummary:
+        self.contexts.append(context)
         self.rebuild_calls.append((current_version_id, tuple(kinds)))
         return RebuildSummary((), 4, 3, 1)
 
@@ -154,7 +153,10 @@ async def test_rebuild_uses_the_existing_default_kinds() -> None:
     assert screen._tabs is not None
     await press(screen._tabs, "records-tabs.maintenance")
 
-    await submit(screen._tabs, "rebuild", {"kind": None, "version_id": None})
+    context = ActingContext.direct(Actor(discord_user_id=10))
+    with context.scope():
+        await submit(screen._tabs, "rebuild", {"kind": None, "version_id": None})
+    assert harness.computation.contexts == [context]
 
     assert harness.computation.rebuild_calls == [(None, (BuildKind.DOOR, BuildKind.EXTENDER))]
 
@@ -192,9 +194,9 @@ async def test_rebuild_explicitly_sets_the_shared_current_version() -> None:
     assert harness.screen._tabs is not None
     await press(harness.screen._tabs, "records-tabs.maintenance")
 
-    await submit(harness.screen._tabs, "rebuild", {"kind": None, "version_id": 3})
+    with ActingContext.direct(Actor(discord_user_id=10)).scope():
+        await submit(harness.screen._tabs, "rebuild", {"kind": None, "version_id": 3})
 
-    assert harness.computation.pin_calls == [3]
     assert harness.computation.rebuild_calls == [(3, (BuildKind.DOOR, BuildKind.EXTENDER))]
 
 

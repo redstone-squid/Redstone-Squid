@@ -111,7 +111,12 @@ from squid.core.persistence.topic_bridge import open_topic_bridge
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.persistence.wake_listener import PostgresWakeListener
 from squid.core.posts.application import PostService
-from squid.core.records.application import PublicRecordQueryService, RecordComputationService, RecordService
+from squid.core.records.application import (
+    PublicRecordQueryService,
+    RecordAdministrationService,
+    RecordComputationService,
+    RecordService,
+)
 from squid.core.records.application.range_publication import RangePublicationService
 from squid.core.records.infrastructure.range_analyzer import SubprocessRangeAnalyzer
 from squid.core.schematics.application import SchematicJobService, SchematicRenderJobService, SchematicService
@@ -707,7 +712,9 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         permission_admin=graph.permission_admin,
         permission_epoch=graph.permission_epoch,
         records=graph.records,
-        record_computation=graph.record_computation,
+        record_administration=RecordAdministrationService(
+            graph.record_computation, graph.permissions, uow_factory=graph.uow_factory
+        ),
         schematics=graph.schematics,
         published_build_media=graph.published_build_media,
         schematic_summaries=SchematicServiceSummaryProvider(

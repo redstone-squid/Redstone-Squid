@@ -57,7 +57,12 @@ from squid.core.permissions.application import (
 )
 from squid.core.permissions.application.epoch import POLL_INTERVAL_SECONDS as PERMISSION_POLL_INTERVAL_SECONDS
 from squid.core.posts.application import PostService
-from squid.core.records.application import PublicRecordQueryService, RecordComputationService, RecordService
+from squid.core.records.application import (
+    PublicRecordQueryService,
+    RecordAdministrationService,
+    RecordComputationService,
+    RecordService,
+)
 from squid.core.records.application.range_publication import RangePublicationService
 from squid.core.schematics.application import SchematicJobService, SchematicRenderJobService, SchematicService
 from squid.core.search.application import SearchEmbeddingService, SearchService
@@ -170,7 +175,7 @@ class BotServices:
     permission_admin: PermissionAdministrationService
     permission_epoch: PermissionEpochWatcher
     records: RecordService
-    record_computation: RecordComputationService
+    record_administration: RecordAdministrationService
     schematics: SchematicService
     search: SearchService
     tags: TagService
