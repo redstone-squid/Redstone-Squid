@@ -1,12 +1,14 @@
 """Exercise the guild workspaces through their registered application commands."""
 
+from uuid import UUID
+
 import discord
 import pytest
 import simcord
 
 from squid.bot.diagnostics.screen import ErrorReportScreen
-from squid.core.accounts.domain import AccountConsent
-from squid.core.accounts.models import Account
+from squid.core.accounts.domain import AccountConsent, PublicCreatorProfile
+from squid.core.accounts.models import Account, CreatorAlias
 from squid.core.permissions.domain.catalogue import DIAGNOSTICS_ERROR_READ, PERM_GRANT_GUILD, SETTINGS_SERVER_VIEW
 from squid.core.settings.domain.guild import GuildSettings
 from squid.core.voting.domain.models import VoteConfiguration, VoteKind
@@ -31,14 +33,14 @@ def assert_private_defer_was_completed(env: simcord.Env) -> None:
     assert any(call.method == "PATCH" and call.path.endswith("/messages/@original") for call in env.http_requests)
 
 
-async def test_account_for_an_unlinked_member_explains_missing_page_privately() -> None:
+async def test_creator_page_action_on_an_unlinked_member_explains_privately() -> None:
     accounts = WorkspaceAccounts()
     async with command_environment("squid.bot.accounts.cog", services=bot_services(accounts=accounts)) as (_, env):
         channel = env.guild.create_text_channel("public")
         visitor = env.guild.add_member(env.create_user("visitor"))
         creator = env.guild.add_member(env.create_user("builder"), nick="Red Builder")
 
-        result = await visitor.slash(channel, "account", user=creator)
+        result = await visitor.context_menu(channel, "Creator Page", creator)
 
         assert result.response is not None
         assert result.response.ephemeral
@@ -46,6 +48,43 @@ async def test_account_for_an_unlinked_member_explains_missing_page_privately() 
             "Red Builder doesn't have a creator page." in text for text in displayed_text(result.response.message)
         )
         assert str(creator.id) in accounts.lookups
+
+
+async def test_creator_accepts_a_pasted_mention() -> None:
+    accounts = WorkspaceAccounts()
+    async with command_environment("squid.bot.accounts.cog", services=bot_services(accounts=accounts)) as (_, env):
+        channel = env.guild.create_text_channel("public")
+        visitor = env.guild.add_member(env.create_user("visitor"))
+        creator = env.guild.add_member(env.create_user("builder"), nick="Red Builder")
+
+        result = await visitor.slash(channel, "creator", name=f"<@!{creator.id}>")
+
+        assert result.response is not None
+        assert result.response.ephemeral
+        assert any(
+            "Red Builder doesn't have a creator page." in text for text in displayed_text(result.response.message)
+        )
+        assert accounts.lookups == [str(creator.id)]
+
+
+async def test_creator_finds_a_typed_credited_name_and_posts_it_publicly() -> None:
+    accounts = WorkspaceAccounts()
+    public_id = UUID(int=5)
+    accounts.aliases["glinte"] = CreatorAlias(name="Glinte", account_id=1, public_creator_id=public_id)
+    accounts.profiles[public_id] = PublicCreatorProfile(public_id=public_id, hidden=False, display_name="Glinte")
+    async with command_environment("squid.bot.accounts.cog", services=bot_services(accounts=accounts)) as (_, env):
+        channel = env.guild.create_text_channel("public")
+        visitor = env.guild.add_member(env.create_user("visitor"))
+
+        found = await visitor.slash(channel, "creator", name="GLINTE")
+        missing = await visitor.slash(channel, "creator", name="Nobody")
+
+        assert found.response is not None
+        assert not found.response.ephemeral
+        assert any("Glinte" in text for text in displayed_text(found.response.message))
+        assert missing.response is not None
+        assert missing.response.ephemeral
+        assert any("Nobody doesn't have a creator page." in text for text in displayed_text(missing.response.message))
 
 
 async def test_unknown_screen_address_finishes_the_private_defer_with_navigation_help() -> None:

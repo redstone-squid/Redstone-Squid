@@ -385,9 +385,6 @@ account-refresh-member-action = Refresh member
 # squid/bot/accounts/workspace.py:350, squid/bot/accounts/workspace.py:545
 account-search-credit-names = Search credited names
 
-# squid/bot/accounts/cog.py:56
-account-select-creator-result = Choose a creator from the name suggestions.
-
 # squid/bot/accounts/workspace.py:547
 account-submit-claim = Submit claim
 
@@ -1642,7 +1639,7 @@ bot-ui-you-can-t-do-that-right-now = You can't do that right now.
 # squid/bot/chrome.py:268
 bot-ui-you-chose = You chose { $label }.
 
-# squid/bot/accounts/cog.py:88
+# squid/bot/accounts/cog.py:113
 bot-verify-doesn-t-have-a-creator-page = { $user } doesn't have a creator page.
 
 # squid/bot/accounts/creator_page.py:69
@@ -2116,7 +2113,7 @@ builds-alias-restriction = That alias is already on this restriction.
 # squid/core/builds/errors.py:139
 builds-alias-used = That alias is already used by another restriction.
 
-# squid/core/builds/domain/models.py:152
+# squid/core/builds/domain/models.py:163
 builds-attribute-immutable = Attribute `{ $name }` is immutable!
 
 # squid/core/builds/errors.py:12
@@ -2161,7 +2158,7 @@ builds-errors-wait-for-the-other-edit-to-finish = Wait for the other edit to fin
 # squid/core/builds/errors.py:68
 builds-if-match-build = An If-Match build revision is required for this operation.
 
-# squid/core/builds/domain/models.py:176
+# squid/core/builds/domain/models.py:187
 builds-not-dataclass = { $class_name } is not a dataclass
 
 # squid/core/builds/errors.py:112
@@ -2287,20 +2284,11 @@ command-access-user-help = Start with this member selected.
 # squid/bot/permissions_cog.py:53
 command-access-user-name = user
 
-# squid/bot/accounts/cog.py:34
-command-account-creator-help = Search public creator pages by credited name
+# squid/bot/accounts/cog.py:37
+command-account-help = Manage your account, credits, and notifications
 
-# squid/bot/accounts/cog.py:33
-command-account-creator-name = creator
-
-# squid/bot/accounts/cog.py:30
-command-account-help = Manage your account or view a creator page
-
-# squid/bot/accounts/cog.py:29
+# squid/bot/accounts/cog.py:36
 command-account-name = account
-
-# squid/bot/accounts/cog.py:38
-command-account-user-name = user
 
 # squid/bot/admin_cog.py:93
 command-archive-message-name = Archive Message
@@ -2436,6 +2424,21 @@ command-connection-help = Inspect the bot's gateway connection and recent reconn
 
 # squid/bot/diagnostics/cog.py:26
 command-connection-name = connection
+
+# squid/bot/accounts/cog.py:45
+command-creator-help = Show a creator's public page
+
+# squid/bot/accounts/cog.py:44
+command-creator-name = creator
+
+# squid/bot/accounts/cog.py:49
+command-creator-name-help = A credited name, or a Discord mention or user ID
+
+# squid/bot/accounts/cog.py:48
+command-creator-name-name = name
+
+# squid/bot/accounts/cog.py:78
+command-creator-page-context = Creator Page
 
 # squid/bot/chrome.py:174
 command-dev-help = Development-only operational diagnostics.
@@ -2918,7 +2921,7 @@ creator-page-builds = Builds
 # squid/bot/accounts/creator_page.py:87
 creator-page-credited-as = Select a name to see the builds credited to it.
 
-# squid/bot/accounts/creator_page.py:57
+# squid/bot/accounts/cog.py:65, squid/bot/accounts/creator_page.py:57
 creator-page-fallback-name = Creator
 
 # squid/bot/submission/ui/credits.py:109, squid/bot/submission/ui/credits.py:82
@@ -6749,9 +6752,6 @@ ui-tally-option = { $label } — { NUMBER($count) }
 
 # squid/bot/accounts/creator_page.py:70
 verify-creator-page-hidden = This creator has hidden their page. Their build credit is still listed.
-
-# squid/bot/accounts/cog.py:39
-verify-creator-page-target-prompt = Whose creator page to show. Defaults to your own account.
 
 # squid/bot/version_tracking_cog.py:108
 versions-add-permission-denied = You are no longer allowed to add versions.

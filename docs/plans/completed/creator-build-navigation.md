@@ -6,7 +6,7 @@ build, open each credited creator's page.
 ## What shipped
 
 - `CreatorPage` (`squid/bot/accounts/creator_page.py`) is routed at `/creators/{public_id}`.
-  `/account creator:` and `/account user:` post it publicly; the route opens it privately. It has
+  `/creator` posts it publicly; the **Creator Page** user action and the route open it privately. It has
   a **Builds** button (`/creators/{public_id}/builds`). If the creator has several names, a select
   searches the builds credited to one name. Hidden pages keep both controls but not Follow.
 - The account workspace's Credits tab has a **Your builds** button.

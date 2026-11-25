@@ -23,7 +23,7 @@ if TYPE_CHECKING:
 
 DIRECTORY_CATEGORIES: tuple[tuple[Any, frozenset[str]], ...] = (
     (tr(t"help-build = Build"), frozenset({"build"})),
-    (tr(t"help-discover = Discover"), frozenset({"search", "tags"})),
+    (tr(t"help-discover = Discover"), frozenset({"creator", "search", "tags"})),
     (tr(t"help-account = Account"), frozenset({"account", "notifications"})),
     (tr(t"help-community = Community"), frozenset({"poll", "recount"})),
     (

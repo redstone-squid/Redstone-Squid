@@ -1331,15 +1331,6 @@
       "squid/bot/accounts/workspace.py:545"
     ]
   },
-  "account-select-creator-result": {
-    "fingerprint": "1345694345fac37958a94f0f3f76937ed58473a62105c3051b29ebd1f35e9a03",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/accounts/cog.py:56"
-    ]
-  },
   "account-submit-claim": {
     "fingerprint": "f26c9d3a26de06a66d9244af417ce2bcd8c1dd7614ed8f7cfa7dd714b9bb248a",
     "attributes": [],
@@ -5457,7 +5448,7 @@
       }
     ],
     "locations": [
-      "squid/bot/accounts/cog.py:88"
+      "squid/bot/accounts/cog.py:113"
     ]
   },
   "bot-verify-hidden-creator-page": {
@@ -6984,7 +6975,7 @@
       }
     ],
     "locations": [
-      "squid/core/builds/domain/models.py:152"
+      "squid/core/builds/domain/models.py:163"
     ]
   },
   "builds-build-data-invalid": {
@@ -7125,7 +7116,7 @@
       }
     ],
     "locations": [
-      "squid/core/builds/domain/models.py:176"
+      "squid/core/builds/domain/models.py:187"
     ]
   },
   "builds-restriction-does-not-exist": {
@@ -7565,31 +7556,13 @@
       "squid/bot/permissions_cog.py:53"
     ]
   },
-  "command-account-creator-help": {
-    "fingerprint": "0bd06098ba77e1d5f83a0f9dfa5de56a7474dd5f2e96e4004b03833501f12e8f",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/accounts/cog.py:34"
-    ]
-  },
-  "command-account-creator-name": {
-    "fingerprint": "862b062fe95b1a813044b08dcc7743225a992059d152af61980035d5d16e7bbe",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/accounts/cog.py:33"
-    ]
-  },
   "command-account-help": {
-    "fingerprint": "f2bac2c7fbda8d78f014fd4c6d4178d76bb6da5f134977f314ed81dbd32bfa94",
+    "fingerprint": "34d63958901bc6e54a4fcee09f1224e23000dae2263559e6830a8300891197b9",
     "attributes": [],
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/cog.py:30"
+      "squid/bot/accounts/cog.py:37"
     ]
   },
   "command-account-name": {
@@ -7598,16 +7571,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/cog.py:29"
-    ]
-  },
-  "command-account-user-name": {
-    "fingerprint": "7808379807918d8adee0c127202826fee0cca1d4bd69903dedf7216b0582358b",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/accounts/cog.py:38"
+      "squid/bot/accounts/cog.py:36"
     ]
   },
   "command-archive-message-name": {
@@ -8014,6 +7978,51 @@
     "arguments": [],
     "locations": [
       "squid/bot/diagnostics/cog.py:26"
+    ]
+  },
+  "command-creator-help": {
+    "fingerprint": "284a9894cd52554416c3638979c75514a561a3919ef87c120a59bff25a2e4d32",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/accounts/cog.py:45"
+    ]
+  },
+  "command-creator-name": {
+    "fingerprint": "819b1f33606e539ae5104c6fdd25f8b25d591dfa7dd9f658a9196a2e635399aa",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/accounts/cog.py:44"
+    ]
+  },
+  "command-creator-name-help": {
+    "fingerprint": "df5d233db1dc7a35bbc4a2964c5fbf0134d271813fb805b891a705a8c710208c",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/accounts/cog.py:49"
+    ]
+  },
+  "command-creator-name-name": {
+    "fingerprint": "2751bed8da72baf45d3cddda0ebfde637754feeba5ca7f22557d072c02971d14",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/accounts/cog.py:48"
+    ]
+  },
+  "command-creator-page-context": {
+    "fingerprint": "44c430732e05eef6ad51ecf1d39deb09f96d41e0a6a225d3c39680e6ae489901",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/accounts/cog.py:78"
     ]
   },
   "command-dev-help": {
@@ -9549,6 +9558,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
+      "squid/bot/accounts/cog.py:65",
       "squid/bot/accounts/creator_page.py:57"
     ]
   },
@@ -22618,15 +22628,6 @@
     "arguments": [],
     "locations": [
       "squid/bot/accounts/creator_page.py:70"
-    ]
-  },
-  "verify-creator-page-target-prompt": {
-    "fingerprint": "70f1cdd3f7bb19c176fa1ea7c49dd0f72f09c3ab178e33595aedcd22c3c926de",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/accounts/cog.py:39"
     ]
   },
   "versions-add-permission-denied": {
