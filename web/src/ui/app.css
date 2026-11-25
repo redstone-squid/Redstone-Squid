@@ -129,6 +129,9 @@
   }
 }
 
+/* A field with the readonly attribute. `:read-only` also matches every select, which has none. */
+@custom-variant readonly (&[readonly]);
+
 /* The current page, tab, or option: any `aria-current` but "false" (page, true, step...). */
 @custom-variant current (&[aria-current]:not([aria-current="false"]));
 

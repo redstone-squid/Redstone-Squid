@@ -12,9 +12,9 @@ const controlBorder = cn(
 export const inputClass = cn(
   controlBorder,
   "min-w-0 py-2 placeholder:text-fg-muted",
-  "hover:not-disabled:not-read-only:not-aria-invalid:border-fg-muted aria-invalid:border-danger",
+  "hover:not-disabled:not-readonly:not-aria-invalid:border-fg-muted aria-invalid:border-danger",
   "disabled:cursor-not-allowed disabled:bg-surface-muted disabled:text-fg-muted",
-  "read-only:bg-surface-muted",
+  "readonly:bg-surface-muted",
 );
 /**
  * A box around a borderless input and its adornments (prefix, unit, clear button). The box
