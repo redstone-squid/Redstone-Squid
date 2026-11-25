@@ -319,7 +319,9 @@ class DatabaseWorker:
             now = Instant.now()
             recounter = self._services.ballot_recounter
             snapshots = await self._services.votes.close_due(
-                now, recount=None if recounter is None else recounter.count_cards, context=context
+                now,
+                recount=None if recounter is None else partial(recounter.count_cards, context=context),
+                context=context,
             )
         for snapshot in snapshots:
             if snapshot.poll is not None:
