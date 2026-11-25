@@ -1,10 +1,12 @@
 import type { Page } from "@playwright/test";
 import { localizePath } from "@/locales/locale";
 import { GROUPS } from "@/workbench/groups";
+import { misalignedRows } from "@tests/support/alignment";
 import { expect, test } from "@tests/support/test";
 
 // Layouts are fluid with per-component container queries rather than a few supported viewport
-// sizes, so check every width a phone, tablet, or resized window can have. Steps of 24px are
+// sizes, so check every width a phone, tablet, or resized window can have, for overflow and
+// for controls side by side that stop lining up when a label wraps. Steps of 24px are
 // small enough that no breakpoint range is skipped.
 const WIDTHS = Array.from({ length: (1600 - 320) / 24 + 1 }, (_, index) => 320 + index * 24);
 
@@ -88,6 +90,7 @@ for (const path of PAGES) {
       // The innermost overflowing elements are usually the cause; the rest are their ancestors.
       const elements = (await overflowing(page)).slice(-3);
       failures.push(...elements.map((element) => `${width}px: ${element}`));
+      failures.push(...(await misalignedRows(page)).map((row) => `${width}px: misaligned ${row}`));
     }
     expect(failures).toEqual([]);
   });

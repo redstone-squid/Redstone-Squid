@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import AxeBuilder from "@axe-core/playwright";
 import { test as base, expect as baseExpect, type Page } from "@playwright/test";
+import { misalignedRows } from "./alignment";
 
 /**
  * Playwright `test` and `expect` for every browser spec.
@@ -8,7 +9,8 @@ import { test as base, expect as baseExpect, type Page } from "@playwright/test"
  * Each test fails if the page logs a console error or throws, which catches hydration
  * failures that assertions miss. `await expect(page).toPassAxe()` fails on any axe violation.
  * Fixture media URLs on media.fixture.invalid are served locally; `broken.png` is not an image,
- * so pages can show their broken-image fallback.
+ * so pages can show their broken-image fallback. `toHaveAlignedControls()` fails when controls
+ * side by side start at different heights (see `misalignedRows`).
  */
 const fixtureImage = readFileSync("public/fixtures/copper-door.svg");
 
@@ -44,6 +46,17 @@ export const test = base.extend<{ browserDiagnostics: undefined; fixtureMedia: u
 });
 
 export const expect = baseExpect.extend({
+  async toHaveAlignedControls(page: Page) {
+    const problems = await misalignedRows(page);
+    return {
+      name: "toHaveAlignedControls",
+      pass: problems.length === 0,
+      message: () =>
+        this.isNot
+          ? "Expected misaligned controls"
+          : `Controls side by side start at different heights:\n${problems.join("\n")}`,
+    };
+  },
   async toPassAxe(page: Page) {
     const { violations } = await new AxeBuilder({ page }).analyze();
     const summary = violations.map(
