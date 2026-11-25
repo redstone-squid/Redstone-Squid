@@ -105,6 +105,7 @@ const errorMessages = {
   MINECRAFT_ACCOUNT_NOT_FOUND: null,
   MINECRAFT_SERVICE_UNAVAILABLE: m.errorUnavailable,
   NOT_FOUND: m.errorGone,
+  PAGE_ANCHOR_NOT_FOUND: null,
   PERSISTENCE_ERROR: m.errorGeneric,
   RATE_LIMITED: m.errorRateLimited,
   RECORD_NOT_FOUND: m.errorGone,

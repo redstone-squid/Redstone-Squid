@@ -268,8 +268,10 @@ async def list_builds(
     """Search approved builds, or list builds with a selected moderation status.
 
     Supplying q selects indexed search within the selected status. Search
-    uses offset pagination. Without q, results come from the build repository;
-    unpublished statuses require build.submission.view_pending permission.
+    uses offset pagination. Without q, results come from the build repository,
+    and after_id or before_id work with every sort; unless sorting by ID, an
+    anchor outside the filtered list returns PAGE_ANCHOR_NOT_FOUND. Unpublished
+    statuses require build.submission.view_pending permission.
     """
     orders = {
         "newest": "-submission_time",
@@ -329,9 +331,7 @@ async def list_builds(
         )
 
     sort_field, descending = parse_page_sort(order, allowed=BUILD_SORT_FIELDS, default="-id")
-    selector = resolve_selector(
-        offset=offset, after_id=after_id, before_id=before_id, keyset_allowed=sort_field == "id"
-    )
+    selector = resolve_selector(offset=offset, after_id=after_id, before_id=before_id)
     page = await build_queries.list_page(
         statuses=frozenset({effective.to_domain()}),
         submitter_account_id=submitter_id,

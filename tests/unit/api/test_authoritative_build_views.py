@@ -65,7 +65,7 @@ class BuildQueryRecorder(BuildQueryService):
             selector=selector,
             page_size=page_size,
             total=len(self.builds),
-            keyset=sort.field == "id",
+            keyset=True,
             id_of=lambda build: build.id or 0,
         )
 
@@ -273,20 +273,14 @@ async def test_pagination_parameters_are_mutually_exclusive() -> None:
 
 
 @pytest.mark.asyncio
-async def test_id_anchors_are_refused_when_the_order_is_not_by_id() -> None:
+async def test_id_anchors_page_a_named_sort() -> None:
     graph = fakes(is_admin=True)
 
-    with pytest.raises(ValidationError, match="require ordering by id"):
-        await list_builds.fn(
-            graph.build_queries,
-            cast(Any, None),
-            graph.permissions,
-            ACCOUNT,
-            sort="newest",
-            after_id=9,
-        )
+    await list_builds.fn(graph.build_queries, cast(Any, None), graph.permissions, ACCOUNT, sort="newest", after_id=9)
 
-    assert graph.build_queries.calls == []
+    call = graph.build_queries.calls[-1]
+    assert call.sort == BuildListSort(field="submission_time", descending=True)
+    assert call.selector == PageSelector(after_id=9)
 
 
 @pytest.mark.asyncio

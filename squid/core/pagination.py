@@ -8,6 +8,10 @@ the offset limit used for deep numbered pages.
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 
+from squid.core.errors import ErrorCode, ValidationError
+from squid.core.i18n import tr
+from squid.core.validation import FieldErrorCode, SimpleIssue
+
 MAX_PAGE_OFFSET = 10_000
 """Maximum offset accepted by paginated endpoints.
 
@@ -43,6 +47,23 @@ class Page[ItemT]:
     total: int
     next: PageAnchor | None
     prev: PageAnchor | None
+
+
+class PageAnchorNotFoundError(ValidationError):
+    """An `after_id` or `before_id` anchor is not in the listing it should seek within.
+
+    Sorts other than `id` need the anchor's sort value, so a deleted or filtered-out anchor
+    leaves nowhere to seek from. Clients restart from the first page.
+    """
+
+    default_message = tr(t"core-page-anchor-not-found = The page anchor is no longer in this list.")
+    default_title = tr(t"core-errors-page-anchor-not-found = Page anchor not found")
+    default_code = ErrorCode.PAGE_ANCHOR_NOT_FOUND
+    default_end_user_action = tr(t"core-page-anchor-not-found-action = Go back to the first page.")
+
+    def __init__(self, selector: PageSelector) -> None:
+        field = "after_id" if selector.after_id is not None else "before_id"
+        super().__init__(issues=(SimpleIssue(field=f"/query/{field}", code=FieldErrorCode.INVALID_VALUE),))
 
 
 FIRST_PAGE = PageSelector()

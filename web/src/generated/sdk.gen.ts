@@ -229,8 +229,10 @@ export const buildMediaContentGet = <ThrowOnError extends boolean = false>(optio
  * Search approved builds, or list builds with a selected moderation status.
  *
  * Supplying q selects indexed search within the selected status. Search
- * uses offset pagination. Without q, results come from the build repository;
- * unpublished statuses require build.submission.view_pending permission.
+ * uses offset pagination. Without q, results come from the build repository,
+ * and after_id or before_id work with every sort; unless sorting by ID, an
+ * anchor outside the filtered list returns PAGE_ANCHOR_NOT_FOUND. Unpublished
+ * statuses require build.submission.view_pending permission.
  */
 export const buildsList = <ThrowOnError extends boolean = false>(options?: Options<BuildsListData, ThrowOnError>): RequestResult<BuildsListResponses, BuildsListErrors, ThrowOnError> => (options?.client ?? client).get<BuildsListResponses, BuildsListErrors, ThrowOnError>({
     security: [

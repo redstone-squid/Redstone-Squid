@@ -1990,7 +1990,7 @@
           "builds"
         ],
         "summary": "ListBuilds",
-        "description": "Search approved builds, or list builds with a selected moderation status.\n\nSupplying q selects indexed search within the selected status. Search\nuses offset pagination. Without q, results come from the build repository;\nunpublished statuses require build.submission.view_pending permission.",
+        "description": "Search approved builds, or list builds with a selected moderation status.\n\nSupplying q selects indexed search within the selected status. Search\nuses offset pagination. Without q, results come from the build repository,\nand after_id or before_id work with every sort; unless sorting by ID, an\nanchor outside the filtered list returns PAGE_ANCHOR_NOT_FOUND. Unpublished\nstatuses require build.submission.view_pending permission.",
         "operationId": "builds_list",
         "parameters": [
           {
@@ -22564,6 +22564,7 @@
           "MINECRAFT_ACCOUNT_NOT_FOUND",
           "MINECRAFT_SERVICE_UNAVAILABLE",
           "NOT_FOUND",
+          "PAGE_ANCHOR_NOT_FOUND",
           "PERSISTENCE_ERROR",
           "RATE_LIMITED",
           "RECORD_NOT_FOUND",

@@ -9293,7 +9293,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:269"
+      "squid/core/errors.py:270"
     ]
   },
   "core-configuration-invalid": {
@@ -9302,7 +9302,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:306"
+      "squid/core/errors.py:307"
     ]
   },
   "core-dependency-failed": {
@@ -9311,7 +9311,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:320"
+      "squid/core/errors.py:321"
     ]
   },
   "core-errors-an-application-error-occurred": {
@@ -9320,7 +9320,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:87"
+      "squid/core/errors.py:88"
     ]
   },
   "core-errors-an-internal-application-error-occurred": {
@@ -9329,7 +9329,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:295"
+      "squid/core/errors.py:296"
     ]
   },
   "core-errors-application-error": {
@@ -9338,7 +9338,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:90"
+      "squid/core/errors.py:91"
     ]
   },
   "core-errors-forbidden": {
@@ -9347,7 +9347,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:265"
+      "squid/core/errors.py:266"
     ]
   },
   "core-errors-internal-error": {
@@ -9356,7 +9356,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:298"
+      "squid/core/errors.py:299"
     ]
   },
   "core-errors-invalid-value": {
@@ -9365,7 +9365,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:226"
+      "squid/core/errors.py:227"
     ]
   },
   "core-errors-operation-conflict": {
@@ -9374,7 +9374,16 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:242"
+      "squid/core/errors.py:243"
+    ]
+  },
+  "core-errors-page-anchor-not-found": {
+    "fingerprint": "9dd5583154e9072d11368bd5a2c50abfbedbfe7552348563190301de05c613e1",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/core/pagination.py:60"
     ]
   },
   "core-errors-request-failed": {
@@ -9383,7 +9392,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:178"
+      "squid/core/errors.py:179"
     ]
   },
   "core-errors-resource-not-found": {
@@ -9392,7 +9401,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:234"
+      "squid/core/errors.py:235"
     ]
   },
   "core-errors-service-unavailable": {
@@ -9401,7 +9410,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:345"
+      "squid/core/errors.py:346"
     ]
   },
   "core-errors-too-many-requests": {
@@ -9410,7 +9419,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:284"
+      "squid/core/errors.py:285"
     ]
   },
   "core-errors-unauthorized": {
@@ -9419,7 +9428,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:248"
+      "squid/core/errors.py:249"
     ]
   },
   "core-errors-unauthorized-2": {
@@ -9428,7 +9437,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:249"
+      "squid/core/errors.py:250"
     ]
   },
   "core-errors-you-do-not-have-permission-to-perform": {
@@ -9437,7 +9446,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:262"
+      "squid/core/errors.py:263"
     ]
   },
   "core-guild-required-action": {
@@ -9446,7 +9455,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:277"
+      "squid/core/errors.py:278"
     ]
   },
   "core-operation-conflict": {
@@ -9455,7 +9464,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:241"
+      "squid/core/errors.py:242"
     ]
   },
   "core-operation-failed": {
@@ -9464,7 +9473,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:177"
+      "squid/core/errors.py:178"
     ]
   },
   "core-owner-required-action": {
@@ -9473,7 +9482,25 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:273"
+      "squid/core/errors.py:274"
+    ]
+  },
+  "core-page-anchor-not-found": {
+    "fingerprint": "4818a66d86aa12ffb2a1a46e5ca07c210c7ff980d81a28fef5458a4e29832eac",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/core/pagination.py:59"
+    ]
+  },
+  "core-page-anchor-not-found-action": {
+    "fingerprint": "c6ccaacbb8be4260d77762e3e800c8617f6b0ee680d0482231033ad43d85a538",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/core/pagination.py:62"
     ]
   },
   "core-persisted-data-inconsistent": {
@@ -9482,7 +9509,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:335"
+      "squid/core/errors.py:336"
     ]
   },
   "core-persistence-operation-failed": {
@@ -9491,7 +9518,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:327"
+      "squid/core/errors.py:328"
     ]
   },
   "core-rate-limited": {
@@ -9500,7 +9527,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:283"
+      "squid/core/errors.py:284"
     ]
   },
   "core-requested-resource-not-found": {
@@ -9509,7 +9536,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:233"
+      "squid/core/errors.py:234"
     ]
   },
   "core-required-service-temporarily": {
@@ -9518,7 +9545,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:344"
+      "squid/core/errors.py:345"
     ]
   },
   "core-retry-later": {
@@ -9527,7 +9554,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:300"
+      "squid/core/errors.py:301"
     ]
   },
   "core-state-invalid-operation": {
@@ -9536,7 +9563,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:313"
+      "squid/core/errors.py:314"
     ]
   },
   "core-supplied-value-invalid": {
@@ -9545,7 +9572,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:225"
+      "squid/core/errors.py:226"
     ]
   },
   "creator-page-build-count": {

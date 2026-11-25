@@ -2827,91 +2827,100 @@ contextual-search-pick = Select a match to add it
 # squid/bot/catalogue/search/contextual.py:88
 contextual-search-prompt = Use { $command } here within two minutes. Leave { $scope } empty.
 
-# squid/core/errors.py:269
+# squid/core/errors.py:270
 core-account-required-action = A linked account is required for this action.
 
-# squid/core/errors.py:306
+# squid/core/errors.py:307
 core-configuration-invalid = Application configuration is invalid.
 
-# squid/core/errors.py:320
+# squid/core/errors.py:321
 core-dependency-failed = An infrastructure dependency failed.
 
-# squid/core/errors.py:87
+# squid/core/errors.py:88
 core-errors-an-application-error-occurred = An application error occurred.
 
-# squid/core/errors.py:295
+# squid/core/errors.py:296
 core-errors-an-internal-application-error-occurred = An internal application error occurred.
 
-# squid/core/errors.py:90
+# squid/core/errors.py:91
 core-errors-application-error = Application error
 
-# squid/core/errors.py:265
+# squid/core/errors.py:266
 core-errors-forbidden = Forbidden
 
-# squid/core/errors.py:298
+# squid/core/errors.py:299
 core-errors-internal-error = Internal error
 
-# squid/core/errors.py:226
+# squid/core/errors.py:227
 core-errors-invalid-value = Invalid value
 
-# squid/core/errors.py:242
+# squid/core/errors.py:243
 core-errors-operation-conflict = Operation conflict
 
-# squid/core/errors.py:178
+# squid/core/pagination.py:60
+core-errors-page-anchor-not-found = Page anchor not found
+
+# squid/core/errors.py:179
 core-errors-request-failed = Request failed
 
-# squid/core/errors.py:234
+# squid/core/errors.py:235
 core-errors-resource-not-found = Resource not found
 
-# squid/core/errors.py:345
+# squid/core/errors.py:346
 core-errors-service-unavailable = Service unavailable
 
-# squid/core/errors.py:284
+# squid/core/errors.py:285
 core-errors-too-many-requests = Too many requests
 
-# squid/core/errors.py:248
+# squid/core/errors.py:249
 core-errors-unauthorized = Unauthorized.
 
-# squid/core/errors.py:249
+# squid/core/errors.py:250
 core-errors-unauthorized-2 = Unauthorized
 
-# squid/core/errors.py:262
+# squid/core/errors.py:263
 core-errors-you-do-not-have-permission-to-perform = You do not have permission to perform this action.
 
-# squid/core/errors.py:277
+# squid/core/errors.py:278
 core-guild-required-action = This action must be performed in the server it belongs to.
 
-# squid/core/errors.py:241
+# squid/core/errors.py:242
 core-operation-conflict = The operation conflicts with the current state.
 
-# squid/core/errors.py:177
+# squid/core/errors.py:178
 core-operation-failed = The requested operation could not be completed.
 
-# squid/core/errors.py:273
+# squid/core/errors.py:274
 core-owner-required-action = Only the owner can perform this action.
 
-# squid/core/errors.py:335
+# squid/core/pagination.py:59
+core-page-anchor-not-found = The page anchor is no longer in this list.
+
+# squid/core/pagination.py:62
+core-page-anchor-not-found-action = Go back to the first page.
+
+# squid/core/errors.py:336
 core-persisted-data-inconsistent = Persisted data is inconsistent with application expectations.
 
-# squid/core/errors.py:327
+# squid/core/errors.py:328
 core-persistence-operation-failed = A persistence operation failed.
 
-# squid/core/errors.py:283
+# squid/core/errors.py:284
 core-rate-limited = Too many requests. Please try again later.
 
-# squid/core/errors.py:233
+# squid/core/errors.py:234
 core-requested-resource-not-found = The requested resource was not found.
 
-# squid/core/errors.py:344
+# squid/core/errors.py:345
 core-required-service-temporarily = A required service is temporarily unavailable.
 
-# squid/core/errors.py:300
+# squid/core/errors.py:301
 core-retry-later = Please try again later.
 
-# squid/core/errors.py:313
+# squid/core/errors.py:314
 core-state-invalid-operation = Application state is invalid for this operation.
 
-# squid/core/errors.py:225
+# squid/core/errors.py:226
 core-supplied-value-invalid = The supplied value is invalid.
 
 # squid/bot/accounts/creator_page.py:121

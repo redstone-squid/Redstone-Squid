@@ -390,7 +390,7 @@ class BuildQueryService:
                     selector=selector,
                     page_size=page_size,
                     total=total,
-                    keyset=sort.field == "id",
+                    keyset=True,
                     id_of=_persisted_build_id,
                 )
 

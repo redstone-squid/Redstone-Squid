@@ -9,7 +9,20 @@ from dataclasses import replace
 from decimal import Decimal
 from typing import Any, cast
 
-from sqlalchemy import BigInteger, String, Table, delete, func, select, update
+from sqlalchemy import (
+    BigInteger,
+    ColumnElement,
+    Select,
+    SQLColumnExpression,
+    String,
+    Table,
+    and_,
+    delete,
+    func,
+    or_,
+    select,
+    update,
+)
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import raiseload, selectinload
@@ -23,6 +36,7 @@ from squid.core.builds.application.queries import (
     DEFAULT_BUILD_LIST_SORT,
     BuildListSort,
     BuildRecordSummary,
+    BuildSortField,
     PublicBuildSummary,
     PublicBuildTag,
 )
@@ -56,6 +70,7 @@ from squid.core.errors import DataIntegrityError, InvalidStateError, Persistence
 from squid.core.events.infrastructure.repository import publish_domain_event
 from squid.core.messages.domain import MessageSnapshot
 from squid.core.messages.models import Message
+from squid.core.pagination import PageAnchorNotFoundError, PageSelector
 from squid.core.records.models import DoorTimingVariant, ExtenderTimingVariant
 from squid.core.search.models import SearchDocument
 from squid.core.settings.infrastructure.repository import ensure_server_settings
@@ -381,49 +396,42 @@ class BuildRepository:
     ) -> list[Build]:
         """Load a page in display order, filtered by status and optional submitter.
 
-        ID anchors page relative to the display order, so they require the ID sort. A `before_id`
-        page is fetched in reversed order and restored in memory; its overfetched row therefore
-        sits at the front for the caller to trim.
+        Ties in the sort value fall back to the ID, and unknown values sort last, so the order is
+        total and ID anchors work with every sort. Except for the ID sort, an anchor outside the
+        filtered listing raises PageAnchorNotFoundError. A `before_id` page is fetched in reversed
+        order and restored in memory; its overfetched row therefore sits at the front for the
+        caller to trim.
         """
         if not statuses or limit <= 0:
             return []
-        if sort.field != "id" and (after_id is not None or before_id is not None):
-            msg = "ID anchors require the ID sort"
-            raise ValueError(msg)
         session = self._session()
-        statement = filter_build_listing(
-            select(Build),
-            statuses=statuses,
-            submitter_account_id=submitter_account_id,
-            filters=filters,
-        )
-        reverse = before_id is not None
-        if sort.field != "id":
-            if sort.field == "opening_time":
-                doors = DoorBuild.__table__.c
-                key = select(doors.normal_opening_time).where(doors.build_id == Build.id).scalar_subquery()
-            elif sort.field == "volume":
-                key = Build.width.cast(BigInteger) * Build.height * Build.depth
-            elif sort.field == "title":
-                indexed = (
-                    select(SearchDocument.title)
-                    .where(SearchDocument.resource_kind == "build", SearchDocument.source_key == Build.id.cast(String))
-                    .scalar_subquery()
-                )
-                key = func.lower(func.coalesce(Build.display_name, indexed))
-            else:
-                key = Build.submission_time if sort.field == "submission_time" else Build.edited_time
-            order = key.desc() if sort.descending else key.asc()
-            statement = statement.order_by(order.nulls_last(), Build.id.desc() if sort.descending else Build.id.asc())
-        elif before_id is not None:
-            # Walk away from the anchor in reversed display order; the page is flipped back below.
-            statement = statement.where(Build.id > before_id if sort.descending else Build.id < before_id).order_by(
-                Build.id.asc() if sort.descending else Build.id.desc()
+
+        def listing[S: Select[Any]](statement: S) -> S:
+            return filter_build_listing(
+                statement, statuses=statuses, submitter_account_id=submitter_account_id, filters=filters
             )
+
+        key = _build_sort_key(sort.field)
+        statement = listing(select(Build))
+        anchor_id = after_id if after_id is not None else before_id
+        reverse = before_id is not None
+        if anchor_id is not None:
+            if sort.field == "id":
+                anchor_key: object = anchor_id
+            else:
+                anchor = (await session.execute(listing(select(key).where(Build.id == anchor_id)))).one_or_none()
+                if anchor is None:
+                    raise PageAnchorNotFoundError(PageSelector(after_id=after_id, before_id=before_id))
+                anchor_key = anchor[0]
+            statement = statement.where(_seek(key, anchor_key, anchor_id, descending=sort.descending, backward=reverse))
+        # Walking backwards reads the reversed display order, which also moves unknown values first.
+        descending = sort.descending != reverse
+        order = key.desc() if descending else key.asc()
+        if sort.field != "id":
+            order = order.nulls_first() if reverse else order.nulls_last()
+            statement = statement.order_by(order, Build.id.desc() if descending else Build.id.asc())
         else:
-            if after_id is not None:
-                statement = statement.where(Build.id < after_id if sort.descending else Build.id > after_id)
-            statement = statement.order_by(Build.id.desc() if sort.descending else Build.id.asc())
+            statement = statement.order_by(order)
         if offset:
             statement = statement.offset(offset)
         rows = (await session.scalars(statement.limit(limit).options(*_mapper_load_options()))).unique().all()
@@ -996,3 +1004,46 @@ def _sponsor_values(build: Build) -> tuple[uuid.UUID | None, str | None, str | N
         build.sponsor.description,
         build.sponsor.website_url,
     )
+
+
+def _build_sort_key(field: BuildSortField) -> SQLColumnExpression[Any]:
+    """Return the SQL expression a build listing sorts by."""
+    match field:
+        case "id":
+            return Build.id
+        case "submission_time":
+            return Build.submission_time
+        case "edited_time":
+            return Build.edited_time
+        case "opening_time":
+            doors = DoorBuild.__table__.c
+            return select(doors.normal_opening_time).where(doors.build_id == Build.id).scalar_subquery()
+        case "volume":
+            return Build.width.cast(BigInteger) * Build.height * Build.depth
+        case "title":
+            indexed = (
+                select(SearchDocument.title)
+                .where(SearchDocument.resource_kind == "build", SearchDocument.source_key == Build.id.cast(String))
+                .scalar_subquery()
+            )
+            return func.lower(func.coalesce(Build.display_name, indexed))
+
+
+def _seek(
+    key: SQLColumnExpression[Any], anchor_key: object, anchor_id: int, *, descending: bool, backward: bool
+) -> ColumnElement[bool]:
+    """Select the builds after an anchor in display order, or before it when walking backward.
+
+    Display order sorts by `key`, then ID in the same direction, with unknown keys last.
+    """
+
+    def beyond(column: SQLColumnExpression[Any], value: object) -> ColumnElement[bool]:
+        # Further along the direction of travel.
+        return column < value if descending != backward else column > value
+
+    same_key_beyond_id = and_(key == anchor_key, beyond(Build.id, anchor_id))
+    if anchor_key is None:
+        within_unknown = and_(key.is_(None), beyond(Build.id, anchor_id))
+        return or_(key.is_not(None), within_unknown) if backward else within_unknown
+    known_beyond = or_(beyond(key, anchor_key), same_key_beyond_id)
+    return known_beyond if backward else or_(known_beyond, key.is_(None))
