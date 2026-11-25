@@ -392,7 +392,7 @@ async def form_options(
 @post(
     "/drafts",
     status_code=status.HTTP_201_CREATED,
-    responses=responses(400, 401, 403, 409, 422, 503),
+    responses=responses(400, 401, 403, 404, 409, 422, 503),
     operation_id="submission_draft_create",
     security=[WEB_WRITE, DEVICE, MINECRAFT],
     opt=contract(
@@ -402,6 +402,7 @@ async def form_options(
     dependencies={
         "_reservation": Provide(reserve_idempotent_request),
         "drafts": Provide(get_submission_drafts, sync_to_thread=False),
+        "finalization": Provide(get_submission_finalization, sync_to_thread=False),
         "caller": Provide(authenticated_submission_caller),
     },
 )
@@ -410,6 +411,7 @@ async def create_draft(
     data: JSONBody[DraftCreateRequest],
     request: Request,
     drafts: Drafts,
+    finalization: Finalization,
     caller: SubmissionCaller,
     *,
     _reservation: NamedDependency[SkipValidation[None]],
@@ -420,7 +422,7 @@ async def create_draft(
         raise AuthorizationError
     if data.source_build_id is not None:
         caller.require_consented_account()
-        editor = get_submission_finalization(request).editor
+        editor = finalization.editor
         if origin is not SubmissionOrigin.WEB or editor is None:
             raise AuthorizationError
         draft = await editor.create(

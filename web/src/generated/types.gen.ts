@@ -7374,6 +7374,10 @@ export type SubmissionDraftCreateErrors = {
      */
     403: ProblemDetail;
     /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
      * Conflict
      */
     409: ProblemDetail;
