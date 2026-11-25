@@ -12,7 +12,7 @@ from hypothesis import given, settings
 from hypothesis import strategies as st
 from whenever import Instant
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.errors import ConflictError, ValidationError
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.application.administration import (
@@ -269,10 +269,13 @@ class TestAuthorityBoundary:
     async def test_a_held_pattern_can_be_granted(self) -> None:
         store = stored(rules=granted("perm.grant.global", "build.**"))
         service = admin(store)
-        actor = await service.resolve_actor(Actor(account_id=7, guild_id=GUILD))
+        actor = await service.resolve_actor(context=ActingContext.direct(Actor(account_id=7, guild_id=GUILD)))
 
         await service.grant(
-            actor, pattern="build.submission.approve", scope_guild_id=None, subject=AccountGrantSubject(8)
+            context=ActingContext.direct(actor),
+            pattern="build.submission.approve",
+            scope_guild_id=None,
+            subject=AccountGrantSubject(8),
         )
 
         assert any(rule.subject_account_id == 8 for rule in store.value.rules)
@@ -280,17 +283,24 @@ class TestAuthorityBoundary:
     async def test_a_pattern_beyond_the_actor_is_refused(self) -> None:
         store = stored(rules=granted("perm.grant.global", "build.**"))
         service = admin(store)
-        actor = await service.resolve_actor(Actor(account_id=7, guild_id=GUILD))
+        actor = await service.resolve_actor(context=ActingContext.direct(Actor(account_id=7, guild_id=GUILD)))
 
         with pytest.raises(PermissionAuthorityError, match="outside your authority"):
-            await service.grant(actor, pattern="bot.tree.sync", scope_guild_id=None, subject=AccountGrantSubject(8))
+            await service.grant(
+                context=ActingContext.direct(actor),
+                pattern="bot.tree.sync",
+                scope_guild_id=None,
+                subject=AccountGrantSubject(8),
+            )
 
     async def test_the_owner_bypasses_every_gate(self) -> None:
         store = stored()
         service = admin(store)
-        actor = await service.resolve_actor(Actor(account_id=1, is_bot_owner=True))
+        actor = await service.resolve_actor(context=ActingContext.direct(Actor(account_id=1, is_bot_owner=True)))
 
-        await service.grant(actor, pattern="**", scope_guild_id=None, subject=AccountGrantSubject(8))
+        await service.grant(
+            context=ActingContext.direct(actor), pattern="**", scope_guild_id=None, subject=AccountGrantSubject(8)
+        )
 
         assert store.value.rules
 
@@ -300,27 +310,40 @@ class TestGuildDelegation:
         """Check the administration service refuses a global capability in a guild-scoped grant."""
         store = stored(rules=granted("perm.grant.guild", "settings.**", "build.**"))
         service = admin(store)
-        actor = await service.resolve_actor(Actor(account_id=7, guild_id=GUILD))
+        actor = await service.resolve_actor(context=ActingContext.direct(Actor(account_id=7, guild_id=GUILD)))
 
         with pytest.raises(PermissionAuthorityError, match="not this server's to grant"):
-            await service.grant(actor, pattern="build.**", scope_guild_id=GUILD, subject=AccountGrantSubject(8))
+            await service.grant(
+                context=ActingContext.direct(actor),
+                pattern="build.**",
+                scope_guild_id=GUILD,
+                subject=AccountGrantSubject(8),
+            )
 
     async def test_a_guild_granter_cannot_write_a_global_rule(self) -> None:
         store = stored(rules=granted("perm.grant.guild", "settings.**"))
         service = admin(store)
-        actor = await service.resolve_actor(Actor(account_id=7, guild_id=GUILD))
+        actor = await service.resolve_actor(context=ActingContext.direct(Actor(account_id=7, guild_id=GUILD)))
 
         with pytest.raises(PermissionAuthorityError, match="scoped to this server"):
             await service.grant(
-                actor, pattern="settings.server.edit", scope_guild_id=None, subject=AccountGrantSubject(8)
+                context=ActingContext.direct(actor),
+                pattern="settings.server.edit",
+                scope_guild_id=None,
+                subject=AccountGrantSubject(8),
             )
 
     async def test_a_guild_scoped_guild_node_is_allowed(self) -> None:
         store = stored(rules=granted("perm.grant.guild", "settings.**"))
         service = admin(store)
-        actor = await service.resolve_actor(Actor(account_id=7, guild_id=GUILD))
+        actor = await service.resolve_actor(context=ActingContext.direct(Actor(account_id=7, guild_id=GUILD)))
 
-        await service.grant(actor, pattern="settings.server.edit", scope_guild_id=GUILD, subject=AccountGrantSubject(8))
+        await service.grant(
+            context=ActingContext.direct(actor),
+            pattern="settings.server.edit",
+            scope_guild_id=GUILD,
+            subject=AccountGrantSubject(8),
+        )
 
         assert store.value.rules[-1].scope_guild_id == GUILD
 
@@ -329,11 +352,11 @@ class TestForbid:
     async def test_forbid_is_owner_only(self) -> None:
         store = stored(rules=granted("**"))
         service = admin(store)
-        actor = await service.resolve_actor(Actor(account_id=7))
+        actor = await service.resolve_actor(context=ActingContext.direct(Actor(account_id=7)))
 
         with pytest.raises(PermissionAuthorityError, match="owner"):
             await service.grant(
-                actor,
+                context=ActingContext.direct(actor),
                 pattern="build.**",
                 effect=Effect.FORBID,
                 scope_guild_id=None,
@@ -344,11 +367,15 @@ class TestForbid:
     async def test_forbid_requires_a_reason(self) -> None:
         store = stored()
         service = admin(store)
-        actor = await service.resolve_actor(Actor(account_id=1, is_bot_owner=True))
+        actor = await service.resolve_actor(context=ActingContext.direct(Actor(account_id=1, is_bot_owner=True)))
 
         with pytest.raises(ValidationError):
             await service.grant(
-                actor, pattern="build.**", effect=Effect.FORBID, scope_guild_id=None, subject=AccountGrantSubject(8)
+                context=ActingContext.direct(actor),
+                pattern="build.**",
+                effect=Effect.FORBID,
+                scope_guild_id=None,
+                subject=AccountGrantSubject(8),
             )
 
 
@@ -362,35 +389,45 @@ class TestRankGate:
             rules=granted("**", "role.definition.manage_guild"),
         )
         service = admin(store)
-        actor = await service.resolve_actor(Actor(account_id=7, guild_id=GUILD))
+        actor = await service.resolve_actor(context=ActingContext.direct(Actor(account_id=7, guild_id=GUILD)))
         store.value.assignments.append(
             PermissionRoleAssignment(
                 id=1, role_id=50, role_slug="moderator", subject_account_id=7, scope_guild_id=GUILD
             )
         )
-        actor = await service.resolve_actor(Actor(account_id=7, guild_id=GUILD))
+        actor = await service.resolve_actor(context=ActingContext.direct(Actor(account_id=7, guild_id=GUILD)))
 
         with pytest.raises(PermissionRankError, match="at or above"):
-            await service.set_rank(actor, await service.role("moderator"), 10)
+            await service.set_rank(
+                await service.role("moderator", context=ActingContext.direct(Actor(is_bot_owner=True))),
+                10,
+                context=ActingContext.direct(actor),
+            )
 
     async def test_a_builtin_refuses_structural_edits(self) -> None:
         store = stored(rules=granted("**"))
         service = admin(store)
-        actor = await service.resolve_actor(Actor(account_id=7, guild_id=GUILD))
+        actor = await service.resolve_actor(context=ActingContext.direct(Actor(account_id=7, guild_id=GUILD)))
 
         with pytest.raises(ProtectedRoleError):
-            await service.add_pattern(actor, await service.role("global-admin"), "bot.**")
+            await service.add_pattern(
+                await service.role("global-admin", context=ActingContext.direct(Actor(is_bot_owner=True))),
+                "bot.**",
+                context=ActingContext.direct(actor),
+            )
 
 
 class TestRoles:
     async def test_a_role_resolves_to_its_leaves(self) -> None:
         store = stored()
         service = admin(store)
-        roles = await service.roles()
-        trusted = await service.role("trusted")
+        roles = await service.roles(context=ActingContext.direct(Actor(is_bot_owner=True)))
+        trusted = await service.role("trusted", context=ActingContext.direct(Actor(is_bot_owner=True)))
 
         assert "vote.log_delete.cast" in service.resolved_leaves(trusted, roles)
-        assert "bot.tree.sync" not in service.resolved_leaves(await service.role("global-admin"), roles)
+        assert "bot.tree.sync" not in service.resolved_leaves(
+            await service.role("global-admin", context=ActingContext.direct(Actor(is_bot_owner=True))), roles
+        )
 
     async def test_composition_cycles_are_refused_at_write_time(self) -> None:
         store = stored(
@@ -403,10 +440,14 @@ class TestRoles:
             rules=granted("**", "role.definition.manage"),
         )
         service = admin(store)
-        actor = await service.resolve_actor(Actor(account_id=1, is_bot_owner=True))
+        actor = await service.resolve_actor(context=ActingContext.direct(Actor(account_id=1, is_bot_owner=True)))
 
         with pytest.raises(ConflictError, match="cycle"):
-            await service.add_include(actor, await service.role("b"), await service.role("a"))
+            await service.add_include(
+                await service.role("b", context=ActingContext.direct(Actor(is_bot_owner=True))),
+                await service.role("a", context=ActingContext.direct(Actor(is_bot_owner=True))),
+                context=ActingContext.direct(actor),
+            )
 
     @pytest.mark.parametrize(("role_guild", "included_guild"), [(None, GUILD), (GUILD, GUILD + 1)])
     async def test_a_role_cannot_include_another_guilds_role(self, role_guild: int | None, included_guild: int) -> None:
@@ -421,10 +462,14 @@ class TestRoles:
             rules=granted("**", "role.definition.manage"),
         )
         service = admin(store)
-        actor = await service.resolve_actor(Actor(account_id=1, is_bot_owner=True))
+        actor = await service.resolve_actor(context=ActingContext.direct(Actor(account_id=1, is_bot_owner=True)))
 
         with pytest.raises(ValidationError, match="own guild"):
-            await service.add_include(actor, await service.role("outer"), await service.role("inner"))
+            await service.add_include(
+                await service.role("outer", context=ActingContext.direct(Actor(is_bot_owner=True))),
+                await service.role("inner", context=ActingContext.direct(Actor(is_bot_owner=True))),
+                context=ActingContext.direct(actor),
+            )
 
     async def test_an_exclusion_needs_no_authority_over_what_it_removes(self) -> None:
         """An exclusion narrows a role, so the editor need not hold the removed capability."""
@@ -439,11 +484,18 @@ class TestRoles:
             PermissionRoleAssignment(id=1, role_id=51, role_slug="lead", subject_account_id=7)
         )
         service = admin(store)
-        actor = await service.resolve_actor(Actor(account_id=7, guild_id=GUILD))
+        actor = await service.resolve_actor(context=ActingContext.direct(Actor(account_id=7, guild_id=GUILD)))
 
-        await service.add_pattern(actor, await service.role("helper"), "bot.**", mode=PatternMode.EXCLUDE)
+        await service.add_pattern(
+            await service.role("helper", context=ActingContext.direct(Actor(is_bot_owner=True))),
+            "bot.**",
+            context=ActingContext.direct(actor),
+            mode=PatternMode.EXCLUDE,
+        )
 
-        assert "bot.**" in (await service.role("helper")).excludes
+        assert (
+            "bot.**" in (await service.role("helper", context=ActingContext.direct(Actor(is_bot_owner=True)))).excludes
+        )
 
     async def test_show_surfaces_patterns_the_actor_cannot_manage(self) -> None:
         store = stored(
@@ -461,10 +513,12 @@ class TestRoles:
             rules=granted("settings.**", "role.definition.manage"),
         )
         service = admin(store)
-        actor = await service.resolve_actor(Actor(account_id=7, guild_id=GUILD))
-        roles = await service.roles()
+        actor = await service.resolve_actor(context=ActingContext.direct(Actor(account_id=7, guild_id=GUILD)))
+        roles = await service.roles(context=ActingContext.direct(Actor(is_bot_owner=True)))
 
-        assert service.unmanageable_patterns(actor, await service.role("helper"), roles) == ("bot.tree.sync",)
+        assert service.unmanageable_patterns(
+            actor, await service.role("helper", context=ActingContext.direct(Actor(is_bot_owner=True))), roles
+        ) == ("bot.tree.sync",)
 
 
 class TestLastGranter:
@@ -472,19 +526,21 @@ class TestLastGranter:
         """Preserve a stored holder of global grant authority."""
         store = stored(rules=granted("perm.grant.global", "**"))
         service = admin(store)
-        actor = await service.resolve_actor(Actor(account_id=7))
+        actor = await service.resolve_actor(context=ActingContext.direct(Actor(account_id=7)))
 
         with pytest.raises(ConflictError, match="last holder"):
-            await service.revoke(actor, pattern="perm.grant.global", subject=AccountGrantSubject(7))
+            await service.revoke(
+                context=ActingContext.direct(actor), pattern="perm.grant.global", subject=AccountGrantSubject(7)
+            )
 
 
 async def test_grant_records_an_audit_entry() -> None:
     store = stored(rules=granted("**"))
     service = admin(store)
-    actor = await service.resolve_actor(Actor(account_id=7, guild_id=GUILD))
+    actor = await service.resolve_actor(context=ActingContext.direct(Actor(account_id=7, guild_id=GUILD)))
 
     await service.grant(
-        actor,
+        context=ActingContext.direct(actor),
         pattern="settings.server.edit",
         scope_guild_id=None,
         expires_at=Instant.from_utc(2030, 1, 1),
@@ -572,14 +628,29 @@ def _p11_scenarios(draw: st.DrawFn) -> _P11Scenario:
 
 async def _p11_apply(service: PermissionAdministrationService, actor: Actor, op: _P11Op) -> None:
     if isinstance(op, _IncludeOp):
-        await service.add_pattern(actor, await service.role(op.slug), op.pattern, mode=op.mode)
+        await service.add_pattern(
+            await service.role(op.slug, context=ActingContext.direct(Actor(is_bot_owner=True))),
+            op.pattern,
+            context=ActingContext.direct(actor),
+            mode=op.mode,
+        )
     elif isinstance(op, _ComposeOp):
-        await service.add_include(actor, await service.role(op.slug), await service.role(op.included_slug))
+        await service.add_include(
+            await service.role(op.slug, context=ActingContext.direct(Actor(is_bot_owner=True))),
+            await service.role(op.included_slug, context=ActingContext.direct(Actor(is_bot_owner=True))),
+            context=ActingContext.direct(actor),
+        )
     elif isinstance(op, _AssignOp):
-        role = await service.role(op.slug)
-        await service.assign(actor, role, scope_guild_id=role.guild_id, subject=AccountGrantSubject(7))
+        role = await service.role(op.slug, context=ActingContext.direct(Actor(is_bot_owner=True)))
+        await service.assign(
+            role, context=ActingContext.direct(actor), scope_guild_id=role.guild_id, subject=AccountGrantSubject(7)
+        )
     elif isinstance(op, _RankOp):
-        await service.set_rank(actor, await service.role(op.slug), op.rank)
+        await service.set_rank(
+            await service.role(op.slug, context=ActingContext.direct(Actor(is_bot_owner=True))),
+            op.rank,
+            context=ActingContext.direct(actor),
+        )
 
 
 @settings(max_examples=200, deadline=None)
@@ -625,22 +696,26 @@ async def test_p11_accepted_role_edits_never_grow_the_editors_authority(scenario
     )
     service = admin(store)
     subject = Actor(account_id=7, guild_id=GUILD)
-    initial_held = (await service.resolve_actor(subject)).capabilities
+    initial_held = (await service.resolve_actor(context=ActingContext.direct(subject))).capabilities
 
     for op in scenario.ops:
-        actor = await service.resolve_actor(subject)
+        actor = await service.resolve_actor(context=ActingContext.direct(subject))
         before_held = actor.capabilities
         try:
             await _p11_apply(service, actor, op)
         except REJECTIONS:
             continue
-        after_held = (await service.resolve_actor(subject)).capabilities
+        after_held = (await service.resolve_actor(context=ActingContext.direct(subject))).capabilities
         assert after_held <= before_held
         assert after_held <= initial_held
 
-    roles = await service.roles()
+    roles = await service.roles(context=ActingContext.direct(Actor(is_bot_owner=True)))
     for slug in (CUSTOM_A, CUSTOM_B):
-        leaves = frozenset(service.resolved_leaves(await service.role(slug), roles))
+        leaves = frozenset(
+            service.resolved_leaves(
+                await service.role(slug, context=ActingContext.direct(Actor(is_bot_owner=True))), roles
+            )
+        )
         assert leaves <= initial_held
 
 

@@ -6,7 +6,7 @@ from typing import Protocol, Self, override
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 from whenever import Instant
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.edits.application import EditUnitOfWork
 from squid.core.edits.domain import EditCommand, EditTarget, EditValues, Revision
 from squid.core.edits.fields import Aggregate, FieldCommand, PreparedFields
@@ -147,7 +147,7 @@ class PermissionFieldCommand[ValuesT: PermissionValues](
             return PermissionGraph(revision, admin.in_transaction(uow), await uow.permission_admin.list_roles())
 
         async def authorize(uow: PermissionEditUnitOfWork, actor: Actor, root: PermissionGraph) -> None:
-            root.actor = await root.admin.resolve_actor(actor)
+            root.actor = await root.admin.resolve_actor(context=ActingContext.for_actor(actor))
 
         async def flush(uow: PermissionEditUnitOfWork, root: PermissionGraph, expected: Revision) -> Revision:
             return Revision(PERMISSION_GRAPH, await uow.permissions.epoch())
@@ -208,11 +208,14 @@ class PermissionGrantEdit(PermissionFieldCommand[GrantValues]):
     ) -> None:
         if after.effect is None:
             await root.admin.revoke(
-                root.current_actor, pattern=after.pattern, scope_guild_id=after.scope_guild_id, subject=after.subject
+                context=ActingContext.for_actor(root.current_actor),
+                pattern=after.pattern,
+                scope_guild_id=after.scope_guild_id,
+                subject=after.subject,
             )
         else:
             await root.admin.grant(
-                root.current_actor,
+                context=ActingContext.for_actor(root.current_actor),
                 pattern=after.pattern,
                 effect=after.effect,
                 scope_guild_id=after.scope_guild_id,
@@ -271,8 +274,8 @@ class PermissionAssignmentEdit(PermissionFieldCommand[AssignmentValues]):
         role = root.role(after.role_id)
         if after.present:
             await root.admin.assign(
-                root.current_actor,
                 role,
+                context=ActingContext.for_actor(root.current_actor),
                 scope_guild_id=after.scope_guild_id,
                 expires_at=after.expiry,
                 reason=after.reason,
@@ -280,7 +283,10 @@ class PermissionAssignmentEdit(PermissionFieldCommand[AssignmentValues]):
             )
         else:
             await root.admin.unassign(
-                root.current_actor, role, scope_guild_id=after.scope_guild_id, subject=after.subject
+                role,
+                context=ActingContext.for_actor(root.current_actor),
+                scope_guild_id=after.scope_guild_id,
+                subject=after.subject,
             )
 
 
@@ -369,7 +375,9 @@ class PermissionRankEdit(PermissionFieldCommand[RankValues]):
     async def write(
         self, uow: PermissionEditUnitOfWork, root: PermissionGraph, before: RankValues, after: RankValues
     ) -> None:
-        await root.admin.set_rank(root.current_actor, root.role(after.role_id), after.rank)
+        await root.admin.set_rank(
+            root.role(after.role_id), after.rank, context=ActingContext.for_actor(root.current_actor)
+        )
 
 
 class PermissionPatternEdit(PermissionFieldCommand[PatternValues]):
@@ -414,9 +422,11 @@ class PermissionPatternEdit(PermissionFieldCommand[PatternValues]):
     ) -> None:
         role = root.role(after.role_id)
         if after.mode is None:
-            await root.admin.remove_pattern(root.current_actor, role, after.pattern)
+            await root.admin.remove_pattern(role, after.pattern, context=ActingContext.for_actor(root.current_actor))
         else:
-            await root.admin.add_pattern(root.current_actor, role, after.pattern, mode=after.mode)
+            await root.admin.add_pattern(
+                role, after.pattern, context=ActingContext.for_actor(root.current_actor), mode=after.mode
+            )
 
 
 class PermissionIncludeEdit(PermissionFieldCommand[IncludeValues]):
@@ -453,9 +463,9 @@ class PermissionIncludeEdit(PermissionFieldCommand[IncludeValues]):
     ) -> None:
         role, included = root.role(after.role_id), root.role(after.included_id)
         if after.present:
-            await root.admin.add_include(root.current_actor, role, included)
+            await root.admin.add_include(role, included, context=ActingContext.for_actor(root.current_actor))
         else:
-            await root.admin.remove_include(root.current_actor, role, included)
+            await root.admin.remove_include(role, included, context=ActingContext.for_actor(root.current_actor))
 
 
 ROLE_CREATE = "permissions.role-create"
@@ -601,4 +611,4 @@ class PermissionRoleDeletion(PermissionFieldCommand[RoleDeletionValues]):
         before: RoleDeletionValues,
         after: RoleDeletionValues,
     ) -> None:
-        await root.admin.delete_role(root.current_actor, root.role(after.role_id))
+        await root.admin.delete_role(root.role(after.role_id), context=ActingContext.for_actor(root.current_actor))

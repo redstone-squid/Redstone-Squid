@@ -16,8 +16,6 @@ from squid.core.actors import ActingContext, Actor
 from squid.core.diagnostics.application import ErrorReportService
 from squid.core.diagnostics.models import ErrorReport
 from squid.core.notifications import (
-    DEFAULT_INBOX_VISIBILITY,
-    InboxVisibility,
     NotificationPreferences,
     NotificationService,
     PendingNotificationDelivery,
@@ -90,7 +88,7 @@ class AccessRevision(PermissionAdministrationService):
         pass
 
     @override
-    async def revision(self) -> int:
+    async def revision(self, *, context: ActingContext) -> int:
         return 1
 
 
@@ -112,21 +110,21 @@ class WorkspaceInbox(NotificationService):
         self.account_id = account_id
 
     @override
-    async def editor_snapshot(self, account_id: int) -> NotificationEditorSnapshot:
+    async def editor_snapshot(self, *, context: ActingContext) -> NotificationEditorSnapshot:
+        account_id = context.effective.require_account_id()
         assert account_id == self.account_id
         return NotificationEditorSnapshot(NotificationPreferences(account_id, consent_pending=False), ())
 
     @override
     async def inbox(
         self,
-        account_id: int,
         *,
+        context: ActingContext,
         selector: PageSelector = FIRST_PAGE,
         page_size: int = 20,
-        visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY,
     ) -> Page[InboxNotification]:
+        account_id = context.effective.require_account_id()
         assert account_id == self.account_id
-        assert not visibility.include_staff
         inbox_item = InboxNotification(
             id=3, kind=NotificationKind.BUILD_CONFIRMED, payload={"build_id": 9}, created_at=Instant.now()
         )

@@ -20,7 +20,7 @@ from dataclasses import replace
 
 from whenever import Instant
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor, application_operation
 from squid.core.errors import AuthorizationError, ConflictError, NotFoundError, ValidationError
 from squid.core.i18n import tr
 from squid.core.permissions.application.ports import AuditEntry, PermissionAdminUnitOfWork
@@ -125,19 +125,30 @@ class PermissionAdministrationService:
             if self._transaction is None:
                 await uow.commit()
 
-    async def revision(self) -> int:
+    @application_operation
+    async def revision(self, *, context: ActingContext) -> int:
         async with self._read() as uow:
             return await uow.permissions.epoch()
 
-    async def resolve_actor(self, subject: Actor) -> Actor:
+    @application_operation
+    async def resolve_actor(self, *, context: ActingContext) -> Actor:
         """Resolve the caller's capabilities and highest role rank in one transaction."""
         async with self._read() as uow:
-            held = (
-                frozenset()
-                if subject.is_bot_owner
-                else (await self._permissions.check(subject, *self._catalogue, uow=uow)).allowed_nodes
-            )
-            return replace(subject, capabilities=held, highest_permission_rank=await self._highest_rank(uow, subject))
+            return await self._resolve_actor(uow, context.effective)
+
+    async def _resolve_actor(self, uow: PermissionAdminUnitOfWork, subject: Actor) -> Actor:
+        unrestricted_owner = subject.is_bot_owner and subject.credential_scopes is None
+        held = (
+            frozenset()
+            if unrestricted_owner
+            else (await self._permissions.check(subject, *self._catalogue, uow=uow)).allowed_nodes
+        )
+        return replace(
+            subject,
+            capabilities=held,
+            is_bot_owner=unrestricted_owner,
+            highest_permission_rank=await self._highest_rank(uow, subject),
+        )
 
     async def _highest_rank(self, uow: PermissionAdminUnitOfWork, subject: Actor) -> int:
         if subject.is_bot_owner:
@@ -358,10 +369,11 @@ class PermissionAdministrationService:
 
     # ---- Direct grants -------------------------------------------------
 
+    @application_operation
     async def grant(
         self,
-        actor: Actor,
         *,
+        context: ActingContext,
         subject: GrantSubject,
         pattern: str,
         effect: Effect = Effect.ALLOW,
@@ -374,6 +386,7 @@ class PermissionAdministrationService:
         discord_role_id = subject.discord_role_id
         guild_id = subject.guild_id
         async with self._write() as uow:
+            actor = await self._resolve_actor(uow, context.effective)
             self.check_grant(
                 actor, pattern=pattern, effect=effect, scope_guild_id=scope_guild_id, reason=reason, subject=subject
             )
@@ -401,8 +414,9 @@ class PermissionAdministrationService:
                 ),
             )
 
+    @application_operation
     async def revoke(
-        self, actor: Actor, *, subject: GrantSubject, pattern: str, scope_guild_id: int | None = None
+        self, *, context: ActingContext, subject: GrantSubject, pattern: str, scope_guild_id: int | None = None
     ) -> bool:
         """Remove a stored rule, returning whether it existed.
 
@@ -412,6 +426,7 @@ class PermissionAdministrationService:
         account_id = subject.account_id
         discord_role_id = subject.discord_role_id
         async with self._write() as uow:
+            actor = await self._resolve_actor(uow, context.effective)
             await self.check_revoke(uow, actor, pattern=pattern, account_id=account_id, scope_guild_id=scope_guild_id)
             return await uow.permission_admin.delete_grant(
                 pattern=pattern,
@@ -454,9 +469,11 @@ class PermissionAdministrationService:
         }
         return len(granting)
 
+    @application_operation
     async def rules_for(
         self,
         *,
+        context: ActingContext,
         account_id: int | None = None,
         discord_role_id: int | None = None,
         guild_id: int | None = None,
@@ -469,9 +486,11 @@ class PermissionAdministrationService:
                 guild_id=guild_id,
             )
 
+    @application_operation
     async def assignments_for(
         self,
         *,
+        context: ActingContext,
         account_id: int | None = None,
         discord_role_id: int | None = None,
         guild_id: int | None = None,
@@ -484,20 +503,25 @@ class PermissionAdministrationService:
                 guild_id=guild_id,
             )
 
-    async def audit(self, *, guild_id: int | None = None, limit: int = 20) -> tuple[PermissionAuditEntry, ...]:
+    @application_operation
+    async def audit(
+        self, *, context: ActingContext, guild_id: int | None = None, limit: int = 20
+    ) -> tuple[PermissionAuditEntry, ...]:
         """The most recent permission mutations."""
         async with self._read() as uow:
             return await uow.permission_admin.list_audit(guild_id=guild_id, limit=limit)
 
     # ---- Permission roles ----------------------------------------------
 
-    async def roles(self, *, guild_id: int | None = None) -> tuple[PermissionRole, ...]:
+    @application_operation
+    async def roles(self, *, context: ActingContext, guild_id: int | None = None) -> tuple[PermissionRole, ...]:
         """Every role visible from one guild, highest rank first."""
         async with self._read() as uow:
             roles = await uow.permission_admin.list_roles(guild_id=guild_id)
             return tuple(sorted(roles, key=lambda role: (-role.rank, role.slug)))
 
-    async def role(self, slug: str, *, guild_id: int | None = None) -> PermissionRole:
+    @application_operation
+    async def role(self, slug: str, *, context: ActingContext, guild_id: int | None = None) -> PermissionRole:
         async with self._read() as uow:
             found = await uow.permission_admin.get_role(slug, guild_id=guild_id)
             if found is None:
@@ -526,7 +550,8 @@ class PermissionAdministrationService:
             return False
         return bool(scopes) and scopes <= {NodeScope.GUILD}
 
-    async def reserve_role_identity(self) -> int:
+    @application_operation
+    async def reserve_role_identity(self, *, context: ActingContext) -> int:
         async with self._read() as uow:
             return await uow.permission_admin.reserve_role_identity()
 
@@ -542,10 +567,11 @@ class PermissionAdministrationService:
             msg = f"You cannot create a role at rank {rank}; your own highest is {actor.require_permission_rank()}."
             raise PermissionRankError(msg, public_context={"rank": rank})
 
+    @application_operation
     async def create_role(
         self,
-        actor: Actor,
         *,
+        context: ActingContext,
         slug: str,
         name: str,
         description: str | None = None,
@@ -554,6 +580,7 @@ class PermissionAdministrationService:
     ) -> PermissionRole:
         """Create an empty role. Patterns are added separately, each gated."""
         async with self._write() as uow:
+            actor = await self._resolve_actor(uow, context.effective)
             self.check_role_creation(actor, rank=rank, guild_id=guild_id)
             if await uow.permission_admin.get_role(slug, guild_id=guild_id) is not None:
                 msg = f"A role named {slug!r} already exists here."
@@ -574,8 +601,10 @@ class PermissionAdministrationService:
                 ),
             )
 
-    async def delete_role(self, actor: Actor, role: PermissionRole) -> bool:
+    @application_operation
+    async def delete_role(self, role: PermissionRole, *, context: ActingContext) -> bool:
         async with self._write() as uow:
+            actor = await self._resolve_actor(uow, context.effective)
             self._require_role_management(actor, role)
             return await uow.permission_admin.delete_role(
                 role.id,
@@ -588,8 +617,10 @@ class PermissionAdministrationService:
                 ),
             )
 
-    async def set_rank(self, actor: Actor, role: PermissionRole, rank: int) -> None:
+    @application_operation
+    async def set_rank(self, role: PermissionRole, rank: int, *, context: ActingContext) -> None:
         async with self._write() as uow:
+            actor = await self._resolve_actor(uow, context.effective)
             self.check_rank(actor, role, rank)
             await uow.permission_admin.set_role_rank(
                 role.id,
@@ -602,8 +633,9 @@ class PermissionAdministrationService:
                 ),
             )
 
+    @application_operation
     async def add_pattern(
-        self, actor: Actor, role: PermissionRole, pattern: str, *, mode: int = PatternMode.INCLUDE
+        self, role: PermissionRole, pattern: str, *, context: ActingContext, mode: int = PatternMode.INCLUDE
     ) -> None:
         """Include or exclude a pattern from a role.
 
@@ -611,6 +643,7 @@ class PermissionAdministrationService:
         the role, so they require management authority but not the excluded permissions.
         """
         async with self._write() as uow:
+            actor = await self._resolve_actor(uow, context.effective)
             self.check_pattern(actor, role, pattern, mode)
             await uow.permission_admin.set_role_pattern(
                 role.id,
@@ -626,8 +659,10 @@ class PermissionAdministrationService:
                 ),
             )
 
-    async def remove_pattern(self, actor: Actor, role: PermissionRole, pattern: str) -> bool:
+    @application_operation
+    async def remove_pattern(self, role: PermissionRole, pattern: str, *, context: ActingContext) -> bool:
         async with self._write() as uow:
+            actor = await self._resolve_actor(uow, context.effective)
             self._require_role_management(actor, role)
             return await uow.permission_admin.remove_role_pattern(
                 role.id,
@@ -641,12 +676,14 @@ class PermissionAdministrationService:
                 ),
             )
 
-    async def add_include(self, actor: Actor, role: PermissionRole, included: PermissionRole) -> None:
+    @application_operation
+    async def add_include(self, role: PermissionRole, included: PermissionRole, *, context: ActingContext) -> None:
         """Compose one role into another.
 
         Refuse cycles, and refuse a guild role unless `role` belongs to the same guild.
         """
         async with self._write() as uow:
+            actor = await self._resolve_actor(uow, context.effective)
             await self.check_include(uow, actor, role, included)
             await uow.permission_admin.add_role_include(
                 role.id,
@@ -675,8 +712,10 @@ class PermissionAdministrationService:
             frontier.extend(edges.get(current, ()))
         return False
 
-    async def remove_include(self, actor: Actor, role: PermissionRole, included: PermissionRole) -> bool:
+    @application_operation
+    async def remove_include(self, role: PermissionRole, included: PermissionRole, *, context: ActingContext) -> bool:
         async with self._write() as uow:
+            actor = await self._resolve_actor(uow, context.effective)
             self._require_role_management(actor, role)
             return await uow.permission_admin.remove_role_include(
                 role.id,
@@ -689,11 +728,12 @@ class PermissionAdministrationService:
                 ),
             )
 
+    @application_operation
     async def assign(
         self,
-        actor: Actor,
         role: PermissionRole,
         *,
+        context: ActingContext,
         subject: GrantSubject,
         scope_guild_id: int | None = None,
         expires_at: Instant | None = None,
@@ -704,6 +744,7 @@ class PermissionAdministrationService:
         discord_role_id = subject.discord_role_id
         guild_id = subject.guild_id
         async with self._write() as uow:
+            actor = await self._resolve_actor(uow, context.effective)
             await self.check_assignment(uow, actor, role, scope_guild_id=scope_guild_id, subject=subject)
             await uow.permission_admin.assign_role(
                 role.id,
@@ -728,12 +769,14 @@ class PermissionAdministrationService:
                 ),
             )
 
+    @application_operation
     async def unassign(
-        self, actor: Actor, role: PermissionRole, *, subject: GrantSubject, scope_guild_id: int | None = None
+        self, role: PermissionRole, *, context: ActingContext, subject: GrantSubject, scope_guild_id: int | None = None
     ) -> bool:
         account_id = subject.account_id
         discord_role_id = subject.discord_role_id
         async with self._write() as uow:
+            actor = await self._resolve_actor(uow, context.effective)
             await self.check_unassignment(uow, actor, role, scope_guild_id)
             return await uow.permission_admin.unassign_role(
                 role.id,

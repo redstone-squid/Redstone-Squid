@@ -81,14 +81,18 @@ async def setup(
 
 
 async def command(admin: PermissionAdministrationService, kind: str, values: PermissionValues) -> EditCommand:
-    return EditCommand(kind, (Revision(PERMISSION_GRAPH, await admin.revision()),), values.edit_values())
+    return EditCommand(
+        kind,
+        (Revision(PERMISSION_GRAPH, await admin.revision(context=ActingContext.direct(Actor(is_bot_owner=True)))),),
+        values.edit_values(),
+    )
 
 
 async def test_permission_commands_undo_redo_and_final_role_deletion(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     factory, admin, executor, owner, subject = await setup(migrated_session_factory)
-    role_id = await admin.reserve_role_identity()
+    role_id = await admin.reserve_role_identity(context=ActingContext.direct(Actor(is_bot_owner=True)))
     created = await executor.execute(
         await command(
             admin, ROLE_CREATE, RolePresenceValues(role_id=role_id, slug="history-role", name="History role", rank=1)
@@ -96,18 +100,22 @@ async def test_permission_commands_undo_redo_and_final_role_deletion(
         context=ActingContext.direct(owner),
     )
     assert created.receipt is not None
-    assert (await admin.role("history-role")).id == role_id
+    assert (await admin.role("history-role", context=ActingContext.direct(Actor(is_bot_owner=True)))).id == role_id
     undone = await executor.execute(
         created.receipt.undo(created.outcome.revisions), context=ActingContext.direct(owner)
     )
     assert undone.receipt is not None
-    assert role_id not in {role.id for role in await admin.roles()}
+    assert role_id not in {
+        role.id for role in await admin.roles(context=ActingContext.direct(Actor(is_bot_owner=True)))
+    }
     restored = await executor.execute(
         created.receipt.redo(undone.outcome.revisions), context=ActingContext.direct(owner)
     )
     assert restored.receipt is not None
-    assert (await admin.role("history-role")).id == role_id
-    included = await admin.create_role(owner, slug="included-role", name="Included role", rank=0)
+    assert (await admin.role("history-role", context=ActingContext.direct(Actor(is_bot_owner=True)))).id == role_id
+    included = await admin.create_role(
+        context=ActingContext.direct(owner), slug="included-role", name="Included role", rank=0
+    )
     changes: tuple[tuple[str, PermissionValues], ...] = (
         (RANK_EDIT, RankValues(role_id=role_id, rank=10)),
         (PATTERN_EDIT, PatternValues(role_id=role_id, pattern=PERM_NODE_VIEW.name, mode=1)),
@@ -130,7 +138,10 @@ async def test_permission_commands_undo_redo_and_final_role_deletion(
         )
         assert last.receipt is not None
         assert last.receipt.after == saved.receipt.after
-        assert await admin.revision() == last.outcome.revisions[0].value
+        assert (
+            await admin.revision(context=ActingContext.direct(Actor(is_bot_owner=True)))
+            == last.outcome.revisions[0].value
+        )
     with pytest.raises(ConflictError):
         await executor.execute(restored.receipt.undo(last.outcome.revisions), context=ActingContext.direct(owner))
     assert last.receipt is not None
@@ -142,7 +153,11 @@ async def test_permission_commands_undo_redo_and_final_role_deletion(
     assert not noop.outcome.changed
     async with migrated_session_factory() as session:
         assert await session.scalar(select(func.count()).select_from(PermissionAuditEntry)) == audits
-    await admin.set_rank(owner, await admin.role("history-role"), 11)
+    await admin.set_rank(
+        await admin.role("history-role", context=ActingContext.direct(Actor(is_bot_owner=True))),
+        11,
+        context=ActingContext.direct(owner),
+    )
     with pytest.raises(RevisionConflictError):
         await executor.execute(last.receipt.undo(last.outcome.revisions), context=ActingContext.direct(owner))
     deleted = await executor.execute(
@@ -152,18 +167,24 @@ async def test_permission_commands_undo_redo_and_final_role_deletion(
     assert deleted.receipt.final
     with pytest.raises(InvalidStateError):
         deleted.receipt.undo(deleted.outcome.revisions)
-    assert role_id not in {role.id for role in await admin.roles()}
-    assert await admin.assignments_for(account_id=subject) == ()
+    assert role_id not in {
+        role.id for role in await admin.roles(context=ActingContext.direct(Actor(is_bot_owner=True)))
+    }
+    assert await admin.assignments_for(context=ActingContext.direct(Actor(is_bot_owner=True)), account_id=subject) == ()
 
 
 async def test_permission_commands_resolve_current_rank_and_authority_even_for_noops(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     factory, admin, executor, owner, subject = await setup(migrated_session_factory)
-    guardian = await admin.create_role(owner, slug="guardian-role", name="Guardian", rank=100)
-    target = await admin.create_role(owner, slug="editable-role", name="Editable", rank=1)
-    await admin.assign(owner, guardian, subject=AccountGrantSubject(subject))
-    await admin.grant(owner, pattern=ROLE_DEFINITION_MANAGE.name, subject=AccountGrantSubject(subject))
+    guardian = await admin.create_role(
+        context=ActingContext.direct(owner), slug="guardian-role", name="Guardian", rank=100
+    )
+    target = await admin.create_role(context=ActingContext.direct(owner), slug="editable-role", name="Editable", rank=1)
+    await admin.assign(guardian, context=ActingContext.direct(owner), subject=AccountGrantSubject(subject))
+    await admin.grant(
+        context=ActingContext.direct(owner), pattern=ROLE_DEFINITION_MANAGE.name, subject=AccountGrantSubject(subject)
+    )
     actor = Actor(account_id=subject)
     saved = await executor.execute(
         await command(admin, RANK_EDIT, RankValues(role_id=target.id, rank=10)), context=ActingContext.direct(actor)
@@ -174,8 +195,12 @@ async def test_permission_commands_resolve_current_rank_and_authority_even_for_n
             await command(admin, RANK_EDIT, RankValues(role_id=target.id, rank=100)),
             context=ActingContext.direct(actor),
         )
-    await admin.revoke(owner, pattern=ROLE_DEFINITION_MANAGE.name, subject=AccountGrantSubject(subject))
-    current = (Revision(PERMISSION_GRAPH, await admin.revision()),)
+    await admin.revoke(
+        context=ActingContext.direct(owner), pattern=ROLE_DEFINITION_MANAGE.name, subject=AccountGrantSubject(subject)
+    )
+    current = (
+        Revision(PERMISSION_GRAPH, await admin.revision(context=ActingContext.direct(Actor(is_bot_owner=True)))),
+    )
     with pytest.raises(AuthorizationError):
         await executor.execute(saved.receipt.undo(current), context=ActingContext.direct(actor))
     with pytest.raises(AuthorizationError):
@@ -188,8 +213,10 @@ async def test_multi_recipient_assignment_undo_preserves_existing_membership(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     _, admin, executor, owner, subject = await setup(migrated_session_factory)
-    role = await admin.create_role(owner, slug="reviewers", name="Reviewers", rank=1)
-    await admin.assign(owner, role, subject=AccountGrantSubject(subject), scope_guild_id=42)
+    role = await admin.create_role(context=ActingContext.direct(owner), slug="reviewers", name="Reviewers", rank=1)
+    await admin.assign(
+        role, context=ActingContext.direct(owner), subject=AccountGrantSubject(subject), scope_guild_id=42
+    )
     values = AssignmentBatch(
         assignments=(
             AssignmentValues(account_id=subject, role_id=role.id, guild_id=42, scope_guild_id=42),
@@ -200,7 +227,13 @@ async def test_multi_recipient_assignment_undo_preserves_existing_membership(
         await command(admin, BULK_ASSIGNMENT_EDIT, values), context=ActingContext.direct(owner)
     )
     assert result.receipt is not None
-    assert await admin.assignments_for(discord_role_id=99, guild_id=42)
+    assert await admin.assignments_for(
+        context=ActingContext.direct(Actor(is_bot_owner=True)), discord_role_id=99, guild_id=42
+    )
     await executor.execute(result.receipt.undo(result.outcome.revisions), context=ActingContext.direct(owner))
-    assert await admin.assignments_for(account_id=subject, guild_id=42)
-    assert not await admin.assignments_for(discord_role_id=99, guild_id=42)
+    assert await admin.assignments_for(
+        context=ActingContext.direct(Actor(is_bot_owner=True)), account_id=subject, guild_id=42
+    )
+    assert not await admin.assignments_for(
+        context=ActingContext.direct(Actor(is_bot_owner=True)), discord_role_id=99, guild_id=42
+    )

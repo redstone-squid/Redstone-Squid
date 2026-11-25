@@ -18,7 +18,7 @@ from squid.bot.ui import tr
 from squid.bot.utils.accounts import get_or_create_discord_account_id
 from squid.bot.utils.permissions import Grants, requires_grant
 from squid.core.accounts.domain import IdentityProvider
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.edits.application import EditRunner
 from squid.core.permissions.application.administration import PermissionAdministrationService, effect_label
 from squid.core.permissions.application.edits import (
@@ -153,7 +153,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         await self._refresh()
 
     async def _refresh(self) -> None:
-        self._revision = await self._admin.revision()
+        self._revision = await self._admin.revision(context=ActingContext.for_actor(await self._actor()))
         page = self._page
         nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = []
         tasks = (
@@ -234,12 +234,22 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
                 )
         elif page == "roles":
             if self._bot:
-                self._rank = (await self._admin.resolve_actor(await self._actor())).require_permission_rank()
+                self._rank = (
+                    await self._admin.resolve_actor(context=ActingContext.for_actor(await self._actor()))
+                ).require_permission_rank()
             nodes.append(sl.note(f"Your management rank: {self._rank}"))
             nodes.extend(self._role_forms())
-            nodes.append(self._role_browser(await self._admin.roles(guild_id=self._guild_id)))
+            nodes.append(
+                self._role_browser(
+                    await self._admin.roles(
+                        context=ActingContext.for_actor(await self._actor()), guild_id=self._guild_id
+                    )
+                )
+            )
         elif page in {"role-settings", "role-actions"}:
-            roles = await self._admin.roles(guild_id=self._guild_id)
+            roles = await self._admin.roles(
+                context=ActingContext.for_actor(await self._actor()), guild_id=self._guild_id
+            )
             role = next((r for r in roles if r.id == self._role_tools), None)
             if role is None:
                 nodes.append(sl.note(tr(t"access-ui-this-role-has-been-deleted = This role has been deleted.")))
@@ -268,7 +278,13 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
                 nodes.append(sl.note(CATALOGUE[self._action].description))
         elif page == "audit":
             if await self.grants.allows(PERM_AUDIT_VIEW):
-                nodes.append(await self._audit(await self._admin.audit(guild_id=self._guild_id, limit=50)))
+                nodes.append(
+                    await self._audit(
+                        await self._admin.audit(
+                            context=ActingContext.for_actor(await self._actor()), guild_id=self._guild_id, limit=50
+                        )
+                    )
+                )
             else:
                 nodes.append(sl.note(_DENIED))
         if page in {"edit", "reference"} and (self._selected_role or self._selected_pattern):
@@ -328,10 +344,10 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         role_only = self._discord_role_id is not None
         allowed = tuple(d for d in decisions if d.allowed and (not role_only or d.decisive_rule))
         target = dict(account_id=self._account_id, discord_role_id=self._discord_role_id)
-        rules = await self._admin.rules_for(**target)
+        rules = await self._admin.rules_for(context=ActingContext.for_actor(await self._actor()), **target)
         assignments = tuple(
             row
-            for row in await self._admin.assignments_for(**target)
+            for row in await self._admin.assignments_for(context=ActingContext.for_actor(await self._actor()), **target)
             if global_admin or row.scope_guild_id in (None, self._guild_id)
         )
         rows = tuple(
@@ -698,7 +714,14 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
 
         async def selected(_event: sd.ActionEvent, item: Suggestion) -> None:
             role = next(
-                (role for role in await self._admin.roles(guild_id=self._guild_id) if str(role.id) == item.value), None
+                (
+                    role
+                    for role in await self._admin.roles(
+                        context=ActingContext.for_actor(await self._actor()), guild_id=self._guild_id
+                    )
+                    if str(role.id) == item.value
+                ),
+                None,
             )
             if role is None:
                 await _event.notice(tr(t"access-role-unavailable = That role is no longer available."))
@@ -936,7 +959,13 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
             label = tr(t"access-view-internal-role-updated = Internal role updated.")
             if composing:
                 included = next(
-                    (role for role in await self._admin.roles(guild_id=self._guild_id) if str(role.id) == item.value),
+                    (
+                        role
+                        for role in await self._admin.roles(
+                            context=ActingContext.for_actor(await self._actor()), guild_id=self._guild_id
+                        )
+                        if str(role.id) == item.value
+                    ),
                     None,
                 )
                 if included is None:
@@ -1050,7 +1079,12 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
                 if identity is not None
             }
         )
-        roles = {role.id: role.name for role in await self._admin.roles(guild_id=self._guild_id)}
+        roles = {
+            role.id: role.name
+            for role in await self._admin.roles(
+                context=ActingContext.for_actor(await self._actor()), guild_id=self._guild_id
+            )
+        }
         guild = self._bot.get_guild(self._guild_id) if self._bot else None
 
         def subject(row: PermissionAuditEntry) -> str:
@@ -1158,7 +1192,9 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         role: PermissionRole | None = None,
     ) -> None:
         if role is None:
-            role = await self._admin.role(str(event.values["slug"]), guild_id=self._guild_id)
+            role = await self._admin.role(
+                str(event.values["slug"]), context=ActingContext.for_actor(await self._actor()), guild_id=self._guild_id
+            )
         values = AssignmentValues(
             role_id=role.id,
             present=event.values["operation"] == "assign",
@@ -1190,7 +1226,12 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
                 stem = f"role-{stem}"[:28]
             if len(stem) < 2:
                 stem += "-role"
-            existing = {role.slug for role in await self._admin.roles(guild_id=_scope(scope, self._guild_id))}
+            existing = {
+                role.slug
+                for role in await self._admin.roles(
+                    context=ActingContext.for_actor(await self._actor()), guild_id=_scope(scope, self._guild_id)
+                )
+            }
             slug = stem
             suffix = 2
             while slug in existing:
@@ -1201,7 +1242,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
         await self._save(
             ROLE_CREATE,
             RolePresenceValues(
-                role_id=await self._admin.reserve_role_identity(),
+                role_id=await self._admin.reserve_role_identity(context=ActingContext.for_actor(await self._actor())),
                 slug=slug,
                 name=form.name,
                 rank=form.rank,
