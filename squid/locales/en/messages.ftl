@@ -1389,19 +1389,19 @@ bot-submission-search-view-version = Version
 # squid/bot/catalogue/search/results.py:153
 bot-submission-search-view-view-build = Expand
 
-# squid/bot/submission/message_intake.py:121
+# squid/bot/submission/message_intake.py:122
 bot-submission-submit-author-has-not-consented = Author has not consented
 
-# squid/bot/submission/form.py:92
+# squid/bot/submission/form.py:93
 bot-submission-submit-check-build-size = Check the build dimensions
 
-# squid/bot/submission/form.py:82
+# squid/bot/submission/form.py:83
 bot-submission-submit-check-door-size = Check the opening size
 
 # squid/bot/submission/cog.py:270
 bot-submission-submit-door-skydoor-or-trapdoor = Door, skydoor, or trapdoor.
 
-# squid/bot/submission/message_intake.py:102
+# squid/bot/submission/message_intake.py:103
 bot-submission-submit-nothing-to-recalculate = Nothing to recalculate
 
 # squid/bot/submission/cog.py:279
@@ -3359,7 +3359,7 @@ draft-editor-title-editing = ## Build draft · { $category }
 # squid/bot/submission/ui/drafts.py:931
 draft-editor-title-expired = ## Draft expired · { $category }
 
-# squid/bot/submission/form.py:183
+# squid/bot/submission/form.py:184
 draft-editor-unused-options = Some values from the command could not be used: { $fields }. Fill them in below.
 
 # squid/bot/submission/ui/drafts.py:778
@@ -6474,13 +6474,13 @@ submit-another-attachment-help = Another schematic, image, or video.
 # squid/bot/submission/cog.py:317
 submit-attachment-types-help = Your schematic, an image, or a video.
 
-# squid/bot/submission/message_intake.py:122
+# squid/bot/submission/message_intake.py:123
 submit-author-consent-required = The author of this message ({ $user_mention }) has not consented to data storage. They must grant consent before this build can be ingested.
 
-# squid/bot/submission/message_intake.py:103
+# squid/bot/submission/message_intake.py:104
 submit-build-log-channel-required = Builds are only read out of messages posted in a build log channel.
 
-# squid/bot/submission/form.py:93
+# squid/bot/submission/form.py:94
 submit-build-size-format = Write it as width x height x depth, such as `5x7x4`.
 
 # squid/bot/submission/cog.py:249
@@ -6495,19 +6495,19 @@ submit-credit-reference-prompt = Credits, comma separated: Name, discord:@user, 
 # squid/bot/submission/cog.py:264
 submit-door-dimensions-help = Opening size as width x height x depth, e.g. `2x2x1`. Depth is optional.
 
-# squid/bot/submission/form.py:63
+# squid/bot/submission/form.py:64
 submit-door-options-only = Opening size and orientation can only be supplied for doors.
 
-# squid/bot/submission/form.py:83
+# squid/bot/submission/form.py:84
 submit-door-size-format = Write it as width x height x depth, such as `2x2x1` or `2x2`.
 
-# squid/bot/submission/form.py:62, squid/bot/submission/form.py:67
+# squid/bot/submission/form.py:63, squid/bot/submission/form.py:68
 submit-inapplicable-options = Options do not apply
 
 # squid/bot/submission/cog.py:260
 submit-name-help = An optional name for the build.
 
-# squid/bot/submission/form.py:68
+# squid/bot/submission/form.py:69
 submit-pattern-options-only = Patterns can only be supplied for doors and extenders.
 
 # squid/bot/submission/cog.py:299

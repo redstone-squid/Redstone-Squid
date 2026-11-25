@@ -4665,7 +4665,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/message_intake.py:121"
+      "squid/bot/submission/message_intake.py:122"
     ]
   },
   "bot-submission-submit-check-build-size": {
@@ -4674,7 +4674,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/form.py:92"
+      "squid/bot/submission/form.py:93"
     ]
   },
   "bot-submission-submit-check-door-size": {
@@ -4683,7 +4683,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/form.py:82"
+      "squid/bot/submission/form.py:83"
     ]
   },
   "bot-submission-submit-door-skydoor-or-trapdoor": {
@@ -4701,7 +4701,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/message_intake.py:102"
+      "squid/bot/submission/message_intake.py:103"
     ]
   },
   "bot-submission-submit-the-whole-build-e-g-x-x": {
@@ -10976,7 +10976,7 @@
       }
     ],
     "locations": [
-      "squid/bot/submission/form.py:183"
+      "squid/bot/submission/form.py:184"
     ]
   },
   "draft-editor-use-file": {
@@ -21538,7 +21538,7 @@
       }
     ],
     "locations": [
-      "squid/bot/submission/message_intake.py:122"
+      "squid/bot/submission/message_intake.py:123"
     ]
   },
   "submit-build-log-channel-required": {
@@ -21547,7 +21547,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/message_intake.py:103"
+      "squid/bot/submission/message_intake.py:104"
     ]
   },
   "submit-build-size-format": {
@@ -21556,7 +21556,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/form.py:93"
+      "squid/bot/submission/form.py:94"
     ]
   },
   "submit-category-help": {
@@ -21601,7 +21601,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/form.py:63"
+      "squid/bot/submission/form.py:64"
     ]
   },
   "submit-door-size-format": {
@@ -21610,7 +21610,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/form.py:83"
+      "squid/bot/submission/form.py:84"
     ]
   },
   "submit-inapplicable-options": {
@@ -21619,8 +21619,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/form.py:62",
-      "squid/bot/submission/form.py:67"
+      "squid/bot/submission/form.py:63",
+      "squid/bot/submission/form.py:68"
     ]
   },
   "submit-name-help": {
@@ -21638,7 +21638,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/form.py:68"
+      "squid/bot/submission/form.py:69"
     ]
   },
   "submit-pattern-type-examples-help": {
