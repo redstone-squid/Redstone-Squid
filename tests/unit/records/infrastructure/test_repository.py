@@ -71,7 +71,7 @@ def test_gap_rows_carry_the_definition_title() -> None:
     result = RecordResult(
         run_id=1,
         definition_id=5,
-        status=ResolutionStatus.UNRESOLVED,
+        status=ResolutionStatus.RESOLVED,
         gap_reasons={"missing": [{"build_id": 4, "field": "closing"}]},
     )
 

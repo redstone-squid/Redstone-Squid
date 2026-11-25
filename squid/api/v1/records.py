@@ -59,6 +59,7 @@ class PublicRecordDTO(DataclassDTO[PublishedRecordResult]):
             "version_scope",
             "status",
             "holder_build_ids",
+            "tied_build_ids",
             "computed_at",
             "last_checked_at",
             "refresh_pending",

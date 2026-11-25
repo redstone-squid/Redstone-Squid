@@ -1,4 +1,4 @@
-"""Inspect unresolved record results and request category lookups or rebuilds.
+"""Inspect records that missing evidence could change, and request category lookups or rebuilds.
 
 Diagnostics identify a RecordDefinition by its integer definition ID. That rules_revision-specific
 definition is distinct from the stable Record record_title UUID used by record
@@ -23,6 +23,7 @@ from squid.core.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD
 from squid.core.records.application import RebuildSummary, RecordGap, RecordLookupRequest, RecordNameDiagnostic
 from squid.core.records.domain import BuildKind
 from squid.core.suggestions.domain import Suggestion
+from squid.core.vocabulary import RECORD_FACTS
 from squid_i18n import Text, md_tr
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 
@@ -126,7 +127,7 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
             detail=self._gap_detail,
             fetch_size=15,
             title=tr(t"bot-submission-records-record-evidence-gaps = Records missing evidence"),
-            empty=tr(t"records-no-unresolved-categories = Every active record category has the evidence it needs."),
+            empty=tr(t"records-no-evidence-gaps = Every active record has the evidence it needs."),
         )
         self._titles = sp.Browser(
             sl.sources.list_source(titles),
@@ -153,7 +154,7 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
         )
 
     def _gap_detail(self, gap: RecordGap) -> sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
-        needs = ", ".join(field.replace("_", " ") for field in gap.fields)
+        needs = _needed_facts(gap)
         return sl.section(
             sl.heading(_gap_title(gap)),
             sl.paragraph(tr(t"records-gap-needs = Needs {needs} on these builds:")),
@@ -164,7 +165,7 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
                         partial(self.open_build, build_id),
                         key=f"gap-build-{build_id}",
                     )
-                    for build_id in gap.build_ids[:5]
+                    for build_id in dict.fromkeys(gap.build_ids[:5])
                 ),
                 key="gap-builds",
             )
@@ -207,8 +208,8 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
                         (
                             sl.note(
                                 tr(
-                                    t"records-gaps-purpose = These record categories cannot be decided yet. Add "
-                                    t"the missing values to their builds, then recompute."
+                                    t"records-gaps-purpose = Missing values could change who holds these records. "
+                                    t"Add them to the builds, then recompute."
                                 )
                             ),
                             self._gaps,
@@ -470,11 +471,11 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
             self._build_tabs()
         definitions = summary.definitions
         resolved = summary.resolved
-        unresolved = summary.unresolved
+        with_gaps = summary.with_gaps
         await event.notice(
             md_tr(
                 t"records-rebuild-summary = Rebuilt {definitions} "
-                t"definitions; {resolved} resolved; {unresolved} awaiting evidence.",
+                t"definitions; {resolved} have holders; {with_gaps} could change with more evidence.",
             )
         )
 
@@ -485,8 +486,12 @@ def _gap_title(gap: RecordGap) -> str:
 
 def _gap_summary(gap: RecordGap) -> sl.TextLike:
     title = _gap_title(gap)
-    needs = ", ".join(field.replace("_", " ") for field in gap.fields)
+    needs = _needed_facts(gap)
     return tr(t"records-gap-summary = {title} · needs {needs}")
+
+
+def _needed_facts(gap: RecordGap) -> Text:
+    return Text.join(", ", [RECORD_FACTS.get(field, field) for field in dict.fromkeys(gap.fields)])
 
 
 def _diagnostic_text(diagnostic: Mapping[str, str | list[str]]) -> str:

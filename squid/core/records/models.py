@@ -7,7 +7,8 @@ RulesRevision, identified by the rules document hash and calculator/formatter
 versions. RecordDefinitionTag stores the tags a definition requires.
 
 ComputationRun groups outcomes for one build kind and version. RecordResult is a
-definition's outcome in that run; RecordHolder stores each holder.
+definition's outcome in that run; RecordHolder stores each holder and
+RecordTiedBuild each build tied with them.
 RecordHolderHistory records previous holders. Public queries use the active run,
 so result IDs change on recomputation while record IDs remain stable.
 """
@@ -293,9 +294,8 @@ class RecordResult(Base, kw_only=True):
 
     __tablename__ = "title_results"
     __table_args__ = (
-        Index("title_results_provisional_build_idx", "provisional_build_id"),
         CheckConstraint(
-            "status IN ('resolved', 'unresolved', 'no_candidate')",
+            "status IN ('resolved', 'no_candidate')",
             name="title_results_status_check",
         ),
         CheckConstraint(
@@ -321,11 +321,6 @@ class RecordResult(Base, kw_only=True):
     status: Mapped[ResolutionStatus] = mapped_column(StrEnumText(ResolutionStatus), nullable=False)
     gap_reasons: Mapped[dict[str, object]] = mapped_column(
         JSONB, nullable=False, server_default=text("'{}'::jsonb"), default_factory=dict
-    )
-    provisional_build_id: Mapped[int | None] = mapped_column(
-        BigInteger,
-        ForeignKey("builds.id", name="title_results_provisional_build_id_fkey", ondelete="SET NULL"),
-        default=None,
     )
     door_evidence: Mapped[DoorRecordEvidence | None] = mapped_column(DoorRecordEvidenceJSON(), default=None)
     history_complete: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("true"), default=True)
@@ -358,6 +353,24 @@ class RecordHolder(Base, kw_only=True):
     title: Mapped[str] = mapped_column(Text, nullable=False)
     subtitle: Mapped[str | None] = mapped_column(Text, default=None)
     completion_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+
+
+class RecordTiedBuild(Base, kw_only=True):
+    """A build that matches a record's holders on every metric but was completed later."""
+
+    __tablename__ = "title_tied_builds"
+    __table_args__ = (Index("title_tied_builds_build_idx", "build_id"),)
+
+    result_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("title_results.id", name="title_tied_builds_result_id_fkey", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    build_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("builds.id", name="title_tied_builds_build_id_fkey", ondelete="CASCADE"),
+        primary_key=True,
+    )
 
 
 class RecordHolderHistory(Base, kw_only=True):

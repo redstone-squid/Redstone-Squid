@@ -1,7 +1,7 @@
 """Application data transferred between record computation and persistence."""
 
-from collections.abc import Sequence
-from dataclasses import dataclass, field, fields
+from collections.abc import Mapping
+from dataclasses import dataclass, field, fields, replace
 from datetime import datetime
 from decimal import Decimal
 from typing import Self
@@ -12,6 +12,7 @@ from squid.core.builds.domain.expansion import DoorExpansion
 from squid.core.records.domain import (
     BuildKind,
     Candidate,
+    CandidateGap,
     DoorCategory,
     ExtenderCategory,
     FormattedTitle,
@@ -164,7 +165,7 @@ class ComputationBatch:
 
 @dataclass(frozen=True, slots=True)
 class RecordGap:
-    """A persisted unresolved record and its decisive missing facts."""
+    """A published record that missing facts could change, and those facts."""
 
     definition_id: int
     title: str
@@ -204,6 +205,8 @@ class PublishedRecordResult:
     status: ResolutionStatus
     holder_build_ids: tuple[int, ...]
     computed_at: datetime
+    tied_build_ids: tuple[int, ...] = field(default=(), kw_only=True)
+    gaps: tuple[CandidateGap, ...] = field(default=(), kw_only=True)
     last_checked_at: datetime | None = field(default=None, kw_only=True)
     refresh_pending: bool = field(default=False, kw_only=True)
     version_id: int | None = field(default=None, kw_only=True)
@@ -222,21 +225,34 @@ class RecordViewer:
 
 @dataclass(frozen=True, slots=True)
 class PublicRecordDetail(PublishedRecordResult):
-    """One published result with its complete ordered public holders.
+    """One published result with the public builds it names.
 
-    `holder_builds` follows the order of `holder_build_ids`. The REST API serializes
-    this type as it is, so a new field changes the published contract.
+    `holder_builds` and `tied_builds` follow their ID fields. `contender_builds` are
+    the non-holders named by `gaps`: builds that could take the record once their
+    missing facts are known. Hidden tied builds and contenders are left out. The
+    REST API serializes this type as it is, so a new field changes the published contract.
     """
 
     holder_builds: tuple[PublicBuildSummary, ...]
+    tied_builds: tuple[PublicBuildSummary, ...] = ()
+    contender_builds: tuple[PublicBuildSummary, ...] = ()
     viewer: RecordViewer | None = None
 
+    @property
+    def contender_build_ids(self) -> tuple[int, ...]:
+        """Gap builds other than the holders, in gap order."""
+        holders = set(self.holder_build_ids)
+        return tuple(dict.fromkeys(gap.build_id for gap in self.gaps if gap.build_id not in holders))
+
     @classmethod
-    def with_holders(cls, result: PublishedRecordResult, holder_builds: Sequence[PublicBuildSummary]) -> Self:
-        """Attach the holders' public summaries to a published result."""
-        return cls(
-            **{field.name: getattr(result, field.name) for field in fields(result)},
-            holder_builds=tuple(holder_builds),
+    def with_builds(cls, result: PublishedRecordResult, builds: Mapping[int, PublicBuildSummary]) -> Self:
+        """Attach public summaries; every holder must be present in `builds`."""
+        detail = cls(**{field.name: getattr(result, field.name) for field in fields(result)}, holder_builds=())
+        return replace(
+            detail,
+            holder_builds=tuple(builds[id] for id in result.holder_build_ids),
+            tied_builds=tuple(builds[id] for id in result.tied_build_ids if id in builds),
+            contender_builds=tuple(builds[id] for id in detail.contender_build_ids if id in builds),
         )
 
 
@@ -266,7 +282,7 @@ class RebuildSummary:
     run_ids: tuple[int, ...]
     definitions: int
     resolved: int
-    unresolved: int
+    with_gaps: int
 
 
 @dataclass(frozen=True, slots=True)

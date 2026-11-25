@@ -62,6 +62,7 @@ _RECORD_JSON = {
     "version_scope": VersionScope.ALL_TIME.value,
     "status": ResolutionStatus.RESOLVED.value,
     "holder_build_ids": [42],
+    "tied_build_ids": [],
     "computed_at": "2026-08-10T12:00:00Z",
     "last_checked_at": "2026-08-11T12:00:00Z",
     "refresh_pending": True,
@@ -133,7 +134,6 @@ async def test_record_detail_serializes_the_application_read_model(expanded: boo
                 evaluated_at=_RECORD.computed_at,
                 resolution=RecordResolution(ResolutionStatus.RESOLVED, holder_ids=(42,)),
                 holder_configuration_ids=(0,),
-                provisional_configuration_ids=(),
                 configurations=(
                     LiveDoorConfiguration(
                         id=0,
@@ -157,7 +157,9 @@ async def test_record_detail_serializes_the_application_read_model(expanded: boo
         if expanded
         else None
     )
-    records.get.return_value = PublicRecordDetail.with_holders(replace(_RECORD, door_evidence=evidence), [holder])
+    records.get.return_value = PublicRecordDetail.with_builds(
+        replace(_RECORD, door_evidence=evidence), {holder.id: holder}
+    )
     handler = get(
         "/records/{record_id:uuid}",
         dependencies={
@@ -176,6 +178,9 @@ async def test_record_detail_serializes_the_application_read_model(expanded: boo
         **_RECORD_JSON,
         "door_evidence": evidence.model_dump(mode="json") if evidence is not None else None,
         "viewer": None,
+        "gaps": [],
+        "tied_builds": [],
+        "contender_builds": [],
         "holder_builds": [
             {
                 "id": 42,
@@ -216,7 +221,6 @@ async def test_live_door_lookup_serializes_configuration_evidence() -> None:
         evaluated_at=datetime(2026, 8, 10, 12, tzinfo=UTC),
         resolution=RecordResolution(ResolutionStatus.RESOLVED, holder_ids=(42,)),
         holder_configuration_ids=(0,),
-        provisional_configuration_ids=(),
         configurations=(
             LiveDoorConfiguration(
                 id=0,

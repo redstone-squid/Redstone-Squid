@@ -17,10 +17,9 @@ def reconstruct_history(
 ) -> tuple[HolderHistoryEntry, ...]:
     """Reconstruct holder changes from today's facts and known completion dates.
 
-    Builds completed at the same time enter together. Undated builds are omitted,
-    and an unresolved comparison closes the previous period. A later resolved
-    comparison starts a new period, leaving the uncertain interval uncovered. These intervals are reconstructed evidence, not an audit
-    log of previously published results.
+    Builds completed at the same time enter together, and undated builds are
+    omitted. These intervals are reconstructed evidence, not an audit log of
+    previously published results.
     """
     dated = sorted(
         (candidate for candidate in candidates if candidate.completion_at is not None),
@@ -32,8 +31,6 @@ def reconstruct_history(
         active.extend(group)
         resolution = resolve_record(criterion, active, methods)
         if resolution.status is not ResolutionStatus.RESOLVED:
-            if periods and periods[-1].held_until is None:
-                periods[-1] = replace(periods[-1], held_until=completion_at)
             continue
         if periods and periods[-1].held_until is None and periods[-1].build_ids == resolution.holder_ids:
             continue

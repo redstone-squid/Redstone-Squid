@@ -161,7 +161,8 @@ def test_claimed_records_and_sample_completion_are_not_eligibility() -> None:
     result = analyze_door_widths(sources, height=3)
     assert_points(sources, result)
     tied = next(r for r in result.analysis.regions if r.domain.contains(6))
-    assert tied.resolution.status is ResolutionStatus.UNRESOLVED
+    assert tied.resolution.status is ResolutionStatus.RESOLVED
+    assert [gap.field for gap in tied.resolution.gaps] == ["completion_at"]
 
 
 def test_unknown_primary_volume_is_excluded_with_diagnostics() -> None:

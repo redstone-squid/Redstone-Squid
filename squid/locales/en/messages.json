@@ -4232,7 +4232,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/records.py:333"
+      "squid/bot/catalogue/records.py:334"
     ]
   },
   "bot-submission-records-current-version-id": {
@@ -4241,7 +4241,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/records.py:526"
+      "squid/bot/catalogue/records.py:531"
     ]
   },
   "bot-submission-records-evidence-gaps": {
@@ -4250,7 +4250,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/records.py:206"
+      "squid/bot/catalogue/records.py:207"
     ]
   },
   "bot-submission-records-lookup-record-category": {
@@ -4259,7 +4259,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/records.py:507"
+      "squid/bot/catalogue/records.py:512"
     ]
   },
   "bot-submission-records-pinned-version-id": {
@@ -4268,7 +4268,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/records.py:517"
+      "squid/bot/catalogue/records.py:522"
     ]
   },
   "bot-submission-records-rebuild-records": {
@@ -4277,8 +4277,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/records.py:272",
-      "squid/bot/catalogue/records.py:522"
+      "squid/bot/catalogue/records.py:273",
+      "squid/bot/catalogue/records.py:527"
     ]
   },
   "bot-submission-records-record-evidence-gaps": {
@@ -4287,7 +4287,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/records.py:128"
+      "squid/bot/catalogue/records.py:129"
     ]
   },
   "bot-submission-records-record-title-diagnostics": {
@@ -4296,7 +4296,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/records.py:151"
+      "squid/bot/catalogue/records.py:152"
     ]
   },
   "bot-submission-records-records": {
@@ -4305,7 +4305,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/records.py:242"
+      "squid/bot/catalogue/records.py:243"
     ]
   },
   "bot-submission-records-title-issues": {
@@ -4314,7 +4314,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/records.py:219"
+      "squid/bot/catalogue/records.py:220"
     ]
   },
   "bot-submission-schematics-and-more-not-listed": {
@@ -16886,7 +16886,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/records.py:255"
+      "squid/bot/catalogue/records.py:256"
     ]
   },
   "records-candidate-no-typed": {
@@ -16901,8 +16901,8 @@
       }
     ],
     "locations": [
-      "squid/core/records/application/services.py:803",
-      "squid/core/records/application/services.py:834"
+      "squid/core/records/application/services.py:805",
+      "squid/core/records/application/services.py:836"
     ]
   },
   "records-category-id": {
@@ -16917,7 +16917,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/records.py:499"
+      "squid/bot/catalogue/records.py:504"
     ]
   },
   "records-category-not-found-title": {
@@ -16936,8 +16936,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/records.py:266",
-      "squid/bot/catalogue/records.py:407"
+      "squid/bot/catalogue/records.py:267",
+      "squid/bot/catalogue/records.py:408"
     ]
   },
   "records-choose-restriction": {
@@ -16946,8 +16946,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/records.py:300",
-      "squid/bot/catalogue/records.py:375"
+      "squid/bot/catalogue/records.py:301",
+      "squid/bot/catalogue/records.py:376"
     ]
   },
   "records-choose-version": {
@@ -16956,8 +16956,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/records.py:278",
-      "squid/bot/catalogue/records.py:361"
+      "squid/bot/catalogue/records.py:279",
+      "squid/bot/catalogue/records.py:362"
     ]
   },
   "records-diagnostics-loading": {
@@ -16966,7 +16966,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/records.py:249"
+      "squid/bot/catalogue/records.py:250"
     ]
   },
   "records-errors-record-not-found": {
@@ -16984,7 +16984,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/records.py:305"
+      "squid/bot/catalogue/records.py:306"
     ]
   },
   "records-exact-category-key": {
@@ -16993,7 +16993,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/records.py:510"
+      "squid/bot/catalogue/records.py:515"
     ]
   },
   "records-exact-heading": {
@@ -17002,7 +17002,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/records.py:291"
+      "squid/bot/catalogue/records.py:292"
     ]
   },
   "records-exact-purpose": {
@@ -17011,7 +17011,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/records.py:293"
+      "squid/bot/catalogue/records.py:294"
     ]
   },
   "records-fastest-records-unsupported": {
@@ -17026,7 +17026,7 @@
       }
     ],
     "locations": [
-      "squid/core/records/application/services.py:847"
+      "squid/core/records/application/services.py:849"
     ]
   },
   "records-fixed-volume-positive": {
@@ -17035,7 +17035,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/records/domain/models.py:115"
+      "squid/core/records/domain/models.py:120"
     ]
   },
   "records-gap-needs": {
@@ -17050,7 +17050,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/records.py:159"
+      "squid/bot/catalogue/records.py:160"
     ]
   },
   "records-gap-open-build": {
@@ -17065,7 +17065,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/records.py:163"
+      "squid/bot/catalogue/records.py:164"
     ]
   },
   "records-gap-summary": {
@@ -17085,16 +17085,16 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/records.py:489"
+      "squid/bot/catalogue/records.py:490"
     ]
   },
   "records-gaps-purpose": {
-    "fingerprint": "46048ba42a755ecb166c439a120fb1420b5f27d36179b5320d7fd3ad4ad9e201",
+    "fingerprint": "0e501b68469fa7497454490ba4712190107b0d515df08e3fddaef240812a9611",
     "attributes": [],
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/records.py:209"
+      "squid/bot/catalogue/records.py:210"
     ]
   },
   "records-maintenance-purpose": {
@@ -17109,7 +17109,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/records.py:258"
+      "squid/bot/catalogue/records.py:259"
     ]
   },
   "records-maintenance-tools": {
@@ -17118,7 +17118,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/records.py:235"
+      "squid/bot/catalogue/records.py:236"
     ]
   },
   "records-maximum-category-size": {
@@ -17139,13 +17139,22 @@
       "squid/core/records/errors.py:42"
     ]
   },
+  "records-no-evidence-gaps": {
+    "fingerprint": "334cbdaea5d1020ad59ecbe89b678811633db293ee3a3fcec339e2aedf72dcf9",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/catalogue/records.py:130"
+    ]
+  },
   "records-no-maintenance-actions": {
     "fingerprint": "c283a904edc751b6f33248b82e7963f55501484258c386c63052072a644bf721",
     "attributes": [],
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/records.py:254"
+      "squid/bot/catalogue/records.py:255"
     ]
   },
   "records-no-titles-need-review": {
@@ -17154,16 +17163,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/records.py:152"
-    ]
-  },
-  "records-no-unresolved-categories": {
-    "fingerprint": "fe5c987602bb4af8659b1aef266ab27178b4d099d636e21274389fa3ae7ff238",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/bot/catalogue/records.py:129"
+      "squid/bot/catalogue/records.py:153"
     ]
   },
   "records-opening-width-invalid": {
@@ -17181,11 +17181,11 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/records/application/services.py:764"
+      "squid/core/records/application/services.py:766"
     ]
   },
   "records-rebuild-summary": {
-    "fingerprint": "5b055dcef9abfb78f1c053837f7317c6cbbd212785723bb007177e0c63fe89f9",
+    "fingerprint": "058bc0f3b37299facae9a233be7ced63f0918f78b71136a367297c146f6dfd38",
     "attributes": [],
     "has_value": true,
     "arguments": [
@@ -17200,13 +17200,13 @@
         "options": []
       },
       {
-        "name": "unresolved",
+        "name": "with_gaps",
         "function": null,
         "options": []
       }
     ],
     "locations": [
-      "squid/bot/catalogue/records.py:475"
+      "squid/bot/catalogue/records.py:476"
     ]
   },
   "records-recompute-definition": {
@@ -17215,9 +17215,9 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/records.py:143",
-      "squid/bot/catalogue/records.py:176",
-      "squid/bot/catalogue/records.py:409"
+      "squid/bot/catalogue/records.py:144",
+      "squid/bot/catalogue/records.py:177",
+      "squid/bot/catalogue/records.py:410"
     ]
   },
   "records-recompute-summary": {
@@ -17237,9 +17237,9 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/records.py:196",
-      "squid/bot/catalogue/records.py:401",
-      "squid/bot/catalogue/records.py:452"
+      "squid/bot/catalogue/records.py:197",
+      "squid/bot/catalogue/records.py:402",
+      "squid/bot/catalogue/records.py:453"
     ]
   },
   "records-record-category-category": {
@@ -17288,7 +17288,7 @@
       }
     ],
     "locations": [
-      "squid/core/records/infrastructure/repository.py:684"
+      "squid/core/records/infrastructure/repository.py:698"
     ]
   },
   "records-record-not-found-title": {
@@ -17312,7 +17312,7 @@
       }
     ],
     "locations": [
-      "squid/core/records/application/services.py:865"
+      "squid/core/records/application/services.py:867"
     ]
   },
   "records-remove-restriction": {
@@ -17327,7 +17327,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/records.py:503"
+      "squid/bot/catalogue/records.py:508"
     ]
   },
   "records-reset-version": {
@@ -17336,7 +17336,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/records.py:282"
+      "squid/bot/catalogue/records.py:283"
     ]
   },
   "records-restriction-base-key-required": {
@@ -17345,7 +17345,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/records.py:433"
+      "squid/bot/catalogue/records.py:434"
     ]
   },
   "records-restriction-ids-help": {
@@ -17354,7 +17354,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/records.py:512"
+      "squid/bot/catalogue/records.py:517"
     ]
   },
   "records-restriction-ids-invalid": {
@@ -17363,7 +17363,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/records.py:427"
+      "squid/bot/catalogue/records.py:428"
     ]
   },
   "records-timing-variant-minimum-items": {
@@ -17372,7 +17372,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/records/domain/models.py:89"
+      "squid/core/records/domain/models.py:90"
     ]
   },
   "records-title-holder-required": {
@@ -17381,7 +17381,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/records/domain/models.py:142"
+      "squid/core/records/domain/models.py:152"
     ]
   },
   "records-title-holders-forbidden": {
@@ -17390,7 +17390,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/records/domain/models.py:145"
+      "squid/core/records/domain/models.py:155"
     ]
   },
   "records-titles-purpose": {
@@ -17399,7 +17399,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/records.py:222"
+      "squid/bot/catalogue/records.py:223"
     ]
   },
   "recount-already-running": {
@@ -22899,7 +22899,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/vocabulary.py:43"
+      "squid/core/vocabulary.py:58"
     ]
   },
   "vocabulary-build-status-pending": {
@@ -22908,7 +22908,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/vocabulary.py:42"
+      "squid/core/vocabulary.py:57"
     ]
   },
   "vocabulary-build-status-rejected": {
@@ -22917,7 +22917,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/vocabulary.py:44"
+      "squid/core/vocabulary.py:59"
     ]
   },
   "vocabulary-criterion-fastest": {
@@ -22965,13 +22965,121 @@
       "squid/core/vocabulary.py:20"
     ]
   },
+  "vocabulary-record-fact-closing": {
+    "fingerprint": "d0282d3556ab144e0d8b38df91ae41a815a4f059617d1bae472c7885628b2be6",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/core/vocabulary.py:46"
+    ]
+  },
+  "vocabulary-record-fact-closing-reset": {
+    "fingerprint": "f15c278a8086b8332f8e93cfd30bdeee331193a992af64b89af35b747065c1e1",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/core/vocabulary.py:49"
+    ]
+  },
+  "vocabulary-record-fact-closing-visible": {
+    "fingerprint": "ff24d0f61e7b181a837c3a6cd7c8a66ab6e0d215714bdacd92ebfadcaa76cce4",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/core/vocabulary.py:47"
+    ]
+  },
+  "vocabulary-record-fact-completion": {
+    "fingerprint": "af640b937e2764617a003316da571bf29fe80db6a40262eea4072920922c50d5",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/core/vocabulary.py:42"
+    ]
+  },
+  "vocabulary-record-fact-extension": {
+    "fingerprint": "0cf2e4e4f9d5a1ade9163644a8447494075562d15bbb6fbf7b7ef4d9167c8efe",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/core/vocabulary.py:51"
+    ]
+  },
+  "vocabulary-record-fact-extension-reset": {
+    "fingerprint": "47b927e725d9a1d172af6e77ee5ac810a07e0ba6908e89c146e0566de064e905",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/core/vocabulary.py:53"
+    ]
+  },
+  "vocabulary-record-fact-opening": {
+    "fingerprint": "8bc957b07901774c9ae56d582f6e2cd2e61eaf46b6b1af5aafeb2f6a44751da2",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/core/vocabulary.py:44"
+    ]
+  },
+  "vocabulary-record-fact-opening-reset": {
+    "fingerprint": "b22c9f68f2ceaf9de9ab2d510ec3fb44e12f5607370e690ca8ef601f4f2850c4",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/core/vocabulary.py:48"
+    ]
+  },
+  "vocabulary-record-fact-opening-visible": {
+    "fingerprint": "85b450e4fff5f8092b4cda809ae565e1347cfefe5f3edaec3ef031349c4d03cd",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/core/vocabulary.py:45"
+    ]
+  },
+  "vocabulary-record-fact-retraction": {
+    "fingerprint": "8ed0c922df244b3436372643280f06d50a6190a7d471447d8c106d29ea1d6f0e",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/core/vocabulary.py:50"
+    ]
+  },
+  "vocabulary-record-fact-retraction-reset": {
+    "fingerprint": "9d73eaed5bd82708f69c505773d9ad4c37020a601c1078283a463c9b0a0d6e20",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/core/vocabulary.py:52"
+    ]
+  },
+  "vocabulary-record-fact-volume": {
+    "fingerprint": "6e36acbef034cfed57e2c967e880c5cf71e0bf4b0ab0f24578cd8037947b5434",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/core/vocabulary.py:43"
+    ]
+  },
   "vocabulary-resolution-no-candidate": {
     "fingerprint": "d7d398c8fed1c82ec730bb7de11f7bdc012fb953ca270038c2265337b9b0e4ea",
     "attributes": [],
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/vocabulary.py:38"
+      "squid/core/vocabulary.py:37"
     ]
   },
   "vocabulary-resolution-resolved": {
@@ -22981,15 +23089,6 @@
     "arguments": [],
     "locations": [
       "squid/core/vocabulary.py:36"
-    ]
-  },
-  "vocabulary-resolution-unresolved": {
-    "fingerprint": "d142b7f946f4bb64dd7c1241575473c0f3960110ea63fbce0126e76c650f344c",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/core/vocabulary.py:37"
     ]
   },
   "vocabulary-version-scope-all-time": {

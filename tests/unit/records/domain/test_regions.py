@@ -45,7 +45,7 @@ def test_disconnected_unbounded_winning_ranges() -> None:
         IntegerProgression(6, 8),
         IntegerProgression(16),
     ]
-    assert [r.domain for r in result.regions if r.resolution.status is ResolutionStatus.UNRESOLVED] == [
+    assert [r.domain for r in result.regions if r.resolution.holder_ids == (1, 2)] == [
         IntegerProgression(5, 5),
         IntegerProgression(9, 9),
         IntegerProgression(15, 15),
@@ -108,8 +108,8 @@ def test_completion_ties_and_same_build_alternatives() -> None:
     sources = [candidate(1, "n"), replace(candidate(2, "n"), build_id=1)]
     result = smallest_record_regions(sources)
     assert result.regions[0].resolution.holder_ids == (1,)
-    assert result.regions[0].holder_configuration_ids == ()
-    assert result.regions[0].provisional_configuration_ids == (1, 2)
+    assert result.regions[0].resolution.gaps == ()
+    assert result.regions[0].holder_configuration_ids == (1, 2)
 
 
 def test_unknown_domain_is_not_a_no_candidate_claim() -> None:
@@ -193,7 +193,7 @@ def test_huge_winning_boundary_does_not_materialize_sizes() -> None:
     assert result.status is RegionAnalysisStatus.EXACT
     assert [(r.domain.minimum, r.domain.maximum, r.resolution.status) for r in result.regions] == [
         (1, root - 1, ResolutionStatus.RESOLVED),
-        (root, root, ResolutionStatus.UNRESOLVED),
+        (root, root, ResolutionStatus.RESOLVED),
         (root + 1, None, ResolutionStatus.RESOLVED),
     ]
     assert result.regions[0].resolution.holder_ids == (1,)

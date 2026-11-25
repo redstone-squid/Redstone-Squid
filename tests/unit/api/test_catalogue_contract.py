@@ -79,7 +79,7 @@ class PublicRecordFake(PublicRecordQueryService):
         self.requests.append(record_id)
         if record_id != self.record.record_id:
             return None
-        return PublicRecordDetail.with_holders(self.record, self.builds)
+        return PublicRecordDetail.with_builds(self.record, {build.id: build for build in self.builds})
 
 
 def test_build_summary_exposes_catalogue_card_fields_and_stable_tag_keys() -> None:

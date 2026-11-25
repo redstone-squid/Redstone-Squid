@@ -35,6 +35,7 @@ from squid.core.records.application.snapshots import RecordSnapshot
 from squid.core.records.domain import (
     BuildKind,
     Candidate,
+    CandidateGap,
     DoorCategory,
     ExtenderCategory,
     FormattedTitle,
@@ -63,6 +64,7 @@ from squid.core.records.models import (
     RecordResult,
     RecordSettings,
     RecordTagRole,
+    RecordTiedBuild,
     RulesRevision,
 )
 from squid.core.tags.infrastructure.loading import assignment_units
@@ -387,7 +389,6 @@ class PostgresRecordRepository:
                 gap_reasons={
                     "missing": [{"build_id": gap.build_id, "field": gap.field} for gap in computed.resolution.gaps]
                 },
-                provisional_build_id=next(iter(computed.resolution.provisional_holder_ids), None),
                 history_complete=computed.history_complete,
                 door_evidence=computed.door_evidence,
             )
@@ -411,6 +412,7 @@ class PostgresRecordRepository:
                         completion_at=_holder_completion(computed, candidate),
                     )
                 )
+            session.add_all(RecordTiedBuild(result_id=result.id, build_id=id) for id in computed.resolution.tied_ids)
 
             history_chain: list[RecordHolderHistory] = []
             for period in computed.history:
@@ -456,7 +458,7 @@ class PostgresRecordRepository:
         return run.id
 
     async def list_gaps(self, *, kind: BuildKind | None = None) -> Sequence[RecordGap]:
-        """List decisive gaps from currently active computation runs."""
+        """List active results that missing facts could change."""
         session = self._session()
         statement = (
             select(RecordDefinition, RecordResult)
@@ -466,7 +468,7 @@ class PostgresRecordRepository:
             .join(ComputationRun, ComputationRun.id == RecordResult.run_id)
             .where(
                 ComputationRun.is_active.is_(True),
-                RecordResult.status == ResolutionStatus.UNRESOLVED,
+                func.jsonb_array_length(RecordResult.gap_reasons["missing"]) > 0,
             )
         )
         if kind is not None:
@@ -626,6 +628,16 @@ class PostgresRecordRepository:
         holders: dict[int, list[int]] = {}
         for holder_result_id, build_id in holder_rows:
             holders.setdefault(holder_result_id, []).append(build_id)
+        tied_rows = (
+            await session.execute(
+                select(RecordTiedBuild.result_id, RecordTiedBuild.build_id)
+                .where(RecordTiedBuild.result_id.in_(result_ids))
+                .order_by(RecordTiedBuild.result_id, RecordTiedBuild.build_id)
+            )
+        ).all()
+        tied: dict[int, list[int]] = {}
+        for tied_result_id, build_id in tied_rows:
+            tied.setdefault(tied_result_id, []).append(build_id)
         return tuple(
             PublishedRecordResult(
                 result_id=result.id,
@@ -638,6 +650,8 @@ class PostgresRecordRepository:
                 version_scope=definition.version_scope,
                 status=result.status,
                 holder_build_ids=tuple(holders.get(result.id, ())),
+                tied_build_ids=tuple(tied.get(result.id, ())),
+                gaps=_stored_gaps(result),
                 computed_at=result.computed_at.to_stdlib(),
                 last_checked_at=None if checked_at is None else checked_at.to_stdlib(),
                 refresh_pending=pending,
@@ -1109,7 +1123,7 @@ def _holder_configurations(computed: ComputedRecordResult, build_id: int) -> tup
     if computed.door_evidence is None:
         return ()
     evaluation = computed.door_evidence.evaluation
-    ids = set(evaluation.holder_configuration_ids + evaluation.provisional_configuration_ids)
+    ids = set(evaluation.holder_configuration_ids)
     return tuple(c for c in evaluation.configurations if c.id in ids and c.build_id == build_id)
 
 
@@ -1161,27 +1175,27 @@ def _fixed_metric_snapshot(criterion: RecordCriterion, candidate: Candidate) -> 
     return snapshot
 
 
-def _gap_from_row(definition: RecordDefinition, result: RecordResult) -> RecordGap:
+def _stored_gaps(result: RecordResult) -> tuple[CandidateGap, ...]:
     missing = result.gap_reasons.get("missing", [])
     entries = cast(list[object], missing) if isinstance(missing, list) else []
-    build_ids: list[int] = []
-    fields: list[str] = []
-    for entry in entries:
-        if not isinstance(entry, Mapping):
-            continue
-        build_id = entry.get("build_id")
-        field = entry.get("field")
-        if isinstance(build_id, int):
-            build_ids.append(build_id)
-        if isinstance(field, str):
-            fields.append(field)
+    return tuple(
+        CandidateGap(build_id, field)
+        for entry in entries
+        if isinstance(entry, Mapping)
+        and isinstance(build_id := entry.get("build_id"), int)
+        and isinstance(field := entry.get("field"), str)
+    )
+
+
+def _gap_from_row(definition: RecordDefinition, result: RecordResult) -> RecordGap:
+    gaps = _stored_gaps(result)
     return RecordGap(
         definition_id=definition.id,
         title=definition.title,
         subtitle=definition.subtitle,
         criterion=definition.criterion,
-        build_ids=tuple(build_ids),
-        fields=tuple(fields),
+        build_ids=tuple(gap.build_id for gap in gaps),
+        fields=tuple(gap.field for gap in gaps),
         build_kind=definition.build_kind,
     )
 

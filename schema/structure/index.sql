@@ -206,6 +206,7 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/TABLES/title_holders.sql
 \ir public/TABLES/title_results.sql
 \ir public/SEQUENCES/title_results_id_seq.sql
+\ir public/TABLES/title_tied_builds.sql
 \ir public/TABLES/utilities.sql
 \ir public/TABLES/verification_attempts.sql
 \ir public/TABLES/verification_codes.sql

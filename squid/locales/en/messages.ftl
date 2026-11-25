@@ -1265,34 +1265,34 @@ bot-submission-consent-banner-discord-account = Discord account
 # squid/bot/submission/consent_banner.py:68
 bot-submission-consent-banner-value = { $user_mention } ({ $user_id })
 
-# squid/bot/catalogue/records.py:333
+# squid/bot/catalogue/records.py:334
 bot-submission-records-build-kind = Build kind
 
-# squid/bot/catalogue/records.py:526
+# squid/bot/catalogue/records.py:531
 bot-submission-records-current-version-id = Current version ID
 
-# squid/bot/catalogue/records.py:206
+# squid/bot/catalogue/records.py:207
 bot-submission-records-evidence-gaps = Missing evidence
 
-# squid/bot/catalogue/records.py:507
+# squid/bot/catalogue/records.py:512
 bot-submission-records-lookup-record-category = Lookup record category
 
-# squid/bot/catalogue/records.py:517
+# squid/bot/catalogue/records.py:522
 bot-submission-records-pinned-version-id = Pinned version ID
 
-# squid/bot/catalogue/records.py:272, squid/bot/catalogue/records.py:522
+# squid/bot/catalogue/records.py:273, squid/bot/catalogue/records.py:527
 bot-submission-records-rebuild-records = Rebuild all records
 
-# squid/bot/catalogue/records.py:128
+# squid/bot/catalogue/records.py:129
 bot-submission-records-record-evidence-gaps = Records missing evidence
 
-# squid/bot/catalogue/records.py:151
+# squid/bot/catalogue/records.py:152
 bot-submission-records-record-title-diagnostics = Unrecognised record titles
 
-# squid/bot/catalogue/records.py:242
+# squid/bot/catalogue/records.py:243
 bot-submission-records-records = Record tools
 
-# squid/bot/catalogue/records.py:219
+# squid/bot/catalogue/records.py:220
 bot-submission-records-title-issues = Unrecognised titles
 
 # squid/bot/catalogue/schematics/presentation.py:113
@@ -5162,67 +5162,67 @@ record-rule-smallest-fastest = Fastest timing, then lowest volume, then earliest
 # squid/bot/submission/cog.py:176
 record-search-query-help = Name, keywords, or filters, e.g. kind:door criterion:smallest.
 
-# squid/bot/catalogue/records.py:255
+# squid/bot/catalogue/records.py:256
 records-active-version = the active version
 
-# squid/core/records/application/services.py:803, squid/core/records/application/services.py:834
+# squid/core/records/application/services.py:805, squid/core/records/application/services.py:836
 records-candidate-no-typed = Candidate { $build_id } has no typed category facts.
 
-# squid/bot/catalogue/records.py:499
+# squid/bot/catalogue/records.py:504
 records-category-id = Category definition #{ $definition_id }
 
 # squid/core/records/errors.py:27, squid/core/records/errors.py:43
 records-category-not-found-title = Record category not found
 
-# squid/bot/catalogue/records.py:266, squid/bot/catalogue/records.py:407
+# squid/bot/catalogue/records.py:267, squid/bot/catalogue/records.py:408
 records-choose-definition = Recompute a category
 
-# squid/bot/catalogue/records.py:300, squid/bot/catalogue/records.py:375
+# squid/bot/catalogue/records.py:301, squid/bot/catalogue/records.py:376
 records-choose-restriction = Add restriction
 
-# squid/bot/catalogue/records.py:278, squid/bot/catalogue/records.py:361
+# squid/bot/catalogue/records.py:279, squid/bot/catalogue/records.py:362
 records-choose-version = Use another version
 
-# squid/bot/catalogue/records.py:249
+# squid/bot/catalogue/records.py:250
 records-diagnostics-loading = Loading record diagnostics.
 
 # squid/core/records/errors.py:12
 records-errors-record-not-found = Record not found.
 
-# squid/bot/catalogue/records.py:305
+# squid/bot/catalogue/records.py:306
 records-exact-category = Look up exact category
 
-# squid/bot/catalogue/records.py:510
+# squid/bot/catalogue/records.py:515
 records-exact-category-key = Exact category key
 
-# squid/bot/catalogue/records.py:291
+# squid/bot/catalogue/records.py:292
 records-exact-heading = Category without a record
 
-# squid/bot/catalogue/records.py:293
+# squid/bot/catalogue/records.py:294
 records-exact-purpose = Create and compute a record category by its exact key, optionally narrowed by restrictions.
 
-# squid/core/records/application/services.py:847
+# squid/core/records/application/services.py:849
 records-fastest-records-unsupported = Fastest records are not supported for { $kind_name }.
 
-# squid/core/records/domain/models.py:115
+# squid/core/records/domain/models.py:120
 records-fixed-volume-positive = Fixed volume must be positive.
 
-# squid/bot/catalogue/records.py:159
+# squid/bot/catalogue/records.py:160
 records-gap-needs = Needs { $needs } on these builds:
 
-# squid/bot/catalogue/records.py:163
+# squid/bot/catalogue/records.py:164
 records-gap-open-build = Open build #{ $build_id }
 
-# squid/bot/catalogue/records.py:489
+# squid/bot/catalogue/records.py:490
 records-gap-summary = { $title } · needs { $needs }
 
-# squid/bot/catalogue/records.py:209
-records-gaps-purpose = These record categories cannot be decided yet. Add the missing values to their builds, then recompute.
+# squid/bot/catalogue/records.py:210
+records-gaps-purpose = Missing values could change who holds these records. Add them to the builds, then recompute.
 
-# squid/bot/catalogue/records.py:258
+# squid/bot/catalogue/records.py:259
 records-maintenance-purpose = Recalculate records after fixing builds or record rules. These actions use the rules of { $version }.
 
-# squid/bot/catalogue/records.py:235
+# squid/bot/catalogue/records.py:236
 records-maintenance-tools = Recompute
 
 # squid/core/records/domain/categories.py:50
@@ -5231,28 +5231,28 @@ records-maximum-category-size = Maximum category size cannot be negative.
 # squid/core/records/errors.py:42
 records-no-confirmed-build = No approved build satisfies the requested record category.
 
-# squid/bot/catalogue/records.py:254
+# squid/bot/catalogue/records.py:130
+records-no-evidence-gaps = Every active record has the evidence it needs.
+
+# squid/bot/catalogue/records.py:255
 records-no-maintenance-actions = No maintenance actions are available.
 
-# squid/bot/catalogue/records.py:152
+# squid/bot/catalogue/records.py:153
 records-no-titles-need-review = Every active record title uses known terms.
-
-# squid/bot/catalogue/records.py:129
-records-no-unresolved-categories = Every active record category has the evidence it needs.
 
 # squid/core/records/application/published_points.py:75
 records-opening-width-invalid = Opening width must be a positive 32-bit integer.
 
-# squid/core/records/application/services.py:764
+# squid/core/records/application/services.py:766
 records-parameterized-record-restriction = Parameterized record restriction is missing a category value.
 
-# squid/bot/catalogue/records.py:475
-records-rebuild-summary = Rebuilt { $definitions } definitions; { $resolved } resolved; { $unresolved } awaiting evidence.
+# squid/bot/catalogue/records.py:476
+records-rebuild-summary = Rebuilt { $definitions } definitions; { $resolved } have holders; { $with_gaps } could change with more evidence.
 
-# squid/bot/catalogue/records.py:143, squid/bot/catalogue/records.py:176, squid/bot/catalogue/records.py:409
+# squid/bot/catalogue/records.py:144, squid/bot/catalogue/records.py:177, squid/bot/catalogue/records.py:410
 records-recompute-definition = Recompute definition
 
-# squid/bot/catalogue/records.py:196, squid/bot/catalogue/records.py:401, squid/bot/catalogue/records.py:452
+# squid/bot/catalogue/records.py:197, squid/bot/catalogue/records.py:402, squid/bot/catalogue/records.py:453
 records-recompute-summary = Recomputed { $definitions } definitions; { $resolved } resolved.
 
 # squid/core/records/application/services.py:586
@@ -5261,40 +5261,40 @@ records-record-category-category = Record category { $definition_id } is a { $ac
 # squid/core/records/errors.py:26
 records-record-category-not-found = Record category not found.
 
-# squid/core/records/infrastructure/repository.py:684
+# squid/core/records/infrastructure/repository.py:698
 records-record-definition-stores = Record definition { $definition_id } stores a category key that does not parse.
 
 # squid/core/records/errors.py:13
 records-record-not-found-title = Record not found
 
-# squid/core/records/application/services.py:865
+# squid/core/records/application/services.py:867
 records-records-not-supported = Records are not supported for { $kind_name }.
 
-# squid/bot/catalogue/records.py:503
+# squid/bot/catalogue/records.py:508
 records-remove-restriction = Remove { $label }
 
-# squid/bot/catalogue/records.py:282
+# squid/bot/catalogue/records.py:283
 records-reset-version = Use active version
 
-# squid/bot/catalogue/records.py:433
+# squid/bot/catalogue/records.py:434
 records-restriction-base-key-required = Restrictions can only be combined with a hand-typed base key.
 
-# squid/bot/catalogue/records.py:512
+# squid/bot/catalogue/records.py:517
 records-restriction-ids-help = Restriction IDs, comma separated
 
-# squid/bot/catalogue/records.py:427
+# squid/bot/catalogue/records.py:428
 records-restriction-ids-invalid = Restriction IDs must be whole numbers separated by commas.
 
-# squid/core/records/domain/models.py:89
+# squid/core/records/domain/models.py:90
 records-timing-variant-minimum-items = A timing variant must contain at least its primary timing method.
 
-# squid/core/records/domain/models.py:142
+# squid/core/records/domain/models.py:152
 records-title-holder-required = A resolved record title must have at least one holder.
 
-# squid/core/records/domain/models.py:145
+# squid/core/records/domain/models.py:155
 records-title-holders-forbidden = Only a resolved record title can have official holders.
 
-# squid/bot/catalogue/records.py:222
+# squid/bot/catalogue/records.py:223
 records-titles-purpose = These record titles contain unrecognized tags. Correct the build tags, then recompute the records.
 
 # squid/bot/recount_cog.py:126
@@ -6840,13 +6840,13 @@ vocabulary-build-kind-extender = Piston extender
 # squid/core/vocabulary.py:27
 vocabulary-build-kind-utility = Utility
 
-# squid/core/vocabulary.py:43
+# squid/core/vocabulary.py:58
 vocabulary-build-status-approved = Approved
 
-# squid/core/vocabulary.py:42
+# squid/core/vocabulary.py:57
 vocabulary-build-status-pending = Pending
 
-# squid/core/vocabulary.py:44
+# squid/core/vocabulary.py:59
 vocabulary-build-status-rejected = Rejected
 
 # squid/core/vocabulary.py:17
@@ -6864,14 +6864,47 @@ vocabulary-criterion-smallest = Smallest
 # squid/core/vocabulary.py:20
 vocabulary-criterion-smallest-fastest = Smallest, then fastest
 
-# squid/core/vocabulary.py:38
+# squid/core/vocabulary.py:46
+vocabulary-record-fact-closing = Closing time
+
+# squid/core/vocabulary.py:49
+vocabulary-record-fact-closing-reset = Closing reset time
+
+# squid/core/vocabulary.py:47
+vocabulary-record-fact-closing-visible = Visible closing time
+
+# squid/core/vocabulary.py:42
+vocabulary-record-fact-completion = Completion date
+
+# squid/core/vocabulary.py:51
+vocabulary-record-fact-extension = Extension time
+
+# squid/core/vocabulary.py:53
+vocabulary-record-fact-extension-reset = Extension reset time
+
+# squid/core/vocabulary.py:44
+vocabulary-record-fact-opening = Opening time
+
+# squid/core/vocabulary.py:48
+vocabulary-record-fact-opening-reset = Opening reset time
+
+# squid/core/vocabulary.py:45
+vocabulary-record-fact-opening-visible = Visible opening time
+
+# squid/core/vocabulary.py:50
+vocabulary-record-fact-retraction = Retraction time
+
+# squid/core/vocabulary.py:52
+vocabulary-record-fact-retraction-reset = Retraction reset time
+
+# squid/core/vocabulary.py:43
+vocabulary-record-fact-volume = Volume
+
+# squid/core/vocabulary.py:37
 vocabulary-resolution-no-candidate = No eligible builds
 
 # squid/core/vocabulary.py:36
 vocabulary-resolution-resolved = Resolved
-
-# squid/core/vocabulary.py:37
-vocabulary-resolution-unresolved = Awaiting evidence
 
 # squid/core/vocabulary.py:31
 vocabulary-version-scope-all-time = All time

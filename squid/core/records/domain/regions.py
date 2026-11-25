@@ -15,7 +15,7 @@ from itertools import combinations, pairwise
 from math import lcm
 
 from squid.core.builds.domain.expansion_math import ExpressionError, Formula, Polynomial
-from squid.core.records.domain.models import Candidate, CandidateGap, RecordResolution, ResolutionStatus
+from squid.core.records.domain.models import Candidate, RecordResolution
 from squid.core.records.domain.region_math import (
     ArithmeticBudget,
     RegionArithmeticError,
@@ -74,13 +74,12 @@ class SmallestRecordRegion:
     """A nonempty progression where build holders and configuration winners agree.
 
     The minimum is a concrete witness. Resolution IDs refer to builds; the
-    configuration lists retain alternatives, including ambiguous same-build ties.
+    configuration list retains alternatives, including same-build ties.
     """
 
     domain: IntegerProgression
     resolution: RecordResolution
     holder_configuration_ids: tuple[int, ...] = ()
-    provisional_configuration_ids: tuple[int, ...] = ()
 
 
 class RegionAnalysisStatus(StrEnum):
@@ -247,16 +246,5 @@ def _resolve_region(
         candidates.append(Candidate(source.configuration_id, source.completion_at, value.numerator))
     result = resolve_smallest(candidates)
     sources_by_id = {source.configuration_id: source for source in sources}
-
-    def build_ids(ids: tuple[int, ...]) -> tuple[int, ...]:
-        return tuple(sorted({sources_by_id[id].build_id for id in ids}))
-
-    resolution = RecordResolution(
-        result.status,
-        build_ids(result.holder_ids),
-        build_ids(result.provisional_holder_ids),
-        tuple(dict.fromkeys(CandidateGap(sources_by_id[gap.build_id].build_id, gap.field) for gap in result.gaps)),
-    )
-    if resolution.status is ResolutionStatus.UNRESOLVED and len(resolution.provisional_holder_ids) == 1:
-        resolution = RecordResolution(ResolutionStatus.RESOLVED, holder_ids=resolution.provisional_holder_ids)
-    return SmallestRecordRegion(domain, resolution, result.holder_ids, result.provisional_holder_ids)
+    resolution = result.by_build(lambda id: sources_by_id[id].build_id)
+    return SmallestRecordRegion(domain, resolution, result.holder_ids)

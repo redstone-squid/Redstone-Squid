@@ -19,8 +19,21 @@
     },
     "resolution_status": {
       "resolved": "Resolved",
-      "unresolved": "Awaiting evidence",
       "no_candidate": "No eligible builds"
+    },
+    "record_fact": {
+      "completion_at": "Completion date",
+      "fixed_volume": "Volume",
+      "opening": "Opening time",
+      "opening_visible": "Visible opening time",
+      "closing": "Closing time",
+      "closing_visible": "Visible closing time",
+      "opening_reset": "Opening reset time",
+      "closing_reset": "Closing reset time",
+      "retraction": "Retraction time",
+      "extension": "Extension time",
+      "retraction_reset": "Retraction reset time",
+      "extension_reset": "Extension reset time"
     },
     "build_status": {
       "pending": "Pending",
@@ -48,8 +61,21 @@
     },
     "resolution_status": {
       "resolved": "已确定",
-      "unresolved": "等待证据",
       "no_candidate": "没有符合条件的作品"
+    },
+    "record_fact": {
+      "completion_at": "Completion date",
+      "fixed_volume": "Volume",
+      "opening": "Opening time",
+      "opening_visible": "Visible opening time",
+      "closing": "Closing time",
+      "closing_visible": "Visible closing time",
+      "opening_reset": "Opening reset time",
+      "closing_reset": "Closing reset time",
+      "retraction": "Retraction time",
+      "extension": "Extension time",
+      "retraction_reset": "Retraction reset time",
+      "extension_reset": "Extension reset time"
     },
     "build_status": {
       "pending": "待审核",

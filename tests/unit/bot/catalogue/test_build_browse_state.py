@@ -500,7 +500,7 @@ async def test_record_tools_load_on_request_and_return_to_builds() -> None:
         await ui.press("record-tools")
         records.gaps.assert_awaited_once()
         assert "## Records missing evidence" in ui.texts()
-        assert "Every active record category has the evidence it needs." in ui.texts()
+        assert "Every active record has the evidence it needs." in ui.texts()
         ui.assert_within_limits()
         await ui.press("all-builds")
         assert "## Build catalogue" in ui.texts()

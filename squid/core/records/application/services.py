@@ -182,7 +182,7 @@ class RecordComputationService:
             run_ids=run_ids,
             definitions=len(records),
             resolved=sum(record.resolution.status is ResolutionStatus.RESOLVED for record in records),
-            unresolved=sum(record.resolution.status is ResolutionStatus.UNRESOLVED for record in records),
+            with_gaps=sum(bool(record.resolution.gaps) for record in records),
         )
 
     async def _compute_snapshot(self, snapshot: RecordSnapshot) -> ComputationBatch:
@@ -311,7 +311,7 @@ class RecordComputationService:
                     run_ids=tuple(run_id for summary in summaries for run_id in summary.run_ids),
                     definitions=sum(summary.definitions for summary in summaries),
                     resolved=sum(summary.resolved for summary in summaries),
-                    unresolved=sum(summary.unresolved for summary in summaries),
+                    with_gaps=sum(summary.with_gaps for summary in summaries),
                 )
                 if summaries
                 else None,
@@ -641,10 +641,10 @@ class PublicRecordQueryService:
         self._builds = builds
 
     async def get(self, record_id: UUID, *, context: ActingContext) -> PublicRecordDetail | None:
-        """Return the latest published result with its holders in result order.
+        """Return the latest published result with its holders, tied builds, and contenders.
 
         Raise `DataIntegrityError` when holder rows contradict the result status
-        or any referenced build is unavailable in the public catalogue.
+        or any holder is unavailable in the public catalogue.
         """
         async with self._uow_factory() as uow:
             result = await uow.records.get_latest_record(record_id)
@@ -661,7 +661,9 @@ class PublicRecordQueryService:
                     "holder_build_ids": list(result.holder_build_ids),
                 },
             )
-        found = await self._builds.get_public_summaries(result.holder_build_ids, context=context)
+        gap_ids = dict.fromkeys(gap.build_id for gap in result.gaps)
+        named_ids = tuple(dict.fromkeys((*result.holder_build_ids, *result.tied_build_ids, *gap_ids)))
+        found = await self._builds.get_public_summaries(named_ids, context=context)
         by_id = {build.id: build for build in found}
         unavailable_ids = [build_id for build_id in result.holder_build_ids if build_id not in by_id]
         if unavailable_ids:
@@ -670,7 +672,7 @@ class PublicRecordQueryService:
                 msg,
                 context={"record_id": str(record_id), "unavailable_holder_build_ids": unavailable_ids},
             )
-        return PublicRecordDetail.with_holders(result, [by_id[build_id] for build_id in result.holder_build_ids])
+        return PublicRecordDetail.with_builds(result, by_id)
 
 
 def _observed_thresholds(

@@ -36,15 +36,18 @@ def test_smallest_ignores_missing_completion_when_volume_is_decisive() -> None:
     assert result.holder_ids == (1,)
 
 
-def test_smallest_uses_earliest_completion_for_volume_tie() -> None:
+def test_smallest_awards_volume_tie_to_earliest_completion_and_ties_the_rest() -> None:
     result = resolve_smallest(
         (
             Candidate(build_id=1, fixed_volume=20, completion_at=LATE),
             Candidate(build_id=2, fixed_volume=20, completion_at=EARLY),
+            Candidate(build_id=3, fixed_volume=21, completion_at=EARLY),
         )
     )
 
     assert result.holder_ids == (2,)
+    assert result.tied_ids == (1,)
+    assert result.gaps == ()
 
 
 def test_smallest_preserves_exact_co_holders() -> None:
@@ -59,7 +62,7 @@ def test_smallest_preserves_exact_co_holders() -> None:
     assert result.holder_ids == (1, 2)
 
 
-def test_smallest_is_unresolved_when_tied_build_lacks_completion() -> None:
+def test_smallest_undated_tie_loses_to_a_dated_build_but_remains_a_contender() -> None:
     result = resolve_smallest(
         (
             Candidate(build_id=1, fixed_volume=20),
@@ -67,10 +70,17 @@ def test_smallest_is_unresolved_when_tied_build_lacks_completion() -> None:
         )
     )
 
-    assert result.status is ResolutionStatus.UNRESOLVED
-    assert result.holder_ids == ()
-    assert result.provisional_holder_ids == (1, 2)
+    assert result.status is ResolutionStatus.RESOLVED
+    assert result.holder_ids == (2,)
+    assert result.tied_ids == ()
     assert result.gaps == (CandidateGap(build_id=1, field="completion_at"),)
+
+
+def test_smallest_undated_ties_share_the_record_until_dates_are_known() -> None:
+    result = resolve_smallest((Candidate(build_id=1, fixed_volume=20), Candidate(build_id=2, fixed_volume=20)))
+
+    assert result.holder_ids == (1, 2)
+    assert result.gaps == (CandidateGap(1, "completion_at"), CandidateGap(2, "completion_at"))
 
 
 def test_smallest_has_no_candidate_without_fixed_volume() -> None:
@@ -90,6 +100,8 @@ def test_first_selects_the_earliest_known_completion() -> None:
 
     assert result.status is ResolutionStatus.RESOLVED
     assert result.holder_ids == (3,)
+    assert result.tied_ids == ()
+    assert result.gaps == ()
 
 
 def test_first_preserves_exact_co_holders() -> None:
@@ -122,17 +134,32 @@ def test_fastest_stops_before_missing_lower_priority_data_when_decisive() -> Non
     assert result.holder_ids == (1,)
 
 
-def test_fastest_reports_only_decisive_missing_method() -> None:
+def test_fastest_missing_method_loses_to_a_known_one_and_is_reported() -> None:
     result = resolve_fastest(
         (
             Candidate(build_id=1, timing_variants=(TimingVariant((4, None)),)),
             Candidate(build_id=2, timing_variants=(TimingVariant((4, 2)),)),
+            Candidate(build_id=3, timing_variants=(TimingVariant((5, None)),)),
         ),
         DOOR_TIMING_METHODS,
     )
 
-    assert result.status is ResolutionStatus.UNRESOLVED
+    assert result.status is ResolutionStatus.RESOLVED
+    assert result.holder_ids == (2,)
     assert result.gaps == (CandidateGap(build_id=1, field="opening_visible"),)
+
+
+def test_fastest_skips_a_method_nobody_measured_and_reports_it() -> None:
+    result = resolve_fastest(
+        (
+            Candidate(build_id=1, timing_variants=(TimingVariant((4, None, 6)),)),
+            Candidate(build_id=2, timing_variants=(TimingVariant((4, None, 5)),)),
+        ),
+        DOOR_TIMING_METHODS,
+    )
+
+    assert result.holder_ids == (2,)
+    assert result.gaps == (CandidateGap(1, "opening_visible"), CandidateGap(2, "opening_visible"))
 
 
 def test_fastest_supports_negative_reset_times() -> None:
@@ -172,6 +199,7 @@ def test_fastest_uses_completion_and_co_holders_after_all_methods_tie() -> None:
 
     assert result.status is ResolutionStatus.RESOLVED
     assert result.holder_ids == (1, 2)
+    assert result.tied_ids == (3,)
 
 
 def test_fastest_smallest_uses_speed_within_the_minimum_volume_pool() -> None:
@@ -200,7 +228,7 @@ def test_smallest_fastest_uses_volume_within_the_fastest_timing_pool() -> None:
     assert result.holder_ids == (2,)
 
 
-def test_smallest_fastest_reports_a_gap_before_the_fastest_pool_is_known() -> None:
+def test_smallest_fastest_reports_a_build_that_might_join_the_fastest_pool() -> None:
     result = resolve_smallest_fastest(
         (
             Candidate(build_id=1, fixed_volume=10, timing_variants=(TimingVariant((4, None)),)),
@@ -209,7 +237,7 @@ def test_smallest_fastest_reports_a_gap_before_the_fastest_pool_is_known() -> No
         ("opening", "opening_visible"),
     )
 
-    assert result.status is ResolutionStatus.UNRESOLVED
+    assert result.holder_ids == (2,)
     assert result.gaps == (CandidateGap(build_id=1, field="opening_visible"),)
 
 

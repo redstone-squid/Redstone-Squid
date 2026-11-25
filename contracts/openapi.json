@@ -24269,12 +24269,6 @@
             },
             "type": "array"
           },
-          "provisional_configuration_ids": {
-            "items": {
-              "type": "integer"
-            },
-            "type": "array"
-          },
           "configurations": {
             "items": {
               "$ref": "#/components/schemas/LiveDoorConfiguration"
@@ -24289,7 +24283,6 @@
           "evaluated_at",
           "holder_configuration_ids",
           "opening",
-          "provisional_configuration_ids",
           "resolution",
           "version_id"
         ],
@@ -25951,6 +25944,20 @@
             "type": "string",
             "format": "date-time"
           },
+          "tied_build_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "default": []
+          },
+          "gaps": {
+            "items": {
+              "$ref": "#/components/schemas/CandidateGap"
+            },
+            "type": "array",
+            "default": []
+          },
           "last_checked_at": {
             "oneOf": [
               {
@@ -25991,6 +25998,20 @@
               "$ref": "#/components/schemas/PublicBuildSummary"
             },
             "type": "array"
+          },
+          "tied_builds": {
+            "items": {
+              "$ref": "#/components/schemas/PublicBuildSummary"
+            },
+            "type": "array",
+            "default": []
+          },
+          "contender_builds": {
+            "items": {
+              "$ref": "#/components/schemas/PublicBuildSummary"
+            },
+            "type": "array",
+            "default": []
           },
           "viewer": {
             "oneOf": [
@@ -26165,6 +26186,13 @@
           "computed_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "tied_build_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "default": []
           },
           "last_checked_at": {
             "oneOf": [
@@ -26826,7 +26854,7 @@
             "type": "array",
             "default": []
           },
-          "provisional_holder_ids": {
+          "tied_ids": {
             "items": {
               "type": "integer"
             },
@@ -27097,11 +27125,10 @@
         "type": "string",
         "enum": [
           "resolved",
-          "unresolved",
           "no_candidate"
         ],
         "title": "ResolutionStatus",
-        "description": "Whether a category produced an official result."
+        "description": "Whether any build competes in a category."
       },
       "RuleIssue": {
         "additionalProperties": false,
@@ -28193,13 +28220,6 @@
             "$ref": "#/components/schemas/RecordResolution"
           },
           "holder_configuration_ids": {
-            "items": {
-              "type": "integer"
-            },
-            "type": "array",
-            "default": []
-          },
-          "provisional_configuration_ids": {
             "items": {
               "type": "integer"
             },

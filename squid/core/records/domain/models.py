@@ -1,8 +1,10 @@
 """Value objects used by record calculators."""
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
+from typing import Self
 
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
@@ -35,10 +37,9 @@ class VersionScope(StrEnum):
 
 
 class ResolutionStatus(StrEnum):
-    """Whether a category produced an official result."""
+    """Whether any build competes in a category."""
 
     RESOLVED = "resolved"
-    UNRESOLVED = "unresolved"
     NO_CANDIDATE = "no_candidate"
 
 
@@ -95,7 +96,11 @@ class TimingVariant:
 
 @dataclass(frozen=True, slots=True)
 class CandidateGap:
-    """A fact missing precisely where it prevents a result."""
+    """A missing fact that could change who holds a record.
+
+    The build either lost the comparison of `field` because the fact is unknown,
+    or shares the record with builds that the fact could separate.
+    """
 
     build_id: int
     field: str
@@ -130,20 +135,39 @@ class TimingReduction:
 
 @dataclass(frozen=True, slots=True)
 class RecordResolution:
-    """The official holders or the decisive gaps for a category."""
+    """Who holds a category's record, who ties it, and which facts could change that.
+
+    There is normally one holder. Builds share a record only when they also have
+    identical, or all unknown, completion dates. Tied builds match the holders on
+    every metric but were completed later.
+    """
 
     status: ResolutionStatus
     holder_ids: tuple[int, ...] = ()
-    provisional_holder_ids: tuple[int, ...] = ()
+    tied_ids: tuple[int, ...] = ()
     gaps: tuple[CandidateGap, ...] = ()
 
     def __post_init__(self) -> None:
         if self.status is ResolutionStatus.RESOLVED and not self.holder_ids:
             msg = tr(t"records-title-holder-required = A resolved record title must have at least one holder.")
             raise ValidationError(msg)
-        if self.status is not ResolutionStatus.RESOLVED and self.holder_ids:
+        if self.status is ResolutionStatus.NO_CANDIDATE and (self.holder_ids or self.tied_ids):
             msg = tr(t"records-title-holders-forbidden = Only a resolved record title can have official holders.")
             raise ValidationError(msg)
+
+    def by_build(self, build_of: Callable[[int], int]) -> Self:
+        """Translate configuration IDs into build IDs.
+
+        Alternatives of one build do not compete with each other, so a gap that
+        could only choose between a sole holder's own configurations is dropped.
+        """
+        holders = tuple(sorted({build_of(id) for id in self.holder_ids}))
+        gaps = dict.fromkeys(CandidateGap(build_of(gap.build_id), gap.field) for gap in self.gaps)
+        if len(holders) == 1:
+            gaps = {gap: None for gap in gaps if gap.build_id != holders[0]}
+        excluded = {*holders, *(gap.build_id for gap in gaps)}
+        tied = tuple(sorted({build_of(id) for id in self.tied_ids} - excluded))
+        return type(self)(self.status, holders, tied, tuple(gaps))
 
 
 class MaterializationSource(StrEnum):

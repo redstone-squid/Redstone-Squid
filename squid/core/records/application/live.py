@@ -22,12 +22,10 @@ from squid.core.records.domain import (
     BuildKind,
     Candidate,
     RecordCriterion,
-    RecordResolution,
-    ResolutionStatus,
     TimingVariant,
 )
 from squid.core.records.domain.door_evidence import LiveDoorConfiguration, LiveDoorRecord
-from squid.core.records.domain.models import DOOR_TIMING_METHODS, CandidateGap
+from squid.core.records.domain.models import DOOR_TIMING_METHODS
 from squid.core.records.domain.resolution import resolve_record
 
 type LookupDimension = Annotated[int, Field(strict=True, ge=1, le=2**31 - 1)]
@@ -175,28 +173,12 @@ def resolve_door_configurations(
     methods = tuple(method.value for method in DOOR_TIMING_METHODS)
     result = resolve_record(request.criterion, eligible, methods)
 
-    def build_ids(ids: tuple[int, ...]) -> tuple[int, ...]:
-        return tuple(sorted({configurations[id].build_id for id in ids}))
-
-    resolution = RecordResolution(
-        result.status,
-        holder_ids=build_ids(result.holder_ids),
-        provisional_holder_ids=build_ids(result.provisional_holder_ids),
-        gaps=tuple(
-            dict.fromkeys(CandidateGap(configurations[gap.build_id].build_id, gap.field) for gap in result.gaps)
-        ),
-    )
-    # Ties between alternatives of the same build cannot change the build-level
-    # holder, even when missing facts prevent selecting its winning branch.
-    if resolution.status is ResolutionStatus.UNRESOLVED and len(resolution.provisional_holder_ids) == 1:
-        resolution = RecordResolution(ResolutionStatus.RESOLVED, holder_ids=resolution.provisional_holder_ids)
     return LiveDoorRecord(
         request.opening,
         request.criterion,
         request.version_id,
         evaluated_at,
-        resolution,
+        result.by_build(lambda id: configurations[id].build_id),
         result.holder_ids,
-        result.provisional_holder_ids,
         tuple(configurations),
     )

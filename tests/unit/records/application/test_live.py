@@ -85,10 +85,10 @@ def test_family_does_not_borrow_sample_measurements_or_completion() -> None:
     assert any(d.code == "unverified_completion" for d in result.configurations[0].diagnostics)
 
 
-def test_completion_tie_stays_unresolved_across_builds() -> None:
+def test_undated_tie_loses_to_dated_build_and_is_reported() -> None:
     result = lookup(fixed(volume=60), family())
-    assert result.resolution.status is ResolutionStatus.UNRESOLVED
-    assert result.resolution.provisional_holder_ids == (1, 2)
+    assert result.resolution.status is ResolutionStatus.RESOLVED
+    assert result.resolution.holder_ids == (1,)
     assert [(gap.build_id, gap.field) for gap in result.resolution.gaps] == [(2, "completion_at")]
 
 
@@ -108,8 +108,8 @@ def test_alternatives_do_not_mix_volume_and_speed(title: RecordCriterion) -> Non
 def test_same_build_alternatives_do_not_require_completion_to_identify_holder() -> None:
     result = lookup(family(branch("10", "10"), branch("10", "1")))
     assert result.resolution.holder_ids == (2,)
-    assert result.holder_configuration_ids == ()
-    assert result.provisional_configuration_ids == (0, 1)
+    assert result.resolution.gaps == ()
+    assert result.holder_configuration_ids == (0, 1)
 
 
 @pytest.mark.parametrize("title", list(RecordCriterion))
@@ -118,7 +118,6 @@ def test_unknown_membership_does_not_block_official_holder(title: RecordCriterio
     result = lookup(fixed(), source, title=title)
     assert result.resolution.status is ResolutionStatus.RESOLVED
     assert result.resolution.holder_ids == (1,)
-    assert result.resolution.provisional_holder_ids == ()
     assert result.resolution.gaps == ()
     configuration = result.configurations[1]
     assert configuration.membership is PointStatus.UNRESOLVED
@@ -130,7 +129,6 @@ def test_unknown_membership_alone_cannot_claim_record() -> None:
     result = lookup(source)
     assert result.resolution.status is ResolutionStatus.NO_CANDIDATE
     assert result.resolution.holder_ids == ()
-    assert result.resolution.provisional_holder_ids == ()
     assert result.configurations[0].membership is PointStatus.UNRESOLVED
 
 

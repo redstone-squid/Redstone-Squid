@@ -658,7 +658,7 @@ async def test_public_record_query_accepts_empty_nonresolved_result() -> None:
     "result",
     [
         _published_record(),
-        replace(_published_record(41), status=ResolutionStatus.UNRESOLVED),
+        replace(_published_record(41), status=ResolutionStatus.NO_CANDIDATE),
     ],
 )
 async def test_public_record_query_rejects_status_holder_corruption(result: PublishedRecordResult) -> None:

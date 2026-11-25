@@ -83,12 +83,12 @@ def test_pending_failed_and_out_of_bounds_are_not_no_candidate_results() -> None
     assert point.region.resolution.status is ResolutionStatus.NO_CANDIDATE
 
 
-def test_unresolved_comparison_remains_published() -> None:
+def test_undated_co_holders_remain_published() -> None:
     state = publication(analyze_door_widths((family(build_id=1), family(build_id=2)), height=3))
     point = PublishedDoorPoint.from_publication(state, 6)
     assert point.status is PublishedPointStatus.PUBLISHED
     assert point.region is not None
-    assert point.region.resolution.status is ResolutionStatus.UNRESOLVED
+    assert point.region.resolution.holder_ids == (1, 2)
 
 
 @pytest.mark.parametrize("duplicate", [False, True])

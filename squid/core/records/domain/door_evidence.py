@@ -37,10 +37,8 @@ class LiveDoorRecord:
     """A concrete evaluation whose configuration IDs are local to this result.
 
     Resolution IDs identify builds. Configuration IDs identify the alternatives
-    selected by the resolver. Configurations with uncertain membership remain
-    in the evidence but do not compete. If all tied alternatives belong to one
-    build, that build can hold the record while its exact winning configuration
-    remains provisional.
+    selected by the resolver; several alternatives of one build can hold together.
+    Configurations with uncertain membership remain in the evidence but do not compete.
     """
 
     opening: tuple[int, int, int]
@@ -49,7 +47,6 @@ class LiveDoorRecord:
     evaluated_at: datetime
     resolution: RecordResolution
     holder_configuration_ids: tuple[int, ...]
-    provisional_configuration_ids: tuple[int, ...]
     configurations: tuple[LiveDoorConfiguration, ...]
 
 

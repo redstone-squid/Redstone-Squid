@@ -15,7 +15,8 @@ def publication_fingerprint(batch: ComputationBatch) -> str:
     records: list[object] = []
     for record in sorted(batch.records, key=lambda r: (r.category.identity.key, r.criterion.value)):
         document = _RECORD.dump_python(record, mode="json")
-        published_ids = set(record.resolution.holder_ids)
+        resolution = record.resolution
+        published_ids = {*resolution.holder_ids, *resolution.tied_ids, *(gap.build_id for gap in resolution.gaps)}
         published_ids.update(build_id for period in record.history for build_id in period.build_ids)
         document["category"]["candidates"] = sorted(
             (c for c in document["category"]["candidates"] if c["build_id"] in published_ids),
@@ -27,7 +28,7 @@ def publication_fingerprint(batch: ComputationBatch) -> str:
             document["door_evidence"]["sources"].sort(key=lambda source: source["build_id"])
         records.append(document)
     value = {
-        "fingerprint_version": 3,
+        "fingerprint_version": 4,
         "rules_revision_id": batch.rules_revision_id,
         "kind": batch.kind.value,
         "version_id": batch.version_id,
