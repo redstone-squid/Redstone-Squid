@@ -20,25 +20,12 @@ Items 1–4 are implemented in the API.
 
 ## Builds
 
-5. **New fields on `BuildDetail` and `PublicBuildSummary`:**
-   - `subtitle: string | null` (the door-rules subtitle: component and miscellaneous restrictions).
-   - `status` as an enum `BuildStatus`, and `category` as the `BuildCategory` enum instead of free strings.
-   - `creators: [{name, creator_id: uuid | null}]` and `credits[].creator_id`, so P5 and cards link to creators.
-   - `preview: {kind, url, width, height, srcset?: [{url, width}]}`. Needed by `Image` to avoid layout shift.
-   - `record_summary: {held_count: int, former_count: int}` on summaries, for the "Record holder" badge on cards and tables.
-6. **More on `BuildDetail`:**
-   - `records_held: [{record_id, title, criterion, version_scope, status, since: datetime}]` and `records_former: [...]` (P5).
-   - `media: [{kind: image | video | render, url, thumbnail_url, width, height, alt: string | null}]`, replacing untyped `links.images` and `links.videos` (P5 gallery).
-   - `schematics: {count, primary: SchematicSummary | null}`. This removes the second request on P5.
-   - `approved_at`, `submitted_at`, `submitted_by: {display_name, creator_id} | null`, `last_edited: {at, by} | null`, `history_count`.
-   - `vote_session_id: int | null` for pending builds (M2, A5).
-7. **`GET /v1/builds/{id}/history?offset&page_size`** returns `Page[{revision, at, actor: {display_name, creator_id} | null, kind, changes: [{field, label, before, after}]}]`. The data exists in `build_edit_history`. Needed by P6, and labels are needed for `Diff`.
-8. **`GET /v1/builds/{id}` for owners and staff.** It currently returns 404 for pending and rejected builds even to the owner. Return them when the caller is the submitter or has `build.submission.view_pending`, adding `review: {status, reason, vote_session_id}`. Needed by P5 (owner banner), A5, M2.
-9. **Filters and sorts on `GET /v1/builds`:**
-   - `category`, `version` (id), `tag` (repeatable id or slug), `creator_id`, `submitted_by=me`, `status` combined with `q` for staff.
-   - `sort` documented as an enum `newest | oldest | updated | fastest_open | smallest_volume | title`.
-   - Needed by P4, P12, P13, A5, M1.
-10. **Edit through drafts.** `POST /v1/submissions/drafts` gains `source_build_id`, creating a draft prefilled from the build. Finalizing that draft applies an edit with the expected revision, and is rejected on conflict with a diff. M4 and "Suggest a correction" on P5 then reuse the S2 renderer, so there are not two form systems. Until then, at least `GET /v1/builds/{id}/form` (manifest plus current answers) is required for M4.
+5. **Build summaries (implemented).** Cards receive the subtitle, typed category and status, creator names with nullable public IDs, and current and former record counts. External preview dimensions can be unknown.
+6. **Build detail (implemented).** P5 receives current and former records, a typed gallery, public schematic count and primary download, submission and approval metadata, and the public history count. Missing historical approval dates are null. An unpublished primary schematic contributes neither metadata nor a download link.
+7. **Public history (implemented).** `GET /v1/builds/{id}/history?offset&page_size` pages published revisions newest first. Changes cover public dimensions, names, description, version specification, timings, orientation, and creator names. The first published revision has no public predecessor.
+8. **Owner and staff access to unpublished detail (deferred).** P5, A5, and M2 need a visibility decision in the service layer. The detail route still serves approved builds.
+9. **Catalogue filters and sorts (implemented).** `GET /v1/builds` accepts category, version ID, repeated tag IDs or slugs (all must match), creator ID, and `submitted_by=me`. Search accepts the same filters and moderation status. Sorts are `newest`, `oldest`, `updated`, `fastest_open`, `smallest_volume`, and `title`. The existing page selectors apply.
+10. **Edit through drafts (implemented).** A web draft with `source_build_id` starts with the approved build's public editable answers and pins its build revision. Finalization applies authorized changes or returns a review vote ID. A stale revision returns 412 with field differences and preserves the draft. Moderators can read the full edit form at `GET /v1/builds/{id}/form`.
 
 ## Records
 
