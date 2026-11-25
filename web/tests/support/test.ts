@@ -31,7 +31,10 @@ export const test = base.extend<{ browserDiagnostics: undefined; fixtureMedia: u
       const errors: string[] = [];
       page.on("pageerror", (error) => errors.push(error.message));
       page.on("console", (message) => {
-        if (message.type() === "error") errors.push(message.text());
+        // WebKit refuses speculation-rule prefetches over HTTP and logs it as an error. The test
+        // servers are HTTP, and production is HTTPS, so this says nothing about the page.
+        if (message.type() === "error" && !message.text().startsWith("Prefetch request denied"))
+          errors.push(message.text());
       });
       await use(undefined);
       baseExpect(errors, "Unexpected browser or hydration errors").toEqual([]);

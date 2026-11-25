@@ -69,8 +69,9 @@ test("security.txt names a contact and expires within a year", async ({ request 
   expect(expires).toBeLessThan(Date.now() + 365 * 24 * 60 * 60 * 1000);
 });
 
-test("hovering a link prefetches its page", async ({ page, browserName }) => {
+test("hovering a link prefetches its page", async ({ page, browserName, isMobile }) => {
   test.skip(browserName !== "chromium", "Only Chromium supports speculation rules.");
+  test.skip(isMobile, "Touch screens have no hover, and the navigation collapses into a menu.");
   await page.goto("/about");
   const link = page
     .getByRole("navigation", { name: m.navPrimary("en") })
