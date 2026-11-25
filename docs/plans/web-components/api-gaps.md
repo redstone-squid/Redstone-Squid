@@ -120,7 +120,7 @@ Items 1–4 are implemented in the API.
     - Role assignments: `GET`, `POST` and `DELETE /v1/permissions/assignments`.
     - `GET /v1/permissions/explain?subject&node` returns the resolver's `Decision` (reason, trace, and each rule's source and the role it came through) for one node, or for every node when `node` is omitted.
     - `GET /v1/permissions/audit` pages with item 55 anchors. It only takes `limit` today.
-46. **Record operations:** `GET /v1/records/{id}/inspection`, `POST /v1/records/{id}/rebuild`, and `GET /v1/records/computations?status=failed` (todo: persist failed attempts). Needed by X7.
+46. **Record operations.** Per-record recompute and inspection, the full recompute backstop, the recompute queue and drift reports. These depend on incremental computation; see [Admin operations](../incremental-records.md#admin-operations). Needed by X7.
 47. **Version corrections.** `POST /v1/versions` wraps `VersionService.add`, including its edition override. The version announcement worker adds most versions, so X8 exists to fix mistakes and also needs `DELETE /v1/versions/{id}`, which core lacks. Needed by X8.
 
 ## Home and sponsors
