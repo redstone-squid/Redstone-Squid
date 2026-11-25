@@ -51,7 +51,7 @@
   {@const radio = props}
   <fieldset class={cn("w-fit max-w-full min-w-0", className)} disabled={radio.disabled}>
     <legend class="sr-only">{label}</legend>
-    <div class={trackClass}>
+    <div data-indicator class={trackClass}>
       {#each radio.items as item (item.value)}
         <label
           class={cn(
@@ -109,3 +109,40 @@
     </ul>
   </nav>
 {/if}
+
+<style>
+  /*
+   * In radio mode the highlight slides to the new choice. The track draws it behind the
+   * segments, anchored to the checked one; `anchor-scope` keeps each group's anchor its own.
+   * Without anchor positioning, the checked segment's own background marks it.
+   */
+  @supports (anchor-scope: all) {
+    [data-indicator] {
+      position: relative;
+      anchor-scope: --checked-segment;
+    }
+    /* Positioned, so the segments paint above the highlight. */
+    [data-indicator] > label {
+      position: relative;
+    }
+    [data-indicator] > label:has(:checked) {
+      anchor-name: --checked-segment;
+      background-color: transparent;
+    }
+    [data-indicator]:has(:checked)::before {
+      content: "";
+      position: absolute;
+      position-anchor: --checked-segment;
+      inset: anchor(top) anchor(right) anchor(bottom) anchor(left);
+      border-radius: var(--radius-xs);
+      background-color: var(--color-accent-soft);
+    }
+    @media (prefers-reduced-motion: no-preference) {
+      [data-indicator]::before {
+        transition-property: inset;
+        transition-duration: var(--duration-normal);
+        transition-timing-function: var(--ease-standard);
+      }
+    }
+  }
+</style>

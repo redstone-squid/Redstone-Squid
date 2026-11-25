@@ -48,7 +48,7 @@
     bind:value={() => value ?? items[0]?.id ?? "", (next) => (value = next)}
     class={cn("grid min-w-0 gap-4", className)}
   >
-    <div class="min-w-0 border-b border-line">
+    <div data-indicator class="min-w-0 border-b border-line">
       <Primitive.List aria-label={label} class="-mb-px flex gap-1 overflow-x-auto">
         {#each items as tab (tab.id)}
           <Primitive.Trigger value={tab.id} disabled={tab.disabled} class={tabClass}
@@ -76,3 +76,38 @@
     </ul>
   </nav>
 {/if}
+
+<style>
+  /*
+   * In panel mode the accent line under the selected tab slides to the next one. The list
+   * draws it, anchored to the selected tab; `anchor-scope` keeps each list's anchor its own.
+   * Without anchor positioning, the tab's own border marks it and the change is instant.
+   */
+  @supports (anchor-scope: all) {
+    [data-indicator] > :global([role="tablist"]) {
+      position: relative;
+      anchor-scope: --selected-tab;
+    }
+    [data-indicator] :global([role="tab"][aria-selected="true"]) {
+      anchor-name: --selected-tab;
+      border-bottom-color: transparent;
+    }
+    /* A border, not a background, so forced colors keep it. */
+    [data-indicator] > :global([role="tablist"]::after) {
+      content: "";
+      position: absolute;
+      position-anchor: --selected-tab;
+      top: calc(anchor(bottom) - 2px);
+      left: anchor(left);
+      right: anchor(right);
+      border-bottom: 2px solid var(--color-accent);
+    }
+    @media (prefers-reduced-motion: no-preference) {
+      [data-indicator] > :global([role="tablist"]::after) {
+        transition-property: left, right;
+        transition-duration: var(--duration-normal);
+        transition-timing-function: var(--ease-standard);
+      }
+    }
+  }
+</style>
