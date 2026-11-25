@@ -156,6 +156,8 @@ class PublishedMediaFake(PublishedBuildMedia):
             object_key="output",
             content_type="image/png",
             byte_size=len(data),
+            width=640,
+            height=320,
             sha256=sha256(data).hexdigest(),
         )
         (tmp_path / self.artifact.object_key).write_bytes(data)
@@ -236,6 +238,12 @@ def test_public_build_links_and_serves_retained_media(
         unrelated = client.get(resource.replace("/builds/7/", "/builds/8/"))
 
     assert detail.status_code == 200
+    assert detail.json()["preview"] == {
+        "kind": "image",
+        "url": f"https://example.com{resource}",
+        "width": 640,
+        "height": 320,
+    }
     assert [item["url"] for item in detail.json()["media"] if item["kind"] == "image"] == [
         f"https://example.com{resource}"
     ]

@@ -12,6 +12,7 @@ from squid.api.v1.schemas.builds import BuildDetail, BuildMedia, BuildSchematicO
 from squid.api.v1.schemas.schematics import SchematicSummary
 from squid.core.accounts.domain.profiles import PublicCreatorProfile
 from squid.core.auth.infrastructure.viewer import SessionCounts, SessionUser
+from squid.core.builds.application.queries import PublicBuildPreview
 from squid.core.builds.domain.edit_policy import BuildEditDecision, decide_build_edit
 from squid.core.builds.models import Build
 from squid.core.notifications.domain import RecordSubscriptionFilter, SubscriptionKind, TagPredicate
@@ -136,15 +137,16 @@ class BrowserViews:
                 ),
             )
         if media := self.services.published_build_media:
-            images, videos = await media.urls(build.id)
-            detail = replace(
-                detail,
-                media=[
-                    *(BuildMedia(kind="image", url=url) for url in images),
-                    *(BuildMedia(kind="video", url=url) for url in videos),
-                    *detail.media,
-                ],
-            )
+            retained = await media.gallery(build.id)
+            gallery = [
+                BuildMedia(kind=item.kind, url=item.url, width=item.width, height=item.height) for item in retained
+            ]
+            preview = detail.preview
+            if preview is None:
+                first = next((item for item in retained if item.kind == "image"), None)
+                if first is not None:
+                    preview = PublicBuildPreview("image", first.url, first.width, first.height)
+            detail = replace(detail, media=[*gallery, *detail.media], preview=preview)
         return detail
 
     async def record(self, detail: PublicRecordDetail) -> PublicRecordDetail:
