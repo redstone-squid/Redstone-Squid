@@ -96,8 +96,16 @@
   <div class={cn("grid min-w-0 gap-3", className)}>
     <figure class="relative grid gap-2">
       {@render media(current, true)}
-      {#if current.caption !== undefined}
-        <figcaption class="text-sm text-fg-muted">{current.caption}</figcaption>
+      {#if items.some((item) => item.caption !== undefined)}
+        <!-- Every caption shares one cell, so it is as tall as the longest and switching items
+             never moves the thumbnails. Only the current one is visible. -->
+        <figcaption class="grid text-sm text-fg-muted">
+          {#each items as item, position (position)}
+            <span class={cn("col-start-1 row-start-1", position !== index && "invisible")}
+              >{item.caption ?? ""}</span
+            >
+          {/each}
+        </figcaption>
       {/if}
       <div class="absolute top-2 right-2">
         <Dialog
