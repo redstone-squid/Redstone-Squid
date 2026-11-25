@@ -10,6 +10,7 @@
   import Spinner from "@/ui/feedback/Spinner.svelte";
   import type { ComboboxOption, FieldMessages } from "@/ui/forms/field";
   import FieldFrame from "./FieldFrame.svelte";
+  import { QueryLoader } from "./query-loader.svelte";
   import { boxClass, boxInputClass, inputClass, popupOptionClass } from "./styles";
 
   /**
@@ -70,8 +71,6 @@
   let open = $state(false);
   let search = $state("");
   let filtering = $state(false);
-  let loaded = $state<ComboboxOption[]>([]);
-  let phase = $state<"idle" | "loading" | "failed">("idle");
   // Labels of every option seen, so chips and the input can name values no longer listed.
   const seen = new SvelteMap<string, string>();
   const values = $derived(
@@ -83,9 +82,23 @@
     item;
 
   const query = $derived(filtering ? search.trim() : "");
+  const remote = new QueryLoader<ComboboxOption[]>(() => {
+    const request = load;
+    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- bind:open writes it.
+    if (!request || !open) return null;
+    return {
+      query,
+      load: async (text, signal) => {
+        const items = await request(text, signal);
+        for (const item of items) seen.set(item.value, item.label);
+        return items;
+      },
+      debounceMs,
+    };
+  });
   const shown = $derived(
     load
-      ? loaded
+      ? (remote.current ?? [])
       : (options ?? []).filter((option) =>
           option.label.toLowerCase().includes(query.toLowerCase()),
         ),
@@ -96,31 +109,6 @@
       !shown.some((option) => option.label.toLowerCase() === query.toLowerCase()) &&
       !values.includes(query),
   );
-
-  $effect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- bind:open writes it.
-    if (!load || !open) return;
-    const text = query;
-    const request = load;
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => {
-      phase = "loading";
-      request(text, controller.signal)
-        .then((items) => {
-          if (controller.signal.aborted) return;
-          for (const item of items) seen.set(item.value, item.label);
-          loaded = items;
-          phase = "idle";
-        })
-        .catch(() => {
-          if (!controller.signal.aborted) phase = "failed";
-        });
-    }, debounceMs);
-    return () => {
-      window.clearTimeout(timer);
-      controller.abort();
-    };
-  });
 
   function changed(next: string | string[]): void {
     if (creatable) seen.set(query, query);
@@ -172,8 +160,9 @@
       {/if}
       {#if shown.length === 0 && !creatable}
         <p class="flex items-center gap-2 px-3 py-2.5 text-sm text-fg-muted" role="status">
-          {#if phase === "loading"}<Spinner
-            />{labels.loading}{:else if phase === "failed"}{labels.error}{:else}{labels.noResults}{/if}
+          <!-- An open list waiting out the debounce is loading too. -->
+          {#if remote.status === "failed"}{labels.error}{:else if load && remote.status !== "ready"}<Spinner
+            />{labels.loading}{:else}{labels.noResults}{/if}
         </p>
       {/if}
     </Combobox.Content>

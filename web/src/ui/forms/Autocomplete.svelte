@@ -4,6 +4,7 @@
   import Spinner from "@/ui/feedback/Spinner.svelte";
   import type { FieldMessages, SuggestionSource, Suggestions } from "@/ui/forms/field";
   import FieldFrame from "./FieldFrame.svelte";
+  import { QueryLoader } from "./query-loader.svelte";
   import { inputClass, popupClass, popupOptionClass } from "./styles";
 
   /**
@@ -51,14 +52,23 @@
   const fieldId = $props.id();
   const listId = `${fieldId}-suggestions`;
   let input: HTMLInputElement | HTMLTextAreaElement | undefined = $state();
-  let result = $state<Suggestions>({ items: [] });
-  let phase = $state<"idle" | "loading" | "ready" | "failed">("idle");
   let active = $state(-1);
   let focused = $state(false);
   let dismissed = $state(false);
   let composing = $state(false);
   let cursor = $state<number | null>(null);
-  const open = $derived(focused && !dismissed && !composing && phase !== "idle");
+  const suggestions = new QueryLoader<Suggestions>(() => {
+    if (!focused || dismissed || composing) return null;
+    const [caret, request] = [cursor, load];
+    return {
+      query: value,
+      load: (query, signal) => request(query, caret, signal),
+      debounceMs,
+      minQueryLength,
+    };
+  });
+  const result = $derived(suggestions.current ?? { items: [] });
+  const open = $derived(focused && !dismissed && !composing && suggestions.status !== "idle");
   const visible = $derived(open ? result.items : []);
 
   onMount(() => {
@@ -67,36 +77,6 @@
       focused = true;
       cursor = input.selectionStart;
     }
-  });
-
-  $effect(() => {
-    const query = value;
-    const caret = cursor;
-    const request = load;
-    active = -1;
-    if (!focused || dismissed || composing || query.trim().length < minQueryLength) {
-      result = { items: [] };
-      phase = "idle";
-      return;
-    }
-    // Earlier suggestions stay visible until the new ones arrive, so the list doesn't flicker.
-    const controller = new AbortController();
-    const timer = window.setTimeout(() => {
-      if (result.items.length === 0) phase = "loading";
-      request(query, caret, controller.signal)
-        .then((response) => {
-          if (controller.signal.aborted) return;
-          result = response;
-          phase = "ready";
-        })
-        .catch(() => {
-          if (!controller.signal.aborted) phase = "failed";
-        });
-    }, debounceMs);
-    return () => {
-      window.clearTimeout(timer);
-      controller.abort();
-    };
   });
 
   async function choose(index: number): Promise<void> {
@@ -122,6 +102,7 @@
     value = target.value;
     cursor = target.selectionStart;
     dismissed = false;
+    active = -1;
   }
   async function keydown(event: KeyboardEvent): Promise<void> {
     if (event.isComposing || composing) return;
@@ -149,7 +130,10 @@
   const handlers = {
     oninput: changed,
     onkeydown: keydown,
-    onfocus: () => (focused = true),
+    onfocus: () => {
+      focused = true;
+      active = -1;
+    },
     onblur: () => (focused = false),
     onselect: () => {
       if (multiline) cursor = input?.selectionStart ?? null;
@@ -220,21 +204,23 @@
             </ul>
           {:else}
             <p class="flex items-center gap-2 px-3 py-2.5 text-sm text-fg-muted">
-              {#if phase === "loading"}<Spinner
-                />{labels.loading}{:else if phase === "failed"}{labels.error}{:else}{labels.noResults}{/if}
+              {#if suggestions.status === "loading"}<Spinner
+                />{labels.loading}{:else if suggestions.status === "failed"}{labels.error}{:else}{labels.noResults}{/if}
             </p>
           {/if}
         </div>
       {/if}
     </div>
     <span class="sr-only" role="status"
-      >{open && phase === "ready"
-        ? result.items.length > 0
-          ? labels.count(result.items.length)
-          : labels.noResults
-        : open && phase === "failed"
+      >{!open
+        ? ""
+        : suggestions.status === "failed"
           ? labels.error
-          : ""}</span
+          : suggestions.current === undefined
+            ? ""
+            : result.items.length > 0
+              ? labels.count(result.items.length)
+              : labels.noResults}</span
     >
   {/snippet}
 </FieldFrame>
