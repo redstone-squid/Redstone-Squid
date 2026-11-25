@@ -128,6 +128,14 @@ class ActingContext:
     invocation_id: UUID = field(default_factory=uuid4, compare=False)
 
     @classmethod
+    def current(cls) -> ActingContext:
+        context = current_acting_context.get()
+        if context is None:
+            message = "Application operation requires an acting context"
+            raise InvalidStateError(message)
+        return context
+
+    @classmethod
     def direct(cls, actor: Actor) -> ActingContext:
         return cls(actor, actor)
 
@@ -138,7 +146,7 @@ class ActingContext:
     @contextmanager
     def scope(self) -> Iterator[None]:
         """Bind attribution to nested operations for the lifetime of this invocation."""
-        with current_acting_context.set(self), self.effective.audit_scope():
+        with current_acting_context.set(self), impersonation_use.set(self.effective.audit_use_id):
             yield
 
 

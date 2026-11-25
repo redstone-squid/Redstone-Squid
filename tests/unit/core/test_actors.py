@@ -1,8 +1,10 @@
 """Identity requirements shared by application operations."""
 
+from uuid import uuid4
+
 import pytest
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor, ActorKind, impersonation_use
 from squid.core.errors import AuthenticationError, InvalidStateError
 
 
@@ -26,3 +28,27 @@ def test_unresolved_rank_is_not_rank_zero() -> None:
     with pytest.raises(InvalidStateError, match="resolved role rank"):
         Actor().require_permission_rank()
     assert Actor(highest_permission_rank=0).require_permission_rank() == 0
+
+
+def test_worker_invocation_isolates_impersonation_and_restores_the_caller() -> None:
+    audit_id = uuid4()
+    user = ActingContext(Actor(account_id=1), Actor(account_id=2, audit_use_id=audit_id))
+    worker = ActingContext.worker("finalize")
+    with user.scope():
+        with worker.scope():
+            assert ActingContext.current() is worker
+            assert worker.effective.reference == "worker:finalize"
+            assert impersonation_use.get() is None
+        assert ActingContext.current() is user
+        assert impersonation_use.get() == audit_id
+    with pytest.raises(InvalidStateError):
+        ActingContext.current()
+
+
+def test_principals_have_distinct_namespaces() -> None:
+    session = uuid4()
+    assert Actor(guest_session_id=session).key == f"guest:{session}"
+    assert Actor(service_id="index").key == "service:index"
+    assert Actor().kind is ActorKind.ANONYMOUS
+    with pytest.raises(ValueError, match="single principal"):
+        Actor(account_id=1, worker_name="index")
