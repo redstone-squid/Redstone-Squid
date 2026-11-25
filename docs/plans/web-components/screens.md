@@ -86,7 +86,7 @@ Rules that apply to every screen:
   - Sibling records: the same category with a different criterion or version scope, shown as a switcher.
   - Door evidence, in a disclosure.
 - *Actions:* follow this record (subscription), open the holder, open the range explorer for this category.
-- *Related links:* holders, past holders (history), sibling records.
+- *Related links:* holders, past holders, related records (same category, other criteria or versions).
 - *Primary action:* follow.
 
 **P9. Door range explorer `/records/ranges`, `/records/ranges/[queryId]`, `/records/ranges/[queryId]/at/[width]`**
@@ -123,7 +123,7 @@ Rules that apply to every screen:
   - Unclaimed alias: "Is this you? Claim this name", with an explanation of how claiming works.
   - The owner viewing their own page: edit profile.
 - A hidden profile renders the alias's builds only. A merged creator redirects.
-- *Related links:* builds, records held, records ever held.
+- *Related links:* builds, records held, past records.
 - *Primary action:* owner: edit profile; unclaimed alias: claim; everyone else: follow.
 
 **P14. Content pages: `/about`, `/rules` (door rules), `/privacy` (consent notice)**

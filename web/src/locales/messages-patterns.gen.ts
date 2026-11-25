@@ -1816,15 +1816,15 @@ export function storyRelatedZeroCounts(locale: Locale = getLocale()): string {
   }
 }
 
-/** A creator, with long labels */
-export function storyRelatedLongLabels(locale: Locale = getLocale()): string {
+/** A creator, with a four-digit count */
+export function storyRelatedCreator(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "A creator, with long labels";
+      return "A creator, with a four-digit count";
     case "zh-CN":
-      return "创作者，含较长的标签";
+      return "创作者，含四位数计数";
     case "en-XA":
-      return "[" + "Å çŕéåţöŕ, ŵîţĥ ļöñĝ ļåƀéļš" + "···········]";
+      return "[" + "Å çŕéåţöŕ, ŵîţĥ å ƒöûŕ-đîĝîţ çöûñţ" + "··············]";
   }
 }
 
@@ -1945,7 +1945,7 @@ export function storyRelatedPastHolders(
   }
 }
 
-/** { $count -> [one] record in this category *[other] records in this category } */
+/** { $count -> [one] related record *[other] related records } */
 export function storyRelatedSiblingRecords(
   args: { count: number },
   locale: Locale = getLocale(),
@@ -1955,21 +1955,16 @@ export function storyRelatedSiblingRecords(
       return select(
         locale,
         args.count,
-        { one: "record in this category", other: "records in this category" },
+        { one: "related record", other: "related records" },
         "other",
       );
     case "zh-CN":
-      return select(locale, args.count, { other: "项同类纪录" }, "other");
+      return select(locale, args.count, { other: "项相关纪录" }, "other");
     case "en-XA":
       return (
         "[" +
-        select(
-          locale,
-          args.count,
-          { one: "ŕéçöŕđ îñ ţĥîš çåţéĝöŕý", other: "ŕéçöŕđš îñ ţĥîš çåţéĝöŕý" },
-          "other",
-        ) +
-        "··········]"
+        select(locale, args.count, { one: "ŕéļåţéđ ŕéçöŕđ", other: "ŕéļåţéđ ŕéçöŕđš" }, "other") +
+        "······]"
       );
   }
 }
@@ -1986,66 +1981,21 @@ export function storyRelatedBuilds(args: { count: number }, locale: Locale = get
   }
 }
 
-/** { $count -> [one] record currently held *[other] records currently held } */
-export function storyRelatedRecordsCurrentlyHeld(
+/** { $count -> [one] past record *[other] past records } */
+export function storyRelatedPastRecords(
   args: { count: number },
   locale: Locale = getLocale(),
 ): string {
   switch (locale) {
     case "en":
-      return select(
-        locale,
-        args.count,
-        { one: "record currently held", other: "records currently held" },
-        "other",
-      );
+      return select(locale, args.count, { one: "past record", other: "past records" }, "other");
     case "zh-CN":
-      return select(locale, args.count, { other: "项目前保持的纪录" }, "other");
+      return select(locale, args.count, { other: "项过往纪录" }, "other");
     case "en-XA":
       return (
         "[" +
-        select(
-          locale,
-          args.count,
-          { one: "ŕéçöŕđ çûŕŕéñţļý ĥéļđ", other: "ŕéçöŕđš çûŕŕéñţļý ĥéļđ" },
-          "other",
-        ) +
-        "·········]"
-      );
-  }
-}
-
-/** { $count -> [one] record held at some point, including since beaten *[other] records held at some point, including since beaten } */
-export function storyRelatedRecordsEverHeld(
-  args: { count: number },
-  locale: Locale = getLocale(),
-): string {
-  switch (locale) {
-    case "en":
-      return select(
-        locale,
-        args.count,
-        {
-          one: "record held at some point, including since beaten",
-          other: "records held at some point, including since beaten",
-        },
-        "other",
-      );
-    case "zh-CN":
-      return select(locale, args.count, { other: "项曾经保持的纪录，包括已被打破的" }, "other");
-    case "en-XA":
-      return (
-        "[" +
-        select(
-          locale,
-          args.count,
-          {
-            one: "ŕéçöŕđ ĥéļđ åţ šöɱé þöîñţ, îñçļûđîñĝ šîñçé ƀéåţéñ",
-            other: "ŕéçöŕđš ĥéļđ åţ šöɱé þöîñţ, îñçļûđîñĝ šîñçé ƀéåţéñ",
-          },
-          "other",
-        ) +
-        "····················]"
+        select(locale, args.count, { one: "þåšţ ŕéçöŕđ", other: "þåšţ ŕéçöŕđš" }, "other") +
+        "·····]"
       );
   }
 }

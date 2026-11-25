@@ -7,7 +7,8 @@
    * Counts of a page's related records, such as a build's versions or a creator's records
    * held, as a strip of links under the `PageHeader`. A screen shows the same items in the same
    * order whatever the data, so a zero count still renders; leave an item out only on pages
-   * where it can never apply. Verbs belong in the `PageHeader` actions instead.
+   * where it can never apply. Keep labels to one or two words ("versions", "past holders");
+   * the page already says what they relate to. Verbs belong in the `PageHeader` actions.
    */
   type Props = {
     items: RelatedLink[];

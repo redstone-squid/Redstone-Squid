@@ -213,7 +213,7 @@
       ]}
     />
   </Variant>
-  <Variant label={m.storyRelatedLongLabels()}>
+  <Variant label={m.storyRelatedCreator()}>
     <RelatedLinks
       label={m.storyRelatedToCreator()}
       items={[
@@ -223,12 +223,12 @@
           href: "#relatedlinks-builds",
         },
         {
-          label: m.storyRelatedRecordsCurrentlyHeld({ count: 0 }),
+          label: m.storyRelatedRecordsHeld({ count: 0 }),
           count: count(0),
           href: "#relatedlinks-held",
         },
         {
-          label: m.storyRelatedRecordsEverHeld({ count: 37 }),
+          label: m.storyRelatedPastRecords({ count: 37 }),
           count: count(37),
           href: "#relatedlinks-ever",
         },

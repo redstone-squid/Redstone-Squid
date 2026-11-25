@@ -874,7 +874,7 @@ story-relatedlinks-description = Counts of related records in a fixed row under 
 story-related-count = { NUMBER($count) }
 story-related-with-actions = Under a page header, with one primary action and the rest in a menu
 story-related-zero-counts = A record, with a zero count
-story-related-long-labels = A creator, with long labels
+story-related-creator = A creator, with a four-digit count
 story-related-to-build = Related to this build
 story-related-to-record = Related to this record
 story-related-to-creator = Related to this creator
@@ -899,20 +899,16 @@ story-related-past-holders = { $count ->
    *[other] past holders
     }
 story-related-sibling-records = { $count ->
-    [one] record in this category
-   *[other] records in this category
+    [one] related record
+   *[other] related records
     }
 story-related-builds = { $count ->
     [one] build
    *[other] builds
     }
-story-related-records-currently-held = { $count ->
-    [one] record currently held
-   *[other] records currently held
-    }
-story-related-records-ever-held = { $count ->
-    [one] record held at some point, including since beaten
-   *[other] records held at some point, including since beaten
+story-related-past-records = { $count ->
+    [one] past record
+   *[other] past records
     }
 story-vote = Vote
 story-voting-closed = Voting closed 2 days ago

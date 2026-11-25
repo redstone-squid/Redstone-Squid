@@ -515,6 +515,7 @@ The `src/ui` primitives and patterns, the feature components built from them, an
 - _API:_ `items` of `{label, count, href, icon?}` and a `label` for the navigation landmark. `label` is the plural-aware text from the catalog, so the caller formats the count.
 - _Renders:_ a `nav` with one bordered strip of links under the `PageHeader`, each a label with its count in a chip. It is a row when the container is wide and a full-width list when narrow, never a mix; dividers are 1px gaps so they survive wrapping.
 - _Behavior:_ order and presence are fixed per screen, never by data. A zero count still renders ("0 records") so the row never reshuffles; an item is left out only on pages where it can never apply. Plain links, so no JS and no extra keyboard handling.
+- _Labels:_ one or two words ("versions", "past holders"). The page header already names the subject, so "records held" not "records this build holds". Go longer only when two words would be ambiguous, and say why in `screens.md`.
 - _Users:_ P5, P8, P12, P13.
 
 **`Section`** (replaces `Panel`)

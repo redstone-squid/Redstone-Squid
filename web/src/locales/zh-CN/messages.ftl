@@ -871,7 +871,7 @@ story-relatedlinks-description = 页面标题下固定一行的相关纪录计�
 story-related-count = { NUMBER($count) }
 story-related-with-actions = 位于页面标题下，一个主要操作，其余放在菜单中
 story-related-zero-counts = 纪录，含零计数
-story-related-long-labels = 创作者，含较长的标签
+story-related-creator = 创作者，含四位数计数
 story-related-to-build = 与此作品相关
 story-related-to-record = 与此纪录相关
 story-related-to-creator = 与此创作者相关
@@ -891,16 +891,13 @@ story-related-past-holders = { $count ->
    *[other] 个曾经的保持作品
     }
 story-related-sibling-records = { $count ->
-   *[other] 项同类纪录
+   *[other] 项相关纪录
     }
 story-related-builds = { $count ->
    *[other] 个作品
     }
-story-related-records-currently-held = { $count ->
-   *[other] 项目前保持的纪录
-    }
-story-related-records-ever-held = { $count ->
-   *[other] 项曾经保持的纪录，包括已被打破的
+story-related-past-records = { $count ->
+   *[other] 项过往纪录
     }
 story-vote = 投票
 story-voting-closed = 投票已于 2 天前结束
