@@ -187,6 +187,7 @@ async def test_record_detail_serializes_the_application_read_model(expanded: boo
                 "dimensions": {"width": 5, "height": 6, "depth": None},
                 "creators": ["Alice"],
                 "credits": [],
+                "subtitle": None,
                 # Decimal tag values travel as strings so clients keep their exact precision.
                 "tags": [{"key": "official_delay", "name": "Delay", "value": "1.5", "unit": "second"}],
                 "preview": {"kind": "render", "url": "https://media.example/render.png"},
