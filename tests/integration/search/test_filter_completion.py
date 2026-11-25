@@ -12,7 +12,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from squid.core.actors import ActingContext
+from squid.core.actors import ActingContext, Actor
 from squid.core.persistence.base import Base
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldRegistry
@@ -149,7 +149,8 @@ async def test_a_half_typed_field_expression_suggests_values_instead_of_raising(
         SuggestionQueryService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory)),
     )
 
-    result = await provider.suggest(SuggestionRequest(source="search_query", query="restriction:sea", limit=10))
+    with ActingContext.direct(Actor()).scope():
+        result = await provider.suggest(SuggestionRequest(source="search_query", query="restriction:sea", limit=10))
 
     assert [item.value for item in result.items] == ["Seamless"]
     assert result.replacement is not None
@@ -166,7 +167,8 @@ async def test_a_value_containing_a_space_is_quoted_so_it_parses_back_as_one_tok
         SuggestionQueryService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory)),
     )
 
-    result = await provider.suggest(SuggestionRequest(source="search_query", query="restriction:full", limit=10))
+    with ActingContext.direct(Actor()).scope():
+        result = await provider.suggest(SuggestionRequest(source="search_query", query="restriction:full", limit=10))
 
     assert [item.value for item in result.items] == ['"Full Lamp"']
     assert [item.label for item in result.items] == ["Full Lamp"]

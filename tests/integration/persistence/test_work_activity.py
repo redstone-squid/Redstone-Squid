@@ -11,8 +11,9 @@ from squid.core.actors import ActingContext, Actor
 from squid.core.events.application import DomainEventService
 from squid.core.events.dispatcher import DomainEventRunner
 from squid.core.events.models import DomainEvent
-from squid.core.persistence.provenance import WorkActivity
+from squid.core.persistence.provenance import WorkActivity, bind_work_attribution
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.worker_context import worker_execution
 
 
 class Fact:
@@ -82,3 +83,56 @@ async def test_worker_effect_traces_to_impersonated_request_after_acknowledgemen
             == 0
         )
         assert await session.scalar(text("SELECT nullif(current_setting('squid.work_attribution', true), '')")) is None
+
+
+async def test_retried_coalesced_work_retains_both_requests_and_claims(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    first = ActingContext.direct(Actor(account_id=1))
+    second = ActingContext.direct(Actor(account_id=2))
+    enqueue = text("SELECT upsert_discord_sync_request('build', :key, 'refresh')")
+    for request in (first, second):
+        with request.scope():
+            async with migrated_session_factory.begin() as session:
+                await bind_work_attribution(session)
+                await session.execute(enqueue, {"key": "42"})
+
+    for attempt in range(2):
+        token = uuid4()
+        with worker_execution("discord.reconciliation"):
+            async with migrated_session_factory.begin() as session:
+                await bind_work_attribution(session)
+                await session.execute(
+                    text(
+                        "UPDATE discord_sync_queue SET claim_token = :token, claimed_at = now() WHERE source_key = '42'"
+                    ),
+                    {"token": token},
+                )
+        with worker_execution("discord.reconciliation", token):
+            async with migrated_session_factory.begin() as session:
+                await bind_work_attribution(session)
+                if attempt == 0:
+                    await session.execute(
+                        text(
+                            "UPDATE discord_sync_queue SET claim_token = NULL, claimed_at = NULL WHERE source_key = '42'"
+                        )
+                    )
+                else:
+                    await session.execute(enqueue, {"key": "43"})
+                    await session.execute(text("DELETE FROM discord_sync_queue WHERE source_key = '42'"))
+
+    async with migrated_session_factory() as session:
+        activity = await session.scalar(
+            text("SELECT max(id) FROM work_activity WHERE relation = 'discord_sync_queue' AND transition = 'insert'")
+        )
+        rows = (
+            (await session.execute(text("SELECT * FROM trace_work_activity(:activity)"), {"activity": activity}))
+            .mappings()
+            .all()
+        )
+    assert [row["effective"] for row in rows[:2]] == ["account:1", "account:2"]
+    assert [row["invocation_id"] for row in rows[:2]] == [first.invocation_id, second.invocation_id]
+    claims = [row for row in rows if row["transition"] == "claim"]
+    assert len(claims) == 2
+    assert claims[0]["acquired_claim"] != claims[1]["acquired_claim"]
+    assert rows[-1]["parent_claim"] == claims[1]["acquired_claim"]

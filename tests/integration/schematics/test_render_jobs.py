@@ -42,7 +42,7 @@ class PreparedSchematics:
     def __init__(self, outcome: RenderPreparation | Exception) -> None:
         self.outcome = outcome
 
-    async def prepare_render(self, _build_id: int) -> RenderPreparation:
+    async def prepare_render(self, _build_id: int, *, context: ActingContext) -> RenderPreparation:
         if isinstance(self.outcome, Exception):
             raise self.outcome
         return self.outcome

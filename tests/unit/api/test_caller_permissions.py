@@ -113,3 +113,15 @@ async def test_core_permission_checks_enforce_the_service_credentials_ceiling(ow
     check = await permissions.check(actor, BUILD_SUBMISSION_VIEW_PENDING)
     assert not check.allowed
     assert check.decisions[0].reason is Reason.CREDENTIAL
+
+
+@pytest.mark.parametrize("kind", ["account", "cli", "minecraft_player"])
+def test_scoped_account_sessions_carry_their_ceiling_into_core(
+    kind: Literal["account", "cli", "minecraft_player"],
+) -> None:
+    caller = Caller(kind=kind, subject="session:42", account_id=7, nodes=frozenset())
+    assert caller.context().effective.credential_scopes == frozenset()
+    assert (
+        Caller(kind=kind, subject="session:43", account_id=7, nodes=UNBOUNDED).context().effective.credential_scopes
+        is None
+    )

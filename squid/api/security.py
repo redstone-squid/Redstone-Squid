@@ -112,7 +112,11 @@ class Caller:
             account_id=self.account_id,
             service_id=self.subject if self.kind == "service" and self.account_id is None else None,
             credential_id=credential_id,
-            credential_scopes=frozenset(pattern.raw for pattern in self.nodes) if self.kind == "service" else None,
+            credential_scopes=(
+                frozenset(pattern.raw for pattern in self.nodes)
+                if self.kind == "service" or self.nodes != UNBOUNDED
+                else None
+            ),
         )
 
     def context(self) -> ActingContext:
