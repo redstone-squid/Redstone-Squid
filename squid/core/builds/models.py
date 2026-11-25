@@ -558,8 +558,9 @@ class BuildCredit(Base):
 
     build: Mapped[Build] = relationship(back_populates="build_credits", lazy="raise_on_sql", repr=False, default=None)
 
-    def to_credit(self) -> Credit:
+    def to_credit(self, creator_id: uuid.UUID | None = None) -> Credit:
         return Credit(
+            creator_id=creator_id,
             name=self.name,
             kind=self.kind,
             username=self.username,

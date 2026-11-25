@@ -19188,7 +19188,7 @@
           },
           "creators": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/PublicBuildCreator"
             },
             "type": "array"
           },
@@ -20623,6 +20623,17 @@
             "oneOf": [
               {
                 "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "creator_id": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "uuid"
               },
               {
                 "type": "null"
@@ -24699,6 +24710,30 @@
         ],
         "title": "ProtocolInterval"
       },
+      "PublicBuildCreator": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "creator_id": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "creator_id",
+          "name"
+        ],
+        "title": "PublicBuildCreator"
+      },
       "PublicBuildCredit": {
         "properties": {
           "name": {
@@ -24722,11 +24757,23 @@
           },
           "attribution": {
             "$ref": "#/components/schemas/CreditAttribution"
+          },
+          "creator_id": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
         "required": [
           "attribution",
+          "creator_id",
           "kind",
           "name",
           "role",
@@ -24857,7 +24904,7 @@
           },
           "creators": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/PublicBuildCreator"
             },
             "type": "array"
           },

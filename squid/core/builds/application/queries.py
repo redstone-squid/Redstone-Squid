@@ -7,6 +7,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Literal, Protocol, get_args
 from urllib.parse import urlsplit
+from uuid import UUID
 
 from squid.core.builds.domain import BuildCategory, BuildStatus
 from squid.core.builds.domain.credits import CreditAttribution, CreditKind, CreditRole
@@ -62,6 +63,12 @@ class PublicBuildDimensions:
 
 
 @dataclass(frozen=True, slots=True)
+class PublicBuildCreator:
+    name: str
+    creator_id: UUID | None
+
+
+@dataclass(frozen=True, slots=True)
 class PublicBuildCredit:
     """Public attribution without private account links or provider identifiers."""
 
@@ -70,6 +77,7 @@ class PublicBuildCredit:
     username: str | None
     role: CreditRole
     attribution: CreditAttribution
+    creator_id: UUID | None
 
 
 class PublicBuildStatus(StrEnum):
@@ -94,7 +102,7 @@ class PublicBuildSummary:
     status: PublicBuildStatus
     category: BuildCategory
     dimensions: PublicBuildDimensions
-    creators: tuple[str, ...]
+    creators: tuple[PublicBuildCreator, ...]
     tags: tuple[PublicBuildTag, ...]
     preview: PublicBuildPreview | None
     version_spec: str | None
@@ -128,10 +136,17 @@ class PublicBuildSummary:
             else PublicBuildStatus.UNKNOWN,
             category=build.category,
             dimensions=PublicBuildDimensions(width=build.width, height=build.height, depth=build.depth),
-            creators=tuple(build.creators_ign),
+            creators=tuple(
+                dict.fromkeys(
+                    PublicBuildCreator(credit.name, credit.creator_id)
+                    for credit in build.credits
+                    if credit.role in {CreditRole.CREATOR, CreditRole.DESIGNER}
+                )
+            ),
             credits=tuple(
                 PublicBuildCredit(
                     name=credit.name,
+                    creator_id=credit.creator_id,
                     kind=credit.kind,
                     username=credit.username,
                     role=credit.role,

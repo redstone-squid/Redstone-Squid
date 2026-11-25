@@ -137,7 +137,7 @@ export type BuildDetail = {
     status: PublicBuildStatus;
     category: BuildCategory;
     dimensions: PublicBuildDimensions;
-    creators: Array<string>;
+    creators: Array<PublicBuildCreator>;
     tags: Array<PublicBuildTag>;
     preview: PublicBuildPreview | null;
     version_spec: string | null;
@@ -479,6 +479,7 @@ export type Credit = {
     role?: CreditRole;
     attribution?: CreditAttribution;
     source_message_id?: number | null;
+    creator_id?: string | null;
 };
 
 /**
@@ -1663,6 +1664,14 @@ export type ProtocolInterval = {
 };
 
 /**
+ * PublicBuildCreator
+ */
+export type PublicBuildCreator = {
+    name: string;
+    creator_id: string | null;
+};
+
+/**
  * PublicBuildCredit
  */
 export type PublicBuildCredit = {
@@ -1671,6 +1680,7 @@ export type PublicBuildCredit = {
     username: string | null;
     role: CreditRole;
     attribution: CreditAttribution;
+    creator_id: string | null;
 };
 
 /**
@@ -1708,7 +1718,7 @@ export type PublicBuildSummary = {
     status: PublicBuildStatus;
     category: BuildCategory;
     dimensions: PublicBuildDimensions;
-    creators: Array<string>;
+    creators: Array<PublicBuildCreator>;
     tags: Array<PublicBuildTag>;
     preview: PublicBuildPreview | null;
     version_spec: string | null;

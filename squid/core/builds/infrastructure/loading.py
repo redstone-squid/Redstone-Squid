@@ -7,7 +7,7 @@ from sqlalchemy import and_, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.core.accounts.domain import IdentityProvider
-from squid.core.accounts.models import AccountIdentity
+from squid.core.accounts.models import Account, AccountIdentity
 from squid.core.builds.domain import BuildCategory, Credit
 from squid.core.builds.domain.credits import CreditRole
 from squid.core.builds.models import (
@@ -40,6 +40,21 @@ class _CrossContextValues:
 class BuildLoader:
     """Enrich loaded builds with facts owned by other contexts."""
 
+    @staticmethod
+    def credit_rows(build_ids: Sequence[int]):
+        """Resolve each credit to its current account and public creator identifier."""
+        linked = func.build_credit_accounts().table_valued("build_id", "position", "account_id")
+        return (
+            select(BuildCredit, linked.c.account_id, Account.public_creator_id)
+            .outerjoin(
+                linked,
+                and_(linked.c.build_id == BuildCredit.build_id, linked.c.position == BuildCredit.position),
+            )
+            .outerjoin(Account, Account.id == linked.c.account_id)
+            .where(BuildCredit.build_id.in_(build_ids))
+            .order_by(BuildCredit.build_id, BuildCredit.position)
+        )
+
     async def load(self, session: AsyncSession, sql_build: Build) -> Build:
         mapped = await self.load_many(session, [sql_build])
         return mapped[0]
@@ -67,17 +82,8 @@ class BuildLoader:
 
         credits: dict[int, list[Credit]] = {build_id: [] for build_id in build_ids}
         creator_accounts: dict[int, set[int]] = {build_id: set() for build_id in build_ids}
-        linked = func.build_credit_accounts().table_valued("build_id", "position", "account_id", "name", "role")
-        for row, linked_account in await session.execute(
-            select(BuildCredit, linked.c.account_id)
-            .outerjoin(
-                linked,
-                and_(linked.c.build_id == BuildCredit.build_id, linked.c.position == BuildCredit.position),
-            )
-            .where(BuildCredit.build_id.in_(build_ids))
-            .order_by(BuildCredit.build_id, BuildCredit.position)
-        ):
-            credits[row.build_id].append(row.to_credit())
+        for row, linked_account, creator_id in await session.execute(BuildLoader.credit_rows(build_ids)):
+            credits[row.build_id].append(row.to_credit(creator_id))
             if row.role is CreditRole.CREATOR and linked_account is not None:
                 creator_accounts[row.build_id].add(linked_account)
 

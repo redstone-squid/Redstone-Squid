@@ -17,7 +17,7 @@ function build(
     status: "approved",
     category: "Door",
     dimensions: { width, height, depth },
-    creators,
+    creators: creators.map((name) => ({ name, creator_id: null })),
     tags: [],
     preview: preview === null ? null : { kind: "image", url: preview },
     version_spec: null,

@@ -1,7 +1,7 @@
 """Typed build attribution, independently of account ownership and identity verification."""
 
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from uuid import UUID
 
@@ -51,6 +51,7 @@ class Credit:
     role: CreditRole = CreditRole.CREATOR
     attribution: CreditAttribution = CreditAttribution.EXPLICIT
     source_message_id: int | None = None
+    creator_id: UUID | None = field(default=None, compare=False)
 
     def __post_init__(self) -> None:
         name = self.name.strip()
