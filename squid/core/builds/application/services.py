@@ -259,9 +259,14 @@ class BuildService:
             raise AuthorizationError
 
     @application_operation
-    async def prepare_edit(self, build: Build, patch: BuildEditPatch, *, context: ActingContext) -> Build:
+    async def prepare_edit(
+        self, build: Build, patch: BuildEditPatch, *, suggestion: bool = False, context: ActingContext
+    ) -> Build:
         """Apply a candidate patch. The writer checks changed fields against the locked build."""
-        if await self.edit_decision(build, set(), context=context) is BuildEditDecision.DENY:
+        if (
+            not (suggestion and build.submission_status is BuildStatus.APPROVED)
+            and await self.edit_decision(build, set(), context=context) is BuildEditDecision.DENY
+        ):
             raise AuthorizationError
         await self._apply_patch(build, patch)
         return build
@@ -275,7 +280,14 @@ class BuildService:
             raise AuthorizationError
         async with self._uow_factory() as uow:
             build = await uow.builds.get_for_update(target.build_id)
-            if build is None or build.revision != target.revision or not build.is_creator(author_account_id):
+            if (
+                build is None
+                or build.revision != target.revision
+                or not (
+                    build.is_creator(author_account_id)
+                    or (target.public_suggestion and build.submission_status is BuildStatus.APPROVED)
+                )
+            ):
                 return False
             before = build_values(build)
             try:

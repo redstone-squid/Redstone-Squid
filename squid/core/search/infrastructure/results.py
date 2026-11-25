@@ -89,6 +89,8 @@ class ResultPager:
             # A unit ranks as its best document, so holding more matching records does not boost a build.
             score = case({key: value.score for key, value in ranked.items()}, value=units.c.document_id, else_=0.0)
             statement = statement.add_columns(func.max(score).label("order_value"))
+        elif isinstance(order, FieldDefinition) and order.name == "title":
+            statement = statement.add_columns(func.min(units.c.unit_title).label("order_value"))
         elif isinstance(order, FieldDefinition):
             statement = statement.outerjoin(
                 SearchDocumentFilter,

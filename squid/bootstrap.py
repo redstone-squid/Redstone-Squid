@@ -37,9 +37,9 @@ from squid.core.artifacts import ArtifactStore
 from squid.core.artifacts.infrastructure import create_artifact_store
 from squid.core.auth.application import ApiKeyService
 from squid.core.auth.application.providers import PROVIDER_FACTORIES, OAuthProvider
+from squid.core.auth.application.viewer import ViewerQueries
 from squid.core.auth.application.web import WebSessionService
 from squid.core.auth.impersonation import ImpersonationService
-from squid.core.auth.infrastructure.viewer import ViewerQueries
 from squid.core.builds.application import (
     BuildEmbeddingService,
     BuildInferenceService,
@@ -63,11 +63,11 @@ from squid.core.events.application import DomainEventService
 from squid.core.events.infrastructure.listener import DomainEventWakeListener
 from squid.core.idempotency import IdempotencyService
 from squid.core.idempotency.infrastructure import IdempotencyResponseCipher
+from squid.core.media.application.build_media import PublishedBuildMedia
 from squid.core.media.application.jobs import MediaProcessingJobRunner, MediaProcessingJobService, MediaStorageCleanup
 from squid.core.media.application.services import MediaProcessingService
 from squid.core.media.domain import MediaLimits
 from squid.core.media.infrastructure import FfmpegMediaProcessor, MediaProcessLimits
-from squid.core.media.infrastructure.build_media import PublishedBuildMedia
 from squid.core.messages.application import MessageService
 from squid.core.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
 from squid.core.minecraft_auth.application.crypto import MinecraftSecretCodec
@@ -367,7 +367,7 @@ class _ServiceGraph:
         base_url = self.config.media.public_base_url or self.config.schematics.render_public_base_url
         if base_url is None:
             return None
-        return PublishedBuildMedia(self.db.async_session, self.artifacts, public_base_url=str(base_url))
+        return PublishedBuildMedia(self.uow_factory, self.artifacts, public_base_url=str(base_url))
 
     @cached_property
     def media_job_service(self) -> MediaProcessingJobService:
@@ -658,7 +658,7 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         raise RuntimeError(msg)
     return ApiServices(
         impersonation=ImpersonationService(graph.uow_factory, graph.permissions),
-        viewer_queries=ViewerQueries(db.async_session, graph.permissions),
+        viewer_queries=ViewerQueries(graph.uow_factory, graph.permissions),
         settings=graph.settings,
         edits=graph.edits,
         builds=graph.builds,

@@ -30,6 +30,7 @@ class SubmissionDraft(Base, kw_only=True):
     """The compact current state of an account-owned submission draft."""
 
     __tablename__ = "submission_drafts"
+    edit_source: Mapped[dict[str, object] | None] = mapped_column(JSONB(none_as_null=True), default=None)
     door_expansion: Mapped[DoorExpansion | None] = mapped_column(DoorExpansionJSON(), default=None)
     source_messages: Mapped[list[dict[str, object]]] = mapped_column(
         JSONB, default_factory=list, server_default=text("'[]'::jsonb")

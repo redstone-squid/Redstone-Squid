@@ -137,7 +137,7 @@ export type BuildDetail = {
     status: PublicBuildStatus;
     category: BuildCategory;
     dimensions: PublicBuildDimensions;
-    creators: Array<string>;
+    creators: Array<PublicBuildCreator>;
     tags: Array<PublicBuildTag>;
     preview: PublicBuildPreview | null;
     version_spec: string | null;
@@ -146,6 +146,7 @@ export type BuildDetail = {
     closing_time: number | null;
     created_at: string | null;
     updated_at: string | null;
+    record_summary?: BuildRecordSummary;
     subtitle?: string | null;
     credits?: Array<PublicBuildCredit>;
     details: DoorDetails | ExtenderDetails | GeneralDetails;
@@ -155,6 +156,15 @@ export type BuildDetail = {
     description: string | null;
     links: BuildLinks;
     media: Array<BuildMedia>;
+    approved_at?: string | null;
+    submitted_by?: HistoryActor | null;
+    last_edited?: BuildLastEdit | null;
+    history_count?: number;
+    vote_session_id?: number | null;
+    records_held?: Array<BuildRecord>;
+    records_former?: Array<BuildRecord>;
+    submitted_at: string | null;
+    schematics?: BuildSchematicOverview | null;
     viewer?: BuildViewer | null;
     sponsor?: BuildSponsor | null;
 };
@@ -165,6 +175,14 @@ export type BuildDetail = {
  * A kind of redstone build recognized by the rules.
  */
 export type BuildKind = 'door' | 'entrance' | 'extender' | 'utility';
+
+/**
+ * BuildLastEdit
+ */
+export type BuildLastEdit = {
+    at: string;
+    by: HistoryActor | null;
+};
 
 /**
  * BuildLinks
@@ -219,6 +237,34 @@ export type BuildPatch = {
     coordinates?: string | null;
     command_to_get_to_build?: string | null;
     completion_time?: string | null;
+};
+
+/**
+ * BuildRecord
+ */
+export type BuildRecord = {
+    record_id: string;
+    title: string;
+    criterion: RecordCriterion;
+    version_scope: VersionScope;
+    status: ResolutionStatus;
+    since: string | null;
+};
+
+/**
+ * BuildRecordSummary
+ */
+export type BuildRecordSummary = {
+    held_count?: number;
+    former_count?: number;
+};
+
+/**
+ * BuildSchematicOverview
+ */
+export type BuildSchematicOverview = {
+    count: number;
+    primary: SchematicSummary | null;
 };
 
 /**
@@ -479,6 +525,7 @@ export type Credit = {
     role?: CreditRole;
     attribution?: CreditAttribution;
     source_message_id?: number | null;
+    creator_id?: string | null;
 };
 
 /**
@@ -712,8 +759,18 @@ export type DraftChangeResponse = {
  */
 export type DraftCreateRequest = {
     category: string;
+    source_build_id?: number | null;
     origin: SubmissionOrigin;
     client_capabilities?: Array<string>;
+};
+
+/**
+ * DraftEditResult
+ */
+export type DraftEditResult = {
+    build_id: number;
+    revision: number;
+    review_vote_id: number | null;
 };
 
 /**
@@ -1106,6 +1163,28 @@ export type FormSectionResponse = {
  */
 export type GeneralDetails = {
     category: 'Utility' | 'Entrance' | 'Other';
+};
+
+/**
+ * HistoryActor
+ */
+export type HistoryActor = {
+    display_name: string | null;
+    creator_id: string;
+};
+
+/**
+ * HistoryChange
+ */
+export type HistoryChange = {
+    field: string;
+    label: string;
+    before: Array<unknown> | {
+        [key: string]: unknown;
+    } | string | boolean | number | number | null;
+    after: Array<unknown> | {
+        [key: string]: unknown;
+    } | string | boolean | number | number | null;
 };
 
 /**
@@ -1532,6 +1611,16 @@ export type PageSquidCoreBuildsApplicationQueriesPublicBuildSummary = {
 };
 
 /**
+ * Page[PublicBuildRevision]
+ */
+export type PageSquidCoreBuildsHistoryPublicBuildRevision = {
+    items: Array<PublicBuildRevision>;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+};
+
+/**
  * PaperChallengeCreateRequest
  */
 export type PaperChallengeCreateRequest = {
@@ -1663,6 +1752,14 @@ export type ProtocolInterval = {
 };
 
 /**
+ * PublicBuildCreator
+ */
+export type PublicBuildCreator = {
+    name: string;
+    creator_id: string | null;
+};
+
+/**
  * PublicBuildCredit
  */
 export type PublicBuildCredit = {
@@ -1671,6 +1768,7 @@ export type PublicBuildCredit = {
     username: string | null;
     role: CreditRole;
     attribution: CreditAttribution;
+    creator_id: string | null;
 };
 
 /**
@@ -1693,6 +1791,17 @@ export type PublicBuildPreview = {
 };
 
 /**
+ * PublicBuildRevision
+ */
+export type PublicBuildRevision = {
+    revision: number;
+    at: string;
+    actor: HistoryActor | null;
+    kind: 'baseline' | 'create' | 'edit' | 'moderation' | 'recalculation' | 'schematic' | 'account_merge' | 'delete';
+    changes: Array<HistoryChange>;
+};
+
+/**
  * PublicBuildStatus
  */
 export type PublicBuildStatus = 'pending' | 'approved' | 'rejected' | 'unknown';
@@ -1708,7 +1817,7 @@ export type PublicBuildSummary = {
     status: PublicBuildStatus;
     category: BuildCategory;
     dimensions: PublicBuildDimensions;
-    creators: Array<string>;
+    creators: Array<PublicBuildCreator>;
     tags: Array<PublicBuildTag>;
     preview: PublicBuildPreview | null;
     version_spec: string | null;
@@ -1717,6 +1826,7 @@ export type PublicBuildSummary = {
     closing_time: number | null;
     created_at: string | null;
     updated_at: string | null;
+    record_summary?: BuildRecordSummary;
     subtitle?: string | null;
     credits?: Array<PublicBuildCredit>;
 };
@@ -2106,6 +2216,21 @@ export type SanitizationCapabilities = {
 };
 
 /**
+ * SavedBuildFormResponse
+ */
+export type SavedBuildFormResponse = {
+    revision: number;
+    category: string;
+    manifest: FormManifestResponse;
+    answers: {
+        [key: string]: Array<unknown> | {
+            [key: string]: unknown;
+        } | string | boolean | number | number | null;
+    };
+    unresolved: UnresolvedTags;
+};
+
+/**
  * SchematicDetection
  */
 export type SchematicDetection = {
@@ -2366,6 +2491,8 @@ export type StartImpersonation = {
  */
 export type StoredDraftResponse = {
     id: string;
+    source_build_id?: number | null;
+    source_revision?: number | null;
     schema_id: string;
     schema_revision: number;
     category: string;
@@ -2652,6 +2779,17 @@ export type TooShortParams = {
      * Min Length
      */
     min_length: number;
+};
+
+/**
+ * UnresolvedTags
+ */
+export type UnresolvedTags = {
+    restrictions?: Array<[
+        'wiring_placement_restrictions' | 'animated_restrictions' | 'component_restrictions' | 'miscellaneous_restrictions',
+        string
+    ]>;
+    patterns?: Array<string>;
 };
 
 /**
@@ -3463,6 +3601,101 @@ export type BuildsUpdateResponses = {
 
 export type BuildsUpdateResponse = BuildsUpdateResponses[keyof BuildsUpdateResponses];
 
+export type BuildsEditFormGetData = {
+    body?: never;
+    path: {
+        build_id: number;
+    };
+    query?: never;
+    url: '/v1/builds/{build_id}/form';
+};
+
+export type BuildsEditFormGetErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type BuildsEditFormGetError = BuildsEditFormGetErrors[keyof BuildsEditFormGetErrors];
+
+export type BuildsEditFormGetResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: SavedBuildFormResponse;
+};
+
+export type BuildsEditFormGetResponse = BuildsEditFormGetResponses[keyof BuildsEditFormGetResponses];
+
+export type BuildsHistoryListData = {
+    body?: never;
+    path: {
+        build_id: number;
+    };
+    query?: {
+        /**
+         * Number of items to skip. Excludes after_id and before_id.
+         */
+        offset?: number | null;
+        /**
+         * Maximum number of items to return.
+         */
+        page_size?: number;
+    };
+    url: '/v1/builds/{build_id}/history';
+};
+
+export type BuildsHistoryListErrors = {
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type BuildsHistoryListError = BuildsHistoryListErrors[keyof BuildsHistoryListErrors];
+
+export type BuildsHistoryListResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: PageSquidCoreBuildsHistoryPublicBuildRevision;
+};
+
+export type BuildsHistoryListResponse = BuildsHistoryListResponses[keyof BuildsHistoryListResponses];
+
 export type BuildMediaContentGetData = {
     body?: never;
     path: {
@@ -3509,7 +3742,12 @@ export type BuildsListData = {
     query?: {
         q?: string | null;
         status?: BuildStatusFilter | null;
-        sort?: string | null;
+        category?: BuildCategory | null;
+        version?: number | null;
+        tag?: Array<string> | null;
+        creator_id?: string | null;
+        submitted_by?: 'me' | null;
+        sort?: 'newest' | 'oldest' | 'updated' | 'fastest_open' | 'smallest_volume' | 'title' | null;
         /**
          * Maximum number of items to return.
          */
@@ -7136,6 +7374,10 @@ export type SubmissionDraftCreateErrors = {
      */
     403: ProblemDetail;
     /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
      * Conflict
      */
     409: ProblemDetail;
@@ -7596,6 +7838,10 @@ export type SubmissionFinalizationStartErrors = {
      */
     409: ProblemDetail;
     /**
+     * Precondition Failed
+     */
+    412: ProblemDetail;
+    /**
      * Unprocessable Content
      */
     422: ValidationProblemDetail;
@@ -7615,7 +7861,7 @@ export type SubmissionFinalizationStartResponses = {
     /**
      * Request accepted, processing continues off-line
      */
-    202: SubmissionAttemptResponse | DraftPreparationResponse;
+    202: SubmissionAttemptResponse | DraftPreparationResponse | DraftEditResult;
 };
 
 export type SubmissionFinalizationStartResponse = SubmissionFinalizationStartResponses[keyof SubmissionFinalizationStartResponses];
@@ -7662,7 +7908,7 @@ export type SubmissionFinalizationGetResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: SubmissionAttemptResponse | DraftPreparationResponse;
+    200: SubmissionAttemptResponse | DraftPreparationResponse | DraftEditResult;
 };
 
 export type SubmissionFinalizationGetResponse = SubmissionFinalizationGetResponses[keyof SubmissionFinalizationGetResponses];

@@ -4,10 +4,14 @@ import logging
 from collections.abc import Callable, Sequence
 from typing import override
 
-from sqlalchemy import func, literal, or_, select, true
+from sqlalchemy import String, func, literal, or_, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
+from squid.core.builds.application.queries import EMPTY_BUILD_FILTERS
+from squid.core.builds.domain import BuildStatus
+from squid.core.builds.infrastructure.listing import filter_build_listing
+from squid.core.builds.models import Build
 from squid.core.search.application import (
     RankedCandidate,
     RankingBranch,
@@ -80,6 +84,17 @@ class PostgresSearchBackend(SearchBackend):
             visible_statuses = _PUBLIC_BUILD_STATUSES
         if visible_statuses is not None and request.scope in {SearchScope.BUILDS, SearchScope.ALL}:
             predicate &= _visible_builds(visible_statuses)
+        if request.catalogue_filters != EMPTY_BUILD_FILTERS or request.submitter_account_id is not None:
+            statuses = frozenset(
+                status for status in BuildStatus if status.name.lower() in (visible_statuses or _PUBLIC_BUILD_STATUSES)
+            )
+            eligible = filter_build_listing(
+                select(Build.id.cast(String)),
+                statuses=statuses,
+                submitter_account_id=request.submitter_account_id,
+                filters=request.catalogue_filters,
+            )
+            predicate &= SearchDocument.source_key.in_(eligible)
         return predicate
 
     @override

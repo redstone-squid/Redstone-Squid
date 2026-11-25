@@ -1,20 +1,24 @@
 """Public build representations."""
 
 from dataclasses import dataclass, fields
+from datetime import datetime
 from enum import StrEnum
 from typing import Annotated, Literal, Self, cast
 from uuid import UUID
 
 from pydantic import AnyHttpUrl, BaseModel, ConfigDict, Field
 
-from squid.core.auth.infrastructure.viewer import ViewerBallot
+from squid.api.v1.schemas.schematics import SchematicSummary
+from squid.core.auth.application.viewer import ViewerBallot
 from squid.core.builds.application.edit_schema import BuildPatch as BuildPatch
 from squid.core.builds.application.edit_schema import DoorPatch as DoorPatch
 from squid.core.builds.application.edit_schema import ExtenderPatch as ExtenderPatch
 from squid.core.builds.application.queries import PublicBuildDimensions, PublicBuildSummary
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.domain.expansion import DoorExpansion
+from squid.core.builds.history import BuildLastEdit, HistoryActor
 from squid.core.builds.models import Build, DoorBuild, ExtenderBuild
+from squid.core.records.domain.build_records import BuildRecord
 
 
 class BuildStatusFilter(StrEnum):
@@ -35,6 +39,11 @@ class BuildLinks(BaseModel):
 
     world_downloads: list[str]
     schematics: list[str]
+
+
+class BuildSchematicOverview(BaseModel):
+    count: int
+    primary: SchematicSummary | None
 
 
 class BuildMedia(BaseModel):
@@ -150,6 +159,15 @@ class BuildDetail(PublicBuildSummary):
     description: str | None
     links: BuildLinks
     media: list[BuildMedia]
+    approved_at: datetime | None = None
+    submitted_by: HistoryActor | None = None
+    last_edited: BuildLastEdit | None = None
+    history_count: int = 0
+    vote_session_id: int | None = None
+    records_held: tuple[BuildRecord, ...] = ()
+    records_former: tuple[BuildRecord, ...] = ()
+    submitted_at: datetime | None
+    schematics: BuildSchematicOverview | None = None
     viewer: BuildViewer | None = None
     sponsor: BuildSponsor | None = None
 
@@ -160,6 +178,9 @@ class BuildDetail(PublicBuildSummary):
         return cls(
             **{field.name: getattr(summary, field.name) for field in fields(summary)},
             details=_details(build),
+            submitted_at=summary.created_at,
+            records_held=build.published_records.held,
+            records_former=build.published_records.former,
             restrictions={name: list(values or ()) for name, values in build.restrictions.items()},
             description=build.description,
             media=[

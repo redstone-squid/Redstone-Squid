@@ -3,6 +3,7 @@
 from decimal import Decimal
 from functools import partial
 from unittest.mock import AsyncMock
+from uuid import uuid4
 
 import anyio
 import pytest
@@ -37,16 +38,25 @@ from squid.core.edits.domain import EditCommand, EditResult, EditValues, LatestR
 from squid.core.errors import AuthorizationError
 from squid.core.events import DomainEvent
 from squid.core.permissions.application.services import PermissionService
-from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT, BUILD_SUBMISSION_RECLASSIFY
+from squid.core.permissions.domain.catalogue import (
+    BUILD_SUBMISSION_CREATE,
+    BUILD_SUBMISSION_EDIT,
+    BUILD_SUBMISSION_RECLASSIFY,
+)
 from squid.core.permissions.models import PermissionGrant
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.records.models import DoorTimingVariant
+from squid.core.submissions.application.build_drafts import BuildDraftEditor
+from squid.core.submissions.application.drafts import SubmissionDraftService
+from squid.core.submissions.application.forms import CheckedInFormManifestRegistry
+from squid.core.submissions.domain import DraftChange, DraftChangeKey, FieldOperation, FieldOperationKind
 from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagValueType
 from squid.core.versions.application import VersionService
 from squid.core.voting.application.services import VoteService
 from squid.core.voting.domain import BuildEditVoteTarget, VoteChoice, VoteKind, VoteSessionResult
 from squid.worker.events import ApplyBuildVoteOutcomeHandler
 from tests.support.build_edits import build_edit_session
+from tests.support.submission_form import Forms
 from tests.support.submission_targets import seed_account_and_version
 
 
@@ -371,8 +381,8 @@ async def test_preparation_does_not_lock_the_build_and_rechecks_after_another_co
     service, executor, actor, build = await setup(sessions)
     prepare = service.prepare_edit
 
-    async def pause(build: Build, patch: BuildEditPatch, *, context: ActingContext) -> Build:
-        result = await prepare(build, patch, context=context)
+    async def pause(build: Build, patch: BuildEditPatch, *, suggestion: bool = False, context: ActingContext) -> Build:
+        result = await prepare(build, patch, suggestion=suggestion, context=context)
         entered.set()
         await resume.wait()
         return result
@@ -604,3 +614,71 @@ async def test_build_events_and_vector_share_the_content_transaction(
         assert saved.embedding is None
         assert await uow.build_vectors.fill_missing(build.id, saved.revision, vector)
         assert not await uow.build_vectors.fill_missing(build.id, saved.revision, vector)
+
+
+@pytest.mark.parametrize("contributor", [False, True])
+async def test_finalize_edit_draft_once_or_retain_it_on_revision_conflict(
+    migrated_session_factory: async_sessionmaker[AsyncSession], contributor: bool
+) -> None:
+    factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    builds, _, owner, build = await setup(migrated_session_factory)
+    async with factory() as uow, uow.builds.editing(actor="review", source="test"):
+        published = await uow.builds.get_for_update(build.id)
+        assert published is not None
+        published.submission_status = BuildStatus.APPROVED
+        await uow.commit()
+    actor = owner
+    async with migrated_session_factory.begin() as session:
+        if contributor:
+            account = Account()
+            session.add(account)
+            await session.flush()
+            actor = UserActor(account_id=account.id)
+        session.add(
+            PermissionGrant(pattern=BUILD_SUBMISSION_CREATE.name, effect=1, subject_account_id=actor.account_id)
+        )
+    registry = CheckedInFormManifestRegistry()
+    permissions = PermissionService(uow_factory=factory)
+    drafts = SubmissionDraftService(registry, permissions=permissions, uow_factory=factory)
+    editor = BuildDraftEditor(drafts, builds, Forms(), permissions, factory)
+    manifest = await registry.edit(locale="en")
+    caps = frozenset(f.required_capability for f in manifest.fields_for("other") if f.required_capability)
+    context = ActingContext.direct(actor)
+    draft = await editor.create(build.id, "other", caps, "en", context=context)
+    stale = await editor.create(build.id, "other", caps, "en", context=context)
+    change = DraftChange(
+        0,
+        "web:browser",
+        DraftChangeKey("change-title"),
+        (FieldOperation(uuid4(), "display_name", FieldOperationKind.SET, "New name"),),
+    )
+    await drafts.apply_change(draft.snapshot.id, change, context=context, locale="en")
+    result = await editor.finish(draft.snapshot.id, "en", context=context)
+    assert await editor.finish(draft.snapshot.id, "en", context=context) == result
+    saved = await builds.get(build.id, context=context)
+    assert saved is not None
+    if contributor:
+        assert result.review_vote_id is not None
+        assert saved.display_name is None
+        vote = await VoteService(uow_factory=factory).get_session(result.review_vote_id, context=context)
+        assert vote is not None
+        assert isinstance(vote.target, BuildEditVoteTarget)
+        assert actor.account_id is not None
+        assert await builds.apply_reviewed_edit(
+            vote.target,
+            author_account_id=actor.account_id,
+            vote_id=vote.id,
+            context=ActingContext.worker("events.core.vote_session.closed"),
+        )
+        revised = await builds.get(build.id, context=context)
+        assert revised is not None
+        assert revised.display_name == "New name"
+    else:
+        assert result.review_vote_id is None
+        assert saved.display_name == "New name"
+        with pytest.raises(RevisionConflictError) as conflict:
+            await editor.finish(stale.snapshot.id, "en", context=context)
+        assert conflict.value.public_context["changes"] == [
+            {"field": "display_name", "before": None, "after": "New name"}
+        ]
+        assert (await drafts.get_accessible(stale.snapshot.id, context=context)).snapshot == stale.snapshot

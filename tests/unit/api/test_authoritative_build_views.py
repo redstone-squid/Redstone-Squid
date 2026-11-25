@@ -12,6 +12,7 @@ from squid.api.v1.me import list_my_builds
 from squid.api.v1.schemas.builds import BuildStatusFilter
 from squid.core.actors import ActingContext, Actor
 from squid.core.builds.application import DEFAULT_BUILD_LIST_SORT, BuildListSort, BuildQueryService
+from squid.core.builds.application.queries import EMPTY_BUILD_FILTERS, BuildListFilters
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build, DoorBuild
 from squid.core.errors import AuthenticationError, AuthorizationError, ValidationError
@@ -53,6 +54,7 @@ class BuildQueryRecorder(BuildQueryService):
         *,
         context: ActingContext,
         statuses: frozenset[BuildStatus],
+        filters: BuildListFilters = EMPTY_BUILD_FILTERS,
         submitter_account_id: int | None = None,
         sort: BuildListSort = DEFAULT_BUILD_LIST_SORT,
         selector: PageSelector = FIRST_PAGE,
@@ -209,17 +211,17 @@ async def test_administrator_reads_the_pending_queue() -> None:
 
 
 @pytest.mark.asyncio
-async def test_status_and_query_are_mutually_exclusive() -> None:
+async def test_searching_unpublished_builds_requires_review_permission() -> None:
     graph = fakes()
 
-    with pytest.raises(ValidationError):
+    with pytest.raises(AuthorizationError):
         await list_builds.fn(
             graph.build_queries,
             cast(Any, None),
             graph.permissions,
             ACCOUNT,
             q="piston",
-            status=BuildStatusFilter.APPROVED,
+            status=BuildStatusFilter.PENDING,
         )
 
 
@@ -281,7 +283,7 @@ async def test_id_anchors_are_refused_when_the_order_is_not_by_id() -> None:
             cast(Any, None),
             graph.permissions,
             ACCOUNT,
-            sort="-submission_time",
+            sort="newest",
             after_id=9,
         )
 
@@ -297,7 +299,7 @@ async def test_a_time_sorted_listing_pages_by_offset() -> None:
         cast(Any, None),
         graph.permissions,
         ACCOUNT,
-        sort="submission_time",
+        sort="oldest",
         page_size=1,
         offset=20,
     )
@@ -306,20 +308,6 @@ async def test_a_time_sorted_listing_pages_by_offset() -> None:
     assert call.sort == BuildListSort(field="submission_time", descending=False)
     assert call.selector.offset == 20
     assert page.prev == PageAnchor(offset=19)
-
-
-@pytest.mark.asyncio
-async def test_an_unlisted_sort_field_is_refused() -> None:
-    graph = fakes(is_admin=True)
-
-    with pytest.raises(ValidationError, match="not supported"):
-        await list_builds.fn(
-            graph.build_queries,
-            cast(Any, None),
-            graph.permissions,
-            ACCOUNT,
-            sort="title",
-        )
 
 
 @pytest.mark.asyncio

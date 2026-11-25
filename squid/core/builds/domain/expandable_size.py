@@ -3,6 +3,7 @@
 from typing import Literal, Self
 
 from pydantic import Field, model_validator
+from pydantic_core import PydanticCustomError
 
 from squid.core.builds.domain.expansion import DoorExpansion, ExpansionBranch, ExpansionFact, ExpansionParameter
 
@@ -11,6 +12,7 @@ type MaximumKind = Literal["unknown", "finite", "unbounded"]
 
 _AXES: tuple[OpeningAxis, ...] = ("width", "height", "depth")
 _PARAMETER = "n"
+_INVALID_VALUE = "value_error"
 
 
 class ExpandableSize(ExpansionFact):
@@ -26,10 +28,10 @@ class ExpandableSize(ExpansionFact):
     def validate_range(self) -> Self:
         if (self.maximum_kind == "finite") != (self.maximum is not None):
             msg = "Enter a maximum only for a finite range."
-            raise ValueError(msg)
+            raise PydanticCustomError(_INVALID_VALUE, msg)
         if self.maximum is not None and (self.maximum < self.minimum or (self.maximum - self.minimum) % self.step):
             msg = "The maximum must be reachable from the minimum using the step."
-            raise ValueError(msg)
+            raise PydanticCustomError(_INVALID_VALUE, msg)
         return self
 
     def to_expansion(self) -> DoorExpansion:

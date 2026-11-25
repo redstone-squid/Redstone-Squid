@@ -26,7 +26,7 @@ from squid.core.builds.domain import BuildStatus
 from squid.core.builds.domain.credits import name_credits
 from squid.core.builds.models import Build, BuildLink, DoorBuild
 from squid.core.edits.domain import Revision, RevisionConflictError
-from squid.core.media.infrastructure.build_media import PublishedBuildMedia
+from squid.core.media.application.build_media import PublishedBuildMedia
 from squid.core.messages.domain import MessageRef, MessageSnapshot
 from squid.core.search.application import SearchService
 from squid.core.search.domain import BuildSearchHit, RecordSearchHit, SearchPage, SearchRequest

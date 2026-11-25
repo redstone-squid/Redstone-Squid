@@ -24,6 +24,7 @@ from squid.core.submissions.domain import (
     FormManifest,
     SubmissionOrigin,
 )
+from squid.core.submissions.domain.build_edit import DraftEditSource
 from squid.core.submissions.domain.finalization import SubmissionAttentionIssue
 from squid.core.submissions.domain.source_files import SubmissionSourceFile
 from squid.core.submissions.errors import (
@@ -98,6 +99,7 @@ class StoredDraft:
     source_issues: tuple[str, ...] = ()
     inference_run_id: UUID | None = None
     preparation_attempt: UUID | None = None
+    edit_source: DraftEditSource | None = None
 
     def __post_init__(self) -> None:
         if self.origin is not SubmissionOrigin.PAPER and self.source_installation_id is not None:
@@ -316,6 +318,7 @@ class SubmissionDraftService:
         client_capabilities: frozenset[str],
         locale: str | None,
         source_installation_id: UUID | None = None,
+        edit_source: DraftEditSource | None = None,
         now: Instant | None = None,
         draft_id: UUID | None = None,
         inferred: bool = False,
@@ -343,7 +346,9 @@ class SubmissionDraftService:
             message = "Inferred drafts require Discord source origin."
             raise ValidationError(message)
         limit = self._inferred_capacity if inferred else await self._capacity.limit_for(owner_account_id)
-        manifest = await self._manifests.current(locale=locale)
+        manifest = (
+            await self._manifests.edit(locale=locale) if edit_source else await self._manifests.current(locale=locale)
+        )
         manifest.category(category)
         missing = manifest.unsupported_required_capabilities(category, client_capabilities, origin)
         if missing:
@@ -356,7 +361,9 @@ class SubmissionDraftService:
                 schema_id=manifest.schema_id,
                 schema_revision=manifest.revision,
                 category=category,
+                answers=edit_source.answers if edit_source else {},
             ),
+            edit_source=edit_source,
             origin=origin,
             created_at=created_at,
             updated_at=created_at,
@@ -501,9 +508,19 @@ class SubmissionDraftService:
     ) -> DraftSnapshot:
         """Validate a candidate against its pinned manifest without writing."""
         manifest = await self._pinned_manifest(current, locale)
+        if current.edit_source is not None and any(
+            op.field_id not in current.edit_source.answers for op in change.operations
+        ):
+            raise DraftAccessDeniedError
         candidate = current.snapshot.apply(change)
-        errors = manifest.answer_issues(
-            candidate.category, candidate.answers, origin=current.origin, require_complete=False
+        errors = (
+            manifest.transition_issues(
+                candidate.category, current.snapshot.answers, candidate.answers, origin=current.origin
+            )
+            if current.edit_source
+            else manifest.answer_issues(
+                candidate.category, candidate.answers, origin=current.origin, require_complete=False
+            )
         )
         if errors:
             raise DraftValidationError(errors)

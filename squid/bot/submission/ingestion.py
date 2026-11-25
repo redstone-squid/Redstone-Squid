@@ -24,6 +24,7 @@ from squid.core.submissions.application.finalization import DraftPreparationSnap
 from squid.core.submissions.application.inference_runs import InferenceCandidate
 from squid.core.submissions.application.inferred_drafts import materialize_candidate
 from squid.core.submissions.domain import DraftStatus, SubmissionAttentionIssue, SubmissionAttentionReason
+from squid.core.submissions.domain.build_edit import DraftEditResult
 from squid.core.submissions.domain.source_files import SubmissionSourceFile
 from squid.core.submissions.errors import DraftCapacityExceededError
 from squid.runtime import BotServices
@@ -153,6 +154,7 @@ async def admit_candidates(
             outcome = await services.submission_finalization.submit(
                 candidate.id, locale=None, context=ActingContext.for_actor(actor)
             )
+            assert not isinstance(outcome, DraftEditResult)  # Inference only creates new submissions.
             if isinstance(outcome, DraftPreparationSnapshot):
                 logger.warning(
                     "Candidate %s needs attention: %s",

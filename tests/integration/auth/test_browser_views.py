@@ -11,7 +11,7 @@ from squid.core.accounts.domain import IdentityProvider
 from squid.core.accounts.infrastructure.repository import AccountRepository
 from squid.core.accounts.models import Account
 from squid.core.actors import ActingContext, UserActor
-from squid.core.auth.infrastructure.viewer import SessionCounts, ViewerQueries
+from squid.core.auth.application.viewer import SessionCounts, ViewerQueries
 from squid.core.notifications.domain import SubscriptionKind
 from squid.core.notifications.models import NotificationSubscription
 from squid.core.permissions.application.services import PermissionService
@@ -51,7 +51,8 @@ async def test_browser_reads_and_links_are_scoped_to_the_account(
         assert await accounts.link_browser_identity(owner.id, IdentityProvider.DISCORD, "123")
         assert not await accounts.link_browser_identity(other.id, IdentityProvider.DISCORD, "123")
     views = ViewerQueries(
-        migrated_session_factory, PermissionService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
+        partial(SqlAlchemyUnitOfWork, migrated_session_factory),
+        PermissionService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)),
     )
     owner_context = ActingContext.direct(UserActor(account_id=owner.id))
     staff = UserActor(account_id=other.id, is_bot_owner=True)

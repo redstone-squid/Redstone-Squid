@@ -78,8 +78,9 @@ class PreparedBuildEdit(PreparedEdit):
 
 
 class BuildFieldsEdit:
-    def __init__(self, builds: BuildService) -> None:
+    def __init__(self, builds: BuildService, *, suggestions: bool = False) -> None:
         self._builds = builds
+        self._suggestions = suggestions
 
     async def prepare(self, uow: BuildFieldsUnitOfWork, actor: Actor, command: EditCommand) -> PreparedBuildEdit:
         if actor.linked_account_id is None:
@@ -118,7 +119,9 @@ class BuildFieldsEdit:
                 attributes[name] = [*cast(list[str], attributes.get(name, [])), *retained.restriction_names(name)]
             attributes["door_type"] = [*cast(list[str], attributes.get("door_type", [])), *retained.patterns]
         candidate = BuildEditPatch.from_attributes(attributes)
-        await self._builds.prepare_edit(build, candidate, context=ActingContext.for_actor(actor))
+        await self._builds.prepare_edit(
+            build, candidate, suggestion=self._suggestions, context=ActingContext.for_actor(actor)
+        )
         current = await uow.builds.get_for_update(build_id)
         if current is None:
             raise BuildNotFoundError(build_id)
@@ -127,6 +130,14 @@ class BuildFieldsEdit:
         changes = changed_build_values(before, after)
         changed = {key for key, _, _ in changes}
         decision = await self._builds.edit_decision(current, changed, uow=uow, context=ActingContext.for_actor(actor))
+        suggestion = (
+            self._suggestions
+            and decision is BuildEditDecision.DENY
+            and current.submission_status is BuildStatus.APPROVED
+            and not current.is_creator(actor.linked_account_id)
+        )
+        if suggestion:
+            decision = BuildEditDecision.REVIEW
         if decision is BuildEditDecision.DENY or (decision is BuildEditDecision.REVIEW and command.purpose != "edit"):
             raise AuthorizationError(public_context={"fields": sorted(changed)})
         if decision is BuildEditDecision.REVIEW:
@@ -135,7 +146,9 @@ class BuildFieldsEdit:
                 author_account_id=actor.linked_account_id,
                 pass_threshold=settings.build_vote_pass_threshold,
                 fail_threshold=settings.build_vote_fail_threshold,
-                target=BuildEditVoteTarget(build_id, expected.value, patch_values(candidate).unpack(), changes),
+                target=BuildEditVoteTarget(
+                    build_id, expected.value, patch_values(candidate).unpack(), changes, public_suggestion=suggestion
+                ),
             )
             return PreparedBuildEdit(
                 before, before, final=True, review_vote_id=vote_id, build=build, revisions=(expected,)

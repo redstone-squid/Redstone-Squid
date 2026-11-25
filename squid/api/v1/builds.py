@@ -4,10 +4,10 @@ import re
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Annotated, cast
+from typing import Annotated, Literal, cast
 from uuid import UUID
 
-from litestar import Response, Router, get, patch
+from litestar import Request, Response, Router, get, patch
 from litestar.background_tasks import BackgroundTask
 from litestar.di import NamedDependency, Provide
 from litestar.openapi.datastructures import ResponseSpec
@@ -26,6 +26,7 @@ from squid.api.dependencies import (
     get_search,
 )
 from squid.api.errors import responses
+from squid.api.i18n import locale_for_request
 from squid.api.idempotency import edit_operation_id, reserve_edit_before_request
 from squid.api.pagination import (
     AfterIdParam,
@@ -40,7 +41,8 @@ from squid.api.pagination import (
 from squid.api.security import Caller, requires
 from squid.api.v1.browser_views import BrowserViews
 from squid.api.v1.schemas.builds import BuildDetail, BuildPatch, BuildStatusFilter
-from squid.api.v1.search import PUBLIC_SEARCH_STATUSES, build_hit_id, hydrate_builds
+from squid.api.v1.schemas.submissions import FormManifestResponse, SavedBuildFormResponse
+from squid.api.v1.search import build_hit_id, hydrate_builds
 from squid.core.actors import ActingContext
 from squid.core.builds.application import (
     BUILD_SORT_FIELDS,
@@ -50,24 +52,24 @@ from squid.core.builds.application import (
     PublicBuildSummary,
 )
 from squid.core.builds.application.edits import BUILD_EDIT, build_target, patch_values
+from squid.core.builds.application.queries import BuildListFilters
+from squid.core.builds.domain import BuildCategory
 from squid.core.builds.errors import (
     BuildNotFoundError,
     BuildRevisionMismatchError,
     BuildRevisionRequiredError,
 )
+from squid.core.builds.history import PublicBuildRevision
 from squid.core.builds.models import Build
 from squid.core.edits.domain import EditCommand, LatestRevision, Revision
-from squid.core.errors import ValidationError
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.domain.catalogue import (
     BUILD_SUBMISSION_CREATE,
+    BUILD_SUBMISSION_EDIT,
     BUILD_SUBMISSION_VIEW_PENDING,
 )
 from squid.core.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
-from squid.core.validation import (
-    FieldErrorCode,
-    SimpleIssue,
-)
+from squid.core.submissions.application.build_answers import answers_from_build
 
 UserWriter = CurrentCaller
 _BUILD_ETAG = re.compile(r'^"build-(?P<build_id>[1-9][0-9]*)-r(?P<revision>[1-9][0-9]*)"$')
@@ -137,7 +139,7 @@ async def edit_build(
     opt=contract(cli=transport_only()),
 )
 async def get_build(
-    build_id: FromPath[int], build_queries: BuildQueries, services: Services, caller: CurrentCaller
+    request: Request, build_id: FromPath[int], build_queries: BuildQueries, services: Services, caller: CurrentCaller
 ) -> Response[BuildDetail]:
     """Return one approved public build.
 
@@ -145,8 +147,64 @@ async def get_build(
     not expose unpublished submissions, even to callers who can view them elsewhere.
     """
     build = await build_queries.get_public(build_id, context=caller.context())
-    detail = await BrowserViews(services, caller).build(build)
+    detail = await BrowserViews(services, caller).build(build, request)
     return Response(detail, headers={"ETag": build_etag(build)})
+
+
+@get(
+    "/{build_id:int}/history",
+    responses=responses(404, 422, 503),
+    security=[ANONYMOUS],
+    operation_id="builds_history_list",
+    opt=contract(cli=transport_only()),
+)
+async def get_build_history(
+    request: Request,
+    build_id: FromPath[int],
+    build_queries: BuildQueries,
+    services: Services,
+    caller: CurrentCaller,
+    offset: OffsetParam = None,
+    page_size: PageSizeParam = 20,
+) -> Page[PublicBuildRevision]:
+    """List published revisions newest first, with changes to public build fields."""
+    manifest = await services.submission_forms.edit_manifest(
+        locale=locale_for_request(request), context=caller.context()
+    )
+    labels = {field.id: field.label for category in manifest.categories for field in manifest.fields_for(category.code)}
+    history = await build_queries.public_history(
+        build_id, labels, offset=offset or 0, page_size=page_size, context=caller.context()
+    )
+    return Page.from_domain(history)
+
+
+@get(
+    "/{build_id:int}/form",
+    responses=responses(401, 403, 404, 422, 503),
+    guards=[requires(BUILD_SUBMISSION_EDIT)],
+    security=[WEB],
+    response_headers={"Cache-Control": "private, no-store"},
+    operation_id="builds_edit_form_get",
+    opt=contract(cli=browser_only()),
+)
+async def get_build_form(
+    request: Request, build_id: FromPath[int], build_queries: BuildQueries, services: Services, caller: CurrentCaller
+) -> SavedBuildFormResponse:
+    """Read an approved build in the moderator editor's form vocabulary."""
+    build = await build_queries.get_public(build_id, context=caller.context())
+    manifest = await services.submission_forms.edit_manifest(
+        locale=locale_for_request(request), context=caller.context()
+    )
+    saved = answers_from_build(build)
+    return SavedBuildFormResponse.model_validate(
+        {
+            "revision": build.revision,
+            "category": build.category.value.lower(),
+            "manifest": FormManifestResponse.from_domain(manifest),
+            "answers": saved.answers,
+            "unresolved": saved.unresolved,
+        }
+    )
 
 
 @get(
@@ -197,7 +255,12 @@ async def list_builds(
     caller: CurrentCaller,
     q: Annotated[str | None, QueryParameter(max_length=1_000)] = None,
     status: FromQuery[BuildStatusFilter | None] = None,
-    sort: Annotated[str | None, QueryParameter(max_length=80)] = None,
+    category: FromQuery[BuildCategory | None] = None,
+    version: Annotated[int | None, QueryParameter(ge=1)] = None,
+    tag: FromQuery[list[str] | None] = None,
+    creator_id: FromQuery[UUID | None] = None,
+    submitted_by: FromQuery[Literal["me"] | None] = None,
+    sort: FromQuery[Literal["newest", "oldest", "updated", "fastest_open", "smallest_volume", "title"] | None] = None,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
     after_id: AfterIdParam = None,
@@ -205,14 +268,25 @@ async def list_builds(
 ) -> Page[PublicBuildSummary]:
     """Search approved builds, or list builds with a selected moderation status.
 
-    Supplying q selects indexed search and cannot be combined with status. Search
+    Supplying q selects indexed search within the selected status. Search
     uses offset pagination. Without q, results come from the build repository;
     unpublished statuses require build.submission.view_pending permission.
     """
+    orders = {
+        "newest": "-submission_time",
+        "oldest": "submission_time",
+        "updated": "-edited_time",
+        "fastest_open": "opening_time",
+        "smallest_volume": "volume",
+        "title": "title",
+    }
+    order = orders.get(sort, sort) if sort is not None else None
+    filters = BuildListFilters(category, version, tuple(dict.fromkeys(tag or ())), creator_id)
+    submitter_id = caller.require_consented_account() if submitted_by is not None else None
+    effective = status or BuildStatusFilter.APPROVED
+    if effective is not BuildStatusFilter.APPROVED and submitter_id is None:
+        await _require_pending_view(permissions, caller)
     if q is not None:
-        if status is not None:
-            msg = "status cannot be combined with q"
-            raise ValidationError(msg, issues=(SimpleIssue(field="/query/status", code=FieldErrorCode.INVALID_VALUE),))
         # Relevance order has no identifier sequence to anchor to, so ranked pages are offset-only.
         selector = resolve_selector(offset=offset, after_id=after_id, before_id=before_id, keyset_allowed=False)
         result = await search_service.search(
@@ -222,12 +296,28 @@ async def list_builds(
                 mode=SearchMode.LEXICAL,
                 page_size=page_size,
                 offset=selector.offset,
-                sort=SearchSort.parse(sort),
-                visible_statuses=PUBLIC_SEARCH_STATUSES,
+                sort=SearchSort.parse(
+                    {
+                        "-submission_time": "-created_at",
+                        "submission_time": "created_at",
+                        "-edited_time": "-updated_at",
+                    }.get(order, order)
+                    if order is not None
+                    else None
+                ),
+                visible_statuses=frozenset({effective.value}),
+                catalogue_filters=filters,
+                submitter_account_id=submitter_id,
             ),
             context=caller.context(),
         )
-        summaries = await hydrate_builds(build_queries, result.hits, context=caller.context())
+        summaries = await hydrate_builds(
+            build_queries,
+            result.hits,
+            status=effective.to_domain(),
+            submitter_id=submitter_id,
+            context=caller.context(),
+        )
         return Page(
             # A page can come back short of `total` when the projection outlived a build; the count
             # is the search backend's, and hydrate_builds has already logged the drift.
@@ -239,15 +329,14 @@ async def list_builds(
             prev=PageAnchor.from_domain(result.prev) if result.prev is not None else None,
         )
 
-    sort_field, descending = parse_page_sort(sort, allowed=BUILD_SORT_FIELDS, default="-id")
+    sort_field, descending = parse_page_sort(order, allowed=BUILD_SORT_FIELDS, default="-id")
     selector = resolve_selector(
         offset=offset, after_id=after_id, before_id=before_id, keyset_allowed=sort_field == "id"
     )
-    effective = status or BuildStatusFilter.APPROVED
-    if effective is not BuildStatusFilter.APPROVED:
-        await _require_pending_view(permissions, caller)
     page = await build_queries.list_page(
         statuses=frozenset({effective.to_domain()}),
+        submitter_account_id=submitter_id,
+        filters=filters,
         sort=BuildListSort(field=cast(BuildSortField, sort_field), descending=descending),
         selector=selector,
         page_size=page_size,
@@ -292,5 +381,5 @@ router = Router(
     },
     path="/builds",
     tags=["builds"],
-    route_handlers=[edit_build, get_build, get_build_media, list_builds],
+    route_handlers=[edit_build, get_build, get_build_form, get_build_history, get_build_media, list_builds],
 )

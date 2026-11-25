@@ -166,7 +166,12 @@ def build_hit_id(source_id: str) -> int:
 
 
 async def hydrate_builds(
-    build_queries: BuildQueryService, hits: Sequence[SearchHit], *, context: ActingContext
+    build_queries: BuildQueryService,
+    hits: Sequence[SearchHit],
+    *,
+    context: ActingContext,
+    status: BuildStatus = BuildStatus.APPROVED,
+    submitter_id: int | None = None,
 ) -> dict[int, PublicBuildSummary]:
     """Load current build rows for search hits and log any missing rows.
 
@@ -181,7 +186,9 @@ async def hydrate_builds(
     summaries = {
         build.id: PublicBuildSummary.from_build(build)
         for build in builds
-        if build.submission_status is BuildStatus.APPROVED and build.id is not None  # pyright: ignore[reportUnnecessaryComparison]
+        if build.submission_status is status
+        and (submitter_id is None or build.submitter_account_id == submitter_id)
+        and build.id is not None  # pyright: ignore[reportUnnecessaryComparison]
     }
     missing = [identifier for identifier in hit_ids if identifier not in summaries]
     if missing:

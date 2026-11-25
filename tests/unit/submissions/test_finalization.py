@@ -46,6 +46,7 @@ from squid.core.submissions.domain import (
     SubmissionCategory,
     SubmissionOrigin,
 )
+from squid.core.submissions.domain.build_edit import DraftEditResult
 from squid.core.submissions.errors import DraftAccessDeniedError
 from squid.core.submissions.infrastructure.finalization_payloads import (
     LEGACY_TAGS_FIELD,
@@ -353,9 +354,11 @@ async def _submit(
         SubmissionPreparation(FakeArtifacts(readiness), FakeSponsors(sponsor)),
         uow_factory=partial(FinalizationScope, jobs, repository),
     )
-    return await service.submit(
+    outcome = await service.submit(
         DRAFT_ID, context=ActingContext.for_actor(UserActor(account_id=7)), locale="en", now=NOW
-    ), jobs
+    )
+    assert not isinstance(outcome, DraftEditResult)
+    return outcome, jobs
 
 
 @pytest.mark.asyncio

@@ -3,12 +3,16 @@
 from dataclasses import dataclass, replace
 from decimal import Decimal
 
+from litestar import Request
 from pydantic import BaseModel, Field
 
+from squid.api.links import relative_url_for
 from squid.api.security import Caller
-from squid.api.v1.schemas.builds import BuildDetail, BuildMedia, BuildViewer
+from squid.api.v1.schemas.builds import BuildDetail, BuildMedia, BuildSchematicOverview, BuildViewer
+from squid.api.v1.schemas.schematics import SchematicSummary
 from squid.core.accounts.domain.profiles import PublicCreatorProfile
-from squid.core.auth.infrastructure.viewer import SessionCounts, SessionUser
+from squid.core.auth.application.viewer import SessionCounts, SessionUser
+from squid.core.builds.application.queries import PublicBuildPreview
 from squid.core.builds.domain.edit_policy import BuildEditDecision, decide_build_edit
 from squid.core.builds.models import Build
 from squid.core.notifications.domain import RecordSubscriptionFilter, SubscriptionKind, TagPredicate
@@ -70,8 +74,29 @@ class BrowserViews:
         user, counts, permissions = await self.services.viewer_queries.session(context=self.caller.context())
         return SessionSnapshot(user, self.caller.consent_pending, permissions, counts)
 
-    async def build(self, build: Build) -> BuildDetail:
-        detail = BuildDetail.from_domain(build)
+    async def build(self, build: Build, request: Request) -> BuildDetail:
+        publication = await self.services.build_queries.publication(build, context=self.caller.context())
+        attachments = await self.services.schematics.list_public_for_build(build.id, context=self.caller.context())
+        primary = next((item for item in attachments if item.is_primary), None)
+        summary = (
+            SchematicSummary.from_domain(
+                primary,
+                download_url=relative_url_for(
+                    request, "build_schematic_content", build_id=build.id, schematic_id=primary.id
+                ),
+            )
+            if primary is not None
+            else None
+        )
+        detail = replace(
+            BuildDetail.from_domain(build),
+            approved_at=publication.approved_at,
+            submitted_by=publication.submitted_by,
+            last_edited=publication.last_edited,
+            history_count=publication.history_count,
+            vote_session_id=publication.vote_session_id,
+            schematics=BuildSchematicOverview(count=len(attachments), primary=summary),
+        )
         if self.account_id is not None:
             follows, ballot = await self.services.viewer_queries.build_state(build, context=self.caller.context())
             permissions = await self.services.permissions.check(
@@ -101,15 +126,16 @@ class BrowserViews:
                 ),
             )
         if media := self.services.published_build_media:
-            images, videos = await media.urls(build.id, context=self.caller.context())
-            detail = replace(
-                detail,
-                media=[
-                    *(BuildMedia(kind="image", url=url) for url in images),
-                    *(BuildMedia(kind="video", url=url) for url in videos),
-                    *detail.media,
-                ],
-            )
+            retained = await media.gallery(build.id, context=self.caller.context())
+            gallery = [
+                BuildMedia(kind=item.kind, url=item.url, width=item.width, height=item.height) for item in retained
+            ]
+            preview = detail.preview
+            if preview is None:
+                first = next((item for item in retained if item.kind == "image"), None)
+                if first is not None:
+                    preview = PublicBuildPreview("image", first.url, first.width, first.height)
+            detail = replace(detail, media=[*gallery, *detail.media], preview=preview)
         return detail
 
     async def record(self, detail: PublicRecordDetail) -> PublicRecordDetail:

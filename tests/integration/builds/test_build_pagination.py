@@ -119,3 +119,21 @@ async def test_the_total_matches_what_paging_actually_returns(
     assert total == 5
     assert len(walked) == total
     assert len(set(walked)) == total
+
+
+async def test_volume_order_places_tied_builds_before_unknown_dimensions(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    identifiers = await seed(migrated_session_factory, 4)
+    factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    async with factory() as uow, uow.builds.editing(actor="test", source="test"):
+        for build_id, width in zip(identifiers, (3, None, 2, 2), strict=True):
+            build = await uow.builds.get_for_update(build_id)
+            assert build is not None
+            build.width, build.height, build.depth = width, 2, 4
+        await uow.commit()
+    async with factory() as uow:
+        ordered = await uow.builds.list_page(
+            statuses=_CONFIRMED, sort=BuildListSort("volume", descending=False), limit=4
+        )
+        assert [item.id for item in ordered] == [identifiers[2], identifiers[3], identifiers[0], identifiers[1]]

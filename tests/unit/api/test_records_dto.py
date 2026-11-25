@@ -21,7 +21,7 @@ from squid.api.v1.records import (
     lookup_door_ranges,
 )
 from squid.core.builds.application import PublicBuildDimensions, PublicBuildPreview, PublicBuildSummary, PublicBuildTag
-from squid.core.builds.application.queries import PublicBuildStatus
+from squid.core.builds.application.queries import PublicBuildCreator, PublicBuildStatus
 from squid.core.builds.domain import BuildCategory
 from squid.core.builds.domain.expansion import DoorExpansion, ExpansionBranch
 from squid.core.builds.domain.expansion_evaluation import PointStatus
@@ -113,7 +113,7 @@ async def test_record_detail_serializes_the_application_read_model(expanded: boo
         status=PublicBuildStatus.APPROVED,
         category=BuildCategory.DOOR,
         dimensions=PublicBuildDimensions(width=5, height=6, depth=None),
-        creators=("Alice",),
+        creators=(PublicBuildCreator("Alice", None),),
         tags=(PublicBuildTag(key="official_delay", name="Delay", value=Decimal("1.5"), unit="second"),),
         preview=PublicBuildPreview(kind="render", url="https://media.example/render.png"),
         version_spec=">=1.21",
@@ -185,7 +185,8 @@ async def test_record_detail_serializes_the_application_read_model(expanded: boo
                 "status": "approved",
                 "category": "Door",
                 "dimensions": {"width": 5, "height": 6, "depth": None},
-                "creators": ["Alice"],
+                "creators": [{"name": "Alice", "creator_id": None}],
+                "record_summary": {"held_count": 0, "former_count": 0},
                 "credits": [],
                 "subtitle": None,
                 # Decimal tag values travel as strings so clients keep their exact precision.

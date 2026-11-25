@@ -1,17 +1,19 @@
 """Application queries for builds, shared by the bot, the API, and the worker."""
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import Literal, Protocol, get_args
 from urllib.parse import urlsplit
+from uuid import UUID
 
 from squid.core.actors import ActingContext, WorkerActor
 from squid.core.builds.domain import BuildCategory, BuildStatus
 from squid.core.builds.domain.credits import CreditAttribution, CreditKind, CreditRole
 from squid.core.builds.errors import BuildNotFoundError
+from squid.core.builds.history import BuildPublication, PublicBuildRevision
 from squid.core.builds.models import Build, DoorBuild
 from squid.core.errors import DataIntegrityError
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
@@ -26,9 +28,17 @@ from squid.core.permissions.domain.catalogue import (
 )
 from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
-type BuildSortField = Literal["id", "submission_time"]
+type BuildSortField = Literal["id", "submission_time", "edited_time", "opening_time", "volume", "title"]
 BUILD_SORT_FIELDS: frozenset[str] = frozenset(get_args(BuildSortField.__value__))
 """Indexed columns available for sorting build listings."""
+
+
+@dataclass(frozen=True, slots=True)
+class BuildListFilters:
+    category: BuildCategory | None = None
+    version: int | None = None
+    tags: tuple[str, ...] = ()
+    creator_id: UUID | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +49,7 @@ class BuildListSort:
     descending: bool = True
 
 
+EMPTY_BUILD_FILTERS = BuildListFilters()
 DEFAULT_BUILD_LIST_SORT = BuildListSort()
 
 
@@ -72,6 +83,18 @@ class PublicBuildDimensions:
 
 
 @dataclass(frozen=True, slots=True)
+class BuildRecordSummary:
+    held_count: int = 0
+    former_count: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class PublicBuildCreator:
+    name: str
+    creator_id: UUID | None
+
+
+@dataclass(frozen=True, slots=True)
 class PublicBuildCredit:
     """Public attribution without private account links or provider identifiers."""
 
@@ -80,6 +103,7 @@ class PublicBuildCredit:
     username: str | None
     role: CreditRole
     attribution: CreditAttribution
+    creator_id: UUID | None
 
 
 class PublicBuildStatus(StrEnum):
@@ -104,7 +128,7 @@ class PublicBuildSummary:
     status: PublicBuildStatus
     category: BuildCategory
     dimensions: PublicBuildDimensions
-    creators: tuple[str, ...]
+    creators: tuple[PublicBuildCreator, ...]
     tags: tuple[PublicBuildTag, ...]
     preview: PublicBuildPreview | None
     version_spec: str | None
@@ -113,6 +137,7 @@ class PublicBuildSummary:
     closing_time: int | None
     created_at: datetime | None
     updated_at: datetime | None
+    record_summary: BuildRecordSummary = BuildRecordSummary()
     subtitle: str | None = None
     credits: tuple[PublicBuildCredit, ...] = ()
 
@@ -132,16 +157,24 @@ class PublicBuildSummary:
             revision=build.revision,
             title=build.title,
             subtitle=build.subtitle,
+            record_summary=BuildRecordSummary(len(build.published_records.held), len(build.published_records.former)),
             display_name=build.display_name,
             status=PublicBuildStatus[build.submission_status.name]
             if build.submission_status is not None
             else PublicBuildStatus.UNKNOWN,
             category=build.category,
             dimensions=PublicBuildDimensions(width=build.width, height=build.height, depth=build.depth),
-            creators=tuple(build.creators_ign),
+            creators=tuple(
+                dict.fromkeys(
+                    PublicBuildCreator(credit.name, credit.creator_id)
+                    for credit in build.credits
+                    if credit.role in {CreditRole.CREATOR, CreditRole.DESIGNER}
+                )
+            ),
             credits=tuple(
                 PublicBuildCredit(
                     name=credit.name,
+                    creator_id=credit.creator_id,
                     kind=credit.kind,
                     username=credit.username,
                     role=credit.role,
@@ -199,6 +232,7 @@ class BuildQueryRepository(Protocol):
         self,
         *,
         statuses: frozenset[BuildStatus],
+        filters: BuildListFilters,
         submitter_account_id: int | None,
         sort: BuildListSort,
         offset: int,
@@ -211,6 +245,7 @@ class BuildQueryRepository(Protocol):
         self,
         *,
         statuses: frozenset[BuildStatus],
+        filters: BuildListFilters,
         submitter_account_id: int | None,
     ) -> int: ...
 
@@ -285,6 +320,21 @@ class BuildQueryService:
                     raise BuildNotFoundError(build_id)
                 return build
 
+    async def publication(self, build: Build, *, context: ActingContext) -> BuildPublication:
+        with context.scope():
+            async with self._uow_factory() as uow:
+                return await uow.build_history.publication(build)
+
+    async def public_history(
+        self, build_id: int, labels: Mapping[str, str], *, context: ActingContext, offset: int, page_size: int
+    ) -> Page[PublicBuildRevision]:
+        with context.scope():
+            async with self._uow_factory() as uow:
+                build = await uow.builds.get_by_id(build_id)
+                if build is None or build.submission_status is not BuildStatus.APPROVED:
+                    raise BuildNotFoundError(build_id)
+                return await uow.build_history.public_page(build_id, labels, offset=offset, page_size=page_size)
+
     async def pending(self, *, context: ActingContext) -> Sequence[Build]:
         with context.scope():
             async with self._uow_factory() as uow:
@@ -312,6 +362,7 @@ class BuildQueryService:
         *,
         context: ActingContext,
         statuses: frozenset[BuildStatus],
+        filters: BuildListFilters = EMPTY_BUILD_FILTERS,
         submitter_account_id: int | None = None,
         sort: BuildListSort = DEFAULT_BUILD_LIST_SORT,
         selector: PageSelector = FIRST_PAGE,
@@ -329,6 +380,7 @@ class BuildQueryService:
             async with self._uow_factory() as uow:
                 rows = await uow.builds.list_page(
                     statuses=statuses,
+                    filters=filters,
                     submitter_account_id=submitter_account_id,
                     sort=sort,
                     offset=selector.offset,
@@ -339,6 +391,7 @@ class BuildQueryService:
                 )
                 total = await uow.builds.count(
                     statuses=statuses,
+                    filters=filters,
                     submitter_account_id=submitter_account_id,
                 )
                 return keyset_page(
@@ -359,6 +412,17 @@ class BuildQueryService:
             return await self.get(build_id, context=context)
 
 
+class PublicHistoryReader(Protocol):
+    async def publication(self, build: Build) -> BuildPublication: ...
+
+    async def public_page(
+        self, build_id: int, labels: Mapping[str, str], *, offset: int, page_size: int
+    ) -> Page[PublicBuildRevision]: ...
+
+
 class BuildQueryUnitOfWork(UnitOfWork, Protocol):
+    @property
+    def build_history(self) -> PublicHistoryReader: ...
+
     @property
     def builds(self) -> BuildQueryRepository: ...

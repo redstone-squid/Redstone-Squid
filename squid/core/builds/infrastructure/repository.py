@@ -9,7 +9,7 @@ from dataclasses import replace
 from decimal import Decimal
 from typing import Any, cast
 
-from sqlalchemy import Select, Table, delete, func, select, update
+from sqlalchemy import BigInteger, String, Table, delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import raiseload, selectinload
@@ -21,7 +21,10 @@ from squid.core.accounts.domain import fold_creator_name
 from squid.core.accounts.models import Account, CreatorAlias
 from squid.core.builds.application.queries import (
     DEFAULT_BUILD_LIST_SORT,
+    EMPTY_BUILD_FILTERS,
+    BuildListFilters,
     BuildListSort,
+    BuildRecordSummary,
     PublicBuildSummary,
     PublicBuildTag,
 )
@@ -30,6 +33,7 @@ from squid.core.builds.domain.events import BuildEdited
 from squid.core.builds.errors import BuildRevisionMismatchError, InvalidBuildError
 from squid.core.builds.history import BuildEditActor, BuildEditContext, HistoryOperation
 from squid.core.builds.infrastructure.edit_scope import build_edit_scope
+from squid.core.builds.infrastructure.listing import filter_build_listing
 from squid.core.builds.infrastructure.loading import BuildLoader
 from squid.core.builds.models import (
     BUILD_CLASS_BY_CATEGORY,
@@ -46,6 +50,7 @@ from squid.core.events.infrastructure.repository import publish_domain_event
 from squid.core.messages.domain import MessageSnapshot
 from squid.core.messages.models import Message
 from squid.core.records.models import DoorTimingVariant, ExtenderTimingVariant
+from squid.core.search.models import SearchDocument
 from squid.core.settings.infrastructure.repository import ensure_server_settings
 from squid.core.tags.domain import TagSemanticKind, TagValueType
 from squid.core.tags.infrastructure.loading import assignment_units, definition_units
@@ -57,19 +62,6 @@ from squid.core.tags.models import (
 from squid.core.versions.models import Version
 
 logger = logging.getLogger(__name__)
-
-
-def _page_filter[S: Select[Any]](
-    statement: S,
-    *,
-    statuses: frozenset[BuildStatus],
-    submitter_account_id: int | None,
-) -> S:
-    """Apply the status and submitter visibility policy shared by page and count queries."""
-    statement = statement.where(Build.submission_status.in_(statuses))
-    if submitter_account_id is not None:
-        statement = statement.where(Build.submitter_account_id == submitter_account_id)
-    return statement
 
 
 def _mapper_load_options() -> tuple[Any, ...]:
@@ -270,12 +262,8 @@ class BuildRepository:
             return ()
 
         credits: dict[int, list[Credit]] = defaultdict(list)
-        for credit in await session.scalars(
-            select(BuildCredit)
-            .where(BuildCredit.build_id.in_(public_ids))
-            .order_by(BuildCredit.build_id, BuildCredit.position)
-        ):
-            credits[credit.build_id].append(credit.to_credit())
+        for credit, _, creator_id in await session.execute(BuildLoader.credit_rows(public_ids)):
+            credits[credit.build_id].append(credit.to_credit(creator_id))
 
         versions: dict[int, list[str]] = defaultdict(list)
         for build_id, edition, major, minor, patch in await session.execute(
@@ -352,6 +340,10 @@ class BuildRepository:
             )
             for row in rows
         }
+        for build_id, holdings in (await self._loader.records(session, public_ids)).items():
+            by_id[build_id] = replace(
+                by_id[build_id], record_summary=BuildRecordSummary(len(holdings.held), len(holdings.former))
+            )
         return tuple(by_id[build_id] for build_id in build_ids if build_id in by_id)
 
     async def get_by_source_submission_draft_id(self, draft_id: uuid.UUID) -> Build | None:
@@ -372,6 +364,7 @@ class BuildRepository:
         self,
         *,
         statuses: frozenset[BuildStatus],
+        filters: BuildListFilters = EMPTY_BUILD_FILTERS,
         submitter_account_id: int | None = None,
         sort: BuildListSort = DEFAULT_BUILD_LIST_SORT,
         offset: int = 0,
@@ -391,16 +384,30 @@ class BuildRepository:
             msg = "ID anchors require the ID sort"
             raise ValueError(msg)
         session = self._session()
-        statement = _page_filter(
+        statement = filter_build_listing(
             select(Build),
             statuses=statuses,
             submitter_account_id=submitter_account_id,
+            filters=filters,
         )
         reverse = before_id is not None
-        if sort.field == "submission_time":
-            time_order = Build.submission_time.desc() if sort.descending else Build.submission_time.asc()
-            id_order = Build.id.desc() if sort.descending else Build.id.asc()
-            statement = statement.order_by(time_order.nulls_last(), id_order)
+        if sort.field != "id":
+            if sort.field == "opening_time":
+                doors = DoorBuild.__table__.c
+                key = select(doors.normal_opening_time).where(doors.build_id == Build.id).scalar_subquery()
+            elif sort.field == "volume":
+                key = Build.width.cast(BigInteger) * Build.height * Build.depth
+            elif sort.field == "title":
+                indexed = (
+                    select(SearchDocument.title)
+                    .where(SearchDocument.resource_kind == "build", SearchDocument.source_key == Build.id.cast(String))
+                    .scalar_subquery()
+                )
+                key = func.lower(func.coalesce(Build.display_name, indexed))
+            else:
+                key = Build.submission_time if sort.field == "submission_time" else Build.edited_time
+            order = key.desc() if sort.descending else key.asc()
+            statement = statement.order_by(order.nulls_last(), Build.id.desc() if sort.descending else Build.id.asc())
         elif before_id is not None:
             # Walk away from the anchor in reversed display order; the page is flipped back below.
             statement = statement.where(Build.id > before_id if sort.descending else Build.id < before_id).order_by(
@@ -420,16 +427,18 @@ class BuildRepository:
         self,
         *,
         statuses: frozenset[BuildStatus],
+        filters: BuildListFilters = EMPTY_BUILD_FILTERS,
         submitter_account_id: int | None = None,
     ) -> int:
         """Count the builds a listing can display under a visibility policy."""
         if not statuses:
             return 0
         session = self._session()
-        statement = _page_filter(
+        statement = filter_build_listing(
             select(func.count()).select_from(Build),
             statuses=statuses,
             submitter_account_id=submitter_account_id,
+            filters=filters,
         )
         return await session.scalar(statement) or 0
 

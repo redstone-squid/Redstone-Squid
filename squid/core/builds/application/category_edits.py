@@ -5,6 +5,7 @@ from functools import cache
 from typing import Protocol, Self, override
 
 from pydantic import BaseModel, ConfigDict, model_validator
+from pydantic_core import PydanticCustomError
 
 from squid.core.actors import Actor
 from squid.core.builds.application.edit_schema import DoorPatch, ExtenderPatch
@@ -24,6 +25,7 @@ from squid.core.submissions.application.build_answers import answers_from_build
 from squid.core.submissions.application.forms import build_edit_manifest
 from squid.core.submissions.domain import SubmissionOrigin
 
+_INVALID_VALUE = "value_error"
 BUILD_CATEGORY_EDIT = "build.category"
 _edit_manifest = cache(build_edit_manifest)
 
@@ -43,10 +45,10 @@ class BuildCategoryChange(BaseModel):
             self.category is not BuildCategory.DOOR or "patterns" in self.door.model_fields_set
         ):
             msg = "Door details must match the selected category. Patterns are edited on the saved build."
-            raise ValueError(msg)
+            raise PydanticCustomError(_INVALID_VALUE, msg)
         if self.extender is not None and self.category is not BuildCategory.EXTENDER:
             msg = "Extender details must match the selected category."
-            raise ValueError(msg)
+            raise PydanticCustomError(_INVALID_VALUE, msg)
         return self
 
     def target(self, build_id: int) -> Build:

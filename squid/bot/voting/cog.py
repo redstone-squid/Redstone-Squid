@@ -205,6 +205,35 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         name=tr(t"command-poll-review-name = poll-review"),
         description=tr(t"command-poll-review-help = Inspect a paused poll or confirm a review decision."),
         defer="private",
+        options={
+            "poll_id": sd.Option(
+                name=tr(t"poll-review-poll-id-name = poll_id"),
+                description=tr(t"poll-review-poll-id-help = Poll to review. Omit to list paused polls."),
+            ),
+            "action": sd.Option(
+                name=tr(t"poll-review-action-name = action"),
+                description=tr(t"poll-review-action-help = Review decision to inspect or confirm."),
+                choices=[
+                    sd.Choice("inspect", tr(t"poll-review-action-inspect = Inspect")),
+                    sd.Choice("retry", tr(t"poll-review-action-retry = Retry")),
+                    sd.Choice("finalize", tr(t"poll-review-action-finalize = Finalize")),
+                    sd.Choice("reopen", tr(t"poll-review-action-reopen = Reopen")),
+                    sd.Choice("void", tr(t"poll-review-action-void = Void")),
+                ],
+            ),
+            "revision": sd.Option(
+                name=tr(t"poll-review-revision-name = revision"),
+                description=tr(t"poll-review-revision-help = Count revision shown by the inspection."),
+            ),
+            "reason": sd.Option(
+                name=tr(t"poll-review-reason-name = reason"),
+                description=tr(t"poll-review-reason-help = Reason for finalizing, reopening, or voiding the poll."),
+            ),
+            "duration": sd.Option(
+                name=tr(t"poll-review-duration-name = duration"),
+                description=tr(t"poll-review-duration-help = Voting time to add when reopening the poll."),
+            ),
+        },
     )
     @app_commands.guild_only()
     async def poll_review(

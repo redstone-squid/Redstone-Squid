@@ -57,7 +57,9 @@ from squid.core.submissions.application import (
     SubmissionRequestResult,
 )
 from squid.core.submissions.application.edits import change_command, draft_target
+from squid.core.submissions.application.finalization import DraftEditor
 from squid.core.submissions.domain import FormManifest, SubmissionOrigin
+from squid.core.submissions.domain.build_edit import DraftEditResult
 
 
 class SubmissionFormReader(Protocol):
@@ -122,15 +124,20 @@ class SubmissionDraftCommands(Protocol):
 class SubmissionFinalizationCommands(Protocol):
     """Owner-scoped finalization operations needed by the HTTP transport."""
 
+    @property
+    def editor(self) -> DraftEditor | None: ...
+
     async def submit(
         self,
         draft_id: UUID,
         *,
         context: ActingContext,
         locale: str | None,
-    ) -> SubmissionRequestResult: ...
+    ) -> SubmissionRequestResult | DraftEditResult: ...
 
-    async def status(self, draft_id: UUID, *, context: ActingContext) -> SubmissionRequestResult | None: ...
+    async def status(
+        self, draft_id: UUID, *, context: ActingContext
+    ) -> SubmissionRequestResult | DraftEditResult | None: ...
 
     async def attempt(
         self, draft_id: UUID, attempt_id: UUID, *, context: ActingContext
@@ -397,7 +404,7 @@ async def form_options(
 @post(
     "/drafts",
     status_code=status.HTTP_201_CREATED,
-    responses=responses(400, 401, 403, 409, 422, 503),
+    responses=responses(400, 401, 403, 404, 409, 422, 503),
     operation_id="submission_draft_create",
     security=[WEB_WRITE, DEVICE, MINECRAFT],
     opt=contract(
@@ -407,6 +414,7 @@ async def form_options(
     dependencies={
         "_reservation": Provide(reserve_idempotent_request),
         "drafts": Provide(get_submission_drafts, sync_to_thread=False),
+        "finalization": Provide(get_submission_finalization, sync_to_thread=False),
         "caller": Provide(authenticated_submission_caller),
     },
 )
@@ -415,14 +423,28 @@ async def create_draft(
     data: JSONBody[DraftCreateRequest],
     request: Request,
     drafts: Drafts,
+    finalization: Finalization,
     caller: SubmissionCaller,
     *,
     _reservation: NamedDependency[SkipValidation[None]],
 ) -> StoredDraftResponse:
-    """Create an empty draft owned by the signed-in account."""
+    """Create a submission draft or prefill an edit draft from an approved source build."""
     origin = _submission_origin(caller)
     if data.origin is not origin:
         raise AuthorizationError
+    if data.source_build_id is not None:
+        caller.require_consented_account()
+        editor = finalization.editor
+        if origin is not SubmissionOrigin.WEB or editor is None:
+            raise AuthorizationError
+        draft = await editor.create(
+            data.source_build_id,
+            data.category,
+            frozenset(data.client_capabilities),
+            locale_for_request(request),
+            context=caller.context(),
+        )
+        return StoredDraftResponse.from_domain(draft)
     draft = await drafts.create(
         owner_account_id=caller.require_consented_account(),
         context=caller.context(),
@@ -542,7 +564,7 @@ async def upgrade_draft_manifest(
 @post(
     "/drafts/{draft_id:uuid}/attempts",
     status_code=status.HTTP_202_ACCEPTED,
-    responses=responses(400, 401, 403, 404, 409, 422, 503),
+    responses=responses(400, 401, 403, 404, 409, 412, 422, 503),
     operation_id="submission_finalization_start",
     security=[WEB_WRITE, DEVICE, MINECRAFT],
     opt=contract(
@@ -563,13 +585,15 @@ async def submit_draft(
     context: SubmissionContext,
     *,
     _reservation: NamedDependency[SkipValidation[None]],
-) -> SubmissionAttemptResponse | DraftPreparationResponse:
+) -> SubmissionAttemptResponse | DraftPreparationResponse | DraftEditResult:
     """Validate a draft and request finalization.
 
     If files are still processing or fields need correction, return preparation
     state. Otherwise return the durable attempt that performs finalization.
     """
     snapshot = await finalization.submit(draft_id, context=context, locale=locale_for_request(request))
+    if isinstance(snapshot, DraftEditResult):
+        return snapshot
     if isinstance(snapshot, DraftPreparationSnapshot):
         return DraftPreparationResponse.from_domain(snapshot)
     return SubmissionAttemptResponse.from_domain(snapshot)
@@ -592,11 +616,13 @@ async def submit_draft(
 @private_response
 async def get_draft_submission(
     draft_id: FromPath[UUID], finalization: Finalization, context: SubmissionContext
-) -> SubmissionAttemptResponse | DraftPreparationResponse:
+) -> SubmissionAttemptResponse | DraftPreparationResponse | DraftEditResult:
     """Return retained finalization state after rechecking draft ownership."""
     snapshot = await finalization.status(draft_id, context=context)
     if snapshot is None:
         raise SubmissionFinalizationNotFoundError
+    if isinstance(snapshot, DraftEditResult):
+        return snapshot
     if isinstance(snapshot, DraftPreparationSnapshot):
         return DraftPreparationResponse.from_domain(snapshot)
     return SubmissionAttemptResponse.from_domain(snapshot)

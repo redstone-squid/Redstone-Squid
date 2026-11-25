@@ -10,6 +10,8 @@ from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
+from squid.core.builds.domain import BuildStatus
+from squid.core.builds.models import Build
 from squid.core.media.application.jobs import (
     ArtifactCleanupClaim,
     ClaimedMediaJob,
@@ -25,6 +27,7 @@ from squid.core.media.application.jobs import (
 )
 from squid.core.media.domain import MediaBatchTotals, MediaKind, MediaLimits
 from squid.core.media.domain.jobs import MediaArtifactRole, MediaJobStatus
+from squid.core.media.domain.models import IMAGE_CONTENT_TYPES, VIDEO_CONTENT_TYPES
 from squid.core.media.errors import (
     MediaDraftNotFoundError,
     MediaDraftRevisionConflictError,
@@ -34,6 +37,7 @@ from squid.core.media.errors import (
 from squid.core.media.infrastructure.artifact_publication import PostgresArtifactPublicationRepository
 from squid.core.media.infrastructure.references import media_for_draft, retained_elsewhere
 from squid.core.media.models import (
+    MediaArtifactObjectRecord,
     MediaArtifactRecord,
     MediaDraftReference,
     MediaProcessingJobRecord,
@@ -47,6 +51,7 @@ from squid.core.persistence.queue import VISIBILITY_TIMEOUT, retry_delay
 from squid.core.persistence.types import database_now
 from squid.core.submissions.domain import DraftStatus
 from squid.core.submissions.models.entities import SubmissionDraft
+from squid.core.submissions.models.finalization import SubmissionFinalizationResult, SubmissionReceiptMedia
 from squid.core.submissions.models.intake import SubmissionSuppliedAttachment
 
 
@@ -61,6 +66,29 @@ class PostgresMediaJobRepository(MediaJobRepository):
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
         self._publications = PostgresArtifactPublicationRepository(session)
+
+    async def published_outputs(self, build_id: int, *, upload_id: UUID | None) -> list[MediaArtifactRecord]:
+        stmt = (
+            select(MediaArtifactRecord)
+            .join(MediaUploadRecord, MediaUploadRecord.id == MediaArtifactRecord.upload_id)
+            .join(SubmissionReceiptMedia, SubmissionReceiptMedia.upload_id == MediaUploadRecord.id)
+            .join(SubmissionFinalizationResult, SubmissionFinalizationResult.job_id == SubmissionReceiptMedia.job_id)
+            .join(Build, Build.id == SubmissionFinalizationResult.build_id)
+            .join(MediaArtifactObjectRecord, MediaArtifactObjectRecord.object_key == MediaArtifactRecord.object_key)
+            .where(
+                Build.id == build_id,
+                Build.submission_status == BuildStatus.APPROVED,
+                Build.source_submission_draft_id == MediaUploadRecord.draft_id,
+                MediaArtifactRecord.role == MediaArtifactRole.OUTPUT,
+                MediaArtifactRecord.content_type.in_(IMAGE_CONTENT_TYPES | VIDEO_CONTENT_TYPES),
+                MediaArtifactObjectRecord.deleted_at.is_(None),
+            )
+            .order_by(MediaArtifactRecord.id)
+            .distinct()
+        )
+        if upload_id is not None:
+            stmt = stmt.where(MediaUploadRecord.id == upload_id)
+        return list(await self._session().scalars(stmt))
 
     @override
     async def enqueue(

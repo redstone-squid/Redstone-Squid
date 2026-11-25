@@ -5,13 +5,13 @@ from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
 from typing import cast, override
+from unittest.mock import Mock
 from uuid import UUID
 
 import pytest
 from litestar import Litestar, Request
 from litestar.di import Provide
 from litestar.testing import TestClient
-from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from squid.api.v1.schemas.votes import VoteSessionDetail
 from squid.core.accounts.application import AccountService
@@ -21,9 +21,10 @@ from squid.core.actors import ActingContext
 from squid.core.artifacts.infrastructure import LocalArtifactStore
 from squid.core.builds.application import BuildQueryService
 from squid.core.builds.domain import BuildStatus
+from squid.core.builds.history import BuildPublication
 from squid.core.builds.models import Build, DoorBuild
+from squid.core.media.application.build_media import PublishedBuildMedia
 from squid.core.media.domain.jobs import MediaArtifactRole
-from squid.core.media.infrastructure.build_media import PublishedBuildMedia
 from squid.core.media.models import MediaArtifactRecord
 from squid.core.schematics.application import RenderedSchematic, RenderRequest, RenderSkipReason, SchematicService
 from squid.core.schematics.errors import SchematicNotFoundError, SchematicRenderRefusedError
@@ -43,7 +44,7 @@ from squid.core.voting.domain import (
 )
 from squid.runtime import ApiServices
 from tests.support.voting import build_snapshot, poll_snapshot
-from tests.unit.api.fakes import MockDatabaseManager
+from tests.unit.api.fakes import MockDatabaseManager, MockSchematics
 
 CREATOR_PUBLIC_ID = UUID("22222222-2222-2222-2222-222222222222")
 RENDER_RECIPE_HASH = "b" * 64
@@ -130,6 +131,10 @@ class RefusingRenderFake(SchematicService):
 
 
 class ConfirmedBuildFake(BuildQueryService):
+    @override
+    async def publication(self, build: Build, *, context: ActingContext) -> BuildPublication:
+        return BuildPublication()
+
     def __init__(self) -> None:
         pass
 
@@ -149,13 +154,15 @@ class ConfirmedBuildFake(BuildQueryService):
 
 class PublishedMediaFake(PublishedBuildMedia):
     def __init__(self, tmp_path: Path, data: bytes) -> None:
-        super().__init__(async_sessionmaker(), LocalArtifactStore(tmp_path), public_base_url="https://example.com")
+        super().__init__(Mock(), LocalArtifactStore(tmp_path), public_base_url="https://example.com")
         self.artifact = MediaArtifactRecord(
             upload_id=UUID("12345678-1234-5678-1234-567812345678"),
             role=MediaArtifactRole.OUTPUT,
             object_key="output",
             content_type="image/png",
             byte_size=len(data),
+            width=640,
+            height=320,
             sha256=sha256(data).hexdigest(),
         )
         (tmp_path / self.artifact.object_key).write_bytes(data)
@@ -229,7 +236,7 @@ def test_public_build_links_and_serves_retained_media(
     app, _database = app_factory
     data = b"processed image"
     media = PublishedMediaFake(tmp_path, data)
-    _override(app, build_queries=ConfirmedBuildFake(), published_build_media=media)
+    _override(app, build_queries=ConfirmedBuildFake(), schematics=MockSchematics(), published_build_media=media)
     resource = f"/v1/builds/7/media/{media.artifact.upload_id}/content"
 
     with TestClient(app) as client:
@@ -238,6 +245,12 @@ def test_public_build_links_and_serves_retained_media(
         unrelated = client.get(resource.replace("/builds/7/", "/builds/8/"))
 
     assert detail.status_code == 200
+    assert detail.json()["preview"] == {
+        "kind": "image",
+        "url": f"https://example.com{resource}",
+        "width": 640,
+        "height": 320,
+    }
     assert [item["url"] for item in detail.json()["media"] if item["kind"] == "image"] == [
         f"https://example.com{resource}"
     ]

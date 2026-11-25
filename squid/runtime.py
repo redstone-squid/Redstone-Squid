@@ -24,9 +24,9 @@ from squid.core.accounts.application import AccountService
 from squid.core.actors import ActingContext
 from squid.core.artifacts import ArtifactStore
 from squid.core.auth.application import ApiKeyService
+from squid.core.auth.application.viewer import ViewerQueries
 from squid.core.auth.application.web import WebSessionService
 from squid.core.auth.impersonation import ImpersonationService
-from squid.core.auth.infrastructure.viewer import ViewerQueries
 from squid.core.builds.application import BuildInferenceService, BuildQueryService, BuildService, RestrictionService
 from squid.core.builds.application.ports import BuildSchematicSummaryProvider
 from squid.core.cli_auth import CliAuthorizationService
@@ -38,8 +38,8 @@ from squid.core.events.application import DomainEventService
 from squid.core.events.infrastructure.listener import DomainEventWakeListener
 from squid.core.events.models import DomainEvent
 from squid.core.idempotency import IdempotencyService
+from squid.core.media.application.build_media import PublishedBuildMedia
 from squid.core.media.application.jobs import MediaProcessingJobRunner, MediaProcessingJobService, MediaStorageCleanup
-from squid.core.media.infrastructure.build_media import PublishedBuildMedia
 from squid.core.messages.application import MessageService
 from squid.core.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
 from squid.core.notifications import NotificationService

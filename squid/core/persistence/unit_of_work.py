@@ -12,6 +12,7 @@ from squid.core.accounts.infrastructure.repository import AccountRepository
 from squid.core.actors import impersonation_use
 from squid.core.auth.infrastructure.repository import PostgresApiKeyRepository
 from squid.core.auth.infrastructure.sessions import PostgresImpersonationRepository, PostgresWebSessionRepository
+from squid.core.auth.infrastructure.viewer import PostgresViewerRepository
 from squid.core.auth.models.sessions import ImpersonationUse
 from squid.core.builds.infrastructure.embeddings import PostgresBuildIndex
 from squid.core.builds.infrastructure.history import BuildHistoryQueries
@@ -122,6 +123,7 @@ class SqlAlchemyUnitOfWork:
         self._accounts: AccountRepository | None = None
         self._cli_authorization = PostgresCliAuthorizationRepository(self._active_session)
         self._minecraft_authorization = PostgresMinecraftAuthorizationRepository(self._active_session)
+        self._viewer = PostgresViewerRepository(self._active_session)
         self._web_sessions = PostgresWebSessionRepository(self._active_session)
         self._api_keys = PostgresApiKeyRepository(self._active_session)
         self._error_reports = PostgresErrorReportRepository(self._active_session)
@@ -133,6 +135,11 @@ class SqlAlchemyUnitOfWork:
         self._starboards = PostgresStarboardRepository(self._active_session)
         self._tags = PostgresTagDefinitionRepository(self._active_session)
         self._versions = VersionRepository(self._active_session)
+
+    @property
+    def viewer(self) -> PostgresViewerRepository:
+        self._active_session()
+        return self._viewer
 
     @property
     def impersonation(self) -> PostgresImpersonationRepository:

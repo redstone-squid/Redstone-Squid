@@ -1,14 +1,16 @@
 """Batch loading of creator, version, and source-message details for builds."""
 
+from collections import defaultdict
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 
-from sqlalchemy import and_, case, func, select
+from sqlalchemy import and_, case, false, func, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.core.accounts.domain import IdentityProvider
-from squid.core.accounts.models import AccountIdentity
-from squid.core.builds.domain import BuildCategory, Credit
+from squid.core.accounts.infrastructure.attribution import attributed_credits
+from squid.core.accounts.models import Account, AccountIdentity
+from squid.core.builds.domain import BuildCategory, BuildStatus, Credit
 from squid.core.builds.domain.credits import CreditRole
 from squid.core.builds.models import (
     BUILD_CLASS_BY_CATEGORY,
@@ -20,6 +22,15 @@ from squid.core.builds.models import (
 from squid.core.errors import DataIntegrityError
 from squid.core.messages.domain import MessageRef
 from squid.core.messages.models import Message
+from squid.core.records.domain.build_records import BuildRecord, BuildRecords
+from squid.core.records.models import (
+    ComputationRun,
+    Record,
+    RecordDefinition,
+    RecordHolder,
+    RecordHolderHistory,
+    RecordResult,
+)
 from squid.core.sponsors import PublicSponsor
 from squid.core.tags.domain import TagSemanticKind
 from squid.core.versions.models import Version
@@ -40,6 +51,87 @@ class _CrossContextValues:
 class BuildLoader:
     """Enrich loaded builds with facts owned by other contexts."""
 
+    @staticmethod
+    def credit_rows(build_ids: Sequence[int]):
+        """Resolve each credit to its current account and public creator identifier."""
+        linked = func.build_credit_accounts().table_valued("build_id", "position", "account_id")
+        public = attributed_credits()
+        public_id = (
+            select(Account.public_creator_id)
+            .join(public, Account.id == public.c.account_id)
+            .where(public.c.build_id == BuildCredit.build_id, public.c.position == BuildCredit.position)
+            .order_by(Account.id)
+            .limit(1)
+            .correlate(BuildCredit)
+            .scalar_subquery()
+        )
+        return (
+            select(BuildCredit, linked.c.account_id, public_id)
+            .outerjoin(
+                linked,
+                and_(linked.c.build_id == BuildCredit.build_id, linked.c.position == BuildCredit.position),
+            )
+            .where(BuildCredit.build_id.in_(build_ids))
+            .order_by(BuildCredit.build_id, BuildCredit.position)
+        )
+
+    @staticmethod
+    async def records(session: AsyncSession, build_ids: Sequence[int]) -> dict[int, BuildRecords]:
+        """Collect current holders and reconstructed intervals from active publications."""
+        if not build_ids:
+            return {}
+        current = (
+            select(
+                RecordHolder.build_id,
+                RecordResult.run_id,
+                RecordResult.definition_id,
+                RecordHolder.completion_at.label("since"),
+                true().label("held"),
+            )
+            .join(RecordResult, RecordResult.id == RecordHolder.result_id)
+            .where(RecordHolder.build_id.in_(build_ids))
+        )
+        intervals = select(
+            RecordHolderHistory.build_id,
+            RecordHolderHistory.run_id,
+            RecordHolderHistory.definition_id,
+            RecordHolderHistory.held_from,
+            false(),
+        ).where(RecordHolderHistory.build_id.in_(build_ids))
+        holdings = current.union_all(intervals).subquery()
+        build_id, run_id, definition_id, since, held = holdings.c
+        rows = await session.execute(
+            select(
+                build_id,
+                Record.public_id,
+                RecordDefinition.title,
+                Record.criterion,
+                Record.version_scope,
+                RecordResult.status,
+                func.max(since),
+                func.bool_or(held),
+            )
+            .select_from(holdings)
+            .join(ComputationRun, ComputationRun.id == run_id)
+            .join(RecordDefinition, RecordDefinition.id == definition_id)
+            .join(Record, Record.public_id == RecordDefinition.record_id)
+            .join(RecordResult, and_(RecordResult.run_id == run_id, RecordResult.definition_id == definition_id))
+            .where(ComputationRun.is_active.is_(True))
+            .group_by(build_id, Record.public_id, RecordDefinition.title, RecordResult.status)
+            .order_by(RecordDefinition.title, Record.public_id)
+        )
+        held_records: dict[int, list[BuildRecord]] = defaultdict(list)
+        former_records: dict[int, list[BuildRecord]] = defaultdict(list)
+        for identifier, record_id, title, criterion, scope, status, start, is_held in rows:
+            target = held_records if is_held else former_records
+            target[identifier].append(
+                BuildRecord(record_id, title, criterion, scope, status, start.to_stdlib() if start else None)
+            )
+        return {
+            identifier: BuildRecords(tuple(held_records[identifier]), tuple(former_records[identifier]))
+            for identifier in held_records.keys() | former_records.keys()
+        }
+
     async def load(self, session: AsyncSession, sql_build: Build) -> Build:
         mapped = await self.load_many(session, [sql_build])
         return mapped[0]
@@ -47,12 +139,17 @@ class BuildLoader:
     async def load_many(self, session: AsyncSession, sql_builds: Sequence[Build]) -> list[Build]:
         """Populate related facts in place and return builds in the supplied order.
 
-        Use at most four queries for the batch. Tags and links must already be
+        Cross-context queries are batched for the page. Tags and links must already be
         loaded; this loader does not fetch them.
         """
         if not sql_builds:
             return []
         values = await self._load_cross_context(session, sql_builds)
+        records = await self.records(
+            session, [build.id for build in sql_builds if build.submission_status is BuildStatus.APPROVED]
+        )
+        for build in sql_builds:
+            build.published_records = records.get(build.id, BuildRecords())
         return [self._populate(sql_build, values) for sql_build in sql_builds]
 
     @staticmethod
@@ -67,17 +164,8 @@ class BuildLoader:
 
         credits: dict[int, list[Credit]] = {build_id: [] for build_id in build_ids}
         creator_accounts: dict[int, set[int]] = {build_id: set() for build_id in build_ids}
-        linked = func.build_credit_accounts().table_valued("build_id", "position", "account_id", "name", "role")
-        for row, linked_account in await session.execute(
-            select(BuildCredit, linked.c.account_id)
-            .outerjoin(
-                linked,
-                and_(linked.c.build_id == BuildCredit.build_id, linked.c.position == BuildCredit.position),
-            )
-            .where(BuildCredit.build_id.in_(build_ids))
-            .order_by(BuildCredit.build_id, BuildCredit.position)
-        ):
-            credits[row.build_id].append(row.to_credit())
+        for row, linked_account, creator_id in await session.execute(BuildLoader.credit_rows(build_ids)):
+            credits[row.build_id].append(row.to_credit(creator_id))
             if row.role is CreditRole.CREATOR and linked_account is not None:
                 creator_accounts[row.build_id].add(linked_account)
 

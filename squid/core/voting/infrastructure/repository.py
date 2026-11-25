@@ -97,6 +97,7 @@ class VoteRepository:
                 vote_session_id=session_id,
                 build_id=target.build_id,
                 changes=list(target.changes),
+                public_suggestion=target.public_suggestion,
                 proposal_revision=target.revision,
                 proposal_patch=dict(target.patch),
             )
@@ -827,6 +828,7 @@ class VoteRepository:
                     proposal.proposal_revision,
                     proposal.proposal_patch,
                     tuple((field, before, after) for field, before, after in proposal.changes),
+                    public_suggestion=proposal.public_suggestion,
                 ), None
             case VoteKind.DELETE_LOG:
                 target_row = (

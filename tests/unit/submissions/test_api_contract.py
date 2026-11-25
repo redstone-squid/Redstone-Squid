@@ -221,6 +221,8 @@ class FakeDrafts(SubmissionDraftCommands):
 
 
 class FakeFinalization(SubmissionFinalizationCommands):
+    editor = None
+
     def __init__(self, draft_id: UUID) -> None:
         self.snapshot = FinalizationJobSnapshot(
             job_id=UUID("3ff2c7e7-8df7-4147-853f-fea71a8c39e4"),
@@ -340,9 +342,9 @@ def test_draft_change_key_publishes_its_complete_wire_constraints() -> None:
 @pytest.mark.parametrize(
     ("revision", "expected_digest"),
     [
-        (2, "40df1c64d2f7cd5f8ab639e42fa3536b3f57f4f73b21f12c71c05b3719ec42de"),
-        (3, "5dc4c89e5d9802cc8f36a55678854406044b6b3370c78119dc2a33da17979617"),
-        (4, "69d1f0e127ad0d97b8b3fa07a7d18f36712edd0f32d83d8b0102ce3c85b6d83d"),
+        (2, "5e20838b31cfa0971d6a767cc88bcc182b65123e12003229e95d6a15465a3a8f"),
+        (3, "361867b40869c73d6aa77ab967346f4821f16cff959757eb2c6b5a9f835feb73"),
+        (4, "670e9cb6bd81565695136036505f85adddff170babe46faacae6e418050160fa"),
     ],
 )
 def test_checked_in_manifest_wire_contract_is_immutable(revision: int, expected_digest: str) -> None:

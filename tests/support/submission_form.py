@@ -23,6 +23,7 @@ from squid.core.submissions.application.finalization import SubmissionRequestRes
 from squid.core.submissions.application.forms import CURRENT_SUBMISSION_SCHEMA, CURRENT_SUBMISSION_SCHEMA_REVISION
 from squid.core.submissions.application.intake import SubmissionAttachmentIntake, SuppliedAttachment
 from squid.core.submissions.domain import DraftChange, DraftSnapshot, FormManifest, SubmissionOrigin
+from squid.core.submissions.domain.build_edit import DraftEditSource
 from squid.core.submissions.domain.source_files import SubmissionSourceFile
 
 
@@ -69,6 +70,7 @@ class Drafts(SubmissionDraftService):
         client_capabilities: frozenset[str],
         locale: str | None,
         source_installation_id: UUID | None = None,
+        edit_source: DraftEditSource | None = None,
         now: Instant | None = None,
         draft_id: UUID | None = None,
         inferred: bool = False,

@@ -44,7 +44,7 @@
       fallbackLabel={preview === null ? m.buildNoPreview() : m.buildImageUnavailable()}
     />
   {/snippet}
-  <Text size="sm" tone="muted">{formatList(build.creators)}</Text>
+  <Text size="sm" tone="muted">{formatList(build.creators.map((creator) => creator.name))}</Text>
   <DescriptionList
     layout="inline"
     size="sm"

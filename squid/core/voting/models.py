@@ -13,6 +13,7 @@ from typing import Any
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
     CheckConstraint,
     Float,
     ForeignKey,
@@ -189,6 +190,7 @@ class BuildVoteSession(Base, kw_only=True):
         primary_key=True,
     )
     changes: Mapped[list[Any]] = mapped_column(JSONB, nullable=False)
+    public_suggestion: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
     proposal_revision: Mapped[int | None] = mapped_column(BigInteger, default=None)
     proposal_patch: Mapped[dict[str, JSONValue] | None] = mapped_column(JSONB(none_as_null=True), default=None)
 

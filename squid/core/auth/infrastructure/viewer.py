@@ -1,69 +1,33 @@
 """Account-scoped read queries for the browser session and detail pages."""
 
-from dataclasses import dataclass
+from collections.abc import Callable
 from uuid import UUID
 
 from sqlalchemy import func, literal, select, true
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
 from squid.core.accounts.domain import avatar_url_for
 from squid.core.accounts.domain.profiles import CreatorViewer
 from squid.core.accounts.errors import AccountNotFoundError
 from squid.core.accounts.models import Account, AccountIdentity, AccountProfile
-from squid.core.actors import ActingContext, application_operation
+from squid.core.auth.application.viewer import SessionCounts, SessionUser, ViewerBallot
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build
 from squid.core.notifications.domain import InboxVisibility, RecordSubscriptionFilter, SubscriptionKind
 from squid.core.notifications.infrastructure.repository import inbox_predicates
 from squid.core.notifications.models import InboxNotification, NotificationSubscription
-from squid.core.permissions.application.services import PermissionService
-from squid.core.permissions.domain.catalogue import ACCOUNT_SELF_READ, BUILD_SUBMISSION_VIEW_PENDING
-from squid.core.permissions.domain.models import NodeScope
 from squid.core.submissions.domain.drafts import DraftStatus
 from squid.core.submissions.models.entities import SubmissionDraft
 from squid.core.voting.domain import VoteStatus
 from squid.core.voting.models import BuildVoteSession, Vote, VoteSession
 
 
-@dataclass(frozen=True)
-class SessionUser:
-    id: int
-    creator_id: UUID
-    display_name: str | None
-    avatar_url: str | None
+class PostgresViewerRepository:
+    def __init__(self, session: Callable[[], AsyncSession]):
+        self._session = session
 
-
-@dataclass(frozen=True)
-class SessionCounts:
-    unread_notifications: int
-    drafts: int
-    drafts_needing_attention: int
-    review_queue: int | None
-
-
-@dataclass(frozen=True)
-class ViewerBallot:
-    vote_session_id: int
-    option_alias_id: int
-
-
-class ViewerQueries:
-    def __init__(self, sessions: async_sessionmaker[AsyncSession], permissions: PermissionService):
-        self.sessions = sessions
-        self._permissions = permissions
-
-    async def _reader(self, context: ActingContext) -> int:
-        account_id = context.effective.require_account_id()
-        await self._permissions.require(context.effective, ACCOUNT_SELF_READ)
-        return account_id
-
-    @application_operation
-    async def session(self, *, context: ActingContext) -> tuple[SessionUser, SessionCounts, tuple[str, ...]]:
-        account_id = await self._reader(context)
-        nodes = (node for node in self._permissions.catalogue.values() if node.scope == NodeScope.GLOBAL)
-        allowed = (await self._permissions.check(context.effective, *nodes)).allowed_nodes
-        staff = BUILD_SUBMISSION_VIEW_PENDING.name in allowed
+    async def session(self, account_id: int, *, staff: bool) -> tuple[SessionUser, SessionCounts]:
         unread = (
             select(func.count())
             .select_from(InboxNotification)
@@ -102,17 +66,15 @@ class ViewerQueries:
             )
             .where(Account.id == account_id)
         )
-        async with self.sessions() as session:
-            row = (await session.execute(query)).one_or_none()
+        session = self._session()
+        row = (await session.execute(query)).one_or_none()
         if row is None:
             raise AccountNotFoundError(account_id)
         creator_id, display_name, avatar, unread_count, active, attention, review = row
         user = SessionUser(account_id, creator_id, display_name, avatar_url_for(avatar) if avatar else None)
-        return user, SessionCounts(unread_count, active, attention, review), tuple(sorted(allowed))
+        return user, SessionCounts(unread_count, active, attention, review)
 
-    @application_operation
-    async def build_state(self, build: Build, *, context: ActingContext) -> tuple[dict[UUID, int], ViewerBallot | None]:
-        account_id = await self._reader(context)
+    async def build_state(self, account_id: int, build: Build) -> tuple[dict[UUID, int], ViewerBallot | None]:
         follows = (
             select(NotificationSubscription.subject_id, NotificationSubscription.id)
             .join(Account, Account.public_creator_id == NotificationSubscription.subject_id)
@@ -133,16 +95,14 @@ class ViewerQueries:
         ballot = select(Vote.vote_session_id, Vote.option_alias_id).where(
             Vote.account_id == account_id, Vote.vote_session_id == active.scalar_subquery()
         )
-        async with self.sessions() as session:
-            subscriptions = {key: value for key, value in await session.execute(follows) if key is not None}
-            row = (await session.execute(ballot)).one_or_none()
+        session = self._session()
+        subscriptions = {key: value for key, value in await session.execute(follows) if key is not None}
+        row = (await session.execute(ballot)).one_or_none()
         return subscriptions, ViewerBallot(*row) if row else None
 
-    @application_operation
     async def subscription(
-        self, kind: SubscriptionKind, target: UUID | RecordSubscriptionFilter, *, context: ActingContext
+        self, account_id: int, kind: SubscriptionKind, target: UUID | RecordSubscriptionFilter
     ) -> int | None:
-        account_id = await self._reader(context)
         query = select(NotificationSubscription.id).where(
             NotificationSubscription.enabled,
             NotificationSubscription.account_id == account_id,
@@ -151,12 +111,10 @@ class ViewerQueries:
             if isinstance(target, RecordSubscriptionFilter)
             else NotificationSubscription.subject_id == target,
         )
-        async with self.sessions() as session:
-            return await session.scalar(query)
+        session = self._session()
+        return await session.scalar(query)
 
-    @application_operation
-    async def creator(self, public_id: UUID, *, context: ActingContext) -> CreatorViewer:
-        account_id = await self._reader(context)
+    async def creator(self, account_id: int, public_id: UUID) -> CreatorViewer:
         sub = (
             select(NotificationSubscription.id)
             .where(
@@ -167,11 +125,9 @@ class ViewerQueries:
             )
             .scalar_subquery()
         )
-        async with self.sessions() as session:
-            is_self, subscription = (
-                await session.execute(
-                    select(Account.public_creator_id == public_id, sub).where(Account.id == account_id)
-                )
-            ).one()
+        session = self._session()
+        is_self, subscription = (
+            await session.execute(select(Account.public_creator_id == public_id, sub).where(Account.id == account_id))
+        ).one()
         # Public profiles belong to accounts. Claims apply only to unclaimed aliases.
         return CreatorViewer(subscription, is_self, can_claim=False)

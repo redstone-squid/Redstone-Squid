@@ -148,7 +148,7 @@ _GAME_TICK_UNITS = (("gt", Decimal(1)), ("s", Decimal(20)))
 
 DEFAULT_FIELD_REGISTRY = FieldRegistry(
     (
-        FieldDefinition("title", FieldType.TEXT, ranked=True, scopes=CATALOGUE_SCOPES),
+        FieldDefinition("title", FieldType.TEXT, ranked=True, supports_sort=True, scopes=CATALOGUE_SCOPES),
         FieldDefinition("description", FieldType.TEXT, ranked=True),
         FieldDefinition("tag", FieldType.TEXT, ranked=True),
         FieldDefinition(
@@ -198,7 +198,14 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
             value_enum=VersionScope,
         ),
         FieldDefinition("record_state", FieldType.TEXT, scopes=frozenset({SearchScope.RECORDS})),
-        FieldDefinition("volume", FieldType.NUMBER, supports_range=True, scopes=CATALOGUE_SCOPES, holder_scoped=True),
+        FieldDefinition(
+            "volume",
+            FieldType.NUMBER,
+            supports_range=True,
+            supports_sort=True,
+            scopes=CATALOGUE_SCOPES,
+            holder_scoped=True,
+        ),
         FieldDefinition("width", FieldType.NUMBER, supports_range=True, supports_sort=True),
         FieldDefinition("height", FieldType.NUMBER, supports_range=True, supports_sort=True),
         FieldDefinition("depth", FieldType.NUMBER, supports_range=True, supports_sort=True),
@@ -223,6 +230,7 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
                 supports_range=True,
                 scopes=CATALOGUE_SCOPES,
                 holder_scoped=True,
+                supports_sort=name == "opening_time",
                 unit_scales=_GAME_TICK_UNITS,
             )
             for name in (
