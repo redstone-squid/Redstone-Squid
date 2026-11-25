@@ -47,8 +47,10 @@
           setTimeout(() => (pending = false), 1500);
         }}>{m.workbenchSaveDraft()}</Button
       >
-      <Button variant="primary" fullWidth>{m.storySubmitForReview()}</Button>
     </div>
+  </Variant>
+  <Variant label={m.storyFullWidth()}>
+    <Button variant="primary" fullWidth>{m.storySubmitForReview()}</Button>
   </Variant>
 </Story>
 
