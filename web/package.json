@@ -56,6 +56,9 @@
     "js-yaml": "4.3.2",
     "@typescript-eslint/typescript-estree": {
       "minimatch": "^11.0.8"
+    },
+    "eslint-plugin-sonarjs": {
+      "minimatch": "^11.0.8"
     }
   },
   "devDependencies": {
