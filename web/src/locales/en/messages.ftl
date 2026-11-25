@@ -22,10 +22,8 @@ builds-title = Build catalogue
 build-creators = Creators
 records-title = Active records
 record-computed = Computed { DATETIME($date, dateStyle: "medium") }
-record-holder-count = { $count ->
-    [one] { $count } holder
-   *[other] { $count } holders
-    }
+record-shared-count = Shared by { $count } builds
+record-tied-count = { $count } tied
 search-title = Search the catalogue
 search-suggestions = Suggestions
 search-suggestion-error = Suggestions are temporarily unavailable.
@@ -111,8 +109,20 @@ offline-body = This page needs a connection. Reconnect and try again.
 
 records-intro = The current holder of every record, recomputed whenever a build is approved.
 records-empty = No records have been published yet.
-record-holders = Holders
+record-holders = Record holder
+record-co-holders = Shared record
+record-co-holders-description = These builds were completed at the same moment, so they share the record.
+record-co-holders-undated = These builds share the record until their completion dates are known.
 record-no-holders = No build holds this record yet.
+record-contenders = Could take this record
+record-contenders-description = Each of these builds is missing a fact needed to compare it with the holder. If you know it, add it to the build.
+record-changeable = { $count ->
+    [one] One build is missing facts that could let it take this record.
+   *[other] { $count } builds are missing facts that could let them take this record.
+    }
+record-tied = Tied record
+record-tied-description = Matched the holder on every measure, but was completed later.
+build-missing-facts = Missing: { $facts }
 record-status = Status: { $status }
 record-build-kind = Build kind
 record-version-scope = Versions

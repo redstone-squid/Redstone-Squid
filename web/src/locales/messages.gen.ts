@@ -283,35 +283,33 @@ export function recordComputed(
   }
 }
 
-/** { $count -> [one] { $count } holder *[other] { $count } holders } */
-export function recordHolderCount(args: { count: number }, locale: Locale = getLocale()): string {
+/** Shared by { $count } builds */
+export function recordSharedCount(
+  args: { count: string | number },
+  locale: Locale = getLocale(),
+): string {
   switch (locale) {
     case "en":
-      return select(
-        locale,
-        args.count,
-        {
-          one: formatNumber(locale, args.count) + " holder",
-          other: formatNumber(locale, args.count) + " holders",
-        },
-        "other",
-      );
+      return "Shared by " + formatValue(locale, args.count) + " builds";
     case "zh-CN":
-      return formatNumber(locale, args.count) + " 个保持作品";
+      return "由 " + formatValue(locale, args.count) + " 个作品共同保持";
     case "en-XA":
-      return (
-        "[" +
-        select(
-          locale,
-          args.count,
-          {
-            one: formatNumber(locale, args.count) + " ĥöļđéŕ",
-            other: formatNumber(locale, args.count) + " ĥöļđéŕš",
-          },
-          "other",
-        ) +
-        "····]"
-      );
+      return "[" + "Šĥåŕéđ ƀý " + formatValue(locale, args.count) + " ƀûîļđš" + "·······]";
+  }
+}
+
+/** { $count } tied */
+export function recordTiedCount(
+  args: { count: string | number },
+  locale: Locale = getLocale(),
+): string {
+  switch (locale) {
+    case "en":
+      return formatValue(locale, args.count) + " tied";
+    case "zh-CN":
+      return formatValue(locale, args.count) + " 个并列";
+    case "en-XA":
+      return "[" + formatValue(locale, args.count) + " ţîéđ" + "··]";
   }
 }
 
@@ -1304,15 +1302,59 @@ export function recordsEmpty(locale: Locale = getLocale()): string {
   }
 }
 
-/** Holders */
+/** Record holder */
 export function recordHolders(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Holders";
+      return "Record holder";
     case "zh-CN":
       return "纪录保持者";
     case "en-XA":
-      return "[" + "Ĥöļđéŕš" + "···]";
+      return "[" + "Ŕéçöŕđ ĥöļđéŕ" + "······]";
+  }
+}
+
+/** Shared record */
+export function recordCoHolders(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Shared record";
+    case "zh-CN":
+      return "共同保持";
+    case "en-XA":
+      return "[" + "Šĥåŕéđ ŕéçöŕđ" + "······]";
+  }
+}
+
+/** These builds were completed at the same moment, so they share the record. */
+export function recordCoHoldersDescription(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "These builds were completed at the same moment, so they share the record.";
+    case "zh-CN":
+      return "这些作品在同一时刻完成，因此共同保持此纪录。";
+    case "en-XA":
+      return (
+        "[" +
+        "Ţĥéšé ƀûîļđš ŵéŕé çöɱþļéţéđ åţ ţĥé šåɱé ɱöɱéñţ, šö ţĥéý šĥåŕé ţĥé ŕéçöŕđ." +
+        "······························]"
+      );
+  }
+}
+
+/** These builds share the record until their completion dates are known. */
+export function recordCoHoldersUndated(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "These builds share the record until their completion dates are known.";
+    case "zh-CN":
+      return "在确认完成日期之前，这些作品共同保持此纪录。";
+    case "en-XA":
+      return (
+        "[" +
+        "Ţĥéšé ƀûîļđš šĥåŕé ţĥé ŕéçöŕđ ûñţîļ ţĥéîŕ çöɱþļéţîöñ đåţéš åŕé ķñöŵñ." +
+        "····························]"
+      );
   }
 }
 
@@ -1325,6 +1367,113 @@ export function recordNoHolders(locale: Locale = getLocale()): string {
       return "暂无作品保持此纪录。";
     case "en-XA":
       return "[" + "Ñö ƀûîļđ ĥöļđš ţĥîš ŕéçöŕđ ýéţ." + "·············]";
+  }
+}
+
+/** Could take this record */
+export function recordContenders(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Could take this record";
+    case "zh-CN":
+      return "可能夺得此纪录";
+    case "en-XA":
+      return "[" + "Çöûļđ ţåķé ţĥîš ŕéçöŕđ" + "·········]";
+  }
+}
+
+/** Each of these builds is missing a fact needed to compare it with the holder. If you know it, add it to the build. */
+export function recordContendersDescription(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Each of these builds is missing a fact needed to compare it with the holder. If you know it, add it to the build.";
+    case "zh-CN":
+      return "这些作品缺少与保持者比较所需的数据。如果你知道，请补充到作品中。";
+    case "en-XA":
+      return (
+        "[" +
+        "Éåçĥ öƒ ţĥéšé ƀûîļđš îš ɱîššîñĝ å ƒåçţ ñééđéđ ţö çöɱþåŕé îţ ŵîţĥ ţĥé ĥöļđéŕ. Îƒ ýöû ķñöŵ îţ, åđđ îţ ţö ţĥé ƀûîļđ." +
+        "··············································]"
+      );
+  }
+}
+
+/** { $count -> [one] One build is missing facts that could let it take this record. *[other] { $count } builds are missing facts that could let them take this record. } */
+export function recordChangeable(args: { count: number }, locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return select(
+        locale,
+        args.count,
+        {
+          one: "One build is missing facts that could let it take this record.",
+          other:
+            formatNumber(locale, args.count) +
+            " builds are missing facts that could let them take this record.",
+        },
+        "other",
+      );
+    case "zh-CN":
+      return formatNumber(locale, args.count) + " 个作品缺少数据，补充后可能夺得此纪录。";
+    case "en-XA":
+      return (
+        "[" +
+        select(
+          locale,
+          args.count,
+          {
+            one: "Öñé ƀûîļđ îš ɱîššîñĝ ƒåçţš ţĥåţ çöûļđ ļéţ îţ ţåķé ţĥîš ŕéçöŕđ.",
+            other:
+              formatNumber(locale, args.count) +
+              " ƀûîļđš åŕé ɱîššîñĝ ƒåçţš ţĥåţ çöûļđ ļéţ ţĥéɱ ţåķé ţĥîš ŕéçöŕđ.",
+          },
+          "other",
+        ) +
+        "··························]"
+      );
+  }
+}
+
+/** Tied record */
+export function recordTied(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Tied record";
+    case "zh-CN":
+      return "并列纪录";
+    case "en-XA":
+      return "[" + "Ţîéđ ŕéçöŕđ" + "·····]";
+  }
+}
+
+/** Matched the holder on every measure, but was completed later. */
+export function recordTiedDescription(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Matched the holder on every measure, but was completed later.";
+    case "zh-CN":
+      return "各项指标均与保持者相同，但完成时间较晚。";
+    case "en-XA":
+      return (
+        "[" +
+        "Ṁåţçĥéđ ţĥé ĥöļđéŕ öñ éṽéŕý ɱéåšûŕé, ƀûţ ŵåš çöɱþļéţéđ ļåţéŕ." +
+        "·························]"
+      );
+  }
+}
+
+/** Missing: { $facts } */
+export function buildMissingFacts(
+  args: { facts: string | number },
+  locale: Locale = getLocale(),
+): string {
+  switch (locale) {
+    case "en":
+      return "Missing: " + formatValue(locale, args.facts);
+    case "zh-CN":
+      return "缺少：" + formatValue(locale, args.facts);
+    case "en-XA":
+      return "[" + "Ṁîššîñĝ: " + formatValue(locale, args.facts) + "····]";
   }
 }
 

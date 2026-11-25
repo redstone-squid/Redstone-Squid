@@ -316,7 +316,7 @@ export type BuildViewer = {
  */
 export type CandidateGap = {
     build_id: number;
-    field: string;
+    field: RecordFact;
 };
 
 /**
@@ -1376,7 +1376,6 @@ export type LiveDoorRecord = {
     evaluated_at: string;
     resolution: RecordResolution;
     holder_configuration_ids: Array<number>;
-    provisional_configuration_ids: Array<number>;
     configurations: Array<LiveDoorConfiguration>;
 };
 
@@ -1856,11 +1855,15 @@ export type PublicRecordDetail = {
     status: ResolutionStatus;
     holder_build_ids: Array<number>;
     computed_at: string;
+    tied_build_ids?: Array<number>;
+    gaps?: Array<CandidateGap>;
     last_checked_at?: string | null;
     refresh_pending?: boolean;
     version_id?: number | null;
     door_evidence?: DoorRecordEvidence | null;
     holder_builds: Array<PublicBuildSummary>;
+    tied_builds?: Array<PublicBuildSummary>;
+    contender_builds?: Array<PublicBuildSummary>;
     viewer?: RecordViewer | null;
 };
 
@@ -1904,6 +1907,7 @@ export type PublishedRecordResult = {
     status: ResolutionStatus;
     holder_build_ids: Array<number>;
     computed_at: string;
+    tied_build_ids?: Array<number>;
     last_checked_at?: string | null;
     refresh_pending?: boolean;
     version_id?: number | null;
@@ -2017,6 +2021,13 @@ export type RecalculationProposalResponse = {
 export type RecordCriterion = 'first' | 'fastest' | 'smallest' | 'fastest_smallest' | 'smallest_fastest';
 
 /**
+ * RecordFact
+ *
+ * A fact a record comparison reads, as gaps name it; timing facts share TimingMethod values.
+ */
+export type RecordFact = 'completion_at' | 'fixed_volume' | 'opening' | 'opening_visible' | 'closing' | 'closing_visible' | 'opening_reset' | 'closing_reset' | 'retraction' | 'extension' | 'retraction_reset' | 'extension_reset';
+
+/**
  * RecordFilterInput
  */
 export type RecordFilterInput = {
@@ -2039,7 +2050,7 @@ export type RecordOperator = 'present' | 'exact' | 'at_most' | 'at_least';
 export type RecordResolution = {
     status: ResolutionStatus;
     holder_ids?: Array<number>;
-    provisional_holder_ids?: Array<number>;
+    tied_ids?: Array<number>;
     gaps?: Array<CandidateGap>;
 };
 
@@ -2127,9 +2138,9 @@ export type RequiredValueParams = {
 /**
  * ResolutionStatus
  *
- * Whether a category produced an official result.
+ * Whether any build competes in a category.
  */
-export type ResolutionStatus = 'resolved' | 'unresolved' | 'no_candidate';
+export type ResolutionStatus = 'resolved' | 'no_candidate';
 
 /**
  * RuleIssue
@@ -2459,7 +2470,6 @@ export type SmallestRecordRegion = {
     domain: IntegerProgression;
     resolution: RecordResolution;
     holder_configuration_ids?: Array<number>;
-    provisional_configuration_ids?: Array<number>;
 };
 
 /**

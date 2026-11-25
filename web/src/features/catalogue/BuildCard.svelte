@@ -10,7 +10,8 @@
 
   /**
    * A public build as a card linking to its page. `category` is the label for its kind;
-   * `priority` loads the preview first, for the first card above the fold.
+   * `priority` loads the preview first, for the first card above the fold. `missingFacts`
+   * names facts the build lacks for a comparison the card is shown in.
    */
   type Props = {
     build: PublicBuildSummary;
@@ -18,8 +19,16 @@
     as?: "article" | "li";
     headingLevel?: 2 | 3;
     priority?: boolean;
+    missingFacts?: string[];
   };
-  let { build, category, as = "article", headingLevel = 3, priority = false }: Props = $props();
+  let {
+    build,
+    category,
+    as = "article",
+    headingLevel = 3,
+    priority = false,
+    missingFacts = [],
+  }: Props = $props();
   const title = $derived(build.display_name ?? build.title);
   const unknown = m.buildDimensionUnknown();
   const { width, height, depth } = $derived(build.dimensions);
@@ -44,6 +53,9 @@
       fallbackLabel={preview === null ? m.buildNoPreview() : m.buildImageUnavailable()}
     />
   {/snippet}
+  {#if missingFacts.length > 0}
+    <Text size="sm" tone="warning">{m.buildMissingFacts({ facts: formatList(missingFacts) })}</Text>
+  {/if}
   <Text size="sm" tone="muted">{formatList(build.creators.map((creator) => creator.name))}</Text>
   <DescriptionList
     layout="inline"

@@ -11,7 +11,8 @@
 
   /**
    * A record as a card linking to its page. The title already names the build kind, and
-   * the version scope shows only when it narrows the record to the current version.
+   * the version scope shows only when it narrows the record to the current version. A
+   * single holder goes unmentioned; shared records and ties are called out.
    */
   type Props = {
     record: PublishedRecordResult;
@@ -19,8 +20,11 @@
     headingLevel?: 2 | 3;
   };
   let { record, as = "article", headingLevel = 3 }: Props = $props();
+  const shared = $derived(record.holder_build_ids.length);
+  const tied = $derived(record.tied_build_ids?.length ?? 0);
   const facts = $derived([
-    m.recordHolderCount({ count: record.holder_build_ids.length }),
+    ...(shared > 1 ? [m.recordSharedCount({ count: shared })] : []),
+    ...(tied > 0 ? [m.recordTiedCount({ count: tied })] : []),
     ...(record.version_scope === "up_to_date" ? [versionScopeLabel(record.version_scope)] : []),
   ]);
 </script>

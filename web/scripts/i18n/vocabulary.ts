@@ -11,6 +11,7 @@ const VALUE_TYPES: Record<string, string> = {
   version_scope: "VersionScope",
   resolution_status: "ResolutionStatus",
   build_status: "BuildStatusFilter",
+  record_fact: "RecordFact",
 };
 
 /**

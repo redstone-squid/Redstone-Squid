@@ -4,6 +4,7 @@ import type {
   BuildKind,
   BuildStatusFilter,
   RecordCriterion,
+  RecordFact,
   ResolutionStatus,
   VersionScope,
 } from "../generated/types.gen";
@@ -60,19 +61,63 @@ export function versionScopeLabel(value: VersionScope, locale: Locale = getLocal
 }
 
 const resolutionStatusLabels = {
-  en: { resolved: "Resolved", unresolved: "Awaiting evidence", no_candidate: "No eligible builds" },
-  "zh-CN": { resolved: "已确定", unresolved: "等待证据", no_candidate: "没有符合条件的作品" },
-  "en-XA": {
-    resolved: "[Ŕéšöļṽéđ····]",
-    unresolved: "[Åŵåîţîñĝ éṽîđéñçé·······]",
-    no_candidate: "[Ñö éļîĝîƀļé ƀûîļđš········]",
-  },
+  en: { resolved: "Resolved", no_candidate: "No eligible builds" },
+  "zh-CN": { resolved: "已确定", no_candidate: "没有符合条件的作品" },
+  "en-XA": { resolved: "[Ŕéšöļṽéđ····]", no_candidate: "[Ñö éļîĝîƀļé ƀûîļđš········]" },
 } as const satisfies Record<Locale, Record<ResolutionStatus, string>>;
 export function resolutionStatusLabel(
   value: ResolutionStatus,
   locale: Locale = getLocale(),
 ): string {
   return resolutionStatusLabels[locale][value];
+}
+
+const recordFactLabels = {
+  en: {
+    completion_at: "Completion date",
+    fixed_volume: "Volume",
+    opening: "Opening time",
+    opening_visible: "Visible opening time",
+    closing: "Closing time",
+    closing_visible: "Visible closing time",
+    opening_reset: "Opening reset time",
+    closing_reset: "Closing reset time",
+    retraction: "Retraction time",
+    extension: "Extension time",
+    retraction_reset: "Retraction reset time",
+    extension_reset: "Extension reset time",
+  },
+  "zh-CN": {
+    completion_at: "完成日期",
+    fixed_volume: "体积",
+    opening: "开门时间",
+    opening_visible: "可见开门时间",
+    closing: "关门时间",
+    closing_visible: "可见关门时间",
+    opening_reset: "开门重置时间",
+    closing_reset: "关门重置时间",
+    retraction: "收回时间",
+    extension: "伸出时间",
+    retraction_reset: "收回重置时间",
+    extension_reset: "伸出重置时间",
+  },
+  "en-XA": {
+    completion_at: "[Çöɱþļéţîöñ đåţé······]",
+    fixed_volume: "[Ṽöļûɱé···]",
+    opening: "[Öþéñîñĝ ţîɱé·····]",
+    opening_visible: "[Ṽîšîƀļé öþéñîñĝ ţîɱé········]",
+    closing: "[Çļöšîñĝ ţîɱé·····]",
+    closing_visible: "[Ṽîšîƀļé çļöšîñĝ ţîɱé········]",
+    opening_reset: "[Öþéñîñĝ ŕéšéţ ţîɱé········]",
+    closing_reset: "[Çļöšîñĝ ŕéšéţ ţîɱé········]",
+    retraction: "[Ŕéţŕåçţîöñ ţîɱé······]",
+    extension: "[Éẋţéñšîöñ ţîɱé······]",
+    retraction_reset: "[Ŕéţŕåçţîöñ ŕéšéţ ţîɱé·········]",
+    extension_reset: "[Éẋţéñšîöñ ŕéšéţ ţîɱé········]",
+  },
+} as const satisfies Record<Locale, Record<RecordFact, string>>;
+export function recordFactLabel(value: RecordFact, locale: Locale = getLocale()): string {
+  return recordFactLabels[locale][value];
 }
 
 const buildStatusLabels = {
