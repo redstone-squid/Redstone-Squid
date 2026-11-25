@@ -3878,6 +3878,48 @@
             "allowReserved": false
           },
           {
+            "name": "after_id",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Return the items after this identifier in display order. Excludes offset."
+            },
+            "description": "Return the items after this identifier in display order. Excludes offset.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "before_id",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Return the items before this identifier in display order. Excludes offset."
+            },
+            "description": "Return the items before this identifier in display order. Excludes offset.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
             "name": "work_lost",
             "in": "query",
             "schema": {
@@ -13157,7 +13199,7 @@
           "submissions"
         ],
         "summary": "ListCorrectionInbox",
-        "description": "List drafts needing staff correction oldest first, excluding attachment processing waits.",
+        "description": "List drafts needing staff correction oldest first, excluding attachment processing waits.\n\nDraft IDs are the page anchors; one that no longer needs attention returns PAGE_ANCHOR_NOT_FOUND.",
         "operationId": "submission_correction_inbox",
         "parameters": [
           {
@@ -13192,6 +13234,48 @@
               "description": "Number of items to skip. Excludes after_id and before_id."
             },
             "description": "Number of items to skip. Excludes after_id and before_id.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "after_id",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Return the items after this identifier in display order. Excludes offset."
+            },
+            "description": "Return the items after this identifier in display order. Excludes offset.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "before_id",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Return the items before this identifier in display order. Excludes offset."
+            },
+            "description": "Return the items before this identifier in display order. Excludes offset.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -24754,6 +24838,10 @@
                 "type": "integer"
               },
               {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
                 "type": "null"
               }
             ]
@@ -24762,6 +24850,10 @@
             "oneOf": [
               {
                 "type": "integer"
+              },
+              {
+                "type": "string",
+                "format": "uuid"
               },
               {
                 "type": "null"

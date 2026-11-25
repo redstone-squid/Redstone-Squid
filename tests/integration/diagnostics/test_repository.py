@@ -10,6 +10,7 @@ from whenever import Instant
 from squid.core.diagnostics.infrastructure.repository import PostgresErrorReportRepository
 from squid.core.diagnostics.models import ErrorReport
 from squid.core.errors import ErrorCode
+from squid.core.pagination import FIRST_PAGE, PageAnchorNotFoundError, PageSelector
 from squid.core.persistence.base import Base
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
@@ -148,12 +149,34 @@ async def test_list_recent_is_newest_first_and_bounded(repository: PostgresError
             make_report(correlation_id=str(index) * 32, occurred_at=NOW.subtract(hours=index)),
         )
 
-    recent = await repository.list_recent(offset=0, limit=2, now=NOW)
-    rest = await repository.list_recent(offset=2, limit=2, now=NOW)
+    recent = await repository.list_recent(selector=FIRST_PAGE, limit=2, now=NOW)
+    rest = await repository.list_recent(selector=PageSelector(offset=2), limit=2, now=NOW)
 
     assert [report.correlation_id for report in recent] == ["0" * 32, "1" * 32]
     assert [report.correlation_id for report in rest] == ["2" * 32]
     assert await repository.count_recent(now=NOW) == 3
+
+
+async def test_report_anchors_walk_through_reports_that_share_a_time(
+    repository: PostgresErrorReportRepository,
+) -> None:
+    for index, hours in enumerate((0, 1, 1, 1, 2)):
+        await repository.save(make_report(correlation_id=str(index) * 32, occurred_at=NOW.subtract(hours=hours)))
+    display = [report.id for report in await repository.list_recent(selector=FIRST_PAGE, limit=5, now=NOW)]
+
+    for index, anchor in enumerate(display):
+        after = await repository.list_recent(selector=PageSelector(after_id=anchor), limit=5, now=NOW)
+        before = await repository.list_recent(selector=PageSelector(before_id=anchor), limit=5, now=NOW)
+        assert [report.id for report in after] == display[index + 1 :]
+        assert [report.id for report in before] == display[:index]
+
+
+async def test_an_expired_report_cannot_anchor_a_page(repository: PostgresErrorReportRepository) -> None:
+    expired = make_report(correlation_id="9" * 32, expires_at=NOW.subtract(hours=1))
+    await repository.save(expired)
+
+    with pytest.raises(PageAnchorNotFoundError):
+        await repository.list_recent(selector=PageSelector(after_id=expired.id), limit=5, now=NOW)
 
 
 async def test_a_report_with_no_error_code_round_trips(repository: PostgresErrorReportRepository) -> None:

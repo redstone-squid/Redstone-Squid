@@ -12,7 +12,7 @@ from squid.bot.submission.ui.drafts import DraftEditorScreen
 from squid.bot.submission.ui.inference import reopen_inference
 from squid.core.accounts.domain import AccountConsent
 from squid.core.actors import ActingContext, Actor, UserActor
-from squid.core.pagination import Page, offset_page
+from squid.core.pagination import FIRST_PAGE, Page, PageSelector, offset_page
 from squid.core.permissions.application import PermissionService, SubjectRecords
 from squid.core.permissions.application.ports import PermissionSubject
 from squid.core.permissions.domain import Effect
@@ -43,10 +43,10 @@ class DraftListing(SubmissionDraftService):
 
     @override
     async def attention_inbox(
-        self, *, context: ActingContext, offset: int = 0, page_size: int = 20
-    ) -> Page[StoredDraft]:
+        self, *, context: ActingContext, selector: PageSelector[UUID] = FIRST_PAGE, page_size: int = 20
+    ) -> Page[StoredDraft, UUID]:
         self.staff.append(context.effective)
-        return offset_page(self.drafts, offset=offset, page_size=page_size)
+        return offset_page(self.drafts, offset=selector.offset, page_size=page_size)
 
 
 class InferenceListing(SubmissionInferenceRuns):

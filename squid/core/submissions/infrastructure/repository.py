@@ -17,11 +17,13 @@ from squid.core.media.domain.jobs import MediaJobStatus
 from squid.core.media.infrastructure.references import media_for_draft, retained_elsewhere
 from squid.core.media.models import MediaProcessingJobRecord, MediaUploadRecord
 from squid.core.messages.domain import MessageSnapshot
+from squid.core.pagination import PageSelector
 from squid.core.persistence.advisory_locks import (
     AdvisoryLockNamespace,
     lock_key,
     lock_uuid,
 )
+from squid.core.persistence.paging import KeysetOrder
 from squid.core.submissions.application import AppliedDraftChange, AppliedDraftUpgrade, DraftRepository, StoredDraft
 from squid.core.submissions.domain import (
     DraftChange,
@@ -82,14 +84,15 @@ class PostgresDraftRepository(DraftRepository):
         self._session = session
 
     @override
-    async def list_attention(self, *, offset: int, limit: int, now: Instant) -> tuple[StoredDraft, ...]:
-        statement = (
-            _needing_attention(select(SubmissionDraft), now)
-            .order_by(SubmissionDraft.created_at, SubmissionDraft.id)
-            .offset(offset)
-            .limit(limit)
-        )
-        return tuple(_to_stored(model) for model in await self._session().scalars(statement))
+    async def list_attention(
+        self, *, selector: PageSelector[UUID], limit: int, now: Instant
+    ) -> tuple[StoredDraft, ...]:
+        """Read drafts oldest first; a `before_id` page is read in reverse and restored to that order."""
+        session = self._session()
+        order = KeysetOrder(SubmissionDraft.created_at, SubmissionDraft.id, descending=False)
+        statement = await order.apply(session, _needing_attention(select(SubmissionDraft), now), selector)
+        rows = tuple(_to_stored(model) for model in await session.scalars(statement.limit(limit)))
+        return rows[::-1] if selector.before_id is not None else rows
 
     @override
     async def count_attention(self, *, now: Instant) -> int:

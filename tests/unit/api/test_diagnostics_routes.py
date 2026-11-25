@@ -1,7 +1,7 @@
 """Stored error report routes and the node that gates them."""
 
 from typing import Any, cast
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from litestar.testing import TestClient
@@ -11,7 +11,7 @@ from squid.core.actors import ActingContext
 from squid.core.diagnostics.domain import ErrorReportNotFoundError
 from squid.core.diagnostics.models import ErrorReport
 from squid.core.errors import ErrorCode
-from squid.core.pagination import Page, offset_page
+from squid.core.pagination import FIRST_PAGE, Page, PageSelector, offset_page
 from tests.unit.api.fakes import TEST_CONFIG, TEST_SYNERGY_SECRET, build_app
 
 OCCURRED = Instant.from_utc(2026, 8, 17, 12, 0, 0)
@@ -46,10 +46,15 @@ class StubErrorReports:
         return self._report, self._matches
 
     async def recent(
-        self, *, context: ActingContext, offset: int = 0, page_size: int = 20, work_lost_only: bool = False
-    ) -> Page[ErrorReport]:
+        self,
+        *,
+        context: ActingContext,
+        selector: PageSelector[UUID] = FIRST_PAGE,
+        page_size: int = 20,
+        work_lost_only: bool = False,
+    ) -> Page[ErrorReport, UUID]:
         shown = self._report is not None and (self._report.work_lost or not work_lost_only)
-        return offset_page([self._report] if shown else [], offset=offset, page_size=page_size)
+        return offset_page([self._report] if shown else [], offset=selector.offset, page_size=page_size)
 
 
 # The bootstrap secret carries only the nodes a deployment names, so reading reports has to be

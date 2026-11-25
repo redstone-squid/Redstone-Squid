@@ -2,6 +2,7 @@
 
 from collections.abc import Sequence
 from typing import Self, override
+from uuid import UUID
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
@@ -11,6 +12,7 @@ from squid.bot.submission.ui.drafts import DraftEditorScreen
 from squid.bot.submission.ui.inference import reopen_inference
 from squid.core.actors import ActingContext
 from squid.core.i18n import tr
+from squid.core.pagination import FIRST_PAGE, PageSelector
 from squid.core.submissions.application import StoredDraft
 from squid.core.submissions.domain import (
     DraftStatus,
@@ -41,11 +43,13 @@ class SavedDraftsScreen(sd.Screen):
         if inbox:
             # The screen pages locally, so it needs the whole queue rather than the first API page.
             drafts: list[StoredDraft] = []
-            offset: int | None = 0
-            while offset is not None:
-                page = await services.submission_drafts.attention_inbox(offset=offset, page_size=50, context=context)
+            selector: PageSelector[UUID] | None = FIRST_PAGE
+            while selector is not None:
+                page = await services.submission_drafts.attention_inbox(
+                    selector=selector, page_size=50, context=context
+                )
                 drafts.extend(page.items)
-                offset = page.next.offset if page.next is not None else None
+                selector = page.next.selector() if page.next is not None else None
         else:
             drafts = list(await services.submission_drafts.list_active(context=context))
         runs = await services.submission_inference.list_active(inbox=inbox, context=context)

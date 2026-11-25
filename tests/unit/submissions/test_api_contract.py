@@ -153,9 +153,9 @@ class FakeDrafts(SubmissionDraftCommands):
 
     @override
     async def attention_inbox(
-        self, *, context: ActingContext, offset: int = 0, page_size: int = 20
-    ) -> Page[StoredDraft]:
-        return offset_page((), offset=offset, page_size=page_size)
+        self, *, context: ActingContext, selector: PageSelector[UUID] = FIRST_PAGE, page_size: int = 20
+    ) -> Page[StoredDraft, UUID]:
+        return offset_page((), offset=selector.offset, page_size=page_size)
 
     @override
     async def list_active(self, *, limit: int = 10, context: ActingContext) -> tuple[StoredDraft, ...]:

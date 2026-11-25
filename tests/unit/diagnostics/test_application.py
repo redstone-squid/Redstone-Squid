@@ -6,6 +6,7 @@ from dataclasses import replace
 from functools import partial
 from typing import override
 from unittest.mock import Mock, create_autospec
+from uuid import UUID
 
 import pytest
 from whenever import Instant
@@ -15,6 +16,7 @@ from squid.core.diagnostics.application import ErrorReportService
 from squid.core.diagnostics.domain import ErrorReportNotFoundError
 from squid.core.diagnostics.models import ErrorReport
 from squid.core.errors import AuthorizationError, ErrorCode, InvalidStateError
+from squid.core.pagination import PageSelector
 from squid.core.permissions.application.services import PermissionService
 from squid.core.permissions.domain.catalogue import DIAGNOSTICS_ERROR_CLEAR
 from squid.core.records.errors import RecordNotFoundError
@@ -45,10 +47,10 @@ class FakeRepository:
         return len(self._matching(reference, now, prefix=prefix))
 
     async def list_recent(
-        self, *, offset: int, limit: int, now: Instant, work_lost_only: bool = False
+        self, *, selector: PageSelector[UUID], limit: int, now: Instant, work_lost_only: bool = False
     ) -> Sequence[ErrorReport]:
         newest_first = sorted(self._unexpired(now, work_lost_only), key=lambda report: report.occurred_at, reverse=True)
-        return newest_first[offset : offset + limit]
+        return newest_first[selector.offset : selector.offset + limit]
 
     async def count_recent(self, *, now: Instant, work_lost_only: bool = False) -> int:
         return len(self._unexpired(now, work_lost_only))

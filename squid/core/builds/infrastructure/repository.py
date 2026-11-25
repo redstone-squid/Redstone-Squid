@@ -11,15 +11,11 @@ from typing import Any, cast
 
 from sqlalchemy import (
     BigInteger,
-    ColumnElement,
-    Select,
     SQLColumnExpression,
     String,
     Table,
-    and_,
     delete,
     func,
-    or_,
     select,
     update,
 )
@@ -70,7 +66,8 @@ from squid.core.errors import DataIntegrityError, InvalidStateError, Persistence
 from squid.core.events.infrastructure.repository import publish_domain_event
 from squid.core.messages.domain import MessageSnapshot
 from squid.core.messages.models import Message
-from squid.core.pagination import PageAnchorNotFoundError, PageSelector
+from squid.core.pagination import PageSelector
+from squid.core.persistence.paging import KeysetOrder
 from squid.core.records.models import DoorTimingVariant, ExtenderTimingVariant
 from squid.core.search.models import SearchDocument
 from squid.core.settings.infrastructure.repository import ensure_server_settings
@@ -405,35 +402,13 @@ class BuildRepository:
         if not statuses or limit <= 0:
             return []
         session = self._session()
-
-        def listing[S: Select[Any]](statement: S) -> S:
-            return filter_build_listing(
-                statement, statuses=statuses, submitter_account_id=submitter_account_id, filters=filters
-            )
-
-        key = _build_sort_key(sort.field)
-        statement = listing(select(Build))
-        anchor_id = after_id if after_id is not None else before_id
+        listing = filter_build_listing(
+            select(Build), statuses=statuses, submitter_account_id=submitter_account_id, filters=filters
+        )
         reverse = before_id is not None
-        if anchor_id is not None:
-            if sort.field == "id":
-                anchor_key: object = anchor_id
-            else:
-                anchor = (await session.execute(listing(select(key).where(Build.id == anchor_id)))).one_or_none()
-                if anchor is None:
-                    raise PageAnchorNotFoundError(PageSelector(after_id=after_id, before_id=before_id))
-                anchor_key = anchor[0]
-            statement = statement.where(_seek(key, anchor_key, anchor_id, descending=sort.descending, backward=reverse))
-        # Walking backwards reads the reversed display order, which also moves unknown values first.
-        descending = sort.descending != reverse
-        order = key.desc() if descending else key.asc()
-        if sort.field != "id":
-            order = order.nulls_first() if reverse else order.nulls_last()
-            statement = statement.order_by(order, Build.id.desc() if descending else Build.id.asc())
-        else:
-            statement = statement.order_by(order)
-        if offset:
-            statement = statement.offset(offset)
+        statement = await KeysetOrder(_build_sort_key(sort.field), Build.id, sort.descending).apply(
+            session, listing, PageSelector(offset=offset, after_id=after_id, before_id=before_id)
+        )
         rows = (await session.scalars(statement.limit(limit).options(*_mapper_load_options()))).unique().all()
         ordered = list(reversed(rows)) if reverse else list(rows)
         return await self._loader.load_many(session, ordered)
@@ -1027,23 +1002,3 @@ def _build_sort_key(field: BuildSortField) -> SQLColumnExpression[Any]:
                 .scalar_subquery()
             )
             return func.lower(func.coalesce(Build.display_name, indexed))
-
-
-def _seek(
-    key: SQLColumnExpression[Any], anchor_key: object, anchor_id: int, *, descending: bool, backward: bool
-) -> ColumnElement[bool]:
-    """Select the builds after an anchor in display order, or before it when walking backward.
-
-    Display order sorts by `key`, then ID in the same direction, with unknown keys last.
-    """
-
-    def beyond(column: SQLColumnExpression[Any], value: object) -> ColumnElement[bool]:
-        # Further along the direction of travel.
-        return column < value if descending != backward else column > value
-
-    same_key_beyond_id = and_(key == anchor_key, beyond(Build.id, anchor_id))
-    if anchor_key is None:
-        within_unknown = and_(key.is_(None), beyond(Build.id, anchor_id))
-        return or_(key.is_not(None), within_unknown) if backward else within_unknown
-    known_beyond = or_(beyond(key, anchor_key), same_key_beyond_id)
-    return known_beyond if backward else or_(known_beyond, key.is_(None))

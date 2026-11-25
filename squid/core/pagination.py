@@ -2,11 +2,14 @@
 
 Services query the data and assemble pages; transports expose the anchors in
 their own response format. Identifier anchors support full traversal without
-the offset limit used for deep numbered pages.
+the offset limit used for deep numbered pages. Anchors are integers unless a
+list is keyed by UUID, so the types take the key as a parameter defaulting to int.
 """
 
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from typing import Any
+from uuid import UUID
 
 from squid.core.errors import ErrorCode, ValidationError
 from squid.core.i18n import tr
@@ -21,32 +24,36 @@ before the requested offset. The assembly helpers here do not enforce this limit
 
 
 @dataclass(frozen=True, slots=True)
-class PageAnchor:
-    """An adjacent page address. Callers should set exactly one field."""
-
-    offset: int | None = None
-    after_id: int | None = None
-    before_id: int | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class PageSelector:
+class PageSelector[KeyT: int | UUID = int]:
     """The single resolved way one request addresses its page."""
 
     offset: int = 0
-    after_id: int | None = None
-    before_id: int | None = None
+    after_id: KeyT | None = None
+    before_id: KeyT | None = None
 
 
 @dataclass(frozen=True, slots=True)
-class Page[ItemT]:
+class PageAnchor[KeyT: int | UUID = int]:
+    """An adjacent page address. Callers should set exactly one field."""
+
+    offset: int | None = None
+    after_id: KeyT | None = None
+    before_id: KeyT | None = None
+
+    def selector(self) -> PageSelector[KeyT]:
+        """Return the selector that requests this page."""
+        return PageSelector(offset=self.offset or 0, after_id=self.after_id, before_id=self.before_id)
+
+
+@dataclass(frozen=True, slots=True)
+class Page[ItemT, KeyT: int | UUID = int]:
     """One page of results and the parameters addressing its neighbours."""
 
     items: tuple[ItemT, ...]
     # TODO: If profiling shows count queries are costly, make totals optional for callers that only need navigation.
     total: int
-    next: PageAnchor | None
-    prev: PageAnchor | None
+    next: PageAnchor[KeyT] | None
+    prev: PageAnchor[KeyT] | None
 
 
 class PageAnchorNotFoundError(ValidationError):
@@ -61,17 +68,20 @@ class PageAnchorNotFoundError(ValidationError):
     default_code = ErrorCode.PAGE_ANCHOR_NOT_FOUND
     default_end_user_action = tr(t"core-page-anchor-not-found-action = Go back to the first page.")
 
-    def __init__(self, selector: PageSelector) -> None:
+    def __init__(self, selector: PageSelector[int] | PageSelector[UUID]) -> None:
         field = "after_id" if selector.after_id is not None else "before_id"
         super().__init__(issues=(SimpleIssue(field=f"/query/{field}", code=FieldErrorCode.INVALID_VALUE),))
 
 
-FIRST_PAGE = PageSelector()
+FIRST_PAGE: PageSelector[Any] = PageSelector()
 """The selector a request that named no pagination parameter resolves to."""
 
 
-def offset_page[ItemT](rows: Sequence[ItemT], *, offset: int, page_size: int) -> Page[ItemT]:
-    """Assemble one offset-addressed page from a collection already held in full."""
+def offset_page[ItemT](rows: Sequence[ItemT], *, offset: int, page_size: int) -> Page[ItemT, Any]:
+    """Assemble one offset-addressed page from a collection already held in full.
+
+    Its anchors are offsets only, so the page fits a list with any key type.
+    """
     total = len(rows)
     return Page(
         items=tuple(rows[offset : offset + page_size]),
@@ -81,14 +91,14 @@ def offset_page[ItemT](rows: Sequence[ItemT], *, offset: int, page_size: int) ->
     )
 
 
-def keyset_page[ItemT](
+def keyset_page[ItemT, KeyT: int | UUID = int](
     rows: Sequence[ItemT],
     *,
-    selector: PageSelector,
+    selector: PageSelector[KeyT],
     page_size: int,
     total: int,
-    id_of: Callable[[ItemT], int] | None = None,
-) -> Page[ItemT]:
+    id_of: Callable[[ItemT], KeyT] | None = None,
+) -> Page[ItemT, KeyT]:
     """Assemble a page from at most `page_size + 1` rows in display order.
 
     The extra row indicates another page in the direction of travel. Backward

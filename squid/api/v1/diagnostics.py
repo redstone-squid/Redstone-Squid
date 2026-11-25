@@ -11,7 +11,14 @@ from squid.api.contract import ANONYMOUS, cli_command, contract
 from squid.api.dependencies import CurrentCaller, ErrorReports, get_error_reports
 from squid.api.errors import responses
 from squid.api.idempotency import reserve_idempotent_request
-from squid.api.pagination import OffsetParam, Page, PageSizeParam
+from squid.api.pagination import (
+    OffsetParam,
+    Page,
+    PageSizeParam,
+    UuidAfterIdParam,
+    UuidBeforeIdParam,
+    resolve_selector,
+)
 from squid.api.security import requires
 from squid.api.v1.schemas.diagnostics import ErrorReportDetail, ErrorReportSummary
 from squid.core.diagnostics.domain import MAX_REFERENCE_LENGTH
@@ -48,6 +55,8 @@ async def list_error_reports(
     error_reports: ErrorReports,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
+    after_id: UuidAfterIdParam = None,
+    before_id: UuidBeforeIdParam = None,
     work_lost: WorkLostParam = False,
 ) -> Page[ErrorReportSummary]:
     """List the most recent unexpired error reports, newest first.
@@ -56,7 +65,10 @@ async def list_error_reports(
     only failures that permanently abandoned work, such as a dead-lettered job.
     """
     page = await error_reports.recent(
-        context=caller.context(), offset=offset or 0, page_size=page_size, work_lost_only=work_lost
+        context=caller.context(),
+        selector=resolve_selector(offset=offset, after_id=after_id, before_id=before_id),
+        page_size=page_size,
+        work_lost_only=work_lost,
     )
     return Page[ErrorReportSummary].from_domain(page, ErrorReportSummary.from_domain)
 

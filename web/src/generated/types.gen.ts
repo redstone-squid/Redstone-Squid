@@ -1518,8 +1518,8 @@ export type OwnVoteSelection = {
  */
 export type PageAnchor = {
     offset?: number | null;
-    after_id?: number | null;
-    before_id?: number | null;
+    after_id?: number | string | null;
+    before_id?: number | string | null;
 };
 
 /**
@@ -4389,6 +4389,14 @@ export type DiagnosticsErrorsListData = {
          * Number of items to skip. Excludes after_id and before_id.
          */
         offset?: number | null;
+        /**
+         * Return the items after this identifier in display order. Excludes offset.
+         */
+        after_id?: string | null;
+        /**
+         * Return the items before this identifier in display order. Excludes offset.
+         */
+        before_id?: string | null;
         /**
          * Return only failures that permanently abandoned work, such as a dead-lettered job.
          */
@@ -7305,6 +7313,14 @@ export type SubmissionCorrectionInboxData = {
          * Number of items to skip. Excludes after_id and before_id.
          */
         offset?: number | null;
+        /**
+         * Return the items after this identifier in display order. Excludes offset.
+         */
+        after_id?: string | null;
+        /**
+         * Return the items before this identifier in display order. Excludes offset.
+         */
+        before_id?: string | null;
     };
     url: '/v1/submissions/inbox';
 };

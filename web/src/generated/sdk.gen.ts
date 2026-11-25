@@ -1418,6 +1418,8 @@ export const browserImpersonationGet = <ThrowOnError extends boolean = false>(op
  * ListCorrectionInbox
  *
  * List drafts needing staff correction oldest first, excluding attachment processing waits.
+ *
+ * Draft IDs are the page anchors; one that no longer needs attention returns PAGE_ANCHOR_NOT_FOUND.
  */
 export const submissionCorrectionInbox = <ThrowOnError extends boolean = false>(options?: Options<SubmissionCorrectionInboxData, ThrowOnError>): RequestResult<SubmissionCorrectionInboxResponses, SubmissionCorrectionInboxErrors, ThrowOnError> => (options?.client ?? client).get<SubmissionCorrectionInboxResponses, SubmissionCorrectionInboxErrors, ThrowOnError>({
     security: [

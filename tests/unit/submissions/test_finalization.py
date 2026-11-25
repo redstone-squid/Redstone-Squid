@@ -71,7 +71,9 @@ class FakeDraftRepository:
     def __init__(self, draft: StoredDraft) -> None:
         self.draft = draft
 
-    async def list_attention(self, *, offset: int, limit: int, now: Instant) -> tuple[StoredDraft, ...]:
+    async def list_attention(
+        self, *, selector: PageSelector[UUID], limit: int, now: Instant
+    ) -> tuple[StoredDraft, ...]:
         return ()
 
     async def count_attention(self, *, now: Instant) -> int:

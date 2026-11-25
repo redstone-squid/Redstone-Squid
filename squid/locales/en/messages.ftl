@@ -1912,34 +1912,34 @@ build-credit-open-page = Open creator page
 # squid/bot/catalogue/browse.py:1108
 build-credit-search-name = Builds credited to this name
 
-# squid/bot/submission/ui/saved_drafts.py:58
+# squid/bot/submission/ui/saved_drafts.py:68
 build-drafts-detected = **Builds found in your build-log posts**
 
-# squid/bot/submission/ui/saved_drafts.py:93
+# squid/bot/submission/ui/saved_drafts.py:103
 build-drafts-edited = Edited { $updated }
 
-# squid/bot/submission/ui/saved_drafts.py:68
+# squid/bot/submission/ui/saved_drafts.py:78
 build-drafts-empty = You have no drafts in progress. Start one with `/build submit`.
 
-# squid/bot/submission/ui/saved_drafts.py:66
+# squid/bot/submission/ui/saved_drafts.py:76
 build-drafts-inbox-empty = No drafts are waiting for staff correction.
 
-# squid/bot/submission/ui/saved_drafts.py:50
+# squid/bot/submission/ui/saved_drafts.py:60
 build-drafts-open = Open
 
-# squid/bot/submission/ui/saved_drafts.py:59
+# squid/bot/submission/ui/saved_drafts.py:69
 build-drafts-review = Review
 
-# squid/bot/submission/ui/saved_drafts.py:85
+# squid/bot/submission/ui/saved_drafts.py:95
 build-drafts-state-creating = Creating the build
 
-# squid/bot/submission/ui/saved_drafts.py:91
+# squid/bot/submission/ui/saved_drafts.py:101
 build-drafts-state-editing = In progress
 
-# squid/bot/submission/ui/saved_drafts.py:89
+# squid/bot/submission/ui/saved_drafts.py:99
 build-drafts-state-needs-changes = Needs changes
 
-# squid/bot/submission/ui/saved_drafts.py:87
+# squid/bot/submission/ui/saved_drafts.py:97
 build-drafts-state-waiting = Waiting for files
 
 # squid/core/submissions/application/forms.py:455
@@ -2857,7 +2857,7 @@ core-errors-invalid-value = Invalid value
 # squid/core/errors.py:243
 core-errors-operation-conflict = Operation conflict
 
-# squid/core/pagination.py:60
+# squid/core/pagination.py:67
 core-errors-page-anchor-not-found = Page anchor not found
 
 # squid/core/errors.py:179
@@ -2893,10 +2893,10 @@ core-operation-failed = The requested operation could not be completed.
 # squid/core/errors.py:274
 core-owner-required-action = Only the owner can perform this action.
 
-# squid/core/pagination.py:59
+# squid/core/pagination.py:66
 core-page-anchor-not-found = The page anchor is no longer in this list.
 
-# squid/core/pagination.py:62
+# squid/core/pagination.py:69
 core-page-anchor-not-found-action = Go back to the first page.
 
 # squid/core/errors.py:336
@@ -2996,19 +2996,19 @@ credits-role = Contribution
 # squid/bot/submission/ui/credits.py:42
 credits-title = Credits
 
-# squid/bot/diagnostics/screen.py:396
+# squid/bot/diagnostics/screen.py:397
 diagnostics-abandoned-job-note = This job was abandoned; nothing will retry it.
 
-# squid/bot/diagnostics/screen.py:50
+# squid/bot/diagnostics/screen.py:51
 diagnostics-attachment-page-hint = { $section } — page { $page } of { $pages }
 
-# squid/bot/diagnostics/screen.py:337
+# squid/bot/diagnostics/screen.py:338
 diagnostics-clear-forbidden = You are no longer allowed to clear error reports.
 
-# squid/bot/diagnostics/screen.py:58
+# squid/bot/diagnostics/screen.py:59
 diagnostics-controls-not-owner = These error controls belong to someone else.
 
-# squid/bot/diagnostics/screen.py:207
+# squid/bot/diagnostics/screen.py:208
 diagnostics-delete-warning = This permanently deletes reports that have not expired yet.
 
 # squid/core/diagnostics/domain.py:23
@@ -3017,82 +3017,82 @@ diagnostics-error-report-not-found = Error report not found
 # squid/core/diagnostics/application.py:72
 diagnostics-error-report-retention = Error report retention must be at least one hour.
 
-# squid/bot/diagnostics/screen.py:248
+# squid/bot/diagnostics/screen.py:249
 diagnostics-no-recent-errors = Nothing has failed within the retention window.
 
 # squid/core/diagnostics/domain.py:22
 diagnostics-no-stored-error = No stored error matches that reference.
 
-# squid/bot/diagnostics/screen.py:169
+# squid/bot/diagnostics/screen.py:170
 diagnostics-path-privacy-warning = An error report names internal paths, so it is never posted in a channel.
 
-# squid/bot/diagnostics/screen.py:124
+# squid/bot/diagnostics/screen.py:125
 diagnostics-report-list-stale = The report list has changed. Refresh when you are ready.
 
-# squid/bot/diagnostics/screen.py:404
+# squid/bot/diagnostics/screen.py:405
 diagnostics-shared-reference-note = { $count } reports match this reference; this is the newest.
 
-# squid/bot/diagnostics/screen.py:119
+# squid/bot/diagnostics/screen.py:120
 diagnostics-update-check-failed = Could not check for updates. You can still refresh reports.
 
-# squid/bot/diagnostics/screen.py:403
+# squid/bot/diagnostics/screen.py:404
 diagnostics-view-ambiguous = Ambiguous
 
-# squid/bot/diagnostics/screen.py:293
+# squid/bot/diagnostics/screen.py:294
 diagnostics-view-clear-all = Clear all
 
-# squid/bot/diagnostics/screen.py:205
+# squid/bot/diagnostics/screen.py:206
 diagnostics-view-clear-every-error-report = Clear every error report?
 
-# squid/bot/diagnostics/screen.py:213
+# squid/bot/diagnostics/screen.py:214
 diagnostics-view-delete-reports = Delete reports
 
-# squid/bot/diagnostics/screen.py:266
+# squid/bot/diagnostics/screen.py:267
 diagnostics-view-deleted-stored-error-reports = Deleted { $count } stored error reports.
 
-# squid/bot/diagnostics/screen.py:59
+# squid/bot/diagnostics/screen.py:60
 diagnostics-view-earlier = Earlier
 
-# squid/bot/diagnostics/screen.py:303
+# squid/bot/diagnostics/screen.py:304
 diagnostics-view-error = Error { $identifier }
 
-# squid/bot/diagnostics/screen.py:264
+# squid/bot/diagnostics/screen.py:265
 diagnostics-view-errors-cleared = Errors cleared
 
-# squid/bot/diagnostics/screen.py:390
+# squid/bot/diagnostics/screen.py:391
 diagnostics-view-exception = Exception
 
-# squid/bot/diagnostics/screen.py:60
+# squid/bot/diagnostics/screen.py:61
 diagnostics-view-later = Later
 
-# squid/bot/diagnostics/screen.py:278
+# squid/bot/diagnostics/screen.py:279
 diagnostics-view-loading-error-reports = Loading error reports.
 
-# squid/bot/diagnostics/screen.py:313
+# squid/bot/diagnostics/screen.py:314
 diagnostics-view-log-tail = Log tail
 
-# squid/bot/diagnostics/screen.py:299
+# squid/bot/diagnostics/screen.py:300
 diagnostics-view-no-traceback-was-recorded = No traceback was recorded.
 
-# squid/bot/diagnostics/screen.py:247
+# squid/bot/diagnostics/screen.py:248
 diagnostics-view-recent-errors = Recent errors
 
-# squid/bot/diagnostics/screen.py:152
+# squid/bot/diagnostics/screen.py:153
 diagnostics-view-refresh-reports = Refresh reports
 
-# squid/bot/diagnostics/screen.py:49
+# squid/bot/diagnostics/screen.py:50
 diagnostics-view-traceback = Traceback
 
-# squid/bot/diagnostics/screen.py:386
+# squid/bot/diagnostics/screen.py:387
 diagnostics-view-when = When
 
-# squid/bot/diagnostics/screen.py:389
+# squid/bot/diagnostics/screen.py:390
 diagnostics-view-where = Where
 
-# squid/bot/diagnostics/screen.py:395
+# squid/bot/diagnostics/screen.py:396
 diagnostics-view-work-lost = Work lost
 
-# squid/bot/diagnostics/screen.py:284
+# squid/bot/diagnostics/screen.py:285
 diagnostics-view-work-lost-only = Work lost only
 
 # squid/bot/submission/ui/drafts.py:1055, squid/bot/submission/ui/drafts.py:607, squid/bot/submission/ui/drafts.py:804
@@ -6186,7 +6186,7 @@ submissions-draft-answers-exceed = The draft answers exceed the retained data li
 # squid/core/submissions/application/attachments.py:74
 submissions-draft-attachment-upload = Draft attachment upload authority is invalid.
 
-# squid/core/submissions/application/drafts.py:263
+# squid/core/submissions/application/drafts.py:265
 submissions-draft-capacity-positive = draft capacity must be positive
 
 # squid/core/submissions/domain/drafts.py:162
@@ -6198,10 +6198,10 @@ submissions-draft-change-keys = draft change keys must be 8-255 visible ASCII ch
 # squid/core/submissions/domain/drafts.py:151
 submissions-draft-changes-exceed = draft changes cannot exceed { $limit } operations
 
-# squid/core/submissions/application/drafts.py:397
+# squid/core/submissions/application/drafts.py:399
 submissions-draft-discovery-limit = draft discovery limit must be between 1 and { $maximum }
 
-# squid/core/submissions/application/drafts.py:475
+# squid/core/submissions/application/drafts.py:482
 submissions-draft-expiry-limit = draft expiry limit must be between 1 and 1000
 
 # squid/core/submissions/domain/drafts.py:312, squid/core/submissions/domain/drafts.py:320
@@ -6231,7 +6231,7 @@ submissions-draft-operation-required = draft changes require at least one operat
 # squid/core/submissions/errors.py:40
 submissions-draft-owner-required = Only the account that owns this draft can perform this action.
 
-# squid/core/submissions/application/drafts.py:303
+# squid/core/submissions/application/drafts.py:305
 submissions-draft-retention-positive = draft retention must be positive
 
 # squid/core/submissions/errors.py:36
@@ -6351,7 +6351,7 @@ submissions-owner-account-id = owner_account_id must be positive
 # squid/core/submissions/domain/finalization.py:374
 submissions-paper-installation-only = Only Paper submissions may retain an installation ID.
 
-# squid/core/submissions/application/drafts.py:340
+# squid/core/submissions/application/drafts.py:342
 submissions-paper-installation-origin-required = Paper drafts require server-derived installation identity.
 
 # squid/core/submissions/application/drafts.py:107
@@ -6429,7 +6429,7 @@ submissions-state-edited = drafts in { $current_status } state cannot be edited
 # squid/core/submissions/domain/finalization.py:148
 submissions-submission-dimensions-positive = submission dimensions must be positive
 
-# squid/core/submissions/application/drafts.py:224
+# squid/core/submissions/application/drafts.py:226
 submissions-submission-form-revisions = submission form revisions must be upgraded one checked-in revision at a time
 
 # squid/core/submissions/domain/finalization.py:368

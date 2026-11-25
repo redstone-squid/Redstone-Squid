@@ -9,6 +9,7 @@ from whenever import Instant
 
 from squid.core.actors import ActingContext, Actor, AnonymousActor, UserActor
 from squid.core.errors import InvalidStateError, JSONValue
+from squid.core.pagination import PageSelector
 from squid.core.permissions.application.ports import PermissionUnitOfWork
 from squid.core.permissions.domain import Decision, PermissionCheck, Reason
 from squid.core.permissions.errors import PermissionDeniedError, require_check
@@ -61,7 +62,9 @@ class FakeDraftRepository:
         self.actors: list[int | None] = []
         self.replays: dict[tuple[UUID, str], AppliedDraftChange] = {}
 
-    async def list_attention(self, *, offset: int, limit: int, now: Instant) -> tuple[StoredDraft, ...]:
+    async def list_attention(
+        self, *, selector: PageSelector[UUID], limit: int, now: Instant
+    ) -> tuple[StoredDraft, ...]:
         return ()
 
     async def count_attention(self, *, now: Instant) -> int:

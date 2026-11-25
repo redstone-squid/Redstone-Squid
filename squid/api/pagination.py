@@ -6,7 +6,8 @@ validates query parameters and converts those pages to JSON representations.
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Annotated, Self, cast, overload
+from typing import Annotated, Any, Self, cast, overload
+from uuid import UUID
 
 from litestar.params import QueryParameter
 from pydantic import BaseModel, ConfigDict
@@ -33,19 +34,30 @@ BeforeIdParam = Annotated[
     int | None,
     QueryParameter(ge=1, description="Return the items before this identifier in display order. Excludes offset."),
 ]
+UuidAfterIdParam = Annotated[
+    UUID | None,
+    QueryParameter(description="Return the items after this identifier in display order. Excludes offset."),
+]
+UuidBeforeIdParam = Annotated[
+    UUID | None,
+    QueryParameter(description="Return the items before this identifier in display order. Excludes offset."),
+]
 
 
 class PageAnchor(BaseModel):
-    """Query-parameter values addressing an adjacent page. Exactly one field is set."""
+    """Query-parameter values addressing an adjacent page. Exactly one field is set.
+
+    IDs are integers, or UUIDs on lists keyed by UUID; send them back unchanged.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     offset: int | None = None
-    after_id: int | None = None
-    before_id: int | None = None
+    after_id: int | UUID | None = None
+    before_id: int | UUID | None = None
 
     @classmethod
-    def from_domain(cls, value: ResultPageAnchor) -> Self:
+    def from_domain(cls, value: ResultPageAnchor[Any]) -> Self:
         """Serialize one adjacent-page address."""
         return cls(offset=value.offset, after_id=value.after_id, before_id=value.before_id)
 
@@ -65,14 +77,16 @@ class Page[ItemT]:
 
     @classmethod
     @overload
-    def from_domain(cls, page: ResultPage[ItemT]) -> Self: ...
+    def from_domain(cls, page: ResultPage[ItemT, Any]) -> Self: ...
 
     @classmethod
     @overload
-    def from_domain[ResultT](cls, page: ResultPage[ResultT], render: Callable[[ResultT], ItemT]) -> Self: ...
+    def from_domain[ResultT](cls, page: ResultPage[ResultT, Any], render: Callable[[ResultT], ItemT]) -> Self: ...
 
     @classmethod
-    def from_domain[ResultT](cls, page: ResultPage[ResultT], render: Callable[[ResultT], ItemT] | None = None) -> Self:
+    def from_domain[ResultT](
+        cls, page: ResultPage[ResultT, Any], render: Callable[[ResultT], ItemT] | None = None
+    ) -> Self:
         """Copy an application page, optionally mapping items that need explicit assembly."""
         # The overload without a renderer requires matching item types.
         items = [render(item) for item in page.items] if render is not None else cast(list[ItemT], list(page.items))
@@ -84,13 +98,13 @@ class Page[ItemT]:
         )
 
 
-def resolve_selector(
+def resolve_selector[KeyT: int | UUID = int](
     *,
     offset: int | None,
-    after_id: int | None = None,
-    before_id: int | None = None,
+    after_id: KeyT | None = None,
+    before_id: KeyT | None = None,
     keyset_allowed: bool = True,
-) -> PageSelector:
+) -> PageSelector[KeyT]:
     """Resolve the mutually exclusive pagination parameters into one selector.
 
     With no selector, start at offset zero. Supplying more than one selector raises

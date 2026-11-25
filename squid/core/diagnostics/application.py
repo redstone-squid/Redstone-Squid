@@ -4,7 +4,7 @@ import logging
 import traceback
 from collections.abc import Callable, Mapping, Sequence
 from typing import Protocol
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from whenever import Instant
 
@@ -13,7 +13,7 @@ from squid.core.diagnostics.domain import MAX_REFERENCE_LENGTH, ErrorReportNotFo
 from squid.core.diagnostics.models import ErrorReport
 from squid.core.errors import InvalidStateError, JSONValue, SquidError
 from squid.core.i18n import tr
-from squid.core.pagination import Page, PageSelector, keyset_page
+from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
 from squid.core.permissions.application.services import PermissionService
 from squid.core.permissions.domain.catalogue import DIAGNOSTICS_ERROR_CLEAR, DIAGNOSTICS_ERROR_READ
 from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
@@ -32,7 +32,7 @@ class ErrorReportRepository(Protocol):
     async def count_matching(self, reference: str, *, now: Instant, prefix: bool = False) -> int: ...
 
     async def list_recent(
-        self, *, offset: int, limit: int, now: Instant, work_lost_only: bool = False
+        self, *, selector: PageSelector[UUID], limit: int, now: Instant, work_lost_only: bool = False
     ) -> Sequence[ErrorReport]: ...
 
     async def count_recent(self, *, now: Instant, work_lost_only: bool = False) -> int: ...
@@ -134,23 +134,31 @@ class ErrorReportService:
                 return report, matches
 
     async def recent(
-        self, *, context: ActingContext, offset: int = 0, page_size: int = 20, work_lost_only: bool = False
-    ) -> Page[ErrorReport]:
-        """Page unexpired reports, newest first.
+        self,
+        *,
+        context: ActingContext,
+        selector: PageSelector[UUID] = FIRST_PAGE,
+        page_size: int = 20,
+        work_lost_only: bool = False,
+    ) -> Page[ErrorReport, UUID]:
+        """Page unexpired reports, newest first, anchored by report ID.
 
         Set work_lost_only to select reports marked as abandoned work, such as
         jobs that exhausted their retries. This separates lost work from failures
-        the application recovered from.
+        the application recovered from. An expired or filtered-out anchor raises
+        PageAnchorNotFoundError.
         """
         with context.scope():
             await self._permissions.require(context.effective, DIAGNOSTICS_ERROR_READ)
             now = self._now()
             async with self._uow_factory() as uow:
                 rows = await uow.error_reports.list_recent(
-                    offset=offset, limit=page_size + 1, now=now, work_lost_only=work_lost_only
+                    selector=selector, limit=page_size + 1, now=now, work_lost_only=work_lost_only
                 )
                 total = await uow.error_reports.count_recent(now=now, work_lost_only=work_lost_only)
-            return keyset_page(rows, selector=PageSelector(offset=offset), page_size=page_size, total=total)
+            return keyset_page(
+                rows, selector=selector, page_size=page_size, total=total, id_of=lambda report: report.id
+            )
 
     async def purge_expired(self, *, context: ActingContext) -> int:
         """Delete reports past their retention window."""

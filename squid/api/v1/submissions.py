@@ -26,7 +26,16 @@ from squid.api.contract import ANONYMOUS, DEVICE, MINECRAFT, WEB, WEB_WRITE, cli
 from squid.api.errors import responses
 from squid.api.i18n import locale_for_request
 from squid.api.idempotency import reserve_edit_request, reserve_idempotent_request
-from squid.api.pagination import AfterIdParam, BeforeIdParam, OffsetParam, Page, PageSizeParam, resolve_selector
+from squid.api.pagination import (
+    AfterIdParam,
+    BeforeIdParam,
+    OffsetParam,
+    Page,
+    PageSizeParam,
+    UuidAfterIdParam,
+    UuidBeforeIdParam,
+    resolve_selector,
+)
 from squid.api.private_responses import private_response
 from squid.api.revisions import InvalidRevisionError, expected_revision, revision_etag
 from squid.api.security import Caller, current_caller
@@ -101,8 +110,8 @@ class SubmissionDraftCommands(Protocol):
     async def list_active(self, *, limit: int = 10, context: ActingContext) -> tuple[StoredDraft, ...]: ...
 
     async def attention_inbox(
-        self, *, context: ActingContext, offset: int = 0, page_size: int = 20
-    ) -> ResultPage[StoredDraft]: ...
+        self, *, context: ActingContext, selector: PageSelector[UUID] = FIRST_PAGE, page_size: int = 20
+    ) -> ResultPage[StoredDraft, UUID]: ...
 
     async def get_accessible(self, draft_id: UUID, *, context: ActingContext) -> StoredDraft: ...
 
@@ -317,9 +326,18 @@ async def list_correction_inbox(
     context: SubmissionContext,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
+    after_id: UuidAfterIdParam = None,
+    before_id: UuidBeforeIdParam = None,
 ) -> Page[DraftSummaryResponse]:
-    """List drafts needing staff correction oldest first, excluding attachment processing waits."""
-    page = await drafts.attention_inbox(offset=offset or 0, page_size=page_size, context=context)
+    """List drafts needing staff correction oldest first, excluding attachment processing waits.
+
+    Draft IDs are the page anchors; one that no longer needs attention returns PAGE_ANCHOR_NOT_FOUND.
+    """
+    page = await drafts.attention_inbox(
+        selector=resolve_selector(offset=offset, after_id=after_id, before_id=before_id),
+        page_size=page_size,
+        context=context,
+    )
     return Page[DraftSummaryResponse].from_domain(page, DraftSummaryResponse.from_domain)
 
 
