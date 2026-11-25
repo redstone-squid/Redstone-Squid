@@ -135,7 +135,7 @@ export type BuildDetail = {
     title: string;
     display_name: string | null;
     status: string;
-    category: string;
+    category: BuildCategory;
     dimensions: PublicBuildDimensions;
     creators: Array<string>;
     tags: Array<PublicBuildTag>;
@@ -146,6 +146,7 @@ export type BuildDetail = {
     closing_time: number | null;
     created_at: string | null;
     updated_at: string | null;
+    subtitle?: string | null;
     credits?: Array<PublicBuildCredit>;
     details: DoorDetails | ExtenderDetails | GeneralDetails;
     restrictions: {
@@ -1688,7 +1689,7 @@ export type PublicBuildSummary = {
     title: string;
     display_name: string | null;
     status: string;
-    category: string;
+    category: BuildCategory;
     dimensions: PublicBuildDimensions;
     creators: Array<string>;
     tags: Array<PublicBuildTag>;
@@ -1699,6 +1700,7 @@ export type PublicBuildSummary = {
     closing_time: number | null;
     created_at: string | null;
     updated_at: string | null;
+    subtitle?: string | null;
     credits?: Array<PublicBuildCredit>;
 };
 

@@ -21,6 +21,7 @@ from squid.api.v1.records import (
     lookup_door_ranges,
 )
 from squid.core.builds.application import PublicBuildDimensions, PublicBuildPreview, PublicBuildSummary, PublicBuildTag
+from squid.core.builds.domain import BuildCategory
 from squid.core.builds.domain.expansion import DoorExpansion, ExpansionBranch
 from squid.core.builds.domain.expansion_evaluation import PointStatus
 from squid.core.pagination import Page, PageAnchor
@@ -109,7 +110,7 @@ async def test_record_detail_serializes_the_application_read_model(expanded: boo
         title="Fastest 2x3 door",
         display_name=None,
         status="approved",
-        category="Door",
+        category=BuildCategory.DOOR,
         dimensions=PublicBuildDimensions(width=5, height=6, depth=None),
         creators=("Alice",),
         tags=(PublicBuildTag(key="official_delay", name="Delay", value=Decimal("1.5"), unit="second"),),

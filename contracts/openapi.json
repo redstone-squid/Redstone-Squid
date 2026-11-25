@@ -19181,7 +19181,7 @@
             "type": "string"
           },
           "category": {
-            "type": "string"
+            "$ref": "#/components/schemas/BuildCategory"
           },
           "dimensions": {
             "$ref": "#/components/schemas/PublicBuildDimensions"
@@ -19260,6 +19260,16 @@
               {
                 "type": "string",
                 "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "subtitle": {
+            "oneOf": [
+              {
+                "type": "string"
               },
               {
                 "type": "null"
@@ -24763,7 +24773,7 @@
             "type": "string"
           },
           "category": {
-            "type": "string"
+            "$ref": "#/components/schemas/BuildCategory"
           },
           "dimensions": {
             "$ref": "#/components/schemas/PublicBuildDimensions"
@@ -24842,6 +24852,16 @@
               {
                 "type": "string",
                 "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "subtitle": {
+            "oneOf": [
+              {
+                "type": "string"
               },
               {
                 "type": "null"

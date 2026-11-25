@@ -7,7 +7,7 @@ from decimal import Decimal
 from typing import Literal, Protocol, get_args
 from urllib.parse import urlsplit
 
-from squid.core.builds.domain import BuildStatus
+from squid.core.builds.domain import BuildCategory, BuildStatus
 from squid.core.builds.domain.credits import CreditAttribution, CreditKind, CreditRole
 from squid.core.builds.errors import BuildNotFoundError
 from squid.core.builds.models import Build, DoorBuild
@@ -82,7 +82,7 @@ class PublicBuildSummary:
     title: str
     display_name: str | None
     status: str
-    category: str
+    category: BuildCategory
     dimensions: PublicBuildDimensions
     creators: tuple[str, ...]
     tags: tuple[PublicBuildTag, ...]
@@ -93,6 +93,7 @@ class PublicBuildSummary:
     closing_time: int | None
     created_at: datetime | None
     updated_at: datetime | None
+    subtitle: str | None = None
     credits: tuple[PublicBuildCredit, ...] = ()
 
     @classmethod
@@ -110,9 +111,10 @@ class PublicBuildSummary:
             id=build.id,
             revision=build.revision,
             title=build.title,
+            subtitle=build.subtitle,
             display_name=build.display_name,
             status=build.submission_status.name.casefold() if build.submission_status is not None else "unknown",
-            category=build.category.value,
+            category=build.category,
             dimensions=PublicBuildDimensions(width=build.width, height=build.height, depth=build.depth),
             creators=tuple(build.creators_ign),
             credits=tuple(

@@ -10,6 +10,7 @@ import anyio
 import pytest
 
 from squid.core.builds.application.queries import PublicBuildDimensions, PublicBuildSummary
+from squid.core.builds.domain import BuildCategory
 from squid.core.builds.domain.expansion import DoorExpansion, ExpansionBranch, ExpansionParameter, ExpansionTiming
 from squid.core.builds.domain.expansion_evaluation import PointStatus
 from squid.core.errors import DataIntegrityError, ServiceUnavailableError, ValidationError
@@ -240,7 +241,7 @@ def _public_build(build_id: int) -> PublicBuildSummary:
         title=f"Build {build_id}",
         display_name=None,
         status="approved",
-        category="Door",
+        category=BuildCategory.DOOR,
         dimensions=PublicBuildDimensions(width=2, height=3, depth=4),
         creators=(),
         tags=(),
