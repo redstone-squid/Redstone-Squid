@@ -372,6 +372,7 @@ class SearchScreen(sd.Screen[None, Any, RedstoneSquid]):
             detail=self._detail,
             overview=self._overview,
             fetch_size=request.page_size,
+            show_fetch_size=True,
             title=tr(t"bot-submission-search-view-search-results = Search results"),
             empty=tr(t"build-search-no-results = No results match this query."),
             copy=sp.LoadingCopy(
