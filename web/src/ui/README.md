@@ -102,6 +102,16 @@ tokens, assigned in order through a `tone` and never used for text. Astro cannot
 snippets, and functions cannot cross into an island, so a Svelte feature component wraps
 components that take them, such as `DataTable`, the charts, and fields with label functions.
 
+Motion only explains a change: an overlay entering or leaving, content growing open, an
+indicator moving to the new choice, content replacing a skeleton. It uses the duration and
+`ease-*` tokens behind `motion-safe:` or `prefers-reduced-motion: no-preference`, and
+`app.css` turns every transition off under reduced motion. bits-ui keeps an overlay mounted
+until its transitions end and marks the exit `data-ending-style`, so give it an exit look
+that mirrors the `starting:` one; a native popover transitions `display` and `overlay`
+discretely instead. `@starting-style` also fires on page load, so a fade-in for content that
+arrives later (`ResultsView`, `DataTable` rows) is added only after mount. The `motion` page
+of the workbench shows each of these.
+
 Astro wraps slot content passed to a Svelte component in an `astro-static-slot` element,
 which `app.css` displays as `contents`. The wrapper still breaks list and table structure,
 so components that render list items or rows take data, not slotted rows.
@@ -110,7 +120,7 @@ so components that render list items or rows take data, not slotted rows.
 
 Each folder has a stories page, `src/workbench/stories/<Folder>Stories.svelte`, that shows
 every variant and state through `Story` (`source` is the component's path, such as
-`feedback/Badge`). `tests/unit/workbench-stories.test.ts` fails when a component has no story.
+`feedback/Badge`); the `motion` page gathers motion across folders. `tests/unit/workbench-stories.test.ts` fails when a component has no story.
 To see a change, run `bun run dev` and open its folder's page under `/design-system`.
 `tests/review/workbench.spec.ts` checks every page in both themes on desktop and mobile with
 axe and an overflow check; `/design-system-trial` exercises a complete draft. Screenshots are

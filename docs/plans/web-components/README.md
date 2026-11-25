@@ -52,7 +52,8 @@ third-party; revisit this then.
 
 ## Status and resuming
 
-Phases 0 to 7 are done; Phase 8 (screens) is next. Every §2 component exists; the
+Phases 0 to 7 are done, along with scoped style blocks and motion (the workbench's
+`motion` page); Phase 8 (screens) is next. Every §2 component exists; the
 "Need → Use" table in `web/src/ui/README.md` lists them. `src/ui/lib`, `src/api-client` and
 `features/submissions/draft-sync.ts` wait for their screens.
 
