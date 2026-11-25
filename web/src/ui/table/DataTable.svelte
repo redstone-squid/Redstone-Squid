@@ -132,8 +132,9 @@
   );
   const rowModel = $derived(table.getRowModel().rows);
 
-  // On phones the pinned column stays narrow enough to leave room for the scrolling ones.
-  const widths = { xs: "min-w-20", sm: "min-w-32", md: "min-w-48", lg: "sm:min-w-72", auto: "" };
+  // A narrow table keeps `lg` columns narrow, leaving room for the others. The query is the
+  // scroll region's width, the same one that caps the pinned column (`@max-xl:max-w-44`).
+  const widths = { xs: "min-w-20", sm: "min-w-32", md: "min-w-48", lg: "@xl:min-w-72", auto: "" };
   const pad = $derived(density === "compact" ? "px-3 py-1.5" : "px-3 py-2.5");
 
   const columnMenu = $derived.by(() => {
