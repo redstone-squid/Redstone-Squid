@@ -1,9 +1,9 @@
 """PostgreSQL error report repository."""
 
 from collections.abc import Callable, Sequence
-from typing import cast, override
+from typing import Any, cast, override
 
-from sqlalchemy import delete, func, or_, select, true
+from sqlalchemy import Select, delete, func, or_, select, true
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
@@ -47,16 +47,21 @@ class PostgresErrorReportRepository(ErrorReportRepository):
         return total or 0
 
     @override
-    async def list_recent(self, *, limit: int, now: Instant, work_lost_only: bool = False) -> Sequence[ErrorReport]:
-        session = self._session()
-        rows = await session.scalars(
-            select(ErrorReport)
-            .where(ErrorReport.expires_at > now)
-            .where(ErrorReport.work_lost if work_lost_only else true())
-            .order_by(ErrorReport.occurred_at.desc())
+    async def list_recent(
+        self, *, offset: int, limit: int, now: Instant, work_lost_only: bool = False
+    ) -> Sequence[ErrorReport]:
+        statement = (
+            _unexpired(select(ErrorReport), now, work_lost_only=work_lost_only)
+            .order_by(ErrorReport.occurred_at.desc(), ErrorReport.id)
+            .offset(offset)
             .limit(limit)
         )
-        return rows.all()
+        return (await self._session().scalars(statement)).all()
+
+    @override
+    async def count_recent(self, *, now: Instant, work_lost_only: bool = False) -> int:
+        statement = _unexpired(select(func.count()).select_from(ErrorReport), now, work_lost_only=work_lost_only)
+        return await self._session().scalar(statement) or 0
 
     @override
     async def purge_expired(self, *, now: Instant) -> int:
@@ -78,3 +83,8 @@ def _matches(reference: str, *, prefix: bool):
         else ErrorReport.correlation_id == reference
     )
     return or_(ErrorReport.reference == reference, correlation_match)
+
+
+def _unexpired[S: Select[Any]](statement: S, now: Instant, *, work_lost_only: bool) -> S:
+    """Keep reports still retained at `now`, optionally only those that abandoned work."""
+    return statement.where(ErrorReport.expires_at > now, ErrorReport.work_lost if work_lost_only else true())

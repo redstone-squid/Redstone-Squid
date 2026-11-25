@@ -19,7 +19,7 @@ from squid.core.notifications import (
 from squid.core.notifications.application import NotificationEditorSnapshot
 from squid.core.notifications.domain import NotificationKind
 from squid.core.notifications.models import InboxNotification
-from squid.core.pagination import FIRST_PAGE, Page, PageSelector
+from squid.core.pagination import FIRST_PAGE, Page, PageSelector, offset_page
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.application.administration import PermissionAdministrationService
 from squid.core.permissions.application.ports import PermissionSubject, SubjectRecords
@@ -135,7 +135,7 @@ class StoredReports(ErrorReportService):
 
     @override
     async def recent(
-        self, *, context: ActingContext, limit: int = 20, work_lost_only: bool = False
-    ) -> tuple[ErrorReport, ...]:
-        self.recent_calls.append((limit, work_lost_only))
-        return (self.report,)
+        self, *, context: ActingContext, offset: int = 0, page_size: int = 20, work_lost_only: bool = False
+    ) -> Page[ErrorReport]:
+        self.recent_calls.append((page_size, work_lost_only))
+        return offset_page((self.report,), offset=offset, page_size=page_size)

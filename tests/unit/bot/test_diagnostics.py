@@ -1,6 +1,6 @@
 """Tests for reading a stored error report from Discord."""
 
-from collections.abc import AsyncIterator, Awaitable, Callable, Sequence
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import override
 from uuid import NAMESPACE_URL, uuid5
@@ -16,6 +16,7 @@ from squid.bot.diagnostics.screen import ERROR_CHROME, ErrorReportScreen, report
 from squid.core.actors import ActingContext, UserActor
 from squid.core.diagnostics.application import ErrorReportService
 from squid.core.diagnostics.models import ErrorReport
+from squid.core.pagination import Page, offset_page
 from squid_ui.ext.discord import (
     V2_LIMITS as LIMITS,
 )
@@ -107,10 +108,10 @@ class ErrorReportRecorder(ErrorReportService):
 
     @override
     async def recent(
-        self, *, context: ActingContext, limit: int = 20, work_lost_only: bool = False
-    ) -> Sequence[ErrorReport]:
-        self.recent_calls.append((limit, work_lost_only))
-        return self.reports
+        self, *, context: ActingContext, offset: int = 0, page_size: int = 20, work_lost_only: bool = False
+    ) -> Page[ErrorReport]:
+        self.recent_calls.append((page_size, work_lost_only))
+        return offset_page(self.reports, offset=offset, page_size=page_size)
 
     @override
     async def clear_all(self, *, context: ActingContext) -> int:
@@ -505,13 +506,15 @@ async def test_report_monitor_cancels_initial_check_and_remounts_with_a_new_run(
     original = screen._operations.recent
     calls = 0
 
-    async def recent(*, context: ActingContext, limit: int = 20, work_lost_only: bool = False) -> Sequence[ErrorReport]:
+    async def recent(
+        *, context: ActingContext, offset: int = 0, page_size: int = 20, work_lost_only: bool = False
+    ) -> Page[ErrorReport]:
         nonlocal calls
         calls += 1
         if calls > 1:
             entered.set()
             await release.wait()
-        return await original(context=context, limit=limit, work_lost_only=work_lost_only)
+        return await original(context=context, offset=offset, page_size=page_size, work_lost_only=work_lost_only)
 
     screen._operations.recent = AsyncCallRecorder(callback=recent)
     async with running_execution_host() as host:

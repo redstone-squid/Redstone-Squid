@@ -11,6 +11,7 @@ from squid.core.actors import ActingContext
 from squid.core.diagnostics.domain import ErrorReportNotFoundError
 from squid.core.diagnostics.models import ErrorReport
 from squid.core.errors import ErrorCode
+from squid.core.pagination import Page, offset_page
 from tests.unit.api.fakes import TEST_CONFIG, TEST_SYNERGY_SECRET, build_app
 
 OCCURRED = Instant.from_utc(2026, 8, 17, 12, 0, 0)
@@ -44,10 +45,11 @@ class StubErrorReports:
             raise ErrorReportNotFoundError(context={"reference": reference})
         return self._report, self._matches
 
-    async def recent(self, *, context: ActingContext, limit: int, work_lost_only: bool = False) -> list[ErrorReport]:
-        if self._report is None or (work_lost_only and not self._report.work_lost):
-            return []
-        return [self._report]
+    async def recent(
+        self, *, context: ActingContext, offset: int = 0, page_size: int = 20, work_lost_only: bool = False
+    ) -> Page[ErrorReport]:
+        shown = self._report is not None and (self._report.work_lost or not work_lost_only)
+        return offset_page([self._report] if shown else [], offset=offset, page_size=page_size)
 
 
 # The bootstrap secret carries only the nodes a deployment names, so reading reports has to be

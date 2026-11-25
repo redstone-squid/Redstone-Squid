@@ -148,9 +148,12 @@ async def test_list_recent_is_newest_first_and_bounded(repository: PostgresError
             make_report(correlation_id=str(index) * 32, occurred_at=NOW.subtract(hours=index)),
         )
 
-    recent = await repository.list_recent(limit=2, now=NOW)
+    recent = await repository.list_recent(offset=0, limit=2, now=NOW)
+    rest = await repository.list_recent(offset=2, limit=2, now=NOW)
 
     assert [report.correlation_id for report in recent] == ["0" * 32, "1" * 32]
+    assert [report.correlation_id for report in rest] == ["2" * 32]
+    assert await repository.count_recent(now=NOW) == 3
 
 
 async def test_a_report_with_no_error_code_round_trips(repository: PostgresErrorReportRepository) -> None:

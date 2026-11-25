@@ -44,11 +44,17 @@ class FakeRepository:
     async def count_matching(self, reference: str, *, now: Instant, prefix: bool = False) -> int:
         return len(self._matching(reference, now, prefix=prefix))
 
-    async def list_recent(self, *, limit: int, now: Instant, work_lost_only: bool = False) -> Sequence[ErrorReport]:
-        unexpired = [
-            report for report in self.saved if report.expires_at > now and (report.work_lost or not work_lost_only)
-        ]
-        return sorted(unexpired, key=lambda report: report.occurred_at, reverse=True)[:limit]
+    async def list_recent(
+        self, *, offset: int, limit: int, now: Instant, work_lost_only: bool = False
+    ) -> Sequence[ErrorReport]:
+        newest_first = sorted(self._unexpired(now, work_lost_only), key=lambda report: report.occurred_at, reverse=True)
+        return newest_first[offset : offset + limit]
+
+    async def count_recent(self, *, now: Instant, work_lost_only: bool = False) -> int:
+        return len(self._unexpired(now, work_lost_only))
+
+    def _unexpired(self, now: Instant, work_lost_only: bool) -> list[ErrorReport]:
+        return [report for report in self.saved if report.expires_at > now and (report.work_lost or not work_lost_only)]
 
     async def purge_expired(self, *, now: Instant) -> int:
         expired = [report for report in self.saved if report.expires_at <= now]

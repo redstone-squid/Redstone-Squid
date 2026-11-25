@@ -6,7 +6,7 @@ recent report IDs and offer refresh without replacing the report being read.
 
 import dataclasses
 import io
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable
 from typing import Any, Protocol, cast, override
 
 import discord
@@ -18,6 +18,7 @@ from squid.bot.diagnostics.refresh import ErrorReportRefresh
 from squid.bot.ui import CHROME, tr
 from squid.core.actors import ActingContext
 from squid.core.diagnostics.models import ErrorReport
+from squid.core.pagination import Page
 from squid_i18n import md_tr
 from squid_ui.ext.discord import primitives
 from squid_ui.ext.discord.target_types import ComponentsV2Target
@@ -34,8 +35,8 @@ class ErrorReportOperations(Protocol):
     ) -> tuple[ErrorReport, int]: ...
 
     async def recent(
-        self, *, context: ActingContext, limit: int = 20, work_lost_only: bool = False
-    ) -> Sequence[ErrorReport]: ...
+        self, *, context: ActingContext, offset: int = 0, page_size: int = 20, work_lost_only: bool = False
+    ) -> Page[ErrorReport]: ...
 
     async def clear_all(self, *, context: ActingContext) -> int: ...
 
@@ -86,10 +87,10 @@ class _ReportUpdates(sl.Component[ComponentsV2Target, sd.Request]):
         return self.monitor.changes
 
     async def _check(self) -> bool:
-        reports = await self._operations.recent(
-            context=await self._context(), limit=RECENT_LIMIT, work_lost_only=self._work_lost_only
+        page = await self._operations.recent(
+            context=await self._context(), page_size=RECENT_LIMIT, work_lost_only=self._work_lost_only
         )
-        return tuple(report.id for report in reports) != self._shown
+        return tuple(report.id for report in page.items) != self._shown
 
     @override
     def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request], ...]:
@@ -223,11 +224,10 @@ class ErrorReportScreen(sd.Screen[int]):
         await self._load_recent()
 
     async def _load_recent(self) -> None:
-        self._reports = tuple(
-            await self._operations.recent(
-                context=await self._context(), limit=RECENT_LIMIT, work_lost_only=self.work_lost_only
-            )
+        page = await self._operations.recent(
+            context=await self._context(), page_size=RECENT_LIMIT, work_lost_only=self.work_lost_only
         )
+        self._reports = page.items
         self._updates = _ReportUpdates(
             self._operations,
             self._reports,
