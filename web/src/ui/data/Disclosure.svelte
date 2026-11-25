@@ -17,7 +17,8 @@
 <details
   class={cn(
     "group min-w-0",
-    variant === "card" && "rounded-md border border-line bg-surface",
+    // The bottom padding sits outside the clipped content, so growing text stays above it.
+    variant === "card" && "rounded-md border border-line bg-surface open:pb-4",
     className,
   )}
   data-variant={variant}
@@ -35,7 +36,7 @@
     />
     {summary}
   </summary>
-  <div class={cn("min-w-0 pt-2 pb-1", variant === "card" ? "px-4 pb-4" : "ps-6")}>
+  <div class={cn("min-w-0 pt-2 pb-1", variant === "card" ? "px-4 pb-0" : "ps-6")}>
     {@render children()}
   </div>
 </details>
@@ -67,9 +68,12 @@
       details:not([open])::details-content {
         block-size: 0;
       }
-      /* The card's padding already fits a focus ring, and a margin would draw text over its border. */
+      /* The card's padding fits a focus ring, and a margin would draw text into it. */
       details[data-variant="card"]::details-content {
         overflow-clip-margin: 0;
+      }
+      details[data-variant="card"] {
+        transition: padding-block-end var(--duration-normal) var(--ease-standard);
       }
     }
   }
