@@ -33,11 +33,17 @@ class BuildLinks(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    images: list[str]
-    videos: list[str]
     world_downloads: list[str]
     schematics: list[str]
-    renders: list[str]
+
+
+class BuildMedia(BaseModel):
+    kind: Literal["image", "video", "render"]
+    url: str
+    thumbnail_url: str | None = None
+    width: int | None = None
+    height: int | None = None
+    alt: str | None = None
 
 
 class BuildSponsor(BaseModel):
@@ -143,6 +149,7 @@ class BuildDetail(PublicBuildSummary):
     restrictions: dict[str, list[str]]
     description: str | None
     links: BuildLinks
+    media: list[BuildMedia]
     viewer: BuildViewer | None = None
     sponsor: BuildSponsor | None = None
 
@@ -155,12 +162,14 @@ class BuildDetail(PublicBuildSummary):
             details=_details(build),
             restrictions={name: list(values or ()) for name, values in build.restrictions.items()},
             description=build.description,
+            media=[
+                *(BuildMedia(kind="render", url=url) for url in build.render_urls),
+                *(BuildMedia(kind="image", url=url) for url in build.image_urls),
+                *(BuildMedia(kind="video", url=url) for url in build.video_urls),
+            ],
             links=BuildLinks(
-                images=list(build.image_urls),
-                videos=list(build.video_urls),
                 world_downloads=list(build.world_download_urls),
                 schematics=list(build.schematic_urls),
-                renders=list(build.render_urls),
             ),
             sponsor=(
                 None

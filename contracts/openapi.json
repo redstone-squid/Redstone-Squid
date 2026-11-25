@@ -19318,6 +19318,12 @@
           "links": {
             "$ref": "#/components/schemas/BuildLinks"
           },
+          "media": {
+            "items": {
+              "$ref": "#/components/schemas/BuildMedia"
+            },
+            "type": "array"
+          },
           "viewer": {
             "oneOf": [
               {
@@ -19351,6 +19357,7 @@
           "display_name",
           "id",
           "links",
+          "media",
           "opening_time",
           "preview",
           "restrictions",
@@ -19377,18 +19384,6 @@
       },
       "BuildLinks": {
         "properties": {
-          "images": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
-          "videos": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          },
           "world_downloads": {
             "items": {
               "type": "string"
@@ -19400,23 +19395,75 @@
               "type": "string"
             },
             "type": "array"
-          },
-          "renders": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
           }
         },
         "type": "object",
         "required": [
-          "images",
-          "renders",
           "schematics",
-          "videos",
           "world_downloads"
         ],
         "title": "BuildLinks"
+      },
+      "BuildMedia": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "image",
+              "video",
+              "render"
+            ]
+          },
+          "url": {
+            "type": "string"
+          },
+          "thumbnail_url": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "width": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "height": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "alt": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "url"
+        ],
+        "title": "BuildMedia"
       },
       "BuildPatch": {
         "properties": {

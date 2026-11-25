@@ -6,7 +6,7 @@ from decimal import Decimal
 from pydantic import BaseModel, Field
 
 from squid.api.security import Caller
-from squid.api.v1.schemas.builds import BuildDetail, BuildViewer
+from squid.api.v1.schemas.builds import BuildDetail, BuildMedia, BuildViewer
 from squid.core.accounts.domain.profiles import PublicCreatorProfile
 from squid.core.auth.infrastructure.viewer import SessionCounts, SessionUser
 from squid.core.builds.domain.edit_policy import BuildEditDecision, decide_build_edit
@@ -115,9 +115,11 @@ class BrowserViews:
             images, videos = await media.urls(build.id)
             detail = replace(
                 detail,
-                links=detail.links.model_copy(
-                    update={"images": [*images, *detail.links.images], "videos": [*videos, *detail.links.videos]}
-                ),
+                media=[
+                    *(BuildMedia(kind="image", url=url) for url in images),
+                    *(BuildMedia(kind="video", url=url) for url in videos),
+                    *detail.media,
+                ],
             )
         return detail
 

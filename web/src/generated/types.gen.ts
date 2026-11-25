@@ -154,6 +154,7 @@ export type BuildDetail = {
     };
     description: string | null;
     links: BuildLinks;
+    media: Array<BuildMedia>;
     viewer?: BuildViewer | null;
     sponsor?: BuildSponsor | null;
 };
@@ -169,11 +170,20 @@ export type BuildKind = 'door' | 'entrance' | 'extender' | 'utility';
  * BuildLinks
  */
 export type BuildLinks = {
-    images: Array<string>;
-    videos: Array<string>;
     world_downloads: Array<string>;
     schematics: Array<string>;
-    renders: Array<string>;
+};
+
+/**
+ * BuildMedia
+ */
+export type BuildMedia = {
+    kind: 'image' | 'video' | 'render';
+    url: string;
+    thumbnail_url?: string | null;
+    width?: number | null;
+    height?: number | null;
+    alt?: string | null;
 };
 
 /**

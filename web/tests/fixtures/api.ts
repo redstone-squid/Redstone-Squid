@@ -27,7 +27,7 @@ const builds = [
     title: "Copper Bolt 5×5",
     display_name: "Copper Bolt",
     status: "approved",
-    category: "door",
+    category: "Door",
     dimensions: { width: 9, height: 7, depth: 4 },
     creators: ["CircuitSage", "红石猫"],
     tags: [
@@ -48,7 +48,7 @@ const builds = [
     title: "Observerless Iris",
     display_name: null,
     status: "approved",
-    category: "entrance",
+    category: "Entrance",
     dimensions: { width: 12, height: 12, depth: 5 },
     creators: ["Space Builder"],
     tags: [],
@@ -66,7 +66,7 @@ const builds = [
     title: "Slim Piston Extender",
     display_name: null,
     status: "approved",
-    category: "extender",
+    category: "Extender",
     dimensions: { width: 3, height: 5, depth: 8 },
     creators: ["CircuitSage"],
     tags: [],
@@ -104,12 +104,15 @@ const detail: BuildDetail = {
     description: "A public survival redstone server.",
     website_url: "https://coppercraft.example/",
   },
+  media: [
+    { kind: "render", url: "https://media.fixture.invalid/build-1.png" },
+    { kind: "image", url: "https://media.fixture.invalid/build-1-alt.png" },
+    { kind: "image", url: "http://unsafe.fixture/image.png" },
+    { kind: "video", url: "https://video.example.org/watch/door" },
+  ],
   links: {
-    images: ["https://media.fixture.invalid/build-1-alt.png", "http://unsafe.fixture/image.png"],
-    videos: ["https://video.example.org/watch/door"],
     world_downloads: ["https://downloads.example.org/copper-bolt.zip"],
     schematics: ["https://downloads.example.org/copper-bolt.litematic"],
-    renders: ["https://media.fixture.invalid/build-1.png"],
   },
 };
 

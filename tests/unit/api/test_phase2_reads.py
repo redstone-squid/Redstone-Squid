@@ -231,7 +231,9 @@ def test_public_build_links_and_serves_retained_media(
         unrelated = client.get(resource.replace("/builds/7/", "/builds/8/"))
 
     assert detail.status_code == 200
-    assert detail.json()["links"]["images"] == [f"https://example.com{resource}"]
+    assert [item["url"] for item in detail.json()["media"] if item["kind"] == "image"] == [
+        f"https://example.com{resource}"
+    ]
     assert content.status_code == 200
     assert content.headers["content-type"] == "image/png"
     assert content.content == data
