@@ -70,7 +70,9 @@ test.describe("with JavaScript disabled", () => {
 
   test("renders stories on the server and switches theme with a link", async ({ page }) => {
     await page.goto("/design-system/patterns?theme=dark");
-    await expect(page.getByRole("heading", { name: "Copper Bolt 5×5", level: 3 })).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Copper Bolt 5×5", level: 3 }).first(),
+    ).toBeVisible();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
     await page.goto("/design-system?theme=dark");
     await page.getByRole("link", { name: m.workbenchLightTheme("en") }).click();
