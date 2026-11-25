@@ -131,7 +131,7 @@ class FakeRestrictionService(RestrictionService):
         self.revision = 1
 
     @override
-    async def alias_revision(self, restriction: str) -> Revision:
+    async def alias_revision(self, restriction: str, *, context: ActingContext) -> Revision:
         return Revision(tag_target(1), self.revision)
 
 

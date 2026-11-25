@@ -7,6 +7,7 @@ import pytest
 
 from squid.bot.recount_cog import RecountCog
 from squid.bot.voting.spec import VoteRecount
+from squid.core.actors import ActingContext
 from squid.core.messages.models import Message
 from squid.core.posts.application import PostService
 from squid.core.posts.domain import PostReference
@@ -20,6 +21,8 @@ from squid_ui.ext.discord.testing import AsyncCallRecorder, MessageHarness
 from tests.support.discord import make_layout_bot
 from tests.support.services import bot_services
 from tests.support.voting import poll_snapshot
+
+pytestmark = [pytest.mark.usefixtures("discord_screen_context")]
 
 GUILD_ID = 10
 LINK = f"https://discord.com/channels/{GUILD_ID}/200/100"
@@ -59,7 +62,7 @@ class Posts(PostService):
         self.mirror_of = mirror_of
 
     @override
-    async def resolve(self, message_id: int) -> PostReference | None:
+    async def resolve(self, message_id: int, *, context: ActingContext) -> PostReference | None:
         if self.mirror_of is None:
             return None
         return PostReference(message_id, "starboard_entry", f"1:{self.mirror_of}", "starboard_entry")
@@ -70,7 +73,7 @@ class Starboards(StarboardService):
         pass
 
     @override
-    async def entry_state(self, starboard_id: int, origin_message_id: int) -> EntryState:
+    async def entry_state(self, starboard_id: int, origin_message_id: int, *, context: ActingContext) -> EntryState:
         return EntryState(
             StarboardConfig(id=starboard_id, guild_id=GUILD_ID, channel_id=200, name="main"),
             OriginMessage(

@@ -36,21 +36,22 @@ class Guild:
 
 
 @dataclass(frozen=True)
+class Author:
+    id: int
+
+
+@dataclass(frozen=True)
 class InteractionSource:
     guild: Guild | None
     guild_locale: discord.Locale | None
     locale: discord.Locale
     interaction: None = None
+    user: Author = Author(7)
 
 
 class FakeClient:
     def __init__(self, services: BotServices) -> None:
         self.services = services
-
-
-@dataclass(frozen=True)
-class Author:
-    id: int
 
 
 @dataclass(frozen=True)
@@ -65,6 +66,7 @@ class ContextSource:
 @dataclass(frozen=True)
 class MessageSource:
     guild: Guild | None
+    author: Author = Author(7)
 
 
 def _make_guild(guild_id: int | None, preferred_locale: discord.Locale = discord.Locale.american_english):

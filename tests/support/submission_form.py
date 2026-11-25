@@ -41,15 +41,17 @@ class Forms(SubmissionFormService):
         pass
 
     @override
-    async def manifest(self, *, locale: str | None) -> FormManifest:
+    async def manifest(self, *, locale: str | None, context: ActingContext) -> FormManifest:
         return build_submission_manifest()
 
     @override
-    async def manifest_revision(self, schema_id: str, revision: int, *, locale: str | None) -> FormManifest | None:
+    async def manifest_revision(
+        self, schema_id: str, revision: int, *, locale: str | None, context: ActingContext
+    ) -> FormManifest | None:
         return build_submission_manifest(revision=revision)
 
     @override
-    async def options(self, source: str, category: str, *, locale: str | None) -> FormOptionSet:
+    async def options(self, source: str, category: str, *, locale: str | None, context: ActingContext) -> FormOptionSet:
         return FormOptionSet(source, category, 1, ())
 
 
@@ -75,6 +77,7 @@ class Drafts(SubmissionDraftService):
         source_files: tuple[SubmissionSourceFile, ...] = (),
         source_issues: tuple[str, ...] = (),
         inference_run_id: UUID | None = None,
+        context: ActingContext,
     ) -> StoredDraft:
         assert draft_id is not None
         created = Instant.now()
@@ -113,7 +116,8 @@ class Drafts(SubmissionDraftService):
         return self.current
 
     @override
-    async def list_active(self, account_id: int, *, limit: int = 10) -> tuple[StoredDraft, ...]:
+    async def list_active(self, *, limit: int = 10, context: ActingContext) -> tuple[StoredDraft, ...]:
+        account_id = context.effective.require_account_id()
         if self.current and self.current.snapshot.owner_account_id == account_id:
             return (self.current,)
         return ()

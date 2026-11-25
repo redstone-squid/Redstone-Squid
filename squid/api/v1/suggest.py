@@ -67,10 +67,10 @@ async def suggest(
             limit=limit,
             context={} if category is None else {"category": category},
             locale=negotiate_locale(request.headers.get("accept-language")),
-            viewer=caller.to_actor(),
             cursor=cursor,
         ),
         authorizer=_CallerAuthorizer(request, caller),
+        context=caller.context(),
     )
     headers: dict[str, str] = {}
     if definition.kind is SourceKind.ENUMERABLE and result.revision is not None:

@@ -7,6 +7,7 @@ from typing import override
 
 import pytest
 
+from squid.core.actors import ActingContext, Actor
 from squid.core.errors import DataIntegrityError, InvalidStateError
 from squid.core.sync import (
     DiscordReconciliationService,
@@ -46,7 +47,7 @@ async def test_service_truncates_failure_and_applies_attempt_ceiling() -> None:
 
     assert (
         await DiscordReconciliationService(max_attempts=3, uow_factory=lambda: ReconciliationUnitOfWork(queue)).fail(
-            job, RuntimeError("x" * 5000)
+            job, RuntimeError("x" * 5000), context=ActingContext.direct(Actor())
         )
         is False
     )
@@ -56,7 +57,9 @@ async def test_service_truncates_failure_and_applies_attempt_ceiling() -> None:
 @pytest.mark.parametrize("limit", [0, 101])
 async def test_claim_rejects_unsafe_batch_sizes(limit: int) -> None:
     with pytest.raises(InvalidStateError, match="between 1 and 100"):
-        await DiscordReconciliationService(uow_factory=lambda: ReconciliationUnitOfWork(QueueRecorder())).claim(limit)
+        await DiscordReconciliationService(uow_factory=lambda: ReconciliationUnitOfWork(QueueRecorder())).claim(
+            limit, context=ActingContext.direct(Actor())
+        )
 
 
 class TestRowMapping:

@@ -10,6 +10,7 @@ import squid_ui_widgets as sp
 from squid.bot.catalogue.record_display import record_row, record_standings
 from squid.bot.follows import follow_control
 from squid.bot.ui import tr, truncate_display_text
+from squid.core.actors import ActingContext
 from squid.core.notifications.domain import SubscriptionKind
 from squid.core.pagination import PageSelector
 from squid.core.records.application import RecordService
@@ -41,6 +42,7 @@ class RecordSource:
             page_size=fetch_size,
             resolved_only=True,
             version_scope=self._version_scope,
+            context=ActingContext.current(),
         )
         # This source exposes offset jumps; the service may return ID links at offset zero.
         return sl.sources.Batch(

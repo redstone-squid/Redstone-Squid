@@ -30,9 +30,11 @@ from squid_ui.ext.discord.target_types import ComponentsV2Target
 class RecordOperations(Protocol):
     """Record diagnostics and exact lookup operations."""
 
-    async def gaps(self, *, kind: BuildKind | None = None) -> Sequence[RecordGap]: ...
+    async def gaps(self, *, kind: BuildKind | None = None, context: ActingContext) -> Sequence[RecordGap]: ...
 
-    async def title_gaps(self, *, kind: BuildKind | None = None) -> Sequence[RecordNameDiagnostic]: ...
+    async def title_gaps(
+        self, *, kind: BuildKind | None = None, context: ActingContext
+    ) -> Sequence[RecordNameDiagnostic]: ...
 
     async def materialize_definition(
         self,
@@ -40,9 +42,12 @@ class RecordOperations(Protocol):
         *,
         kind: BuildKind,
         version_id: int | None = None,
+        context: ActingContext,
     ) -> RebuildSummary: ...
 
-    async def lookup_or_materialize(self, request: RecordLookupRequest) -> RebuildSummary: ...
+    async def lookup_or_materialize(
+        self, request: RecordLookupRequest, *, context: ActingContext
+    ) -> RebuildSummary: ...
 
 
 class RecordAdministration(Protocol):
@@ -110,8 +115,8 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
         self._build_tabs()
 
     async def _refresh_diagnostics(self) -> None:
-        gaps = tuple(await self._records.gaps())
-        titles = tuple(await self._records.title_gaps())
+        gaps = tuple(await self._records.gaps(context=ActingContext.current()))
+        titles = tuple(await self._records.title_gaps(context=ActingContext.current()))
         self._gaps = sp.Browser(
             sl.sources.list_source(gaps),
             key="evidence-gaps",
@@ -179,7 +184,10 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
     @requires_grant(RECORD_ENTRY_INSPECT)
     async def _recompute_diagnostic(self, definition_id: int, kind: BuildKind, event: sl.PressEvent) -> None:
         summary = await self._records.materialize_definition(
-            definition_id, kind=kind, version_id=int(self._version.value) if self._version else None
+            definition_id,
+            kind=kind,
+            version_id=int(self._version.value) if self._version else None,
+            context=ActingContext.current(),
         )
         await self._refresh_diagnostics()
         self._build_tabs()
@@ -384,7 +392,7 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
                 return
             assert item.description is not None
             summary = await self._records.materialize_definition(
-                int(item.value), kind=BuildKind(item.description), version_id=version
+                int(item.value), kind=BuildKind(item.description), version_id=version, context=ActingContext.current()
             )
             await self._refresh_diagnostics()
             self._build_tabs()
@@ -428,10 +436,13 @@ class RecordsScreen(sd.Screen[None, Any, RedstoneSquid]):
                     )
                 )
                 return
-            summary = await self._records.materialize_definition(int(selected), kind=kind, version_id=version_id)
+            summary = await self._records.materialize_definition(
+                int(selected), kind=kind, version_id=version_id, context=ActingContext.current()
+            )
         else:
             summary = await self._records.lookup_or_materialize(
-                RecordLookupRequest(kind, selected, restrictions, version_id=version_id)
+                RecordLookupRequest(kind, selected, restrictions, version_id=version_id),
+                context=ActingContext.current(),
             )
         await self._refresh_diagnostics()
         self._build_tabs()

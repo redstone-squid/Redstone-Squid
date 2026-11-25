@@ -14,7 +14,7 @@ import squid_ui.ext.discord as sd
 from squid.bot.routes import AppRequest, AppRoutes
 from squid.bot.ui import text_node
 from squid.bot.voting.actors import describe_rejection, resolve_actor
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.i18n import tr
 from squid.core.voting.domain import VoteRejection, VoteSessionSnapshot
 from squid_i18n import Text, md_tr
@@ -56,7 +56,9 @@ async def close_poll(request: AppRequest) -> None:
     vote_cog = cast("VoteCog | None", bot.get_cog("VoteCog"))
     await request.defer()
     result = await bot.services.votes.close(
-        snapshot.id, actor, recount=vote_cog.reactions.count_cards if vote_cog else None
+        snapshot.id,
+        recount=vote_cog.reactions.count_cards if vote_cog else None,
+        context=ActingContext.for_actor(actor),
     )
     if result.rejection is not None or result.session is None:
         await _refuse(request, result.rejection or VoteRejection.NOT_FOUND)
@@ -78,7 +80,7 @@ async def refresh_poll(request: AppRequest) -> None:
         return
     snapshot, _actor = authorized
     bot = request.client
-    result = await bot.services.votes.refresh(snapshot.id)
+    result = await bot.services.votes.refresh(snapshot.id, context=ActingContext.current())
     if result.session is not None:
         await bot.refresh_posts("vote_session", str(result.session.id))
     text = tr(t"bot-voting-controls-poll-weights-refreshed = Poll weights refreshed.")
@@ -109,7 +111,7 @@ async def _authorize(
         await _refuse(request, VoteRejection.WRONG_GUILD)
         return None
 
-    snapshot = await bot.services.votes.get_session_for_message(message.id)
+    snapshot = await bot.services.votes.get_session_for_message(message.id, context=ActingContext.current())
     if snapshot is None:
         await _refuse(request, VoteRejection.NOT_FOUND)
         return None

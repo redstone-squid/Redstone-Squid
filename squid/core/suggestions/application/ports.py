@@ -2,6 +2,7 @@
 
 from typing import Protocol, runtime_checkable
 
+from squid.core.actors import ActingContext
 from squid.core.search.application.fields import FieldRegistry
 from squid.core.suggestions.application.matching import Candidate
 from squid.core.suggestions.domain import SuggestionRequest, SuggestionResult
@@ -45,4 +46,4 @@ class SuggestionAuthorizer(Protocol):
 class SearchFields(Protocol):
     """Read the effective public field registry."""
 
-    async def fields(self) -> FieldRegistry: ...
+    async def fields(self, *, context: ActingContext) -> FieldRegistry: ...

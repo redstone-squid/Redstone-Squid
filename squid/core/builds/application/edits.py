@@ -10,7 +10,7 @@ writer, including callers which also use the longer application lease.
 from dataclasses import dataclass
 from typing import Protocol, cast
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.builds.application.edit_schema import BuildPatch
 from squid.core.builds.application.edit_values import build_values as build_values
 from squid.core.builds.application.edit_values import changed_build_values
@@ -98,7 +98,7 @@ class BuildFieldsEdit:
             if current is None:
                 raise BuildNotFoundError(build_id)
             expected = require_revision(expected, current.revision)
-        build = await self._builds.get(build_id)
+        build = await self._builds.get(build_id, context=ActingContext.current())
         if build is None:
             raise BuildNotFoundError(build_id)
         if build.revision != expected.value:
@@ -118,7 +118,7 @@ class BuildFieldsEdit:
                 attributes[name] = [*cast(list[str], attributes.get(name, [])), *retained.restriction_names(name)]
             attributes["door_type"] = [*cast(list[str], attributes.get("door_type", [])), *retained.patterns]
         candidate = BuildEditPatch.from_attributes(attributes)
-        await self._builds.prepare_edit(actor, build, candidate)
+        await self._builds.prepare_edit(build, candidate, context=ActingContext.for_actor(actor))
         current = await uow.builds.get_for_update(build_id)
         if current is None:
             raise BuildNotFoundError(build_id)
@@ -126,7 +126,7 @@ class BuildFieldsEdit:
         after = build_values(build)
         changes = changed_build_values(before, after)
         changed = {key for key, _, _ in changes}
-        decision = await self._builds.edit_decision(actor, current, changed, uow=uow)
+        decision = await self._builds.edit_decision(current, changed, uow=uow, context=ActingContext.for_actor(actor))
         if decision is BuildEditDecision.DENY or (decision is BuildEditDecision.REVIEW and command.purpose != "edit"):
             raise AuthorizationError(public_context={"fields": sorted(changed)})
         if decision is BuildEditDecision.REVIEW:

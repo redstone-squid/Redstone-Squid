@@ -3,13 +3,18 @@
 from dataclasses import dataclass
 from typing import Any, cast, override
 
+import pytest
+
 from squid.bot.utils.permissions import Grants
 from squid.bot.version_tracking_cog import VersionScreen
+from squid.core.actors import ActingContext
 from squid.core.permissions.domain import PermissionNode
 from squid.core.permissions.domain.catalogue import VERSION_ENTRY_CREATE
 from squid.core.versions.application import VersionService
 from squid.core.versions.domain import Edition, MinecraftVersion
 from squid_ui.testing import RecordingResponder, labels, submit, submit_event
+
+pytestmark = pytest.mark.usefixtures("discord_screen_context")
 
 
 class VersionRecorder(VersionService):
@@ -18,12 +23,14 @@ class VersionRecorder(VersionService):
         self.add_calls: list[tuple[str, Edition | None]] = []
 
     @override
-    async def list_display(self, edition: Edition, *, limit: int | None = None) -> list[str]:
+    async def list_display(self, edition: Edition, *, limit: int | None = None, context: ActingContext) -> list[str]:
         self.list_calls.append((edition, limit))
         return ["1.21", "1.20"] if edition == "Java" else ["1.21.90"]
 
     @override
-    async def add(self, version_string: str, *, edition: Edition | None = None) -> MinecraftVersion:
+    async def add(
+        self, version_string: str, *, edition: Edition | None = None, context: ActingContext
+    ) -> MinecraftVersion:
         self.add_calls.append((version_string, edition))
         return MinecraftVersion("Java", 1, 22, 0)
 

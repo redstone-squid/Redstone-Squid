@@ -8,6 +8,7 @@ from typing import Any
 import anyio
 import pytest
 
+from squid.core.actors import ActingContext, Actor
 from squid_ui.ext.discord import MessageRoot
 from squid_ui.runtime import UIExecutionHost
 
@@ -63,3 +64,19 @@ def _fail_on_missed_redraws(caplog: pytest.LogCaptureFixture) -> Iterator[None]:
         if getattr(record, "squid_unscheduled_change", False)
     ]
     assert not missed, "\n".join(missed)
+
+
+@pytest.fixture
+def discord_screen_context() -> Iterator[ActingContext]:
+    """Supply the member used by a standalone Discord test interaction."""
+    context = ActingContext.direct(Actor(discord_user_id=1))
+    with context.scope():
+        yield context
+
+
+@pytest.fixture
+def discord_worker_context(request: pytest.FixtureRequest) -> Iterator[ActingContext]:
+    """Dispatch a standalone callback as its named worker."""
+    context = ActingContext.worker(request.param)
+    with context.scope():
+        yield context

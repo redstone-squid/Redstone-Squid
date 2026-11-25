@@ -9,11 +9,17 @@ import discord
 import pytest
 
 from squid.bot.voting.sessions import ensure_build_review
+from squid.core.actors import ActingContext
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import OtherBuild
 from squid.core.settings.domain.runtime import RuntimeSettings
 from squid.core.voting.domain import VoteKind
 from tests.support.settings import RuntimeSettingsStub
+
+pytestmark = [
+    pytest.mark.parametrize("discord_worker_context", ["events.discord.build.submitted"], indirect=True),
+    pytest.mark.usefixtures("discord_worker_context"),
+]
 
 
 async def test_a_guild_without_a_vote_channel_does_not_fail_the_submission(
@@ -63,4 +69,4 @@ async def test_review_batches_presets_for_unique_destination_guilds() -> None:
         for id_, guild in [(10, 1), (10, 1), (11, 1), (20, 2)]
     ]
     assert await ensure_build_review(cast(Any, bot), build, channels) == 123
-    votes.emoji_presets.assert_awaited_once_with((1, 2), VoteKind.BUILD)
+    votes.emoji_presets.assert_awaited_once_with((1, 2), VoteKind.BUILD, context=ActingContext.current())

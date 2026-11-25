@@ -91,8 +91,8 @@ class StarboardScreen(sd.Screen):
     async def _refresh(self) -> None:
         focus = self._browser.session.focus if self._browser is not None else None
         snapshots = {}
-        for board in await self._operations.list_for_guild(self._guild_id, context=ActingContext.current()):
-            snapshot = await self._operations.snapshot(board.id, context=ActingContext.current())
+        for board in await self._operations.list_for_guild(self._guild_id, context=await self.edits.context()):
+            snapshot = await self._operations.snapshot(board.id, context=await self.edits.context())
             if snapshot is not None:
                 snapshots[snapshot.id] = snapshot
         self._snapshots = snapshots
@@ -276,7 +276,7 @@ class StarboardScreen(sd.Screen):
         name = form.name
         required = form.required
         await self._validate_channel(channel_id)
-        identity = await self._operations.reserve_id(context=ActingContext.current())
+        identity = await self._operations.reserve_id(context=await self.edits.context())
         created = StarboardConfig(
             id=identity,
             guild_id=self._guild_id,

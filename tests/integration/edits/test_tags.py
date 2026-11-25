@@ -53,7 +53,7 @@ async def test_alias_history_fences_legacy_writers_and_current_permissions(
     actor = Actor(discord_user_id=1, is_bot_owner=True)
     command = EditCommand(
         ALIAS_EDIT,
-        (await restrictions.alias_revision("Restriction"),),
+        (await restrictions.alias_revision("Restriction", context=ActingContext.direct(Actor())),),
         AliasValues(alias="Alternate").edit_values(),
     )
     saved = await executor.execute(command, context=ActingContext.direct(actor))
@@ -69,7 +69,7 @@ async def test_alias_history_fences_legacy_writers_and_current_permissions(
         assert not await uow.restrictions.has_alias(definition.id, "Alternate")
     redone = await executor.execute(saved.receipt.redo(undone.outcome.revisions), context=ActingContext.direct(actor))
     assert redone.receipt is not None
-    await restrictions.add_alias("Restriction", "Other alias")
+    await restrictions.add_alias("Restriction", "Other alias", context=ActingContext.direct(Actor()))
     with pytest.raises(RevisionConflictError):
         await executor.execute(redone.receipt.undo(redone.outcome.revisions), context=ActingContext.direct(actor))
 

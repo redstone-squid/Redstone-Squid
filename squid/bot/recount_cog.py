@@ -103,7 +103,7 @@ class RecountCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         channel_id, message_id = int(match["channel"]), int(match["message"])
 
         # A vote card, recognized by its session.
-        snapshot = await self.bot.services.votes.get_session_for_message(message_id)
+        snapshot = await self.bot.services.votes.get_session_for_message(message_id, context=ActingContext.current())
         if snapshot is not None:
             if not snapshot.is_open:
                 return tr(t"bot-recount-that-vote-is-already-closed = That vote is already closed.")

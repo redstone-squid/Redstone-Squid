@@ -9,6 +9,7 @@ import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.ui import tr
 from squid.bot.utils.permissions import allows
+from squid.core.actors import ActingContext
 from squid.core.suggestions.application import Candidate, SuggestionService, rank
 from squid.core.suggestions.application.ports import SuggestionAuthorizer
 from squid.core.suggestions.domain import SourceKind, Suggestion, SuggestionRequest
@@ -49,7 +50,12 @@ class SuggestionSource:
     async def fetch(self, position: sl.sources.Position, fetch_size: int) -> sl.sources.Batch[Suggestion]:
         if self._items is None:
             request = replace(self.request, limit=0, query="") if self.enumerable else self.request
-            result = await self.service.suggest(request, authorizer=self.authorizer, raise_on_failure=True)
+            result = await self.service.suggest(
+                request,
+                authorizer=self.authorizer,
+                raise_on_failure=True,
+                context=ActingContext.for_actor(request.viewer),
+            )
             self._items = (
                 rank(self.request.query, (Candidate(item) for item in result.items), limit=len(result.items))
                 if self.enumerable

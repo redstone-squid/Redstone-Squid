@@ -4,17 +4,24 @@ import asyncio
 from typing import override
 
 import anyio
+import pytest
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.app import RedstoneSquid
 from squid.bot.posts.reconciler import PostReconciler
+from squid.core.actors import ActingContext
 from squid.core.posts.application import PostService
 from squid.core.posts.domain import ResourceKind
 from squid_reactivity import CellAddress, Topic
 from squid_ui.ext.discord import Everyone
 from squid_ui.ext.discord.testing import delivered_to, message_harness
 from tests.support.services import bot_services
+
+pytestmark = [
+    pytest.mark.parametrize("discord_worker_context", ["discord.posts"], indirect=True),
+    pytest.mark.usefixtures("discord_worker_context"),
+]
 
 
 class Projection(sl.Component):
@@ -56,7 +63,9 @@ class PostRecorder(PostService):
         pass
 
     @override
-    async def pending_generation(self, resource_kind: ResourceKind, resource_key: str) -> int | None:
+    async def pending_generation(
+        self, resource_kind: ResourceKind, resource_key: str, *, context: ActingContext
+    ) -> int | None:
         assert (resource_kind, resource_key) == ("build", "42")
         return 7
 

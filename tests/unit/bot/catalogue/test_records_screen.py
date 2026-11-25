@@ -27,6 +27,8 @@ from squid_ui.ext.discord.testing import assert_within_limits, commit_render, de
 from squid_ui.testing import RecordingResponder, labels, press, press_event, submit, submit_event
 from tests.support.discord import make_layout_bot
 
+pytestmark = pytest.mark.usefixtures("discord_screen_context")
+
 
 class RecordRecorder(RecordService):
     def __init__(self) -> None:
@@ -34,12 +36,14 @@ class RecordRecorder(RecordService):
         self.materialize_calls: list[tuple[int, BuildKind | None, int | None]] = []
 
     @override
-    async def gaps(self, *, kind: BuildKind | None = None) -> Sequence[RecordGap]:
+    async def gaps(self, *, kind: BuildKind | None = None, context: ActingContext) -> Sequence[RecordGap]:
         self.gap_reads += 1
         return (RecordGap(1, "Smallest door", None, RecordCriterion.SMALLEST, (7,), ("volume",), BuildKind.DOOR),)
 
     @override
-    async def title_gaps(self, *, kind: BuildKind | None = None) -> Sequence[RecordNameDiagnostic]:
+    async def title_gaps(
+        self, *, kind: BuildKind | None = None, context: ActingContext
+    ) -> Sequence[RecordNameDiagnostic]:
         return (RecordNameDiagnostic(2, "Unknown door", ({"code": "unknown"},), BuildKind.DOOR),)
 
     @override
@@ -49,12 +53,13 @@ class RecordRecorder(RecordService):
         *,
         kind: BuildKind | None = None,
         version_id: int | None = None,
+        context: ActingContext,
     ) -> RebuildSummary:
         self.materialize_calls.append((definition_id, kind, version_id))
         return RebuildSummary((), 1, 1, 0)
 
     @override
-    async def lookup_or_materialize(self, request: RecordLookupRequest) -> RebuildSummary:
+    async def lookup_or_materialize(self, request: RecordLookupRequest, *, context: ActingContext) -> RebuildSummary:
         return RebuildSummary((), 1, 1, 0)
 
 
@@ -218,7 +223,7 @@ async def test_diagnostic_recompute_carries_kind_version_and_rechecks_permission
 async def test_large_diagnostics_render_within_discord_limits() -> None:
     harness = make_screen()
 
-    async def gaps(*, kind: BuildKind | None = None) -> Sequence[RecordGap]:
+    async def gaps(*, kind: BuildKind | None = None, context: ActingContext) -> Sequence[RecordGap]:
         return tuple(
             RecordGap(
                 i,

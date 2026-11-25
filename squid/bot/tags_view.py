@@ -56,7 +56,7 @@ class TagOperations(Protocol):
 class RestrictionOperations(Protocol):
     """Restriction tag editing exposed by the workspace."""
 
-    async def alias_revision(self, restriction: str) -> Revision: ...
+    async def alias_revision(self, restriction: str, *, context: ActingContext) -> Revision: ...
 
 
 type ModerationRequest = Callable[[TagDefinition, str], Awaitable[None]]
@@ -137,8 +137,11 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
     async def _refresh(self) -> None:
         if self._restriction is not None:
             item, _ = self._restriction
-            self._restriction = (item, await self._restrictions.alias_revision(item.value))
-        definitions = tuple(await self._tags.public_definitions(context=ActingContext.current()))
+            self._restriction = (
+                item,
+                await self._restrictions.alias_revision(item.value, context=await self.edits.context()),
+            )
+        definitions = tuple(await self._tags.public_definitions(context=await self.edits.context()))
         self._catalogue = sp.Browser(
             sl.sources.list_source(definitions),
             key="tag-catalogue",
@@ -151,7 +154,7 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
             empty=tr(t"bot-tags-view-no-public-build-tags-are-available = No public build tags are available."),
         )
         if TAG_PROPOSAL_LIST in self.grants:
-            pending = tuple(await self._tags.pending(context=ActingContext.current()))
+            pending = tuple(await self._tags.pending(context=await self.edits.context()))
             actions = tuple(
                 action
                 for action, node in (
@@ -298,7 +301,10 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
         )
 
     async def _restriction_picked(self, _event: sd.ActionEvent, item: Suggestion) -> None:
-        self._restriction = (item, await self._restrictions.alias_revision(item.value))
+        self._restriction = (
+            item,
+            await self._restrictions.alias_revision(item.value, context=await self.edits.context()),
+        )
         self._build_tabs()
 
     @requires_grant(RESTRICTION_ALIAS_CREATE)
@@ -326,7 +332,7 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
             candidate = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")[:64]
             if candidate and candidate[0].isalpha():
                 query_name = candidate
-        tag_id = await self._tags.reserve_identity(context=ActingContext.current())
+        tag_id = await self._tags.reserve_identity(context=await self.edits.context())
         await self.edits.bind(PROPOSAL_EDIT, tag_target(tag_id), 0).save(
             ProposalValues(display_name=name, value_type=value_type, query_name=query_name).edit_values(),
             tr(t"tags-history-proposal = Propose showcase tag"),

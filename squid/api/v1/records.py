@@ -33,6 +33,7 @@ from squid.api.pagination import (
 )
 from squid.api.security import requires
 from squid.api.v1.browser_views import BrowserViews
+from squid.core.actors import ActingContext
 from squid.core.permissions.domain.catalogue import RECORD_ENTRY_REBUILD
 from squid.core.records.application.expansion_regions import DoorRangeQuery, DoorRangeResult
 from squid.core.records.application.live import DoorRecordLookup, LiveDoorRecord
@@ -109,7 +110,9 @@ async def list_records(
     """List authoritative published record results."""
     _, descending = parse_page_sort(sort, allowed=_SORT_FIELDS, default="-result_id")
     selector = resolve_selector(offset=offset, after_id=after_id, before_id=before_id)
-    page = await records.list_page(selector=selector, descending=descending, page_size=page_size)
+    page = await records.list_page(
+        selector=selector, descending=descending, page_size=page_size, context=ActingContext.current()
+    )
     return Page[PublishedRecordResult].from_domain(page)
 
 
@@ -123,7 +126,7 @@ async def list_records(
 )
 async def lookup_door(data: JSONBody[DoorRecordLookup], records: Records) -> LiveDoorRecord:
     """Compare fixed doors and expandable configurations without creating a title."""
-    return await records.lookup_door(data)
+    return await records.lookup_door(data, context=ActingContext.current())
 
 
 @post(
@@ -140,7 +143,7 @@ async def lookup_door_ranges(data: JSONBody[DoorRangeQuery], records: Records) -
     Results are live and never published. Unsupported inputs, exhausted limits,
     and timeouts return an analysis status with no awarded ranges.
     """
-    return await records.lookup_door_ranges(data)
+    return await records.lookup_door_ranges(data, context=ActingContext.current())
 
 
 @get(
@@ -153,7 +156,7 @@ async def lookup_door_ranges(data: JSONBody[DoorRangeQuery], records: Records) -
 )
 async def get_door_ranges(query_id: FromPath[int], publications: RangePublications) -> RangePublication:
     """Read a registered query's active publication and latest computation attempt."""
-    publication = await publications.get(query_id)
+    publication = await publications.get(query_id, context=ActingContext.current())
     if publication is None:
         raise RecordNotFoundError(query_id)
     return publication
@@ -220,7 +223,7 @@ async def get_door_range_point(
     publications: RangePublications,
 ) -> PublishedDoorPoint:
     """Read one opening from saved regions, with publication and latest-attempt origin."""
-    point = await publications.get_point(query_id, width)
+    point = await publications.get_point(query_id, width, context=ActingContext.current())
     if point is None:
         raise RecordNotFoundError(query_id)
     return point

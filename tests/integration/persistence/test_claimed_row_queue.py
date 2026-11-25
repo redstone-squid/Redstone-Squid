@@ -12,6 +12,7 @@ import pytest
 from sqlalchemy import literal, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from squid.core.actors import ActingContext, Actor
 from squid.core.persistence.queue import ClaimedRowQueue, retry_delay, retry_delay_sql
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.schematics.infrastructure.jobs import SCHEMATIC_JOB_SPEC
@@ -386,9 +387,9 @@ async def test_service_claim_is_not_published_when_commit_fails(
     await _seed_sync_job(migrated_session_factory)
     service = DiscordReconciliationService(uow_factory=partial(FailingUnitOfWork, migrated_session_factory))
     with pytest.raises(RuntimeError, match="claim commit failed"):
-        await service.claim()
+        await service.claim(context=ActingContext.direct(Actor()))
 
     service = DiscordReconciliationService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
-    claimed = await service.claim()
+    claimed = await service.claim(context=ActingContext.direct(Actor()))
     assert len(claimed) == 1
-    assert await service.complete(claimed[0])
+    assert await service.complete(claimed[0], context=ActingContext.direct(Actor()))

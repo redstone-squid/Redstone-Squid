@@ -8,7 +8,7 @@ import pytest
 
 from squid.api.security import Caller
 from squid.api.v1.votes import VoteInput, cast_vote, clear_vote
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.errors import AuthenticationError, AuthorizationError, ConflictError, ValidationError
 from squid.core.voting.application import VoteService
 from squid.core.voting.domain import (
@@ -60,7 +60,7 @@ class VoteRecorder(VoteService):
         self.cast_calls: list[CastCall] = []
 
     @override
-    async def get_session(self, vote_session_id: int) -> VoteSessionSnapshot | None:
+    async def get_session(self, vote_session_id: int, *, context: ActingContext) -> VoteSessionSnapshot | None:
         assert vote_session_id == 12
         return self.session
 
@@ -68,20 +68,22 @@ class VoteRecorder(VoteService):
     async def cast_vote(
         self,
         vote_session_id: int,
-        actor: Actor,
         option_id: str,
         *,
         emoji: str | None = None,
         toggle: bool = True,
         count_revision: int | None = None,
+        context: ActingContext,
     ) -> CastVoteResult:
+        actor = context.effective
         assert emoji is None
         assert not toggle
         self.cast_calls.append(CastCall(vote_session_id, actor, option_id))
         return CastVoteResult(self.session, rejection=self.rejection)
 
     @override
-    async def clear_vote(self, vote_session_id: int, actor: Actor) -> CastVoteResult:
+    async def clear_vote(self, vote_session_id: int, *, context: ActingContext) -> CastVoteResult:
+        actor = context.effective
         self.cast_calls.append(CastCall(vote_session_id, actor, "clear"))
         return CastVoteResult(self.session, rejection=self.rejection)
 
@@ -122,7 +124,7 @@ async def test_vote_keeps_the_option_id_stable_across_guild_aliases(guild_id: in
     )
 
     assert members.calls == [(1, guild_id, VoteKind.BUILD)]
-    assert votes.cast_calls == [CastCall(12, actor, "approve")]
+    assert votes.cast_calls == [CastCall(12, account().context().with_actor(actor).effective, "approve")]
     assert response.id == 12
 
 
@@ -143,7 +145,7 @@ async def test_a_cli_caller_with_no_discord_identity_can_vote() -> None:
     response = await cast_vote.fn(12, VoteInput(guild_id=10, option_id="approve"), votes, members, cli)
 
     assert response.id == 12
-    assert votes.cast_calls == [CastCall(12, actor, "approve")]
+    assert votes.cast_calls == [CastCall(12, cli.context().with_actor(actor).effective, "approve")]
 
 
 @pytest.mark.asyncio
@@ -190,5 +192,5 @@ async def test_clear_resolves_the_authenticated_member() -> None:
     votes = VoteRecorder(snapshot())
     members = MemberRecorder(actor)
     await clear_vote.fn(12, 10, votes, members, account())
-    assert votes.cast_calls == [CastCall(12, actor, "clear")]
+    assert votes.cast_calls == [CastCall(12, account().context().with_actor(actor).effective, "clear")]
     assert members.calls == [(1, 10, VoteKind.BUILD)]

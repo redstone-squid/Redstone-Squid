@@ -10,11 +10,17 @@ import discord
 import pytest
 
 from squid.bot.guild_state_cog import GuildStateCog
+from squid.core.actors import ActingContext
 from squid.core.settings.application import SettingsService
 from squid.core.settings.domain import Setting
 from squid.core.starboard.application import StarboardService
 from tests.support.discord import make_layout_bot
 from tests.support.services import bot_services
+
+pytestmark = [
+    pytest.mark.parametrize("discord_worker_context", ["discord.gateway.guild"], indirect=True),
+    pytest.mark.usefixtures("discord_worker_context"),
+]
 
 
 @dataclass
@@ -24,16 +30,20 @@ class FakeSettings(SettingsService):
     forgotten: list[tuple[int, frozenset[int]]] = field(default_factory=list)
 
     @override
-    async def sync_presence(self, present_server_ids: Iterable[int]) -> tuple[list[int], list[int]]:
+    async def sync_presence(
+        self, present_server_ids: Iterable[int], *, context: ActingContext
+    ) -> tuple[list[int], list[int]]:
         self.presence.append(frozenset(present_server_ids))
         return [], []
 
     @override
-    async def referenced_channels(self, server_id: int) -> frozenset[int]:
+    async def referenced_channels(self, server_id: int, *, context: ActingContext) -> frozenset[int]:
         return self.referenced.get(server_id, frozenset())
 
     @override
-    async def forget_channels(self, server_id: int, channel_ids: Collection[int]) -> tuple[Setting, ...]:
+    async def forget_channels(
+        self, server_id: int, channel_ids: Collection[int], *, context: ActingContext
+    ) -> tuple[Setting, ...]:
         self.forgotten.append((server_id, frozenset(channel_ids)))
         return ()
 
@@ -44,11 +54,11 @@ class FakeStarboards(StarboardService):
     forgotten: list[tuple[int, frozenset[int]]] = field(default_factory=list)
 
     @override
-    async def referenced_channels(self, guild_id: int) -> frozenset[int]:
+    async def referenced_channels(self, guild_id: int, *, context: ActingContext) -> frozenset[int]:
         return self.referenced.get(guild_id, frozenset())
 
     @override
-    async def forget_channels(self, guild_id: int, channel_ids: Collection[int]) -> None:
+    async def forget_channels(self, guild_id: int, channel_ids: Collection[int], *, context: ActingContext) -> None:
         self.forgotten.append((guild_id, frozenset(channel_ids)))
 
 

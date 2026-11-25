@@ -11,10 +11,16 @@ import pytest
 from whenever import Instant
 
 from squid.bot.app import MessageLookup, RedstoneSquid
+from squid.core.actors import ActingContext
 from squid.core.messages.application import MessageService
 from squid_ui.ext.discord.testing import AsyncCallRecorder
 from tests.support.discord import make_layout_bot
 from tests.support.services import bot_services
+
+pytestmark = [
+    pytest.mark.parametrize("discord_worker_context", ["discord.gateway.message"], indirect=True),
+    pytest.mark.usefixtures("discord_worker_context"),
+]
 
 
 def _error(status: int) -> discord.HTTPException:
@@ -49,12 +55,14 @@ class Messages(MessageService):
     deleted: list[int] = field(default_factory=list)
 
     @override
-    async def refresh_content(self, message_id: int, content: str | None, edited_at: Instant | None) -> bool:
+    async def refresh_content(
+        self, message_id: int, content: str | None, edited_at: Instant | None, *, context: ActingContext
+    ) -> bool:
         self.refreshed.append((message_id, content, edited_at))
         return True
 
     @override
-    async def mark_deleted(self, message_id: int) -> bool:
+    async def mark_deleted(self, message_id: int, *, context: ActingContext) -> bool:
         self.deleted.append(message_id)
         return True
 

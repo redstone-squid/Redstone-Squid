@@ -4,6 +4,7 @@ from collections.abc import Sequence
 
 import pytest
 
+from squid.core.actors import ActingContext, Actor
 from squid.core.suggestions.application import SuggestionRegistry, SuggestionService, SuggestionSource, content_revision
 from squid.core.suggestions.application.queries import TagEntry
 from squid.core.suggestions.domain import SourceKind, Suggestion, SuggestionRequest
@@ -42,12 +43,18 @@ async def test_tags_completions_match_names_and_aliases_without_reloading(by_id:
         "42" if by_id else "seamless", "Seamless", description="also flush, hidden, smooth", kind="pattern"
     )
 
-    result = await service.enumerate("patterns")
+    result = await service.enumerate("patterns", context=ActingContext.direct(Actor()))
     assert result.items == (compact, seamless)
     assert result.revision == content_revision(result.items)
     # Even aliases omitted from the display hint remain searchable.
     for query in ("seamless", "flush", "invisible"):
-        assert (await service.suggest(SuggestionRequest(source="patterns", query=query))).items[0] == seamless
-    numbered = await service.suggest(SuggestionRequest(source="patterns", query="42"))
+        assert (
+            await service.suggest(
+                SuggestionRequest(source="patterns", query=query), context=ActingContext.direct(Actor())
+            )
+        ).items[0] == seamless
+    numbered = await service.suggest(
+        SuggestionRequest(source="patterns", query="42"), context=ActingContext.direct(Actor())
+    )
     assert numbered.items == ((seamless,) if by_id else ())
     assert reader.calls == [("pattern", "Door", None)]

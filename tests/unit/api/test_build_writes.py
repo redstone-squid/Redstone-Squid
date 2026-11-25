@@ -10,6 +10,7 @@ from pydantic import ValidationError
 from squid.api.security import Caller
 from squid.api.v1.builds import edit_build
 from squid.api.v1.schemas.builds import BuildPatch, DoorPatch, ExtenderPatch
+from squid.core.actors import ActingContext
 from squid.core.builds.application import BuildEditPatch, BuildService
 from squid.core.builds.domain import BuildStatus, ShowcaseTag
 from squid.core.builds.models import Build, DoorBuild
@@ -52,7 +53,7 @@ class BuildRecorder(BuildService):
         self.runner = BuildEditRecorder(result or persisted_build(), error=edit_error)
 
     @override
-    async def get(self, build_id: int) -> Build:
+    async def get(self, build_id: int, *, context: ActingContext) -> Build:
         assert build_id == self.runner.build.id
         return self.runner.build
 

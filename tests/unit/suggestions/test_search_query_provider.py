@@ -1,9 +1,10 @@
 """Query-language completion tests that need no database."""
 
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 
 import pytest
 
+from squid.core.actors import ActingContext, Actor
 from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldDefinition, FieldRegistry, FieldType
 from squid.core.suggestions.application.queries import TagEntry
 from squid.core.suggestions.domain import SuggestionRequest
@@ -11,11 +12,17 @@ from squid.core.suggestions.infrastructure.providers.search_fields import Search
 from squid.core.suggestions.infrastructure.providers.search_query import SearchQueryProvider
 
 
+@pytest.fixture(autouse=True)
+def public_query() -> Iterator[None]:
+    with ActingContext.direct(Actor()).scope():
+        yield
+
+
 class StaticFields:
     def __init__(self, registry: FieldRegistry = DEFAULT_FIELD_REGISTRY) -> None:
         self.registry = registry
 
-    async def fields(self) -> FieldRegistry:
+    async def fields(self, *, context: ActingContext) -> FieldRegistry:
         return self.registry
 
 

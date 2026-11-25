@@ -78,13 +78,14 @@ class StarboardCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         origin = self._origin(message, member.guild)
         result = await self.service.record_vote(
             origin,
-            Actor(
-                discord_user_id=member.id,
-                guild_id=member.guild.id,
-                discord_role_ids=frozenset(role.id for role in member.roles),
-            ),
             event.emoji,
-            context=ActingContext.current(),
+            context=ActingContext.for_actor(
+                Actor(
+                    discord_user_id=member.id,
+                    guild_id=member.guild.id,
+                    discord_role_ids=frozenset(role.id for role in member.roles),
+                )
+            ),
         )
         if result.remove_reaction:
             with contextlib.suppress(discord.NotFound, discord.Forbidden):

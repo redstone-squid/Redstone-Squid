@@ -13,6 +13,7 @@ from discord.ext.commands import Context
 
 import squid_ui.ext.discord as sd
 from squid.bot.ui import text_node
+from squid.core.actors import ActingContext
 from squid.core.settings.application import SettingsService
 from squid_ui.ext.discord.testing import AsyncCallRecorder, ContextHarness, InteractionHarness, MessageHarness
 from tests.support.discord import make_layout_bot
@@ -36,7 +37,7 @@ class SettingsRecorder(SettingsService):
         pass
 
     @override
-    async def get_locale(self, server_id: int) -> str | None:
+    async def get_locale(self, server_id: int, *, context: ActingContext) -> str | None:
         return None
 
 

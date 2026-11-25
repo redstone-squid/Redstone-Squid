@@ -15,6 +15,7 @@ from squid.bot.extensions import Extension, ExtensionManager
 from squid.core.permissions.application.services import PermissionService
 from squid.core.settings.application import SettingsService
 from squid.runtime import BotServices
+from tests.e2e.discord.workspace_services import WorkspaceAccounts
 from tests.support.services import bot_services, is_configured
 from tests.support.settings import FakeSettingsUnitOfWork, settings_state
 
@@ -34,6 +35,8 @@ async def command_environment(
     *extensions: Extension, services: BotServices | None = None, development_mode: bool = False
 ) -> AsyncIterator[tuple[RedstoneSquid, simcord.Env]]:
     services = services or bot_services()
+    if not is_configured(services.accounts):
+        services = replace(services, accounts=WorkspaceAccounts())
     if not is_configured(services.settings):
         settings = SettingsService(
             permissions=create_autospec(PermissionService, instance=True),

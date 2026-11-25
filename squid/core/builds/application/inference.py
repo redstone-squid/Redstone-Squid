@@ -12,6 +12,7 @@ from urllib.parse import urlsplit
 from pydantic import BaseModel, ConfigDict, Field
 from whenever import Instant
 
+from squid.core.actors import ActingContext, application_operation
 from squid.core.builds.application.inference_expansion import InferredDoorExpansion
 from squid.core.builds.domain import (
     BuildCategory,
@@ -346,17 +347,21 @@ class BuildTagVocabulary(Protocol):
         self,
         restrictions: list[str],
         type: RestrictionTypeLiteral,
+        *,
+        context: ActingContext,
     ) -> tuple[list[str], list[str]]: ...
 
-    async def validate_door_types(self, door_types: list[str]) -> tuple[list[str], list[str]]: ...
+    async def validate_door_types(
+        self, door_types: list[str], *, context: ActingContext
+    ) -> tuple[list[str], list[str]]: ...
 
-    async def inference_vocabulary(self) -> str: ...
+    async def inference_vocabulary(self, *, context: ActingContext) -> str: ...
 
 
 class VersionResolver(Protocol):
     """Resolve build version specifications."""
 
-    async def resolve_spec(self, version_spec: str) -> list[str]: ...
+    async def resolve_spec(self, version_spec: str, *, context: ActingContext) -> list[str]: ...
 
 
 class BuildInferenceService:
@@ -374,12 +379,14 @@ class BuildInferenceService:
         self._versions = versions
         self._system_prompt = system_prompt
 
+    @application_operation
     async def infer(
         self,
         source: BuildInferenceInput,
         *,
         model: str,
         reasoning_effort: str | None = None,
+        context: ActingContext,
     ) -> list[BuildInput]:
         """Infer drafts from the primary messages and their supporting context.
 
@@ -388,7 +395,7 @@ class BuildInferenceService:
         for review. A missing model result returns an empty list; provider and
         validation errors propagate to the caller.
         """
-        vocabulary = await self._tags.inference_vocabulary()
+        vocabulary = await self._tags.inference_vocabulary(context=context)
         result = await self._generator.generate(
             f"{self._system_prompt}\n\nAPPROVED TAGS\n{vocabulary}",
             self._render_user_message(source),
@@ -556,11 +563,13 @@ class BuildInferenceService:
         for values, restriction_type, destination in restriction_fields:
             if values:
                 destinations.append(destination)
-                validations.append(self._tags.validate_restrictions(values, restriction_type))
+                validations.append(
+                    self._tags.validate_restrictions(values, restriction_type, context=ActingContext.current())
+                )
 
         if inferred.door_type:
             destinations.append("door_types")
-            validations.append(self._tags.validate_door_types(inferred.door_type))
+            validations.append(self._tags.validate_door_types(inferred.door_type, context=ActingContext.current()))
 
         # Finish or cancel all validation calls before leaving this inference step.
         results = await run_all_awaitables(validations)
@@ -681,7 +690,7 @@ class BuildInferenceService:
                 build.version_spec = f"{inferred.edition} {build.version_spec}"
         if build.version_spec is not None:
             try:
-                build.versions = await self._versions.resolve_spec(build.version_spec)
+                build.versions = await self._versions.resolve_spec(build.version_spec, context=ActingContext.current())
             except ValueError, InvalidVersionError:
                 # Keep the original claim available for correction instead of losing
                 # this build and every other candidate in the same model response.

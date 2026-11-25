@@ -3,6 +3,7 @@
 import json
 from typing import Protocol
 
+from squid.core.actors import ActingContext, application_operation
 from squid.core.builds.domain import UnresolvedTags
 from squid.core.builds.models import Build, DoorBuild, ExtenderBuild
 from squid.core.errors import InvalidStateError
@@ -34,7 +35,8 @@ class BuildEmbeddingService:
         self._model = model
         self._uow_factory = uow_factory
 
-    async def handle(self, event: DomainEvent) -> None:
+    @application_operation
+    async def handle(self, event: DomainEvent, *, context: ActingContext) -> None:
         """Generate a missing vector and install it only on the revision read."""
         versions = (1, 2) if event.event_type == "build.submitted" else (1,)
         if event.schema_version not in versions:
@@ -60,7 +62,8 @@ class BuildEmbeddingService:
                 message = "Build changed while generating its embedding."
                 raise InvalidStateError(message)
 
-    async def find_build_id(self, query: str) -> int | None:
+    @application_operation
+    async def find_build_id(self, query: str, *, context: ActingContext) -> int | None:
         """Find the build nearest to a natural-language query."""
         embedding = await self._model.embed(query)
         if embedding is None:

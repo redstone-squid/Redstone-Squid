@@ -17,7 +17,7 @@ from squid.bot._types import GuildMessageable
 from squid.bot.message_adapter import to_message_snapshot
 from squid.bot.ui import render_payload, text_node
 from squid.bot.voting.poll_wizard import parse_option_lines
-from squid.core.actors import ActingContext
+from squid.core.actors import ActingContext, application_operation
 from squid.core.permissions.domain.catalogue import VOTE_POLL_NETWORK_CREATE
 from squid.core.voting.domain import PollScope, VoteKind, VoteOption, VoteVisibility
 from squid_ui.ext.discord import send_to
@@ -82,7 +82,9 @@ class DiscordPollPublisher:
 
     async def palette(self, guild_id: int) -> tuple[VoteOption, ...]:
         """Return the guild's configured generic emoji palette."""
-        return (await self._bot.services.votes.emoji_preset(guild_id, VoteKind.GENERIC)).options
+        return (
+            await self._bot.services.votes.emoji_preset(guild_id, VoteKind.GENERIC, context=ActingContext.current())
+        ).options
 
     async def resolve_options(self, guild_id: int, lines: Sequence[str]) -> tuple[VoteOption, ...]:
         """Turn wizard option lines into stable options, filling aliases from the palette."""
@@ -93,6 +95,7 @@ class DiscordPollPublisher:
             emoji_is_usable=self._emoji_is_usable,
         )
 
+    @application_operation
     async def create_and_publish(
         self,
         *,
@@ -160,7 +163,7 @@ class DiscordPollPublisher:
         """Attach an already sent message, safe to repeat after a partial failure."""
         try:
             await self._bot.services.messages.observe(to_message_snapshot(message), context=ActingContext.current())
-            await self._bot.services.votes.attach_message(vote_session_id, message.id)
+            await self._bot.services.votes.attach_message(vote_session_id, message.id, context=ActingContext.current())
             await self._bot.refresh_posts("vote_session", str(vote_session_id))
         except Exception as error:
             raise PollPublicationError(PendingPollPublication(vote_session_id, message)) from error

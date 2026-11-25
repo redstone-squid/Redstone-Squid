@@ -58,6 +58,7 @@ async def test_search_scope_query_reaches_service_as_enum(scope: SearchScope) ->
     handler = get(
         "/search",
         dependencies={
+            "caller": Provide(lambda: Caller(kind="anonymous", subject="anonymous"), sync_to_thread=False),
             "search_service": Provide(lambda: search_service, sync_to_thread=False),
             "build_queries": Provide(lambda: build_queries, sync_to_thread=False),
         },

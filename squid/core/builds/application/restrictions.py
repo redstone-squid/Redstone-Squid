@@ -6,6 +6,7 @@ from typing import Protocol
 
 from async_lru import alru_cache
 
+from squid.core.actors import ActingContext, application_operation
 from squid.core.builds.domain import RestrictionTypeLiteral
 from squid.core.edits.domain import Revision
 from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
@@ -43,22 +44,26 @@ class RestrictionService:
     def __init__(self, *, uow_factory: UnitOfWorkFactory[RestrictionUnitOfWork]) -> None:
         self._uow_factory = uow_factory
 
-    async def add_alias(self, restriction: str, alias: str) -> None:
+    @application_operation
+    async def add_alias(self, restriction: str, alias: str, *, context: ActingContext) -> None:
         """Save an alias and invalidate this service's cached restriction list."""
         async with self._uow_factory() as uow:
             await uow.restrictions.add_alias(restriction, alias)
             await uow.commit()
         self.fetch_all_restrictions.cache_clear()
 
-    async def alias_revision(self, restriction: str) -> Revision:
+    @application_operation
+    async def alias_revision(self, restriction: str, *, context: ActingContext) -> Revision:
         async with self._uow_factory() as uow:
             return await uow.restrictions.alias_revision(restriction)
 
-    async def names(self) -> list[str]:
-        return [restriction.name for restriction in await self.fetch_all_restrictions()]
+    @application_operation
+    async def names(self, *, context: ActingContext) -> list[str]:
+        return [restriction.name for restriction in await self.fetch_all_restrictions(context=context)]
 
     @alru_cache
-    async def fetch_all_restrictions(self) -> Sequence[RestrictionDefinition]:
+    @application_operation
+    async def fetch_all_restrictions(self, *, context: ActingContext) -> Sequence[RestrictionDefinition]:
         """Return cached approved restriction names and their classifications."""
         async with self._uow_factory() as uow:
             return await uow.restrictions.fetch_all_restrictions()

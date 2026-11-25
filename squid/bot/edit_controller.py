@@ -93,6 +93,10 @@ class EditController:
         self._refresh_failed = False
         self._signal = Signal()
 
+    async def context(self) -> ActingContext:
+        """Resolve the actor for a read or write in this editor."""
+        return ActingContext.for_actor(await self._actor())
+
     def bind(self, kind: str, target: EditTarget, revision: int) -> BoundEdit:
         """Capture a displayed revision; later refreshes never rebase this binding."""
         return BoundEdit(self, kind, (Revision(target, revision),))
@@ -178,7 +182,7 @@ class EditController:
 
     async def _run(self, command: EditCommand) -> EditResult:
         try:
-            return await self._runner.execute(command, context=ActingContext.for_actor(await self._actor()))
+            return await self._runner.execute(command, context=await self.context())
         except EditCommitUncertainError:
             self.forget(version.target.identity for version in command.expected)
             await self.refresh()

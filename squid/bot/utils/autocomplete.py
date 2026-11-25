@@ -16,7 +16,7 @@ from discord import app_commands
 
 import squid_ui.ext.discord as sd
 from squid.bot.utils.permissions import allows
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.observability import trace_span
 from squid.core.suggestions.application import SuggestionSource
 from squid.core.suggestions.domain import (
@@ -118,11 +118,11 @@ async def _choices(
             limit=AUTOCOMPLETE_CHOICE_LIMIT,
             context=dict(context(interaction)) if context is not None else {},
             locale=str(interaction.locale),
-            viewer=await _viewer(interaction, source),
             # Discord provides no caret position; the suggestion service assumes the input end.
             cursor=None,
         ),
         authorizer=_InteractionAuthorizer(interaction),
+        context=ActingContext.direct(await _viewer(interaction, source)),
     )
     if result.replacement is not None:
         # A choice replaces the whole option value, so a source that completes part of the input
@@ -151,10 +151,10 @@ async def _viewer(
 ) -> Actor:
     """Resolve the caller's identity, paying for the account lookup only when a source needs it."""
     if source.visibility is not Visibility.VIEWER_SCOPED:
-        return Actor(guild_id=interaction.guild_id)
+        return Actor(discord_user_id=interaction.user.id, guild_id=interaction.guild_id)
     bot = interaction.client
     account_id = await bot.account_ids.resolve(bot.services.accounts, interaction.user.id)
-    return Actor(account_id=account_id, guild_id=interaction.guild_id)
+    return Actor(account_id=account_id, discord_user_id=interaction.user.id, guild_id=interaction.guild_id)
 
 
 def _split(current: str, separator: str | None) -> tuple[str, str]:

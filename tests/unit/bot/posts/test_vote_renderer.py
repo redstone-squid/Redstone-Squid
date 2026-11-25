@@ -12,6 +12,7 @@ from squid.bot.posts import vote_renderer
 from squid.bot.posts.vote_renderer import VoteSessionRenderer
 from squid.core.accounts.application import AccountService
 from squid.core.accounts.models import Account
+from squid.core.actors import ActingContext
 from squid.core.messages.application import MessageService
 from squid.core.messages.models import Message
 from squid.core.posts.application import PostService
@@ -40,7 +41,7 @@ class VoteRecorder(VoteService):
         self.snapshot = snapshot
 
     @override
-    async def get_session(self, vote_session_id: int) -> VoteSessionSnapshot | None:
+    async def get_session(self, vote_session_id: int, *, context: ActingContext) -> VoteSessionSnapshot | None:
         assert vote_session_id == self.snapshot.id
         return self.snapshot
 
@@ -50,7 +51,9 @@ class SettingsRecorder(SettingsService):
         self.vote_channels = vote_channels
 
     @override
-    async def get_many(self, server_ids: Iterable[int], setting: Setting) -> Mapping[int, int | None]:
+    async def get_many(
+        self, server_ids: Iterable[int], setting: Setting, *, context: ActingContext
+    ) -> Mapping[int, int | None]:
         assert setting == "Vote"
         return {guild_id: channel_id for channel_id, guild_id in self.vote_channels.items() if guild_id in server_ids}
 
@@ -60,7 +63,9 @@ class PostRecorder(PostService):
         self.snapshot = snapshot
 
     @override
-    async def list_for_resource(self, resource_kind: ResourceKind, resource_key: str) -> Sequence[DiscordPost]:
+    async def list_for_resource(
+        self, resource_kind: ResourceKind, resource_key: str, *, context: ActingContext
+    ) -> Sequence[DiscordPost]:
         assert (resource_kind, resource_key) == ("vote_session", str(self.snapshot.id))
         return [
             DiscordPost(
@@ -168,7 +173,7 @@ async def test_a_deleted_vote_target_is_shown_from_its_stored_copy(monkeypatch: 
             pass
 
         @override
-        async def get(self, message_id: int) -> Message:
+        async def get(self, message_id: int, *, context: ActingContext) -> Message:
             return Message(id=message_id, channel_id=1, author_id=2, content="the stored text")
 
     def render(snapshot: VoteSessionSnapshot, content: str) -> object:

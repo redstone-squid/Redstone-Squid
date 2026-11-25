@@ -7,6 +7,7 @@ from typing import Protocol
 from async_lru import alru_cache
 from pydantic import BaseModel, ConfigDict, Field
 
+from squid.core.actors import ActingContext, application_operation
 from squid.core.builds.application.tags import TagResolution
 from squid.core.builds.domain import RestrictionTypeLiteral, normalize_tag_name
 from squid.core.concurrency import run_all_awaitables
@@ -45,64 +46,79 @@ class BuildTagService:
     def __init__(self, *, uow_factory: UnitOfWorkFactory[TagUnitOfWork]) -> None:
         self._uow_factory = uow_factory
 
-    async def get_restriction_id(self, name_or_alias: str) -> int | None:
+    @application_operation
+    async def get_restriction_id(self, name_or_alias: str, *, context: ActingContext) -> int | None:
         async with self._uow_factory() as uow:
             return await uow.build_tags.get_restriction_id(name_or_alias)
 
     @alru_cache
-    async def fetch_all_restrictions(self) -> list[TagDefinition]:
+    @application_operation
+    async def fetch_all_restrictions(self, *, context: ActingContext) -> list[TagDefinition]:
         """Return cached approved restriction definitions and their aliases."""
         async with self._uow_factory() as uow:
             return await uow.build_tags.fetch_all_restrictions()
 
-    async def add_restriction_alias_by_id(self, restriction_id: int, alias: str) -> None:
+    @application_operation
+    async def add_restriction_alias_by_id(self, restriction_id: int, alias: str, *, context: ActingContext) -> None:
         async with self._uow_factory() as uow:
             await uow.build_tags.add_restriction_alias_by_id(restriction_id, alias)
             await uow.commit()
         self.fetch_all_restrictions.cache_clear()
 
-    async def add_restriction_alias(self, name_or_alias: str, alias: str) -> None:
+    @application_operation
+    async def add_restriction_alias(self, name_or_alias: str, alias: str, *, context: ActingContext) -> None:
         async with self._uow_factory() as uow:
             await uow.build_tags.add_restriction_alias(name_or_alias, alias)
             await uow.commit()
         self.fetch_all_restrictions.cache_clear()
 
-    async def get_valid_restrictions(self, type: RestrictionTypeLiteral) -> Sequence[str]:
+    @application_operation
+    async def get_valid_restrictions(self, type: RestrictionTypeLiteral, *, context: ActingContext) -> Sequence[str]:
         async with self._uow_factory() as uow:
             return await uow.build_tags.get_valid_restrictions(type)
 
-    async def get_valid_door_types(self) -> Sequence[str]:
+    @application_operation
+    async def get_valid_door_types(self, *, context: ActingContext) -> Sequence[str]:
         async with self._uow_factory() as uow:
             return await uow.build_tags.get_valid_door_types()
 
-    async def inference_vocabulary(self) -> str:
+    @application_operation
+    async def inference_vocabulary(self, *, context: ActingContext) -> str:
         """Return the current approved names, grouped by the inference fields."""
         types: tuple[RestrictionTypeLiteral, ...] = ("component", "wiring-placement", "animated", "miscellaneous")
         results = await run_all_awaitables(
-            [*(self.get_valid_restrictions(type) for type in types), self.get_valid_door_types()]
+            [
+                *(self.get_valid_restrictions(type, context=context) for type in types),
+                self.get_valid_door_types(context=context),
+            ]
         )
         return _InferenceVocabularyJson.model_validate(
             dict(zip((*types, "patterns"), results, strict=True))
         ).model_dump_json(by_alias=True)
 
+    @application_operation
     async def resolve_tags(
-        self, *, build_kind: str | None, restrictions: Sequence[str], patterns: Sequence[str]
+        self, *, build_kind: str | None, restrictions: Sequence[str], patterns: Sequence[str], context: ActingContext
     ) -> TagResolution:
         async with self._uow_factory() as uow:
             return await uow.build_tags.resolve_tags(
                 build_kind=build_kind, restrictions=restrictions, patterns=patterns
             )
 
-    async def showcase_definitions(self, keys: Sequence[str]) -> Sequence[TagDefinition]:
+    @application_operation
+    async def showcase_definitions(self, keys: Sequence[str], *, context: ActingContext) -> Sequence[TagDefinition]:
         if not keys:
             return ()
         async with self._uow_factory() as uow:
             return await uow.build_tags.showcase_definitions(keys)
 
+    @application_operation
     async def validate_restrictions(
         self,
         restrictions: list[str],
         type: RestrictionTypeLiteral,
+        *,
+        context: ActingContext,
     ) -> tuple[list[str], list[str]]:
         """Resolve approved names and aliases, retaining unknown or ambiguous input."""
         expanded: list[str] = []
@@ -113,16 +129,19 @@ class BuildTagService:
             else:
                 expanded.append(value)
         restrictions = expanded
-        resolution = await self.resolve_tags(build_kind=None, restrictions=restrictions, patterns=())
+        resolution = await self.resolve_tags(build_kind=None, restrictions=restrictions, patterns=(), context=context)
         return _validated_names(
             restrictions,
             [item.definition for item in resolution.assignments if item.definition.restriction_type == type],
             resolution.unknown_restrictions,
         )
 
-    async def validate_door_types(self, door_types: list[str]) -> tuple[list[str], list[str]]:
+    @application_operation
+    async def validate_door_types(
+        self, door_types: list[str], *, context: ActingContext
+    ) -> tuple[list[str], list[str]]:
         """Split door pattern names into recognized display names and unrecognized input."""
-        resolution = await self.resolve_tags(build_kind="Door", restrictions=(), patterns=door_types)
+        resolution = await self.resolve_tags(build_kind="Door", restrictions=(), patterns=door_types, context=context)
         return _validated_names(
             door_types, [item.definition for item in resolution.assignments], resolution.unknown_patterns
         )

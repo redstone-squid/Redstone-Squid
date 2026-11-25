@@ -22,6 +22,8 @@ from squid_i18n import Text
 from squid_ui.ext.discord.testing import StagedUI, iter_component_payloads, stage
 from tests.unit.suggestions.test_services import RecordingProvider
 
+pytestmark = pytest.mark.usefixtures("discord_screen_context")
+
 
 def editor(query: str = "") -> GuidedSearch:
     service = AsyncMock()
@@ -108,7 +110,9 @@ def _suggestions(*sources: tuple[str, tuple[Candidate, ...]]) -> SuggestionServi
 
 
 def _install(ui: StagedUI[GuidedSearch], monkeypatch: pytest.MonkeyPatch, service: SuggestionService) -> None:
-    monkeypatch.setattr(ui._client, "actors", SimpleNamespace(resolve=AsyncMock(return_value=Actor())), raising=False)
+    monkeypatch.setattr(
+        ui._client, "actors", SimpleNamespace(resolve=AsyncMock(return_value=Actor(discord_user_id=1))), raising=False
+    )
     monkeypatch.setattr(ui._client, "services", SimpleNamespace(suggestions=service), raising=False)
 
 

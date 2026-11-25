@@ -47,7 +47,7 @@ class VoteRecorder(VoteService):
         return 41
 
     @override
-    async def attach_message(self, vote_session_id: int, message_id: int) -> None:
+    async def attach_message(self, vote_session_id: int, message_id: int, *, context: ActingContext) -> None:
         self.attach_calls.append((vote_session_id, message_id))
         if len(self.attach_calls) <= self.attachment_failures:
             raise RuntimeError("temporary database failure")
@@ -58,7 +58,7 @@ class MessageRecorder(MessageService):
         self.snapshots: list[MessageSnapshot] = []
 
     @override
-    async def observe(self, snapshot: MessageSnapshot) -> None:
+    async def observe(self, snapshot: MessageSnapshot, *, context: ActingContext) -> None:
         self.snapshots.append(snapshot)
 
 

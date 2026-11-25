@@ -26,6 +26,11 @@ from squid_reactivity import LocalTopicBus
 from tests.support.delivery_uow import ReconciliationUnitOfWork
 from tests.support.services import bot_services
 
+pytestmark = [
+    pytest.mark.parametrize("discord_worker_context", ["discord.reconciliation"], indirect=True),
+    pytest.mark.usefixtures("discord_worker_context"),
+]
+
 
 def _job(
     resource: ReconciliationResource = ReconciliationResource.BUILD,

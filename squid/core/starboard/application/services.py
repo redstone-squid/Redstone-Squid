@@ -58,15 +58,14 @@ class StarboardService:
             return emoji in await uow.starboards.relevant_emojis(guild_id)
 
     @application_operation
-    async def record_vote(
-        self, origin: OriginMessage, actor: Actor, emoji: str, *, context: ActingContext
-    ) -> StarboardVoteResult:
+    async def record_vote(self, origin: OriginMessage, emoji: str, *, context: ActingContext) -> StarboardVoteResult:
         """Record accepted votes across matching boards in one transaction.
 
         A member has one vote per origin and board, so another emoji replaces it.
         Removal is requested if any rejecting board asks for cleanup, even when
         another board accepts the same reaction.
         """
+        actor = context.effective
         user_id = actor.require_discord_user_id()
         async with self._uow_factory() as uow:
             weight_policy = self._weight_policy(uow.starboards)

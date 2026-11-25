@@ -153,9 +153,7 @@ async def test_used_board_refuses_creation_undo_but_explicit_delete_is_final(
             id=100, guild_id=10, channel_id=30, author_id=40, created_at=Instant.now().subtract(seconds=60)
         ),
     )
-    await service.record_vote(
-        origin, Actor(discord_user_id=50, guild_id=10), "⭐", context=ActingContext.direct(Actor())
-    )
+    await service.record_vote(origin, "⭐", context=ActingContext.for_actor(Actor(discord_user_id=50, guild_id=10)))
     with pytest.raises(ConflictError, match="already in use"):
         await executor.execute(created.receipt.undo(created.outcome.revisions), context=ActingContext.direct(ACTOR))
     deleted = await executor.execute(
@@ -166,7 +164,7 @@ async def test_used_board_refuses_creation_undo_but_explicit_delete_is_final(
     assert await service.list_for_guild(10, context=ActingContext.direct(Actor())) == ()
     assert not await service.is_relevant_emoji(10, "⭐", context=ActingContext.direct(Actor()))
     ignored = await service.record_vote(
-        origin, Actor(discord_user_id=51, guild_id=10), "⭐", context=ActingContext.direct(Actor())
+        origin, "⭐", context=ActingContext.for_actor(Actor(discord_user_id=51, guild_id=10))
     )
     assert ignored.keys == ()
 
@@ -205,7 +203,12 @@ async def test_first_vote_and_creation_undo_cannot_both_win(
 
     async with anyio.create_task_group() as tasks:
         tasks.start_soon(undo)
-        tasks.start_soon(service.record_vote, origin, Actor(discord_user_id=50, guild_id=10), "⭐")
+        tasks.start_soon(
+            partial(service.record_vote, context=ActingContext.worker("reaction")),
+            origin,
+            Actor(discord_user_id=50, guild_id=10),
+            "⭐",
+        )
     async with factory() as uow:
         stored = await uow.starboards.get_by_id(identity, include_archived=True)
         assert stored is not None

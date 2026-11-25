@@ -17,6 +17,7 @@ from squid.bot.app import RedstoneSquid
 from squid.bot.posts.reconciler import PostReconciler
 from squid.bot.posts.renderer import DesiredPost
 from squid.bot.posts.submission_renderer import SubmissionStatusRenderer
+from squid.core.actors import ActingContext, Actor
 from squid.core.messages.application import MessageService
 from squid.core.messages.domain import MessageSnapshot
 from squid.core.posts.application import PostService
@@ -115,7 +116,9 @@ class FakePosts(PostService):
         self.posts: dict[int, DiscordPost] = {}
 
     @override
-    async def list_for_resource(self, resource_kind: ResourceKind, resource_key: str) -> Sequence[DiscordPost]:
+    async def list_for_resource(
+        self, resource_kind: ResourceKind, resource_key: str, *, context: ActingContext
+    ) -> Sequence[DiscordPost]:
         return [
             post
             for post in self.posts.values()
@@ -132,6 +135,7 @@ class FakePosts(PostService):
         resource_key: str,
         surface: Surface,
         applied_revision: int,
+        context: ActingContext,
     ) -> None:
         clash = [
             post
@@ -154,7 +158,7 @@ class FakePosts(PostService):
         )
 
     @override
-    async def mark_rendered(self, message_id: int, applied_revision: int) -> None:
+    async def mark_rendered(self, message_id: int, applied_revision: int, *, context: ActingContext) -> None:
         post = self.posts[message_id]
         if post.applied_revision < applied_revision:
             self.posts[message_id] = DiscordPost(
@@ -167,7 +171,7 @@ class FakePosts(PostService):
             )
 
     @override
-    async def suppress(self, message_id: int) -> bool:
+    async def suppress(self, message_id: int, *, context: ActingContext) -> bool:
         post = self.posts.get(message_id)
         if post is None or not post.is_live:
             return False
@@ -183,7 +187,7 @@ class FakePosts(PostService):
         return True
 
     @override
-    async def forget(self, message_id: int) -> None:
+    async def forget(self, message_id: int, *, context: ActingContext) -> None:
         self.posts.pop(message_id, None)
 
 
@@ -193,11 +197,11 @@ class FakeMessages(MessageService):
         self.deleted: list[int] = []
 
     @override
-    async def observe(self, snapshot: MessageSnapshot) -> None:
+    async def observe(self, snapshot: MessageSnapshot, *, context: ActingContext) -> None:
         self.observed.append(snapshot.id)
 
     @override
-    async def mark_deleted(self, message_id: int) -> bool:
+    async def mark_deleted(self, message_id: int, *, context: ActingContext) -> bool:
         self.deleted.append(message_id)
         return True
 
@@ -280,6 +284,7 @@ async def test_inference_status_refresh_removes_legacy_posts_without_sending_new
         resource_key="42",
         surface="submission_status",
         applied_revision=1,
+        context=ActingContext.direct(Actor()),
     )
     renderer = SubmissionStatusRenderer(cast(RedstoneSquid, bot))
     reconciler = PostReconciler(cast(RedstoneSquid, bot), [renderer])
@@ -290,7 +295,9 @@ async def test_inference_status_refresh_removes_legacy_posts_without_sending_new
     assert legacy_status.deleted
     assert not source.deleted
     assert channel.sent == []
-    assert await bot.services.posts.list_for_resource("inference_run", "42") == []
+    assert (
+        await bot.services.posts.list_for_resource("inference_run", "42", context=ActingContext.direct(Actor())) == []
+    )
 
 
 async def test_a_partial_failure_is_repaired_by_posting_only_the_missing_channel() -> None:

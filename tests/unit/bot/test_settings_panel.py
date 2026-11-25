@@ -89,7 +89,7 @@ class FakeSettingsService(SettingsService):
     async def guild_snapshot(self, guild_id: int, *, context: ActingContext) -> tuple[GuildSettings, int]:
         voting = {}
         for kind in VoteKind:
-            weights = await self.votes.get_role_weights(guild_id, kind)
+            weights = await self.votes.get_role_weights(guild_id, kind, context=context)
             voting[kind] = VoteConfiguration(None, tuple(weight for weight in weights if weight.kind == kind))
         return GuildSettings(
             **{name: self.stored.get(key) for key, name in CHANNEL_FIELDS.items()}, locale=self.locale, voting=voting
@@ -124,15 +124,17 @@ class FakeVoteService(VoteService):
         self.role_weight_error: RuntimeError | None = None
 
     @override
-    async def configuration(self, guild_id: int, kind: VoteKind) -> VoteConfiguration:
+    async def configuration(self, guild_id: int, kind: VoteKind, *, context: ActingContext) -> VoteConfiguration:
         return VoteConfiguration(None, self.role_weights)
 
     @override
-    async def emoji_preset(self, guild_id: int, kind: VoteKind) -> EmojiPreset:
+    async def emoji_preset(self, guild_id: int, kind: VoteKind, *, context: ActingContext) -> EmojiPreset:
         return EmojiPreset(guild_id, kind, ())
 
     @override
-    async def get_role_weights(self, guild_id: int, kind: VoteKind) -> tuple[RoleWeight, ...]:
+    async def get_role_weights(
+        self, guild_id: int, kind: VoteKind, *, context: ActingContext
+    ) -> tuple[RoleWeight, ...]:
         del guild_id, kind
         if self.role_weight_error is not None:
             raise self.role_weight_error
@@ -181,7 +183,7 @@ def make_component_panel(
             raise AuthorizationError
         if bound_revisions(command)[0].value != settings.revision:
             raise RevisionConflictError(bound_revisions(command)[0], settings.revision)
-        current, _ = await settings.guild_snapshot(GUILD_ID)
+        current, _ = await settings.guild_snapshot(GUILD_ID, context=context)
         before = EditValues.of(current.model_dump(mode="json"))
         after = before.patch(command.values)
         values = after.unpack()

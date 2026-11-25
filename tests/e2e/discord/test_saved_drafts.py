@@ -35,7 +35,8 @@ class DraftListing(SubmissionDraftService):
         self.staff: list[Actor] = []
 
     @override
-    async def list_active(self, account_id: int, *, limit: int = 10) -> tuple[StoredDraft, ...]:
+    async def list_active(self, *, limit: int = 10, context: ActingContext) -> tuple[StoredDraft, ...]:
+        account_id = context.effective.require_account_id()
         self.owners.append(account_id)
         return self.drafts
 

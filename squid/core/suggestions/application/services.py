@@ -14,6 +14,7 @@ from dataclasses import replace
 
 import anyio
 
+from squid.core.actors import ActingContext, application_operation
 from squid.core.errors import ValidationError
 from squid.core.observability import add_counter, trace_span
 from squid.core.suggestions.application.matching import rank
@@ -60,12 +61,14 @@ class SuggestionService:
         """The registry this service resolves against."""
         return self._registry
 
+    @application_operation
     async def suggest(
         self,
         request: SuggestionRequest,
         *,
         authorizer: SuggestionAuthorizer | None = None,
         raise_on_failure: bool = False,
+        context: ActingContext,
     ) -> SuggestionResult:
         """Return ranked completions for a partially typed value.
 
@@ -79,7 +82,7 @@ class SuggestionService:
         Composed providers apply their own ranking and limits.
         """
         source = self._registry.resolve(request.source)
-        normalized = _normalize(request)
+        normalized = _normalize(replace(request, viewer=context.effective))
         with trace_span("suggestions.suggest", {"squid.suggestion.source": source.id}) as span:
             if not await self._permitted(source, normalized, authorizer):
                 add_counter("suggestions.denied", attributes={"squid.suggestion.source": source.id})
@@ -107,12 +110,14 @@ class SuggestionService:
                     raise
             return SuggestionResult()
 
+    @application_operation
     async def enumerate(
         self,
         source_id: str,
         *,
-        context: dict[str, str] | None = None,
+        source_context: dict[str, str] | None = None,
         locale: str | None = None,
+        context: ActingContext,
     ) -> SuggestionResult:
         """Return an enumerable source's full candidate set with its content revision.
 
@@ -127,13 +132,15 @@ class SuggestionService:
                     t"suggestions-enumerated = {source_id!s} cannot be enumerated",
                 )
             )
+        if source.visibility is not Visibility.PUBLIC:
+            return SuggestionResult()
         request = SuggestionRequest(
             source=source_id,
             limit=0,
-            context=context or {},
+            context=source_context or {},
             locale=locale,
         )
-        return await self.suggest(request)
+        return await self.suggest(request, context=context)
 
     async def _produce(self, source: SuggestionSource, request: SuggestionRequest) -> SuggestionResult:
         provider = source.provider

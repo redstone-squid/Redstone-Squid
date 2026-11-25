@@ -181,13 +181,13 @@ class SettingsPanel(sd.Screen):
         request = cast(SettingsRequest, event.context)
         services = request.client.services
         boards = (
-            await services.starboards.list_for_guild(self._guild.id)
+            await services.starboards.list_for_guild(self._guild.id, context=await self.edits.context())
             if await self.settings.grants.allows(STARBOARD_BOARD_VIEW)
             else ()
         )
         role_id = None
         if self._guild.id == self._owner_guild_id:
-            role_id = (await services.settings.get_runtime()).redstoner_role_id
+            role_id = (await services.settings.get_runtime(context=await self.edits.context())).redstoner_role_id
         self.diagnostics = GuildPermissionDiagnostics(self._guild, snapshot, boards, redstoner_role_id=role_id)
         self.page = "diagnostics"
 
@@ -219,7 +219,9 @@ class SettingsEditor(sl.Reactive):
         self.edits = EditController(edits, actor, self.refresh)
 
     async def refresh(self) -> None:
-        self.snapshot, self.revision = await self._settings.guild_snapshot(self._guild_id)
+        self.snapshot, self.revision = await self._settings.guild_snapshot(
+            self._guild_id, context=await self.edits.context()
+        )
         if self.localization.root is not None:
             self.localization.root.localize(localization_for(self.snapshot.locale or self.localization.fallback))
 

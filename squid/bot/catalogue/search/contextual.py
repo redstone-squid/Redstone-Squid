@@ -20,6 +20,7 @@ from squid.bot.utils.autocomplete import (
     SuggestionChoice,
     suggests,
 )
+from squid.core.actors import ActingContext
 from squid.core.suggestions.domain import Suggestion, SuggestionRequest
 from squid_i18n import Text, discord_markup, discord_text, inline_code, resolve_text, source_text
 from squid_ui.ext.discord.target_types import ComponentsV2Target
@@ -172,6 +173,7 @@ class ContextualSearches:
         result = await request.client.services.suggestions.suggest(
             SuggestionRequest(search.source, query=query, limit=AUTOCOMPLETE_CHOICE_LIMIT, locale=request.locale),
             raise_on_failure=True,
+            context=ActingContext.current(),
         )
         if self.active(interaction) is not search:
             await request.respond(text_node(_EXPIRED))

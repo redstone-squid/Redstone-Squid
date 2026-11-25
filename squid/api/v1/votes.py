@@ -41,7 +41,7 @@ async def get_vote_session(
     caller: CurrentCaller,
 ) -> VoteSessionDetail:
     """Return aggregate vote state without exposing ballot identities."""
-    session = await votes.get_session(vote_session_id)
+    session = await votes.get_session(vote_session_id, context=caller.context())
     if session is None:
         raise VoteSessionNotFoundError(vote_session_id)
     return VoteSessionDetail.from_domain(session, caller_account_id=caller.account_id)
@@ -66,7 +66,7 @@ async def cast_vote(
 ) -> VoteSessionDetail:
     """Cast the authenticated Discord member's weighted vote."""
     account_id = caller.require_consented_account()
-    session = await votes.get_session(vote_session_id)
+    session = await votes.get_session(vote_session_id, context=caller.context())
     if session is None:
         raise VoteSessionNotFoundError(vote_session_id)
     if vote_members is None:
@@ -74,7 +74,9 @@ async def cast_vote(
     actor = await vote_members.member(account_id, data.guild_id, session.kind)
     if actor is None:
         raise AuthorizationError
-    result = await votes.cast_vote(vote_session_id, actor, data.option_id, toggle=False)
+    result = await votes.cast_vote(
+        vote_session_id, data.option_id, toggle=False, context=caller.context().with_actor(actor)
+    )
     _raise_vote_rejection(vote_session_id, result)
     assert result.session is not None
     return VoteSessionDetail.from_domain(result.session, caller_account_id=account_id)
@@ -99,7 +101,7 @@ async def clear_vote(
 ) -> VoteSessionDetail:
     """Remove the authenticated member's ballot; repeating this keeps it absent."""
     account_id = caller.require_consented_account()
-    session = await votes.get_session(vote_session_id)
+    session = await votes.get_session(vote_session_id, context=caller.context())
     if session is None:
         raise VoteSessionNotFoundError(vote_session_id)
     if vote_members is None:
@@ -107,7 +109,7 @@ async def clear_vote(
     actor = await vote_members.member(account_id, guild_id, session.kind)
     if actor is None:
         raise AuthorizationError
-    result = await votes.clear_vote(vote_session_id, actor)
+    result = await votes.clear_vote(vote_session_id, context=caller.context().with_actor(actor))
     _raise_vote_rejection(vote_session_id, result)
     assert result.session is not None
     return VoteSessionDetail.from_domain(result.session, caller_account_id=account_id)

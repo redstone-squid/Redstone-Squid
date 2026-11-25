@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
+from squid.core.actors import ActingContext
 from squid.core.builds.domain import BuildCategory, ShowcaseTag, UnresolvedTags
 from squid.core.builds.errors import InvalidBuildError
 from squid.core.builds.models import Build
@@ -35,14 +36,15 @@ class BuildTagResolver(Protocol):
         build_kind: str | None,
         restrictions: Sequence[str],
         patterns: Sequence[str],
+        context: ActingContext,
     ) -> TagResolution: ...
 
-    async def showcase_definitions(self, keys: Sequence[str]) -> Sequence[TagDefinition]:
+    async def showcase_definitions(self, keys: Sequence[str], *, context: ActingContext) -> Sequence[TagDefinition]:
         """Return the approved showcase tags with these stable keys; unknown keys are left out."""
         ...
 
 
-async def apply_build_tags(build: Build, resolver: BuildTagResolver) -> None:
+async def apply_build_tags(build: Build, resolver: BuildTagResolver, *, context: ActingContext) -> None:
     """Resolve editable restriction and pattern names into tag assignments.
 
     The repository persists build.tags; BuildLoader derives the editable name
@@ -67,9 +69,7 @@ async def apply_build_tags(build: Build, resolver: BuildTagResolver) -> None:
         ["Regular"] if build.category in {BuildCategory.DOOR, BuildCategory.EXTENDER} else []
     )
     resolution = await resolver.resolve_tags(
-        build_kind=build.category.value,
-        restrictions=requested.restriction_names(),
-        patterns=patterns,
+        build_kind=build.category.value, restrictions=requested.restriction_names(), patterns=patterns, context=context
     )
     requested.retain(restrictions=resolution.unknown_restrictions, patterns=resolution.unknown_patterns).write(
         build.extra_info
@@ -106,7 +106,9 @@ async def apply_build_tags(build: Build, resolver: BuildTagResolver) -> None:
     ]
 
 
-async def replace_showcase_tags(build: Build, tags: Sequence[ShowcaseTag], resolver: BuildTagResolver) -> None:
+async def replace_showcase_tags(
+    build: Build, tags: Sequence[ShowcaseTag], resolver: BuildTagResolver, *, context: ActingContext
+) -> None:
     """Make `tags` the build's showcase tags, in that order.
 
     A key the build does not have yet must name an approved showcase tag. Each value must suit its
@@ -127,7 +129,10 @@ async def replace_showcase_tags(build: Build, tags: Sequence[ShowcaseTag], resol
     added = [tag.key for tag in requested if tag.key not in current]
     definitions = {
         **{key: assignment.definition for key, assignment in current.items()},
-        **{definition.stable_key: definition for definition in await resolver.showcase_definitions(added)},
+        **{
+            definition.stable_key: definition
+            for definition in await resolver.showcase_definitions(added, context=context)
+        },
     }
     values: dict[str, TagValue] = {}
     invalid: list[str] = []

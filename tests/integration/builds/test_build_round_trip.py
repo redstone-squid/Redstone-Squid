@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.core.accounts.models import Account, AccountIdentity, CreatorAlias
+from squid.core.actors import ActingContext, Actor
 from squid.core.builds.application.tag_service import BuildTagService
 from squid.core.builds.application.tags import apply_build_tags, replace_showcase_tags
 from squid.core.builds.domain import BuildCategory, BuildStatus, ShowcaseTag
@@ -252,7 +253,11 @@ async def _resolve_and_save(
     build: Build,
 ) -> None:
     """Persist the way the application service does: resolve tags, then save."""
-    await apply_build_tags(build, BuildTagService(uow_factory=partial(SqlAlchemyUnitOfWork, session_factory)))
+    await apply_build_tags(
+        build,
+        BuildTagService(uow_factory=partial(SqlAlchemyUnitOfWork, session_factory)),
+        context=ActingContext.direct(Actor()),
+    )
     await transact(
         repository,
         lambda uow: uow.builds.save(build),
@@ -564,7 +569,11 @@ async def test_unknown_restriction_is_recorded_at_edit_time_and_round_trips(
 
     build = _make_build(BuildCategory.UTILITY, account_id)
     build.component_restrictions = ["Imaginary Component"]
-    await apply_build_tags(build, BuildTagService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)))
+    await apply_build_tags(
+        build,
+        BuildTagService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)),
+        context=ActingContext.direct(Actor()),
+    )
 
     # Retain the unrecognized name in extra_info and remove it from the resolved
     # restriction list before saving, so reloading preserves both representations.
@@ -636,7 +645,11 @@ async def test_apply_build_tags_defaults_door_pattern(
 
     build = _make_build(BuildCategory.DOOR, account_id)
     build.patterns = []
-    await apply_build_tags(build, BuildTagService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)))
+    await apply_build_tags(
+        build,
+        BuildTagService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)),
+        context=ActingContext.direct(Actor()),
+    )
 
     # The default pattern is materialized visibly at edit time.
     assert build.patterns == ["Regular"]
@@ -921,7 +934,7 @@ async def test_showcase_tags_are_replaced_by_key_beside_resolved_restrictions(
     restrictions = loaded.restrictions
 
     tags = BuildTagService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
-    await replace_showcase_tags(loaded, [ShowcaseTag("compact")], tags)
+    await replace_showcase_tags(loaded, [ShowcaseTag("compact")], tags, context=ActingContext.direct(Actor()))
     await _resolve_and_save(migrated_session_factory, repository, loaded)
 
     reloaded = await transact(repository, lambda uow: uow.builds.get_by_id(build.id))

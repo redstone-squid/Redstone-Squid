@@ -27,7 +27,7 @@ class GuildStarboards(Protocol):
 class PermissionRoles(Protocol):
     """Read the permission roles visible from a guild."""
 
-    async def roles(self, *, guild_id: int | None = None) -> Sequence[PermissionRole]: ...
+    async def roles(self, *, context: ActingContext, guild_id: int | None = None) -> Sequence[PermissionRole]: ...
 
 
 class StarboardNameProvider:
@@ -74,7 +74,7 @@ class PermissionRoleProvider:
                 terms=(role.name, role.slug),
                 kind="permission_role",
             )
-            for role in await self._roles.roles(guild_id=guild_id)
+            for role in await self._roles.roles(guild_id=guild_id, context=ActingContext.current())
         )
 
 

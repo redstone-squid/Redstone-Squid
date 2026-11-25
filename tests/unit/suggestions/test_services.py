@@ -3,7 +3,7 @@
 import anyio
 import pytest
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.errors import InvalidStateError
 from squid.core.suggestions.application import (
     Candidate,
@@ -77,45 +77,56 @@ def gated_source(node: str = "build.submission.view_pending") -> SuggestionSourc
 async def test_unknown_source_raises_because_it_is_a_bad_url_not_a_transient_failure() -> None:
     service = service_for(SuggestionSource(id="restrictions", provider=StaticProvider.of(NAMES)))
     with pytest.raises(UnknownSuggestionSourceError):
-        await service.suggest(SuggestionRequest(source="nope"))
+        await service.suggest(SuggestionRequest(source="nope"), context=ActingContext.direct(Actor()))
 
 
 async def test_provider_failure_returns_empty_instead_of_raising() -> None:
     service = service_for(SuggestionSource(id="restrictions", provider=FailingProvider()))
-    assert await service.suggest(SuggestionRequest(source="restrictions")) == SuggestionResult()
+    assert (
+        await service.suggest(SuggestionRequest(source="restrictions"), context=ActingContext.direct(Actor()))
+        == SuggestionResult()
+    )
 
 
 async def test_a_hanging_provider_is_bounded_and_returns_empty() -> None:
     service = service_for(SuggestionSource(id="restrictions", provider=HangingProvider()), timeout_seconds=0.05)
     with anyio.fail_after(5):
-        result = await service.suggest(SuggestionRequest(source="restrictions"))
+        result = await service.suggest(SuggestionRequest(source="restrictions"), context=ActingContext.direct(Actor()))
     assert result.items == ()
 
 
 async def test_query_limit_is_clamped_to_service_ceiling() -> None:
     service = service_for(SuggestionSource(id="restrictions", provider=StaticProvider.of(NAMES)))
-    result = await service.suggest(SuggestionRequest(source="restrictions", limit=500))
+    result = await service.suggest(
+        SuggestionRequest(source="restrictions", limit=500), context=ActingContext.direct(Actor())
+    )
     assert len(result.items) == MAX_QUERY_SUGGESTIONS
 
 
 async def test_query_is_truncated_and_cursor_is_clamped_before_the_provider() -> None:
     provider = RecordingProvider()
     service = service_for(SuggestionSource(id="restrictions", provider=provider))
-    await service.suggest(SuggestionRequest(source="restrictions", query="x" * 5_000, cursor=4_000))
+    await service.suggest(
+        SuggestionRequest(source="restrictions", query="x" * 5_000, cursor=4_000), context=ActingContext.direct(Actor())
+    )
     assert len(provider.requests[0].query) == MAX_QUERY_LENGTH
     assert provider.requests[0].cursor == MAX_QUERY_LENGTH
 
 
 async def test_gated_source_is_refused_without_an_authorizer() -> None:
     source = gated_source()
-    result = await service_for(source).suggest(SuggestionRequest(source="restrictions"))
+    result = await service_for(source).suggest(
+        SuggestionRequest(source="restrictions"), context=ActingContext.direct(Actor())
+    )
     assert result.items == ()
 
 
 async def test_gated_source_is_refused_when_the_authorizer_denies() -> None:
     source = gated_source()
     authorizer = AllowingAuthorizer(allowed=False)
-    result = await service_for(source).suggest(SuggestionRequest(source="restrictions"), authorizer=authorizer)
+    result = await service_for(source).suggest(
+        SuggestionRequest(source="restrictions"), authorizer=authorizer, context=ActingContext.direct(Actor())
+    )
     assert result.items == ()
     assert authorizer.nodes == ["build.submission.view_pending"]
 
@@ -123,60 +134,76 @@ async def test_gated_source_is_refused_when_the_authorizer_denies() -> None:
 async def test_gated_source_is_served_when_the_authorizer_allows() -> None:
     source = gated_source()
     authorizer = AllowingAuthorizer(allowed=True)
-    result = await service_for(source).suggest(SuggestionRequest(source="restrictions"), authorizer=authorizer)
+    result = await service_for(source).suggest(
+        SuggestionRequest(source="restrictions"), authorizer=authorizer, context=ActingContext.direct(Actor())
+    )
     assert len(result.items) == MAX_QUERY_SUGGESTIONS
 
 
 async def test_viewer_scoped_source_is_refused_for_an_anonymous_caller() -> None:
     source = SuggestionSource(id="restrictions", provider=StaticProvider.of(NAMES), visibility=Visibility.VIEWER_SCOPED)
     service = service_for(source)
-    assert (await service.suggest(SuggestionRequest(source="restrictions"))).items == ()
+    assert (
+        await service.suggest(SuggestionRequest(source="restrictions"), context=ActingContext.direct(Actor()))
+    ).items == ()
     signed_in = SuggestionRequest(source="restrictions", viewer=Actor(account_id=7))
-    assert (await service.suggest(signed_in)).items
+    assert (await service.suggest(signed_in, context=ActingContext.direct(Actor(account_id=7)))).items
 
 
 async def test_missing_required_context_returns_empty_rather_than_a_wrong_answer() -> None:
     provider = RecordingProvider()
     source = SuggestionSource(id="restrictions", provider=provider, context_keys=frozenset({"category"}))
-    result = await service_for(source).suggest(SuggestionRequest(source="restrictions"))
+    result = await service_for(source).suggest(
+        SuggestionRequest(source="restrictions"), context=ActingContext.direct(Actor())
+    )
     assert result.items == ()
     assert provider.requests == []
 
 
 async def test_enumerable_sources_carry_a_content_revision() -> None:
     source = SuggestionSource(id="restrictions", provider=StaticProvider.of(NAMES), kind=SourceKind.ENUMERABLE)
-    result = await service_for(source).suggest(SuggestionRequest(source="restrictions"))
+    result = await service_for(source).suggest(
+        SuggestionRequest(source="restrictions"), context=ActingContext.direct(Actor())
+    )
     assert result.revision == content_revision(result.items)
 
 
 async def test_queried_sources_carry_no_revision_because_the_set_is_not_stable() -> None:
     source = SuggestionSource(id="restrictions", provider=StaticProvider.of(NAMES))
-    assert (await service_for(source).suggest(SuggestionRequest(source="restrictions"))).revision is None
+    assert (
+        await service_for(source).suggest(
+            SuggestionRequest(source="restrictions"), context=ActingContext.direct(Actor())
+        )
+    ).revision is None
 
 
 async def test_enumerate_returns_the_whole_set_unranked() -> None:
     source = SuggestionSource(id="restrictions", provider=StaticProvider.of(NAMES), kind=SourceKind.ENUMERABLE)
-    result = await service_for(source).enumerate("restrictions")
+    result = await service_for(source).enumerate("restrictions", context=ActingContext.direct(Actor()))
     assert [item.value for item in result.items] == NAMES
 
 
 async def test_enumerate_refuses_a_queried_source() -> None:
     service = service_for(SuggestionSource(id="restrictions", provider=StaticProvider.of(NAMES)))
     with pytest.raises(ValueError, match="cannot be enumerated"):
-        await service.enumerate("restrictions")
+        await service.enumerate("restrictions", context=ActingContext.direct(Actor()))
 
 
 async def test_source_kind_label_is_stamped_onto_unlabelled_candidates() -> None:
     provider = RecordingProvider((Candidate.create("seamless", "Seamless"),))
     source = SuggestionSource(id="restrictions", provider=provider, kind_label="restriction")
-    result = await service_for(source).suggest(SuggestionRequest(source="restrictions"))
+    result = await service_for(source).suggest(
+        SuggestionRequest(source="restrictions"), context=ActingContext.direct(Actor())
+    )
     assert result.items[0].kind == "restriction"
 
 
 async def test_a_candidates_own_kind_wins_over_the_source_default() -> None:
     provider = RecordingProvider((Candidate(Suggestion("a", "A", kind="alias")),))
     source = SuggestionSource(id="restrictions", provider=provider, kind_label="restriction")
-    result = await service_for(source).suggest(SuggestionRequest(source="restrictions"))
+    result = await service_for(source).suggest(
+        SuggestionRequest(source="restrictions"), context=ActingContext.direct(Actor())
+    )
     assert result.items[0].kind == "alias"
 
 
@@ -220,13 +247,17 @@ def test_content_revision_preserves_field_and_item_boundaries() -> None:
 async def test_persistent_lookup_distinguishes_provider_failure_from_no_matches() -> None:
     service = service_for(SuggestionSource(id="restrictions", provider=FailingProvider()))
     with pytest.raises(RuntimeError, match="database is on fire"):
-        await service.suggest(SuggestionRequest(source="restrictions"), raise_on_failure=True)
+        await service.suggest(
+            SuggestionRequest(source="restrictions"), raise_on_failure=True, context=ActingContext.direct(Actor())
+        )
 
 
 async def test_persistent_lookup_can_retry_a_timeout() -> None:
     service = service_for(SuggestionSource(id="restrictions", provider=HangingProvider()), timeout_seconds=0.01)
     with pytest.raises(TimeoutError):
-        await service.suggest(SuggestionRequest(source="restrictions"), raise_on_failure=True)
+        await service.suggest(
+            SuggestionRequest(source="restrictions"), raise_on_failure=True, context=ActingContext.direct(Actor())
+        )
 
 
 class OversizedComposedProvider:
@@ -236,5 +267,5 @@ class OversizedComposedProvider:
 
 async def test_composed_results_cannot_exceed_the_requested_limit() -> None:
     service = service_for(SuggestionSource(id="composed", provider=OversizedComposedProvider()))
-    result = await service.suggest(SuggestionRequest(source="composed", limit=3))
+    result = await service.suggest(SuggestionRequest(source="composed", limit=3), context=ActingContext.direct(Actor()))
     assert [item.value for item in result.items] == ["0", "1", "2"]

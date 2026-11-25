@@ -62,7 +62,7 @@ class PermissionEdits:
         self.revision = revision
         self.commands: list[EditCommand] = []
         self.admin = AsyncMock(spec=PermissionAdministrationService)
-        self.admin.revision.side_effect = lambda: self.revision
+        self.admin.revision.side_effect = lambda *, context: self.revision
         self.admin.roles.return_value = ()
         self.admin.audit.return_value = ()
 
@@ -268,7 +268,7 @@ async def test_access_tasks_render_in_discord(page: str) -> None:
         account_id=2,
         discord_role_id=None,
         grants=grants(*ACCESS_NODES),
-        actor=AsyncMock(),
+        actor=admin_actor,
     )
     await screen.on_load()
     with transaction():
@@ -310,7 +310,7 @@ async def test_check_uses_selected_membership_or_only_the_selected_role(role_id:
         subject_label="Helpers" if role_id else "Alex",
         grants=grants(PERM_SUBJECT_INSPECT),
         bot=client,
-        actor=AsyncMock(),
+        actor=admin_actor,
     )
     with transaction():
         admin.assignments_for.return_value = ()
