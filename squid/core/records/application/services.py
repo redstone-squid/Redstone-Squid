@@ -10,12 +10,12 @@ from uuid import UUID
 
 import anyio
 
-from squid.core.actors import ActingContext
+from squid.core.actors import ActingContext, application_operation
 from squid.core.errors import DataIntegrityError, InvalidStateError, ServiceUnavailableError, ValidationError
 from squid.core.i18n import tr
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
 from squid.core.permissions.application.services import PermissionService
-from squid.core.permissions.domain.catalogue import RECORD_ENTRY_REBUILD
+from squid.core.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD
 from squid.core.records.application.door_categories import door_category_lookup, family_at_category
 from squid.core.records.application.expansion_regions import DoorRangeQuery, DoorRangeResult
 from squid.core.records.application.history import reconstruct_history
@@ -97,7 +97,7 @@ class RecordAdministrationService:
                 async with self._uow_factory() as uow:
                     await uow.records.set_current_version(current_version_id)
                     await uow.commit()
-            return await self._computation.rebuild(current_version_id=current_version_id, kinds=kinds)
+            return await self._computation.rebuild(current_version_id=current_version_id, kinds=kinds, context=context)
 
 
 class RecordComputationService:
@@ -127,11 +127,13 @@ class RecordComputationService:
         self._category_limit = category_limit
         self._compute_limiter = anyio.CapacityLimiter(1)
 
+    @application_operation
     async def rebuild(
         self,
         *,
         current_version_id: int | None = None,
         kinds: Sequence[BuildKind] = (BuildKind.DOOR, BuildKind.EXTENDER),
+        context: ActingContext,
     ) -> RebuildSummary:
         """Capture immutable inputs, compute without a connection, then publish."""
         return await self._rebuild(current_version_id=current_version_id, kinds=kinds)
@@ -434,30 +436,40 @@ class RecordService:
         self,
         computation: RecordComputationService,
         *,
+        permissions: PermissionService,
         uow_factory: UnitOfWorkFactory[RecordUnitOfWork],
         range_analyzer: DoorRangeAnalyzer | None = None,
         range_concurrency: int = 2,
     ) -> None:
         self._uow_factory = uow_factory
         self._computation = computation
+        self._permissions = permissions
         self._range_analyzer = range_analyzer
         self._range_limiter = anyio.CapacityLimiter(range_concurrency)
 
-    async def gaps(self, *, kind: BuildKind | None = None) -> Sequence[RecordGap]:
+    @application_operation
+    async def gaps(self, *, kind: BuildKind | None = None, context: ActingContext) -> Sequence[RecordGap]:
         """Return decisive facts missing from active record results."""
+        await self._permissions.require(context.effective, RECORD_ENTRY_INSPECT)
         async with self._uow_factory() as uow:
             return await uow.records.list_gaps(kind=kind)
 
-    async def title_gaps(self, *, kind: BuildKind | None = None) -> Sequence[RecordNameDiagnostic]:
+    @application_operation
+    async def title_gaps(
+        self, *, kind: BuildKind | None = None, context: ActingContext
+    ) -> Sequence[RecordNameDiagnostic]:
         """Return active record names requiring tag review."""
+        await self._permissions.require(context.effective, RECORD_ENTRY_INSPECT)
         async with self._uow_factory() as uow:
             return await uow.records.list_title_gaps(kind=kind)
 
-    async def get(self, result_id: int) -> PublishedRecordResult | None:
+    @application_operation
+    async def get(self, result_id: int, *, context: ActingContext) -> PublishedRecordResult | None:
         """Return one published computed record result."""
         async with self._uow_factory() as uow:
             return await uow.records.get_published_record(result_id)
 
+    @application_operation
     async def list_page(
         self,
         *,
@@ -466,6 +478,7 @@ class RecordService:
         page_size: int = 20,
         resolved_only: bool = False,
         version_scope: VersionScope | None = None,
+        context: ActingContext,
     ) -> Page[PublishedRecordResult]:
         """Return one page of published record results in display order."""
         async with self._uow_factory() as uow:
@@ -490,7 +503,8 @@ class RecordService:
                 id_of=lambda record: record.result_id,
             )
 
-    async def lookup_door(self, request: DoorRecordLookup) -> LiveDoorRecord:
+    @application_operation
+    async def lookup_door(self, request: DoorRecordLookup, *, context: ActingContext) -> LiveDoorRecord:
         """Evaluate one size against current approved facts without persisting it.
 
         The repository pins a read-only database snapshot before loading related
@@ -511,7 +525,8 @@ class RecordService:
             evaluated_at=datetime.now(UTC),
         )
 
-    async def lookup_door_ranges(self, request: DoorRangeQuery) -> DoorRangeResult:
+    @application_operation
+    async def lookup_door_ranges(self, request: DoorRangeQuery, *, context: ActingContext) -> DoorRangeResult:
         """Analyze live smallest-record widths without publishing or storing regions.
 
         Admission covers database loading and analysis. The worker receives
@@ -549,14 +564,17 @@ class RecordService:
         finally:
             self._range_limiter.release()
 
+    @application_operation
     async def materialize_definition(
         self,
         definition_id: int,
         *,
         kind: BuildKind | None = None,
         version_id: int | None = None,
+        context: ActingContext,
     ) -> RebuildSummary:
         """Re-materialize the exact category an existing definition identifies."""
+        await self._permissions.require(context.effective, RECORD_ENTRY_INSPECT)
         async with self._uow_factory() as uow:
             identity = await uow.records.get_definition_identity(definition_id)
         if identity is None:
@@ -577,11 +595,14 @@ class RecordService:
                 restriction_ids=frozenset(identity.restriction_ids),
                 restriction_values=identity.restriction_values,
                 version_id=version_id,
-            )
+            ),
+            context=context,
         )
 
-    async def lookup_or_materialize(self, request: RecordLookupRequest) -> RebuildSummary:
+    @application_operation
+    async def lookup_or_materialize(self, request: RecordLookupRequest, *, context: ActingContext) -> RebuildSummary:
         """Persist a valid exact category and refresh its build kind."""
+        await self._permissions.require(context.effective, RECORD_ENTRY_INSPECT)
         async with self._uow_factory() as uow:
             await uow.record_candidates.begin_computation()
             source = tuple(await uow.record_candidates.list_confirmed(request.kind))
@@ -606,8 +627,7 @@ class RecordService:
             )
             await uow.commit()
         return await self._computation.rebuild(
-            current_version_id=request.version_id,
-            kinds=(request.kind,),
+            current_version_id=request.version_id, kinds=(request.kind,), context=context
         )
 
 

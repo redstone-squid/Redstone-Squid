@@ -198,10 +198,10 @@ async def test_publication_uses_saved_inputs_despite_live_edits_and_queue_refres
         uow_factory=factory,
         analyzer=EditingAnalyzer(),
     )
-    first = await publisher.publish(DoorRangeQuery(height=3))
+    first = await publisher.publish(DoorRangeQuery(height=3), context=ActingContext.direct(Actor()))
     assert first.active is not None
     first_run_id = first.active.id
-    point = await publisher.get_point(first.query_id, 6)
+    point = await publisher.get_point(first.query_id, 6, context=ActingContext.direct(Actor()))
     assert point is not None
     assert point.region is not None
     assert point.region.resolution.holder_ids == (build_id,)
@@ -213,11 +213,11 @@ async def test_publication_uses_saved_inputs_despite_live_edits_and_queue_refres
         assert saved.sources[0].expansion is not None
         assert saved.sources[0].expansion.branches[0].volume == "10n"
     await publisher.process_queue(context=ActingContext.worker("test-worker"))
-    refreshed = await publisher.get(first.query_id)
+    refreshed = await publisher.get(first.query_id, context=ActingContext.direct(Actor()))
     assert refreshed is not None
     assert refreshed.active is not None
     assert refreshed.active.id != first_run_id
-    point = await publisher.get_point(first.query_id, 6)
+    point = await publisher.get_point(first.query_id, 6, context=ActingContext.direct(Actor()))
     assert point is not None
     assert point.region is not None
     assert point.region.resolution.holder_ids == (fixed_id,)
@@ -245,7 +245,7 @@ async def test_cancelled_publication_records_failure_and_preserves_previous_resu
         analyzer=analyzer,
     )
     query = DoorRangeQuery(height=3)
-    first = await publisher.publish(query)
+    first = await publisher.publish(query, context=ActingContext.direct(Actor()))
     assert first.active is not None
     started = anyio.Event()
 
@@ -257,17 +257,17 @@ async def test_cancelled_publication_records_failure_and_preserves_previous_resu
     analyzer.analyze.side_effect = block
     with anyio.fail_after(10):
         async with anyio.create_task_group() as group:
-            group.start_soon(publisher.publish, query)
+            group.start_soon(partial(publisher.publish, query, context=ActingContext.worker("records")))
             await started.wait()
             group.cancel_scope.cancel()
-    state = await publisher.get(first.query_id)
+    state = await publisher.get(first.query_id, context=ActingContext.direct(Actor()))
     assert state is not None
     assert state.active is not None
     assert state.latest is not None
     assert state.active.id == first.active.id
     assert state.latest.error == "cancelled"
     analyzer.analyze.side_effect = None
-    replacement = await publisher.publish(query)
+    replacement = await publisher.publish(query, context=ActingContext.direct(Actor()))
     assert replacement.active is not None
     assert replacement.active.id == first.active.id
     assert replacement.latest is not None
@@ -365,8 +365,8 @@ async def test_refresh_attempts_every_query_before_reporting_a_failure(
 
     analyzer.analyze.side_effect = analyze
     assert await publisher.process_queue(context=ActingContext.worker("test-worker")) == (1, 1)
-    failed = await publisher.get(broken)
-    refreshed = await publisher.get(healthy)
+    failed = await publisher.get(broken, context=ActingContext.direct(Actor()))
+    refreshed = await publisher.get(healthy, context=ActingContext.direct(Actor()))
     assert failed is not None
     assert failed.active is None
     assert failed.latest is not None
@@ -401,7 +401,7 @@ async def test_query_with_too_many_sources_saves_no_snapshot(
         uow_factory=factory,
         analyzer=analyzer,
     )
-    publication = await publisher.publish(DoorRangeQuery(height=3))
+    publication = await publisher.publish(DoorRangeQuery(height=3), context=ActingContext.direct(Actor()))
     assert publication.active is None
     assert publication.latest is not None
     assert publication.latest.error == "too_many_sources"
@@ -424,7 +424,7 @@ async def test_inexact_refresh_keeps_publication_and_retries_only_that_query(
     )
     query_id = await publisher.register(DoorRangeQuery(height=3), context=ADMIN)
     assert await publisher.process_queue(context=ActingContext.worker("test-worker")) == (1, 0)
-    first = await publisher.get(query_id)
+    first = await publisher.get(query_id, context=ActingContext.direct(Actor()))
     assert first is not None
     assert first.active is not None
 
@@ -432,7 +432,7 @@ async def test_inexact_refresh_keeps_publication_and_retries_only_that_query(
     await publisher.request_refresh(query_id, context=ADMIN)
     assert await publisher.process_queue(context=ActingContext.worker("test-worker")) == (0, 1)
 
-    current = await publisher.get(query_id)
+    current = await publisher.get(query_id, context=ActingContext.direct(Actor()))
     assert current is not None
     assert current.active is not None
     assert current.active.id == first.active.id
@@ -459,19 +459,19 @@ async def test_unchanged_range_keeps_publication_and_advances_last_checked(
     )
     query_id = await publisher.register(DoorRangeQuery(height=3), context=ADMIN)
     assert await publisher.process_queue(context=ActingContext.worker("test-worker")) == (1, 0)
-    first = await publisher.get(query_id)
+    first = await publisher.get(query_id, context=ActingContext.direct(Actor()))
     assert first is not None
     assert first.active is not None
     assert first.last_checked_at is not None
     assert not first.refresh_pending
 
     await publisher.request_refresh(query_id, context=ADMIN)
-    pending = await publisher.get(query_id)
+    pending = await publisher.get(query_id, context=ActingContext.direct(Actor()))
     assert pending is not None
     assert pending.refresh_pending
     assert await publisher.process_queue(context=ActingContext.worker("test-worker")) == (1, 0)
 
-    checked = await publisher.get(query_id)
+    checked = await publisher.get(query_id, context=ActingContext.direct(Actor()))
     assert checked is not None
     assert checked.active is not None
     assert checked.latest is not None

@@ -3,8 +3,9 @@ from collections.abc import Mapping, Sequence
 from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
+from functools import partial
 from typing import override
-from unittest.mock import create_autospec
+from unittest.mock import Mock, create_autospec
 
 import anyio
 import pytest
@@ -15,6 +16,8 @@ from squid.core.builds.domain import BuildCategory
 from squid.core.builds.domain.expansion import DoorExpansion, ExpansionBranch, ExpansionParameter, ExpansionTiming
 from squid.core.builds.domain.expansion_evaluation import PointStatus
 from squid.core.errors import DataIntegrityError, ServiceUnavailableError, ValidationError
+from squid.core.permissions.application.services import PermissionService
+from squid.core.permissions.errors import PermissionDeniedError
 from squid.core.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery, analyze_door_widths
 from squid.core.records.application.live import DoorRecordLookup
 from squid.core.records.application.models import (
@@ -317,7 +320,7 @@ async def test_rebuild_computes_eager_subsets_and_all_door_base_titles() -> None
     runs = FakeRuns()
     service = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
 
-    summary = await service.rebuild(kinds=(BuildKind.DOOR,))
+    summary = await service.rebuild(kinds=(BuildKind.DOOR,), context=ActingContext.direct(Actor()))
 
     assert summary.run_ids == (1,)
     assert summary.definitions == 20
@@ -367,7 +370,7 @@ async def test_parameterized_at_most_restriction_derives_weaker_thresholds() -> 
         )
     )
 
-    await service.rebuild(kinds=(BuildKind.DOOR,))
+    await service.rebuild(kinds=(BuildKind.DOOR,), context=ActingContext.direct(Actor()))
 
     threshold_three = [
         record
@@ -402,7 +405,7 @@ async def test_rebuild_creates_empty_extender_run() -> None:
     runs = FakeRuns()
     service = RecordComputationService(uow_factory=lambda: RecordScope(FakeCandidates(()), runs))
 
-    summary = await service.rebuild(kinds=(BuildKind.EXTENDER,))
+    summary = await service.rebuild(kinds=(BuildKind.EXTENDER,), context=ActingContext.direct(Actor()))
 
     assert summary.run_ids == (1,)
     assert summary.definitions == 0
@@ -421,7 +424,7 @@ async def test_current_version_run_filters_incompatible_candidates() -> None:
     runs = FakeRuns()
     service = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
 
-    await service.rebuild(current_version_id=3, kinds=(BuildKind.DOOR,))
+    await service.rebuild(current_version_id=3, kinds=(BuildKind.DOOR,), context=ActingContext.direct(Actor()))
 
     assert len(runs.batches) == 2
     current = runs.batches[1]
@@ -457,7 +460,7 @@ async def test_eager_categories_never_exceed_eight_restrictions() -> None:
         )
     )
 
-    await service.rebuild(kinds=(BuildKind.DOOR,))
+    await service.rebuild(kinds=(BuildKind.DOOR,), context=ActingContext.direct(Actor()))
 
     assert max(len(record.category.identity.restriction_ids) for record in runs.batches[0].records) == 8
     assert all(len(record.category.identity.restriction_ids) <= 8 for record in runs.batches[0].records)
@@ -478,14 +481,19 @@ async def test_lookup_materializes_large_exact_category_and_rebuilds_full_kind()
     candidates = FakeCandidates((source,))
     runs = FakeRuns()
     computation = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
-    service = RecordService(computation, uow_factory=lambda: RecordScope(candidates, runs))
+    service = RecordService(
+        computation,
+        permissions=create_autospec(PermissionService, instance=True),
+        uow_factory=lambda: RecordScope(candidates, runs),
+    )
 
     summary = await service.lookup_or_materialize(
         RecordLookupRequest(
             kind=BuildKind.DOOR,
             base_key="door|2x2|t[20]|Door",
             restriction_ids=frozenset(range(1, 10)),
-        )
+        ),
+        context=ActingContext.direct(Actor()),
     )
 
     assert summary.run_ids == (1,)
@@ -509,10 +517,11 @@ async def test_materialize_definition_round_trips_the_stored_identity() -> None:
     runs.definition_identities[42] = identity
     service = RecordService(
         RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs)),
+        permissions=create_autospec(PermissionService, instance=True),
         uow_factory=lambda: RecordScope(candidates, runs),
     )
 
-    summary = await service.materialize_definition(42, kind=BuildKind.DOOR)
+    summary = await service.materialize_definition(42, kind=BuildKind.DOOR, context=ActingContext.direct(Actor()))
 
     assert summary.run_ids == (1,)
     assert runs.requested[BuildKind.DOOR] == [identity]
@@ -524,11 +533,12 @@ async def test_materialize_definition_rejects_unknown_id() -> None:
     runs = FakeRuns()
     service = RecordService(
         RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs)),
+        permissions=create_autospec(PermissionService, instance=True),
         uow_factory=lambda: RecordScope(candidates, runs),
     )
 
     with pytest.raises(RecordDefinitionNotFoundError):
-        await service.materialize_definition(999)
+        await service.materialize_definition(999, context=ActingContext.direct(Actor()))
 
 
 @pytest.mark.asyncio
@@ -538,11 +548,12 @@ async def test_materialize_definition_rejects_kind_mismatch() -> None:
     runs.definition_identities[42] = CategoryIdentity(BuildKind.DOOR, "door|2x2|t[20]|Door", ())
     service = RecordService(
         RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs)),
+        permissions=create_autospec(PermissionService, instance=True),
         uow_factory=lambda: RecordScope(candidates, runs),
     )
 
     with pytest.raises(ValidationError):
-        await service.materialize_definition(42, kind=BuildKind.EXTENDER)
+        await service.materialize_definition(42, kind=BuildKind.EXTENDER, context=ActingContext.direct(Actor()))
 
 
 @pytest.mark.asyncio
@@ -551,6 +562,7 @@ async def test_lookup_rejects_category_without_confirmed_candidate() -> None:
     runs = FakeRuns()
     service = RecordService(
         RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs)),
+        permissions=create_autospec(PermissionService, instance=True),
         uow_factory=lambda: RecordScope(candidates, runs),
     )
 
@@ -560,7 +572,8 @@ async def test_lookup_rejects_category_without_confirmed_candidate() -> None:
                 kind=BuildKind.DOOR,
                 base_key="door|3x3|t[20]|Door",
                 restriction_ids=frozenset(),
-            )
+            ),
+            context=ActingContext.direct(Actor()),
         )
 
 
@@ -580,10 +593,11 @@ async def test_gaps_delegates_active_result_query() -> None:
     candidates = FakeCandidates(())
     service = RecordService(
         RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs)),
+        permissions=create_autospec(PermissionService, instance=True),
         uow_factory=lambda: RecordScope(candidates, runs),
     )
 
-    assert await service.gaps(kind=BuildKind.DOOR) == (gap,)
+    assert await service.gaps(kind=BuildKind.DOOR, context=ActingContext.direct(Actor())) == (gap,)
 
 
 @pytest.mark.asyncio
@@ -680,10 +694,11 @@ async def test_title_gaps_delegates_active_definition_query() -> None:
     candidates = FakeCandidates(())
     service = RecordService(
         RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs)),
+        permissions=create_autospec(PermissionService, instance=True),
         uow_factory=lambda: RecordScope(candidates, runs),
     )
 
-    assert await service.title_gaps(kind=BuildKind.DOOR) == (gap,)
+    assert await service.title_gaps(kind=BuildKind.DOOR, context=ActingContext.direct(Actor())) == (gap,)
 
 
 @pytest.mark.asyncio
@@ -741,7 +756,7 @@ async def test_rebuild_rolls_back_all_scopes_when_later_activation_fails() -> No
     computation = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
 
     with pytest.raises(RuntimeError, match="second activation"):
-        await computation.rebuild(kinds=(BuildKind.DOOR,), current_version_id=3)
+        await computation.rebuild(kinds=(BuildKind.DOOR,), current_version_id=3, context=ActingContext.direct(Actor()))
 
     assert runs.batches == []
 
@@ -776,7 +791,11 @@ async def test_live_door_lookup_applies_tags_version_and_thresholds_without_writ
     candidates = FakeCandidates((source, family, wrong_version, wrong_types, wrong_restrictions))
     runs = FakeRuns()
     computation = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
-    service = RecordService(computation, uow_factory=lambda: RecordScope(candidates, runs))
+    service = RecordService(
+        computation,
+        permissions=create_autospec(PermissionService, instance=True),
+        uow_factory=lambda: RecordScope(candidates, runs),
+    )
     result = await service.lookup_door(
         DoorRecordLookup(
             opening=(2, 2, 1),
@@ -784,7 +803,8 @@ async def test_live_door_lookup_applies_tags_version_and_thresholds_without_writ
             restriction_ids=frozenset({1, 7}),
             restriction_values=((7, "at_most", "4"),),
             version_id=3,
-        )
+        ),
+        context=ActingContext.direct(Actor()),
     )
     assert result.resolution.holder_ids == (2,)
     assert {configuration.build_id for configuration in result.configurations} == {1, 2}
@@ -806,14 +826,19 @@ async def test_live_lookup_rejects_incompatible_threshold_without_crashing(thres
     candidates = FakeCandidates((_door(1, volume=100, opening=10, restrictions=(width,)),))
     runs = FakeRuns()
     computation = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
-    service = RecordService(computation, uow_factory=lambda: RecordScope(candidates, runs))
+    service = RecordService(
+        computation,
+        permissions=create_autospec(PermissionService, instance=True),
+        uow_factory=lambda: RecordScope(candidates, runs),
+    )
     result = await service.lookup_door(
         DoorRecordLookup(
             opening=(2, 2, 1),
             type_ids=frozenset({20}),
             restriction_ids=frozenset({7}),
             restriction_values=((7, "at_most", threshold),),
-        )
+        ),
+        context=ActingContext.direct(Actor()),
     )
     assert result.resolution.status is ResolutionStatus.NO_CANDIDATE
 
@@ -838,10 +863,13 @@ async def test_width_lookup_filters_tags_and_versions_without_writes() -> None:
     runs = FakeRuns()
     service = RecordService(
         RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs)),
+        permissions=create_autospec(PermissionService, instance=True),
         uow_factory=lambda: RecordScope(candidates, runs),
         range_analyzer=SubprocessRangeAnalyzer(),
     )
-    result = await service.lookup_door_ranges(DoorRangeQuery(height=2, type_ids=frozenset({20}), version_id=3))
+    result = await service.lookup_door_ranges(
+        DoorRangeQuery(height=2, type_ids=frozenset({20}), version_id=3), context=ActingContext.direct(Actor())
+    )
     assert result.analysis.status is RegionAnalysisStatus.EXACT
     assert [(r.domain.minimum, r.domain.maximum, r.resolution.holder_ids) for r in result.analysis.regions] == [
         (1, 1, (2,)),
@@ -868,6 +896,7 @@ async def test_range_admission_precedes_loading_and_releases_on_cancellation() -
     analyzer.analyze.side_effect = blocked
     service = RecordService(
         RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs)),
+        permissions=create_autospec(PermissionService, instance=True),
         uow_factory=lambda: RecordScope(candidates, runs),
         range_analyzer=analyzer,
         range_concurrency=1,
@@ -875,15 +904,15 @@ async def test_range_admission_precedes_loading_and_releases_on_cancellation() -
     request = DoorRangeQuery(height=3)
     with anyio.fail_after(5):
         async with anyio.create_task_group() as group:
-            group.start_soon(service.lookup_door_ranges, request)
+            group.start_soon(partial(service.lookup_door_ranges, context=ActingContext.direct(Actor())), request)
             await started.wait()
             with pytest.raises(ServiceUnavailableError):
-                await service.lookup_door_ranges(request)
+                await service.lookup_door_ranges(request, context=ActingContext.direct(Actor()))
             candidates.list_for_door_widths.assert_awaited_once()
             group.cancel_scope.cancel()
     analyzer.analyze.side_effect = None
     analyzer.analyze.return_value = analyze_door_widths((), height=3)
-    result = await service.lookup_door_ranges(request)
+    result = await service.lookup_door_ranges(request, context=ActingContext.direct(Actor()))
     assert result.query == request
     assert result.analysis.status is RegionAnalysisStatus.EXACT
     assert candidates.list_for_door_widths.await_count == 2
@@ -935,7 +964,7 @@ async def test_ordinary_records_evaluate_families_and_keep_the_source_evidence()
     candidates = FakeCandidates((fixed, family))
     runs = FakeRuns()
     service = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
-    await service.rebuild(kinds=(BuildKind.DOOR,))
+    await service.rebuild(kinds=(BuildKind.DOOR,), context=ActingContext.direct(Actor()))
     assert len(runs.batches[0].records) == 5
     for record in runs.batches[0].records:
         assert record.door_evidence is not None
@@ -954,11 +983,16 @@ async def test_family_sample_never_seeds_categories_but_explicit_large_request_d
     candidates = FakeCandidates((_expanding_door(),))
     runs = FakeRuns()
     computation = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
-    await computation.rebuild(kinds=(BuildKind.DOOR,))
+    await computation.rebuild(kinds=(BuildKind.DOOR,), context=ActingContext.direct(Actor()))
     assert runs.batches[0].records == ()
-    service = RecordService(computation, uow_factory=lambda: RecordScope(candidates, runs))
+    service = RecordService(
+        computation,
+        permissions=create_autospec(PermissionService, instance=True),
+        uow_factory=lambda: RecordScope(candidates, runs),
+    )
     await service.lookup_or_materialize(
-        RecordLookupRequest(kind=BuildKind.DOOR, base_key="door|9999x2|t[20]|Door", restriction_ids=frozenset())
+        RecordLookupRequest(kind=BuildKind.DOOR, base_key="door|9999x2|t[20]|Door", restriction_ids=frozenset()),
+        context=ActingContext.direct(Actor()),
     )
     records = runs.batches[-1].records
     assert len(records) == 5
@@ -979,7 +1013,7 @@ async def test_ordinary_records_exclude_unproven_expansion_sizes(unknown: bool) 
     )
     runs = FakeRuns()
     computation = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
-    await computation.rebuild(kinds=(BuildKind.DOOR,))
+    await computation.rebuild(kinds=(BuildKind.DOOR,), context=ActingContext.direct(Actor()))
     smallest = next(r for r in runs.batches[0].records if r.criterion is RecordCriterion.SMALLEST)
     assert smallest.resolution.status is ResolutionStatus.RESOLVED
     assert smallest.resolution.holder_ids == (1,)
@@ -1002,7 +1036,7 @@ async def test_family_population_respects_version_and_category_identity() -> Non
     candidates = FakeCandidates((fixed, family, wrong_orientation, wrong_type))
     runs = FakeRuns()
     computation = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
-    await computation.rebuild(kinds=(BuildKind.DOOR,), current_version_id=3)
+    await computation.rebuild(kinds=(BuildKind.DOOR,), current_version_id=3, context=ActingContext.direct(Actor()))
     all_time = next(r for r in runs.batches[0].records if r.criterion is RecordCriterion.SMALLEST)
     assert all_time.resolution.holder_ids == (2,)
     assert all_time.door_evidence is not None
@@ -1034,7 +1068,9 @@ async def test_family_absent_from_a_size_leaves_that_category_alone() -> None:
     )
     candidates = FakeCandidates((_door(1, volume=100, opening=10, restrictions=()), family))
     runs = FakeRuns()
-    await RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs)).rebuild(kinds=(BuildKind.DOOR,))
+    await RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs)).rebuild(
+        kinds=(BuildKind.DOOR,), context=ActingContext.direct(Actor())
+    )
     records = runs.batches[0].records
     # No empty "Flush 2x2" category appears, and the fixed-only category keeps its history.
     assert {record.category.identity.restriction_ids for record in records} == {()}
@@ -1062,3 +1098,23 @@ async def test_failed_kind_does_not_roll_back_other_kind_publication() -> None:
     assert runs.completed == (BuildKind.EXTENDER,)
     assert runs.failed == ((BuildKind.DOOR,), "door computation failed")
     assert [batch.kind for batch in runs.batches] == [BuildKind.EXTENDER]
+
+
+async def test_record_inspection_rejects_callers_outside_the_credential_ceiling_before_loading_records() -> None:
+    uow_factory = Mock()
+    permissions = PermissionService(uow_factory=uow_factory)
+    service = RecordService(
+        RecordComputationService(uow_factory=uow_factory), permissions=permissions, uow_factory=uow_factory
+    )
+    context = ActingContext.direct(Actor(account_id=1, is_bot_owner=True, credential_scopes=frozenset()))
+    with pytest.raises(PermissionDeniedError):
+        await service.gaps(context=context)
+    with pytest.raises(PermissionDeniedError):
+        await service.title_gaps(context=context)
+    with pytest.raises(PermissionDeniedError):
+        await service.materialize_definition(1, context=context)
+    with pytest.raises(PermissionDeniedError):
+        await service.lookup_or_materialize(
+            RecordLookupRequest(kind=BuildKind.DOOR, base_key="door", restriction_ids=frozenset()), context=context
+        )
+    uow_factory.assert_not_called()

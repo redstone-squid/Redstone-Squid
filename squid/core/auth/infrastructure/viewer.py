@@ -11,11 +11,15 @@ from squid.core.accounts.domain import avatar_url_for
 from squid.core.accounts.domain.profiles import CreatorViewer
 from squid.core.accounts.errors import AccountNotFoundError
 from squid.core.accounts.models import Account, AccountIdentity, AccountProfile
+from squid.core.actors import ActingContext, application_operation
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build
 from squid.core.notifications.domain import InboxVisibility, RecordSubscriptionFilter, SubscriptionKind
 from squid.core.notifications.infrastructure.repository import inbox_predicates
 from squid.core.notifications.models import InboxNotification, NotificationSubscription
+from squid.core.permissions.application.services import PermissionService
+from squid.core.permissions.domain.catalogue import ACCOUNT_SELF_READ, BUILD_SUBMISSION_VIEW_PENDING
+from squid.core.permissions.domain.models import NodeScope
 from squid.core.submissions.domain.drafts import DraftStatus
 from squid.core.submissions.models.entities import SubmissionDraft
 from squid.core.voting.domain import VoteStatus
@@ -45,10 +49,21 @@ class ViewerBallot:
 
 
 class ViewerQueries:
-    def __init__(self, sessions: async_sessionmaker[AsyncSession]):
+    def __init__(self, sessions: async_sessionmaker[AsyncSession], permissions: PermissionService):
         self.sessions = sessions
+        self._permissions = permissions
 
-    async def session(self, account_id: int, *, staff: bool) -> tuple[SessionUser, SessionCounts]:
+    async def _reader(self, context: ActingContext) -> int:
+        account_id = context.effective.require_account_id()
+        await self._permissions.require(context.effective, ACCOUNT_SELF_READ)
+        return account_id
+
+    @application_operation
+    async def session(self, *, context: ActingContext) -> tuple[SessionUser, SessionCounts, tuple[str, ...]]:
+        account_id = await self._reader(context)
+        nodes = (node for node in self._permissions.catalogue.values() if node.scope == NodeScope.GLOBAL)
+        allowed = (await self._permissions.check(context.effective, *nodes)).allowed_nodes
+        staff = BUILD_SUBMISSION_VIEW_PENDING.name in allowed
         unread = (
             select(func.count())
             .select_from(InboxNotification)
@@ -93,9 +108,11 @@ class ViewerQueries:
             raise AccountNotFoundError(account_id)
         creator_id, display_name, avatar, unread_count, active, attention, review = row
         user = SessionUser(account_id, creator_id, display_name, avatar_url_for(avatar) if avatar else None)
-        return user, SessionCounts(unread_count, active, attention, review)
+        return user, SessionCounts(unread_count, active, attention, review), tuple(sorted(allowed))
 
-    async def build_state(self, account_id: int, build: Build) -> tuple[dict[UUID, int], ViewerBallot | None]:
+    @application_operation
+    async def build_state(self, build: Build, *, context: ActingContext) -> tuple[dict[UUID, int], ViewerBallot | None]:
+        account_id = await self._reader(context)
         follows = (
             select(NotificationSubscription.subject_id, NotificationSubscription.id)
             .join(Account, Account.public_creator_id == NotificationSubscription.subject_id)
@@ -121,9 +138,11 @@ class ViewerQueries:
             row = (await session.execute(ballot)).one_or_none()
         return subscriptions, ViewerBallot(*row) if row else None
 
+    @application_operation
     async def subscription(
-        self, account_id: int, kind: SubscriptionKind, target: UUID | RecordSubscriptionFilter
+        self, kind: SubscriptionKind, target: UUID | RecordSubscriptionFilter, *, context: ActingContext
     ) -> int | None:
+        account_id = await self._reader(context)
         query = select(NotificationSubscription.id).where(
             NotificationSubscription.enabled,
             NotificationSubscription.account_id == account_id,
@@ -135,7 +154,9 @@ class ViewerQueries:
         async with self.sessions() as session:
             return await session.scalar(query)
 
-    async def creator(self, account_id: int, public_id: UUID) -> CreatorViewer:
+    @application_operation
+    async def creator(self, public_id: UUID, *, context: ActingContext) -> CreatorViewer:
+        account_id = await self._reader(context)
         sub = (
             select(NotificationSubscription.id)
             .where(

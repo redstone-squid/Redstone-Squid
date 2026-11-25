@@ -8,8 +8,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.core.accounts.models import Account
+from squid.core.actors import ActingContext, Actor
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import DoorBuild
+from squid.core.permissions.application.services import PermissionService
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.records.application.models import RecordLookupRequest
 from squid.core.records.application.services import RecordComputationService, RecordService
@@ -58,7 +60,7 @@ async def test_ordinary_publication_uses_saved_configuration_and_survives_source
         family_id, fixed_id = family.id, fixed.id
     factory = partial(SqlAlchemyUnitOfWork, sessions)
     computation = RecordComputationService(uow_factory=factory)
-    await computation.rebuild(kinds=(BuildKind.DOOR,))
+    await computation.rebuild(kinds=(BuildKind.DOOR,), context=ActingContext.direct(Actor()))
     async with factory() as uow:
         listing = await uow.records.list_published_records(
             offset=0, after_id=None, before_id=None, descending=False, limit=20
@@ -111,7 +113,7 @@ async def test_ordinary_publication_uses_saved_configuration_and_survives_source
         unchanged = await uow.records.get_published_record(smallest.result_id)
         assert unchanged is not None
         assert unchanged.door_evidence == original_evidence
-    await computation.rebuild(kinds=(BuildKind.DOOR,))
+    await computation.rebuild(kinds=(BuildKind.DOOR,), context=ActingContext.direct(Actor()))
     async with factory() as uow:
         listing = await uow.records.list_published_records(
             offset=0, after_id=None, before_id=None, descending=False, limit=20
@@ -121,9 +123,10 @@ async def test_ordinary_publication_uses_saved_configuration_and_survives_source
         assert replacement.holder_build_ids == (fixed_id,)
         assert await uow.records.get_published_record(smallest.result_id) is None
     # Explicitly requesting a large size creates only that category, using the new source facts.
-    service = RecordService(computation, uow_factory=factory)
+    service = RecordService(computation, permissions=PermissionService(uow_factory=factory), uow_factory=factory)
     await service.lookup_or_materialize(
-        RecordLookupRequest(kind=BuildKind.DOOR, base_key="door|9999x3|t[]|Door", restriction_ids=frozenset())
+        RecordLookupRequest(kind=BuildKind.DOOR, base_key="door|9999x3|t[]|Door", restriction_ids=frozenset()),
+        context=ActingContext.direct(Actor(account_id=1, is_bot_owner=True)),
     )
     async with factory() as uow:
         listing = await uow.records.list_published_records(

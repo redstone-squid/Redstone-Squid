@@ -95,8 +95,12 @@ async def test_current_ranges_follow_the_pin_without_changing_fixed_queries(
         uow_factory=factory,
         analyzer=PinChangingAnalyzer(),
     )
-    fixed = await publisher.publish(DoorRangeQuery(height=3, version_id=first_id))
-    current = await publisher.publish(DoorRangeQuery(height=3, follow_current_version=True))
+    fixed = await publisher.publish(
+        DoorRangeQuery(height=3, version_id=first_id), context=ActingContext.direct(Actor())
+    )
+    current = await publisher.publish(
+        DoorRangeQuery(height=3, follow_current_version=True), context=ActingContext.direct(Actor())
+    )
     assert current.query_id != fixed.query_id
     assert current.active is None
     assert current.latest is not None
@@ -106,8 +110,8 @@ async def test_current_ranges_follow_the_pin_without_changing_fixed_queries(
 
     await publisher.process_queue(context=ActingContext.worker("test-worker"))
 
-    current = await publisher.get(current.query_id)
-    fixed = await publisher.get(fixed.query_id)
+    current = await publisher.get(current.query_id, context=ActingContext.direct(Actor()))
+    fixed = await publisher.get(fixed.query_id, context=ActingContext.direct(Actor()))
     assert current is not None
     assert current.active is not None
     assert current.active.resolved_version_id == second_id
@@ -131,7 +135,7 @@ async def test_current_range_without_a_pin_stays_pending(
         context=ActingContext.direct(Actor(is_bot_owner=True, account_id=7)),
     )
     assert await publisher.process_queue(context=ActingContext.worker("test-worker")) == (0, 1)
-    publication = await publisher.get(query_id)
+    publication = await publisher.get(query_id, context=ActingContext.direct(Actor()))
     assert publication is not None
     assert publication.active is None
     assert publication.latest is not None

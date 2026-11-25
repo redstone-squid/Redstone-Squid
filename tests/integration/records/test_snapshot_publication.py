@@ -9,7 +9,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.accounts.models import Account
-from squid.core.actors import ActingContext
+from squid.core.actors import ActingContext, Actor
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import DoorBuild
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
@@ -66,7 +66,7 @@ async def test_older_snapshot_cannot_replace_a_newer_publication(
     new = RecordComputationService(uow_factory=factory)
 
     async def rebuild_old() -> None:
-        old_results.append(await old.rebuild(kinds=(BuildKind.DOOR,)))
+        old_results.append(await old.rebuild(kinds=(BuildKind.DOOR,), context=ActingContext.direct(Actor())))
 
     with anyio.fail_after(20):
         async with anyio.create_task_group() as group:
@@ -77,7 +77,7 @@ async def test_older_snapshot_cannot_replace_a_newer_publication(
                 door = await session.get(DoorBuild, build_id)
                 assert door is not None
                 door.width = 5
-            newer = await new.rebuild(kinds=(BuildKind.DOOR,))
+            newer = await new.rebuild(kinds=(BuildKind.DOOR,), context=ActingContext.direct(Actor()))
             release.set()
 
     assert newer is not None

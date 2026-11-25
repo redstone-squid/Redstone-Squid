@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 
 import anyio
 
-from squid.core.actors import ActingContext
+from squid.core.actors import ActingContext, application_operation
 from squid.core.permissions.application.services import PermissionService
 from squid.core.permissions.domain.catalogue import RECORD_ENTRY_REBUILD
 from squid.core.records.application.expansion_regions import DoorRangeQuery
@@ -65,14 +65,16 @@ class RangePublicationService:
                 await uow.commit()
         return found
 
-    async def get(self, query_id: int) -> RangePublication | None:
+    @application_operation
+    async def get(self, query_id: int, *, context: ActingContext) -> RangePublication | None:
         """Read publication metadata and saved results without consulting live builds."""
         async with self._uow_factory() as uow:
             return await uow.record_ranges.get(query_id)
 
-    async def get_point(self, query_id: int, width: int) -> PublishedDoorPoint | None:
+    @application_operation
+    async def get_point(self, query_id: int, width: int, *, context: ActingContext) -> PublishedDoorPoint | None:
         """Select the published region covering width without reading live builds."""
-        publication = await self.get(query_id)
+        publication = await self.get(query_id, context=context)
         return None if publication is None else PublishedDoorPoint.from_publication(publication, width)
 
     async def process_queue(self, *, context: ActingContext, limit: int = 20) -> tuple[int, int]:
@@ -93,7 +95,7 @@ class RangePublicationService:
                 with worker_execution("record-ranges", claim.token):
                     error: str | None = None
                     try:
-                        publication = await self.publish(claim.query)
+                        publication = await self.publish(claim.query, context=context)
                         latest = publication.latest
                         if latest is None or latest.error is not None:
                             error = latest.error if latest is not None else "missing_attempt"
@@ -112,7 +114,8 @@ class RangePublicationService:
                         await uow.commit()
             return succeeded, failed
 
-    async def publish(self, query: DoorRangeQuery) -> RangePublication:
+    @application_operation
+    async def publish(self, query: DoorRangeQuery, *, context: ActingContext) -> RangePublication:
         """Capture and compute a fresh attempt, returning active and latest outcomes."""
         async with self._limiter:
             async with self._uow_factory() as uow:
@@ -170,7 +173,7 @@ class RangePublicationService:
         return await self._published(query_id)
 
     async def _published(self, query_id: int) -> RangePublication:
-        publication = await self.get(query_id)
+        publication = await self.get(query_id, context=ActingContext.current())
         assert publication is not None
         return publication
 
