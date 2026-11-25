@@ -255,6 +255,10 @@
   astro-static-slot {
     display: contents;
   }
+  /* Chromium and WebKit draw their own clear button in search inputs; TextField has one. */
+  input[type="search"]::-webkit-search-cancel-button {
+    appearance: none;
+  }
   h1 {
     font-size: var(--text-display);
     font-weight: 700;

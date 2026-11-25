@@ -11,7 +11,8 @@
    * URL and it works without JavaScript. `hidden` keeps other query parameters, such as the
    * scope and view, across a new search. `suggestions` turns the field into an
    * `Autocomplete`. `compact` hides the label and shortens the button to an icon, for the
-   * header; the label still names the field.
+   * header; the label still names the field. One magnifier shows either way: in the field, or
+   * on the compact button.
    */
   type Props = {
     action: string;
@@ -61,7 +62,7 @@
         class="min-w-0 flex-1"
         type="search"
         enterkeyhint="search"
-        icon={Search}
+        icon={compact ? undefined : Search}
         {name}
         {value}
         {label}
@@ -72,7 +73,7 @@
     <Button
       type="submit"
       variant={compact ? "secondary" : "primary"}
-      icon={Search}
+      icon={compact ? Search : undefined}
       iconOnly={compact}
       label={submitLabel}>{submitLabel}</Button
     >
