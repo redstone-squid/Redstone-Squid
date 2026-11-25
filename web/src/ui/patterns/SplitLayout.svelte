@@ -74,13 +74,13 @@
         <div
           id={`${id}-sheet`}
           popover="auto"
+          data-side={side}
           class={cn(
             "fixed inset-y-0 m-0 h-dvh max-h-none w-[calc(100%-3rem)] max-w-dialog-sm overflow-y-auto overscroll-contain",
             "border-line bg-surface-raised p-panel text-fg shadow-overlay backdrop:bg-overlay",
-            "motion-safe:transition-[translate] motion-safe:duration-normal motion-safe:ease-standard",
             side === "start"
-              ? "start-0 end-auto rounded-e-lg border-e motion-safe:starting:-translate-x-full rtl:motion-safe:starting:translate-x-full"
-              : "start-auto end-0 rounded-s-lg border-s motion-safe:starting:translate-x-full rtl:motion-safe:starting:-translate-x-full",
+              ? "start-0 end-auto rounded-e-lg border-e"
+              : "start-auto end-0 rounded-s-lg border-s",
             "@3xl:popover-inline @3xl:block",
           )}
         >
@@ -104,3 +104,43 @@
     <div class="min-w-0">{@render children()}</div>
   </div>
 </div>
+
+<style>
+  /*
+   * The collapsed sheet slides in from its edge over a fading backdrop and leaves the same
+   * way. `display` and `overlay` transition discretely to keep it in the top layer until it
+   * is off screen. Only below the width where the sidebar shows inline (@3xl).
+   */
+  [popover] {
+    --sheet-offset: 100%;
+  }
+  [popover][data-side="start"]:dir(ltr),
+  [popover][data-side="end"]:dir(rtl) {
+    --sheet-offset: -100%;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    @container (width < 48rem) {
+      [popover],
+      [popover]::backdrop {
+        transition-property: translate, opacity, display, overlay;
+        transition-duration: var(--duration-normal);
+        transition-timing-function: var(--ease-standard);
+        transition-behavior: allow-discrete;
+      }
+      [popover]:not(:popover-open) {
+        translate: var(--sheet-offset);
+      }
+      [popover]:not(:popover-open)::backdrop {
+        opacity: 0;
+      }
+      @starting-style {
+        [popover]:popover-open {
+          translate: var(--sheet-offset);
+        }
+        [popover]:popover-open::backdrop {
+          opacity: 0;
+        }
+      }
+    }
+  }
+</style>

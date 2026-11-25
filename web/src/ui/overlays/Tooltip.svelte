@@ -33,7 +33,7 @@
         role="tooltip"
         class={cn(
           "z-dropdown max-w-xs rounded-xs border border-transparent bg-fg px-2 py-1 text-xs text-surface shadow-overlay",
-          "motion-safe:transition-opacity motion-safe:duration-fast motion-safe:starting:opacity-0",
+          "data-ending-style:opacity-0 motion-safe:transition-opacity motion-safe:duration-fast motion-safe:starting:opacity-0",
         )}>{content}</Primitive.Content
       >
     </Primitive.Portal>

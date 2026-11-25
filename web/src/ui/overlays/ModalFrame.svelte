@@ -69,7 +69,7 @@
   {/if}
   <Primitive.Portal>
     <Primitive.Overlay
-      class="fixed inset-0 z-overlay bg-overlay motion-safe:transition-opacity motion-safe:duration-normal motion-safe:starting:opacity-0"
+      class="fixed inset-0 z-overlay bg-overlay data-ending-style:opacity-0 motion-safe:transition-opacity motion-safe:duration-normal motion-safe:starting:opacity-0"
     />
     <Primitive.Content
       bind:ref={panel}
@@ -79,7 +79,7 @@
       onCloseAutoFocus={focusReturn}
       class={cn(
         "fixed z-modal flex flex-col overflow-hidden border border-line bg-surface-raised text-fg shadow-overlay",
-        "motion-safe:transition-[opacity,translate] motion-safe:duration-normal motion-safe:ease-standard motion-safe:starting:opacity-0",
+        "data-ending-style:opacity-0 motion-safe:transition-[opacity,translate] motion-safe:duration-normal motion-safe:ease-standard motion-safe:starting:opacity-0",
         panelClass,
       )}
     >

@@ -67,7 +67,7 @@
       data-align={align}
       class={cn(
         floatingPanelClass,
-        "max-h-[60vh] min-w-44 overflow-auto p-1",
+        "max-h-[60vh] min-w-44 overflow-auto p-1 not-open:opacity-0",
         align === "start" ? "dropdown-start" : "dropdown-end",
       )}
     >
