@@ -14,7 +14,7 @@ from squid.bot.starboard.debounce import EntryDebouncer, EntryKey
 from squid.bot.starboard.screen import StarboardScreen
 from squid.bot.starboard.spec import StarboardExports, extension
 from squid.bot.utils.permissions import Grants, enforce, hide_unless
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
 from squid.core.messages.models import Message
@@ -69,7 +69,7 @@ class StarboardCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     async def on_reaction_add(self, event: ReactionEvent) -> None:
         payload = event.payload
         assert payload.guild_id is not None  # The subscription is guild-only.
-        if not await self.service.is_relevant_emoji(payload.guild_id, event.emoji):
+        if not await self.service.is_relevant_emoji(payload.guild_id, event.emoji, context=ActingContext.current()):
             return
         message = await event.message(own=False)
         member = await event.member(humans_only=True)
@@ -84,6 +84,7 @@ class StarboardCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
                 discord_role_ids=frozenset(role.id for role in member.roles),
             ),
             event.emoji,
+            context=ActingContext.current(),
         )
         if result.remove_reaction:
             with contextlib.suppress(discord.NotFound, discord.Forbidden):
@@ -94,33 +95,45 @@ class StarboardCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     async def on_reaction_remove(self, event: ReactionEvent) -> None:
         payload = event.payload
         assert payload.guild_id is not None  # The subscription is guild-only.
-        if not await self.service.is_relevant_emoji(payload.guild_id, event.emoji):
+        if not await self.service.is_relevant_emoji(payload.guild_id, event.emoji, context=ActingContext.current()):
             return
-        self._schedule(await self.service.withdraw_vote(payload.message_id, payload.user_id, event.emoji))
+        self._schedule(
+            await self.service.withdraw_vote(
+                payload.message_id, payload.user_id, event.emoji, context=ActingContext.current()
+            )
+        )
 
     @reaction_handler("clear")
     async def on_reaction_clear(self, event: ReactionClearEvent) -> None:
-        self._schedule(await self.service.clear_votes(event.payload.message_id))
+        self._schedule(await self.service.clear_votes(event.payload.message_id, context=ActingContext.current()))
 
     @reaction_handler("clear_emoji")
     async def on_reaction_clear_emoji(self, event: ReactionClearEvent) -> None:
-        self._schedule(await self.service.clear_votes(event.payload.message_id, event.emoji))
+        self._schedule(
+            await self.service.clear_votes(event.payload.message_id, event.emoji, context=ActingContext.current())
+        )
 
     @sd.Cog.listener()
     async def on_raw_message_edit(self, payload: discord.RawMessageUpdateEvent) -> None:
-        self._schedule(await self.service.refresh(payload.message_id, force=True), force=True)
+        self._schedule(
+            await self.service.refresh(payload.message_id, force=True, context=ActingContext.current()), force=True
+        )
 
     @sd.Cog.listener()
     async def on_raw_message_delete(self, payload: discord.RawMessageDeleteEvent) -> None:
         # A deleted *post* is tombstoned by the shared message listener and repaired by
         # the reconciler, so only the origin's disappearance is starboard business.
-        self._schedule(await self.service.mark_origin_deleted(payload.message_id), force=True)
+        self._schedule(
+            await self.service.mark_origin_deleted(payload.message_id, context=ActingContext.current()), force=True
+        )
 
     @sd.Cog.listener()
     async def on_raw_bulk_message_delete(self, payload: discord.RawBulkMessageDeleteEvent) -> None:
         # A channel purge arrives only as this event, never as individual deletes.
         for message_id in payload.message_ids:
-            self._schedule(await self.service.mark_origin_deleted(message_id), force=True)
+            self._schedule(
+                await self.service.mark_origin_deleted(message_id, context=ActingContext.current()), force=True
+            )
 
     async def recount(self, message: discord.Message) -> tuple[EntryKey, ...]:
         """Replace one source message's starboard votes with the reactions it has now.
@@ -139,7 +152,7 @@ class StarboardCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         reactions: list[tuple[Actor, str]] = []
         for reaction in message.reactions:
             emoji = str(reaction.emoji)
-            if not await self.service.is_relevant_emoji(guild.id, emoji):
+            if not await self.service.is_relevant_emoji(guild.id, emoji, context=ActingContext.current()):
                 continue
             async for user in reaction.users(limit=None):
                 if user.bot:
@@ -152,7 +165,9 @@ class StarboardCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
                         discord_role_ids=frozenset(role.id for role in member.roles),
                     )
                     reactions.append((actor, emoji))
-        keys = await self.service.recount(self._origin(message, guild), tuple(reactions))
+        keys = await self.service.recount(
+            self._origin(message, guild), tuple(reactions), context=ActingContext.current()
+        )
         self._schedule(keys, force=True)
         return keys
 

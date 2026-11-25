@@ -6,6 +6,7 @@ Results include the character range to replace, preserving the rest of the query
 from collections.abc import Sequence
 from typing import Protocol
 
+from squid.core.actors import ActingContext
 from squid.core.search.application.completion import (
     BOOLEAN_KEYWORDS,
     CompletionContext,
@@ -77,7 +78,7 @@ class SearchQueryProvider:
 
     async def suggest(self, request: SuggestionRequest) -> SuggestionResult:
         scope = suggestion_search_scope(request)
-        registry = (await self._search.fields()).for_scope(scope)
+        registry = (await self._search.fields(context=ActingContext.current())).for_scope(scope)
         context = analyze(request.query, request.cursor, registry)
         limit = request.limit or MAX_QUERY_SUGGESTIONS
         span = ReplacementSpan(context.start, context.end)

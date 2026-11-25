@@ -6,6 +6,7 @@ from typing import Self, override
 
 import pytest
 
+from squid.core.actors import ActingContext, Actor
 from squid.core.errors import ValidationError
 from squid.core.pagination import PageAnchor
 from squid.core.search.application import SearchQueryParser, SearchService, SearchSlice
@@ -56,7 +57,10 @@ async def test_service_parses_query_and_reports_the_backend_total() -> None:
     backend = FakeSearchBackend()
     service = SearchService(uow_factory=partial(SearchUnitOfWork, backend))
 
-    page = await service.search(SearchRequest("status:approved door", scope=SearchScope.BUILDS, page_size=5))
+    page = await service.search(
+        SearchRequest("status:approved door", scope=SearchScope.BUILDS, page_size=5),
+        context=ActingContext.direct(Actor()),
+    )
 
     assert page.hits[0].resource_kind == "build"
     assert page.total == 25
@@ -69,7 +73,7 @@ async def test_service_resolves_the_sort_field_before_searching() -> None:
     backend = FakeSearchBackend()
     service = SearchService(uow_factory=partial(SearchUnitOfWork, backend))
 
-    await service.search(SearchRequest("door", sort=SearchSort("width")))
+    await service.search(SearchRequest("door", sort=SearchSort("width")), context=ActingContext.direct(Actor()))
 
     assert backend.calls[0][2] == DEFAULT_FIELD_REGISTRY.resolve("width")
 
@@ -80,7 +84,9 @@ async def test_service_uses_the_scoped_tree_without_reparsing_display_text() -> 
     parsed = SearchQueryParser(scope=SearchScope.BUILDS).parse("door width:5")
     assert isinstance(parsed, BuildQuery)
 
-    await service.search(SearchRequest("as typed", scope=SearchScope.BUILDS, parsed_query=parsed))
+    await service.search(
+        SearchRequest("as typed", scope=SearchScope.BUILDS, parsed_query=parsed), context=ActingContext.direct(Actor())
+    )
 
     assert backend.calls[0][1] is parsed
     with pytest.raises(ValidationError, match="scope"):
@@ -93,7 +99,7 @@ async def test_service_rejects_unsortable_and_unknown_sort_fields(field: str) ->
     service = SearchService(uow_factory=partial(SearchUnitOfWork, backend))
 
     with pytest.raises(ValidationError, match="cannot be sorted"):
-        await service.search(SearchRequest("door", sort=SearchSort(field)))
+        await service.search(SearchRequest("door", sort=SearchSort(field)), context=ActingContext.direct(Actor()))
 
     assert backend.calls == []
 
@@ -101,7 +107,7 @@ async def test_service_rejects_unsortable_and_unknown_sort_fields(field: str) ->
 async def test_service_addresses_neighbouring_pages_by_offset() -> None:
     service = SearchService(uow_factory=partial(SearchUnitOfWork, FakeSearchBackend()))
 
-    page = await service.search(SearchRequest("door", page_size=5, offset=10))
+    page = await service.search(SearchRequest("door", page_size=5, offset=10), context=ActingContext.direct(Actor()))
 
     assert (page.prev, page.next) == (PageAnchor(offset=5), PageAnchor(offset=15))
 
@@ -109,8 +115,8 @@ async def test_service_addresses_neighbouring_pages_by_offset() -> None:
 async def test_service_stops_paging_at_the_end_of_the_results() -> None:
     service = SearchService(uow_factory=partial(SearchUnitOfWork, FakeSearchBackend(total=12)))
 
-    first = await service.search(SearchRequest("door", page_size=5))
-    last = await service.search(SearchRequest("door", page_size=5, offset=10))
+    first = await service.search(SearchRequest("door", page_size=5), context=ActingContext.direct(Actor()))
+    last = await service.search(SearchRequest("door", page_size=5, offset=10), context=ActingContext.direct(Actor()))
 
     assert (first.prev, first.next) == (None, PageAnchor(offset=5))
     assert (last.prev, last.next) == (PageAnchor(offset=5), None)
@@ -119,10 +125,10 @@ async def test_service_stops_paging_at_the_end_of_the_results() -> None:
 async def test_service_delegates_suggestions_and_bounds_limit() -> None:
     service = SearchService(uow_factory=partial(SearchUnitOfWork, FakeSearchBackend()))
 
-    assert await service.suggest("dor", limit=1) == ("door",)
+    assert await service.suggest("dor", limit=1, context=ActingContext.direct(Actor())) == ("door",)
 
     with pytest.raises(ValidationError, match="between 1 and 25"):
-        await service.suggest("dor", limit=0)
+        await service.suggest("dor", limit=0, context=ActingContext.direct(Actor()))
 
 
 class StaticFields:
@@ -182,7 +188,7 @@ async def test_query_embedding_is_generated_outside_scopes_and_passed_to_search(
     model = FakeEmbeddingModel(backend)
     service = SearchService(uow_factory=partial(SearchUnitOfWork, backend), embedding_model=model)
 
-    await service.search(SearchRequest("door", mode=SearchMode.SEMANTIC))
+    await service.search(SearchRequest("door", mode=SearchMode.SEMANTIC), context=ActingContext.direct(Actor()))
 
     assert model.inputs == ["door"]
     assert backend.embeddings == [QueryEmbedding([1.0, 0.0], "test-model")]
@@ -202,7 +208,7 @@ async def test_search_skips_embedding_when_semantic_ranking_is_unused(search_req
     model = FakeEmbeddingModel(backend)
     service = SearchService(uow_factory=partial(SearchUnitOfWork, backend), embedding_model=model)
 
-    await service.search(search_request)
+    await service.search(search_request, context=ActingContext.direct(Actor()))
 
     assert model.inputs == []
     assert backend.embeddings == [None]
@@ -214,7 +220,7 @@ async def test_missing_or_failed_embedding_still_runs_the_result_query(raises: b
     model = FakeEmbeddingModel(backend, unavailable=True, error=raises)
     service = SearchService(uow_factory=partial(SearchUnitOfWork, backend), embedding_model=model)
 
-    page = await service.search(SearchRequest("door", mode=SearchMode.SEMANTIC))
+    page = await service.search(SearchRequest("door", mode=SearchMode.SEMANTIC), context=ActingContext.direct(Actor()))
 
     assert page.hits
     assert backend.embeddings == [None]

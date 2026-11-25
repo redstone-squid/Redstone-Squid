@@ -5,7 +5,7 @@ from typing import Any
 import pytest
 from whenever import Instant
 
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.errors import AuthenticationError
 from squid.core.messages.models import Message
 from squid.core.starboard.application import PendingVote, StarboardService
@@ -78,11 +78,11 @@ async def test_service_reads_current_emojis_across_edits() -> None:
     committed = CommittedState(repository, clone=_copy_repository)
     service = StarboardService(uow_factory=partial(FakeStarboardUnitOfWork, committed))  # type: ignore[arg-type]
 
-    assert await service.is_relevant_emoji(10, "⭐")
+    assert await service.is_relevant_emoji(10, "⭐", context=ActingContext.direct(Actor()))
 
     committed.value.config = replace(committed.value.config, emojis=())
 
-    assert not await service.is_relevant_emoji(10, "⭐")
+    assert not await service.is_relevant_emoji(10, "⭐", context=ActingContext.direct(Actor()))
 
 
 async def test_service_combines_highest_role_and_emoji_multiplier() -> None:
@@ -91,7 +91,10 @@ async def test_service_combines_highest_role_and_emoji_multiplier() -> None:
     service = StarboardService(uow_factory=partial(FakeStarboardUnitOfWork, committed))  # type: ignore[arg-type]
 
     result = await service.record_vote(
-        make_origin(), Actor(discord_user_id=41, guild_id=10, discord_role_ids=frozenset({50})), "⭐"
+        make_origin(),
+        Actor(discord_user_id=41, guild_id=10, discord_role_ids=frozenset({50})),
+        "⭐",
+        context=ActingContext.direct(Actor()),
     )
 
     assert not result.remove_reaction
@@ -104,7 +107,9 @@ async def test_service_only_requests_invalid_reaction_removal_when_configured() 
     committed = CommittedState(repository, clone=_copy_repository)
     service = StarboardService(uow_factory=partial(FakeStarboardUnitOfWork, committed))  # type: ignore[arg-type]
 
-    result = await service.record_vote(make_origin(), Actor(discord_user_id=41, guild_id=10), "⭐")
+    result = await service.record_vote(
+        make_origin(), Actor(discord_user_id=41, guild_id=10), "⭐", context=ActingContext.direct(Actor())
+    )
 
     assert result.remove_reaction
     assert committed.value.recorded == []
@@ -116,7 +121,7 @@ async def test_account_identity_cannot_stand_in_for_a_discord_reaction() -> None
     service = StarboardService(uow_factory=partial(FakeStarboardUnitOfWork, committed))  # type: ignore[arg-type]
     actor = Actor(account_id=7, guild_id=10)
     with pytest.raises(AuthenticationError):
-        await service.record_vote(make_origin(), actor, "⭐")
+        await service.record_vote(make_origin(), actor, "⭐", context=ActingContext.direct(Actor()))
     with pytest.raises(AuthenticationError):
-        await service.recount(make_origin(), ((actor, "⭐"),))
+        await service.recount(make_origin(), ((actor, "⭐"),), context=ActingContext.direct(Actor()))
     assert committed.value.recorded == []

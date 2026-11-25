@@ -11,6 +11,7 @@ from squid.bot._types import GuildMessageable
 from squid.bot.i18n import resolve_locale
 from squid.bot.posts.renderer import DesiredPost, PostRenderer
 from squid.bot.starboard.render import starboard_layout
+from squid.core.actors import ActingContext
 from squid.core.posts.domain import ResourceKind, StarboardEntryKey
 from squid.core.starboard.domain import entry_should_be_posted
 
@@ -34,11 +35,15 @@ class StarboardEntryRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
     @override
     async def desired(self, resource_key: str) -> Sequence[DesiredPost] | None:
         key = StarboardEntryKey.parse(resource_key)
-        state = await self.bot.services.starboards.entry_state(key.starboard_id, key.origin_message_id)
+        state = await self.bot.services.starboards.entry_state(
+            key.starboard_id, key.origin_message_id, context=ActingContext.current()
+        )
         if state is None:
             return None
 
-        posts = await self.bot.services.posts.list_for_resource(self.resource_kind, resource_key)
+        posts = await self.bot.services.posts.list_for_resource(
+            self.resource_kind, resource_key, context=ActingContext.current()
+        )
         currently_posted = any(post.is_live for post in posts)
         if not entry_should_be_posted(
             state.config,
@@ -53,7 +58,7 @@ class StarboardEntryRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
         if lookup.gone:
             # Deleted while the bot was offline. Recording it lets each board's entry apply its
             # link_deletes setting; the database queues those entries for another render.
-            await self.bot.services.starboards.mark_origin_deleted(state.origin.id)
+            await self.bot.services.starboards.mark_origin_deleted(state.origin.id, context=ActingContext.current())
         origin = lookup.message
         if message_destination is None or origin is None or _unsafe_nsfw(origin.channel, message_destination):
             return ()
@@ -78,7 +83,9 @@ class StarboardEntryRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
     async def after_send(self, resource_key: str, message: discord.Message) -> None:
         """Add the board's enabled baseline reactions to a newly sent mirror."""
         key = StarboardEntryKey.parse(resource_key)
-        state = await self.bot.services.starboards.entry_state(key.starboard_id, key.origin_message_id)
+        state = await self.bot.services.starboards.entry_state(
+            key.starboard_id, key.origin_message_id, context=ActingContext.current()
+        )
         if state is None:
             return
         for item in state.config.emojis:

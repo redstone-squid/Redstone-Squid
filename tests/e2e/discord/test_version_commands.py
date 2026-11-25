@@ -1,5 +1,6 @@
 from typing import override
 
+from squid.core.actors import ActingContext
 from squid.core.versions.application import VersionService
 from squid.core.versions.domain import Edition, MinecraftVersion
 from tests.e2e.discord.environment import command_environment, displayed_text
@@ -12,7 +13,7 @@ class EditionCatalogue(VersionService):
         self.releases = (MinecraftVersion("Java", 1, 21, 5), MinecraftVersion("Bedrock", 1, 21, 50))
 
     @override
-    async def list_versions(self, edition: Edition) -> list[MinecraftVersion]:
+    async def list_versions(self, edition: Edition, *, context: ActingContext) -> list[MinecraftVersion]:
         return [release for release in self.releases if release.edition == edition]
 
 

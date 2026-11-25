@@ -8,6 +8,7 @@ from squid.api.dependencies import Versions, get_versions
 from squid.api.errors import responses
 from squid.api.pagination import OffsetParam, Page, PageSizeParam
 from squid.api.v1.schemas.versions import VersionDetail
+from squid.core.actors import ActingContext
 from squid.core.pagination import offset_page
 
 
@@ -24,7 +25,7 @@ async def list_versions(
     offset: OffsetParam = None,
 ) -> Page[VersionDetail]:
     """List recognized Java and Bedrock releases."""
-    versions = await versions_service.list_all()
+    versions = await versions_service.list_all(context=ActingContext.current())
     page = offset_page(versions, offset=offset or 0, page_size=page_size)
     return Page[VersionDetail].from_domain(page, VersionDetail.from_domain)
 

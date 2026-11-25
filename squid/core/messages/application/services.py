@@ -2,6 +2,7 @@
 
 from whenever import Instant
 
+from squid.core.actors import ActingContext, application_operation
 from squid.core.messages.application.ports import MessageUnitOfWork
 from squid.core.messages.domain import MessageSnapshot
 from squid.core.messages.models import Message
@@ -18,7 +19,8 @@ class MessageService:
     def __init__(self, *, uow_factory: UnitOfWorkFactory[MessageUnitOfWork]) -> None:
         self._uow_factory = uow_factory
 
-    async def observe(self, snapshot: MessageSnapshot) -> None:
+    @application_operation
+    async def observe(self, snapshot: MessageSnapshot, *, context: ActingContext) -> None:
         """Insert a message or replace its observed details if it is already known.
 
         Keep the first observation time and any recorded edit or deletion times.
@@ -28,7 +30,8 @@ class MessageService:
             await uow.messages.upsert_snapshot(snapshot)
             await uow.commit()
 
-    async def record_edit(self, message_id: int, content: str | None) -> bool:
+    @application_operation
+    async def record_edit(self, message_id: int, content: str | None, *, context: ActingContext) -> bool:
         """Refresh stored content after Discord reports an edit.
 
         Returns whether a stored message matched; most edits are to messages the
@@ -39,7 +42,10 @@ class MessageService:
             await uow.commit()
             return changed
 
-    async def refresh_content(self, message_id: int, content: str | None, edited_at: Instant | None) -> bool:
+    @application_operation
+    async def refresh_content(
+        self, message_id: int, content: str | None, edited_at: Instant | None, *, context: ActingContext
+    ) -> bool:
         """Store a message's content as just fetched from Discord, if it changed.
 
         This catches up on edits made while the bot was offline. Unknown messages are
@@ -50,7 +56,8 @@ class MessageService:
             await uow.commit()
             return changed
 
-    async def mark_deleted(self, message_id: int) -> bool:
+    @application_operation
+    async def mark_deleted(self, message_id: int, *, context: ActingContext) -> bool:
         """Record a message's deletion without removing its stored details.
 
         Return True on the first deletion of a known message. Return False for
@@ -61,7 +68,8 @@ class MessageService:
             await uow.commit()
             return changed
 
-    async def get(self, message_id: int) -> Message | None:
+    @application_operation
+    async def get(self, message_id: int, *, context: ActingContext) -> Message | None:
         """Return a stored message, including deleted ones, or None if unknown."""
         async with self._uow_factory() as uow:
             return await uow.messages.get_by_id(message_id)

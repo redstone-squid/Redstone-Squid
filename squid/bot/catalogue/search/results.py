@@ -11,6 +11,7 @@ from squid.bot.app import RedstoneSquid
 from squid.bot.catalogue.record_display import record_row, record_standings
 from squid.bot.catalogue.rows import build_row
 from squid.bot.ui import tr, truncate_display_text
+from squid.core.actors import ActingContext
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build
 from squid.core.records.domain.models import RecordCriterion, VersionScope
@@ -99,7 +100,7 @@ class _SearchSource:
 
     async def fetch(self, position: sl.sources.Position, fetch_size: int) -> sl.sources.Batch[SearchHit]:
         request = replace(self.base_request, offset=position.offset, page_size=fetch_size)
-        page = await self._service.search(request)
+        page = await self._service.search(request, context=ActingContext.current())
         return self._loaded(page, position.offset).batch
 
     def page_for(self, loaded: sl.sources.LoadedBatch[SearchHit]) -> SearchPage:

@@ -352,7 +352,7 @@ class RedstoneSquid(Bot):
     async def start(self, token: str, *, reconnect: bool = True) -> None:
         """Own development diagnostics for the bot and the tasks it starts."""
         observation = observe_events(self.action_ledger) if self.development_mode else contextlib.nullcontext()
-        with observation:
+        with ActingContext.worker("discord.gateway").scope(), observation:
             await super().start(token, reconnect=reconnect)
 
     @override
@@ -488,9 +488,11 @@ class RedstoneSquid(Bot):
         if lookup.message is not None:
             message = lookup.message
             edited_at = None if message.edited_at is None else Instant(message.edited_at)
-            await self.services.messages.refresh_content(message.id, message.content, edited_at)
+            await self.services.messages.refresh_content(
+                message.id, message.content, edited_at, context=ActingContext.current()
+            )
         elif lookup.gone:
-            await self.services.messages.mark_deleted(message_id)
+            await self.services.messages.mark_deleted(message_id, context=ActingContext.current())
         return lookup.message
 
     async def refresh_posts(self, resource_kind: ResourceKind, resource_key: str) -> None:
@@ -501,7 +503,9 @@ class RedstoneSquid(Bot):
         can retry one if immediate delivery fails.
         """
         self.topic_publisher.publish(resource_topic(resource_kind, resource_key))
-        generation = await self.services.posts.pending_generation(resource_kind, resource_key)
+        generation = await self.services.posts.pending_generation(
+            resource_kind, resource_key, context=ActingContext.current()
+        )
         if generation is None:
             return
         await self.post_reconciler.reconcile(resource_kind, resource_key, generation)

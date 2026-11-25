@@ -7,6 +7,7 @@ restriction picked in Discord, on the web form, and in-game is spelled identical
 from collections.abc import Sequence
 from typing import Protocol
 
+from squid.core.actors import ActingContext
 from squid.core.permissions.domain.catalogue import TAG_PROPOSAL_LIST
 from squid.core.suggestions.application import Candidate
 from squid.core.suggestions.application.queries import TagEntry
@@ -32,7 +33,7 @@ class TagReader(Protocol):
 class PendingTagDefinitions(Protocol):
     """Read the tag definitions awaiting moderation."""
 
-    async def pending(self) -> Sequence[TagDefinition]: ...
+    async def pending(self, *, context: ActingContext) -> Sequence[TagDefinition]: ...
 
 
 class TagProvider:
@@ -94,7 +95,7 @@ class PendingTagProvider:
                 kind="tag",
                 terms=(item.display_name, item.stable_key, str(item.id)),
             )
-            for item in await self._tags.pending()
+            for item in await self._tags.pending(context=ActingContext.current())
         )
 
 

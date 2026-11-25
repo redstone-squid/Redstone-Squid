@@ -148,21 +148,19 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             return await self.publisher.resolve_options(guild.id, lines)
 
         async def publish(draft: PollDraft, options: tuple[VoteOption, ...]) -> str:
-            if draft.scope is PollScope.NETWORK and not (
-                isinstance(actor, discord.Member) and await self.publisher.may_create_network(actor)
-            ):
-                raise InvalidVoteConfigurationError(
-                    tr(
-                        t"bot-voting-vote-you-may-no-longer-publish-a-poll = You may no longer publish a poll "
-                        t"to every server."
-                    )
-                )
             subject = await self.bot.actors.resolve(request, refresh=True)
             if subject.account_id != account.id:
                 raise InvalidVoteConfigurationError(
                     tr(t"poll-account-changed = Your account changed. Open the poll again.")
                 )
             if draft.scope is PollScope.NETWORK:
+                if not (await self.bot.services.permissions.check(subject, VOTE_POLL_NETWORK_CREATE)).allowed:
+                    raise InvalidVoteConfigurationError(
+                        tr(
+                            t"bot-voting-vote-you-may-no-longer-publish-a-poll = You may no longer publish a poll "
+                            t"to every server."
+                        )
+                    )
                 subject = replace(subject, capabilities=subject.capabilities | {VOTE_POLL_NETWORK_CREATE.name})
             publication = await self.publisher.create_and_publish(
                 context=ActingContext.for_actor(subject),

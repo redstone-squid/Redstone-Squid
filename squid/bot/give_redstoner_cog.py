@@ -15,6 +15,7 @@ from squid.bot.i18n import localization_for, resolve_locale
 from squid.bot.routes import AppRequest, AppRoutes
 from squid.bot.ui import render_payload, text_node, tr
 from squid.bot.utils.permissions import Grants, enforce, hide_unless, requires_grant
+from squid.core.actors import ActingContext
 from squid.core.community.application import RedstonerService
 from squid.core.community.domain import RedstonerDecisionKind, RedstonerPolicy
 from squid.core.permissions.domain.catalogue import REDSTONER_PANEL_MANAGE, REDSTONER_ROLE_RESYNC
@@ -54,7 +55,7 @@ async def remove_own_redstoner_role(request: AppRequest) -> None:
     interaction = request.interaction
     assert interaction is not None and interaction.guild is not None
     member = interaction.user
-    community = await interaction.client.services.settings.get_runtime()
+    community = await interaction.client.services.settings.get_runtime(context=ActingContext.current())
     redstoner_role = interaction.guild.get_role(community.redstoner_role_id)
     if redstoner_role is None or redstoner_role not in member.roles:
         return
@@ -188,7 +189,7 @@ class GiveRedstoner[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
                 )
             )
 
-        community = await self.bot.services.settings.get_runtime()
+        community = await self.bot.services.settings.get_runtime(context=ActingContext.current())
         return RedstonerScreen(
             guild_id=guild.id,
             role_id=community.redstoner_role_id,
@@ -201,7 +202,7 @@ class GiveRedstoner[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         """Give the redstoner role to a user based on a Starboard message."""
         if message.guild is None or message.guild.id != self.bot.owner_server_id:
             return
-        community = await self.bot.services.settings.get_runtime()
+        community = await self.bot.services.settings.get_runtime(context=ActingContext.current())
         if not community.redstoner_enabled:
             return
         service = RedstonerService(

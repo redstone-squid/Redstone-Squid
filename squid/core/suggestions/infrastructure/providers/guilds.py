@@ -8,6 +8,7 @@ exists but does not verify guild membership.
 from collections.abc import Sequence
 from typing import Protocol
 
+from squid.core.actors import ActingContext
 from squid.core.permissions.models import PermissionRole
 from squid.core.starboard.domain import EDITABLE_SETTINGS
 from squid.core.starboard.models import StarboardConfig
@@ -20,7 +21,7 @@ from squid.core.suggestions.infrastructure.providers.static import StaticProvide
 class GuildStarboards(Protocol):
     """Read a guild's configured starboards."""
 
-    async def list_for_guild(self, guild_id: int) -> Sequence[StarboardConfig]: ...
+    async def list_for_guild(self, guild_id: int, *, context: ActingContext) -> Sequence[StarboardConfig]: ...
 
 
 class PermissionRoles(Protocol):
@@ -43,7 +44,7 @@ class StarboardNameProvider:
                 description=f"#{config.channel_id}" + ("" if config.enabled else " · disabled"),
                 kind="starboard",
             )
-            for config in await self._starboards.list_for_guild(guild_id)
+            for config in await self._starboards.list_for_guild(guild_id, context=ActingContext.current())
         )
 
 

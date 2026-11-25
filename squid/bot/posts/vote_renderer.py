@@ -14,6 +14,7 @@ from squid.bot.submission.build_card import render_build_card
 from squid.bot.voting.rendering import render_build_review, render_delete_log, render_generic_poll
 from squid.bot.voting.sessions import configured_vote_channels
 from squid.core.accounts.domain import IdentityProvider
+from squid.core.actors import ActingContext
 from squid.core.concurrency import DISCORD_FANOUT_LIMIT, TaskFailure, settle_all
 from squid.core.i18n import tr
 from squid.core.posts.domain import ResourceKind
@@ -88,7 +89,7 @@ class VoteSessionRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
         if not isinstance(target, BuildVoteTarget | BuildEditVoteTarget):
             logger.warning("A build review session has no build", extra={"squid.vote_session.id": snapshot.id})
             return ()
-        build = await self.bot.services.build_queries.get(target.build_id)
+        build = await self.bot.services.build_queries.get(target.build_id, context=ActingContext.current())
         if build is None:
             return ()
 
@@ -145,7 +146,7 @@ class VoteSessionRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
                 content = message.content
             else:
                 # Deleted or unreadable: show what was stored, so voters still see what they judge.
-                stored = await self.bot.services.messages.get(target.message_id)
+                stored = await self.bot.services.messages.get(target.message_id, context=ActingContext.current())
                 content = (stored.content if stored is not None else None) or ""
         layout = render_delete_log(snapshot, content)
         return [
@@ -184,7 +185,9 @@ class VoteSessionRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
 
     async def _published_channels(self, snapshot: VoteSessionSnapshot) -> dict[int, int]:
         """Channels this session already has live posts in, mapped to their guild."""
-        posts = await self.bot.services.posts.list_for_resource("vote_session", str(snapshot.id))
+        posts = await self.bot.services.posts.list_for_resource(
+            "vote_session", str(snapshot.id), context=ActingContext.current()
+        )
         live = {post.channel_id for post in posts if post.is_live}
         return {message.channel_id: message.guild_id for message in snapshot.messages if message.channel_id in live}
 

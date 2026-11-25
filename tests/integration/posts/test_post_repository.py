@@ -7,6 +7,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from squid.core.actors import ActingContext, Actor
 from squid.core.errors import InvalidStateError
 from squid.core.messages.application.services import MessageService
 from squid.core.messages.domain import MessageSnapshot
@@ -28,7 +29,8 @@ async def _observe(session_factory: async_sessionmaker[AsyncSession], *message_i
     messages = MessageService(uow_factory=partial(SqlAlchemyUnitOfWork, session_factory))
     for message_id in message_ids:
         await messages.observe(
-            MessageSnapshot(id=message_id, channel_id=CHANNEL, author_id=7000, guild_id=4000, content=None)
+            MessageSnapshot(id=message_id, channel_id=CHANNEL, author_id=7000, guild_id=4000, content=None),
+            context=ActingContext.direct(Actor()),
         )
 
 
@@ -46,6 +48,7 @@ async def test_one_live_post_per_resource_and_channel(
         resource_key="42",
         surface="build_card",
         applied_revision=1,
+        context=ActingContext.direct(Actor()),
     )
 
     with pytest.raises(IntegrityError):
@@ -56,6 +59,7 @@ async def test_one_live_post_per_resource_and_channel(
             resource_key="42",
             surface="build_card",
             applied_revision=1,
+            context=ActingContext.direct(Actor()),
         )
 
 
@@ -74,9 +78,10 @@ async def test_recording_the_same_message_twice_is_a_noop(
             resource_key="42",
             surface="build_card",
             applied_revision=1,
+            context=ActingContext.direct(Actor()),
         )
 
-    assert len(await posts.list_for_resource("build", "42")) == 1
+    assert len(await posts.list_for_resource("build", "42", context=ActingContext.direct(Actor()))) == 1
 
 
 async def test_suppressing_frees_the_channel_for_a_replacement(
@@ -92,11 +97,12 @@ async def test_suppressing_frees_the_channel_for_a_replacement(
         resource_key="1:2",
         surface="starboard_entry",
         applied_revision=1,
+        context=ActingContext.direct(Actor()),
     )
 
-    assert await posts.suppress(100) is True
+    assert await posts.suppress(100, context=ActingContext.direct(Actor())) is True
     # A redelivered raw delete event must not move the tombstone.
-    assert await posts.suppress(100) is False
+    assert await posts.suppress(100, context=ActingContext.direct(Actor())) is False
 
     await posts.record(
         message_id=101,
@@ -105,8 +111,13 @@ async def test_suppressing_frees_the_channel_for_a_replacement(
         resource_key="1:2",
         surface="starboard_entry",
         applied_revision=1,
+        context=ActingContext.direct(Actor()),
     )
-    live = [post for post in await posts.list_for_resource("starboard_entry", "1:2") if post.is_live]
+    live = [
+        post
+        for post in await posts.list_for_resource("starboard_entry", "1:2", context=ActingContext.direct(Actor()))
+        if post.is_live
+    ]
     assert [post.message_id for post in live] == [101]
 
 
@@ -123,12 +134,15 @@ async def test_applied_revision_never_moves_backwards(
         resource_key="42",
         surface="build_card",
         applied_revision=1,
+        context=ActingContext.direct(Actor()),
     )
 
-    await posts.mark_applied("build", "42", 9)
-    await posts.mark_applied("build", "42", 4)
+    await posts.mark_applied("build", "42", 9, context=ActingContext.direct(Actor()))
+    await posts.mark_applied("build", "42", 4, context=ActingContext.direct(Actor()))
 
-    assert (await posts.list_for_resource("build", "42"))[0].applied_revision == 9
+    assert (await posts.list_for_resource("build", "42", context=ActingContext.direct(Actor())))[
+        0
+    ].applied_revision == 9
 
 
 async def test_service_returns_detached_posts(
@@ -144,12 +158,15 @@ async def test_service_returns_detached_posts(
         resource_key="42",
         surface="build_card",
         applied_revision=1,
+        context=ActingContext.direct(Actor()),
     )
 
-    post = (await posts.list_for_resource("build", "42"))[0]
+    post = (await posts.list_for_resource("build", "42", context=ActingContext.direct(Actor())))[0]
     assert_loaded_detached(post)
     post.applied_revision = 99
-    assert (await posts.list_for_resource("build", "42"))[0].applied_revision == 1
+    assert (await posts.list_for_resource("build", "42", context=ActingContext.direct(Actor())))[
+        0
+    ].applied_revision == 1
 
 
 async def test_pending_generation_reads_desired_state_from_the_queue(
@@ -166,6 +183,7 @@ async def test_pending_generation_reads_desired_state_from_the_queue(
             resource_key="42",
             surface="build_card",
             applied_revision=1,
+            context=ActingContext.direct(Actor()),
         )
 
     async with migrated_session_factory.begin() as session:
@@ -178,14 +196,14 @@ async def test_pending_generation_reads_desired_state_from_the_queue(
             )
         ).scalar_one()
 
-    assert await posts.pending_generation("build", "42") == generation
+    assert await posts.pending_generation("build", "42", context=ActingContext.direct(Actor())) == generation
 
     # One post rendered, the other not: the resource is still behind.
-    await posts.mark_rendered(100, generation)
-    assert await posts.pending_generation("build", "42") == generation
+    await posts.mark_rendered(100, generation, context=ActingContext.direct(Actor()))
+    assert await posts.pending_generation("build", "42", context=ActingContext.direct(Actor())) == generation
 
-    await posts.mark_rendered(101, generation)
-    assert await posts.pending_generation("build", "42") is None
+    await posts.mark_rendered(101, generation, context=ActingContext.direct(Actor()))
+    assert await posts.pending_generation("build", "42", context=ActingContext.direct(Actor())) is None
 
 
 async def test_a_post_cannot_outlive_its_message_snapshot(
@@ -201,6 +219,7 @@ async def test_a_post_cannot_outlive_its_message_snapshot(
         resource_key="42",
         surface="build_card",
         applied_revision=1,
+        context=ActingContext.direct(Actor()),
     )
 
     with pytest.raises(IntegrityError):
@@ -249,6 +268,7 @@ async def test_post_updates_and_deletion_roll_back_together(
             resource_key="42",
             surface="build_card",
             applied_revision=1,
+            context=ActingContext.direct(Actor()),
         )
 
     async with factory() as uow:
@@ -262,12 +282,12 @@ async def test_post_updates_and_deletion_roll_back_together(
         await repository.forget(101)
         assert len(await repository.list_for_resource("build", "42")) == 1
 
-    stored = await posts.list_for_resource("build", "42")
+    stored = await posts.list_for_resource("build", "42", context=ActingContext.direct(Actor()))
     assert len(stored) == 2
     assert all(post.applied_revision == 1 and post.is_live for post in stored)
     with pytest.raises(InvalidStateError):
         await repository.forget(100)
 
-    await posts.forget(100)
-    assert await posts.resolve(100) is None
-    assert await posts.resolve(101) is not None
+    await posts.forget(100, context=ActingContext.direct(Actor()))
+    assert await posts.resolve(100, context=ActingContext.direct(Actor())) is None
+    assert await posts.resolve(101, context=ActingContext.direct(Actor())) is not None

@@ -7,6 +7,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from squid.bot.chrome import CHROME
+from squid.core.actors import ActingContext
 from squid.core.i18n import DEFAULT_LOCALE, localization_for, negotiate_locale
 from squid.core.settings.application import SettingsService
 from squid_i18n import Localization, Text, localization_scope
@@ -29,7 +30,7 @@ async def resolve_locale(
     """
     guild = target.guild
     if guild is not None:
-        override = await settings_service.get_locale(guild.id)
+        override = await settings_service.get_locale(guild.id, context=ActingContext.current())
         if override is not None:
             return negotiate_locale(override)
 

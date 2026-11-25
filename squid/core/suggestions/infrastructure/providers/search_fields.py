@@ -5,6 +5,7 @@ The field registry is already the published contract for what may be queried
 memorized from documentation.
 """
 
+from squid.core.actors import ActingContext
 from squid.core.search.domain.scope import SearchScope
 from squid.core.suggestions.application import Candidate
 from squid.core.suggestions.application.ports import SearchFields
@@ -23,7 +24,7 @@ class SearchFieldProvider:
         return await self._cache.get(suggestion_search_scope(request))
 
     async def _load(self, scope: SearchScope) -> tuple[Candidate, ...]:
-        registry = (await self._search.fields()).for_scope(scope)
+        registry = (await self._search.fields(context=ActingContext.current())).for_scope(scope)
         return tuple(
             Candidate.create(
                 value=field.name,
@@ -54,7 +55,7 @@ class SearchSortProvider:
         return await self._cache.get(None)
 
     async def _load(self, _key: None) -> tuple[Candidate, ...]:
-        registry = await self._search.fields()
+        registry = await self._search.fields(context=ActingContext.current())
         sortable = sorted(
             (field for field in registry.definitions if field.supports_sort),
             key=lambda item: item.name,

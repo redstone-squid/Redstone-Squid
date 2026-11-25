@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Protocol
 
+from squid.core.actors import ActingContext, application_operation
 from squid.core.errors import InvalidStateError
 from squid.core.i18n import tr
 from squid.core.posts.domain import ResourceKind as PostResourceKind
@@ -97,7 +98,8 @@ class DiscordReconciliationService:
         self._uow_factory = uow_factory
         self._max_attempts = max_attempts
 
-    async def claim(self, limit: int = 20) -> Sequence[ReconciliationJob]:
+    @application_operation
+    async def claim(self, limit: int = 20, *, context: ActingContext) -> Sequence[ReconciliationJob]:
         """Claim ready work and commit its leases, including replacements for expired claims."""
         async with self._uow_factory() as uow:
             if not 1 <= limit <= 100:
@@ -107,14 +109,16 @@ class DiscordReconciliationService:
             await uow.commit()
             return result
 
-    async def complete(self, job: ReconciliationJob) -> bool:
+    @application_operation
+    async def complete(self, job: ReconciliationJob, *, context: ActingContext) -> bool:
         """Remove a job and return True only if its claim still matches."""
         async with self._uow_factory() as uow:
             result = await uow.reconciliation.complete(job)
             await uow.commit()
             return result
 
-    async def fail(self, job: ReconciliationJob, error: Exception) -> bool:
+    @application_operation
+    async def fail(self, job: ReconciliationJob, error: Exception, *, context: ActingContext) -> bool:
         """Retry failed work with backoff, or dead-letter it at the attempt ceiling.
 
         Return True if retries were stopped. False means a retry was scheduled or the claim was lost.

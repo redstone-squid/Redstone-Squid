@@ -22,6 +22,7 @@ from squid.api.v1.schemas.search import (
     SearchResult,
     SearchSuggestions,
 )
+from squid.core.actors import ActingContext
 from squid.core.builds.application import BuildQueryService, PublicBuildSummary
 from squid.core.errors import DataIntegrityError
 from squid.core.search.application.fields import FieldDefinition
@@ -54,7 +55,7 @@ class PublicSearchFieldDTO(DataclassDTO[FieldDefinition]):
 )
 async def list_search_fields(search_service: Search) -> tuple[FieldDefinition, ...]:
     """Publish the effective allowlisted query-field registry."""
-    registry = await search_service.fields()
+    registry = await search_service.fields(context=ActingContext.current())
     return registry.definitions
 
 
@@ -71,7 +72,9 @@ async def suggest_terms(
     limit: Annotated[int, QueryParameter(ge=1, le=25)] = 5,
 ) -> SearchSuggestions:
     """Suggest indexed terms completing a valid query."""
-    return SearchSuggestions(suggestions=list(await search_service.suggest(q, limit=limit)))
+    return SearchSuggestions(
+        suggestions=list(await search_service.suggest(q, limit=limit, context=ActingContext.current()))
+    )
 
 
 @get(
@@ -104,7 +107,8 @@ async def search(
             sort=SearchSort.parse(sort),
             visible_statuses=PUBLIC_SEARCH_STATUSES,
             group_by_build=group_by_build,
-        )
+        ),
+        context=ActingContext.current(),
     )
     builds = await hydrate_builds(build_queries, result.hits)
     items: list[SearchResult] = []
@@ -168,7 +172,7 @@ async def hydrate_builds(build_queries: BuildQueryService, hits: Sequence[Search
     hit_ids = [build_hit_id(hit.source_id) for hit in hits if hit.resource_kind == "build"]
     if not hit_ids:
         return {}
-    builds = await build_queries.get_many(hit_ids)
+    builds = await build_queries.get_many(hit_ids, context=ActingContext.current())
     # ORM identity columns may still be None before flush.
     summaries = {
         build.id: PublicBuildSummary.from_build(build)

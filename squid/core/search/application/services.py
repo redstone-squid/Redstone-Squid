@@ -3,6 +3,7 @@
 import logging
 from typing import Protocol
 
+from squid.core.actors import ActingContext, application_operation
 from squid.core.errors import ErrorCode, ValidationError
 from squid.core.pagination import PageAnchor
 from squid.core.search.application.embeddings import SearchEmbeddingModel
@@ -55,7 +56,8 @@ class SearchService:
         self._uow_factory = uow_factory
         self._embedding_model = embedding_model
 
-    async def search(self, request: SearchRequest) -> SearchPage:
+    @application_operation
+    async def search(self, request: SearchRequest, *, context: ActingContext) -> SearchPage:
         """Parse the request, fetch results, and add offset-based page links.
 
         An unknown or unsortable sort field raises ValidationError.
@@ -64,7 +66,9 @@ class SearchService:
         transaction. An embedding failure is logged and leaves the backend to
         return lexical results with a warning.
         """
-        registry = await self.fields() if request.parsed_query is None or request.sort is not None else None
+        registry = (
+            await self.fields(context=context) if request.parsed_query is None or request.sort is not None else None
+        )
         query: SearchQuery | None = request.parsed_query
         if query is None:
             assert registry is not None
@@ -106,7 +110,8 @@ class SearchService:
             offset=offset,
         )
 
-    async def suggest(self, query: str | SearchQuery, *, limit: int = 5) -> tuple[str, ...]:
+    @application_operation
+    async def suggest(self, query: str | SearchQuery, *, limit: int = 5, context: ActingContext) -> tuple[str, ...]:
         """Suggest indexed titles; limit must be between 1 and 25."""
         if not 1 <= limit <= 25:
             msg = "suggestion limit must be between 1 and 25"
@@ -124,7 +129,8 @@ class SearchService:
             )
             return await uow.search.suggest(parsed, limit=limit)
 
-    async def fields(self) -> FieldRegistry:
+    @application_operation
+    async def fields(self, *, context: ActingContext) -> FieldRegistry:
         """Return the field registry used by query parsing."""
         async with self._uow_factory() as uow:
             return await uow.search_fields.registry()

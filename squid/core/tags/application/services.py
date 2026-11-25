@@ -4,6 +4,7 @@ import re
 from collections.abc import Sequence
 from typing import Protocol
 
+from squid.core.actors import ActingContext, application_operation
 from squid.core.builds.application.ports import BuildEditingUnitOfWork
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
@@ -50,21 +51,25 @@ class TagService:
     def __init__(self, *, uow_factory: UnitOfWorkFactory[TagUnitOfWork]) -> None:
         self._uow_factory = uow_factory
 
-    async def reserve_identity(self) -> int:
+    @application_operation
+    async def reserve_identity(self, *, context: ActingContext) -> int:
         async with self._uow_factory() as uow:
             return await uow.tags.reserve_identity()
 
-    async def pending(self) -> Sequence[TagDefinition]:
+    @application_operation
+    async def pending(self, *, context: ActingContext) -> Sequence[TagDefinition]:
         """List user definitions awaiting staff review."""
         async with self._uow_factory() as uow:
             return await uow.tags.pending()
 
-    async def public_definitions(self) -> Sequence[TagDefinition]:
+    @application_operation
+    async def public_definitions(self, *, context: ActingContext) -> Sequence[TagDefinition]:
         """List tag definitions available to public search and build clients."""
         async with self._uow_factory() as uow:
             return await uow.tags.approved()
 
-    async def public_definition(self, tag_id: int | str) -> TagDefinition | None:
+    @application_operation
+    async def public_definition(self, tag_id: int | str, *, context: ActingContext) -> TagDefinition | None:
         """Return an approved tag, or None if it is missing or has another status."""
         async with self._uow_factory() as uow:
             definition = await uow.tags.get(tag_id)

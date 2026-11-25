@@ -25,7 +25,10 @@ def poll_context() -> tuple[Any, Any]:
     account = SimpleNamespace(id=7, needs_consent_refresh=False)
     cast(Any, cog).bot = SimpleNamespace(
         actors=SimpleNamespace(resolve=AsyncMock(return_value=Actor(account_id=7, guild_id=10))),
-        services=SimpleNamespace(accounts=SimpleNamespace(get_account_by_identity=AsyncMock(return_value=account))),
+        services=SimpleNamespace(
+            accounts=SimpleNamespace(get_account_by_identity=AsyncMock(return_value=account)),
+            permissions=SimpleNamespace(check=AsyncMock(return_value=SimpleNamespace(allowed=True))),
+        ),
     )
     cast(Any, cog).publisher = SimpleNamespace(
         may_create_network=AsyncMock(return_value=True),
@@ -95,7 +98,7 @@ async def test_network_permission_is_rechecked_at_publish(poll_context: tuple[An
     cog, request = poll_context
     screen = await invoke(cog, request, question="Ready?", scope="network", preview=True)
     assert isinstance(screen, PollScreen)
-    cog.publisher.may_create_network.return_value = False
+    cog.bot.services.permissions.check.return_value = SimpleNamespace(allowed=False)
 
     async with sd.testing.stage(screen, owner=object()) as ui:
         await ui.press(next(key for key in ui.root.snapshot().handler_keys if key.endswith("poll.finish")))

@@ -5,6 +5,7 @@ from functools import partial
 
 from whenever import Instant
 
+from squid.core.actors import ActingContext, Actor
 from squid.core.messages.application import MessageService
 from squid.core.messages.domain import MessageSnapshot
 from squid.core.messages.models import Message
@@ -75,9 +76,9 @@ async def test_observing_the_same_message_twice_keeps_one_snapshot() -> None:
     committed = CommittedState(FakeMessageRepository())
     service = MessageService(uow_factory=partial(FakeMessageUnitOfWork, committed))
 
-    await service.observe(_snapshot())
+    await service.observe(_snapshot(), context=ActingContext.direct(Actor()))
     first_seen = committed.value.observed_at[1]
-    await service.observe(_snapshot(content="hello (edited elsewhere)"))
+    await service.observe(_snapshot(content="hello (edited elsewhere)"), context=ActingContext.direct(Actor()))
 
     assert list(committed.value.snapshots) == [1]
     assert committed.value.snapshots[1].content == "hello (edited elsewhere)"
@@ -90,7 +91,10 @@ async def test_observing_a_dm_is_allowed() -> None:
     committed = CommittedState(FakeMessageRepository())
     service = MessageService(uow_factory=partial(FakeMessageUnitOfWork, committed))
 
-    await service.observe(MessageSnapshot(id=5, channel_id=20, author_id=30, guild_id=None, content="dm"))
+    await service.observe(
+        MessageSnapshot(id=5, channel_id=20, author_id=30, guild_id=None, content="dm"),
+        context=ActingContext.direct(Actor()),
+    )
 
     assert committed.value.snapshots[5].guild_id is None
 
@@ -99,13 +103,13 @@ async def test_edits_and_deletes_report_whether_the_message_was_known() -> None:
     """Unknown messages and repeated deletions return False."""
     committed = CommittedState(FakeMessageRepository())
     service = MessageService(uow_factory=partial(FakeMessageUnitOfWork, committed))
-    await service.observe(_snapshot())
+    await service.observe(_snapshot(), context=ActingContext.direct(Actor()))
 
-    assert await service.record_edit(1, "changed") is True
+    assert await service.record_edit(1, "changed", context=ActingContext.direct(Actor())) is True
     assert committed.value.snapshots[1].content == "changed"
-    assert await service.record_edit(999, "changed") is False
+    assert await service.record_edit(999, "changed", context=ActingContext.direct(Actor())) is False
 
-    assert await service.mark_deleted(1) is True
+    assert await service.mark_deleted(1, context=ActingContext.direct(Actor())) is True
     # A redelivered raw event must not move the tombstone forward.
-    assert await service.mark_deleted(1) is False
-    assert await service.mark_deleted(999) is False
+    assert await service.mark_deleted(1, context=ActingContext.direct(Actor())) is False
+    assert await service.mark_deleted(999, context=ActingContext.direct(Actor())) is False

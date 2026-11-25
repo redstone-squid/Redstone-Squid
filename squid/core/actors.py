@@ -1,10 +1,12 @@
 """Trusted identity and permission context shared by application operations."""
 
-from collections.abc import Iterator
+from collections.abc import Callable, Coroutine, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
+from functools import wraps
+from typing import Any
 from uuid import UUID, uuid4
 
 from squid.core.errors import AuthenticationError, InvalidStateError
@@ -176,3 +178,20 @@ class ActingContext:
 
 
 current_acting_context: ContextVar[ActingContext | None] = ContextVar("current_acting_context", default=None)
+
+
+def application_operation[**P, R](
+    operation: Callable[P, Coroutine[Any, Any, R]],
+) -> Callable[P, Coroutine[Any, Any, R]]:
+    """Bind an operation's required keyword-only context through nested calls and transactions."""
+
+    @wraps(operation)
+    async def invoke(*args: P.args, **kwargs: P.kwargs) -> R:
+        context = kwargs.get("context")
+        if not isinstance(context, ActingContext):
+            message = "An application operation requires an acting context"
+            raise InvalidStateError(message)
+        with context.scope():
+            return await operation(*args, **kwargs)
+
+    return invoke

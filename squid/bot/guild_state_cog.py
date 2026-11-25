@@ -22,6 +22,8 @@ from typing import TYPE_CHECKING
 import discord
 from discord.ext import commands
 
+from squid.core.actors import ActingContext
+
 if TYPE_CHECKING:
     import squid.bot.app
 
@@ -39,7 +41,9 @@ class GuildStateCog[BotT: squid.bot.app.RedstoneSquid](commands.Cog):
     @commands.Cog.listener()
     async def on_ready(self) -> None:
         """Make stored guild presence match the guilds in this gateway session."""
-        joined, left = await self.settings.sync_presence(guild.id for guild in self.bot.guilds)
+        joined, left = await self.settings.sync_presence(
+            (guild.id for guild in self.bot.guilds), context=ActingContext.current()
+        )
         if joined or left:
             logger.info(
                 "Repaired guild presence missed while disconnected",
@@ -49,12 +53,12 @@ class GuildStateCog[BotT: squid.bot.app.RedstoneSquid](commands.Cog):
     @commands.Cog.listener()
     async def on_guild_join(self, guild: discord.Guild) -> None:
         # Settings survive leaving a guild, so a rejoined guild may point at channels deleted since.
-        await self.settings.guild_joined(guild.id)
+        await self.settings.guild_joined(guild.id, context=ActingContext.current())
         await self.reconcile_channels(guild)
 
     @commands.Cog.listener()
     async def on_guild_remove(self, guild: discord.Guild) -> None:
-        await self.settings.guild_removed(guild.id)
+        await self.settings.guild_removed(guild.id, context=ActingContext.current())
 
     @commands.Cog.listener()
     async def on_guild_available(self, guild: discord.Guild) -> None:
@@ -77,9 +81,9 @@ class GuildStateCog[BotT: squid.bot.app.RedstoneSquid](commands.Cog):
         """
         if guild.unavailable:
             return
-        referenced = await self.settings.referenced_channels(guild.id) | await self.starboards.referenced_channels(
-            guild.id
-        )
+        referenced = await self.settings.referenced_channels(
+            guild.id, context=ActingContext.current()
+        ) | await self.starboards.referenced_channels(guild.id, context=ActingContext.current())
         uncached = [channel_id for channel_id in referenced if guild.get_channel_or_thread(channel_id) is None]
         gone = {channel_id for channel_id in uncached if await self._is_deleted(channel_id)}
         if gone:
@@ -91,8 +95,8 @@ class GuildStateCog[BotT: squid.bot.app.RedstoneSquid](commands.Cog):
 
     async def forget_channels(self, guild_id: int, channel_ids: set[int]) -> None:
         """Clear settings that name the channels and stop starboards using them."""
-        await self.settings.forget_channels(guild_id, channel_ids)
-        await self.starboards.forget_channels(guild_id, channel_ids)
+        await self.settings.forget_channels(guild_id, channel_ids, context=ActingContext.current())
+        await self.starboards.forget_channels(guild_id, channel_ids, context=ActingContext.current())
 
     async def _is_deleted(self, channel_id: int) -> bool:
         """Ask Discord whether an uncached channel is gone, treating any doubt as present."""

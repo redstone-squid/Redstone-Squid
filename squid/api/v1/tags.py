@@ -10,6 +10,7 @@ from squid.api.dependencies import CurrentCaller, Services, Tags, get_tags
 from squid.api.errors import responses
 from squid.api.pagination import OffsetParam, Page, PageSizeParam
 from squid.api.v1.browser_views import BrowserViews, TagDetail
+from squid.core.actors import ActingContext
 from squid.core.pagination import offset_page
 from squid.core.tags.errors import TagNotFoundError
 from squid.core.tags.models import TagDefinition
@@ -58,7 +59,7 @@ async def list_tags(
     offset: OffsetParam = None,
 ) -> Page[TagDefinition]:
     """List published tag definitions."""
-    definitions = await tags.public_definitions()
+    definitions = await tags.public_definitions(context=ActingContext.current())
     page = offset_page(definitions, offset=offset or 0, page_size=page_size)
     return Page[TagDefinition].from_domain(page)
 
@@ -73,7 +74,7 @@ async def list_tags(
 )
 async def get_tag(tag_id: FromPath[int], tags: Tags, caller: CurrentCaller, services: Services) -> TagDetail:
     """Return one published tag definition."""
-    definition = await tags.public_definition(tag_id)
+    definition = await tags.public_definition(tag_id, context=ActingContext.current())
     if definition is None:
         raise TagNotFoundError(tag_id)
     return await BrowserViews(services, caller).tag(definition)
@@ -89,7 +90,7 @@ async def get_tag(tag_id: FromPath[int], tags: Tags, caller: CurrentCaller, serv
 )
 async def get_tag_by_slug(slug: FromPath[str], tags: Tags, caller: CurrentCaller, services: Services) -> TagDetail:
     """Resolve a current or former slug to its published tag."""
-    definition = await tags.public_definition(slug)
+    definition = await tags.public_definition(slug, context=ActingContext.current())
     if definition is None:
         raise TagNotFoundError(slug)
     return await BrowserViews(services, caller).tag(definition)

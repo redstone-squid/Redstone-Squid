@@ -17,6 +17,7 @@ from squid.bot.catalogue.search.clauses import CatalogueQuery, combine_clauses, 
 from squid.bot.catalogue.search.labels import field_label, filter_label, sort_label
 from squid.bot.lookup import RequestAuthorizer, SuggestionSource
 from squid.bot.ui import tr
+from squid.core.actors import ActingContext
 from squid.core.search.application import SearchService
 from squid.core.search.application.fields import FieldRegistry
 from squid.core.search.application.parser import SearchQueryParser
@@ -100,7 +101,7 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
 
     @override
     async def on_load(self) -> None:
-        self.parser = SearchQueryParser(await self.service.fields(), scope=self.scope)
+        self.parser = SearchQueryParser(await self.service.fields(context=ActingContext.current()), scope=self.scope)
 
     @property
     def clauses(self) -> tuple[QueryExpression, ...]:

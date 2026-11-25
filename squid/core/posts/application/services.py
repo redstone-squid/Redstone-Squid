@@ -2,6 +2,7 @@
 
 from collections.abc import Sequence
 
+from squid.core.actors import ActingContext, application_operation
 from squid.core.posts.application.ports import PostUnitOfWork
 from squid.core.posts.domain import PostReference, ResourceKind, Surface
 from squid.core.posts.models import DiscordPost
@@ -24,6 +25,7 @@ class PostService:
     def __init__(self, *, uow_factory: UnitOfWorkFactory[PostUnitOfWork]) -> None:
         self._uow_factory = uow_factory
 
+    @application_operation
     async def record(
         self,
         *,
@@ -33,6 +35,7 @@ class PostService:
         resource_key: str,
         surface: Surface,
         applied_revision: int,
+        context: ActingContext,
     ) -> None:
         """Record a sent post. An existing message ID is left unchanged.
 
@@ -50,42 +53,55 @@ class PostService:
             )
             await uow.commit()
 
-    async def list_for_resource(self, resource_kind: ResourceKind, resource_key: str) -> Sequence[DiscordPost]:
+    @application_operation
+    async def list_for_resource(
+        self, resource_kind: ResourceKind, resource_key: str, *, context: ActingContext
+    ) -> Sequence[DiscordPost]:
         """Return all posts for a resource in channel-ID order, including suppressed posts."""
         async with self._uow_factory() as uow:
             return await uow.posts.list_for_resource(resource_kind, resource_key)
 
-    async def resolve(self, message_id: int) -> PostReference | None:
+    @application_operation
+    async def resolve(self, message_id: int, *, context: ActingContext) -> PostReference | None:
         """Return the resource for a known post, including suppressed posts, or None."""
         async with self._uow_factory() as uow:
             return await uow.posts.resolve(message_id)
 
-    async def mark_rendered(self, message_id: int, applied_revision: int) -> None:
+    @application_operation
+    async def mark_rendered(self, message_id: int, applied_revision: int, *, context: ActingContext) -> None:
         """Advance a post's rendered generation if the supplied value is newer."""
         async with self._uow_factory() as uow:
             await uow.posts.mark_rendered(message_id, applied_revision)
             await uow.commit()
 
-    async def mark_applied(self, resource_kind: ResourceKind, resource_key: str, generation: int) -> None:
+    @application_operation
+    async def mark_applied(
+        self, resource_kind: ResourceKind, resource_key: str, generation: int, *, context: ActingContext
+    ) -> None:
         """Advance all posts for a resource, including suppressed ones, to at least this generation."""
         async with self._uow_factory() as uow:
             await uow.posts.mark_applied(resource_kind, resource_key, generation)
             await uow.commit()
 
-    async def suppress(self, message_id: int) -> bool:
+    @application_operation
+    async def suppress(self, message_id: int, *, context: ActingContext) -> bool:
         """Record an external deletion, returning True if a live post was suppressed."""
         async with self._uow_factory() as uow:
             changed = await uow.posts.suppress(message_id)
             await uow.commit()
             return changed
 
-    async def forget(self, message_id: int) -> None:
+    @application_operation
+    async def forget(self, message_id: int, *, context: ActingContext) -> None:
         """Remove the post record while retaining its stored Discord message."""
         async with self._uow_factory() as uow:
             await uow.posts.forget(message_id)
             await uow.commit()
 
-    async def pending_generation(self, resource_kind: ResourceKind, resource_key: str) -> int | None:
+    @application_operation
+    async def pending_generation(
+        self, resource_kind: ResourceKind, resource_key: str, *, context: ActingContext
+    ) -> int | None:
         """Return the queued generation when posts need to be created or updated.
 
         A resource with no live posts also needs reconciliation. Return None if

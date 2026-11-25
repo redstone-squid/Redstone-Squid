@@ -4,6 +4,7 @@ from collections.abc import Collection, Iterable, Sequence
 from dataclasses import replace
 from typing import override
 
+from squid.core.actors import ActingContext
 from squid.core.settings.application import SettingsService
 from squid.core.settings.domain.runtime import RuntimeSettings
 from squid.core.settings.models import RuntimeSetting, ServerSetting
@@ -70,9 +71,9 @@ class RuntimeSettingsStub(SettingsService):
         self.value = value or RuntimeSettings()
 
     @override
-    async def get_runtime(self) -> RuntimeSettings:
+    async def get_runtime(self, *, context: ActingContext) -> RuntimeSettings:
         return self.value
 
     @override
-    async def runtime_snapshot(self) -> tuple[RuntimeSettings, int]:
+    async def runtime_snapshot(self, *, context: ActingContext) -> tuple[RuntimeSettings, int]:
         return self.value, 1

@@ -28,6 +28,7 @@ from squid.bot.ui import text_node
 from squid.bot.utils.permissions import enforce
 from squid.bot.voting.spec import VoteRecount
 from squid.bot.voting.spec import extension as voting_extension
+from squid.core.actors import ActingContext
 from squid.core.i18n import tr
 from squid.core.permissions.domain.catalogue import STARBOARD_BOARD_RECOUNT
 from squid_i18n import md_tr
@@ -138,11 +139,13 @@ class RecountCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
 
     async def _starboard_origin(self, channel_id: int, message_id: int) -> tuple[int, int]:
         """Return the source message a starboard post mirrors, or the given message itself."""
-        post = await self.bot.services.posts.resolve(message_id)
+        post = await self.bot.services.posts.resolve(message_id, context=ActingContext.current())
         if post is None or post.resource_kind != "starboard_entry":
             return channel_id, message_id
         starboard_id, _, origin_id = post.resource_key.partition(":")
-        state = await self.bot.services.starboards.entry_state(int(starboard_id), int(origin_id))
+        state = await self.bot.services.starboards.entry_state(
+            int(starboard_id), int(origin_id), context=ActingContext.current()
+        )
         if state is None:
             return channel_id, message_id
         return state.origin.channel_id, state.origin.id

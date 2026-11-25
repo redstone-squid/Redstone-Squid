@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 import discord
 
 from squid.bot._types import GuildMessageable
+from squid.core.actors import ActingContext
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build
 from squid.core.voting.domain import VoteKind
@@ -22,7 +23,9 @@ logger = logging.getLogger(__name__)
 
 async def configured_vote_channels(bot: squid.bot.app.RedstoneSquid) -> list[GuildMessageable]:
     """Every vote channel the bot can currently see, one per guild that set one."""
-    configured = await bot.services.settings.get_many((guild.id for guild in bot.guilds), "Vote")
+    configured = await bot.services.settings.get_many(
+        (guild.id for guild in bot.guilds), "Vote", context=ActingContext.current()
+    )
     resolved = (bot.get_channel(channel_id) for channel_id in configured.values() if channel_id is not None)
     return list({channel.id: channel for channel in resolved if isinstance(channel, GuildMessageable)}.values())
 
@@ -66,7 +69,7 @@ async def ensure_build_review(
     )
     options = [option for preset in presets.values() for option in preset.options]
 
-    settings = await bot.services.settings.get_runtime()
+    settings = await bot.services.settings.get_runtime(context=ActingContext.current())
     session_id = await bot.services.votes.ensure_build_submission_vote(
         author_account_id=build.submitter_account_id,
         pass_threshold=settings.build_vote_pass_threshold,
@@ -97,7 +100,7 @@ async def start_delete_log_vote(
         raise ValueError(msg)
 
     options = (await bot.services.votes.emoji_preset(target_message.guild.id, VoteKind.DELETE_LOG)).options
-    settings = await bot.services.settings.get_runtime()
+    settings = await bot.services.settings.get_runtime(context=ActingContext.current())
     session_id = await bot.services.votes.start_delete_log_vote(
         author_account_id=author_account_id,
         pass_threshold=settings.delete_vote_pass_threshold,

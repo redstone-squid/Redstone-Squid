@@ -6,6 +6,8 @@ from typing import TYPE_CHECKING
 import discord
 from discord.ext import commands
 
+from squid.core.actors import ActingContext
+
 if TYPE_CHECKING:
     import squid.bot.app
 
@@ -24,16 +26,18 @@ class MessageTrackingCog[BotT: squid.bot.app.RedstoneSquid](commands.Cog):
         # all, which is not the same as an edit that cleared the message body.
         if "content" not in payload.data:
             return
-        await self.bot.services.messages.record_edit(payload.message_id, payload.data["content"])
+        await self.bot.services.messages.record_edit(
+            payload.message_id, payload.data["content"], context=ActingContext.current()
+        )
 
     @commands.Cog.listener()
     async def on_raw_message_delete(self, payload: discord.RawMessageDeleteEvent) -> None:
-        await self.bot.services.messages.mark_deleted(payload.message_id)
+        await self.bot.services.messages.mark_deleted(payload.message_id, context=ActingContext.current())
 
     @commands.Cog.listener()
     async def on_raw_bulk_message_delete(self, payload: discord.RawBulkMessageDeleteEvent) -> None:
         for message_id in payload.message_ids:
-            await self.bot.services.messages.mark_deleted(message_id)
+            await self.bot.services.messages.mark_deleted(message_id, context=ActingContext.current())
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:

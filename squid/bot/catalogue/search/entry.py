@@ -8,6 +8,7 @@ from squid.bot.catalogue.search.clauses import query_leaves
 from squid.bot.catalogue.search.results import SearchScreen
 from squid.bot.routes import AppRequest
 from squid.bot.submission.build_card import render_build_card
+from squid.core.actors import ActingContext
 from squid.core.search.application.parser import SearchQueryParser
 from squid.core.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
 from squid.core.search.domain.query import FieldExpression, NotExpression, PresenceExpression
@@ -52,7 +53,9 @@ async def open_search(
 ) -> BuildBrowseScreen | SearchScreen:
     """Open the requested search target, inferring records from criterion when scope is omitted."""
     if scope is None:
-        parsed = SearchQueryParser(await request.client.services.search.fields()).parse(query)
+        parsed = SearchQueryParser(await request.client.services.search.fields(context=ActingContext.current())).parse(
+            query
+        )
         leaves = query_leaves(parsed.expression) if parsed.expression is not None else ()
         fields = (leaf.operand if isinstance(leaf, NotExpression) else leaf for _, leaf in leaves)
         scope = (
@@ -82,7 +85,7 @@ async def open_search(
     )
     client = request.client
     search = client.services.search
-    page = await search.search(search_request)
+    page = await search.search(search_request, context=ActingContext.current())
     return SearchScreen(
         search,
         search_request,

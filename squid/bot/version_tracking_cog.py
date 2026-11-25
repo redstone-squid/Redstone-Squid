@@ -12,6 +12,7 @@ import squid_ui_widgets as sp
 from squid.bot.i18n import localization_for, resolve_locale
 from squid.bot.ui import render_payload, text_node, tr
 from squid.bot.utils.permissions import Grants, requires_grant
+from squid.core.actors import ActingContext
 from squid.core.permissions.domain.catalogue import VERSION_ENTRY_CREATE
 from squid.core.versions.domain import Edition, MinecraftVersion
 from squid.core.versions.errors import InvalidVersionError
@@ -28,9 +29,13 @@ if TYPE_CHECKING:
 class VersionOperations(Protocol):
     """Version reads and writes used by the live catalogue."""
 
-    async def list_display(self, edition: Edition, *, limit: int | None = None) -> Sequence[str]: ...
+    async def list_display(
+        self, edition: Edition, *, limit: int | None = None, context: ActingContext
+    ) -> Sequence[str]: ...
 
-    async def add(self, version_string: str, *, edition: Edition | None = None) -> MinecraftVersion: ...
+    async def add(
+        self, version_string: str, *, edition: Edition | None = None, context: ActingContext
+    ) -> MinecraftVersion: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,8 +66,8 @@ class VersionScreen(sd.Screen):
         await self._refresh()
 
     async def _refresh(self) -> None:
-        java = await self._versions.list_display("Java")
-        bedrock = await self._versions.list_display("Bedrock")
+        java = await self._versions.list_display("Java", context=ActingContext.current())
+        bedrock = await self._versions.list_display("Bedrock", context=ActingContext.current())
         entries = tuple(VersionItem("Java", value) for value in java) + tuple(
             VersionItem("Bedrock", value) for value in bedrock
         )
@@ -106,7 +111,7 @@ class VersionScreen(sd.Screen):
         form = _AddVersionForm.from_submission(event)
         edition = form.edition
         version_text = form.version
-        version = str(await self._versions.add(version_text, edition=edition))
+        version = str(await self._versions.add(version_text, edition=edition, context=ActingContext.current()))
         await self._refresh()
         await event.notice(md_tr(t"bot-version-tracking-added = Added {version}."))
 
@@ -131,14 +136,14 @@ class VersionTracker[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="Vers
         """Ingest version announcements, ignoring our own replies and non-version posts."""
         if message.guild is None or message.guild.id != self.bot.owner_server_id:
             return
-        settings = await self.bot.services.settings.get_runtime()
+        settings = await self.bot.services.settings.get_runtime(context=ActingContext.current())
         channel_id = message.channel.id
         if channel_id != settings.version_tracker_channel_id:
             return
         if message.author == self.bot.user:
             return
         try:
-            version = await self.version_service.add(message.content.split("\n", 1)[0])
+            version = await self.version_service.add(message.content.split("\n", 1)[0], context=ActingContext.current())
         except InvalidVersionError:
             return
         locale = await resolve_locale(message, self.bot.services.settings)

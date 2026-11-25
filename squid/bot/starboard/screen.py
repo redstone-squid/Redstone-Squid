@@ -13,7 +13,7 @@ import squid_ui_widgets as sp
 from squid.bot.edit_controller import EditController
 from squid.bot.ui import tr
 from squid.bot.utils.permissions import Grants, requires_grant
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.edits.application import EditRunner
 from squid.core.edits.domain import EditValues
 from squid.core.permissions.domain.catalogue import (
@@ -44,11 +44,11 @@ type ChannelValidator = Callable[[int], Awaitable[None]]
 class StarboardOperations(Protocol):
     """Starboard reads and writes used by the configuration screen."""
 
-    async def snapshot(self, starboard_id: int) -> StarboardSnapshot | None: ...
+    async def snapshot(self, starboard_id: int, *, context: ActingContext) -> StarboardSnapshot | None: ...
 
-    async def reserve_id(self) -> int: ...
+    async def reserve_id(self, *, context: ActingContext) -> int: ...
 
-    async def list_for_guild(self, guild_id: int) -> Sequence[StarboardConfig]: ...
+    async def list_for_guild(self, guild_id: int, *, context: ActingContext) -> Sequence[StarboardConfig]: ...
 
 
 class StarboardScreen(sd.Screen):
@@ -91,8 +91,8 @@ class StarboardScreen(sd.Screen):
     async def _refresh(self) -> None:
         focus = self._browser.session.focus if self._browser is not None else None
         snapshots = {}
-        for board in await self._operations.list_for_guild(self._guild_id):
-            snapshot = await self._operations.snapshot(board.id)
+        for board in await self._operations.list_for_guild(self._guild_id, context=ActingContext.current()):
+            snapshot = await self._operations.snapshot(board.id, context=ActingContext.current())
             if snapshot is not None:
                 snapshots[snapshot.id] = snapshot
         self._snapshots = snapshots
@@ -276,7 +276,7 @@ class StarboardScreen(sd.Screen):
         name = form.name
         required = form.required
         await self._validate_channel(channel_id)
-        identity = await self._operations.reserve_id()
+        identity = await self._operations.reserve_id(context=ActingContext.current())
         created = StarboardConfig(
             id=identity,
             guild_id=self._guild_id,

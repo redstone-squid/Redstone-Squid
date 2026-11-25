@@ -12,6 +12,7 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from squid.core.actors import ActingContext
 from squid.core.persistence.base import Base
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldRegistry
@@ -28,7 +29,7 @@ RESTRICTIONS = ["Seamless", "Semi-Seamless", "Full Lamp", "Flush", "Skydoor"]
 
 
 class StaticFields:
-    async def fields(self) -> FieldRegistry:
+    async def fields(self, *, context: ActingContext) -> FieldRegistry:
         return DEFAULT_FIELD_REGISTRY
 
 

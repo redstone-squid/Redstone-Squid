@@ -5,6 +5,7 @@ import json
 from collections.abc import Sequence
 from typing import Protocol, override
 
+from squid.core.actors import ActingContext
 from squid.core.submissions.application import FormOptionCatalog, FormOptionSet
 from squid.core.submissions.domain import ChoiceOption
 from squid.core.tags.domain import TagSemanticKind, TagValueType
@@ -21,13 +22,13 @@ _SOURCES = {
 class ApprovedTagDefinitions(Protocol):
     """Read the tag definitions approved for public clients."""
 
-    async def public_definitions(self) -> Sequence[TagDefinition]: ...
+    async def public_definitions(self, *, context: ActingContext) -> Sequence[TagDefinition]: ...
 
 
 class CanonicalMinecraftVersions(Protocol):
     """Read canonical versions recognized by build persistence."""
 
-    async def list_all(self) -> Sequence[MinecraftVersion]: ...
+    async def list_all(self, *, context: ActingContext) -> Sequence[MinecraftVersion]: ...
 
 
 class ApprovedSubmissionOptionCatalog(FormOptionCatalog):
@@ -56,7 +57,7 @@ class ApprovedSubmissionOptionCatalog(FormOptionCatalog):
             choices = tuple(
                 ChoiceOption(value, value)
                 for value in sorted(
-                    {str(version) for version in await self._versions.list_all()},
+                    {str(version) for version in await self._versions.list_all(context=ActingContext.current())},
                     key=_version_sort_key,
                 )
             )
@@ -68,7 +69,7 @@ class ApprovedSubmissionOptionCatalog(FormOptionCatalog):
             raise ValueError(msg) from error
         definitions = tuple(
             definition
-            for definition in await self._tags.public_definitions()
+            for definition in await self._tags.public_definitions(context=ActingContext.current())
             if definition.semantic_kind is semantic_kind
         )
         choices = tuple(

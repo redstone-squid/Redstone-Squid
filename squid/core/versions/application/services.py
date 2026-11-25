@@ -2,6 +2,7 @@
 
 import re
 
+from squid.core.actors import ActingContext, application_operation
 from squid.core.unit_of_work import UnitOfWorkFactory
 from squid.core.versions.application.ports import VersionUnitOfWork
 from squid.core.versions.domain import Edition, MinecraftVersion, parse_version_string
@@ -14,7 +15,10 @@ class VersionService:
     def __init__(self, *, uow_factory: UnitOfWorkFactory[VersionUnitOfWork]) -> None:
         self._uow_factory = uow_factory
 
-    async def add(self, version_string: str, *, edition: Edition | None = None) -> MinecraftVersion:
+    @application_operation
+    async def add(
+        self, version_string: str, *, edition: Edition | None = None, context: ActingContext
+    ) -> MinecraftVersion:
         """Parse and store a version, using `edition` to override the parsed edition."""
         parsed_edition, major, minor, patch = parse_version_string(version_string)
         version = MinecraftVersion(edition or parsed_edition, major, minor, patch)
@@ -23,44 +27,51 @@ class VersionService:
             await uow.commit()
             return stored
 
-    async def data_version_for(self, version_label: str) -> int | None:
+    @application_operation
+    async def data_version_for(self, version_label: str, *, context: ActingContext) -> int | None:
         """Return the saved-data version, or None for an invalid, unknown, or unmapped release."""
         async with self._uow_factory() as uow:
             return await uow.versions.data_version_for(version_label)
 
-    async def label_for_data_version(self, data_version: int) -> str | None:
+    @application_operation
+    async def label_for_data_version(self, data_version: int, *, context: ActingContext) -> str | None:
         """Return the earliest matching catalogue release, or None if no release matches."""
         async with self._uow_factory() as uow:
             return await uow.versions.label_for_data_version(data_version)
 
-    async def list_versions(self, edition: Edition) -> list[MinecraftVersion]:
+    @application_operation
+    async def list_versions(self, edition: Edition, *, context: ActingContext) -> list[MinecraftVersion]:
         """Return catalog versions for one edition, from oldest to newest."""
         async with self._uow_factory() as uow:
             return await uow.versions.list(edition)
 
-    async def list_all(self) -> list[MinecraftVersion]:
+    @application_operation
+    async def list_all(self, *, context: ActingContext) -> list[MinecraftVersion]:
         """List Java versions followed by Bedrock versions, oldest first within each edition."""
         async with self._uow_factory() as uow:
             java = await uow.versions.list("Java")
             bedrock = await uow.versions.list("Bedrock")
             return [*java, *bedrock]
 
-    async def list_display(self, edition: Edition, *, limit: int | None = None) -> list[str]:
+    @application_operation
+    async def list_display(self, edition: Edition, *, limit: int | None = None, context: ActingContext) -> list[str]:
         """Return oldest-first display strings, optionally sliced to `limit`."""
-        versions = await self.list_versions(edition)
+        versions = await self.list_versions(edition, context=context)
         return [str(version) for version in (versions if limit is None else versions[:limit])]
 
-    async def newest(self, edition: Edition) -> str:
+    @application_operation
+    async def newest(self, edition: Edition, *, context: ActingContext) -> str:
         """Return the newest recognized version as a display string.
 
         Raise VersionCatalogUnavailableError if the edition has no catalog entries.
         """
-        versions = await self.list_versions(edition)
+        versions = await self.list_versions(edition, context=context)
         if not versions:
             raise VersionCatalogUnavailableError(edition)
         return str(versions[-1])
 
-    async def resolve_spec(self, version_spec: str) -> list[str]:
+    @application_operation
+    async def resolve_spec(self, version_spec: str, *, context: ActingContext) -> list[str]:
         """Resolve comma-separated version selections against the catalog.
 
         `1.19` selects every known patch in that release. `1.19 - 1.20` includes
@@ -83,7 +94,7 @@ class VersionService:
         if not normalized_spec and version_spec.strip() in {"Java", "Bedrock"}:
             return []
         normalized_spec = re.sub(r"(?<=\d)\s*[~\uff5e\u2013\u2014]\s*(?=\d)", " - ", normalized_spec)
-        versions = await self.list_versions(edition)
+        versions = await self.list_versions(edition, context=context)
         available = [(version.major, version.minor, version.patch) for version in versions]
         resolved: list[tuple[int, int, int]] = []
         excluded: list[tuple[int, int, int]] = []

@@ -16,7 +16,7 @@ from squid.bot.edit_controller import EditController
 from squid.bot.lookup import pick
 from squid.bot.ui import tr
 from squid.bot.utils.permissions import Grants, requires_grant
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.builds.errors import AliasAlreadyAddedError
 from squid.core.edits.application import EditRunner
 from squid.core.edits.domain import Revision
@@ -46,11 +46,11 @@ from squid_ui.ext.discord.target_types import ComponentsV2Target
 class TagOperations(Protocol):
     """Tag reads and mutations exposed by the workspace."""
 
-    async def public_definitions(self) -> Sequence[TagDefinition]: ...
+    async def public_definitions(self, *, context: ActingContext) -> Sequence[TagDefinition]: ...
 
-    async def pending(self) -> Sequence[TagDefinition]: ...
+    async def pending(self, *, context: ActingContext) -> Sequence[TagDefinition]: ...
 
-    async def reserve_identity(self) -> int: ...
+    async def reserve_identity(self, *, context: ActingContext) -> int: ...
 
 
 class RestrictionOperations(Protocol):
@@ -138,7 +138,7 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
         if self._restriction is not None:
             item, _ = self._restriction
             self._restriction = (item, await self._restrictions.alias_revision(item.value))
-        definitions = tuple(await self._tags.public_definitions())
+        definitions = tuple(await self._tags.public_definitions(context=ActingContext.current()))
         self._catalogue = sp.Browser(
             sl.sources.list_source(definitions),
             key="tag-catalogue",
@@ -151,7 +151,7 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
             empty=tr(t"bot-tags-view-no-public-build-tags-are-available = No public build tags are available."),
         )
         if TAG_PROPOSAL_LIST in self.grants:
-            pending = tuple(await self._tags.pending())
+            pending = tuple(await self._tags.pending(context=ActingContext.current()))
             actions = tuple(
                 action
                 for action, node in (
@@ -326,7 +326,7 @@ class TagsScreen(sd.Screen[None, Any, RedstoneSquid]):
             candidate = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")[:64]
             if candidate and candidate[0].isalpha():
                 query_name = candidate
-        tag_id = await self._tags.reserve_identity()
+        tag_id = await self._tags.reserve_identity(context=ActingContext.current())
         await self.edits.bind(PROPOSAL_EDIT, tag_target(tag_id), 0).save(
             ProposalValues(display_name=name, value_type=value_type, query_name=query_name).edit_values(),
             tr(t"tags-history-proposal = Propose showcase tag"),

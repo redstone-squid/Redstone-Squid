@@ -3,6 +3,7 @@
 from collections.abc import Sequence
 from typing import Protocol
 
+from squid.core.actors import ActingContext
 from squid.core.suggestions.application import Candidate
 from squid.core.suggestions.application.queries import SuggestionRepository
 from squid.core.suggestions.application.registry import SuggestionSource
@@ -14,7 +15,7 @@ from squid.core.versions.domain import MinecraftVersion
 class CanonicalMinecraftVersions(Protocol):
     """Read canonical versions recognized by build persistence."""
 
-    async def list_all(self) -> Sequence[MinecraftVersion]: ...
+    async def list_all(self, *, context: ActingContext) -> Sequence[MinecraftVersion]: ...
 
 
 class VersionProvider:
@@ -31,7 +32,9 @@ class VersionProvider:
     async def _load(self, _key: None) -> tuple[Candidate, ...]:
         # Newest first, because an empty query should offer the versions people actually submit
         # against rather than the oldest ones the catalogue happens to start with.
-        names = sorted({str(version) for version in await self._versions.list_all()}, key=_sort_key)
+        names = sorted(
+            {str(version) for version in await self._versions.list_all(context=ActingContext.current())}, key=_sort_key
+        )
         return tuple(Candidate.create(name, kind="version") for name in names)
 
 

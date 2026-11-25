@@ -159,7 +159,7 @@ class DiscordPollPublisher:
     async def attach_message(self, vote_session_id: int, message: discord.Message) -> PollPublication:
         """Attach an already sent message, safe to repeat after a partial failure."""
         try:
-            await self._bot.services.messages.observe(to_message_snapshot(message))
+            await self._bot.services.messages.observe(to_message_snapshot(message), context=ActingContext.current())
             await self._bot.services.votes.attach_message(vote_session_id, message.id)
             await self._bot.refresh_posts("vote_session", str(vote_session_id))
         except Exception as error:

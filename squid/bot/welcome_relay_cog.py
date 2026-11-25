@@ -9,6 +9,7 @@ from discord.ext.commands import Cog
 
 from squid.bot._types import GuildMessageable
 from squid.bot.ui import render_payload, text_node
+from squid.core.actors import ActingContext
 from squid.core.community.domain import WelcomeRelayDecision, WelcomeRelayPolicy
 from squid.core.settings.domain.runtime import RuntimeSettings
 from squid_i18n import Text, mention
@@ -28,7 +29,7 @@ class WelcomeRelay[BotT: squid.bot.app.RedstoneSquid](Cog):
         self.service = bot.services.welcome_relay
 
     async def _settings(self) -> RuntimeSettings:
-        settings = await self.bot.services.settings.get_runtime()
+        settings = await self.bot.services.settings.get_runtime(context=ActingContext.current())
         self.service.configure(
             WelcomeRelayPolicy(settings.welcome_channel_id, settings.welcome_forward_chance),
             enabled=settings.welcome_enabled,

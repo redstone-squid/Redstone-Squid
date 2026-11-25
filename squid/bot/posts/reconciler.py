@@ -23,6 +23,7 @@ import discord
 import squid_ui.ext.discord as sd
 from squid.bot.message_adapter import to_message_snapshot
 from squid.bot.posts.renderer import DesiredPost, PostRenderer
+from squid.core.actors import ActingContext
 from squid.core.concurrency import DISCORD_FANOUT_LIMIT, run_all
 from squid.core.posts.domain import ResourceKind, Surface
 from squid.core.posts.models import DiscordPost
@@ -57,7 +58,7 @@ class PostReconciler[BotT: squid.bot.app.RedstoneSquid]:
         Callers use this for cards whose destination a person chose, such as a
         delete-log vote. The initial applied revision is zero.
         """
-        await self.bot.services.messages.observe(to_message_snapshot(message))
+        await self.bot.services.messages.observe(to_message_snapshot(message), context=ActingContext.current())
         await self.bot.services.posts.record(
             message_id=message.id,
             channel_id=message.channel.id,
@@ -65,6 +66,7 @@ class PostReconciler[BotT: squid.bot.app.RedstoneSquid]:
             resource_key=resource_key,
             surface=surface,
             applied_revision=0,
+            context=ActingContext.current(),
         )
 
     async def reconcile(self, resource_kind: ResourceKind, resource_key: str, generation: int) -> None:
@@ -78,7 +80,9 @@ class PostReconciler[BotT: squid.bot.app.RedstoneSquid]:
         if renderer is None:
             logger.warning("No renderer is registered for %s posts", resource_kind)
             return
-        existing = await self.bot.services.posts.list_for_resource(resource_kind, resource_key)
+        existing = await self.bot.services.posts.list_for_resource(
+            resource_kind, resource_key, context=ActingContext.current()
+        )
         desired = await renderer.desired(resource_key)
 
         if desired is None:
@@ -123,7 +127,7 @@ class PostReconciler[BotT: squid.bot.app.RedstoneSquid]:
             raise RuntimeError(detail)
         # The fact has to land before the post: `discord_posts.message_id` is RESTRICT,
         # so a post row cannot reference a message the database has not recorded yet.
-        await self.bot.services.messages.observe(to_message_snapshot(message))
+        await self.bot.services.messages.observe(to_message_snapshot(message), context=ActingContext.current())
         await self.bot.services.posts.record(
             message_id=message.id,
             channel_id=want.channel_id,
@@ -131,6 +135,7 @@ class PostReconciler[BotT: squid.bot.app.RedstoneSquid]:
             resource_key=resource_key,
             surface=want.surface,
             applied_revision=generation,
+            context=ActingContext.current(),
         )
         await renderer.after_send(resource_key, message)
 
@@ -147,7 +152,7 @@ class PostReconciler[BotT: squid.bot.app.RedstoneSquid]:
         if message is None:
             return False
         await sd.edit_to(message)(want.payload)
-        await self.bot.services.posts.mark_rendered(post.message_id, generation)
+        await self.bot.services.posts.mark_rendered(post.message_id, generation, context=ActingContext.current())
         return True
 
     async def _remove_all(self, posts: Sequence[DiscordPost]) -> None:
@@ -159,7 +164,7 @@ class PostReconciler[BotT: squid.bot.app.RedstoneSquid]:
             # Already gone is the expected state on a retry.
             with contextlib.suppress(discord.NotFound, discord.Forbidden):
                 await message.delete()
-        await self.bot.services.posts.forget(post.message_id)
+        await self.bot.services.posts.forget(post.message_id, context=ActingContext.current())
 
     async def _fetch(self, post: DiscordPost) -> discord.Message | None:
         """Fetch a recorded message, returning `None` when unavailable.
@@ -173,8 +178,8 @@ class PostReconciler[BotT: squid.bot.app.RedstoneSquid]:
         try:
             return await channel.fetch_message(post.message_id)
         except discord.NotFound:
-            await self.bot.services.posts.suppress(post.message_id)
-            await self.bot.services.messages.mark_deleted(post.message_id)
+            await self.bot.services.posts.suppress(post.message_id, context=ActingContext.current())
+            await self.bot.services.messages.mark_deleted(post.message_id, context=ActingContext.current())
             return None
         except discord.Forbidden:
             return None

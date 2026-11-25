@@ -10,6 +10,7 @@ from squid.bot._types import GuildMessageable
 from squid.bot.posts.renderer import DesiredPost, PostRenderer
 from squid.bot.submission.build_card import render_build_card
 from squid.bot.ui import render_payload, tr
+from squid.core.actors import ActingContext
 from squid.core.builds.domain import BuildStatus
 from squid.core.posts.domain import ResourceKind
 
@@ -35,7 +36,7 @@ class BuildCardRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
 
     @override
     async def desired(self, resource_key: str) -> Sequence[DesiredPost] | None:
-        build = await self.bot.services.build_queries.get(int(resource_key))
+        build = await self.bot.services.build_queries.get(int(resource_key), context=ActingContext.current())
         if build is None:
             return None
         if build.submission_status != BuildStatus.APPROVED:
@@ -60,7 +61,9 @@ class BuildCardRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
             key="build-post-actions",
         )
         payload = render_payload([card, creators] if build.credits else [card])
-        configured = await self.bot.services.settings.get_many((guild.id for guild in self.bot.guilds), "Builds")
+        configured = await self.bot.services.settings.get_many(
+            (guild.id for guild in self.bot.guilds), "Builds", context=ActingContext.current()
+        )
         channels = (self.bot.get_channel(channel_id) for channel_id in configured.values() if channel_id is not None)
         return [
             DesiredPost(
