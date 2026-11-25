@@ -17,6 +17,7 @@ from squid.api.v1.schemas.votes import VoteSessionDetail
 from squid.core.accounts.application import AccountService
 from squid.core.accounts.domain import CreditedAlias, PublicCreatorProfile
 from squid.core.accounts.models import CreatorAlias
+from squid.core.actors import ActingContext
 from squid.core.artifacts.infrastructure import LocalArtifactStore
 from squid.core.builds.application import BuildQueryService
 from squid.core.builds.domain import BuildStatus
@@ -56,11 +57,11 @@ class PublicTagFake(TagService):
         self.definition = definition
 
     @override
-    async def public_definitions(self) -> Sequence[TagDefinition]:
+    async def public_definitions(self, *, context: ActingContext) -> Sequence[TagDefinition]:
         return (self.definition,)
 
     @override
-    async def public_definition(self, tag_id: int | str) -> TagDefinition | None:
+    async def public_definition(self, tag_id: int | str, *, context: ActingContext) -> TagDefinition | None:
         return self.definition if tag_id == self.definition.id else None
 
 
@@ -69,7 +70,7 @@ class VersionFake(VersionService):
         pass
 
     @override
-    async def list_all(self) -> list[MinecraftVersion]:
+    async def list_all(self, *, context: ActingContext) -> list[MinecraftVersion]:
         return [MinecraftVersion("Java", 1, 21, 5), MinecraftVersion("Bedrock", 1, 21, 50)]
 
 
@@ -78,13 +79,13 @@ class AccountFake(AccountService):
         pass
 
     @override
-    async def get_creator_alias(self, name: str) -> CreatorAlias | None:
+    async def get_creator_alias(self, name: str, *, context: ActingContext) -> CreatorAlias | None:
         if name.casefold() != "builder":
             return None
         return CreatorAlias(id=7, name="Builder", account_id=42, public_creator_id=CREATOR_PUBLIC_ID)
 
     @override
-    async def get_public_profile(self, public_id: UUID) -> PublicCreatorProfile | None:
+    async def get_public_profile(self, public_id: UUID, *, context: ActingContext) -> PublicCreatorProfile | None:
         if public_id != CREATOR_PUBLIC_ID:
             return None
         return PublicCreatorProfile(
@@ -100,7 +101,9 @@ class SchematicFake(SchematicService):
         pass
 
     @override
-    async def render_content(self, recipe_hash: str, *, max_bytes: int = 8 * 1024 * 1024) -> bytes:
+    async def render_content(
+        self, recipe_hash: str, *, context: ActingContext, max_bytes: int = 8 * 1024 * 1024
+    ) -> bytes:
         # Raising rather than returning None, because that is what the real service does
         # when the hash is unknown, and the route has no branch for a missing preview.
         if recipe_hash != RENDER_RECIPE_HASH:
@@ -119,7 +122,9 @@ class RefusingRenderFake(SchematicService):
         return RenderRequest()
 
     @override
-    async def render_now(self, build_id: int, *, request: RenderRequest | None = None) -> RenderedSchematic:
+    async def render_now(
+        self, build_id: int, *, context: ActingContext, request: RenderRequest | None = None
+    ) -> RenderedSchematic:
         reason = RenderSkipReason.OVER_VOLUME_BUDGET
         raise SchematicRenderRefusedError(reason.value, reason.description)
 
@@ -129,7 +134,7 @@ class ConfirmedBuildFake(BuildQueryService):
         pass
 
     @override
-    async def get_public(self, build_id: int) -> Build:
+    async def get_public(self, build_id: int, *, context: ActingContext) -> Build:
         return DoorBuild(
             id=build_id,
             submitter_account_id=1,
@@ -156,7 +161,9 @@ class PublishedMediaFake(PublishedBuildMedia):
         (tmp_path / self.artifact.object_key).write_bytes(data)
 
     @override
-    async def outputs(self, build_id: int, *, upload_id: UUID | None = None) -> list[MediaArtifactRecord]:
+    async def outputs(
+        self, build_id: int, *, context: ActingContext, upload_id: UUID | None = None
+    ) -> list[MediaArtifactRecord]:
         return [self.artifact] if build_id == 7 and upload_id in {None, self.artifact.upload_id} else []
 
 
@@ -165,7 +172,7 @@ class VoteFake(VoteService):
         self.session = session
 
     @override
-    async def get_session(self, vote_session_id: int) -> VoteSessionSnapshot | None:
+    async def get_session(self, vote_session_id: int, *, context: ActingContext) -> VoteSessionSnapshot | None:
         return self.session if vote_session_id == self.session.id else None
 
 

@@ -454,11 +454,15 @@ async def test_link_rejects_an_invalid_or_conflicting_java_identity() -> None:
     assert account.id is not None
     linked = service(repository)
     with pytest.raises(InvalidVerificationCodeError):
-        await linked.link_minecraft_account(account.id, "bad", consent=CONSENT, attempted_by=ATTEMPT)
+        await linked.link_minecraft_account(
+            "bad", consent=CONSENT, context=ActingContext.direct(Actor(discord_user_id=123, account_id=account.id))
+        )
 
     repository.link_result = VerificationLinkResult(account=account, conflicting_java_uuid=OTHER_JAVA_UUID)
     with pytest.raises(AccountAlreadyLinkedError):
-        await linked.link_minecraft_account(account.id, "valid", consent=CONSENT, attempted_by=ATTEMPT)
+        await linked.link_minecraft_account(
+            "valid", consent=CONSENT, context=ActingContext.direct(Actor(discord_user_id=123, account_id=account.id))
+        )
 
 
 async def test_link_returns_the_automatically_claimed_alias() -> None:
@@ -469,7 +473,7 @@ async def test_link_returns_the_automatically_claimed_alias() -> None:
     assert account.id is not None
 
     refresh = await service(repository).link_minecraft_account(
-        account.id, "valid", consent=CONSENT, attempted_by=ATTEMPT
+        "valid", consent=CONSENT, context=ActingContext.direct(Actor(discord_user_id=123, account_id=account.id))
     )
 
     assert refresh.claimed_alias is not None
@@ -500,7 +504,9 @@ async def test_a_bad_code_fails_at_reservation_before_any_prompt() -> None:
     repository = FakeAccountRepository()
 
     with pytest.raises(InvalidVerificationCodeError):
-        await service(repository).reserve_minecraft_link("bad", attempted_by=ATTEMPT)
+        await service(repository).reserve_minecraft_link(
+            "bad", context=ActingContext.direct(Actor(discord_user_id=123))
+        )
 
     # An invalid reservation consumes a verification attempt.
     assert repository.failures[ATTEMPT] == 1
@@ -511,7 +517,9 @@ async def test_reserving_returns_the_preview_the_prompt_needs() -> None:
     credit = CreditPreview(name="Player", build_count=12)
     repository.reservable["good"] = _preview(credit=credit)
 
-    reservation = await service(repository).reserve_minecraft_link("good", attempted_by=ATTEMPT)
+    reservation = await service(repository).reserve_minecraft_link(
+        "good", context=ActingContext.direct(Actor(discord_user_id=123))
+    )
 
     assert reservation.preview.username == "Player"
     assert reservation.preview.credit == credit
@@ -527,10 +535,10 @@ async def test_reservation_lockout_is_enforced_before_reserving() -> None:
     accounts = service(repository)
     for _ in range(VERIFICATION_MAX_CONSECUTIVE_FAILURES):
         with pytest.raises(InvalidVerificationCodeError):
-            await accounts.reserve_minecraft_link("bad", attempted_by=ATTEMPT)
+            await accounts.reserve_minecraft_link("bad", context=ActingContext.direct(Actor(discord_user_id=123)))
 
     with pytest.raises(VerificationAttemptsExhaustedError):
-        await accounts.reserve_minecraft_link("good", attempted_by=ATTEMPT)
+        await accounts.reserve_minecraft_link("good", context=ActingContext.direct(Actor(discord_user_id=123)))
 
 
 async def test_committing_a_reservation_passes_the_token_through() -> None:
@@ -540,10 +548,15 @@ async def test_committing_a_reservation_passes_the_token_through() -> None:
     repository.reservable["good"] = _preview()
     repository.link_result = _linked(account)
     accounts = service(repository)
-    reservation = await accounts.reserve_minecraft_link("good", attempted_by=ATTEMPT)
+    reservation = await accounts.reserve_minecraft_link(
+        "good", context=ActingContext.direct(Actor(discord_user_id=123))
+    )
 
     await accounts.link_minecraft_account(
-        account.id, "good", consent=CONSENT, attempted_by=ATTEMPT, reservation=reservation
+        "good",
+        consent=CONSENT,
+        reservation=reservation,
+        context=ActingContext.direct(Actor(discord_user_id=123, account_id=account.id)),
     )
 
     assert repository.consumed_token == reservation.token
@@ -556,12 +569,17 @@ async def test_a_lapsed_reservation_is_not_reported_as_a_bad_code() -> None:
     assert account.id is not None
     repository.reservable["good"] = _preview()
     accounts = service(repository)
-    reservation = await accounts.reserve_minecraft_link("good", attempted_by=ATTEMPT)
-    await accounts.release_minecraft_link("good", reservation)
+    reservation = await accounts.reserve_minecraft_link(
+        "good", context=ActingContext.direct(Actor(discord_user_id=123))
+    )
+    await accounts.release_minecraft_link("good", reservation, context=ActingContext.direct(Actor(discord_user_id=123)))
 
     with pytest.raises(LinkReservationExpiredError):
         await accounts.link_minecraft_account(
-            account.id, "good", consent=CONSENT, attempted_by=ATTEMPT, reservation=reservation
+            "good",
+            consent=CONSENT,
+            reservation=reservation,
+            context=ActingContext.direct(Actor(discord_user_id=123, account_id=account.id)),
         )
 
 
@@ -572,14 +590,19 @@ async def test_committing_a_reservation_is_not_charged_again() -> None:
     assert account.id is not None
     repository.reservable["good"] = _preview()
     accounts = service(repository)
-    reservation = await accounts.reserve_minecraft_link("good", attempted_by=ATTEMPT)
+    reservation = await accounts.reserve_minecraft_link(
+        "good", context=ActingContext.direct(Actor(discord_user_id=123))
+    )
     repository.link_result = VerificationLinkResult()
 
     # The code vanished between prompt and commit, which is not a guess.
     repository.reservations.add(reservation.token)
     with pytest.raises(InvalidVerificationCodeError):
         await accounts.link_minecraft_account(
-            account.id, "good", consent=CONSENT, attempted_by=ATTEMPT, reservation=reservation
+            "good",
+            consent=CONSENT,
+            reservation=reservation,
+            context=ActingContext.direct(Actor(discord_user_id=123, account_id=account.id)),
         )
 
     assert repository.failures.get(ATTEMPT, 0) == 0
@@ -593,12 +616,16 @@ async def test_consecutive_wrong_codes_lock_the_attempting_identity() -> None:
 
     for _ in range(VERIFICATION_MAX_CONSECUTIVE_FAILURES):
         with pytest.raises(InvalidVerificationCodeError):
-            await accounts.link_minecraft_account(account.id, "bad", consent=CONSENT, attempted_by=ATTEMPT)
+            await accounts.link_minecraft_account(
+                "bad", consent=CONSENT, context=ActingContext.direct(Actor(discord_user_id=123, account_id=account.id))
+            )
 
     # Lockout rejects even valid codes. Checking correctness first would still let guesses succeed.
     repository.link_result = _linked(account)
     with pytest.raises(VerificationAttemptsExhaustedError) as caught:
-        await accounts.link_minecraft_account(account.id, "valid", consent=CONSENT, attempted_by=ATTEMPT)
+        await accounts.link_minecraft_account(
+            "valid", consent=CONSENT, context=ActingContext.direct(Actor(discord_user_id=123, account_id=account.id))
+        )
     assert caught.value.retry_after > 0
     assert caught.value.public_context == {"retry_after": caught.value.retry_after}
 
@@ -610,13 +637,16 @@ async def test_a_lockout_is_scoped_to_one_identity() -> None:
     accounts = service(repository)
     for _ in range(VERIFICATION_MAX_CONSECUTIVE_FAILURES):
         with pytest.raises(InvalidVerificationCodeError):
-            await accounts.link_minecraft_account(account.id, "bad", consent=CONSENT, attempted_by=ATTEMPT)
+            await accounts.link_minecraft_account(
+                "bad", consent=CONSENT, context=ActingContext.direct(Actor(discord_user_id=123, account_id=account.id))
+            )
 
     # A different identity retains its own attempt budget, so one caller cannot lock everyone out.
     repository.link_result = _linked(account)
-    other = (IdentityProvider.DISCORD, "456")
 
-    linked = await accounts.link_minecraft_account(account.id, "valid", consent=CONSENT, attempted_by=other)
+    linked = await accounts.link_minecraft_account(
+        "valid", consent=CONSENT, context=ActingContext.direct(Actor(discord_user_id=456, account_id=account.id))
+    )
 
     assert linked.account_id == account.id
 
@@ -628,17 +658,23 @@ async def test_a_success_clears_the_failure_count() -> None:
     accounts = service(repository)
     for _ in range(VERIFICATION_MAX_CONSECUTIVE_FAILURES - 1):
         with pytest.raises(InvalidVerificationCodeError):
-            await accounts.link_minecraft_account(account.id, "bad", consent=CONSENT, attempted_by=ATTEMPT)
+            await accounts.link_minecraft_account(
+                "bad", consent=CONSENT, context=ActingContext.direct(Actor(discord_user_id=123, account_id=account.id))
+            )
 
     repository.link_result = _linked(account)
-    await accounts.link_minecraft_account(account.id, "valid", consent=CONSENT, attempted_by=ATTEMPT)
+    await accounts.link_minecraft_account(
+        "valid", consent=CONSENT, context=ActingContext.direct(Actor(discord_user_id=123, account_id=account.id))
+    )
     assert repository.failures.get(ATTEMPT, 0) == 0
 
     # Failures are consecutive, so the budget is whole again rather than one attempt from a lockout.
     repository.link_result = VerificationLinkResult()
     for _ in range(VERIFICATION_MAX_CONSECUTIVE_FAILURES - 1):
         with pytest.raises(InvalidVerificationCodeError):
-            await accounts.link_minecraft_account(account.id, "bad", consent=CONSENT, attempted_by=ATTEMPT)
+            await accounts.link_minecraft_account(
+                "bad", consent=CONSENT, context=ActingContext.direct(Actor(discord_user_id=123, account_id=account.id))
+            )
     assert repository.lockouts == {}
 
 
@@ -652,7 +688,11 @@ async def test_holding_a_correct_code_is_never_charged_as_a_failure() -> None:
 
     for _ in range(VERIFICATION_MAX_CONSECUTIVE_FAILURES + 2):
         with pytest.raises(AccountAlreadyLinkedError):
-            await accounts.link_minecraft_account(account.id, "valid", consent=CONSENT, attempted_by=ATTEMPT)
+            await accounts.link_minecraft_account(
+                "valid",
+                consent=CONSENT,
+                context=ActingContext.direct(Actor(discord_user_id=123, account_id=account.id)),
+            )
 
     assert repository.failures == {}
     assert repository.lockouts == {}
@@ -700,25 +740,48 @@ async def test_merge_requires_recent_proof_of_two_distinct_accounts() -> None:
     repository.merge_result = AccountMerge(1, 2, UUID(int=1), UUID(int=2))
     accounts = service(repository)
 
-    result = await accounts.merge_accounts(RecentAccountProof(1, NOW), RecentAccountProof(2, NOW), now=NOW)
+    result = await accounts.merge_accounts(
+        RecentAccountProof(1, NOW),
+        RecentAccountProof(2, NOW),
+        now=NOW,
+        context=ActingContext.direct(Actor(account_id=1)),
+    )
     assert result == repository.merge_result
 
     with pytest.raises(InvalidMergeProofError):
-        await accounts.merge_accounts(RecentAccountProof(1, NOW), RecentAccountProof(1, NOW), now=NOW)
+        await accounts.merge_accounts(
+            RecentAccountProof(1, NOW),
+            RecentAccountProof(1, NOW),
+            now=NOW,
+            context=ActingContext.direct(Actor(account_id=1)),
+        )
     with pytest.raises(InvalidMergeProofError):
         await accounts.merge_accounts(
-            RecentAccountProof(1, NOW.subtract(minutes=11)), RecentAccountProof(2, NOW), now=NOW
+            RecentAccountProof(1, NOW.subtract(minutes=11)),
+            RecentAccountProof(2, NOW),
+            now=NOW,
+            context=ActingContext.direct(Actor(account_id=1)),
         )
 
 
 async def test_code_generation_validates_java_identity() -> None:
     repository = FakeAccountRepository()
-    generated = await service(repository).generate_verification_code(JAVA_UUID)
+    generated = await service(repository).generate_verification_code(
+        JAVA_UUID,
+        context=ActingContext.direct(
+            Actor(service_id="verification-relay", credential_scopes=frozenset({"account.verify.relay"}))
+        ),
+    )
     assert generated == 123456
     assert repository.created_code == (JAVA_UUID, "123456", "Player")
 
     with pytest.raises(MinecraftAccountNotFoundError):
-        await service(FakeAccountRepository(), None).generate_verification_code(JAVA_UUID)
+        await service(FakeAccountRepository(), None).generate_verification_code(
+            JAVA_UUID,
+            context=ActingContext.direct(
+                Actor(service_id="verification-relay", credential_scopes=frozenset({"account.verify.relay"}))
+            ),
+        )
 
 
 async def test_code_generation_retries_a_code_another_player_holds() -> None:
@@ -729,7 +792,15 @@ async def test_code_generation_retries_a_code_another_player_holds() -> None:
         username_lookup("Player"), lambda: next(codes), uow_factory=lambda: AccountScope(repository)
     )
 
-    assert await accounts.generate_verification_code(JAVA_UUID) == 222222
+    assert (
+        await accounts.generate_verification_code(
+            JAVA_UUID,
+            context=ActingContext.direct(
+                Actor(service_id="verification-relay", credential_scopes=frozenset({"account.verify.relay"}))
+            ),
+        )
+        == 222222
+    )
     assert repository.created_code == (JAVA_UUID, "222222", "Player")
 
 
@@ -842,7 +913,9 @@ async def test_an_account_without_discord_can_link_and_unlink_minecraft() -> Non
     repository.link_result = _linked(account, claimed_alias=alias)
     accounts = service(repository)
 
-    linked = await accounts.link_minecraft_account(account.id, "valid", consent=CONSENT, attempted_by=ATTEMPT)
+    linked = await accounts.link_minecraft_account(
+        "valid", consent=CONSENT, context=ActingContext.direct(Actor(discord_user_id=123, account_id=account.id))
+    )
 
     assert linked.claimed_alias is not None
     assert linked.claimed_alias.id == alias.id
@@ -857,7 +930,9 @@ async def test_linking_against_a_missing_account_does_not_create_one() -> None:
     repository = FakeAccountRepository()
 
     with pytest.raises(AccountNotFoundError):
-        await service(repository).link_minecraft_account(999, "valid", consent=CONSENT, attempted_by=ATTEMPT)
+        await service(repository).link_minecraft_account(
+            "valid", consent=CONSENT, context=ActingContext.direct(Actor(discord_user_id=123, account_id=999))
+        )
 
     assert repository.accounts == {}
 
@@ -871,14 +946,19 @@ class TestProfiles:
         accounts = service(repository)
         await repository.upsert_profile(account.id, ProfileUpdate(display_name="Notch", hidden=True))
 
-        public = await accounts.get_public_profile(account.public_creator_id)
+        public = await accounts.get_public_profile(account.public_creator_id, context=ActingContext.direct(Actor()))
 
         assert public is not None
         assert public.hidden
         assert public.display_name is None
 
     async def test_public_profile_is_none_for_an_unknown_creator(self) -> None:
-        assert await service(FakeAccountRepository()).get_public_profile(UUID(int=99)) is None
+        assert (
+            await service(FakeAccountRepository()).get_public_profile(
+                UUID(int=99), context=ActingContext.direct(Actor())
+            )
+            is None
+        )
 
 
 class TestIdentityManagement:

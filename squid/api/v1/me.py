@@ -113,14 +113,15 @@ async def get_me(accounts: Accounts, caller: UserCaller) -> Response[UserMe]:
     response_headers: dict[str, str] = {}
     if caller.account_id is None:
         raise AuthenticationError
-    result = await _render_me(accounts, caller.account_id, consent_pending=caller.consent_pending)
+    result = await _render_me(accounts, caller, consent_pending=caller.consent_pending)
     response_headers["ETag"] = revision_etag(Revision(account_target(caller.account_id), result.revision))
     return Response(content=result, headers=response_headers, status_code=200)
 
 
-async def _render_me(accounts: AccountService, account_id: int, *, consent_pending: bool) -> UserMe:
+async def _render_me(accounts: AccountService, caller: Caller, *, consent_pending: bool) -> UserMe:
     """Compose the self view from the account and its profile."""
-    snapshot = await accounts.editor_snapshot(account_id)
+    account_id = caller.to_actor().require_account_id()
+    snapshot = await accounts.editor_snapshot(account_id, context=caller.context())
     return UserMe.from_domain(snapshot.account, snapshot.profile, consent_pending=consent_pending)
 
 
@@ -151,7 +152,7 @@ async def grant_consent(
     if data is not None and data.version is not None and (data.version != CURRENT_CONSENT_VERSION):
         raise StaleConsentNoticeError(offered=data.version, current=CURRENT_CONSENT_VERSION)
     await accounts.grant_current_consent(context=caller.context())
-    return await _render_me(accounts, caller.account_id, consent_pending=False)
+    return await _render_me(accounts, caller, consent_pending=False)
 
 
 @patch(
@@ -194,7 +195,7 @@ async def update_profile(
         ),
         context=caller.context(),
     )
-    snapshot = await accounts.editor_snapshot(caller.account_id)
+    snapshot = await accounts.editor_snapshot(caller.account_id, context=caller.context())
     response_headers["ETag"] = revision_etag(Revision(account_target(caller.account_id), snapshot.account.revision))
     return Response(
         content=ProfileDetail.from_domain(snapshot.profile, snapshot.account.identities),
@@ -262,7 +263,7 @@ async def set_identity_visibility(
         ),
         context=caller.context(),
     )
-    snapshot = await accounts.editor_snapshot(caller.account_id)
+    snapshot = await accounts.editor_snapshot(caller.account_id, context=caller.context())
     response_headers["ETag"] = revision_etag(Revision(account_target(caller.account_id), snapshot.account.revision))
     identity = next((identity for identity in snapshot.account.identities if identity.id == identity_id), None)
     if identity is None:
@@ -442,10 +443,12 @@ async def refresh_minecraft_identity_for(
     status_code=200,
     guards=[requires(ACCOUNT_PROFILE_MODERATE)],
 )
-async def review_profile(account_id: FromPath[int], accounts: Accounts) -> Response[ProfileDetail]:
+async def review_profile(
+    account_id: FromPath[int], accounts: Accounts, caller: NamedDependency[SkipValidation[Caller]]
+) -> Response[ProfileDetail]:
     """Read a profile and its revision for staff moderation."""
     response_headers: dict[str, str] = {}
-    snapshot = await accounts.editor_snapshot(account_id)
+    snapshot = await accounts.editor_snapshot(account_id, context=caller.context())
     response_headers["ETag"] = revision_etag(Revision(account_target(account_id), snapshot.account.revision))
     return Response(
         content=ProfileDetail.from_domain(snapshot.profile, snapshot.account.identities),
@@ -490,7 +493,7 @@ async def clear_profile(
         ),
         context=caller.context(),
     )
-    snapshot = await accounts.editor_snapshot(account_id)
+    snapshot = await accounts.editor_snapshot(account_id, context=caller.context())
     response_headers["ETag"] = revision_etag(Revision(account_target(account_id), snapshot.account.revision))
     return Response(
         content=ProfileDetail.from_domain(snapshot.profile, snapshot.account.identities),

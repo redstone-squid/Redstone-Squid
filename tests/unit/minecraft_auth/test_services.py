@@ -148,7 +148,7 @@ async def test_registration_requires_current_consent_and_profile_is_explicit_opt
 async def test_public_listing_is_an_explicit_secret_free_projection() -> None:
     _, _, _, installations, _ = services()
     private = await installations.register(label="Private", context=ActingContext.direct(Actor(account_id=ACCOUNT_ID)))
-    assert await installations.public_servers() == ()
+    assert await installations.public_servers(context=ActingContext.direct(Actor())) == ()
 
     profile = PublicServerProfile(enabled=True, display_name="Community", sponsor_opt_in=True)
     await installations.update_profile(
@@ -157,10 +157,13 @@ async def test_public_listing_is_an_explicit_secret_free_projection() -> None:
         context=ActingContext.direct(Actor(account_id=ACCOUNT_ID)),
     )
 
-    (published,) = await installations.public_servers()
+    (published,) = await installations.public_servers(context=ActingContext.direct(Actor()))
     assert published.installation_id == private.installation.id
     assert published.profile == profile
-    assert await installations.get_public_server(private.installation.id) == published
+    assert (
+        await installations.get_public_server(private.installation.id, context=ActingContext.direct(Actor()))
+        == published
+    )
     assert not hasattr(published, "secret_hash")
 
     await installations.update_profile(
@@ -168,8 +171,8 @@ async def test_public_listing_is_an_explicit_secret_free_projection() -> None:
         profile=PublicServerProfile(enabled=True, display_name="Listed without sponsor consent"),
         context=ActingContext.direct(Actor(account_id=ACCOUNT_ID)),
     )
-    assert len(await installations.public_servers()) == 1
-    assert await installations.get_public_server(private.installation.id) is None
+    assert len(await installations.public_servers(context=ActingContext.direct(Actor()))) == 1
+    assert await installations.get_public_server(private.installation.id, context=ActingContext.direct(Actor())) is None
 
 
 async def test_rotation_invalidates_old_secret_and_increments_fence() -> None:

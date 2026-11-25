@@ -10,7 +10,7 @@ import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.catalogue.schematics.tools import SchematicTools, _video_failure_reason
 from squid.bot.catalogue.schematics.video import VideoEditor
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.schematics.application.services import SchematicService
 from squid.core.schematics.application.video import VideoRenderRequest
 from squid.core.schematics.application.video_service import SchematicVideoService, VideoStatus
@@ -20,21 +20,20 @@ from tests.support.grants import grants
 
 
 @pytest.fixture
-def delivery(monkeypatch: pytest.MonkeyPatch) -> tuple[SchematicTools, Mock, Mock]:
+def delivery() -> tuple[SchematicTools, Mock, Mock]:
     service = Mock(spec=SchematicVideoService)
     service.get_video = AsyncMock(return_value=VideoStatus(id=41, build_id=7, schematic_id=1, status="succeeded"))
     service.open_video_content = AsyncMock(return_value=b"mp4")
     service.public_base_url = "https://squid.example"
     schematics = Mock(spec=SchematicService)
     schematics.videos = service
-    component = SchematicTools(7, schematics=schematics, actor_account_id=10, grants=grants())
+    component = SchematicTools(7, schematics=schematics, grants=grants())
     request = Mock(spec=sd.Request)
     request.interaction = Mock(filesize_limit=100)
     request.interaction.is_expired.return_value = False
     request.respond = AsyncMock()
     request.client = Mock()
-    request.client.actors.resolve = AsyncMock(return_value=Actor(account_id=10))
-    monkeypatch.setattr("squid.bot.catalogue.schematics.tools.allows", AsyncMock(return_value=True))
+    request.client.actors.acting_context = AsyncMock(return_value=ActingContext.direct(Actor(account_id=10)))
     return component, request, service
 
 
@@ -44,7 +43,9 @@ async def test_completed_video_is_attached_once_and_privately(delivery: tuple[Sc
     assert await component._deliver_video(request, 41)
     request.respond.assert_awaited_once()
     assert request.respond.call_args.kwargs["audience"] == "personal"
-    service.open_video_content.assert_awaited_once_with(41, account_id=10, can_view_private=True)
+    context = service.get_video.await_args.kwargs["context"]
+    assert context.effective == Actor(account_id=10)
+    service.open_video_content.assert_awaited_once_with(41, context=context)
 
 
 async def test_oversized_video_uses_private_link(delivery: tuple[SchematicTools, Mock, Mock]) -> None:
@@ -115,9 +116,10 @@ async def test_check_video_shows_result_after_automatic_delivery(
     service.get_video.reset_mock()
     event = Mock(spec=sl.PressEvent, context=request, notice=AsyncMock())
 
-    await component._refresh_video(event)
+    with request.client.actors.acting_context.return_value.scope():
+        await component._refresh_video(event)
 
-    service.get_video.assert_awaited_once_with(41, account_id=10, can_view_private=True)
+    service.get_video.assert_awaited_once_with(41, context=request.client.actors.acting_context.return_value)
     request.respond.assert_awaited_once()
     assert request.respond.call_args.kwargs["audience"] == "personal"
     event.notice.assert_not_awaited()
@@ -135,7 +137,8 @@ async def test_check_video_reports_pending_render(
     component._video_job_id = 41
     event = Mock(spec=sl.PressEvent, context=request, notice=AsyncMock())
 
-    await component._refresh_video(event)
+    with request.client.actors.acting_context.return_value.scope():
+        await component._refresh_video(event)
 
     event.notice.assert_awaited_once()
     assert "still rendering" in source_text(event.notice.call_args.args[0])
@@ -152,7 +155,7 @@ async def test_automatic_delivery_sends_a_visible_video_followup(
         VideoStatus(id=41, build_id=7, schematic_id=1, status="succeeded"),
     ]
     client = Mock(spec=discord.Client)
-    client.actors = Mock(resolve=AsyncMock(return_value=Actor(account_id=10)))
+    client.actors = Mock(acting_context=AsyncMock(return_value=ActingContext.direct(Actor(account_id=10))))
     runtime = sd.install(client)
     scope = runtime.scope(object())
     interaction = InteractionHarness(client=client)

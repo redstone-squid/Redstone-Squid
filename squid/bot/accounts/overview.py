@@ -104,7 +104,9 @@ class AccountOverview(sl.Component[ComponentsV2Target, sd.Request]):
 
     async def _refresh(self) -> None:
         """Reload account and profile data, clearing a selection that is no longer displayed."""
-        snapshot = await self._accounts.editor_snapshot(self._account_id)
+        snapshot = await self._accounts.editor_snapshot(
+            self._account_id, context=ActingContext.for_actor(await self._edit_actor())
+        )
         self._revision = snapshot.account.revision
         self._identities = snapshot.account.identities
         self._needs_consent = snapshot.account.needs_consent_refresh

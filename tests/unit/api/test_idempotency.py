@@ -30,7 +30,7 @@ from squid.api.idempotency import (
     reserve_idempotent_request,
 )
 from squid.api.security import current_caller
-from squid.core.actors import ActingContext
+from squid.core.actors import ActingContext, Actor
 from squid.core.edits.application import EditExecutor
 from squid.core.errors import ErrorCode
 from squid.core.idempotency import IdempotencyService, PendingRequest, StoredResponse
@@ -104,7 +104,7 @@ class CountingAccounts(MockAccountManager):
         self.calls = 0
 
     @override
-    async def generate_verification_code(self, minecraft_uuid: UUID) -> int:
+    async def generate_verification_code(self, minecraft_uuid: UUID, *, context: ActingContext) -> int:
         self.calls += 1
         return 100_000 + self.calls
 
@@ -119,7 +119,9 @@ class CompletionRecorder:
         self.release = asyncio.Event()
         self.release.set()
 
-    async def complete(self, _request: PendingRequest, response: StoredResponse) -> StoredResponse:
+    async def complete(
+        self, _request: PendingRequest, response: StoredResponse, *, context: ActingContext
+    ) -> StoredResponse:
         self.started.set()
         await self.release.wait()
         if self.error is not None:
@@ -155,6 +157,7 @@ async def run_completion_middleware(
                 "squid_idempotency": IdempotencyReservationState(
                     cast(IdempotencyService, recorder),
                     PendingRequest(uuid4()),
+                    ActingContext.direct(Actor(account_id=1)),
                 )
             },
         },
@@ -289,6 +292,7 @@ async def test_pending_key_blocks_concurrent_duplicate_but_is_scoped_per_caller(
     async def reserve_for(caller: str) -> PendingRequest | StoredResponse:
         return await service.reserve(
             caller=caller,
+            context=ActingContext.direct(Actor(account_id=int(caller.split(":")[1]))),
             key="concurrent-request",
             fingerprint=b"same-request",
             method=UnsafeHttpMethod.POST,

@@ -65,7 +65,7 @@ class AccountRecorder(AccountService):
         self.merges: list[tuple[int, str]] = []
 
     @override
-    async def editor_snapshot(self, account_id: int) -> AccountEditorSnapshot:
+    async def editor_snapshot(self, account_id: int, *, context: ActingContext) -> AccountEditorSnapshot:
         return AccountEditorSnapshot(Account(id=account_id, identities=self.identities), self.profile)
 
     @override

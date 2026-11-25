@@ -113,7 +113,7 @@ class FakeCliAuthorization(CliAuthorizationService):
         return IssuedCliEnrollment(enrollment(), DEVICE_CODE, USER_CODE, 3)
 
     @override
-    async def preview_enrollment(self, user_code: str) -> CliDeviceEnrollment:
+    async def preview_enrollment(self, user_code: str, *, context: ActingContext) -> CliDeviceEnrollment:
         assert user_code == USER_CODE
         return enrollment()
 
@@ -171,7 +171,7 @@ class FakeCliAuthorization(CliAuthorizationService):
         return True
 
     @override
-    async def revoke_current_session(self, identity: CliIdentity) -> bool:
+    async def revoke_current_session(self, identity: CliIdentity, *, context: ActingContext) -> bool:
         self.revoked_identity = identity
         return True
 

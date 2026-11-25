@@ -13,6 +13,7 @@ from squid.bot.catalogue.browse import BuildBrowseScreen
 from squid.bot.catalogue.search.entry import SearchTarget
 from squid.bot.catalogue.search.results import SearchScreen, _highlighted, _result_description, _result_label
 from squid.bot.submission.cog import BuildCommands, SearchModeChoice
+from squid.core.actors import ActingContext, Actor
 from squid.core.builds.application import BuildQueryService
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build, DoorBuild
@@ -40,6 +41,8 @@ from squid_ui.ext.discord.testing import stage
 from tests.support.services import bot_services
 from tests.unit.bot.catalogue.test_build_browse_state import _screen, submit_search
 
+pytestmark = pytest.mark.usefixtures("discord_screen_context")
+
 
 class RecordingSearch(SearchService):
     """A search service that keeps the request it was handed."""
@@ -49,11 +52,11 @@ class RecordingSearch(SearchService):
         self.registry = registry
 
     @override
-    async def fields(self) -> FieldRegistry:
+    async def fields(self, *, context: ActingContext) -> FieldRegistry:
         return self.registry
 
     @override
-    async def search(self, request: SearchRequest) -> SearchPage:
+    async def search(self, request: SearchRequest, *, context: ActingContext) -> SearchPage:
         self.requests.append(request)
         return SearchPage(hits=(), total=0, next=None, prev=None)
 
@@ -63,7 +66,7 @@ class BuildQueryRecorder(BuildQueryService):
         pass
 
     @override
-    async def get(self, build_id: int) -> Build | None:
+    async def get(self, build_id: int, *, context: ActingContext) -> Build | None:
         return None
 
 
@@ -72,7 +75,7 @@ class SettingsRecorder(SettingsService):
         pass
 
     @override
-    async def get_locale(self, server_id: int) -> str | None:
+    async def get_locale(self, server_id: int, *, context: ActingContext) -> str | None:
         return None
 
 
@@ -97,7 +100,7 @@ async def _run(cog: BuildCommands[Any], **kwargs: Any) -> BuildBrowseScreen | Se
         assert not restore_preferences
         screen = _screen(initial_id=None, records=AsyncMock(spec=RecordService), initial_records=initial_records)
         screen._search_service = cog.bot.services.search
-        screen._search_fields = await cog.bot.services.search.fields()
+        screen._search_fields = await cog.bot.services.search.fields(context=ActingContext.current())
         return screen
 
     with patch.object(BuildBrowseScreen, "create", side_effect=create):
@@ -316,7 +319,7 @@ async def test_registered_fields_survive_opening_the_catalogue(scope: SearchTarg
 async def test_search_jump_form_preserves_the_query_and_fetches_the_requested_page() -> None:
     class PagedSearch(RecordingSearch):
         @override
-        async def search(self, request: SearchRequest) -> SearchPage:
+        async def search(self, request: SearchRequest, *, context: ActingContext) -> SearchPage:
             self.requests.append(request)
             return SearchPage(
                 hits=tuple(
@@ -330,7 +333,7 @@ async def test_search_jump_form_preserves_the_query_and_fetches_the_requested_pa
 
     service = PagedSearch()
     request = SearchRequest("door width:2", page_size=5)
-    screen = SearchScreen(service, request, await service.search(request))
+    screen = SearchScreen(service, request, await service.search(request, context=ActingContext.direct(Actor())))
     async with stage(screen, owner=object()) as ui:
         form = await ui.press_for_form("search.seek.jump")
         await form.submit({"page": "37"})
@@ -455,7 +458,7 @@ async def test_grouped_record_and_holder_navigation_preserves_the_search_page() 
     page = SearchPage((hit,), total=11, next=None, prev=PageAnchor(offset=5))
     loaded: list[int] = []
 
-    async def load(build_id: int) -> Build:
+    async def load(build_id: int, *, context: ActingContext) -> Build:
         loaded.append(build_id)
         return DoorBuild(id=build_id, submission_status=BuildStatus.APPROVED)
 

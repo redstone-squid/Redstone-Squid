@@ -13,7 +13,7 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from whenever import Instant
 
-from squid.core.actors import ActingContext
+from squid.core.actors import ActingContext, application_operation
 from squid.core.cli_auth.domain import CliIdentity, IssuedCliEnrollment, IssuedCliSession, IssuedCliSessionChallenge
 from squid.core.cli_auth.errors import (
     CliAuthorizationPendingError,
@@ -184,8 +184,10 @@ class CliAuthorizationService:
             await uow.commit()
             return result
 
-    async def preview_enrollment(self, user_code: str) -> CliDeviceEnrollment:
-        """Return enrollment metadata for an approval screen; the caller authenticates the browser."""
+    @application_operation
+    async def preview_enrollment(self, user_code: str, *, context: ActingContext) -> CliDeviceEnrollment:
+        """Return enrollment metadata to the signed-in account reviewing it."""
+        context.effective.require_account_id()
         async with self._uow_factory() as uow:
             enrollment = await self._enrollment_for_user_code(uow, user_code)
             self._ensure_approvable(enrollment, self._now())
@@ -339,8 +341,14 @@ class CliAuthorizationService:
                 await uow.commit()
                 return result
 
-    async def revoke_current_session(self, identity: CliIdentity) -> bool:
+    @application_operation
+    async def revoke_current_session(self, identity: CliIdentity, *, context: ActingContext) -> bool:
         """Revoke the exact session represented by a CLI caller."""
+        if (
+            context.effective.account_id != identity.account_id
+            or context.effective.credential_id != f"cli-session:{identity.session_id}"
+        ):
+            raise InvalidCliSessionError
         async with self._uow_factory() as uow:
             result = await uow.cli_authorization.revoke_session(
                 session_id=identity.session_id,

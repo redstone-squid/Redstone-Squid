@@ -27,8 +27,7 @@ from squid.bot.submission.ui import controls as build_controls
 from squid.bot.ui import tr, truncate_display_text
 from squid.bot.utils.permissions import Grants
 from squid.core.accounts.application import AccountService
-from squid.core.accounts.models import CataloguePreference
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.builds.application import BuildQueryService, BuildService
 from squid.core.builds.application.edits import BUILD_STATUS_EDIT, build_target
 from squid.core.builds.domain import BuildStatus, Credit, CreditRole, EditAccess
@@ -95,6 +94,7 @@ class _BuildSource:
             statuses=self._statuses,
             selector=PageSelector(offset=position.offset),
             page_size=fetch_size,
+            context=ActingContext.current(),
         )
         # This source exposes offset jumps; the service may return ID links at offset zero.
         return sl.sources.Batch(
@@ -134,7 +134,7 @@ class _NeighbourBuildSource:
         assert position.anchor is not None
         build_id = int(position.anchor)
         if position.direction is sl.sources.Direction.AROUND:
-            build = await self.queries.get(build_id)
+            build = await self.queries.get(build_id, context=ActingContext.current())
             if build is None or build.submission_status not in self.statuses:
                 return sl.sources.Batch(sl.sources.Position(), ())
             return self.initial(build).batch
@@ -143,7 +143,9 @@ class _NeighbourBuildSource:
             if position.direction is sl.sources.Direction.BACKWARD
             else PageSelector(after_id=build_id)
         )
-        page = await self.queries.list_page(statuses=self.statuses, selector=selector, page_size=fetch_size)
+        page = await self.queries.list_page(
+            statuses=self.statuses, selector=selector, page_size=fetch_size, context=ActingContext.current()
+        )
         return sl.sources.Batch(
             sl.sources.Position(str(page.items[0].id) if page.items else None),
             page.items,
@@ -205,7 +207,6 @@ class _BuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         self.schematics = SchematicTools(
             build_id,
             schematics=schematics,
-            actor_account_id=actor_account_id,
             grants=grants,
             show_details=lambda: self._show_schematics,
         )
@@ -222,15 +223,18 @@ class _BuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         self._changes.watch()
         build, self._seed = self._seed, None
         if build is None:
-            build = await self._queries.get(self._build_id)
+            build = await self._queries.get(self._build_id, context=ActingContext.current())
         if build is None:
             message = f"build {self._build_id} no longer exists"
             raise LookupError(message)
         has_schematic = (
-            self._schematics.available and await self._schematics.featured_for_build(self._build_id) is not None
+            self._schematics.available
+            and await self._schematics.featured_for_build(self._build_id, context=ActingContext.current()) is not None
         )
         owners = (
-            await self._accounts.credit_owners(self._build_id) if self._accounts is not None and build.credits else {}
+            await self._accounts.credit_owners(self._build_id, context=ActingContext.current())
+            if self._accounts is not None and build.credits
+            else {}
         )
         return build, await self._render_build(build), has_schematic, owners
 
@@ -530,7 +534,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             record_tools=record_tools,
             initial_records=initial_records,
         )
-        screen._search_fields = await request.client.services.search.fields()
+        screen._search_fields = await request.client.services.search.fields(context=ActingContext.current())
         if restore_preferences and build_id is None:
             await screen._restore_preferences()
         return screen
@@ -538,7 +542,9 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
     async def _restore_preferences(self) -> None:
         if self._accounts is None or self._actor_account_id is None:
             return
-        for preference in await self._accounts.catalogue_preferences(self._actor_account_id):
+        for preference in await self._accounts.catalogue_preferences(
+            context=ActingContext.for_actor(await self._actor())
+        ):
             scope = SearchScope(preference.scope)
             parser = SearchQueryParser(self._search_fields, scope=scope)
             try:
@@ -559,12 +565,10 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
     async def _save_preferences(self) -> None:
         if self._accounts is not None and self._actor_account_id is not None:
             await self._accounts.save_catalogue_preference(
-                CataloguePreference(
-                    account_id=self._actor_account_id,
-                    scope=self._search_scope,
-                    filters=self._query.preference_filters(self._search_parser),
-                    sort=self._sort,
-                )
+                context=ActingContext.for_actor(await self._actor()),
+                scope=self._search_scope,
+                filters=self._query.preference_filters(self._search_parser),
+                sort=self._sort,
             )
 
     @classmethod
@@ -604,7 +608,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
     async def open_detail(cls, request: AppRequest, build_id: int) -> Self:
         """Open one build, unless it does not exist or the opener may not see it while pending."""
         screen = await cls.create(request, build_id=build_id)
-        build = await request.client.services.build_queries.get(build_id)
+        build = await request.client.services.build_queries.get(build_id, context=ActingContext.current())
         if build is None or (
             build.submission_status is not BuildStatus.APPROVED and BUILD_SUBMISSION_VIEW_PENDING not in screen.grants
         ):
@@ -860,7 +864,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         )
 
     async def _select(self, build_id: int) -> bool:
-        build = await self._queries.get(build_id)
+        build = await self._queries.get(build_id, context=ActingContext.current())
         if build is None or (
             build.submission_status is not BuildStatus.APPROVED and BUILD_SUBMISSION_VIEW_PENDING not in self.grants
         ):
@@ -992,7 +996,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             parsed_query=query.effective_query(self._search_parser),
             anchor=focus.anchor if focus is not None else None,
         )
-        page = await self._search_service.search(request)
+        page = await self._search_service.search(request, context=ActingContext.current())
         self._creator_names = await self._load_creator_names(expression)
         results = SearchScreen(
             self._search_service,
@@ -1021,7 +1025,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             storage, value = clause.stored()
             if storage != CREATOR_ID_STORAGE or str(value) in names:
                 continue
-            profile = await self._accounts.get_public_profile(UUID(str(value)))
+            profile = await self._accounts.get_public_profile(UUID(str(value)), context=ActingContext.current())
             if profile is not None and profile.name is not None:
                 names[str(value)] = profile.name
         return names
@@ -1071,10 +1075,12 @@ class BuildCreatorsScreen(sd.Screen[None, Any, RedstoneSquid]):
     @classmethod
     async def open(cls, request: AppRequest, build_id: int) -> Self:
         """Open the creators of an approved build that credits anyone."""
-        build = await request.client.services.build_queries.get(build_id)
+        build = await request.client.services.build_queries.get(build_id, context=ActingContext.current())
         if build is None or build.submission_status is not BuildStatus.APPROVED or not build.credits:
             raise ScreenUnavailable(tr(t"navigation-build-unavailable = That build is unavailable."))
-        return cls(build, await request.client.services.accounts.credit_owners(build_id))
+        return cls(
+            build, await request.client.services.accounts.credit_owners(build_id, context=ActingContext.current())
+        )
 
     @override
     def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, AppRequest], ...]:

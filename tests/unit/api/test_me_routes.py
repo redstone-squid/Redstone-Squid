@@ -63,7 +63,7 @@ class AccountRecorder(SnapshotAccountService):
         return self.account
 
     @override
-    async def get_profile(self, account_id: int) -> AccountProfile:
+    async def get_profile(self, account_id: int, *, context: ActingContext) -> AccountProfile:
         assert account_id == 1
         return self.profile
 

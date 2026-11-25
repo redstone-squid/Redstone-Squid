@@ -47,7 +47,7 @@ from squid.core.accounts.models import (
     CreatorAlias,
     MergeTicket,
 )
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, Actor, application_operation
 from squid.core.errors import ConflictError, InvalidStateError
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.domain.catalogue import (
@@ -56,8 +56,10 @@ from squid.core.permissions.domain.catalogue import (
     ACCOUNT_CLAIM_REJECT,
     ACCOUNT_IDENTITY_REFRESH,
     ACCOUNT_IDENTITY_REFRESH_ANY,
+    ACCOUNT_PROFILE_MODERATE,
     ACCOUNT_SELF_MANAGE,
     ACCOUNT_SELF_READ,
+    ACCOUNT_VERIFY_RELAY,
 )
 from squid.core.unit_of_work import UnitOfWorkFactory
 
@@ -128,13 +130,19 @@ class AccountService:
         async with self._uow_factory() as uow:
             return await uow.accounts.get_by_id(account_id)
 
-    async def catalogue_preferences(self, account_id: int) -> Sequence[CataloguePreference]:
+    @application_operation
+    async def catalogue_preferences(self, *, context: ActingContext) -> Sequence[CataloguePreference]:
         async with self._uow_factory() as uow:
-            return await uow.accounts.catalogue_preferences(account_id)
+            return await uow.accounts.catalogue_preferences(context.effective.require_account_id())
 
-    async def save_catalogue_preference(self, preference: CataloguePreference) -> None:
+    @application_operation
+    async def save_catalogue_preference(self, *, scope: str, filters: str, sort: str, context: ActingContext) -> None:
         async with self._uow_factory() as uow:
-            await uow.accounts.save_catalogue_preference(preference)
+            await uow.accounts.save_catalogue_preference(
+                CataloguePreference(
+                    account_id=context.effective.require_account_id(), scope=scope, filters=filters, sort=sort
+                )
+            )
             await uow.commit()
 
     async def get_accounts(self, account_ids: Sequence[int]) -> dict[int, Account]:
@@ -166,17 +174,20 @@ class AccountService:
                 await uow.commit()
                 return result
 
+    @application_operation
     async def merge_accounts(
         self,
         surviving_proof: RecentAccountProof,
         absorbed_proof: RecentAccountProof,
         *,
+        context: ActingContext,
         now: Instant | None = None,
     ) -> AccountMerge:
         """Merge two accounts only after recent, independent proof of both."""
         checked_at = now or Instant.now()
         if (
-            surviving_proof.account_id == absorbed_proof.account_id
+            context.effective.require_account_id() != surviving_proof.account_id
+            or surviving_proof.account_id == absorbed_proof.account_id
             or not surviving_proof.is_recent_at(checked_at)
             or not absorbed_proof.is_recent_at(checked_at)
         ):
@@ -262,17 +273,19 @@ class AccountService:
                 await uow.commit()
                 return result
 
-    async def get_creator_alias(self, name: str) -> CreatorAlias | None:
+    @application_operation
+    async def get_creator_alias(self, name: str, *, context: ActingContext) -> CreatorAlias | None:
         """Return a creator credit by name without loading its linked account."""
         async with self._uow_factory() as uow:
             return await uow.accounts.get_alias_by_name(name)
 
-    async def get_creator_profile(self, public_id: UUID) -> CreatorProfile | None:
+    @application_operation
+    async def get_creator_profile(self, public_id: UUID, *, context: ActingContext) -> CreatorProfile | None:
         """Return a public creator profile, following permanent merge redirects."""
         async with self._uow_factory() as uow:
             return await uow.accounts.get_creator_profile(public_id)
 
-    async def guard_verification_attempts(self, attempted_by: tuple[IdentityProvider, str]) -> None:
+    async def _guard_verification_attempts(self, attempted_by: tuple[IdentityProvider, str]) -> None:
         """Reject a code attempt while the external identity is locked out.
 
         Reservations and direct redemption share this check, so previewing a code
@@ -292,11 +305,12 @@ class AccountService:
                 )
                 raise VerificationAttemptsExhaustedError(retry_after)
 
+    @application_operation
     async def reserve_minecraft_link(
         self,
         code: str,
         *,
-        attempted_by: tuple[IdentityProvider, str],
+        context: ActingContext,
         ttl_seconds: int = LINK_RESERVATION_TTL_SECONDS,
     ) -> LinkReservation:
         """Reserve a valid code so a consent prompt can preview the link.
@@ -304,7 +318,8 @@ class AccountService:
         Apply the same guessing limit as direct redemption and count rejected codes as
         failures. A reservation records only a token and expiry on the code row.
         """
-        await self.guard_verification_attempts(attempted_by)
+        attempted_by = (IdentityProvider.DISCORD, str(context.effective.require_discord_user_id()))
+        await self._guard_verification_attempts(attempted_by)
         async with self._uow_factory() as uow:
             reservation = await uow.accounts.reserve_verification_code(code, ttl_seconds=ttl_seconds)
             await uow.commit()
@@ -313,7 +328,8 @@ class AccountService:
             raise InvalidVerificationCodeError
         return reservation
 
-    async def release_minecraft_link(self, code: str, reservation: LinkReservation) -> None:
+    @application_operation
+    async def release_minecraft_link(self, code: str, reservation: LinkReservation, *, context: ActingContext) -> None:
         """Give a held code back after a declined or abandoned prompt.
 
         Best-effort by design: if this never runs, `reserved_until` lapses on its own, so a crash
@@ -323,13 +339,13 @@ class AccountService:
             await uow.accounts.release_verification_code(code, reservation.token)
             await uow.commit()
 
+    @application_operation
     async def link_minecraft_account(
         self,
-        account_id: int,
         code: str,
         *,
         consent: AccountConsent,
-        attempted_by: tuple[IdentityProvider, str],
+        context: ActingContext,
         reservation: LinkReservation | None = None,
     ) -> IdentityRefresh:
         """Link a verified Java identity and reconcile its creator credit.
@@ -341,8 +357,10 @@ class AccountService:
         The result includes retained aliases and any contested name sent for staff
         review. Conflicting Java links are rejected without consuming the code.
         """
+        account_id = context.effective.require_account_id()
+        attempted_by = (IdentityProvider.DISCORD, str(context.effective.require_discord_user_id()))
         if reservation is None:
-            await self.guard_verification_attempts(attempted_by)
+            await self._guard_verification_attempts(attempted_by)
         async with (
             self._uow_factory() as uow,
             uow.builds.editing(actor=account_id, operation="edit", source="identity_link"),
@@ -404,35 +422,46 @@ class AccountService:
                     raise AccountNotFoundError(account_id)
                 return account.identities
 
-    async def record_identity_avatar_key(self, account_id: int, identity_id: int, avatar_key: str | None) -> None:
+    @application_operation
+    async def record_identity_avatar_key(
+        self, identity_id: int, avatar_key: str | None, *, context: ActingContext
+    ) -> None:
         """Store the provider key an avatar URL needs, when a caller happens to hold a fresh one."""
         async with self._uow_factory() as uow:
-            await uow.accounts.set_identity_avatar_key(account_id, identity_id, avatar_key)
+            await uow.accounts.set_identity_avatar_key(context.effective.require_account_id(), identity_id, avatar_key)
             await uow.commit()
 
-    async def editor_snapshot(self, account_id: int) -> AccountEditorSnapshot:
+    @application_operation
+    async def editor_snapshot(self, account_id: int, *, context: ActingContext) -> AccountEditorSnapshot:
         """Read the profile and identities under their shared account revision lock."""
         async with self._uow_factory() as uow:
+            required = ACCOUNT_SELF_READ if account_id == context.effective.account_id else ACCOUNT_PROFILE_MODERATE
+            await self._permissions.require(context.effective, required, uow=uow)
             account = await uow.accounts.lock_for_edit(account_id)
             profile = await uow.accounts.get_profile(account_id)
             assert profile is not None
             return AccountEditorSnapshot(account, profile)
 
-    async def get_profile(self, account_id: int) -> AccountProfile:
+    @application_operation
+    async def get_profile(self, account_id: int, *, context: ActingContext) -> AccountProfile:
         """Return an account's own profile, including anything it has chosen to hide."""
         async with self._uow_factory() as uow:
+            required = ACCOUNT_SELF_READ if account_id == context.effective.account_id else ACCOUNT_PROFILE_MODERATE
+            await self._permissions.require(context.effective, required, uow=uow)
             profile = await uow.accounts.get_profile(account_id)
             if profile is None:
                 raise AccountNotFoundError(account_id)
             return profile
 
-    async def get_public_profile(self, public_id: UUID) -> PublicCreatorProfile | None:
+    @application_operation
+    async def get_public_profile(self, public_id: UUID, *, context: ActingContext) -> PublicCreatorProfile | None:
         """Return what a stranger may see of one creator, following merge redirects."""
         async with self._uow_factory() as uow:
             record = await uow.accounts.get_creator_profile_record(public_id)
             return None if record is None else PublicCreatorProfile.from_record(record)
 
-    async def credit_owners(self, build_id: int) -> dict[int, UUID]:
+    @application_operation
+    async def credit_owners(self, build_id: int, *, context: ActingContext) -> dict[int, UUID]:
         """Map each credit position on a build to the public ID of the creator it belongs to.
 
         Unclaimed names and credits matching only a private identity are absent.
@@ -575,8 +604,10 @@ class AccountService:
             await uow.commit()
             return result
 
-    async def generate_verification_code(self, minecraft_uuid: UUID) -> int:
+    @application_operation
+    async def generate_verification_code(self, minecraft_uuid: UUID, *, context: ActingContext) -> int:
         """Generate a verification code after validating the Java account."""
+        await self._permissions.require(context.effective, ACCOUNT_VERIFY_RELAY)
         minecraft_username = await self._minecraft_username_lookup(minecraft_uuid)
         if minecraft_username is None:
             raise MinecraftAccountNotFoundError(minecraft_uuid)

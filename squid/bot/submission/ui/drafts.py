@@ -304,8 +304,11 @@ class DraftWorkspace(sl.Reactive):
         """Fetch the current catalogue for each catalogue field, replacing any earlier copy."""
         sources = {field.option_source for field in fields if field.option_source is not None}
         loaded = dict(self.option_sets)
+        context = ActingContext.for_actor(await self.resolve_actor())
         for source in sources:
-            loaded[source] = (await self.services.submission_forms.options(source, self.category, locale=None)).options
+            loaded[source] = (
+                await self.services.submission_forms.options(source, self.category, locale=None, context=context)
+            ).options
         self.option_sets = loaded
 
     async def save_values(
@@ -514,11 +517,10 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
         Raises:
             ValueError: This server can no longer read the draft's form revision.
         """
-        draft = await services.submission_drafts.get_accessible(
-            draft_id, context=ActingContext.for_actor(await resolve_actor())
-        )
+        context = ActingContext.for_actor(await resolve_actor())
+        draft = await services.submission_drafts.get_accessible(draft_id, context=context)
         manifest = await services.submission_forms.manifest_revision(
-            draft.snapshot.schema_id, draft.snapshot.schema_revision, locale=None
+            draft.snapshot.schema_id, draft.snapshot.schema_revision, locale=None, context=context
         )
         if manifest is None:
             message = "This draft's form revision is unavailable."
@@ -879,7 +881,12 @@ class BuildPreviewScreen(sd.Screen[None]):
         """The rendered card, or None while the answers its title needs are missing."""
         ws = self.workspace
         answers = ws.manifest.visible_answers(ws.category, ws.draft.snapshot.answers, origin=ws.draft.origin)
-        definitions = {definition.stable_key: definition for definition in await ws.services.tags.public_definitions()}
+        definitions = {
+            definition.stable_key: definition
+            for definition in await ws.services.tags.public_definitions(
+                context=ActingContext.for_actor(await ws.resolve_actor())
+            )
+        }
         build = preview_build(ws.category, answers, definitions)
         if build is None or ws.render_card is None:
             return None

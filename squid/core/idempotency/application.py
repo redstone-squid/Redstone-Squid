@@ -5,7 +5,7 @@ from typing import Protocol
 
 from whenever import Instant
 
-from squid.core.actors import ActingContext
+from squid.core.actors import ActingContext, application_operation
 from squid.core.errors import InvalidStateError
 from squid.core.i18n import tr
 from squid.core.idempotency.domain import (
@@ -17,7 +17,7 @@ from squid.core.idempotency.domain import (
     StoredResponse,
     UnsafeHttpMethod,
 )
-from squid.core.replay import REPLAY_RETENTION_HOURS
+from squid.core.replay import REPLAY_RETENTION_HOURS, replay_fingerprint
 from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from squid.core.worker_context import worker_scope
 
@@ -72,10 +72,12 @@ class IdempotencyService:
         self._ttl_hours = ttl_hours
         self._now = now
 
+    @application_operation
     async def reserve(
         self,
         *,
         caller: str,
+        context: ActingContext,
         key: str,
         fingerprint: bytes,
         method: UnsafeHttpMethod,
@@ -90,6 +92,7 @@ class IdempotencyService:
         IdempotencyInProgressError unless the handler opts into atomic outcome
         recovery. That opt-in returns the original mutation ID, never a new one.
         """
+        fingerprint = replay_fingerprint(fingerprint, context)
         now = self._now()
         async with self._uow_factory() as uow:
             reservation = await uow.idempotency.reserve(
@@ -111,7 +114,10 @@ class IdempotencyService:
             raise IdempotencyInProgressError
         return reservation.response
 
-    async def complete(self, request: PendingRequest, response: StoredResponse) -> StoredResponse:
+    @application_operation
+    async def complete(
+        self, request: PendingRequest, response: StoredResponse, *, context: ActingContext
+    ) -> StoredResponse:
         """Return the first completed response, retaining it for later equivalent requests."""
         async with self._uow_factory() as uow:
             stored = await uow.idempotency.complete(request, response, now=self._now())

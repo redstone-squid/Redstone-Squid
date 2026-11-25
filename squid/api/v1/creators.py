@@ -57,10 +57,10 @@ class PublicCreatorDTO(DataclassDTO[PublicCreatorProfile]):
     opt=contract(cli=transport_only()),
 )
 async def get_creator_alias(
-    name: Annotated[str, PathParameter(min_length=1, max_length=64)], accounts: Accounts
+    caller: CurrentCaller, name: Annotated[str, PathParameter(min_length=1, max_length=64)], accounts: Accounts
 ) -> CreatorAliasDetail:
     """Return a creator credit without exposing its linked account."""
-    alias = await accounts.get_creator_alias(name)
+    alias = await accounts.get_creator_alias(name, context=caller.context())
     if alias is None:
         raise CreatorAliasNotFoundError(name)
     return CreatorAliasDetail.from_domain(alias)
@@ -83,7 +83,7 @@ async def get_creator_profile(
     The account service applies profile and identity visibility before this route
     serializes the result.
     """
-    profile = await accounts.get_public_profile(creator_id)
+    profile = await accounts.get_public_profile(creator_id, context=caller.context())
     if profile is None:
         raise CreatorNotFoundError(creator_id)
     return await BrowserViews(services, caller).creator(profile)

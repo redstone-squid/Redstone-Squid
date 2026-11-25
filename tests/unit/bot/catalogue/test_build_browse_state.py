@@ -20,6 +20,7 @@ from squid.bot.submission.build_card import render_build_card
 from squid.bot.utils.web import MediaPreviewClient
 from squid.core.accounts.application import AccountService
 from squid.core.accounts.models import CataloguePreference
+from squid.core.actors import ActingContext, Actor
 from squid.core.builds.application import BuildQueryService, BuildService
 from squid.core.builds.domain import BuildStatus, Credit, CreditRole
 from squid.core.builds.models import Build, DoorBuild
@@ -59,6 +60,8 @@ from squid_ui.ext.discord.testing import StagedUI, stage
 from squid_ui.testing import find_all, press_event, submit_event
 from tests.support.grants import grants
 from tests.unit.suggestions.test_services import RecordingProvider
+
+pytestmark = pytest.mark.usefixtures("discord_screen_context")
 
 
 def _screen(
@@ -100,7 +103,7 @@ def _screen(
         cast(BuildQueryService, queries),
         cast(BuildService, None),
         AsyncMock(),
-        AsyncMock(),
+        AsyncMock(return_value=Actor(account_id=1, discord_user_id=1)),
         cast(SchematicService, schematics),
         topics=LocalTopicBus(),
         initial_id=initial_id,
@@ -140,7 +143,12 @@ async def pick_sort(ui: StagedUI[BuildBrowseScreen], sort: str, monkeypatch: pyt
     if ui.component._guided.sort_picker is None:
         provider = RecordingProvider((Candidate.create("-width", "Widest"), Candidate.create("width", "Narrowest")))
         suggestions = SuggestionService(SuggestionRegistry.of((RegisteredSource("search_sorts", provider),)))
-        monkeypatch.setattr(ui._client, "actors", SimpleNamespace(resolve=AsyncMock(return_value=None)), raising=False)
+        monkeypatch.setattr(
+            ui._client,
+            "actors",
+            SimpleNamespace(resolve=AsyncMock(return_value=ActingContext.current().effective)),
+            raising=False,
+        )
         monkeypatch.setattr(ui._client, "services", SimpleNamespace(suggestions=suggestions), raising=False)
         await ui.press("sort")
     with anyio.fail_after(2):
@@ -417,6 +425,7 @@ async def test_detail_navigation_uses_id_anchors_and_preserves_visibility(newer:
         await ui.press("linked-build.item-previous" if newer else "linked-build.item-next")
         assert f"Build #{8 if newer else 6}" in ui.texts()
         queries.list_page.assert_awaited_once_with(
+            context=ActingContext.current(),
             statuses=frozenset({BuildStatus.APPROVED, BuildStatus.PENDING}),
             selector=PageSelector(before_id=7) if newer else PageSelector(after_id=7),
             page_size=1,
@@ -894,13 +903,16 @@ async def test_catalogue_detail_crosses_a_service_keyset_boundary_using_its_offs
             prev=PageAnchor(offset=0),
         ),
     )
-    queries.get.side_effect = lambda identifier: DoorBuild(id=identifier, submission_status=BuildStatus.APPROVED)
+    queries.get.side_effect = lambda identifier, *, context: DoorBuild(
+        id=identifier, submission_status=BuildStatus.APPROVED
+    )
     async with stage(screen, owner=object()) as ui:
         await ui.select("builds.open", ["13"])
         assert "Build #13" in ui.texts()
         await ui.press("builds.item-next")
         assert "Build #12" in ui.texts()
         queries.list_page.assert_awaited_with(
+            context=ActingContext.current(),
             statuses=frozenset({BuildStatus.APPROVED, BuildStatus.PENDING}),
             selector=PageSelector(offset=15),
             page_size=15,
@@ -1005,7 +1017,9 @@ async def test_catalogue_jump_form_requests_the_numbered_build_page() -> None:
     screen = _screen(initial_id=None)
     queries = cast(AsyncMock, screen._queries)
 
-    async def page(*, statuses: frozenset[BuildStatus], selector: PageSelector, page_size: int) -> Page[Build]:
+    async def page(
+        *, context: ActingContext, statuses: frozenset[BuildStatus], selector: PageSelector, page_size: int
+    ) -> Page[Build]:
         assert BuildStatus.APPROVED in statuses
         return Page(
             items=tuple(
@@ -1104,7 +1118,12 @@ async def test_search_panel_and_pickers_keep_browse_controls_and_results(monkeyp
     )
     screen._query = CatalogueQuery.from_text(screen._search_parser, "width:3 AND height:5")
     async with stage(screen, owner=object()) as ui:
-        monkeypatch.setattr(ui._client, "actors", SimpleNamespace(resolve=AsyncMock(return_value=None)), raising=False)
+        monkeypatch.setattr(
+            ui._client,
+            "actors",
+            SimpleNamespace(resolve=AsyncMock(return_value=ActingContext.current().effective)),
+            raising=False,
+        )
         monkeypatch.setattr(ui._client, "services", SimpleNamespace(suggestions=suggestions), raising=False)
         await ui.press("guided-search")
         form = await ui.press_for_form("advanced")
@@ -1499,7 +1518,8 @@ async def test_catalogue_reopens_with_field_filters_and_sort() -> None:
     screen._accounts = accounts
     async with stage(screen, owner=object()) as ui:
         await submit_search(ui, "piston (width<=5 OR width>=10)", "-width")
-    preference = accounts.save_catalogue_preference.await_args.args[0]
+    args = dict(accounts.save_catalogue_preference.await_args.kwargs)
+    preference = CataloguePreference(account_id=args.pop("context").effective.require_account_id(), **args)
     assert preference.account_id == 1
     assert preference.scope == "builds"
     assert "piston" not in preference.filters
@@ -1516,5 +1536,5 @@ async def test_catalogue_reopens_with_field_filters_and_sort() -> None:
     await reopened._switch("records", press_event())
     assert reopened._query.text == "criterion:fastest"
     await reopened._reset_search(press_event())
-    reset = accounts.save_catalogue_preference.await_args.args[0]
-    assert (reset.scope, reset.filters, reset.sort) == ("records", "", "")
+    reset = accounts.save_catalogue_preference.await_args.kwargs
+    assert (reset["scope"], reset["filters"], reset["sort"]) == ("records", "", "")

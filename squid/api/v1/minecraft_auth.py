@@ -27,7 +27,7 @@ from squid.api.dependencies import (
 )
 from squid.api.errors import responses
 from squid.api.idempotency import IdempotencyKey, reserve_idempotent_request, reserve_idempotent_request_for
-from squid.api.security import BrowserContext, current_browser_context, prevent_credential_storage
+from squid.api.security import BrowserContext, Caller, current_browser_context, prevent_credential_storage
 from squid.api.v1.schemas.minecraft_auth import (
     ChallengeApprovalRequest,
     ChallengeApprovalResponse,
@@ -43,6 +43,7 @@ from squid.api.v1.schemas.minecraft_auth import (
     PaperChallengeExchangeRequest,
     ServerProfileSchema,
 )
+from squid.core.actors import ActingContext, Actor
 from squid.core.errors import NotFoundError, ServiceUnavailableError
 from squid.core.minecraft_auth.application.crypto import (
     MAX_INSTALLATION_ID_CHARS,
@@ -95,6 +96,7 @@ AuthenticatedPaper = NamedDependency[SkipValidation[AuthenticatedPaperInstallati
 
 
 async def enforce_paper_request_idempotency(
+    caller: NamedDependency[SkipValidation[Caller]],
     request: Request,
     installation: AuthenticatedPaper,
     idempotency_key: IdempotencyKey = None,
@@ -104,18 +106,24 @@ async def enforce_paper_request_idempotency(
     Rotating the credential starts a new namespace, so a key used with the old
     credential cannot replay its response under the replacement credential.
     """
-    caller = f"minecraft-installation:{installation.id}:{installation.credential_version}"
-    await reserve_idempotent_request_for(request, caller, idempotency_key)
+    namespace = f"minecraft-installation:{installation.id}:{installation.credential_version}"
+    installation_actor = Actor(service_id=f"minecraft-installation:{installation.id}", credential_id=namespace)
+    installation_context = ActingContext(
+        installation_actor, installation_actor, invocation_id=caller.context().invocation_id
+    )
+    installation_caller = Caller(kind="service", subject=namespace, acting_context=installation_context)
+    await reserve_idempotent_request_for(request, installation_caller, idempotency_key, namespace=namespace)
 
 
 async def enforce_fabric_request_idempotency(
+    caller: NamedDependency[SkipValidation[Caller]],
     request: Request,
     idempotency_key: IdempotencyKey = None,
 ) -> None:
     """Scope anonymous Fabric retries to a digest of the client's observed IP address."""
     peer = request.client.host if request.client is not None else "unknown"
     peer_digest = hashlib.sha256(peer.encode()).hexdigest()
-    await reserve_idempotent_request_for(request, f"minecraft-fabric:{peer_digest}", idempotency_key)
+    await reserve_idempotent_request_for(request, caller, idempotency_key, namespace=f"minecraft-fabric:{peer_digest}")
 
 
 @post(

@@ -25,9 +25,9 @@ from litestar.types import ASGIApp, Message, Receive, Scope, Send
 
 from squid.api.contract import iter_contract_routes
 from squid.api.security import Caller, current_caller
+from squid.core.actors import ActingContext
 from squid.core.errors import AuthenticationError
 from squid.core.idempotency import IdempotencyService, PendingRequest, StoredResponse, UnsafeHttpMethod
-from squid.core.replay import replay_fingerprint
 
 _UNSAFE_METHODS = frozenset(UnsafeHttpMethod)
 _REPLAYED_HEADERS = frozenset({"cache-control", "content-language", "content-type", "etag", "location", "pragma"})
@@ -61,6 +61,7 @@ class IdempotencyReservationState:
 
     service: IdempotencyService
     request: PendingRequest
+    context: ActingContext
     recoverable: bool = False
 
 
@@ -84,9 +85,10 @@ async def reserve_edit_request(
 
 async def reserve_idempotent_request_for(
     request: Request,
-    caller: str | Caller,
+    caller: Caller,
     idempotency_key: str | None,
     *,
+    namespace: str | None = None,
     recoverable: bool = False,
 ) -> None:
     """Reserve a mutation key, or raise IdempotencyReplay for a completed matching request.
@@ -96,15 +98,15 @@ async def reserve_idempotent_request_for(
     """
     if request.method not in _UNSAFE_METHODS or idempotency_key is None:
         return
-    if isinstance(caller, Caller) and caller.kind == "anonymous":
+    if namespace is None and caller.kind == "anonymous":
         raise AuthenticationError
     service = cast(IdempotencyService, request.app.state.runtime.services.idempotency)
     route_path = request.scope.get("path_template", request.url.path)
     fingerprint = await _request_fingerprint(request, route_path)
-    if isinstance(caller, Caller):
-        fingerprint = replay_fingerprint(fingerprint, caller.context())
+    context = caller.context()
     reservation = await service.reserve(
-        caller=caller.subject if isinstance(caller, Caller) else caller,
+        caller=namespace or caller.subject,
+        context=context,
         key=idempotency_key,
         fingerprint=fingerprint,
         method=UnsafeHttpMethod(request.method),
@@ -113,7 +115,7 @@ async def reserve_idempotent_request_for(
     )
     if isinstance(reservation, StoredResponse):
         raise IdempotencyReplay(reservation)
-    setattr(request.state, _STATE_KEY, IdempotencyReservationState(service, reservation, recoverable))
+    setattr(request.state, _STATE_KEY, IdempotencyReservationState(service, reservation, context, recoverable))
 
 
 def edit_operation_id(request: Request, _reservation: NamedDependency[None] = None) -> UUID:
@@ -178,7 +180,7 @@ class CompleteIdempotentResponseMiddleware:
         # durable response commit settles.
         if not pending.recoverable or response.status_code < 500:
             with CancelScope(shield=True):
-                stored = await pending.service.complete(pending.request, response)
+                stored = await pending.service.complete(pending.request, response, context=pending.context)
             if stored != response:
                 await ASGIResponse(body=stored.body, status_code=stored.status_code, headers=dict(stored.headers))(
                     scope, receive, send
@@ -201,7 +203,7 @@ async def complete_failed_request(request: Request, response: Response) -> Respo
         body=response.render(response.content, response.media_type or "application/json"),
     )
     with CancelScope(shield=True):
-        stored = await pending.service.complete(pending.request, stored)
+        stored = await pending.service.complete(pending.request, stored, context=pending.context)
     return Response(content=stored.body, status_code=stored.status_code, headers=dict(stored.headers))
 
 

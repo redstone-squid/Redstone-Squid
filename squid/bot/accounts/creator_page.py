@@ -13,6 +13,7 @@ from squid.bot.routes import AppRequest, AppRoutes, ScreenUnavailable
 from squid.bot.ui import card_node, tr
 from squid.core.accounts.application import AccountService
 from squid.core.accounts.domain import PublicCreatorProfile
+from squid.core.actors import ActingContext
 from squid.core.notifications.domain import SubscriptionKind
 from squid.core.search.application.completion import render_value
 from squid_ui.ext.discord.target_types import ComponentsV2Target
@@ -42,7 +43,7 @@ class CreatorPage(sd.Screen[None, Any, RedstoneSquid]):
         Raises:
             ScreenUnavailable: No creator has this public ID.
         """
-        profile = await accounts.get_public_profile(public_id)
+        profile = await accounts.get_public_profile(public_id, context=ActingContext.current())
         if profile is None:
             raise ScreenUnavailable(
                 tr(t"bot-verify-that-creator-page-could-not-be-found = That creator page could not be found.")

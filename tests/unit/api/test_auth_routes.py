@@ -17,7 +17,7 @@ from squid.api.dependencies import CurrentCaller
 from squid.config import OAuthClientCredentials
 from squid.core.accounts.domain import AccountConsent, IdentityProvider
 from squid.core.accounts.models import Account
-from squid.core.actors import current_acting_context
+from squid.core.actors import ActingContext, current_acting_context
 from squid.core.auth.application.providers import DiscordOAuthProvider
 from squid.core.auth.application.web import WebSessionService
 from squid.core.auth.impersonation import AuthorizedImpersonation
@@ -36,6 +36,7 @@ class IdempotencyRecorder(IdempotencyService):
         self,
         *,
         caller: str,
+        context: ActingContext,
         key: str,
         fingerprint: bytes,
         method: UnsafeHttpMethod,

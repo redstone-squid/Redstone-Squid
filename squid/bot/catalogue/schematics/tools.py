@@ -3,6 +3,7 @@
 import asyncio
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Any, cast, override
+from uuid import UUID
 
 import anyio
 
@@ -15,7 +16,8 @@ from squid.bot.catalogue.schematics.presentation import (
 from squid.bot.catalogue.schematics.video import VideoEditor
 from squid.bot.lookup import pick
 from squid.bot.ui import tr
-from squid.bot.utils.permissions import Grants, allows
+from squid.bot.utils.permissions import Grants
+from squid.core.actors import ActingContext
 from squid.core.permissions.domain import PermissionNode
 from squid.core.permissions.domain.catalogue import (
     BUILD_SCHEMATIC_DOWNLOAD_PRIVATE,
@@ -49,13 +51,11 @@ class SchematicTools(sl.Component[ComponentsV2Target, SchematicRequest]):
         build_id: int,
         *,
         schematics: SchematicService,
-        actor_account_id: int | None,
         grants: Grants,
         show_details: Callable[[], bool] | None = None,
     ) -> None:
         self._build_id = build_id
         self._schematics = schematics
-        self._actor_account_id = actor_account_id
         self.grants = grants
         self._show_details = show_details
         self._video_delivery_lock = asyncio.Lock()
@@ -149,11 +149,13 @@ class SchematicTools(sl.Component[ComponentsV2Target, SchematicRequest]):
         A publicly downloadable schematic is open to everyone. Otherwise the uploader may use it, as
         may anyone holding `private_access`; the download and view actions pass different nodes.
         """
-        stored = await self._schematics.featured_for_build(self._build_id)
+        context = ActingContext.current()
+        stored = await self._schematics.featured_for_build(self._build_id, context=context)
         if stored is None:
             await event.notice(tr(t"build-schematic-missing = This build has no schematic attached."))
             return None
-        is_uploader = self._actor_account_id is not None and stored.uploaded_by_account_id == self._actor_account_id
+        account_id = context.effective.account_id
+        is_uploader = account_id is not None and stored.uploaded_by_account_id == account_id
         if not (stored.publication.is_public_downloadable or is_uploader or await self.grants.allows(private_access)):
             await event.notice(tr(t"build-schematic-not-public = This schematic is not publicly available."))
             return None
@@ -163,7 +165,9 @@ class SchematicTools(sl.Component[ComponentsV2Target, SchematicRequest]):
         stored = await self._primary(event, BUILD_SCHEMATIC_VIEW_PRIVATE)
         if stored is None:
             return
-        self._schematic_result = _describe(stored, render_skip=await self._schematics.explain_render_skip(stored))
+        self._schematic_result = _describe(
+            stored, render_skip=await self._schematics.explain_render_skip(stored, context=ActingContext.current())
+        )
 
     async def _schematic_download(self, event: sl.PressEvent) -> None:
         request = cast(SchematicRequest, event.context)
@@ -171,7 +175,7 @@ class SchematicTools(sl.Component[ComponentsV2Target, SchematicRequest]):
         if await self._primary(event, BUILD_SCHEMATIC_DOWNLOAD_PRIVATE) is None:
             return
         data, _ = await self._schematics.convert(
-            self._build_id, ConvertRequest(target_format=SchematicFormat.LITEMATIC)
+            self._build_id, ConvertRequest(target_format=SchematicFormat.LITEMATIC), context=ActingContext.current()
         )
         self._asset = self._schematic_asset(data, "litematic")
 
@@ -181,7 +185,9 @@ class SchematicTools(sl.Component[ComponentsV2Target, SchematicRequest]):
         if await self._primary(event, BUILD_SCHEMATIC_VIEW_PRIVATE) is None:
             return
         try:
-            rendered = await self._schematics.render_now(self._build_id, request=self._schematics.render_recipe())
+            rendered = await self._schematics.render_now(
+                self._build_id, request=self._schematics.render_recipe(), context=ActingContext.current()
+            )
         except SchematicRenderRefusedError as error:
             await event.notice(error.public_text())
             return
@@ -201,18 +207,18 @@ class SchematicTools(sl.Component[ComponentsV2Target, SchematicRequest]):
     async def _submit_recipe(self, event: sd.ActionEvent, recipe: VideoRenderRequest) -> None:
         request = cast(SchematicRequest, event.context)
         request.client.command_limits.check(request.user.id, cost=4)
-        actor = await request.client.actors.resolve(request, refresh=True)
+        context = ActingContext.current()
         stored = await self._primary(event, BUILD_SCHEMATIC_VIEW_PRIVATE)
         service = self._schematics.videos
-        if stored is None or service is None or actor.account_id is None:
+        if stored is None or service is None or context.effective.account_id is None:
             return
-        await self._queue_recipe(request, stored, actor.account_id, recipe, event)
+        await self._queue_recipe(request, stored, context, recipe, event)
 
     async def _queue_recipe(
         self,
         request: SchematicRequest,
         stored: StoredSchematic,
-        account_id: int,
+        context: ActingContext,
         recipe: VideoRenderRequest,
         event: sl.ActionEvent[Any],
     ) -> None:
@@ -222,8 +228,7 @@ class SchematicTools(sl.Component[ComponentsV2Target, SchematicRequest]):
             self._build_id,
             stored.id,
             recipe,
-            account_id=account_id,
-            can_view_private=await allows(request, BUILD_SCHEMATIC_VIEW_PRIVATE),
+            context=context,
         )
         self._video_recipe = recipe
         self._video_recipes[status.id] = recipe
@@ -233,38 +238,41 @@ class SchematicTools(sl.Component[ComponentsV2Target, SchematicRequest]):
             md_tr(t"schematic-video-queued = Video #{job_id} queued. I'll attach it here when it is ready.")
         )
         request.client.background_tasks.start(
-            self._follow_video(request, status.id), name=f"schematic-video-{status.id}"
+            self._follow_video(request, status.id, session_id=context.session_id), name=f"schematic-video-{status.id}"
         )
 
-    async def _follow_video(self, request: SchematicRequest, job_id: int) -> None:
+    async def _follow_video(self, request: SchematicRequest, job_id: int, *, session_id: UUID | None = None) -> None:
         with anyio.move_on_after(600):
             while request.interaction is not None and not request.interaction.is_expired():
-                if await self._deliver_video(request, job_id):
+                if await self._deliver_video(request, job_id, session_id=session_id):
                     return
                 await anyio.sleep(2)
 
     async def _refresh_video(self, event: sd.PressEvent[RedstoneSquid]) -> None:
         request = event.context
-        if self._video_job_id is not None and not await self._deliver_video(request, self._video_job_id, repeat=True):
+        if self._video_job_id is not None and not await self._deliver_video(
+            request, self._video_job_id, repeat=True, session_id=ActingContext.current().session_id
+        ):
             await event.notice(tr(t"schematic-video-pending = The video is still rendering."))
 
-    async def _deliver_video(self, request: SchematicRequest, job_id: int, *, repeat: bool = False) -> bool:
+    async def _deliver_video(
+        self, request: SchematicRequest, job_id: int, *, repeat: bool = False, session_id: UUID | None = None
+    ) -> bool:
         async with self._video_delivery_lock:
             # Explicit checks should show the result even after automatic delivery.
             if not repeat and job_id in self._delivered_videos:
                 return True
-            delivered = await self._deliver_video_once(request, job_id)
+            delivered = await self._deliver_video_once(request, job_id, session_id)
             if delivered and request.interaction is not None and not request.interaction.is_expired():
                 self._delivered_videos.add(job_id)
             return delivered
 
-    async def _deliver_video_once(self, request: SchematicRequest, job_id: int) -> bool:
+    async def _deliver_video_once(self, request: SchematicRequest, job_id: int, session_id: UUID | None) -> bool:
         service = self._schematics.videos
-        actor = await request.client.actors.resolve(request)
-        if service is None or actor.account_id is None:
+        context = await request.client.actors.acting_context(request, session_id, "schematic_video_delivery")
+        if service is None or context.effective.account_id is None:
             return True
-        can_view = await allows(request, BUILD_SCHEMATIC_VIEW_PRIVATE)
-        status = await service.get_video(job_id, account_id=actor.account_id, can_view_private=can_view)
+        status = await service.get_video(job_id, context=context)
         if status.status in ("queued", "running"):
             return False
         if status.input_candidates:
@@ -284,7 +292,7 @@ class SchematicTools(sl.Component[ComponentsV2Target, SchematicRequest]):
                 audience="personal",
             )
             return True
-        content = await service.open_video_content(job_id, account_id=actor.account_id, can_view_private=can_view)
+        content = await service.open_video_content(job_id, context=context)
         interaction = request.interaction
         if interaction is None or interaction.is_expired():
             return True
@@ -343,7 +351,9 @@ class SchematicTools(sl.Component[ComponentsV2Target, SchematicRequest]):
         source.client.command_limits.check(source.user.id, cost=4)
         if await self._primary(event, BUILD_SCHEMATIC_DOWNLOAD_PRIVATE) is None:
             return
-        data, losses = await self._schematics.convert(self._build_id, request, version_label=version_label)
+        data, losses = await self._schematics.convert(
+            self._build_id, request, version_label=version_label, context=ActingContext.current()
+        )
         file_format = request.target_format
         self._asset = self._schematic_asset(data, WRITABLE_EXTENSIONS[file_format])
         loss_summary = summarise_losses(losses)

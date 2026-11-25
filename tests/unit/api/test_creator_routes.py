@@ -20,6 +20,7 @@ from squid.core.accounts.domain import (
     ProfileLink,
     PublicCreatorProfile,
 )
+from squid.core.actors import ActingContext
 
 CREATOR_ID = UUID("11111111-1111-4111-8111-111111111111")
 CANONICAL_ID = UUID("22222222-2222-4222-8222-222222222222")
@@ -31,7 +32,7 @@ class AccountReader(AccountService):
         self.profile = profile
 
     @override
-    async def get_public_profile(self, public_id: UUID) -> PublicCreatorProfile | None:
+    async def get_public_profile(self, public_id: UUID, *, context: ActingContext) -> PublicCreatorProfile | None:
         return self.profile
 
 

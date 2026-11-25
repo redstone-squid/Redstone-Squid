@@ -171,7 +171,9 @@ async def _enrolled_service() -> tuple[
         client_instance_id=uuid4(),
         label="  Workstation   CLI ",
     )
-    preview = await service.preview_enrollment(issued.user_code.lower())
+    preview = await service.preview_enrollment(
+        issued.user_code.lower(), context=ActingContext.direct(Actor(account_id=42))
+    )
     assert preview.label == "Workstation CLI"
     await service.approve_enrollment(user_code=issued.user_code, context=ActingContext.direct(Actor(account_id=42)))
     signature = private_key.sign(enrollment_proof_message(issued.enrollment.id, issued.device_code))
@@ -225,7 +227,17 @@ async def test_enrolled_device_can_renew_and_revoke_a_session() -> None:
 
     assert (await service.authenticate(renewed.token)).device_id == identity.device_id
     renewed_identity = await service.authenticate(renewed.token)
-    assert await service.revoke_current_session(renewed_identity) is True
+    assert (
+        await service.revoke_current_session(
+            renewed_identity,
+            context=ActingContext.direct(
+                Actor(
+                    account_id=renewed_identity.account_id, credential_id=f"cli-session:{renewed_identity.session_id}"
+                )
+            ),
+        )
+        is True
+    )
     with pytest.raises(InvalidCliSessionError):
         await service.authenticate(renewed.token)
     assert repository.challenges[challenge.challenge.id].consumed_at == NOW

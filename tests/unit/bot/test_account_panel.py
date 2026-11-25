@@ -188,7 +188,7 @@ class PublicProfileService(SnapshotAccountService):
         self.profile = profile
 
     @override
-    async def get_public_profile(self, public_id: UUID) -> PublicCreatorProfile | None:
+    async def get_public_profile(self, public_id: UUID, *, context: ActingContext) -> PublicCreatorProfile | None:
         del public_id
         return self.profile
 
@@ -227,10 +227,9 @@ class LinkAccountService(SnapshotAccountService):
         self,
         code: str,
         *,
-        attempted_by: tuple[IdentityProvider, str],
+        context: ActingContext,
         ttl_seconds: int = 120,
     ) -> LinkReservation:
-        del attempted_by
         assert code == "abcd"
         self.reservation_ttls.append(ttl_seconds)
         return self.reservation
@@ -238,20 +237,20 @@ class LinkAccountService(SnapshotAccountService):
     @override
     async def link_minecraft_account(
         self,
-        account_id: int,
         code: str,
         *,
         consent: AccountConsent,
-        attempted_by: tuple[IdentityProvider, str],
+        context: ActingContext,
         reservation: LinkReservation | None = None,
     ) -> IdentityRefresh:
-        del consent, attempted_by
+        account_id = context.effective.require_account_id()
+        del consent
         assert reservation is self.reservation
         self.linked.append((account_id, code))
         return IdentityRefresh(account_id, JAVA_UUID, "Notch")
 
     @override
-    async def release_minecraft_link(self, code: str, reservation: LinkReservation) -> None:
+    async def release_minecraft_link(self, code: str, reservation: LinkReservation, *, context: ActingContext) -> None:
         assert reservation is self.reservation
         self.released.append(code)
 
@@ -357,7 +356,8 @@ async def test_somebody_elses_creator_page_uses_the_public_profile_projection() 
     page = UUID(int=7)
     accounts = PublicProfileService(PublicCreatorProfile(public_id=page, hidden=False))
 
-    creator = await CreatorPage.load(accounts, page, "Someone")
+    with ActingContext.direct(await edit_actor()).scope():
+        creator = await CreatorPage.load(accounts, page, "Someone")
 
     assert "Someone" in str(creator.render())
 
@@ -1036,7 +1036,7 @@ async def test_embedded_overview_opens_consent_under_the_workspace_screen(mocker
             return account
 
         @override
-        async def get_profile(self, account_id: int) -> AccountProfile:
+        async def get_profile(self, account_id: int, *, context: ActingContext) -> AccountProfile:
             return AccountProfile.empty(account_id)
 
     accounts = OverviewAccounts()
@@ -1117,7 +1117,7 @@ async def test_embedded_overview_opens_consent_under_the_workspace_screen(mocker
         await ui.press(
             next(key for key in ui.root.snapshot().handler_keys if key.endswith("account-tabs.notifications"))
         )
-        notifications.editor_snapshot.assert_awaited_once_with(ACCOUNT_ID)
+        notifications.editor_snapshot.assert_awaited_once_with(context=ActingContext.direct(await edit_actor()))
         assert any("Your inbox is empty" in content for content in ui.texts())
 
 
@@ -1170,7 +1170,7 @@ async def test_account_focus_before_and_after_load_preserves_user_selection() ->
             return account
 
         @override
-        async def get_profile(self, account_id: int) -> AccountProfile:
+        async def get_profile(self, account_id: int, *, context: ActingContext) -> AccountProfile:
             return AccountProfile.empty(account_id)
 
     async def authorize(_node: PermissionNode) -> bool:

@@ -1,5 +1,7 @@
 """Browser-session service tests, over Discord and over a second provider alike."""
 
+from uuid import uuid4
+
 import httpx
 import pytest
 from pydantic import AnyHttpUrl, SecretStr
@@ -7,9 +9,10 @@ from whenever import Instant
 
 from squid.config import OAuthClientCredentials, OAuthConfig, UpstreamHttpConfig
 from squid.core.accounts.domain import IdentityProvider
+from squid.core.actors import ActingContext, Actor
 from squid.core.auth.application.providers import DiscordOAuthProvider, OAuthProvider
 from squid.core.auth.application.web import WebSessionService
-from squid.core.errors import AuthenticationError, NotFoundError
+from squid.core.errors import AuthenticationError, AuthorizationError, NotFoundError
 from tests.support.identity_uow import WebScope
 from tests.unit.auth.application.fakes import AccountServiceRecorder, FakeXboxOAuthProvider, SessionRepository
 
@@ -53,11 +56,13 @@ async def test_oauth_state_is_durable_and_callback_issues_hashed_session() -> No
     repository = SessionRepository()
     web = service(repository, discord_provider())
 
-    authorize_url = await web.authorize_url("discord", "/account")
+    authorize_url = await web.authorize_url("discord", "/account", context=ActingContext.direct(Actor()))
     assert repository.state is not None
     assert "code_challenge_method=S256" in authorize_url
 
-    token, redirect_to = await web.callback("discord", "code", repository.state.state, user_agent="test")
+    token, redirect_to = await web.callback(
+        "discord", "code", repository.state.state, user_agent="test", context=ActingContext.direct(Actor())
+    )
 
     assert redirect_to == "/account"
     assert repository.token_hash is not None
@@ -85,10 +90,12 @@ async def test_oauth_service_uses_configured_loopback_endpoints() -> None:
     )
     web = service(repository, provider)
 
-    authorize_url = await web.authorize_url("discord", None)
+    authorize_url = await web.authorize_url("discord", None, context=ActingContext.direct(Actor()))
     assert authorize_url.startswith("http://127.0.0.1:8102/discord/authorize?")
     assert repository.state is not None
-    await web.callback("discord", "code", repository.state.state, user_agent=None)
+    await web.callback(
+        "discord", "code", repository.state.state, user_agent=None, context=ActingContext.direct(Actor())
+    )
 
     assert [request.url.path for request in requests] == [
         "/discord/api/oauth2/token",
@@ -109,13 +116,15 @@ async def test_a_second_provider_logs_in_and_lands_its_own_identity_namespace() 
         uow_factory=lambda: WebScope(repository, accounts),
     )
 
-    authorize_url = await web.authorize_url("bedrock", "/account")
+    authorize_url = await web.authorize_url("bedrock", "/account", context=ActingContext.direct(Actor()))
     assert authorize_url.startswith("https://xbox.example/authorize?")
     assert repository.state is not None
     assert repository.state.provider is IdentityProvider.BEDROCK
     minted_verifier = repository.state.code_verifier
 
-    token, redirect_to = await web.callback("bedrock", "code", repository.state.state, user_agent=None)
+    token, redirect_to = await web.callback(
+        "bedrock", "code", repository.state.state, user_agent=None, context=ActingContext.direct(Actor())
+    )
 
     assert accounts.identities == [(IdentityProvider.BEDROCK, "2535465049322445")]
     assert fake.exchanges == [("code", minted_verifier)]
@@ -129,11 +138,13 @@ async def test_a_state_minted_for_one_provider_is_not_redeemable_at_another() ->
     repository = SessionRepository()
     web = service(repository, discord_provider(), FakeXboxOAuthProvider())
 
-    await web.authorize_url("discord", None)
+    await web.authorize_url("discord", None, context=ActingContext.direct(Actor()))
     assert repository.state is not None
 
     with pytest.raises(AuthenticationError):
-        await web.callback("bedrock", "code", repository.state.state, user_agent=None)
+        await web.callback(
+            "bedrock", "code", repository.state.state, user_agent=None, context=ActingContext.direct(Actor())
+        )
 
 
 async def test_an_unknown_provider_slug_is_not_found_rather_than_unauthorized() -> None:
@@ -141,9 +152,9 @@ async def test_an_unknown_provider_slug_is_not_found_rather_than_unauthorized() 
     web = service(SessionRepository(), discord_provider())
 
     with pytest.raises(NotFoundError):
-        await web.authorize_url("github", None)
+        await web.authorize_url("github", None, context=ActingContext.direct(Actor()))
     with pytest.raises(NotFoundError):
-        await web.callback("github", "code", "state", user_agent=None)
+        await web.callback("github", "code", "state", user_agent=None, context=ActingContext.direct(Actor()))
 
 
 def test_configured_clients_are_reported_per_provider() -> None:
@@ -173,10 +184,17 @@ def test_a_deployment_with_no_providers_reports_itself_unconfigured() -> None:
 async def test_link_requires_the_account_that_started_it(returning_account: int | None) -> None:
     repository = SessionRepository()
     web = service(repository, discord_provider())
-    await web.authorize_url("discord", "/account", link_account_id=42)
+    await web.authorize_url(
+        "discord", "/account", link=True, context=ActingContext.direct(Actor(account_id=42, credential_id="browser:42"))
+    )
     assert repository.state is not None
     attempt = web.callback(
-        "discord", "code", repository.state.state, user_agent=None, current_account_id=returning_account
+        "discord",
+        "code",
+        repository.state.state,
+        user_agent=None,
+        context=ActingContext.direct(Actor(account_id=returning_account, credential_id="browser:return")),
+        consent_current=True,
     )
     if returning_account == 42:
         _, destination = await attempt
@@ -186,4 +204,15 @@ async def test_link_requires_the_account_that_started_it(returning_account: int 
         with pytest.raises(AuthenticationError):
             await attempt
         assert repository.account_id is None
+    assert repository.state is None
+
+
+async def test_linking_requires_the_original_browser_identity() -> None:
+    repository = SessionRepository()
+    web = service(repository, discord_provider())
+    operator = Actor(account_id=51, credential_id="browser:session")
+    target = Actor(account_id=42, credential_id="browser:session")
+    context = ActingContext(operator, target, session_id=uuid4())
+    with pytest.raises(AuthorizationError):
+        await web.authorize_url("discord", "/account", link=True, context=context)
     assert repository.state is None

@@ -27,11 +27,11 @@ class SnapshotAccountService(AccountService):
         raise AssertionError("This fixture does not unlink identities")
 
     @override
-    async def editor_snapshot(self, account_id: int) -> AccountEditorSnapshot:
+    async def editor_snapshot(self, account_id: int, *, context: ActingContext) -> AccountEditorSnapshot:
         account = await self.get_account_by_id(account_id)
         if account is None:
             raise AccountNotFoundError(account_id)
-        return AccountEditorSnapshot(account, await self.get_profile(account_id))
+        return AccountEditorSnapshot(account, await self.get_profile(account_id, context=context))
 
 
 class AccountRecorder(Protocol):

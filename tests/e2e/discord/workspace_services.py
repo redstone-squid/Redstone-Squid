@@ -46,12 +46,12 @@ class WorkspaceAccounts(AccountService):
         return self.discord_accounts.get(subject)
 
     @override
-    async def credit_owners(self, build_id: int) -> dict[int, UUID]:
+    async def credit_owners(self, build_id: int, *, context: ActingContext) -> dict[int, UUID]:
         del build_id
         return {}
 
     @override
-    async def editor_snapshot(self, account_id: int) -> AccountEditorSnapshot:
+    async def editor_snapshot(self, account_id: int, *, context: ActingContext) -> AccountEditorSnapshot:
         account = next(account for account in self.discord_accounts.values() if account.id == account_id)
         return AccountEditorSnapshot(account, AccountProfile.empty(account_id))
 

@@ -77,7 +77,7 @@ async def logout(
     token = request.cookies.get("__Host-squid_session")
     if caller.kind != "account" or token is None or web_auth is None:
         raise AuthenticationError
-    await web_auth.logout(token)
+    await web_auth.logout(token, context=caller.context())
     response = Response(content=None, status_code=204)
     response.set_cookie("__Host-squid_session", "", max_age=0, path="/", secure=True, httponly=True, samesite="lax")
     response.set_cookie("squid_csrf", "", max_age=0, path="/", secure=True, samesite="lax")
@@ -93,6 +93,7 @@ async def logout(
     status_code=307,
 )
 async def browser_authorization_start(
+    caller: CurrentCaller,
     request: Request,
     web_auth: WebAuth,
     provider: ProviderSlug,
@@ -102,7 +103,7 @@ async def browser_authorization_start(
     if web_auth is None:
         raise AuthenticationError
     _validate_redirect(request, redirect_to)
-    return Redirect(await web_auth.authorize_url(provider, redirect_to), status_code=307)
+    return Redirect(await web_auth.authorize_url(provider, redirect_to, context=caller.context()), status_code=307)
 
 
 class LinkAuthorization(BaseModel):
@@ -129,9 +130,9 @@ async def link_provider(
     """Start identity linking for the consenting browser account."""
     if web_auth is None or caller.kind != "account":
         raise AuthenticationError
-    account_id = caller.require_consented_account()
+    caller.require_consented_account()
     _validate_redirect(request, redirect_to)
-    url = await web_auth.authorize_url(provider, redirect_to, link_account_id=account_id)
+    url = await web_auth.authorize_url(provider, redirect_to, link=True, context=caller.context())
     return LinkAuthorization(authorization_url=url)
 
 
@@ -164,7 +165,8 @@ async def browser_authorization_callback(
             oauth_state,
             user_agent=request.headers.get("User-Agent"),
             error=error,
-            current_account_id=caller.account_id if caller.kind == "account" and not caller.consent_pending else None,
+            context=caller.context(),
+            consent_current=caller.kind == "account" and not caller.consent_pending,
         )
     except CallbackFailure as failure:
         params = {"auth_error": failure.callback_code}

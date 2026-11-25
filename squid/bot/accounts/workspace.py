@@ -2,6 +2,7 @@
 
 import asyncio
 from collections.abc import Awaitable, Callable
+from dataclasses import replace
 from typing import Any, Literal, Self, cast, override
 
 import anyio
@@ -415,10 +416,10 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
         account = self._account
         form = _LinkForm.from_submission(event)
         code = form.code
-        attempted_by = (IdentityProvider.DISCORD, str(self._actor_id))
+        context = ActingContext.for_actor(await self._edit_actor())
         reservation = await self._accounts.reserve_minecraft_link(
             code,
-            attempted_by=attempted_by,
+            context=context,
             ttl_seconds=int(CONSENT_PROMPT_TIMEOUT_SECONDS),
         )
         conflict = (
@@ -427,7 +428,7 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
             else link_conflict(reservation.preview, account.identities_for(IdentityProvider.JAVA))
         )
         if conflict is not None:
-            await self._accounts.release_minecraft_link(code, reservation)
+            await self._accounts.release_minecraft_link(code, reservation, context=context)
             raise AccountAlreadyLinkedError(
                 account_id=account.id if account is not None else None, minecraft_uuid=conflict
             )
@@ -441,7 +442,7 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
                 async with settlement:
                     if settled:
                         return
-                    await self._accounts.release_minecraft_link(code, reservation)
+                    await self._accounts.release_minecraft_link(code, reservation, context=context)
                     settled = True
 
         async def consented_account_id(consent: AccountConsent) -> int:
@@ -472,10 +473,11 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
                         return
                     linked_account_id = await consented_account_id(consent)
                     refresh = await self._accounts.link_minecraft_account(
-                        linked_account_id,
                         code,
                         consent=consent,
-                        attempted_by=attempted_by,
+                        context=ActingContext.for_actor(
+                            replace(await self._edit_actor(), account_id=linked_account_id)
+                        ),
                         reservation=reservation,
                     )
                     settled = True
@@ -650,4 +652,6 @@ async def refresh_discord_avatar_key(
         return
     key = user.avatar.key if user.avatar is not None else None
     if key != identity.avatar_key:
-        await request.client.services.accounts.record_identity_avatar_key(account.id, identity.id, key)
+        await request.client.services.accounts.record_identity_avatar_key(
+            identity.id, key, context=ActingContext.for_actor(await request.client.actors.resolve(request))
+        )

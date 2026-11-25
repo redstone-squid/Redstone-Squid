@@ -20,10 +20,17 @@ from collections.abc import Callable, Mapping
 
 from whenever import Instant
 
+from squid.core.actors import ActingContext, application_operation
 from squid.core.auth.application.ports import WebSessionUnitOfWork
 from squid.core.auth.application.providers import OAuthProvider
 from squid.core.auth.models.sessions import OAuthState
-from squid.core.errors import AuthenticationError, NotFoundError, ServiceUnavailableError, ValidationError
+from squid.core.errors import (
+    AuthenticationError,
+    AuthorizationError,
+    NotFoundError,
+    ServiceUnavailableError,
+    ValidationError,
+)
 from squid.core.unit_of_work import UnitOfWorkFactory
 
 
@@ -73,7 +80,10 @@ class WebSessionService:
     def provider_ids(self) -> tuple[str, ...]:
         return tuple(self._providers)
 
-    async def authorize_url(self, slug: str, redirect_to: str | None, *, link_account_id: int | None = None) -> str:
+    @application_operation
+    async def authorize_url(
+        self, slug: str, redirect_to: str | None, *, context: ActingContext, link: bool = False
+    ) -> str:
         """Store a ten-minute login attempt and return the provider's authorization URL.
 
         `redirect_to` is retained for the callback. The API route must validate it
@@ -82,8 +92,11 @@ class WebSessionService:
         async with self._uow_factory() as uow:
             provider = self._provider(slug)
             state = secrets.token_urlsafe(24)
-            if link_account_id is not None:
-                binding = self._link_binding(link_account_id, state)
+            if link:
+                account_id = self._browser_account(context)
+                if account_id is None:
+                    raise AuthorizationError
+                binding = self._link_binding(account_id, state)
                 state = f"link.{state}.{binding}"
             verifier = secrets.token_urlsafe(48)
             challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
@@ -100,6 +113,7 @@ class WebSessionService:
             await uow.commit()
             return result
 
+    @application_operation
     async def callback(
         self,
         slug: str,
@@ -108,7 +122,8 @@ class WebSessionService:
         *,
         user_agent: str | None,
         error: str | None = None,
-        current_account_id: int | None = None,
+        context: ActingContext,
+        consent_current: bool = False,
     ) -> tuple[str, str | None]:
         """Consume OAuth state, exchange the code, and return a session token and redirect.
 
@@ -123,6 +138,7 @@ class WebSessionService:
         if saved is None or saved.provider is not provider.provider:
             msg = "invalid_state"
             raise CallbackFailure(msg)
+        current_account_id = self._browser_account(context) if consent_current else None
         linking = saved.state.startswith("link.")
         if linking:
             _, nonce, binding = saved.state.split(".")
@@ -168,7 +184,8 @@ class WebSessionService:
             await uow.commit()
             return result
 
-    async def logout(self, token: str) -> None:
+    @application_operation
+    async def logout(self, token: str, *, context: ActingContext) -> None:
         """Revoke the matching session, doing nothing if the token is unknown."""
         async with self._uow_factory() as uow:
             await uow.web_sessions.revoke(self.hash_token(token), now=self._now())
@@ -176,6 +193,13 @@ class WebSessionService:
 
     def hash_token(self, token: str) -> bytes:
         return hash_web_session_token(self._pepper, token)
+
+    @staticmethod
+    def _browser_account(context: ActingContext) -> int | None:
+        actor = context.effective
+        if context.session_id is not None or not (actor.credential_id or "").startswith("browser:"):
+            return None
+        return actor.account_id
 
     def _link_binding(self, account_id: int, nonce: str) -> str:
         return hmac.digest(self._pepper, f"link:{account_id}:{nonce}".encode(), hashlib.sha256).hex()

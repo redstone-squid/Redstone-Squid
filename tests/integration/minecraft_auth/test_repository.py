@@ -165,7 +165,7 @@ async def test_paper_rotation_atomically_fences_credential_challenge_and_grant(
         profile=PublicServerProfile(enabled=True, display_name="Survival", sponsor_opt_in=True),
         context=ActingContext.direct(Actor(account_id=account_id)),
     )
-    (published,) = await installations.public_servers()
+    (published,) = await installations.public_servers(context=ActingContext.direct(Actor()))
     assert published.installation_id == first.installation.id
     authenticated = await installations.authenticate(first.token)
     challenge = await players.start_paper_challenge(installation=authenticated, java_uuid=JAVA_UUID)
@@ -178,7 +178,7 @@ async def test_paper_rotation_atomically_fences_credential_challenge_and_grant(
 
     assert replacement.installation.id == authenticated.id
     assert replacement.installation.credential_version == authenticated.credential_version + 1
-    (published_after_rotation,) = await installations.public_servers()
+    (published_after_rotation,) = await installations.public_servers(context=ActingContext.direct(Actor()))
     assert published_after_rotation == published
     with pytest.raises(InvalidInstallationCredentialError):
         await installations.authenticate(first.token)
@@ -220,9 +220,14 @@ async def test_targeted_public_sponsor_lookup_isolated_from_unrelated_malformed_
             .values(public_profile_enabled=True, public_display_name=" ", sponsor_opt_in=True)
         )
 
-    sponsor = await PaperSponsorResolver(installations).resolve(valid.installation.id)
+    sponsor = await PaperSponsorResolver(installations).resolve(
+        valid.installation.id, context=ActingContext.direct(Actor(account_id=account_id))
+    )
 
-    assert await installations.get_public_server(listed_only.installation.id) is None
+    assert (
+        await installations.get_public_server(listed_only.installation.id, context=ActingContext.direct(Actor()))
+        is None
+    )
     assert sponsor is not None
     assert sponsor.installation_id == valid.installation.id
     assert sponsor.display_name == "Valid server"

@@ -2,6 +2,7 @@
 
 from uuid import UUID
 
+from squid.core.actors import ActingContext
 from squid.core.minecraft_auth.application import InstallationCredentialService
 from squid.core.sponsors import PublicSponsor
 
@@ -12,10 +13,10 @@ class PaperSponsorResolver:
     def __init__(self, installations: InstallationCredentialService) -> None:
         self._installations = installations
 
-    async def resolve(self, installation_id: UUID) -> PublicSponsor | None:
+    async def resolve(self, installation_id: UUID, *, context: ActingContext) -> PublicSponsor | None:
         """Return published sponsor details, or None if unavailable, opted out, or invalid."""
         try:
-            server = await self._installations.get_public_server(installation_id)
+            server = await self._installations.get_public_server(installation_id, context=context)
         except ValueError:
             return None
         if server is None or not server.profile.sponsor_opt_in:

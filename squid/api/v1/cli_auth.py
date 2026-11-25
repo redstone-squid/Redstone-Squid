@@ -51,7 +51,7 @@ class CliAuthorizationHttpService(Protocol):
         label: str,
     ) -> IssuedCliEnrollment: ...
 
-    async def preview_enrollment(self, user_code: str) -> CliDeviceEnrollment: ...
+    async def preview_enrollment(self, user_code: str, *, context: ActingContext) -> CliDeviceEnrollment: ...
 
     async def approve_enrollment(self, *, context: ActingContext, user_code: str) -> CliDeviceEnrollment: ...
 
@@ -72,7 +72,7 @@ class CliAuthorizationHttpService(Protocol):
 
     async def revoke_device(self, *, context: ActingContext, device_id: UUID) -> bool: ...
 
-    async def revoke_current_session(self, identity: CliIdentity) -> bool: ...
+    async def revoke_current_session(self, identity: CliIdentity, *, context: ActingContext) -> bool: ...
 
 
 class CliAuthApiServices(Protocol):
@@ -127,6 +127,7 @@ async def current_cli_identity(caller: NamedDependency[SkipValidation[Caller]]) 
 
 
 async def enforce_anonymous_cli_idempotency(
+    caller: NamedDependency[SkipValidation[Caller]],
     request: Request,
     idempotency_key: IdempotencyKey = None,
 ) -> None:
@@ -137,7 +138,7 @@ async def enforce_anonymous_cli_idempotency(
     """
     peer = request.client.host if request.client is not None else "unknown"
     peer_digest = hashlib.sha256(peer.encode()).hexdigest()
-    await reserve_idempotent_request_for(request, f"cli-anonymous:{peer_digest}", idempotency_key)
+    await reserve_idempotent_request_for(request, caller, idempotency_key, namespace=f"cli-anonymous:{peer_digest}")
 
 
 CliAuthorization = NamedDependency[SkipValidation[CliAuthorizationHttpService]]
@@ -220,7 +221,7 @@ async def preview_enrollment(
     cli: CliAuthorization, context: BrowserContext, user_code: Annotated[UserCode, QueryParameter()]
 ) -> CliEnrollmentApprovalResponse:
     """Show a device label and fingerprint before the browser grants access."""
-    enrollment = await cli.preview_enrollment(user_code)
+    enrollment = await cli.preview_enrollment(user_code, context=context)
     return CliEnrollmentApprovalResponse.from_domain(enrollment)
 
 
@@ -373,10 +374,14 @@ async def revoke_device(
     },
 )
 async def revoke_current_session(
-    cli: CliAuthorization, identity: CurrentCliIdentity, *, _reservation: NamedDependency[SkipValidation[None]]
+    cli: CliAuthorization,
+    identity: CurrentCliIdentity,
+    caller: NamedDependency[SkipValidation[Caller]],
+    *,
+    _reservation: NamedDependency[SkipValidation[None]],
 ) -> None:
     """Revoke the exact CLI bearer session authenticating this request."""
-    if not await cli.revoke_current_session(identity):
+    if not await cli.revoke_current_session(identity, context=caller.context()):
         raise AuthenticationError
 
 

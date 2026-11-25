@@ -26,7 +26,7 @@ from squid.api.contract import (
     internal,
     transport_only,
 )
-from squid.api.dependencies import Accounts, get_accounts, service_dependencies
+from squid.api.dependencies import Accounts, CurrentCaller, get_accounts, service_dependencies
 from squid.api.errors import capture_exception, exception_handlers, responses
 from squid.api.i18n import LocaleContextMiddleware
 from squid.api.idempotency import (
@@ -121,9 +121,9 @@ class User(BaseModel):
     security=[SERVICE, WEB_WRITE, DEVICE],
     opt=contract(cli=transport_only(), scopes=("account.verify.relay",)),
 )
-async def get_verification_code(data: JSONBody[User], accounts: Accounts) -> int:
+async def get_verification_code(data: JSONBody[User], accounts: Accounts, caller: CurrentCaller) -> int:
     """Generate a verification code for a user."""
-    return await accounts.generate_verification_code(data.uuid)
+    return await accounts.generate_verification_code(data.uuid, context=caller.context())
 
 
 @post(
@@ -143,10 +143,11 @@ async def get_verification_code(data: JSONBody[User], accounts: Accounts) -> int
     ),
 )
 async def get_verification_code_compatibility(
+    caller: CurrentCaller,
     data: JSONBody[User],
     accounts: Accounts,
 ) -> int:
-    return await accounts.generate_verification_code(data.uuid)
+    return await accounts.generate_verification_code(data.uuid, context=caller.context())
 
 
 def create_api_app(

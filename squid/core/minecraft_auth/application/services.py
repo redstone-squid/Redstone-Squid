@@ -21,7 +21,7 @@ from uuid import UUID, uuid4
 
 from whenever import Instant
 
-from squid.core.actors import ActingContext
+from squid.core.actors import ActingContext, application_operation
 from squid.core.errors import InvalidStateError, ValidationError
 from squid.core.i18n import tr
 from squid.core.minecraft_auth.application.crypto import (
@@ -220,12 +220,14 @@ class InstallationCredentialService:
             raise InvalidInstallationCredentialError from None
         return await self.authenticate(self._codec.installation_token(parsed_id, installation_secret))
 
-    async def public_servers(self) -> tuple[PublishedPaperServer, ...]:
+    @application_operation
+    async def public_servers(self, *, context: ActingContext) -> tuple[PublishedPaperServer, ...]:
         """Return only safe projections for installations that explicitly opted into listing."""
         async with self._uow_factory() as uow:
             return await uow.minecraft_authorization.list_public_servers()
 
-    async def get_public_server(self, installation_id: UUID) -> PublishedPaperServer | None:
+    @application_operation
+    async def get_public_server(self, installation_id: UUID, *, context: ActingContext) -> PublishedPaperServer | None:
         """Return one active, public, sponsor-enabled installation without scanning unrelated profiles."""
         async with self._uow_factory() as uow:
             return await uow.minecraft_authorization.get_public_server(installation_id)

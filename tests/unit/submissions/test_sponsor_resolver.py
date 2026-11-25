@@ -7,6 +7,7 @@ import pytest
 from whenever import Instant
 
 from squid.config import MinecraftAuthConfig
+from squid.core.actors import ActingContext, Actor
 from squid.core.minecraft_auth.domain import PublicServerProfile, PublishedPaperServer
 from squid.core.submissions.infrastructure.sponsors import PaperSponsorResolver
 
@@ -18,7 +19,7 @@ class FakeInstallations:
     def __init__(self, *servers: PublishedPaperServer) -> None:
         self.servers = {server.installation_id: server for server in servers}
 
-    async def get_public_server(self, installation_id: UUID) -> PublishedPaperServer | None:
+    async def get_public_server(self, installation_id: UUID, *, context: ActingContext) -> PublishedPaperServer | None:
         return self.servers.get(installation_id)
 
 
@@ -54,7 +55,7 @@ async def test_resolver_projects_only_sponsor_opted_in_public_fields() -> None:
     )
     resolver = PaperSponsorResolver(cast(Any, FakeInstallations(server)))
 
-    sponsor = await resolver.resolve(INSTALLATION_ID)
+    sponsor = await resolver.resolve(INSTALLATION_ID, context=ActingContext.direct(Actor()))
 
     assert sponsor is not None
     assert sponsor.installation_id == INSTALLATION_ID
@@ -72,8 +73,11 @@ async def test_resolver_fails_closed_without_sponsor_opt_in() -> None:
     )
     resolver = PaperSponsorResolver(cast(Any, FakeInstallations(server)))
 
-    assert await resolver.resolve(INSTALLATION_ID) is None
-    assert await resolver.resolve(UUID("00000000-0000-4000-8000-000000000702")) is None
+    assert await resolver.resolve(INSTALLATION_ID, context=ActingContext.direct(Actor())) is None
+    assert (
+        await resolver.resolve(UUID("00000000-0000-4000-8000-000000000702"), context=ActingContext.direct(Actor()))
+        is None
+    )
 
 
 @pytest.mark.asyncio
@@ -89,4 +93,4 @@ async def test_resolver_fails_closed_for_an_unsafe_public_website() -> None:
     )
     resolver = PaperSponsorResolver(cast(Any, FakeInstallations(server)))
 
-    assert await resolver.resolve(INSTALLATION_ID) is None
+    assert await resolver.resolve(INSTALLATION_ID, context=ActingContext.direct(Actor())) is None

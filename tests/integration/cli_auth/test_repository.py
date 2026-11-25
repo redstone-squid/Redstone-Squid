@@ -12,6 +12,7 @@ from whenever import Instant
 
 from squid.core.accounts.domain import CURRENT_CONSENT_VERSION
 from squid.core.accounts.models import Account
+from squid.core.actors import ActingContext, Actor
 from squid.core.cli_auth import CliAuthorizationService, CliSecretCodec
 from squid.core.cli_auth.application import enrollment_proof_message, session_proof_message
 from squid.core.cli_auth.errors import CliEnrollmentAlreadyExchangedError, InvalidCliSessionError
@@ -86,7 +87,9 @@ async def enroll(
         client_instance_id=CLIENT_INSTANCE_ID,
         label="Integration workstation",
     )
-    await authorization.approve_enrollment(user_code=enrollment.user_code, account_id=account_id)
+    await authorization.approve_enrollment(
+        user_code=enrollment.user_code, context=ActingContext.direct(Actor(account_id=account_id))
+    )
     signature = private_key.sign(enrollment_proof_message(enrollment.enrollment.id, enrollment.device_code))
     issued = await authorization.exchange_enrollment(device_code=enrollment.device_code, signature=signature)
     return private_key, issued.token
@@ -103,7 +106,9 @@ async def test_enrollment_secrets_are_hash_only_and_exchange_is_one_time(
         client_instance_id=CLIENT_INSTANCE_ID,
         label="Integration workstation",
     )
-    await authorization.approve_enrollment(user_code=enrollment.user_code, account_id=account_id)
+    await authorization.approve_enrollment(
+        user_code=enrollment.user_code, context=ActingContext.direct(Actor(account_id=account_id))
+    )
     signature = private_key.sign(enrollment_proof_message(enrollment.enrollment.id, enrollment.device_code))
 
     issued = await authorization.exchange_enrollment(device_code=enrollment.device_code, signature=signature)
@@ -139,7 +144,9 @@ async def test_signed_nonce_renews_session_and_device_revocation_fences_both(
     )
 
     assert (await authorization.authenticate(renewed.token)).device_id == identity.device_id
-    assert await authorization.revoke_device(device_id=identity.device_id, account_id=account_id)
+    assert await authorization.revoke_device(
+        device_id=identity.device_id, context=ActingContext.direct(Actor(account_id=account_id))
+    )
     with pytest.raises(InvalidCliSessionError):
         await authorization.authenticate(first_token)
     with pytest.raises(InvalidCliSessionError):

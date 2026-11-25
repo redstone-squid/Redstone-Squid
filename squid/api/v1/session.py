@@ -33,7 +33,7 @@ class StartImpersonation:
 async def reserve_session_change(
     request: Request, caller: CurrentCaller, idempotency_key: IdempotencyKey = None
 ) -> None:
-    await reserve_idempotent_request_for(request, caller.browser_binding(), idempotency_key)
+    await reserve_idempotent_request_for(request, caller, idempotency_key, namespace=caller.browser_binding())
 
 
 @post(

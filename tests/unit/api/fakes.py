@@ -145,19 +145,19 @@ class MockAccountManager(AccountService):
         """Answer from nothing; no repository is attached."""
 
     @override
-    async def get_creator_alias(self, name: str) -> CreatorAlias | None:
+    async def get_creator_alias(self, name: str, *, context: ActingContext) -> CreatorAlias | None:
         return None
 
     @override
-    async def get_creator_profile(self, public_id: UUID) -> CreatorProfile | None:
+    async def get_creator_profile(self, public_id: UUID, *, context: ActingContext) -> CreatorProfile | None:
         return None
 
     @override
-    async def get_public_profile(self, public_id: UUID) -> PublicCreatorProfile | None:
+    async def get_public_profile(self, public_id: UUID, *, context: ActingContext) -> PublicCreatorProfile | None:
         return None
 
     @override
-    async def get_profile(self, account_id: int) -> AccountProfile:
+    async def get_profile(self, account_id: int, *, context: ActingContext) -> AccountProfile:
         return AccountProfile.empty(account_id)
 
     @override
@@ -165,7 +165,7 @@ class MockAccountManager(AccountService):
         return ()
 
     @override
-    async def generate_verification_code(self, minecraft_uuid: UUID) -> int:
+    async def generate_verification_code(self, minecraft_uuid: UUID, *, context: ActingContext) -> int:
         if minecraft_uuid == TEST_UUID:
             return TEST_VERIFICATION_CODE
         raise MinecraftAccountNotFoundError(minecraft_uuid)
@@ -201,7 +201,7 @@ class MockCliAuthorization(CliAuthorizationService):
         raise InvalidCliEnrollmentError
 
     @override
-    async def preview_enrollment(self, user_code: str) -> CliDeviceEnrollment:
+    async def preview_enrollment(self, user_code: str, *, context: ActingContext) -> CliDeviceEnrollment:
         raise InvalidCliEnrollmentError
 
     @override
@@ -227,7 +227,7 @@ class MockCliAuthorization(CliAuthorizationService):
         raise InvalidCliEnrollmentError
 
     @override
-    async def revoke_current_session(self, identity: CliIdentity) -> bool:
+    async def revoke_current_session(self, identity: CliIdentity, *, context: ActingContext) -> bool:
         raise InvalidCliEnrollmentError
 
 
@@ -570,6 +570,7 @@ class MockIdempotency(IdempotencyService):
         self,
         *,
         caller: str,
+        context: ActingContext,
         key: str,
         fingerprint: bytes,
         method: UnsafeHttpMethod,
@@ -579,7 +580,9 @@ class MockIdempotency(IdempotencyService):
         return PendingRequest(uuid.uuid4())
 
     @override
-    async def complete(self, request: PendingRequest, response: StoredResponse) -> StoredResponse:
+    async def complete(
+        self, request: PendingRequest, response: StoredResponse, *, context: ActingContext
+    ) -> StoredResponse:
         return response
 
 
@@ -639,7 +642,7 @@ class MockSubmissionDrafts(SubmissionDraftService):
         """Hold no repository; nothing here reaches one."""
 
     @override
-    async def list_active(self, account_id: int, *, limit: int = 10, context: ActingContext) -> tuple[StoredDraft, ...]:
+    async def list_active(self, *, limit: int = 10, context: ActingContext) -> tuple[StoredDraft, ...]:
         return ()
 
     @override
@@ -653,7 +656,7 @@ class MockSubmissionDrafts(SubmissionDraftService):
         raise DraftNotFoundError(draft_id)
 
     @override
-    async def delete(self, draft_id: UUID, account_id: int, *, context: ActingContext) -> None:
+    async def delete(self, draft_id: UUID, *, context: ActingContext) -> None:
         raise DraftNotFoundError(draft_id)
 
 
