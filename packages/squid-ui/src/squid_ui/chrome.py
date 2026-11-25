@@ -25,6 +25,10 @@ def _default_page_footer(page: int, pages: int) -> TextLike:
     return md(t"Page {page} of {pages}")
 
 
+def _default_split_page_footer(part: int, parts: int) -> TextLike:
+    return md(t"Page too big to fit \N{MIDDLE DOT} part {part} of {parts}")
+
+
 def _default_range_footer(first: int, last: int) -> TextLike:
     return md(t"{first}\N{EN DASH}{last}")
 
@@ -224,6 +228,8 @@ class Chrome:
     unanswered: TextLike = "Not answered yet"
     page_footer: Callable[[int, int], TextLike] = _default_page_footer
     """Small-text footer under paginated content; called with (page, pages), 1-based."""
+    split_page_footer: Callable[[int, int], TextLike] = _default_split_page_footer
+    """Footer under each part of a page too big to show at once; called with (part, parts), 1-based."""
     range_footer: Callable[[int, int], TextLike] = _default_range_footer
     """Visible 1-based item range for a source with known offsets."""
     approximate_total_footer: Callable[[int, int, int], TextLike] = _default_approximate_total_footer
@@ -273,7 +279,7 @@ class Chrome:
     form_timezone_offset_mismatch: TextLike = "The UTC offset does not match this local time in the selected timezone."
     form_scale_integer: Callable[[int | float, int | float], TextLike] = _default_form_scale_integer
     page_jump_unavailable: TextLike = "This pager is no longer available."
-    items_per_batch: TextLike = "Items per batch"
+    items_per_page: TextLike = "Items per page"
     page_jump_number: TextLike = "Page number"
     page_jump_range: Callable[[int], TextLike] = _default_page_jump_range
     tally_option: Callable[[TextLike, int], TextLike] = _default_tally_option
@@ -381,7 +387,7 @@ def localize_chrome(chrome: Chrome, localization: Localization) -> Chrome:
             resolve_text(chrome.form_scale_integer(minimum, maximum), localization).content
         ),
         page_jump_unavailable=resolve_text(chrome.page_jump_unavailable, localization).content,
-        items_per_batch=resolve_text(chrome.items_per_batch, localization).content,
+        items_per_page=resolve_text(chrome.items_per_page, localization).content,
         page_jump_number=resolve_text(chrome.page_jump_number, localization).content,
         page_jump_range=lambda pages: resolve_text(chrome.page_jump_range(pages), localization).content,
         tally_option=lambda label, count: resolve_text(chrome.tally_option(label, count), localization).content,
@@ -428,6 +434,7 @@ def localize_chrome(chrome: Chrome, localization: Localization) -> Chrome:
         step_progress=lambda step, steps: resolve_text(chrome.step_progress(step, steps), localization).content,
         unanswered=resolve_text(chrome.unanswered, localization).content,
         page_footer=lambda page, pages: resolve_text(chrome.page_footer(page, pages), localization).content,
+        split_page_footer=lambda part, parts: resolve_text(chrome.split_page_footer(part, parts), localization).content,
         range_footer=lambda first, last: resolve_text(chrome.range_footer(first, last), localization).content,
         approximate_total_footer=lambda first, last, total: (
             resolve_text(chrome.approximate_total_footer(first, last, total), localization).content

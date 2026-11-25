@@ -1328,62 +1328,62 @@ bot-submission-schematics-tick-gt-after-input = tick { $tick } ({ $duration } gt
 # squid/bot/submission/cog.py:159
 bot-submission-search-open-this-build-directly = Open this build directly.
 
-# squid/bot/catalogue/search/results.py:645
+# squid/bot/catalogue/search/results.py:646
 bot-submission-search-view-build-base-title =
     { "*" }*Build**
     { $build_title } ({ $build_id })
     { "*" }*Record criterion**
     { $criterion } · { $version_scope }
 
-# squid/bot/catalogue/search/results.py:544
+# squid/bot/catalogue/search/results.py:545
 bot-submission-search-view-creator = Creator
 
-# squid/bot/catalogue/search/results.py:679
+# squid/bot/catalogue/search/results.py:680
 bot-submission-search-view-kind =
     { "*" }*Kind**
     { $kind }
 
-# squid/bot/catalogue/search/results.py:656
+# squid/bot/catalogue/search/results.py:657
 bot-submission-search-view-metrics =
     { $fields }
     { "*" }*Metrics**
     { $metrics }
 
-# squid/bot/catalogue/search/results.py:540
+# squid/bot/catalogue/search/results.py:541
 bot-submission-search-view-pattern = Pattern
 
-# squid/bot/catalogue/search/results.py:538
+# squid/bot/catalogue/search/results.py:539
 bot-submission-search-view-restriction = Restriction
 
-# squid/bot/catalogue/search/results.py:304, squid/bot/catalogue/search/results.py:384
+# squid/bot/catalogue/search/results.py:304, squid/bot/catalogue/search/results.py:385
 bot-submission-search-view-retry = Retry
 
-# squid/bot/catalogue/search/results.py:379
+# squid/bot/catalogue/search/results.py:380
 bot-submission-search-view-search-results = Search results
 
-# squid/bot/catalogue/search/results.py:542
+# squid/bot/catalogue/search/results.py:543
 bot-submission-search-view-showcase-tag = Showcase tag
 
-# squid/bot/catalogue/search/results.py:668
+# squid/bot/catalogue/search/results.py:669
 bot-submission-search-view-status =
     { "*" }*Status**
     { $status }
 
-# squid/bot/catalogue/search/results.py:548
+# squid/bot/catalogue/search/results.py:549
 bot-submission-search-view-tag = Tag
 
-# squid/bot/catalogue/search/results.py:688
+# squid/bot/catalogue/search/results.py:689
 bot-submission-search-view-tags =
     { $fields }
     { "*" }*Tags**
     { $tags }
 
-# squid/bot/catalogue/search/results.py:696
+# squid/bot/catalogue/search/results.py:697
 bot-submission-search-view-value =
     { $description }
     { $fields }
 
-# squid/bot/catalogue/search/results.py:546
+# squid/bot/catalogue/search/results.py:547
 bot-submission-search-view-version = Version
 
 # squid/bot/catalogue/search/results.py:153
@@ -1617,6 +1617,9 @@ bot-ui-search = Search
 
 # squid/bot/chrome.py:247
 bot-ui-sent-by-direct-message = Sent by direct message.
+
+# squid/bot/chrome.py:278
+bot-ui-split-page-part = Page too big to fit · part { $part } of { $parts }
 
 # squid/bot/chrome.py:248
 bot-ui-this-reply-is-too-private-for-a = This reply is too private for a channel, and your direct messages are closed. Run the command in a direct message, or allow direct messages and retry.
@@ -2089,16 +2092,16 @@ build-schematic-tools-show = Schematic tools
 # squid/bot/catalogue/search/results.py:168, squid/bot/catalogue/search/results.py:172, squid/bot/catalogue/search/results.py:248, squid/bot/catalogue/search/results.py:301
 build-search-build-unavailable = That build is no longer available.
 
-# squid/bot/catalogue/search/results.py:383
+# squid/bot/catalogue/search/results.py:384
 build-search-load-failed = Could not load search results.
 
-# squid/bot/catalogue/search/results.py:382
+# squid/bot/catalogue/search/results.py:383
 build-search-loading = Loading search results…
 
 # squid/bot/submission/cog.py:106
 build-search-matching-mode-help = Use keyword matching or smart meaning-based matching.
 
-# squid/bot/catalogue/search/results.py:380
+# squid/bot/catalogue/search/results.py:381
 build-search-no-results = No results match this query.
 
 # squid/bot/submission/cog.py:116
@@ -5204,7 +5207,7 @@ records-exact-purpose = Create and compute a record category by its exact key, o
 # squid/core/records/application/services.py:849
 records-fastest-records-unsupported = Fastest records are not supported for { $kind_name }.
 
-# squid/core/records/domain/models.py:120
+# squid/core/records/domain/models.py:137
 records-fixed-volume-positive = Fixed volume must be positive.
 
 # squid/bot/catalogue/records.py:160
@@ -5261,7 +5264,7 @@ records-record-category-category = Record category { $definition_id } is a { $ac
 # squid/core/records/errors.py:26
 records-record-category-not-found = Record category not found.
 
-# squid/core/records/infrastructure/repository.py:698
+# squid/core/records/infrastructure/repository.py:699
 records-record-definition-stores = Record definition { $definition_id } stores a category key that does not parse.
 
 # squid/core/records/errors.py:13
@@ -5285,13 +5288,13 @@ records-restriction-ids-help = Restriction IDs, comma separated
 # squid/bot/catalogue/records.py:428
 records-restriction-ids-invalid = Restriction IDs must be whole numbers separated by commas.
 
-# squid/core/records/domain/models.py:90
+# squid/core/records/domain/models.py:107
 records-timing-variant-minimum-items = A timing variant must contain at least its primary timing method.
 
-# squid/core/records/domain/models.py:152
+# squid/core/records/domain/models.py:169
 records-title-holder-required = A resolved record title must have at least one holder.
 
-# squid/core/records/domain/models.py:155
+# squid/core/records/domain/models.py:172
 records-title-holders-forbidden = Only a resolved record title can have official holders.
 
 # squid/bot/catalogue/records.py:223
@@ -5667,7 +5670,7 @@ search-filter-not = Not: { $inner }
 # squid/bot/catalogue/search/labels.py:136
 search-filter-range = { $name } { $lower } to { $upper }
 
-# squid/bot/catalogue/search/results.py:506
+# squid/bot/catalogue/search/results.py:507
 search-grouped-build-count = { $total } builds
 
 # squid/bot/catalogue/search/results.py:258
@@ -5679,13 +5682,13 @@ search-grouped-loading-build = Loading build…
 # squid/bot/catalogue/search/results.py:199
 search-grouped-matching-records = Matching records
 
-# squid/bot/catalogue/search/results.py:631
+# squid/bot/catalogue/search/results.py:632
 search-grouped-more-records = +{ $count } more records
 
 # squid/bot/catalogue/search/results.py:201
 search-grouped-records = Records
 
-# squid/bot/catalogue/search/results.py:508
+# squid/bot/catalogue/search/results.py:509
 search-grouped-result-count = { $total } results
 
 # squid/bot/catalogue/record_display.py:41
@@ -6588,7 +6591,7 @@ tags-workspace-heading = Tags
 # squid/bot/tags_view.py:223
 tags-workspace-help = Browse the tag library and propose new tags. To tag one of your builds, open the build and choose **Edit**.
 
-# squid/bot/chrome.py:293
+# squid/bot/chrome.py:296
 ui-chrome-approve = Approve
 
 # squid/bot/chrome.py:44
@@ -6597,22 +6600,22 @@ ui-chrome-approved-count = Approved: { $count }/{ $total }
 # squid/bot/chrome.py:24
 ui-chrome-approximate-total-footer = { $first }–{ $last } of ~{ $total }
 
-# squid/bot/chrome.py:278
+# squid/bot/chrome.py:281
 ui-chrome-changed-elsewhere = Someone else changed this while you were working. Try again.
 
-# squid/bot/chrome.py:283
+# squid/bot/chrome.py:286
 ui-chrome-continue = Continue
 
-# squid/bot/chrome.py:291
+# squid/bot/chrome.py:294
 ui-chrome-full = Full
 
-# squid/bot/chrome.py:288
+# squid/bot/chrome.py:291
 ui-chrome-jump-to-page = Jump to a page
 
-# squid/bot/chrome.py:280
+# squid/bot/chrome.py:283
 ui-chrome-newer = Newer
 
-# squid/bot/chrome.py:279
+# squid/bot/chrome.py:282
 ui-chrome-older = Older
 
 # squid/bot/chrome.py:32
@@ -6621,7 +6624,7 @@ ui-chrome-page-option = Page { $page }
 # squid/bot/chrome.py:20
 ui-chrome-range-footer = { $first }–{ $last }
 
-# squid/bot/chrome.py:282
+# squid/bot/chrome.py:285
 ui-chrome-redo = Redo
 
 # squid/bot/chrome.py:39
@@ -6636,13 +6639,13 @@ ui-chrome-step-progress = Step { $step } of { $steps }
 # squid/bot/chrome.py:28
 ui-chrome-total-range-footer = { $first }–{ $last } of { $total }
 
-# squid/bot/chrome.py:281
+# squid/bot/chrome.py:284
 ui-chrome-undo = Undo
 
-# squid/bot/chrome.py:290
+# squid/bot/chrome.py:293
 ui-chrome-waitlist = Waitlist
 
-# squid/bot/chrome.py:294
+# squid/bot/chrome.py:297
 ui-chrome-withdraw = Withdraw
 
 # squid/bot/chrome.py:220
@@ -6736,7 +6739,7 @@ ui-form-time-nonexistent = This local time does not exist in the selected timezo
 ui-form-timezone-offset-mismatch = The UTC offset does not match this local time in the selected timezone.
 
 # squid/bot/chrome.py:232
-ui-items-per-batch = Items per batch
+ui-items-per-page = Items per page
 
 # squid/bot/chrome.py:237
 ui-list-controls-not-owned = These list controls belong to someone else.
@@ -6840,13 +6843,13 @@ vocabulary-build-kind-extender = Piston extender
 # squid/core/vocabulary.py:27
 vocabulary-build-kind-utility = Utility
 
-# squid/core/vocabulary.py:58
+# squid/core/vocabulary.py:57
 vocabulary-build-status-approved = Approved
 
-# squid/core/vocabulary.py:57
+# squid/core/vocabulary.py:56
 vocabulary-build-status-pending = Pending
 
-# squid/core/vocabulary.py:59
+# squid/core/vocabulary.py:58
 vocabulary-build-status-rejected = Rejected
 
 # squid/core/vocabulary.py:17
@@ -6864,40 +6867,40 @@ vocabulary-criterion-smallest = Smallest
 # squid/core/vocabulary.py:20
 vocabulary-criterion-smallest-fastest = Smallest, then fastest
 
-# squid/core/vocabulary.py:46
+# squid/core/vocabulary.py:45
 vocabulary-record-fact-closing = Closing time
 
-# squid/core/vocabulary.py:49
+# squid/core/vocabulary.py:48
 vocabulary-record-fact-closing-reset = Closing reset time
 
-# squid/core/vocabulary.py:47
+# squid/core/vocabulary.py:46
 vocabulary-record-fact-closing-visible = Visible closing time
 
-# squid/core/vocabulary.py:42
+# squid/core/vocabulary.py:41
 vocabulary-record-fact-completion = Completion date
 
-# squid/core/vocabulary.py:51
+# squid/core/vocabulary.py:50
 vocabulary-record-fact-extension = Extension time
 
-# squid/core/vocabulary.py:53
+# squid/core/vocabulary.py:52
 vocabulary-record-fact-extension-reset = Extension reset time
 
-# squid/core/vocabulary.py:44
+# squid/core/vocabulary.py:43
 vocabulary-record-fact-opening = Opening time
 
-# squid/core/vocabulary.py:48
+# squid/core/vocabulary.py:47
 vocabulary-record-fact-opening-reset = Opening reset time
 
-# squid/core/vocabulary.py:45
+# squid/core/vocabulary.py:44
 vocabulary-record-fact-opening-visible = Visible opening time
 
-# squid/core/vocabulary.py:50
+# squid/core/vocabulary.py:49
 vocabulary-record-fact-retraction = Retraction time
 
-# squid/core/vocabulary.py:52
+# squid/core/vocabulary.py:51
 vocabulary-record-fact-retraction-reset = Retraction reset time
 
-# squid/core/vocabulary.py:43
+# squid/core/vocabulary.py:42
 vocabulary-record-fact-volume = Volume
 
 # squid/core/vocabulary.py:37

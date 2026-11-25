@@ -24,7 +24,7 @@ from squid_ui.authoring.rosters import (
 from squid_ui.factories.collections import TallyOption
 from squid_ui_widgets import guards, machines
 from squid_ui_widgets._actions import MachineKeySegment, PageDirection
-from squid_ui_widgets._window import DEFAULT_LOADING_COPY, LoadingCopy
+from squid_ui_widgets._window import DEFAULT_LOADING_COPY, LoadingCopy, PageOverflow
 from squid_ui_widgets.agreement import Agreement, AgreementParticipant, AgreementResolveHandler
 from squid_ui_widgets.browser import Browser, BrowserDetail, BrowserOverview
 from squid_ui_widgets.browsing import BrowseSession, BrowseSnapshot
@@ -119,6 +119,7 @@ __all__ = [
     "MultiChoiceGroup",
     "MultiChoiceState",
     "PageDirection",
+    "PageOverflow",
     "RankedEntry",
     "RankedList",
     "RankedListState",

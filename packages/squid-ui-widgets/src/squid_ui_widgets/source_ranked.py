@@ -31,6 +31,7 @@ from squid_ui_widgets._content import ContentLike, normalize_content, require_ke
 from squid_ui_widgets._window import (
     DEFAULT_LOADING_COPY,
     LoadingCopy,
+    PageOverflow,
     source_navigation_state,
 )
 from squid_ui_widgets.browsing import BrowseSession, Movement
@@ -47,8 +48,9 @@ class SourceRankedList[EntryT, RenderTargetT: RenderTarget = RenderTarget, Conte
     """Render source-ordered ranking batches, retaining the last page during reloads.
 
     The source's absolute offset determines row numbers. Header and footer callbacks
-    receive None when the source does not supply a total count. `show_fetch_size` adds
-    an items-per-batch form; changing it returns to the beginning.
+    receive None when the source does not supply a total count. Each batch is one page;
+    `overflow` says what a page that cannot fit does. `show_fetch_size` adds an
+    items-per-page form; changing it returns to the beginning.
     """
 
     def __init__(
@@ -66,6 +68,7 @@ class SourceRankedList[EntryT, RenderTargetT: RenderTarget = RenderTarget, Conte
         empty: ContentLike[RenderTargetT, ContextT] = "No entries",
         initial_position: Position = ORIGIN,
         show_fetch_size: bool = False,
+        overflow: PageOverflow = PageOverflow.SPLIT,
         copy: LoadingCopy = DEFAULT_LOADING_COPY,
     ) -> None:
         title = None if title is None else Text(title)
@@ -84,6 +87,7 @@ class SourceRankedList[EntryT, RenderTargetT: RenderTarget = RenderTarget, Conte
         )
 
         self.show_fetch_size = show_fetch_size
+        self.overflow = overflow
         self.copy = copy
 
     @property
@@ -161,13 +165,17 @@ class SourceRankedList[EntryT, RenderTargetT: RenderTarget = RenderTarget, Conte
         total = batch.item_count if capabilities.count is not CountPrecision.NONE else None
         body = (
             (
-                List(
-                    tuple(
-                        ListItem(str(index), line)
-                        for index, line in enumerate(self.rows.lines(batch.items, batch.position.offset))
+                self.overflow.listing(
+                    List(
+                        tuple(
+                            ListItem(str(index), line)
+                            for index, line in enumerate(self.rows.lines(batch.items, batch.position.offset))
+                        ),
+                        key=f"{self.key}.rows",
+                        markers=False,
                     ),
-                    key=f"{self.key}.rows",
-                    markers=False,
+                    fetch_size=self.fetch_size,
+                    chrome=chrome,
                 ),
             )
             if batch.items

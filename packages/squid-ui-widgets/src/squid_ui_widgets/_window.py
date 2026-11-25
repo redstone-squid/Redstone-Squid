@@ -1,7 +1,9 @@
 """Shared paging state for widgets whose visible page comes from a batch source."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
+from enum import StrEnum
 
+from squid_ui.authoring.semantic import List, Truncated, truncate
 from squid_ui.chrome import Chrome
 from squid_ui.content.text import TextLike
 from squid_ui.planning.pagination.navigation import NavigationState, NavigationUnit
@@ -20,6 +22,25 @@ class LoadingCopy:
 
 
 DEFAULT_LOADING_COPY = LoadingCopy()
+
+
+class PageOverflow(StrEnum):
+    """What a page of source items does when it cannot fit.
+
+    A page always shows its whole batch when it can, continuing in further messages
+    when the root allows more than one. This choice applies only after that fails.
+    """
+
+    SPLIT = "split"
+    """Show the page in parts, each footed as part of a page too big to fit."""
+    SHORTEN = "shorten"
+    """Shorten the longest items until the page fits."""
+
+    def listing(self, items: List, *, fetch_size: int, chrome: Chrome) -> List | Truncated:
+        """Keep one batch's items together as one page, with this fallback."""
+        if self is PageOverflow.SHORTEN:
+            return truncate(replace(items, group_size=fetch_size))
+        return replace(items, group_size=fetch_size, split_footer=chrome.split_page_footer)
 
 
 def source_navigation_state[ItemT](
@@ -77,6 +98,7 @@ def step_labels(chrome: Chrome, chronology: Chronology | None) -> tuple[TextLike
 __all__ = [
     "DEFAULT_LOADING_COPY",
     "LoadingCopy",
+    "PageOverflow",
     "source_navigation_state",
     "step_labels",
 ]

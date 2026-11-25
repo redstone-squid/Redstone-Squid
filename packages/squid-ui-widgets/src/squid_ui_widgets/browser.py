@@ -53,6 +53,7 @@ from squid_ui_widgets._content import ContentLike, normalize_content, require_ke
 from squid_ui_widgets._window import (
     DEFAULT_LOADING_COPY,
     LoadingCopy,
+    PageOverflow,
     source_navigation_state,
     step_labels,
 )
@@ -66,6 +67,11 @@ type BrowserOverview[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT
 ]
 
 
+# The item picker lists every item on the page. Past a select menu's option limit (25 on
+# Discord), the picker would page on its own inside a page the reader thinks is whole.
+_MAX_FETCH_SIZE = 25
+
+
 class Browser[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = object](Component[RenderTargetT, ContextT]):
     """Browse a batch source and open one item's detail content.
 
@@ -77,8 +83,9 @@ class Browser[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = obje
 
     Back returns to the list. Supply `on_back` to choose another destination and keep
     the session's focus. For time-sorted lists, `chronology` labels page and item steps
-    Newer and Older. `show_fetch_size` adds a form for changing the batch size (1 to 25)
-    and changing size returns to the beginning.
+    Newer and Older. Each batch is one page; `overflow` says what a page that cannot
+    fit does. `show_fetch_size` adds a form for changing the page size (1 to 25) and
+    changing size returns to the beginning.
 
     The session owns navigation and focus. The detail factory runs through an atomic
     resource on focus changes and must be safe to retry. Refreshing the same item
@@ -100,6 +107,7 @@ class Browser[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = obje
         title: TextLike | None = None,
         empty: ContentLike[RenderTargetT, ContextT] = "No entries",
         show_fetch_size: bool = False,
+        overflow: PageOverflow = PageOverflow.SPLIT,
         copy: LoadingCopy = DEFAULT_LOADING_COPY,
         chronology: Chronology | None = None,
         on_back: Callable[[ActionEvent], Awaitable[None]] | None = None,
@@ -113,8 +121,8 @@ class Browser[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = obje
                 message = "Browser requires identity when given a source"
                 raise ValueError(message)
             self.session = BrowseSession(source, identity=identity, fetch_size=fetch_size)
-        if not 1 <= self.session.fetch_size <= 25:
-            message = "Browser.fetch_size must be between 1 and 25"
+        if not 1 <= self.session.fetch_size <= _MAX_FETCH_SIZE:
+            message = f"Browser.fetch_size must be between 1 and {_MAX_FETCH_SIZE}"
             raise ValueError(message)
         self.identity = self.session.identity
         self.label = label
@@ -125,6 +133,7 @@ class Browser[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = obje
         self.title = title
         self.empty = normalize_content(empty, name="Browser.empty")
         self.show_fetch_size = show_fetch_size
+        self.overflow = overflow
         self.copy = copy
         self.chronology = chronology
         self.on_back = on_back
@@ -152,8 +161,8 @@ class Browser[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = obje
         return self.session.fetch_size
 
     async def _resize(self, revision: int, _event: ActionEvent, fetch_size: int) -> None:
-        if not 1 <= fetch_size <= 25:
-            message = "Browser.fetch_size must be between 1 and 25"
+        if not 1 <= fetch_size <= _MAX_FETCH_SIZE:
+            message = f"Browser.fetch_size must be between 1 and {_MAX_FETCH_SIZE}"
             raise ValueError(message)
         self.session.resize(fetch_size, revision=revision)
 
@@ -231,15 +240,19 @@ class Browser[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = obje
         extra = normalize_content(self.overview(loaded), name="Browser.overview") if self.overview is not None else ()
         if items:
             listing = (
-                bullets(
-                    *(
-                        bullet(
-                            self.summary(item) if self.summary is not None else self.label(item),
-                            key=self.identity(item),
-                        )
-                        for item in items
+                self.overflow.listing(
+                    bullets(
+                        *(
+                            bullet(
+                                self.summary(item) if self.summary is not None else self.label(item),
+                                key=self.identity(item),
+                            )
+                            for item in items
+                        ),
+                        key=f"{self.key}.items",
                     ),
-                    key=f"{self.key}.items",
+                    fetch_size=self.fetch_size,
+                    chrome=chrome,
                 ),
             )
             picker = choices(
@@ -282,7 +295,11 @@ class Browser[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = obje
         )
         size = (
             fetch_size_button(
-                self.key, self.fetch_size, partial(self._resize, self.session.revision), maximum=25, chrome=chrome
+                self.key,
+                self.fetch_size,
+                partial(self._resize, self.session.revision),
+                maximum=_MAX_FETCH_SIZE,
+                chrome=chrome,
             )
             if self.show_fetch_size
             else None

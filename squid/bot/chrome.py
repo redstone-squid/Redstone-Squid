@@ -229,7 +229,7 @@ CHROME = ui.chrome.Chrome(
     ),
     form_scale_integer=_form_scale_integer,
     page_jump_unavailable=tr(t"ui-page-jump-unavailable = This pager is no longer available."),
-    items_per_batch=tr(t"ui-items-per-batch = Items per batch"),
+    items_per_page=tr(t"ui-items-per-page = Items per page"),
     page_jump_number=tr(t"ui-page-jump-number = Page number"),
     page_jump_range=_page_jump_range,
     tally_option=_tally_option,
@@ -275,6 +275,9 @@ CHROME = ui.chrome.Chrome(
     finish=tr(t"bot-ui-finish = Finish"),
     unanswered=tr(t"bot-ui-not-answered-yet = Not answered yet"),
     page_footer=lambda page, pages: md_tr(t"bot-ui-page-of = Page {page} of {pages}"),
+    split_page_footer=lambda part, parts: md_tr(
+        t"bot-ui-split-page-part = Page too big to fit \N{MIDDLE DOT} part {part} of {parts}"
+    ),
     changed_elsewhere=tr(t"ui-chrome-changed-elsewhere = Someone else changed this while you were working. Try again."),
     older=tr(t"ui-chrome-older = Older"),
     newer=tr(t"ui-chrome-newer = Newer"),

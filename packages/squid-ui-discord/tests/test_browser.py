@@ -248,3 +248,39 @@ async def test_flow_rejects_an_indivisible_paragraph_that_cannot_fit() -> None:
     with pytest.RaisesGroup(JointInfeasibleError):
         async with stage(flow, owner=object()):
             pytest.fail("oversized paragraph was delivered")
+
+
+def _long_entries(**options: object) -> sp.Browser[str]:
+    # Eight entries of about 1200 characters need three messages of 4000.
+    return sp.Browser(
+        list_source(tuple(str(index) for index in range(8))),
+        identity=str,
+        label=str,
+        summary=lambda item: f"Entry {item}: " + "content " * 150,
+        detail=lambda item: f"Detail {item}",
+        fetch_size=8,
+        **options,  # type: ignore[arg-type]
+    )
+
+
+async def test_a_page_too_big_for_one_message_continues_in_the_next() -> None:
+    async with stage(_long_entries(), owner=object(), max_messages=3) as ui:
+        text = " ".join(ui.texts())
+        assert all(f"Entry {index}:" in text for index in range(8))
+        assert "Page too big to fit" not in text
+        assert len(ui.root._continuations.slots) == 2
+
+
+async def test_a_page_that_cannot_fit_is_split_and_says_so() -> None:
+    async with stage(_long_entries(), owner=object()) as ui:
+        text = " ".join(ui.texts())
+        assert "Page too big to fit · part 1 of" in text
+        assert "Entry 7:" not in text
+
+
+async def test_a_page_that_may_shorten_fits_in_one_message() -> None:
+    async with stage(_long_entries(overflow=sp.PageOverflow.SHORTEN), owner=object()) as ui:
+        text = " ".join(ui.texts())
+        assert all(f"Entry {index}:" in text for index in range(8))
+        assert "…" in text
+        assert "Page too big to fit" not in text
