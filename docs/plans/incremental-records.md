@@ -125,6 +125,54 @@ This replaces item 46 in [the web API gaps](web-components/api-gaps.md).
   last error, which `fail_recompute` already stores.
 - `GET /v1/records/drift` lists differences found by the backstop.
 
+## Implementation notes
+
+Decisions from surveying the code, before any implementation landed:
+
+- **Thresholds and families are the only cases where old and new memberships
+  are not enough.** A category at a new threshold, or at a new family
+  projection, always contains the build that created it. It can also have
+  siblings without that build. For example, (width ≤ 4, flush) can hold other
+  flush doors when *b* is not flush. Detect these cases by comparing what was
+  observed before the change with what is observed now, for each scope. The
+  "before" side is the unchanged builds plus the threshold triples and base
+  keys in the changed builds' old memberships. This holds because a category
+  with fewer restrictions has a superset of the members, so if any category at
+  a threshold is live, the plain threshold category is live too and contains
+  *b*.
+- **Load the live category keys for the kind** (one row per live record) to
+  find live records that a removed threshold or base key retires.
+- **Results.** `title_results` holds one current row per record
+  (`title_id` unique), updated in place so result IDs stay stable until the
+  record retires. Store `input_generation` on `record_titles` so a retirement
+  also fences out older batches. History rows are keyed by record rather than
+  by run, and survive retirement.
+- **`record_members (title_id, build_id)`** has no foreign key to `builds`, so
+  a deleted build's old memberships survive until a worker processes the
+  deletion. `record_recompute_queue.build_id` drops its foreign key for the
+  same reason.
+- **Queue targets:** whole kind (rules, pin and tag changes, so differences
+  are expected), backstop (records drift), build, and record. A backstop batch
+  also reads every pending item's build, so that their legitimate changes
+  aren't counted as drift.
+- **Maintained scopes** are all-time and the pinned version only. A pin change
+  retires the old pin's records. Lookups lose their `version_id`, because
+  requested categories apply in every maintained scope.
+- **`RecordResolution` loses `status`.** Empty `holder_ids` means no
+  competitors. Live lookups, range regions and the stored `door_evidence` and
+  `door_range_runs` JSON drop the key too. The search `status` field loses its
+  records scope.
+- **Events.** `record_run.activated` becomes one event per batch run, with a
+  per-record list of changes: holders changed, retired, or revived. The
+  aggregate is the run, because aggregate IDs are integers. Revival reaches
+  subscribers as a normal gain. Retirement needs a new `record_retired`
+  notification kind, with bot and web text.
+- **Other readers to update:** `BuildLoader.records`, search projection and
+  its triggers (drop the `record_computation_runs` trigger), the notification
+  repository, `RecordGap` and diagnostics queries, the API DTO, the bot
+  records screen (`materialize_definition` becomes queue-and-return) and the
+  web `RecordDetail` and `RecordCard`.
+
 ## Open questions
 
 - **Candidate loading.** Thresholds and families need the kind-wide view, so
