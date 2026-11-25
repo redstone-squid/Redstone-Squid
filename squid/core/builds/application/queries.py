@@ -8,6 +8,7 @@ from enum import StrEnum
 from typing import Literal, Protocol, get_args
 from urllib.parse import urlsplit
 
+from squid.core.actors import ActingContext
 from squid.core.builds.domain import BuildCategory, BuildStatus
 from squid.core.builds.domain.credits import CreditAttribution, CreditKind, CreditRole
 from squid.core.builds.errors import BuildNotFoundError
@@ -250,10 +251,13 @@ class BuildQueryService:
         async with self._uow_factory() as uow:
             return await uow.builds.get_many(build_ids)
 
-    async def get_public_summaries(self, build_ids: Sequence[int]) -> Sequence[PublicBuildSummary]:
+    async def get_public_summaries(
+        self, build_ids: Sequence[int], *, context: ActingContext
+    ) -> Sequence[PublicBuildSummary]:
         """Return confirmed public summaries in requested order, omitting unavailable IDs."""
-        async with self._uow_factory() as uow:
-            return await uow.builds.get_public_summaries(build_ids)
+        with context.scope():
+            async with self._uow_factory() as uow:
+                return await uow.builds.get_public_summaries(build_ids)
 
     async def list_page(
         self,

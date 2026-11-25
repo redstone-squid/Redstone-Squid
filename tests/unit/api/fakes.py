@@ -21,7 +21,7 @@ from squid.core.accounts.domain import CreatorProfile
 from squid.core.accounts.domain.profiles import PublicCreatorProfile
 from squid.core.accounts.errors import MinecraftAccountNotFoundError
 from squid.core.accounts.models import AccountIdentity, AccountProfile, CreatorAlias
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.auth.application.web import WebSessionService
 from squid.core.auth.impersonation import ImpersonationService
 from squid.core.auth.infrastructure.viewer import ViewerQueries
@@ -529,7 +529,7 @@ class MockPublicRecords(PublicRecordQueryService):
         """Publish no records."""
 
     @override
-    async def get(self, record_id: UUID) -> PublicRecordDetail | None:
+    async def get(self, record_id: UUID, *, context: ActingContext) -> PublicRecordDetail | None:
         return None
 
 

@@ -9,6 +9,7 @@ import pytest
 from squid.api.security import ANONYMOUS
 from squid.api.v1.records import get_record
 from squid.api.v1.schemas.builds import BuildDetail, DoorDetails, ExtenderDetails, GeneralDetails
+from squid.core.actors import ActingContext
 from squid.core.builds.application import PublicBuildPreview, PublicBuildSummary
 from squid.core.builds.domain import BuildStatus, MediaTypeLiteral
 from squid.core.builds.models import Build, DoorBuild, ExtenderBuild, UtilityBuild
@@ -74,7 +75,7 @@ class PublicRecordFake(PublicRecordQueryService):
         self.requests: list[UUID] = []
 
     @override
-    async def get(self, record_id: UUID) -> PublicRecordDetail | None:
+    async def get(self, record_id: UUID, *, context: ActingContext) -> PublicRecordDetail | None:
         self.requests.append(record_id)
         if record_id != self.record.record_id:
             return None

@@ -10,9 +10,12 @@ from uuid import UUID
 
 import anyio
 
+from squid.core.actors import ActingContext
 from squid.core.errors import DataIntegrityError, InvalidStateError, ServiceUnavailableError, ValidationError
 from squid.core.i18n import tr
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
+from squid.core.permissions.application.services import PermissionService
+from squid.core.permissions.domain.catalogue import RECORD_ENTRY_REBUILD
 from squid.core.records.application.door_categories import door_category_lookup, family_at_category
 from squid.core.records.application.expansion_regions import DoorRangeQuery, DoorRangeResult
 from squid.core.records.application.history import reconstruct_history
@@ -66,6 +69,36 @@ from squid.core.unit_of_work import UnitOfWorkFactory
 from squid_i18n import md_tr
 
 
+class RecordAdministrationService:
+    """Authorize a staff-requested version pin and rebuild before either write."""
+
+    def __init__(
+        self,
+        computation: RecordComputationService,
+        permissions: PermissionService,
+        *,
+        uow_factory: UnitOfWorkFactory[RecordUnitOfWork],
+    ) -> None:
+        self._computation = computation
+        self._permissions = permissions
+        self._uow_factory = uow_factory
+
+    async def rebuild(
+        self,
+        *,
+        context: ActingContext,
+        current_version_id: int | None,
+        kinds: Sequence[BuildKind],
+    ) -> RebuildSummary:
+        with context.scope():
+            await self._permissions.require(context.effective, RECORD_ENTRY_REBUILD)
+            if current_version_id is not None:
+                async with self._uow_factory() as uow:
+                    await uow.records.set_current_version(current_version_id)
+                    await uow.commit()
+            return await self._computation.rebuild(current_version_id=current_version_id, kinds=kinds)
+
+
 class RecordComputationService:
     """Compare approved builds and publish replacement record results.
 
@@ -92,12 +125,6 @@ class RecordComputationService:
         self._formatter = formatter or RulesTitleFormatter()
         self._category_limit = category_limit
         self._compute_limiter = anyio.CapacityLimiter(1)
-
-    async def pin_current_version(self, version_id: int | None) -> None:
-        """Set the shared current version and queue affected publications."""
-        async with self._uow_factory() as uow:
-            await uow.records.set_current_version(version_id)
-            await uow.commit()
 
     async def rebuild(
         self,
@@ -592,7 +619,7 @@ class PublicRecordQueryService:
         self._uow_factory = uow_factory
         self._builds = builds
 
-    async def get(self, record_id: UUID) -> PublicRecordDetail | None:
+    async def get(self, record_id: UUID, *, context: ActingContext) -> PublicRecordDetail | None:
         """Return the latest published result with its holders in result order.
 
         Raise `DataIntegrityError` when holder rows contradict the result status
@@ -613,7 +640,7 @@ class PublicRecordQueryService:
                     "holder_build_ids": list(result.holder_build_ids),
                 },
             )
-        found = await self._builds.get_public_summaries(result.holder_build_ids)
+        found = await self._builds.get_public_summaries(result.holder_build_ids, context=context)
         by_id = {build.id: build for build in found}
         unavailable_ids = [build_id for build_id in result.holder_build_ids if build_id not in by_id]
         if unavailable_ids:

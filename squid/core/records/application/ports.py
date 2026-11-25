@@ -5,6 +5,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 
+from squid.core.actors import ActingContext
 from squid.core.builds.application.queries import PublicBuildSummary
 from squid.core.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery
 from squid.core.records.application.models import (
@@ -83,7 +84,9 @@ class DoorRangeAnalyzer(Protocol):
 class PublicBuildSummaryReader(Protocol):
     """Load only build fields approved for public record details."""
 
-    async def get_public_summaries(self, build_ids: Sequence[int]) -> Sequence[PublicBuildSummary]: ...
+    async def get_public_summaries(
+        self, build_ids: Sequence[int], *, context: ActingContext
+    ) -> Sequence[PublicBuildSummary]: ...
 
 
 class RecordRunRepository(Protocol):

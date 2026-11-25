@@ -84,7 +84,7 @@ async def get_record(
     record_id: FromPath[UUID], records: PublicRecords, services: Services, caller: CurrentCaller
 ) -> PublicRecordDetail:
     """Return the latest published result for a record."""
-    detail = await records.get(record_id)
+    detail = await records.get(record_id, context=caller.context())
     if detail is None:
         raise RecordNotFoundError(record_id)
     return await BrowserViews(services, caller).record(detail)

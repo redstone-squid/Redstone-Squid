@@ -9,6 +9,7 @@ from unittest.mock import create_autospec
 import anyio
 import pytest
 
+from squid.core.actors import ActingContext, Actor
 from squid.core.builds.application.queries import PublicBuildDimensions, PublicBuildStatus, PublicBuildSummary
 from squid.core.builds.domain import BuildCategory
 from squid.core.builds.domain.expansion import DoorExpansion, ExpansionBranch, ExpansionParameter, ExpansionTiming
@@ -229,7 +230,9 @@ class FakePublicBuilds:
         self.summaries = {summary.id: summary for summary in summaries}
         self.requests: list[tuple[int, ...]] = []
 
-    async def get_public_summaries(self, build_ids: Sequence[int]) -> Sequence[PublicBuildSummary]:
+    async def get_public_summaries(
+        self, build_ids: Sequence[int], *, context: ActingContext
+    ) -> Sequence[PublicBuildSummary]:
         self.requests.append(tuple(build_ids))
         return tuple(self.summaries[build_id] for build_id in build_ids if build_id in self.summaries)
 
@@ -590,7 +593,7 @@ async def test_public_record_query_preserves_holder_order() -> None:
     builds = FakePublicBuilds((_public_build(42), _public_build(41)))
     service = PublicRecordQueryService(builds, uow_factory=lambda: RecordQueryScope(runs))
 
-    detail = await service.get(runs.published_records[7].record_id)
+    detail = await service.get(runs.published_records[7].record_id, context=ActingContext.direct(Actor()))
 
     assert detail is not None
     assert [build.id for build in detail.holder_builds] == [41, 42]
@@ -606,7 +609,7 @@ async def test_public_record_query_rejects_unavailable_holder() -> None:
     )
 
     with pytest.raises(DataIntegrityError) as exc_info:
-        await service.get(runs.published_records[7].record_id)
+        await service.get(runs.published_records[7].record_id, context=ActingContext.direct(Actor()))
 
     assert exc_info.value.context == {
         "record_id": str(runs.published_records[7].record_id),
@@ -625,7 +628,7 @@ async def test_public_record_query_accepts_empty_nonresolved_result() -> None:
     builds = FakePublicBuilds(())
     service = PublicRecordQueryService(builds, uow_factory=lambda: RecordQueryScope(runs))
 
-    detail = await service.get(runs.published_records[7].record_id)
+    detail = await service.get(runs.published_records[7].record_id, context=ActingContext.direct(Actor()))
 
     assert detail is not None
     assert detail.holder_builds == ()
@@ -648,7 +651,7 @@ async def test_public_record_query_rejects_status_holder_corruption(result: Publ
     )
 
     with pytest.raises(DataIntegrityError, match="status contradicts") as exc_info:
-        await service.get(runs.published_records[7].record_id)
+        await service.get(runs.published_records[7].record_id, context=ActingContext.direct(Actor()))
 
     assert exc_info.value.context == {
         "record_id": str(runs.published_records[7].record_id),
@@ -661,7 +664,7 @@ async def test_public_record_query_rejects_status_holder_corruption(result: Publ
 async def test_public_record_query_returns_none_for_unknown_record() -> None:
     service = PublicRecordQueryService(FakePublicBuilds(()), uow_factory=lambda: RecordQueryScope(FakeRuns()))
 
-    assert await service.get(uuid.UUID(int=999)) is None
+    assert await service.get(uuid.UUID(int=999), context=ActingContext.direct(Actor())) is None
 
 
 @pytest.mark.asyncio
