@@ -13,6 +13,7 @@ describe("runtime configuration", () => {
   it("uses local defaults only outside production", () => {
     expect(getRuntimeConfig({}, false)).toEqual({
       apiBaseUrl: "http://127.0.0.1:8000",
+      apiInternalUrl: "http://127.0.0.1:8000",
       siteUrl: "http://127.0.0.1:4321",
       discordCommunityUrl: "https://discord.gg/redstone",
       botInviteUrl: "https://discord.com/oauth2/authorize",
@@ -20,8 +21,11 @@ describe("runtime configuration", () => {
   });
 
   it("normalizes validated production values", () => {
-    expect(getRuntimeConfig(productionEnvironment, true)).toEqual({
+    expect(
+      getRuntimeConfig({ ...productionEnvironment, API_INTERNAL_URL: "http://api:8000/" }, true),
+    ).toEqual({
       apiBaseUrl: "https://api.redstone-squid.org",
+      apiInternalUrl: "http://api:8000",
       siteUrl: "https://catalogue.redstone-squid.org",
       discordCommunityUrl: "https://discord.gg/redstone",
       botInviteUrl: "https://discord.com/oauth2/authorize?client_id=123",

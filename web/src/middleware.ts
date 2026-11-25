@@ -1,7 +1,8 @@
 import { SpanKind, TraceFlags, trace } from "@opentelemetry/api";
+import type { APIContext } from "astro";
 import { defineMiddleware, sequence } from "astro:middleware";
 import { DEFAULT_LOCALE, localeFromPath, localizePath, unprefixedPath } from "@/locales/locale";
-import { createApiClient } from "@/server/api";
+import { createApiClient, forwardedFor } from "@/server/api";
 import { readPreference } from "@/server/cookies";
 import { getRuntimeConfig } from "@/server/config";
 import { loadSession } from "@/server/session";
@@ -75,7 +76,11 @@ const catalogueRequest = defineMiddleware(async (context, next) => {
   if (moved !== undefined) return context.redirect(localizePath(`${moved}${search}`, locale), 308);
   try {
     context.locals.config = getRuntimeConfig();
-    context.locals.api = createApiClient(locale, context.locals.config);
+    context.locals.api = createApiClient(
+      locale,
+      context.locals.config,
+      forwardedFor(context.request, peerAddress(context)),
+    );
     // A rewrite to an error page keeps the session the first pass loaded.
     context.locals.session =
       inherited.session === undefined ? await loadSession(context) : inherited.session;
@@ -93,6 +98,19 @@ const catalogueRequest = defineMiddleware(async (context, next) => {
     throw error;
   }
 });
+
+/**
+ * The address this request came from. Astro trusts `X-Forwarded-For` only for hosts in
+ * `security.allowedDomains`, which is unset, so this is the socket's peer: the gateway in
+ * production. Prerendered and test requests have none, and reading it there throws.
+ */
+function peerAddress(context: APIContext): string | undefined {
+  try {
+    return context.clientAddress;
+  } catch {
+    return undefined;
+  }
+}
 
 /** Headers that complement the content security policy in `astro.config.ts`. */
 const securityHeaders = defineMiddleware(async (_context, next) => {

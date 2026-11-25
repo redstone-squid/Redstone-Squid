@@ -5,12 +5,13 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import { buildsGet, buildsList } from "@/generated/sdk.gen";
 import type { BuildsListResponse } from "@/generated/types.gen";
 import { ApiError, unwrap } from "@/api-client/api-error";
-import { createApiClient, load } from "@/server/api";
+import { createApiClient, forwardedFor, load } from "@/server/api";
 import type { RuntimeConfig } from "@/server/config";
 
 const API = "https://api.catalogue.test";
 const config: RuntimeConfig = {
-  apiBaseUrl: API,
+  apiBaseUrl: "https://catalogue.test",
+  apiInternalUrl: API,
   siteUrl: "https://catalogue.test",
   discordCommunityUrl: "https://discord.gg/redstone",
   botInviteUrl: "https://discord.com/oauth2/authorize",
@@ -33,7 +34,10 @@ function failBuildLookup(status: number, body: JsonBodyType, headers: Record<str
       }),
     ),
   );
-  return buildsGet({ client: createApiClient("zh-CN", config), path: { build_id: 404 } });
+  return buildsGet({
+    client: createApiClient("zh-CN", config, undefined),
+    path: { build_id: 404 },
+  });
 }
 
 describe("per-request API client", () => {
@@ -45,10 +49,24 @@ describe("per-request API client", () => {
         return HttpResponse.json(emptyPage);
       }),
     );
-    const client = createApiClient("zh-CN", config);
+    const client = createApiClient("zh-CN", config, "203.0.113.9, 172.18.0.2");
     expect(unwrap(await buildsList({ client, query: { after_id: 7 } }))).toEqual(emptyPage);
     expect(request?.url).toBe(`${API}/v1/builds?after_id=7`);
     expect(request?.headers.get("Accept-Language")).toBe("zh-CN");
+    expect(request?.headers.get("X-Forwarded-For")).toBe("203.0.113.9, 172.18.0.2");
+  });
+
+  it("appends the peer to the forwarded chain, as a proxy does", () => {
+    const request = (header?: string) =>
+      new Request("https://catalogue.test/", {
+        headers: header === undefined ? {} : { "X-Forwarded-For": header },
+      });
+    // A spoofed first entry stays in the chain; the API reads from the trusted right end.
+    expect(forwardedFor(request("198.51.100.1, 203.0.113.9"), "172.18.0.2")).toBe(
+      "198.51.100.1, 203.0.113.9, 172.18.0.2",
+    );
+    expect(forwardedFor(request(), "172.18.0.2")).toBe("172.18.0.2");
+    expect(forwardedFor(request(" "), undefined)).toBeUndefined();
   });
 
   it("returns a service error when the API deadline expires", async () => {
@@ -65,7 +83,7 @@ describe("per-request API client", () => {
     // Hold the response so the deadline expires while fetch is waiting for the API.
     const timeout = vi.spyOn(AbortSignal, "timeout").mockReturnValueOnce(deadline.signal);
     try {
-      const pending = buildsList({ client: createApiClient("en", config) });
+      const pending = buildsList({ client: createApiClient("en", config, undefined) });
       await started.promise;
       deadline.abort(new DOMException("Deadline expired", "TimeoutError"));
       release.resolve(undefined);
@@ -150,7 +168,7 @@ describe("API errors", () => {
 });
 
 describe("load", () => {
-  const client = () => createApiClient("en", config);
+  const client = () => createApiClient("en", config, undefined);
 
   it("returns the data of a successful call", async () => {
     server.use(http.get(`${API}/v1/builds`, () => HttpResponse.json(emptyPage)));

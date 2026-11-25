@@ -6,21 +6,24 @@ const DEVELOPMENT_DEFAULTS = {
 } as const;
 
 export type RuntimeConfig = {
+  /** The API as browsers reach it: links into the OAuth flow and island requests. */
   apiBaseUrl: string;
+  /**
+   * The API as this server reaches it, from `API_INTERNAL_URL`, defaulting to `apiBaseUrl`.
+   * Production points it at the API container so page requests skip the public gateway, which
+   * would replace the `X-Forwarded-For` chain naming the visitor.
+   */
+  apiInternalUrl: string;
   siteUrl: string;
   discordCommunityUrl: string;
   botInviteUrl: string;
 };
 
-export type RuntimeEnvironment = Partial<
-  Record<keyof typeof DEVELOPMENT_DEFAULTS, string | undefined>
->;
+type Setting = keyof typeof DEVELOPMENT_DEFAULTS | "API_INTERNAL_URL";
 
-function checkedUrl(
-  name: keyof typeof DEVELOPMENT_DEFAULTS,
-  value: string,
-  production: boolean,
-): string {
+export type RuntimeEnvironment = Partial<Record<Setting, string | undefined>>;
+
+function checkedUrl(name: Setting, value: string, production: boolean): string {
   let parsed: URL;
   try {
     parsed = new URL(value);
@@ -45,25 +48,33 @@ function checkedUrl(
 /**
  * Read and normalize runtime HTTP(S) URLs, removing a trailing slash.
  *
- * Production requires all four settings and rejects known development/placeholder hosts.
+ * Production requires all four public settings and rejects known development/placeholder hosts.
  * Missing production values or invalid URLs throw; development uses defaults for absent values.
+ * `API_INTERNAL_URL` is optional everywhere.
  */
 export function getRuntimeConfig(
   environment: RuntimeEnvironment = process.env,
   production = import.meta.env.PROD,
 ): RuntimeConfig {
-  const value = (name: keyof typeof DEVELOPMENT_DEFAULTS): string => {
+  const configuredValue = (name: Setting): string | undefined => {
     // An empty variable counts as unset, so development falls back to the default.
     const trimmed = environment[name]?.trim();
-    const configured = trimmed === "" ? undefined : trimmed;
+    return trimmed === "" ? undefined : trimmed;
+  };
+  const value = (name: keyof typeof DEVELOPMENT_DEFAULTS): string => {
+    const configured = configuredValue(name);
     if (production && configured === undefined) {
       throw new Error(`${name} is required in production.`);
     }
     return checkedUrl(name, configured ?? DEVELOPMENT_DEFAULTS[name], production);
   };
 
+  const apiBaseUrl = value("API_BASE_URL");
+  const internal = configuredValue("API_INTERNAL_URL");
   return {
-    apiBaseUrl: value("API_BASE_URL"),
+    apiBaseUrl,
+    apiInternalUrl:
+      internal === undefined ? apiBaseUrl : checkedUrl("API_INTERNAL_URL", internal, production),
     siteUrl: value("SITE_URL"),
     discordCommunityUrl: value("DISCORD_COMMUNITY_URL"),
     botInviteUrl: value("BOT_INVITE_URL"),

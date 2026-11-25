@@ -3,6 +3,11 @@
 services:
   api:
     ports: !reset []
+    environment:
+      # Caddy and the website reach the API across Docker networks, so trust forwarded
+      # client addresses from Docker's default address pools. Without this, every visitor
+      # shares the gateway's or the website's IP quota.
+      SQUID_API_TRUSTED_PROXY_IPS: ${SQUID_API_TRUSTED_PROXY_IPS:-["172.16.0.0/12","192.168.0.0/16"]}
     networks:
       default: {}
       edge:
@@ -27,6 +32,9 @@ services:
       OTEL_TRACES_SAMPLER: parentbased_traceidratio
       OTEL_TRACES_SAMPLER_ARG: ${SQUID_OBSERVABILITY_SAMPLE_RATIO:-1.0}
       API_BASE_URL: ${API_BASE_URL:-${SITE_URL:?SITE_URL must be the public catalogue origin}}
+      # Page requests go straight to the API container. Through Caddy, the website would be an
+      # untrusted client, and Caddy would replace the X-Forwarded-For chain naming the visitor.
+      API_INTERNAL_URL: ${API_INTERNAL_URL:-http://api:${SQUID_API_PORT:-8000}}
       SITE_URL: ${SITE_URL:?SITE_URL must be the public catalogue origin}
       DISCORD_COMMUNITY_URL: ${DISCORD_COMMUNITY_URL:-https://discord.gg/redstone}
       BOT_INVITE_URL: ${BOT_INVITE_URL:-https://discord.com/oauth2/authorize?client_id=528946065668308992&scope=bot%20applications.commands}

@@ -49,7 +49,10 @@ takes the base URL from the page (`config.apiBaseUrl`), so development, with the
 another port of the same host, works through the API's CORS settings. Only `src/server` may
 read cookies, so islands fetch the CSRF token once per page from `GET /v1/auth/csrf`. If the
 API ever moves to another site, the CSP needs a `connect-src` and its cookies become
-third-party; revisit this then.
+third-party; revisit this then. Page loads are the exception: the site's server calls the API
+container directly (`API_INTERNAL_URL`) and forwards each visitor's address in
+`X-Forwarded-For`, so the API's per-IP quota counts visitors, not the website
+(`docs/docker.md`).
 
 ## Status and resuming
 

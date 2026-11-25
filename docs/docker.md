@@ -55,6 +55,13 @@ the API to the proxy network, and removes the API's host port. Create the
 `edge` network if the host does not already provide it. For same-origin browser
 authentication, the site's `API_BASE_URL` defaults to `SITE_URL`.
 
+The website renders pages by calling the API itself, so the API sees the website rather
+than the visitor. The website forwards each visitor's address in `X-Forwarded-For` and calls
+the API container directly (`API_INTERNAL_URL`), since Caddy would replace that header. The
+API trusts the header from Docker's default address pools
+(`SQUID_API_TRUSTED_PROXY_IPS`); if the host's Docker uses other pools, set it to them, or
+every visitor shares one rate-limit quota.
+
 Use plain `docker compose` commands to load the file list from `.env`.
 The release deploy script appends its image configuration to that list.
 Rebuild the website separately with `docker compose up -d --build --wait web`.
