@@ -304,7 +304,7 @@ async def test_optional_fetch_size_form_can_shrink_a_single_page(show_fetch_size
     root = MessageRoot(ranked, access=Everyone(), timeout=None)
     await root.send(delivered_to(message_harness()))
     assert root._candidates.view is not None
-    assert ("Items per batch" in _labels(root._candidates.view)) is show_fetch_size
+    assert ("Items per page" in _labels(root._candidates.view)) is show_fetch_size
     if not show_fetch_size:
         return
     interaction = interaction_harness()

@@ -48,7 +48,7 @@ class SourceRankedList[EntryT, RenderTargetT: RenderTarget = RenderTarget, Conte
 
     The source's absolute offset determines row numbers. Header and footer callbacks
     receive None when the source does not supply a total count. `show_fetch_size` adds
-    an items-per-batch form; changing it returns to the beginning.
+    an items-per-page form; changing it returns to the beginning.
     """
 
     def __init__(
