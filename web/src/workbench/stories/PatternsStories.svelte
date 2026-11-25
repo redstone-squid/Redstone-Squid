@@ -278,7 +278,7 @@
 </Story>
 
 <Story name="SearchBox" source="patterns/SearchBox" description={m.storySearchboxDescription()}>
-  <Layout pattern="grid" min="card-wide">
+  <Layout pattern="stack" gap="lg">
     <Variant label={m.storyPageSearchKeepingScope()}>
       <SearchBox
         action="/design-system/patterns"

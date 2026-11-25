@@ -14,15 +14,16 @@
     children: Snippet;
   };
   let { name, source, heading = name, description, children }: Props = $props();
+  const id = $derived(name.toLowerCase().replaceAll(" ", "-"));
 </script>
 
 <section
-  id={name.toLowerCase()}
-  aria-labelledby={`${name.toLowerCase()}-title`}
+  {id}
+  aria-labelledby={`${id}-title`}
   class="grid min-w-0 gap-4 rounded-md border border-line bg-surface p-panel shadow-card"
 >
   <header class="grid gap-1">
-    <h2 id={`${name.toLowerCase()}-title`} class="text-xl font-bold tracking-tight">{heading}</h2>
+    <h2 id={`${id}-title`} class="text-xl font-bold tracking-tight">{heading}</h2>
     <code class="font-mono text-xs wrap-anywhere text-fg-muted"
       >{source.startsWith("features/")
         ? `src/${source}`

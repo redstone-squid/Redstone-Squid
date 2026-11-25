@@ -329,7 +329,7 @@
 </Story>
 
 <Story name="FieldGroup" source="forms/FieldGroup" description={m.storyFieldGroupDescription()}>
-  <Layout pattern="grid" min="card-wide">
+  <Layout pattern="stack" gap="lg">
     <Variant label={m.storyRow()}>
       <FieldGroup
         label={m.storyDoorSize()}
@@ -356,7 +356,7 @@
 </Story>
 
 <Story name="RangeField" source="forms/RangeField" description={m.storyRangeFieldDescription()}>
-  <Layout pattern="grid" min="card-wide">
+  <Layout pattern="stack" gap="lg">
     <Variant label={m.storyWithUnit()}>
       <RangeField
         label={m.storyWidth()}
