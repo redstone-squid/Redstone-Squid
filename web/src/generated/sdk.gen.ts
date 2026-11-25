@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AccountBuildsListData, AccountBuildsListErrors, AccountBuildsListResponses, AccountConsentGrantData, AccountConsentGrantErrors, AccountConsentGrantResponses, AccountGetData, AccountGetErrors, AccountGetResponses, AccountIdentityListData, AccountIdentityListErrors, AccountIdentityListResponses, AccountIdentityUnlinkData, AccountIdentityUnlinkErrors, AccountIdentityUnlinkResponses, AccountIdentityVisibilitySetData, AccountIdentityVisibilitySetErrors, AccountIdentityVisibilitySetResponses, AccountMergeCodeCreateData, AccountMergeCodeCreateErrors, AccountMergeCodeCreateResponses, AccountMergeCompleteData, AccountMergeCompleteErrors, AccountMergeCompleteResponses, AccountMergePreviewData, AccountMergePreviewErrors, AccountMergePreviewResponses, AccountMinecraftRefreshData, AccountMinecraftRefreshErrors, AccountMinecraftRefreshForData, AccountMinecraftRefreshForErrors, AccountMinecraftRefreshForResponses, AccountMinecraftRefreshResponses, AccountProfileClearData, AccountProfileClearErrors, AccountProfileClearResponses, AccountProfileReviewData, AccountProfileReviewErrors, AccountProfileReviewResponses, AccountProfileUpdateData, AccountProfileUpdateErrors, AccountProfileUpdateResponses, BrowserAuthorizationCallbackData, BrowserAuthorizationCallbackErrors, BrowserAuthorizationStartData, BrowserAuthorizationStartErrors, BrowserCsrfGetData, BrowserCsrfGetErrors, BrowserCsrfGetResponses, BrowserImpersonationGetData, BrowserImpersonationGetErrors, BrowserImpersonationGetResponses, BrowserImpersonationStartData, BrowserImpersonationStartErrors, BrowserImpersonationStartResponses, BrowserImpersonationStopData, BrowserImpersonationStopErrors, BrowserImpersonationStopResponses, BrowserProviderLinkData, BrowserProviderLinkErrors, BrowserProviderLinkResponses, BrowserProvidersListData, BrowserProvidersListErrors, BrowserProvidersListResponses, BrowserSessionGetData, BrowserSessionGetErrors, BrowserSessionGetResponses, BrowserSessionRevokeData, BrowserSessionRevokeErrors, BrowserSessionRevokeResponses, BuildMediaContentGetData, BuildMediaContentGetErrors, BuildMediaContentGetResponses, BuildSchematicContentGetData, BuildSchematicContentGetErrors, BuildSchematicContentGetResponses, BuildSchematicRenderGetData, BuildSchematicRenderGetErrors, BuildSchematicRenderGetResponses, BuildSchematicsListData, BuildSchematicsListErrors, BuildSchematicsListResponses, BuildsEditFormGetData, BuildsEditFormGetErrors, BuildsEditFormGetResponses, BuildsGetData, BuildsGetErrors, BuildsGetResponses, BuildsHistoryListData, BuildsHistoryListErrors, BuildsHistoryListResponses, BuildsListData, BuildsListErrors, BuildsListResponses, BuildsUpdateData, BuildsUpdateErrors, BuildsUpdateResponses, CapabilitiesGetData, CapabilitiesGetErrors, CapabilitiesGetResponses, CliDeviceRevokeData, CliDeviceRevokeErrors, CliDeviceRevokeResponses, CliDevicesListData, CliDevicesListErrors, CliDevicesListResponses, CliEnrollmentApproveData, CliEnrollmentApproveErrors, CliEnrollmentApproveResponses, CliEnrollmentExchangeData, CliEnrollmentExchangeErrors, CliEnrollmentExchangeResponses, CliEnrollmentPreviewData, CliEnrollmentPreviewErrors, CliEnrollmentPreviewResponses, CliEnrollmentStartData, CliEnrollmentStartErrors, CliEnrollmentStartResponses, CliSessionChallengeStartData, CliSessionChallengeStartErrors, CliSessionChallengeStartResponses, CliSessionExchangeData, CliSessionExchangeErrors, CliSessionExchangeResponses, CliSessionRevokeData, CliSessionRevokeErrors, CliSessionRevokeResponses, ConsentNoticeGetData, ConsentNoticeGetErrors, ConsentNoticeGetResponses, CreatorAliasGetData, CreatorAliasGetErrors, CreatorAliasGetResponses, CreatorProfileGetData, CreatorProfileGetErrors, CreatorProfileGetResponses, DiagnosticsErrorGetData, DiagnosticsErrorGetErrors, DiagnosticsErrorGetResponses, DiagnosticsErrorsClearData, DiagnosticsErrorsClearErrors, DiagnosticsErrorsClearResponses, DiagnosticsErrorsListData, DiagnosticsErrorsListErrors, DiagnosticsErrorsListResponses, FabricChallengeExchangeData, FabricChallengeExchangeErrors, FabricChallengeExchangeResponses, FabricChallengeStartData, FabricChallengeStartErrors, FabricChallengeStartResponses, HealthLiveData, HealthLiveResponses, HealthReadyCompatibilityData, HealthReadyCompatibilityResponses, HealthReadyData, HealthReadyResponses, MinecraftChallengeApproveData, MinecraftChallengeApproveErrors, MinecraftChallengeApproveResponses, MinecraftGrantRevokeData, MinecraftGrantRevokeErrors, MinecraftGrantRevokeResponses, MinecraftVersionsListData, MinecraftVersionsListErrors, MinecraftVersionsListResponses, NotificationInboxListData, NotificationInboxListErrors, NotificationInboxListResponses, NotificationInboxMarkReadData, NotificationInboxMarkReadErrors, NotificationInboxMarkReadResponses, NotificationInboxMarkUnreadData, NotificationInboxMarkUnreadErrors, NotificationInboxMarkUnreadResponses, NotificationPreferencesGetData, NotificationPreferencesGetErrors, NotificationPreferencesGetResponses, NotificationPreferencesUpdateData, NotificationPreferencesUpdateErrors, NotificationPreferencesUpdateResponses, NotificationSubscriptionCreateData, NotificationSubscriptionCreateErrors, NotificationSubscriptionCreateResponses, NotificationSubscriptionDeleteData, NotificationSubscriptionDeleteErrors, NotificationSubscriptionDeleteResponses, NotificationSubscriptionsListData, NotificationSubscriptionsListErrors, NotificationSubscriptionsListResponses, PaperChallengeExchangeData, PaperChallengeExchangeErrors, PaperChallengeExchangeResponses, PaperChallengeStartData, PaperChallengeStartErrors, PaperChallengeStartResponses, PaperInstallationCreateData, PaperInstallationCreateErrors, PaperInstallationCreateResponses, PaperInstallationProfileUpdateData, PaperInstallationProfileUpdateErrors, PaperInstallationProfileUpdateResponses, PaperInstallationRevokeData, PaperInstallationRevokeErrors, PaperInstallationRevokeResponses, PaperInstallationRotateData, PaperInstallationRotateErrors, PaperInstallationRotateResponses, PaperInstallationsListData, PaperInstallationsListErrors, PaperInstallationsListResponses, RecordsGetData, RecordsGetDoorRangePointData, RecordsGetDoorRangePointErrors, RecordsGetDoorRangePointResponses, RecordsGetDoorRangesData, RecordsGetDoorRangesErrors, RecordsGetDoorRangesResponses, RecordsGetErrors, RecordsGetResponses, RecordsListData, RecordsListErrors, RecordsListResponses, RecordsLookupDoorData, RecordsLookupDoorErrors, RecordsLookupDoorRangesData, RecordsLookupDoorRangesErrors, RecordsLookupDoorRangesResponses, RecordsLookupDoorResponses, RecordsRefreshDoorRangesData, RecordsRefreshDoorRangesErrors, RecordsRefreshDoorRangesResponses, RecordsRegisterDoorRangesData, RecordsRegisterDoorRangesErrors, RecordsRegisterDoorRangesResponses, RuntimeSettingsGetData, RuntimeSettingsGetErrors, RuntimeSettingsGetResponses, RuntimeSettingsUpdateData, RuntimeSettingsUpdateErrors, RuntimeSettingsUpdateResponses, SchematicRenderContentGetData, SchematicRenderContentGetErrors, SchematicRenderContentGetResponses, SchematicVideoContentData, SchematicVideoContentErrors, SchematicVideoContentResponses, SchematicVideoCreateData, SchematicVideoCreateErrors, SchematicVideoCreateResponses, SchematicVideoStatusData, SchematicVideoStatusErrors, SchematicVideoStatusResponses, SearchExecuteData, SearchExecuteErrors, SearchExecuteResponses, SearchFieldsListData, SearchFieldsListErrors, SearchFieldsListResponses, SearchTermsSuggestData, SearchTermsSuggestErrors, SearchTermsSuggestResponses, SubmissionAttemptGetData, SubmissionAttemptGetErrors, SubmissionAttemptGetResponses, SubmissionAttemptsListData, SubmissionAttemptsListErrors, SubmissionAttemptsListResponses, SubmissionCorrectionInboxData, SubmissionCorrectionInboxErrors, SubmissionCorrectionInboxResponses, SubmissionDraftChangeData, SubmissionDraftChangeErrors, SubmissionDraftChangeResponses, SubmissionDraftCreateData, SubmissionDraftCreateErrors, SubmissionDraftCreateResponses, SubmissionDraftDeleteData, SubmissionDraftDeleteErrors, SubmissionDraftDeleteResponses, SubmissionDraftGetData, SubmissionDraftGetErrors, SubmissionDraftGetResponses, SubmissionDraftManifestUpgradeData, SubmissionDraftManifestUpgradeErrors, SubmissionDraftManifestUpgradeResponses, SubmissionDraftsListData, SubmissionDraftsListErrors, SubmissionDraftsListResponses, SubmissionFinalizationGetData, SubmissionFinalizationGetErrors, SubmissionFinalizationGetResponses, SubmissionFinalizationStartData, SubmissionFinalizationStartErrors, SubmissionFinalizationStartResponses, SubmissionFormCurrentData, SubmissionFormCurrentErrors, SubmissionFormCurrentResponses, SubmissionFormOptionsGetData, SubmissionFormOptionsGetErrors, SubmissionFormOptionsGetResponses, SubmissionFormRevisionGetData, SubmissionFormRevisionGetErrors, SubmissionFormRevisionGetResponses, SubmissionMediaAttachData, SubmissionMediaAttachErrors, SubmissionMediaAttachResponses, SubmissionMediaDiscardData, SubmissionMediaDiscardErrors, SubmissionMediaDiscardResponses, SubmissionMediaGetData, SubmissionMediaGetErrors, SubmissionMediaGetResponses, SubmissionMediaListData, SubmissionMediaListErrors, SubmissionMediaListResponses, SubmissionMediaUploadData, SubmissionMediaUploadErrors, SubmissionMediaUploadResponses, SubmissionRevisionApproveData, SubmissionRevisionApproveErrors, SubmissionRevisionApproveResponses, SubmissionRevisionGetData, SubmissionRevisionGetErrors, SubmissionRevisionGetResponses, SubmissionRevisionHistoryData, SubmissionRevisionHistoryErrors, SubmissionRevisionHistoryResponses, SubmissionRevisionMatchData, SubmissionRevisionMatchErrors, SubmissionRevisionMatchResponses, SubmissionSchematicAttachData, SubmissionSchematicAttachErrors, SubmissionSchematicAttachResponses, SubmissionSchematicDiscardData, SubmissionSchematicDiscardErrors, SubmissionSchematicDiscardResponses, SubmissionSchematicListData, SubmissionSchematicListErrors, SubmissionSchematicListResponses, SubmissionSchematicPrimaryData, SubmissionSchematicPrimaryErrors, SubmissionSchematicPrimaryResponses, SubmissionSchematicSuggestionsData, SubmissionSchematicSuggestionsErrors, SubmissionSchematicSuggestionsResponses, SubmissionSchematicUploadData, SubmissionSchematicUploadErrors, SubmissionSchematicUploadResponses, SubmissionSuppliedFileDiscardData, SubmissionSuppliedFileDiscardErrors, SubmissionSuppliedFileDiscardResponses, SubmissionSuppliedFileListData, SubmissionSuppliedFileListErrors, SubmissionSuppliedFileListResponses, SubmissionSuppliedFileUploadData, SubmissionSuppliedFileUploadErrors, SubmissionSuppliedFileUploadResponses, SuggestionsGetData, SuggestionsGetErrors, SuggestionsGetResponses, SuggestionSourcesListData, SuggestionSourcesListErrors, SuggestionSourcesListResponses, TagsGetBySlugData, TagsGetBySlugErrors, TagsGetBySlugResponses, TagsGetData, TagsGetErrors, TagsGetResponses, TagsListData, TagsListErrors, TagsListResponses, VerificationCreateCompatibilityData, VerificationCreateCompatibilityErrors, VerificationCreateCompatibilityResponses, VerificationCreateData, VerificationCreateErrors, VerificationCreateResponses, VoteCastData, VoteCastErrors, VoteCastResponses, VoteClearData, VoteClearErrors, VoteClearResponses, VoteSessionGetData, VoteSessionGetErrors, VoteSessionGetResponses } from './types.gen';
+import type { AccountBuildsListData, AccountBuildsListErrors, AccountBuildsListResponses, AccountConsentGrantData, AccountConsentGrantErrors, AccountConsentGrantResponses, AccountGetData, AccountGetErrors, AccountGetResponses, AccountIdentityListData, AccountIdentityListErrors, AccountIdentityListResponses, AccountIdentityUnlinkData, AccountIdentityUnlinkErrors, AccountIdentityUnlinkResponses, AccountIdentityVisibilitySetData, AccountIdentityVisibilitySetErrors, AccountIdentityVisibilitySetResponses, AccountMergeCodeCreateData, AccountMergeCodeCreateErrors, AccountMergeCodeCreateResponses, AccountMergeCompleteData, AccountMergeCompleteErrors, AccountMergeCompleteResponses, AccountMergePreviewData, AccountMergePreviewErrors, AccountMergePreviewResponses, AccountMinecraftRefreshData, AccountMinecraftRefreshErrors, AccountMinecraftRefreshForData, AccountMinecraftRefreshForErrors, AccountMinecraftRefreshForResponses, AccountMinecraftRefreshResponses, AccountProfileClearData, AccountProfileClearErrors, AccountProfileClearResponses, AccountProfileReviewData, AccountProfileReviewErrors, AccountProfileReviewResponses, AccountProfileUpdateData, AccountProfileUpdateErrors, AccountProfileUpdateResponses, BrowserAuthorizationCallbackData, BrowserAuthorizationCallbackErrors, BrowserAuthorizationStartData, BrowserAuthorizationStartErrors, BrowserCsrfGetData, BrowserCsrfGetErrors, BrowserCsrfGetResponses, BrowserImpersonationGetData, BrowserImpersonationGetErrors, BrowserImpersonationGetResponses, BrowserImpersonationStartData, BrowserImpersonationStartErrors, BrowserImpersonationStartResponses, BrowserImpersonationStopData, BrowserImpersonationStopErrors, BrowserImpersonationStopResponses, BrowserProviderLinkData, BrowserProviderLinkErrors, BrowserProviderLinkResponses, BrowserProvidersListData, BrowserProvidersListErrors, BrowserProvidersListResponses, BrowserSessionGetData, BrowserSessionGetErrors, BrowserSessionGetResponses, BrowserSessionRevokeData, BrowserSessionRevokeErrors, BrowserSessionRevokeResponses, BuildMediaContentGetData, BuildMediaContentGetErrors, BuildMediaContentGetResponses, BuildSchematicContentGetData, BuildSchematicContentGetErrors, BuildSchematicContentGetResponses, BuildSchematicRenderGetData, BuildSchematicRenderGetErrors, BuildSchematicRenderGetResponses, BuildSchematicsListData, BuildSchematicsListErrors, BuildSchematicsListResponses, BuildsEditFormGetData, BuildsEditFormGetErrors, BuildsEditFormGetResponses, BuildsGetData, BuildsGetErrors, BuildsGetResponses, BuildsHistoryListData, BuildsHistoryListErrors, BuildsHistoryListResponses, BuildsListData, BuildsListErrors, BuildsListResponses, BuildsUpdateData, BuildsUpdateErrors, BuildsUpdateResponses, CapabilitiesGetData, CapabilitiesGetErrors, CapabilitiesGetResponses, CliDeviceRevokeData, CliDeviceRevokeErrors, CliDeviceRevokeResponses, CliDevicesListData, CliDevicesListErrors, CliDevicesListResponses, CliEnrollmentApproveData, CliEnrollmentApproveErrors, CliEnrollmentApproveResponses, CliEnrollmentExchangeData, CliEnrollmentExchangeErrors, CliEnrollmentExchangeResponses, CliEnrollmentPreviewData, CliEnrollmentPreviewErrors, CliEnrollmentPreviewResponses, CliEnrollmentStartData, CliEnrollmentStartErrors, CliEnrollmentStartResponses, CliSessionChallengeStartData, CliSessionChallengeStartErrors, CliSessionChallengeStartResponses, CliSessionExchangeData, CliSessionExchangeErrors, CliSessionExchangeResponses, CliSessionRevokeData, CliSessionRevokeErrors, CliSessionRevokeResponses, ConsentNoticeGetData, ConsentNoticeGetErrors, ConsentNoticeGetResponses, CreatorAliasGetData, CreatorAliasGetErrors, CreatorAliasGetResponses, CreatorProfileGetData, CreatorProfileGetErrors, CreatorProfileGetResponses, DiagnosticsErrorGetData, DiagnosticsErrorGetErrors, DiagnosticsErrorGetResponses, DiagnosticsErrorsClearData, DiagnosticsErrorsClearErrors, DiagnosticsErrorsClearResponses, DiagnosticsErrorsListData, DiagnosticsErrorsListErrors, DiagnosticsErrorsListResponses, FabricChallengeExchangeData, FabricChallengeExchangeErrors, FabricChallengeExchangeResponses, FabricChallengeStartData, FabricChallengeStartErrors, FabricChallengeStartResponses, HealthLiveData, HealthLiveResponses, HealthReadyCompatibilityData, HealthReadyCompatibilityResponses, HealthReadyData, HealthReadyResponses, MinecraftChallengeApproveData, MinecraftChallengeApproveErrors, MinecraftChallengeApproveResponses, MinecraftGrantRevokeData, MinecraftGrantRevokeErrors, MinecraftGrantRevokeResponses, MinecraftVersionsListData, MinecraftVersionsListErrors, MinecraftVersionsListResponses, NotificationInboxListData, NotificationInboxListErrors, NotificationInboxListResponses, NotificationInboxMarkReadData, NotificationInboxMarkReadErrors, NotificationInboxMarkReadResponses, NotificationInboxMarkUnreadData, NotificationInboxMarkUnreadErrors, NotificationInboxMarkUnreadResponses, NotificationPreferencesGetData, NotificationPreferencesGetErrors, NotificationPreferencesGetResponses, NotificationPreferencesUpdateData, NotificationPreferencesUpdateErrors, NotificationPreferencesUpdateResponses, NotificationSubscriptionCreateData, NotificationSubscriptionCreateErrors, NotificationSubscriptionCreateResponses, NotificationSubscriptionDeleteData, NotificationSubscriptionDeleteErrors, NotificationSubscriptionDeleteResponses, NotificationSubscriptionsListData, NotificationSubscriptionsListErrors, NotificationSubscriptionsListResponses, PaperChallengeExchangeData, PaperChallengeExchangeErrors, PaperChallengeExchangeResponses, PaperChallengeStartData, PaperChallengeStartErrors, PaperChallengeStartResponses, PaperInstallationCreateData, PaperInstallationCreateErrors, PaperInstallationCreateResponses, PaperInstallationProfileUpdateData, PaperInstallationProfileUpdateErrors, PaperInstallationProfileUpdateResponses, PaperInstallationRevokeData, PaperInstallationRevokeErrors, PaperInstallationRevokeResponses, PaperInstallationRotateData, PaperInstallationRotateErrors, PaperInstallationRotateResponses, PaperInstallationsListData, PaperInstallationsListErrors, PaperInstallationsListResponses, RecordsDriftData, RecordsDriftErrors, RecordsDriftResponses, RecordsGetData, RecordsGetDoorRangePointData, RecordsGetDoorRangePointErrors, RecordsGetDoorRangePointResponses, RecordsGetDoorRangesData, RecordsGetDoorRangesErrors, RecordsGetDoorRangesResponses, RecordsGetErrors, RecordsGetResponses, RecordsInspectData, RecordsInspectErrors, RecordsInspectResponses, RecordsListData, RecordsListErrors, RecordsListResponses, RecordsLookupDoorData, RecordsLookupDoorErrors, RecordsLookupDoorRangesData, RecordsLookupDoorRangesErrors, RecordsLookupDoorRangesResponses, RecordsLookupDoorResponses, RecordsRecomputeData, RecordsRecomputeErrors, RecordsRecomputeQueueData, RecordsRecomputeQueueErrors, RecordsRecomputeQueueResponses, RecordsRecomputeResponses, RecordsRefreshDoorRangesData, RecordsRefreshDoorRangesErrors, RecordsRefreshDoorRangesResponses, RecordsRegisterDoorRangesData, RecordsRegisterDoorRangesErrors, RecordsRegisterDoorRangesResponses, RecordsRequestBackstopData, RecordsRequestBackstopErrors, RecordsRequestBackstopResponses, RuntimeSettingsGetData, RuntimeSettingsGetErrors, RuntimeSettingsGetResponses, RuntimeSettingsUpdateData, RuntimeSettingsUpdateErrors, RuntimeSettingsUpdateResponses, SchematicRenderContentGetData, SchematicRenderContentGetErrors, SchematicRenderContentGetResponses, SchematicVideoContentData, SchematicVideoContentErrors, SchematicVideoContentResponses, SchematicVideoCreateData, SchematicVideoCreateErrors, SchematicVideoCreateResponses, SchematicVideoStatusData, SchematicVideoStatusErrors, SchematicVideoStatusResponses, SearchExecuteData, SearchExecuteErrors, SearchExecuteResponses, SearchFieldsListData, SearchFieldsListErrors, SearchFieldsListResponses, SearchTermsSuggestData, SearchTermsSuggestErrors, SearchTermsSuggestResponses, SubmissionAttemptGetData, SubmissionAttemptGetErrors, SubmissionAttemptGetResponses, SubmissionAttemptsListData, SubmissionAttemptsListErrors, SubmissionAttemptsListResponses, SubmissionCorrectionInboxData, SubmissionCorrectionInboxErrors, SubmissionCorrectionInboxResponses, SubmissionDraftChangeData, SubmissionDraftChangeErrors, SubmissionDraftChangeResponses, SubmissionDraftCreateData, SubmissionDraftCreateErrors, SubmissionDraftCreateResponses, SubmissionDraftDeleteData, SubmissionDraftDeleteErrors, SubmissionDraftDeleteResponses, SubmissionDraftGetData, SubmissionDraftGetErrors, SubmissionDraftGetResponses, SubmissionDraftManifestUpgradeData, SubmissionDraftManifestUpgradeErrors, SubmissionDraftManifestUpgradeResponses, SubmissionDraftsListData, SubmissionDraftsListErrors, SubmissionDraftsListResponses, SubmissionFinalizationGetData, SubmissionFinalizationGetErrors, SubmissionFinalizationGetResponses, SubmissionFinalizationStartData, SubmissionFinalizationStartErrors, SubmissionFinalizationStartResponses, SubmissionFormCurrentData, SubmissionFormCurrentErrors, SubmissionFormCurrentResponses, SubmissionFormOptionsGetData, SubmissionFormOptionsGetErrors, SubmissionFormOptionsGetResponses, SubmissionFormRevisionGetData, SubmissionFormRevisionGetErrors, SubmissionFormRevisionGetResponses, SubmissionMediaAttachData, SubmissionMediaAttachErrors, SubmissionMediaAttachResponses, SubmissionMediaDiscardData, SubmissionMediaDiscardErrors, SubmissionMediaDiscardResponses, SubmissionMediaGetData, SubmissionMediaGetErrors, SubmissionMediaGetResponses, SubmissionMediaListData, SubmissionMediaListErrors, SubmissionMediaListResponses, SubmissionMediaUploadData, SubmissionMediaUploadErrors, SubmissionMediaUploadResponses, SubmissionRevisionApproveData, SubmissionRevisionApproveErrors, SubmissionRevisionApproveResponses, SubmissionRevisionGetData, SubmissionRevisionGetErrors, SubmissionRevisionGetResponses, SubmissionRevisionHistoryData, SubmissionRevisionHistoryErrors, SubmissionRevisionHistoryResponses, SubmissionRevisionMatchData, SubmissionRevisionMatchErrors, SubmissionRevisionMatchResponses, SubmissionSchematicAttachData, SubmissionSchematicAttachErrors, SubmissionSchematicAttachResponses, SubmissionSchematicDiscardData, SubmissionSchematicDiscardErrors, SubmissionSchematicDiscardResponses, SubmissionSchematicListData, SubmissionSchematicListErrors, SubmissionSchematicListResponses, SubmissionSchematicPrimaryData, SubmissionSchematicPrimaryErrors, SubmissionSchematicPrimaryResponses, SubmissionSchematicSuggestionsData, SubmissionSchematicSuggestionsErrors, SubmissionSchematicSuggestionsResponses, SubmissionSchematicUploadData, SubmissionSchematicUploadErrors, SubmissionSchematicUploadResponses, SubmissionSuppliedFileDiscardData, SubmissionSuppliedFileDiscardErrors, SubmissionSuppliedFileDiscardResponses, SubmissionSuppliedFileListData, SubmissionSuppliedFileListErrors, SubmissionSuppliedFileListResponses, SubmissionSuppliedFileUploadData, SubmissionSuppliedFileUploadErrors, SubmissionSuppliedFileUploadResponses, SuggestionsGetData, SuggestionsGetErrors, SuggestionsGetResponses, SuggestionSourcesListData, SuggestionSourcesListErrors, SuggestionSourcesListResponses, TagsGetBySlugData, TagsGetBySlugErrors, TagsGetBySlugResponses, TagsGetData, TagsGetErrors, TagsGetResponses, TagsListData, TagsListErrors, TagsListResponses, VerificationCreateCompatibilityData, VerificationCreateCompatibilityErrors, VerificationCreateCompatibilityResponses, VerificationCreateData, VerificationCreateErrors, VerificationCreateResponses, VoteCastData, VoteCastErrors, VoteCastResponses, VoteClearData, VoteClearErrors, VoteClearResponses, VoteSessionGetData, VoteSessionGetErrors, VoteSessionGetResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -1026,7 +1026,10 @@ export const notificationInboxMarkUnread = <ThrowOnError extends boolean = false
 /**
  * GetRecord
  *
- * Return the latest published result for a record.
+ * Return a record's current result, or its retired state with its holder history.
+ *
+ * A record retires when no build competes for it, and keeps its ID and history
+ * in case a competitor brings it back.
  */
 export const recordsGet = <ThrowOnError extends boolean = false>(options: Options<RecordsGetData, ThrowOnError>): RequestResult<RecordsGetResponses, RecordsGetErrors, ThrowOnError> => (options.client ?? client).get<RecordsGetResponses, RecordsGetErrors, ThrowOnError>({
     security: [{
@@ -1144,6 +1147,129 @@ export const recordsRefreshDoorRanges = <ThrowOnError extends boolean = false>(o
  * Read one opening from saved regions, with publication and latest-attempt origin.
  */
 export const recordsGetDoorRangePoint = <ThrowOnError extends boolean = false>(options: Options<RecordsGetDoorRangePointData, ThrowOnError>): RequestResult<RecordsGetDoorRangePointResponses, RecordsGetDoorRangePointErrors, ThrowOnError> => (options.client ?? client).get<RecordsGetDoorRangePointResponses, RecordsGetDoorRangePointErrors, ThrowOnError>({ url: '/v1/records/ranges/door/{query_id}/at/{width}', ...options });
+
+/**
+ * RecomputeRecord
+ *
+ * Queue every criterion of the record's category for recomputation.
+ */
+export const recordsRecompute = <ThrowOnError extends boolean = false>(options: Options<RecordsRecomputeData, ThrowOnError>): RequestResult<RecordsRecomputeResponses, RecordsRecomputeErrors, ThrowOnError> => (options.client ?? client).post<RecordsRecomputeResponses, RecordsRecomputeErrors, ThrowOnError>({
+    security: [
+        { name: 'Authorization', type: 'apiKey' },
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        { name: 'CSRF-Token', type: 'apiKey' },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
+    url: '/v1/records/{record_id}/recompute',
+    ...options
+});
+
+/**
+ * InspectRecord
+ *
+ * Compute the record from current builds, without publishing, and compare it with its published result.
+ */
+export const recordsInspect = <ThrowOnError extends boolean = false>(options: Options<RecordsInspectData, ThrowOnError>): RequestResult<RecordsInspectResponses, RecordsInspectErrors, ThrowOnError> => (options.client ?? client).get<RecordsInspectResponses, RecordsInspectErrors, ThrowOnError>({
+    security: [
+        { name: 'Authorization', type: 'apiKey' },
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
+    url: '/v1/records/{record_id}/inspection',
+    ...options
+});
+
+/**
+ * RequestBackstop
+ *
+ * Queue a full recompute that reports each difference no pending change explains as drift.
+ */
+export const recordsRequestBackstop = <ThrowOnError extends boolean = false>(options: Options<RecordsRequestBackstopData, ThrowOnError>): RequestResult<RecordsRequestBackstopResponses, RecordsRequestBackstopErrors, ThrowOnError> => (options.client ?? client).post<RecordsRequestBackstopResponses, RecordsRequestBackstopErrors, ThrowOnError>({
+    security: [
+        { name: 'Authorization', type: 'apiKey' },
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        { name: 'CSRF-Token', type: 'apiKey' },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
+    url: '/v1/records/recomputes',
+    ...options,
+    headers: {
+        'Content-Type': 'application/json',
+        ...options.headers
+    }
+});
+
+/**
+ * RecomputeQueue
+ *
+ * List pending and failed recompute requests, oldest first, with each one's last error.
+ */
+export const recordsRecomputeQueue = <ThrowOnError extends boolean = false>(options?: Options<RecordsRecomputeQueueData, ThrowOnError>): RequestResult<RecordsRecomputeQueueResponses, RecordsRecomputeQueueErrors, ThrowOnError> => (options?.client ?? client).get<RecordsRecomputeQueueResponses, RecordsRecomputeQueueErrors, ThrowOnError>({
+    security: [
+        { name: 'Authorization', type: 'apiKey' },
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
+    url: '/v1/records/recompute-queue',
+    ...options
+});
+
+/**
+ * ListDrift
+ *
+ * List records the backstop changed although no queued change explained it, newest first.
+ *
+ * Each entry means the affected-set calculation missed a case.
+ */
+export const recordsDrift = <ThrowOnError extends boolean = false>(options?: Options<RecordsDriftData, ThrowOnError>): RequestResult<RecordsDriftResponses, RecordsDriftErrors, ThrowOnError> => (options?.client ?? client).get<RecordsDriftResponses, RecordsDriftErrors, ThrowOnError>({
+    security: [
+        { name: 'Authorization', type: 'apiKey' },
+        {
+            in: 'cookie',
+            name: '__Host-squid_session',
+            type: 'apiKey'
+        },
+        {
+            key: 'DeviceSession',
+            scheme: 'bearer',
+            type: 'http'
+        }
+    ],
+    url: '/v1/records/drift',
+    ...options
+});
 
 /**
  * ListBuildSchematics

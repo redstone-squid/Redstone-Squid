@@ -5,7 +5,6 @@ import type {
   BuildStatusFilter,
   RecordCriterion,
   RecordFact,
-  ResolutionStatus,
   VersionScope,
 } from "../generated/types.gen";
 import { getLocale, type Locale } from "./locale";
@@ -58,18 +57,6 @@ const versionScopeLabels = {
 } as const satisfies Record<Locale, Record<VersionScope, string>>;
 export function versionScopeLabel(value: VersionScope, locale: Locale = getLocale()): string {
   return versionScopeLabels[locale][value];
-}
-
-const resolutionStatusLabels = {
-  en: { resolved: "Resolved", no_candidate: "No eligible builds" },
-  "zh-CN": { resolved: "已确定", no_candidate: "没有符合条件的作品" },
-  "en-XA": { resolved: "[Ŕéšöļṽéđ····]", no_candidate: "[Ñö éļîĝîƀļé ƀûîļđš········]" },
-} as const satisfies Record<Locale, Record<ResolutionStatus, string>>;
-export function resolutionStatusLabel(
-  value: ResolutionStatus,
-  locale: Locale = getLocale(),
-): string {
-  return resolutionStatusLabels[locale][value];
 }
 
 const recordFactLabels = {

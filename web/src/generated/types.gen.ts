@@ -247,8 +247,8 @@ export type BuildRecord = {
     title: string;
     criterion: RecordCriterion;
     version_scope: VersionScope;
-    status: ResolutionStatus;
     since: string | null;
+    retired?: boolean;
 };
 
 /**
@@ -1181,6 +1181,15 @@ export type HistoryChange = {
 };
 
 /**
+ * HolderHistoryEntry
+ */
+export type HolderHistoryEntry = {
+    build_ids: Array<number>;
+    held_from: string;
+    held_until: string | null;
+};
+
+/**
  * IdentityDetail
  */
 export type IdentityDetail = {
@@ -1452,7 +1461,7 @@ export type MinecraftIdentityRefresh = {
  *
  * Inbox and delivery message categories.
  */
-export type NotificationKind = 'build_confirmed' | 'build_denied' | 'creator_build_confirmed' | 'record_gained' | 'staff_build_submitted';
+export type NotificationKind = 'build_confirmed' | 'build_denied' | 'creator_build_confirmed' | 'record_gained' | 'record_retired' | 'staff_build_submitted';
 
 /**
  * NotificationPreferenceUpdate
@@ -1627,6 +1636,16 @@ export type PageSquidCoreBuildsApplicationQueriesPublicBuildSummary = {
  */
 export type PageSquidCoreBuildsHistoryPublicBuildRevision = {
     items: Array<PublicBuildRevision>;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+};
+
+/**
+ * Page[RecordDrift]
+ */
+export type PageSquidCoreRecordsApplicationModelsRecordDrift = {
+    items: Array<RecordDrift>;
     total: number;
     next: PageAnchor | null;
     prev: PageAnchor | null;
@@ -1857,7 +1876,7 @@ export type PublicBuildTag = {
  * PublicRecordDetail
  */
 export type PublicRecordDetail = {
-    result_id: number;
+    result_id: number | null;
     definition_id: number;
     record_id: string;
     title: string;
@@ -1865,7 +1884,6 @@ export type PublicRecordDetail = {
     criterion: RecordCriterion;
     build_kind: BuildKind;
     version_scope: VersionScope;
-    status: ResolutionStatus;
     holder_build_ids: Array<number>;
     computed_at: string;
     tied_build_ids?: Array<number>;
@@ -1874,9 +1892,11 @@ export type PublicRecordDetail = {
     refresh_pending?: boolean;
     version_id?: number | null;
     door_evidence?: DoorRecordEvidence | null;
+    retired_at?: string | null;
     holder_builds: Array<PublicBuildSummary>;
     tied_builds?: Array<PublicBuildSummary>;
     contender_builds?: Array<PublicBuildSummary>;
+    history?: Array<HolderHistoryEntry>;
     viewer?: RecordViewer | null;
 };
 
@@ -1909,7 +1929,7 @@ export type PublishedPointStatus = 'published' | 'not_published' | 'outside_quer
  * PublishedRecordResult
  */
 export type PublishedRecordResult = {
-    result_id: number;
+    result_id: number | null;
     definition_id: number;
     record_id: string;
     title: string;
@@ -1917,7 +1937,6 @@ export type PublishedRecordResult = {
     criterion: RecordCriterion;
     build_kind: BuildKind;
     version_scope: VersionScope;
-    status: ResolutionStatus;
     holder_build_ids: Array<number>;
     computed_at: string;
     tied_build_ids?: Array<number>;
@@ -2027,11 +2046,63 @@ export type RecalculationProposalResponse = {
 };
 
 /**
+ * RecomputeItem
+ */
+export type RecomputeItem = {
+    id: number;
+    kind: BuildKind;
+    target: RecomputeTarget;
+    build_id: number | null;
+    record_id: string | null;
+    reasons: Array<string>;
+    enqueued_at: string;
+    attempts: number;
+    last_error: string | null;
+    claimed: boolean;
+};
+
+/**
+ * RecomputeRequest
+ */
+export type RecomputeRequest = {
+    kinds?: Array<BuildKind>;
+};
+
+/**
+ * RecomputeTarget
+ *
+ * What a queued recompute covers.
+ *
+ * `kind` recomputes a whole build kind after a rules, version pin or tag change,
+ * where differences are expected. `backstop` does the same but reports each
+ * difference that no pending change explains as drift.
+ *
+ */
+export type RecomputeTarget = 'kind' | 'backstop' | 'build' | 'record';
+
+/**
  * RecordCriterion
  *
  * A metric by which records are classified.
  */
 export type RecordCriterion = 'first' | 'fastest' | 'smallest' | 'fastest_smallest' | 'smallest_fastest';
+
+/**
+ * RecordDrift
+ */
+export type RecordDrift = {
+    id: number;
+    record_id: string;
+    title: string;
+    run_id: number;
+    detected_at: string;
+    published: {
+        [key: string]: unknown;
+    };
+    computed: {
+        [key: string]: unknown;
+    };
+};
 
 /**
  * RecordFact
@@ -2051,6 +2122,20 @@ export type RecordFilterInput = {
 };
 
 /**
+ * RecordInspection
+ */
+export type RecordInspection = {
+    record_id: string;
+    title: string;
+    published_holder_ids: Array<number>;
+    computed_holder_ids: Array<number>;
+    published_gaps: Array<CandidateGap>;
+    computed_gaps: Array<CandidateGap>;
+    members_gained: Array<number>;
+    members_lost: Array<number>;
+};
+
+/**
  * RecordOperator
  *
  * How a tag assignment satisfies a record-category predicate.
@@ -2061,7 +2146,6 @@ export type RecordOperator = 'present' | 'exact' | 'at_most' | 'at_least';
  * RecordResolution
  */
 export type RecordResolution = {
-    status: ResolutionStatus;
     holder_ids?: Array<number>;
     tied_ids?: Array<number>;
     gaps?: Array<CandidateGap>;
@@ -2147,13 +2231,6 @@ export type RequiredValue = {
 export type RequiredValueParams = {
     expected: JsonValue2;
 };
-
-/**
- * ResolutionStatus
- *
- * Whether any build competes in a category.
- */
-export type ResolutionStatus = 'resolved' | 'no_candidate';
 
 /**
  * RuleIssue
@@ -6630,6 +6707,264 @@ export type RecordsGetDoorRangePointResponses = {
 };
 
 export type RecordsGetDoorRangePointResponse = RecordsGetDoorRangePointResponses[keyof RecordsGetDoorRangePointResponses];
+
+export type RecordsRecomputeData = {
+    body?: never;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        record_id: string;
+    };
+    query?: never;
+    url: '/v1/records/{record_id}/recompute';
+};
+
+export type RecordsRecomputeErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type RecordsRecomputeError = RecordsRecomputeErrors[keyof RecordsRecomputeErrors];
+
+export type RecordsRecomputeResponses = {
+    /**
+     * Request accepted, processing continues off-line
+     */
+    202: unknown;
+};
+
+export type RecordsInspectData = {
+    body?: never;
+    path: {
+        record_id: string;
+    };
+    query?: never;
+    url: '/v1/records/{record_id}/inspection';
+};
+
+export type RecordsInspectErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type RecordsInspectError = RecordsInspectErrors[keyof RecordsInspectErrors];
+
+export type RecordsInspectResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: RecordInspection;
+};
+
+export type RecordsInspectResponse = RecordsInspectResponses[keyof RecordsInspectResponses];
+
+export type RecordsRequestBackstopData = {
+    body: RecomputeRequest;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/records/recomputes';
+};
+
+export type RecordsRequestBackstopErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type RecordsRequestBackstopError = RecordsRequestBackstopErrors[keyof RecordsRequestBackstopErrors];
+
+export type RecordsRequestBackstopResponses = {
+    /**
+     * Request accepted, processing continues off-line
+     */
+    202: unknown;
+};
+
+export type RecordsRecomputeQueueData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/records/recompute-queue';
+};
+
+export type RecordsRecomputeQueueErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type RecordsRecomputeQueueError = RecordsRecomputeQueueErrors[keyof RecordsRecomputeQueueErrors];
+
+export type RecordsRecomputeQueueResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: Array<RecomputeItem>;
+};
+
+export type RecordsRecomputeQueueResponse = RecordsRecomputeQueueResponses[keyof RecordsRecomputeQueueResponses];
+
+export type RecordsDriftData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Maximum number of items to return.
+         */
+        page_size?: number;
+        /**
+         * Number of items to skip. Excludes after_id and before_id.
+         */
+        offset?: number | null;
+        /**
+         * Return the items after this identifier in display order. Excludes offset.
+         */
+        after_id?: number | null;
+        /**
+         * Return the items before this identifier in display order. Excludes offset.
+         */
+        before_id?: number | null;
+    };
+    url: '/v1/records/drift';
+};
+
+export type RecordsDriftErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type RecordsDriftError = RecordsDriftErrors[keyof RecordsDriftErrors];
+
+export type RecordsDriftResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: PageSquidCoreRecordsApplicationModelsRecordDrift;
+};
+
+export type RecordsDriftResponse = RecordsDriftResponses[keyof RecordsDriftResponses];
 
 export type BuildSchematicsListData = {
     body?: never;

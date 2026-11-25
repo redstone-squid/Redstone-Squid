@@ -6,7 +6,7 @@ export const doorEvidence: DoorRecordEvidence = {
     criterion: "smallest",
     version_id: null,
     evaluated_at: "2026-08-10T12:00:00Z",
-    resolution: { status: "resolved", holder_ids: [1] },
+    resolution: { holder_ids: [1] },
     holder_configuration_ids: [0],
     configurations: [
       {

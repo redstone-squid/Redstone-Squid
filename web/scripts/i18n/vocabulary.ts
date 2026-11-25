@@ -9,7 +9,6 @@ const VALUE_TYPES: Record<string, string> = {
   record_criterion: "RecordCriterion",
   build_kind: "BuildKind",
   version_scope: "VersionScope",
-  resolution_status: "ResolutionStatus",
   build_status: "BuildStatusFilter",
   record_fact: "RecordFact",
 };

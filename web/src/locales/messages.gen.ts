@@ -1477,18 +1477,137 @@ export function buildMissingFacts(
   }
 }
 
-/** Status: { $status } */
-export function recordStatus(
-  args: { status: string | number },
+/** Current */
+export function recordCurrent(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Current";
+    case "zh-CN":
+      return "现行";
+    case "en-XA":
+      return "[" + "Çûŕŕéñţ" + "···]";
+  }
+}
+
+/** Retired { DATETIME($date, dateStyle: "medium") } */
+export function recordRetired(args: { date: Date | string }, locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Retired " + formatDateTime(locale, args.date, { dateStyle: "medium" });
+    case "zh-CN":
+      return "已于 " + formatDateTime(locale, args.date, { dateStyle: "medium" }) + " 停用";
+    case "en-XA":
+      return (
+        "[" + "Ŕéţîŕéđ " + formatDateTime(locale, args.date, { dateStyle: "medium" }) + "····]"
+      );
+  }
+}
+
+/** No build competes for this record any more. It comes back, with the same link, when one does. */
+export function recordRetiredDescription(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "No build competes for this record any more. It comes back, with the same link, when one does.";
+    case "zh-CN":
+      return "已没有作品参与这项纪录。一旦有作品参与，它会以同一链接恢复。";
+    case "en-XA":
+      return (
+        "[" +
+        "Ñö ƀûîļđ çöɱþéţéš ƒöŕ ţĥîš ŕéçöŕđ åñý ɱöŕé. Îţ çöɱéš ƀåçķ, ŵîţĥ ţĥé šåɱé ļîñķ, ŵĥéñ öñé đöéš." +
+        "······································]"
+      );
+  }
+}
+
+/** Holder history */
+export function recordHistory(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Holder history";
+    case "zh-CN":
+      return "保持者历史";
+    case "en-XA":
+      return "[" + "Ĥöļđéŕ ĥîšţöŕý" + "······]";
+  }
+}
+
+/** { $builds }, from { DATETIME($from, dateStyle: "medium") } */
+export function recordHistoryPeriod(
+  args: { builds: string | number; from: Date | string },
   locale: Locale = getLocale(),
 ): string {
   switch (locale) {
     case "en":
-      return "Status: " + formatValue(locale, args.status);
+      return (
+        formatValue(locale, args.builds) +
+        ", from " +
+        formatDateTime(locale, args.from, { dateStyle: "medium" })
+      );
     case "zh-CN":
-      return "状态：" + formatValue(locale, args.status);
+      return (
+        formatValue(locale, args.builds) +
+        "，自 " +
+        formatDateTime(locale, args.from, { dateStyle: "medium" }) +
+        " 起"
+      );
     case "en-XA":
-      return "[" + "Šţåţûš: " + formatValue(locale, args.status) + "····]";
+      return (
+        "[" +
+        formatValue(locale, args.builds) +
+        ", ƒŕöɱ " +
+        formatDateTime(locale, args.from, { dateStyle: "medium" }) +
+        "···]"
+      );
+  }
+}
+
+/** { $builds }, { DATETIME($from, dateStyle: "medium") } to { DATETIME($until, dateStyle: "medium") } */
+export function recordHistoryPeriodEnded(
+  args: { builds: string | number; from: Date | string; until: Date | string },
+  locale: Locale = getLocale(),
+): string {
+  switch (locale) {
+    case "en":
+      return (
+        formatValue(locale, args.builds) +
+        ", " +
+        formatDateTime(locale, args.from, { dateStyle: "medium" }) +
+        " to " +
+        formatDateTime(locale, args.until, { dateStyle: "medium" })
+      );
+    case "zh-CN":
+      return (
+        formatValue(locale, args.builds) +
+        "，" +
+        formatDateTime(locale, args.from, { dateStyle: "medium" }) +
+        " 至 " +
+        formatDateTime(locale, args.until, { dateStyle: "medium" })
+      );
+    case "en-XA":
+      return (
+        "[" +
+        formatValue(locale, args.builds) +
+        ", " +
+        formatDateTime(locale, args.from, { dateStyle: "medium" }) +
+        " ţö " +
+        formatDateTime(locale, args.until, { dateStyle: "medium" }) +
+        "···]"
+      );
+  }
+}
+
+/** Build #{ $id } */
+export function recordHistoryBuild(
+  args: { id: string | number },
+  locale: Locale = getLocale(),
+): string {
+  switch (locale) {
+    case "en":
+      return "Build #" + formatValue(locale, args.id);
+    case "zh-CN":
+      return "作品 #" + formatValue(locale, args.id);
+    case "en-XA":
+      return "[" + "Ɓûîļđ #" + formatValue(locale, args.id) + "···]";
   }
 }
 
