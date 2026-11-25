@@ -29,10 +29,17 @@ const viewportBreakpoint = {
   message:
     "Use a container query (@container with @md: and similar) or a fluid layout instead of a viewport breakpoint.",
 };
+// The restrictions also read every string value in object literals assigned to a variable,
+// such as `const widths = { lg: "min-w-72" }`, which the default selectors skip. Only this
+// rule reads them: labels in such objects are not classes, so unknown-class checks would
+// misfire, while a label rarely looks like a restricted class.
 const restrictClasses = (...restrict) => ({
   "better-tailwindcss/no-restricted-classes": [
     "error",
-    { restrict: [arbitraryColor, rawDuration, ...restrict] },
+    {
+      restrict: [arbitraryColor, rawDuration, ...restrict],
+      selectors: { extends: [{ kind: "variable", name: ".*", match: [{ type: "objectValues" }] }] },
+    },
   ],
 });
 
@@ -245,6 +252,8 @@ export default tseslint.config(
     // Class names must exist in the theme, and colors come from tokens rather than arbitrary
     // values. Prettier sorts classes, so ordering and wrapping rules stay off.
     files: ["src/**/*.{ts,astro,svelte}"],
+    // No markup: their object values are data, such as the pseudo-locale's "[Ƥšéûđö]" label.
+    ignores: ["src/locales/**", "src/server/**"],
     plugins: { "better-tailwindcss": betterTailwind },
     settings: {
       "better-tailwindcss": {

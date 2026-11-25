@@ -3,9 +3,9 @@
  * pattern is matched against one class, variants included.
  */
 
-/** Outside src/ui: any arbitrary value, property, or variant. */
+/** Outside src/ui: any arbitrary value, property, or variant, or a `w-(--var)` value. */
 export const arbitraryValue = {
-  pattern: String.raw`\[`,
+  pattern: String.raw`\[|-\(--`,
   message:
     "Arbitrary Tailwind values belong in src/ui. Compose a ui component or use a theme utility.",
 };
