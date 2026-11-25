@@ -5,6 +5,7 @@
   import Card from "@/ui/data/Card.svelte";
   import Disclosure from "@/ui/data/Disclosure.svelte";
   import Notice from "@/ui/feedback/Notice.svelte";
+  import Switch from "@/ui/forms/Switch.svelte";
   import SaveStatus from "@/ui/feedback/SaveStatus.svelte";
   import type { SaveState } from "@/ui/feedback/save-state";
   import Layout from "@/ui/layout/Layout.svelte";
@@ -30,6 +31,23 @@
     ["ease-emphasized", "ease-emphasized"],
   ] as const;
   let played = $state(false);
+
+  // The tokens differ by tenths of a second, too little to compare side by side. Slow motion
+  // stretches every token on the page, overlays included, while the switch is on.
+  let slow = $state<boolean>(false);
+  $effect(() => {
+    if (!slow) return;
+    const root = document.documentElement.style;
+    for (const [token, ms] of [
+      ["fast", 120],
+      ["normal", 200],
+      ["slow", 320],
+    ] as const)
+      root.setProperty(`--duration-${token}`, `${ms * 5}ms`);
+    return () => {
+      for (const token of ["fast", "normal", "slow"]) root.removeProperty(`--duration-${token}`);
+    };
+  });
 
   const menuItems = [{ label: "Edit" }, { label: "Duplicate" }, { label: "Report" }];
   const linkItems = [
@@ -81,9 +99,10 @@
   description="Durations and easings from app.css. Motion only explains a change: something entering, leaving, or moving to a new choice. Everything stops under prefers-reduced-motion."
 >
   {@render reducedNote()}
-  <Button class="w-fit" icon={Play} onclick={() => (played = !played)} aria-pressed={played}
-    >Play</Button
-  >
+  <div class="flex flex-wrap items-center gap-6">
+    <Button icon={Play} onclick={() => (played = !played)} aria-pressed={played}>Play</Button>
+    <Switch label="Slow motion (×5)" bind:checked={slow} />
+  </div>
   <Variant label="Durations, with ease-standard">
     <div class="grid gap-3">
       {#each durations as [token, duration] (token)}

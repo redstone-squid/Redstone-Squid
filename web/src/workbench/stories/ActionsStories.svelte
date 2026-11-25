@@ -1,11 +1,13 @@
 <script lang="ts">
   import * as m from "@/locales/messages-actions.gen";
   import ArrowUpRight from "@lucide/svelte/icons/arrow-up-right";
+  import Download from "@lucide/svelte/icons/download";
   import Plus from "@lucide/svelte/icons/plus";
   import Trash from "@lucide/svelte/icons/trash-2";
   import Button from "@/ui/actions/Button.svelte";
   import CopyButton from "@/ui/actions/CopyButton.svelte";
   import Code from "@/ui/content/Code.svelte";
+  import Layout from "@/ui/layout/Layout.svelte";
   import Story from "./Story.svelte";
   import Variant from "./Variant.svelte";
 
@@ -51,29 +53,41 @@
 </Story>
 
 <Story name="CopyButton" source="actions/CopyButton" description={m.storyCopyButtonDescription()}>
-  <Variant label={m.storyWithTextIconOnlySizeMd()}>
-    <div class="flex flex-wrap items-center gap-3">
-      <Code>mc.example.net:25565</Code>
-      <CopyButton
-        value="mc.example.net:25565"
-        label={m.storyCopyAddress()}
-        copiedLabel={m.storyCopied()}
-        failedLabel={m.storyCopyFailed()}
-      />
-      <CopyButton
-        value="mc.example.net:25565"
-        label={m.storyCopyAddress()}
-        copiedLabel={m.storyCopied()}
-        failedLabel={m.storyCopyFailed()}
-        iconOnly
-      />
-      <CopyButton
-        value="mc.example.net:25565"
-        label={m.storyCopyAddress()}
-        copiedLabel={m.storyCopied()}
-        failedLabel={m.storyCopyFailed()}
-        size="md"
-      />
-    </div>
-  </Variant>
+  <!-- One control size per row: sm beside text, md among a page's actions. -->
+  <Layout pattern="stack" gap="lg">
+    <Variant label={m.storyCopyBesideValue()}>
+      <Layout pattern="cluster" gap="xs">
+        <Code>mc.example.net:25565</Code>
+        <CopyButton
+          value="mc.example.net:25565"
+          label={m.storyCopyAddress()}
+          copiedLabel={m.storyCopied()}
+          failedLabel={m.storyCopyFailed()}
+          iconOnly
+        />
+      </Layout>
+    </Variant>
+    <Variant label={m.storyCopyWithText()}>
+      <Layout pattern="cluster">
+        <CopyButton
+          value="mc.example.net:25565"
+          label={m.storyCopyAddress()}
+          copiedLabel={m.storyCopied()}
+          failedLabel={m.storyCopyFailed()}
+        />
+      </Layout>
+    </Variant>
+    <Variant label={m.storyCopySizeMd()}>
+      <Layout pattern="cluster">
+        <Button href="#copybutton" icon={Download}>{m.storyDownload()}</Button>
+        <CopyButton
+          value="mc.example.net:25565"
+          label={m.storyCopyAddress()}
+          copiedLabel={m.storyCopied()}
+          failedLabel={m.storyCopyFailed()}
+          size="md"
+        />
+      </Layout>
+    </Variant>
+  </Layout>
 </Story>

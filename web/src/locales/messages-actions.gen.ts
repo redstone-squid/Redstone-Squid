@@ -114,15 +114,51 @@ export function storyCopyButtonDescription(locale: Locale = getLocale()): string
   }
 }
 
-/** with text, icon only, size md */
-export function storyWithTextIconOnlySizeMd(locale: Locale = getLocale()): string {
+/** beside a value */
+export function storyCopyBesideValue(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "with text, icon only, size md";
+      return "beside a value";
     case "zh-CN":
-      return "带文字、仅图标、中号";
+      return "紧挨着值";
     case "en-XA":
-      return "[" + "ŵîţĥ ţéẋţ, îçöñ öñļý, šîžé ɱđ" + "············]";
+      return "[" + "ƀéšîđé å ṽåļûé" + "······]";
+  }
+}
+
+/** with text */
+export function storyCopyWithText(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "with text";
+    case "zh-CN":
+      return "带文字";
+    case "en-XA":
+      return "[" + "ŵîţĥ ţéẋţ" + "····]";
+  }
+}
+
+/** size md, beside another page action */
+export function storyCopySizeMd(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "size md, beside another page action";
+    case "zh-CN":
+      return "中号，与其他页面操作并排";
+    case "en-XA":
+      return "[" + "šîžé ɱđ, ƀéšîđé åñöţĥéŕ þåĝé åçţîöñ" + "··············]";
+  }
+}
+
+/** Download */
+export function storyDownload(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Download";
+    case "zh-CN":
+      return "下载";
+    case "en-XA":
+      return "[" + "Đöŵñļöåđ" + "····]";
   }
 }
 
