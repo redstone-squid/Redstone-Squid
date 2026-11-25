@@ -8,7 +8,7 @@ import discord
 import pytest
 
 from squid.bot.version_tracking_cog import VersionTracker
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.settings.domain.runtime import RuntimeSettings
 from squid.core.versions.application import VersionService
 from squid.core.versions.domain import Edition, MinecraftVersion, parse_version_string
@@ -76,7 +76,7 @@ async def test_version_announcements(
     monkeypatch.setattr("squid.bot.version_tracking_cog.resolve_locale", AsyncMock(return_value="en"))
     monkeypatch.setattr("squid.bot.version_tracking_cog.send_to", lambda channel: send)
 
-    with ActingContext.direct(Actor(discord_user_id=author_id, guild_id=123)).scope():
+    with ActingContext.direct(UserActor(discord_user_id=author_id, guild_id=123)).scope():
         await VersionTracker(bot).on_message_version_add(message)
 
     assert versions.calls == expected_calls
@@ -105,7 +105,7 @@ async def test_storage_errors_propagate() -> None:
     )
 
     with (
-        ActingContext.direct(Actor(discord_user_id=2, guild_id=123)).scope(),
+        ActingContext.direct(UserActor(discord_user_id=2, guild_id=123)).scope(),
         pytest.raises(RuntimeError, match="storage unavailable"),
     ):
         await VersionTracker(bot).on_message_version_add(message)

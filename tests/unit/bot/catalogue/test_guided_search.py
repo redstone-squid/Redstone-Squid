@@ -10,7 +10,7 @@ import pytest
 from squid.bot.catalogue.search.clauses import CatalogueQuery
 from squid.bot.catalogue.search.filters import GuidedSearch, SearchSelection
 from squid.bot.catalogue.search.labels import filter_label
-from squid.core.actors import Actor
+from squid.core.actors import UserActor
 from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY
 from squid.core.search.application.parser import SearchQueryParser
 from squid.core.search.domain.query import BooleanExpression, BooleanOperator, ComparisonOperator, FieldExpression
@@ -111,7 +111,10 @@ def _suggestions(*sources: tuple[str, tuple[Candidate, ...]]) -> SuggestionServi
 
 def _install(ui: StagedUI[GuidedSearch], monkeypatch: pytest.MonkeyPatch, service: SuggestionService) -> None:
     monkeypatch.setattr(
-        ui._client, "actors", SimpleNamespace(resolve=AsyncMock(return_value=Actor(discord_user_id=1))), raising=False
+        ui._client,
+        "actors",
+        SimpleNamespace(resolve=AsyncMock(return_value=UserActor(discord_user_id=1))),
+        raising=False,
     )
     monkeypatch.setattr(ui._client, "services", SimpleNamespace(suggestions=service), raising=False)
 

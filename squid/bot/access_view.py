@@ -51,7 +51,7 @@ from squid.core.permissions.domain.catalogue import (
     ROLE_DEFINITION_MANAGE,
     ROLE_DEFINITION_MANAGE_GUILD,
 )
-from squid.core.permissions.domain.models import NodeScope, PatternMode
+from squid.core.permissions.domain.models import NodeScope, PatternMode, RolePermissionSubject
 from squid.core.permissions.models import (
     PermissionAuditEntry,
     PermissionGrant,
@@ -330,7 +330,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
                 return (
                     sl.note(tr(t"access-ui-that-discord-role-has-been-deleted = That Discord role has been deleted.")),
                 )
-            actor = Actor(guild_id=guild.id, discord_role_ids=frozenset({self._discord_role_id}))
+            actor = RolePermissionSubject(guild_id=guild.id, discord_role_ids=frozenset({self._discord_role_id}))
         else:
             assert self._member_id is not None
             try:
@@ -376,7 +376,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
             authors = await self._account_names(
                 {r.granted_by_account_id for r in (*rows, *assignments) if r.granted_by_account_id is not None}
             )
-            admin_account = (await self._actor()).account_id
+            admin_account = (await self._actor()).linked_account_id
             if admin_account is not None:
                 authors[admin_account] = "you"
             results.append(self._subject_browser(rows, assignments, authors))

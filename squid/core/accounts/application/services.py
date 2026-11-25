@@ -435,7 +435,9 @@ class AccountService:
     async def editor_snapshot(self, account_id: int, *, context: ActingContext) -> AccountEditorSnapshot:
         """Read the profile and identities under their shared account revision lock."""
         async with self._uow_factory() as uow:
-            required = ACCOUNT_SELF_READ if account_id == context.effective.account_id else ACCOUNT_PROFILE_MODERATE
+            required = (
+                ACCOUNT_SELF_READ if account_id == context.effective.linked_account_id else ACCOUNT_PROFILE_MODERATE
+            )
             await self._permissions.require(context.effective, required, uow=uow)
             account = await uow.accounts.lock_for_edit(account_id)
             profile = await uow.accounts.get_profile(account_id)
@@ -446,7 +448,9 @@ class AccountService:
     async def get_profile(self, account_id: int, *, context: ActingContext) -> AccountProfile:
         """Return an account's own profile, including anything it has chosen to hide."""
         async with self._uow_factory() as uow:
-            required = ACCOUNT_SELF_READ if account_id == context.effective.account_id else ACCOUNT_PROFILE_MODERATE
+            required = (
+                ACCOUNT_SELF_READ if account_id == context.effective.linked_account_id else ACCOUNT_PROFILE_MODERATE
+            )
             await self._permissions.require(context.effective, required, uow=uow)
             profile = await uow.accounts.get_profile(account_id)
             if profile is None:
@@ -482,7 +486,9 @@ class AccountService:
         MinecraftServiceUnavailableError if the lookup fails.
         """
         subject = context.effective
-        permission = ACCOUNT_IDENTITY_REFRESH if subject.account_id == account_id else ACCOUNT_IDENTITY_REFRESH_ANY
+        permission = (
+            ACCOUNT_IDENTITY_REFRESH if subject.linked_account_id == account_id else ACCOUNT_IDENTITY_REFRESH_ANY
+        )
         with context.scope():
             await self._permissions.require(subject, permission)
             account = await self.get_account_by_id(account_id)
@@ -501,7 +507,7 @@ class AccountService:
             async with (
                 self._uow_factory() as uow,
                 uow.builds.editing(
-                    actor=subject.account_id if subject.account_id is not None else subject.reference,
+                    actor=subject.linked_account_id if subject.linked_account_id is not None else subject.reference,
                     operation="edit",
                     source="identity_refresh",
                 ),

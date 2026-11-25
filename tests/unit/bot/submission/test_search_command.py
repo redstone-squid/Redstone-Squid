@@ -13,7 +13,7 @@ from squid.bot.catalogue.browse import BuildBrowseScreen
 from squid.bot.catalogue.search.entry import SearchTarget
 from squid.bot.catalogue.search.results import SearchScreen, _highlighted, _result_description, _result_label
 from squid.bot.submission.cog import BuildCommands, SearchModeChoice
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, AnonymousActor
 from squid.core.builds.application import BuildQueryService
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build, DoorBuild
@@ -333,7 +333,9 @@ async def test_search_jump_form_preserves_the_query_and_fetches_the_requested_pa
 
     service = PagedSearch()
     request = SearchRequest("door width:2", page_size=5)
-    screen = SearchScreen(service, request, await service.search(request, context=ActingContext.direct(Actor())))
+    screen = SearchScreen(
+        service, request, await service.search(request, context=ActingContext.direct(AnonymousActor()))
+    )
     async with stage(screen, owner=object()) as ui:
         form = await ui.press_for_form("search.seek.jump")
         await form.submit({"page": "37"})

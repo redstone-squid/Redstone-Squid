@@ -77,7 +77,7 @@ class RecalculationProposalService:
         actor = context.effective
         with context.scope():
             async with self._uow_factory() as uow:
-                if actor.account_id is None:
+                if actor.linked_account_id is None:
                     raise AccountRequiredError
                 await self._permissions.require(actor, BUILD_SUBMISSION_RECALC, uow=uow)
                 now = Instant.now()
@@ -86,7 +86,7 @@ class RecalculationProposalService:
                         uuid5(run_id, str(index)),
                         run_id,
                         owner_account_id,
-                        actor.account_id,
+                        actor.linked_account_id,
                         source_message_id,
                         RecalculationFacts.from_draft(candidate),
                         None,
@@ -126,7 +126,7 @@ class RecalculationProposalService:
         self, uow: RevisionUnitOfWork, proposals: Sequence[RecalculationProposal], actor: Actor
     ) -> None:
         if any(
-            actor.account_id not in {proposal.owner_account_id, proposal.requested_by_account_id}
+            actor.linked_account_id not in {proposal.owner_account_id, proposal.requested_by_account_id}
             for proposal in proposals
         ):
             await self._permissions.require(actor, BUILD_SUBMISSION_EDIT, uow=uow)
@@ -179,7 +179,7 @@ class RecalculationProposalService:
         """
         actor = context.effective
         with context.scope():
-            if actor.account_id is None:
+            if actor.linked_account_id is None:
                 raise AccountRequiredError
             proposal = await self.get(proposal_id, context=context)
             if proposal.applied_revision is not None:
@@ -208,12 +208,12 @@ class RecalculationProposalService:
     async def _approve_prepared(
         self, proposal: RecalculationProposal, build: Build, actor: Actor
     ) -> RecalculationProposal:
-        if actor.account_id is None:
+        if actor.linked_account_id is None:
             raise AccountRequiredError
         async with (
             self._uow_factory() as uow,
             uow.builds.editing(
-                actor=actor.account_id,
+                actor=actor.linked_account_id,
                 operation="recalculation",
                 # Build history stores these values, so they keep the proposal's original name.
                 source="revision_proposal",
@@ -253,7 +253,7 @@ class RecalculationProposalService:
                 build,
             )
             result = await uow.recalculation_proposals.mark_approved(
-                proposal.id, account_id=actor.account_id, revision=build.revision
+                proposal.id, account_id=actor.linked_account_id, revision=build.revision
             )
             await uow.commit()
             return result

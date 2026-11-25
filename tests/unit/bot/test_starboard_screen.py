@@ -8,7 +8,7 @@ import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.starboard.cog import StarboardCog
 from squid.bot.starboard.screen import StarboardScreen
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, Actor, UserActor
 from squid.core.edits.domain import EditCommand, EditOutcome, EditReceipt, EditResult, EditValues, Revision
 from squid.core.permissions.domain import PermissionNode
 from squid.core.permissions.domain.catalogue import (
@@ -135,7 +135,7 @@ def make_screen(
     creator = ChannelValidator()
 
     async def actor() -> Actor:
-        return Actor(account_id=1, guild_id=7)
+        return UserActor(account_id=1, guild_id=7)
 
     return (
         StarboardScreen(

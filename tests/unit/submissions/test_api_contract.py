@@ -32,7 +32,7 @@ from squid.api.v1.submissions import (
     router,
 )
 from squid.core.accounts.errors import ConsentRequiredError
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, Actor, UserActor
 from squid.core.errors import AuthenticationError
 from squid.core.submissions.application import (
     AppliedDraftChange,
@@ -255,14 +255,14 @@ class FakeFinalization(SubmissionFinalizationCommands):
     async def attempt(
         self, draft_id: UUID, attempt_id: UUID, *, context: ActingContext
     ) -> FinalizationJobSnapshot | None:
-        assert context.effective.account_id == ACCOUNT_ID
+        assert context.effective.linked_account_id == ACCOUNT_ID
         return self.snapshot if draft_id == self.snapshot.draft_id and attempt_id == self.snapshot.job_id else None
 
     @override
     async def attempts(
         self, draft_id: UUID, *, context: ActingContext, before: int | None = None, limit: int = 20
     ) -> tuple[FinalizationJobSnapshot, ...]:
-        assert context.effective.account_id == ACCOUNT_ID
+        assert context.effective.linked_account_id == ACCOUNT_ID
         assert draft_id == self.snapshot.draft_id
         return (self.snapshot,)[:limit] if before is None or before > self.snapshot.attempt_number else ()
 
@@ -376,7 +376,7 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
         return finalization
 
     async def account_dependency() -> ActingContext:
-        return ActingContext.direct(Actor(account_id=ACCOUNT_ID))
+        return ActingContext.direct(UserActor(account_id=ACCOUNT_ID))
 
     async def caller_dependency() -> Caller:
         return Caller(kind="account", subject=f"account:{ACCOUNT_ID}", account_id=ACCOUNT_ID)
@@ -485,8 +485,8 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
     assert detail_response.json() == submit_response.json()
     assert empty_history.json() == []
     assert invalid_limit.status_code == 422
-    assert finalization.submit_calls == [(UUID(draft_id), Actor(account_id=ACCOUNT_ID), "en")]
-    assert finalization.status_calls == [(UUID(draft_id), Actor(account_id=ACCOUNT_ID))]
+    assert finalization.submit_calls == [(UUID(draft_id), UserActor(account_id=ACCOUNT_ID), "en")]
+    assert finalization.status_calls == [(UUID(draft_id), UserActor(account_id=ACCOUNT_ID))]
     assert delete_response.status_code == 204
     assert drafts.deleted == (UUID(draft_id), ACCOUNT_ID)
 

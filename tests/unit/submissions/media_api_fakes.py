@@ -13,7 +13,7 @@ from squid.api.dependencies import get_draft_attachments
 from squid.api.security import Caller, current_caller
 from squid.api.v1.submission_media import router
 from squid.api.v1.submissions import authenticated_submission_context, get_submission_edits
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.edits.application import EditRunner
 from squid.core.edits.domain import EditCommand, EditOutcome, EditResult, Revision
 from squid.core.media.application.jobs import (
@@ -96,7 +96,7 @@ class FakeDrafts:
     async def get_accessible(self, draft_id: UUID, *, context: ActingContext) -> StoredDraft:
         self.events.append("owner")
         assert draft_id == DRAFT_ID
-        assert context.effective.account_id == ACCOUNT_ID
+        assert context.effective.linked_account_id == ACCOUNT_ID
         if self.deny:
             raise DraftAccessDeniedError
         return stored_draft(draft_id)
@@ -225,7 +225,7 @@ def app_with_fakes(media: FakeMedia, drafts: FakeDrafts) -> Litestar:
         return DraftAttachmentService(drafts, media)
 
     async def account_dependency() -> ActingContext:
-        return ActingContext.direct(Actor(account_id=ACCOUNT_ID))
+        return ActingContext.direct(UserActor(account_id=ACCOUNT_ID))
 
     async def caller_dependency() -> Caller:
         return Caller(kind="account", subject=f"account:{ACCOUNT_ID}", account_id=ACCOUNT_ID)

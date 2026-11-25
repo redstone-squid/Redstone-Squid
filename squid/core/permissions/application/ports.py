@@ -5,9 +5,9 @@ from typing import Protocol
 
 from whenever import Instant
 
-from squid.core.actors import Actor
+from squid.core.actors import Actor, UserActor
 from squid.core.permissions.domain import PermissionCheck
-from squid.core.permissions.domain.models import AuditAction, AuditSubjectKind
+from squid.core.permissions.domain.models import AuditAction, AuditSubjectKind, RolePermissionSubject
 from squid.core.permissions.models import (
     PermissionAuditEntry,
     PermissionGrant,
@@ -15,6 +15,8 @@ from squid.core.permissions.models import (
     PermissionRoleAssignment,
 )
 from squid.core.unit_of_work import UnitOfWork
+
+type PermissionSubject = UserActor | RolePermissionSubject
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,7 +30,7 @@ class SubjectRecords:
     """
 
     epoch: int
-    subject: Actor
+    subject: PermissionSubject
     roles: tuple[PermissionRole, ...] = ()
     grants: tuple[PermissionGrant, ...] = ()
     assignments: tuple[PermissionRoleAssignment, ...] = ()
@@ -37,7 +39,7 @@ class SubjectRecords:
 class PermissionRepository(Protocol):
     """Persistence operations required by :class:`PermissionService`."""
 
-    async def load_for_subject(self, subject: Actor) -> SubjectRecords:
+    async def load_for_subject(self, subject: PermissionSubject) -> SubjectRecords:
         """Load and bind rule sources to exactly this identity and context."""
         ...
 

@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy import inspect
 from sqlalchemy.orm import make_transient_to_detached
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, AnonymousActor
 from squid.core.builds.application import BuildEmbeddingService
 from squid.core.builds.domain.credits import name_credits
 from squid.core.builds.models import Build, DoorBuild, OtherBuild
@@ -66,11 +66,11 @@ async def test_retry_skips_completed_vector_and_lookup_uses_index() -> None:
     model = FakeEmbeddingModel([1.0, 2.0])
     index = FakeVectorIndex(OtherBuild(id=7))
     service = BuildEmbeddingService(model, uow_factory=partial(VectorScope, index))
-    await service.handle(edited(), context=ActingContext.direct(Actor()))
-    await service.handle(edited(), context=ActingContext.direct(Actor()))
+    await service.handle(edited(), context=ActingContext.direct(AnonymousActor()))
+    await service.handle(edited(), context=ActingContext.direct(AnonymousActor()))
     assert len(model.inputs) == 1
     assert index.build.embedding == [1.0, 2.0]
-    assert await service.find_build_id("compact door", context=ActingContext.direct(Actor())) == 7
+    assert await service.find_build_id("compact door", context=ActingContext.direct(AnonymousActor())) == 7
 
 
 async def test_missing_configured_vector_retries_and_disabled_provider_skips() -> None:
@@ -78,9 +78,9 @@ async def test_missing_configured_vector_retries_and_disabled_provider_skips() -
     index = FakeVectorIndex(OtherBuild(id=7))
     service = BuildEmbeddingService(model, uow_factory=partial(VectorScope, index))
     with pytest.raises(InvalidStateError):
-        await service.handle(edited(), context=ActingContext.direct(Actor()))
+        await service.handle(edited(), context=ActingContext.direct(AnonymousActor()))
     model.enabled = False
-    await service.handle(edited(), context=ActingContext.direct(Actor()))
+    await service.handle(edited(), context=ActingContext.direct(AnonymousActor()))
     assert len(model.inputs) == 1
     assert index.build.embedding is None
 
@@ -112,7 +112,7 @@ async def test_prepare_embeds_build_facts_without_rendering_unloaded_tag_relatio
     index = FakeVectorIndex(build)
     service = BuildEmbeddingService(model, uow_factory=partial(VectorScope, index, clone=lambda value: value))
 
-    await service.handle(edited(), context=ActingContext.direct(Actor()))
+    await service.handle(edited(), context=ActingContext.direct(AnonymousActor()))
 
     text = json.loads(model.inputs[0])
     assert text["category"] == "Door"
@@ -137,8 +137,8 @@ async def test_moderation_during_generation_retries_against_the_new_revision() -
     model = RacingModel([1.0, 2.0])
     service = BuildEmbeddingService(model, uow_factory=partial(VectorScope, index))
     with pytest.raises(InvalidStateError, match="Build changed"):
-        await service.handle(edited(), context=ActingContext.direct(Actor()))
+        await service.handle(edited(), context=ActingContext.direct(AnonymousActor()))
 
     assert index.build.embedding is None
-    await service.handle(edited(), context=ActingContext.direct(Actor()))
+    await service.handle(edited(), context=ActingContext.direct(AnonymousActor()))
     assert index.build.embedding == [1.0, 2.0]

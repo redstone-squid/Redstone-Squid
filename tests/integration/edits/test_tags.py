@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.accounts.domain import AccountConsent
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, AnonymousActor, UserActor
 from squid.core.builds.application.restrictions import RestrictionService
 from squid.core.edits.application import EditExecutor
 from squid.core.edits.domain import EditCommand, Revision, RevisionConflictError
@@ -50,10 +50,10 @@ async def test_alias_history_fences_legacy_writers_and_current_permissions(
     permissions = PermissionService(uow_factory=factory)
     executor = EditExecutor(factory, {ALIAS_EDIT: TagAliasEdit(permissions)})
     restrictions = RestrictionService(uow_factory=factory)
-    actor = Actor(discord_user_id=1, is_bot_owner=True)
+    actor = UserActor(discord_user_id=1, is_bot_owner=True)
     command = EditCommand(
         ALIAS_EDIT,
-        (await restrictions.alias_revision("Restriction", context=ActingContext.direct(Actor())),),
+        (await restrictions.alias_revision("Restriction", context=ActingContext.direct(AnonymousActor())),),
         AliasValues(alias="Alternate").edit_values(),
     )
     saved = await executor.execute(command, context=ActingContext.direct(actor))
@@ -61,7 +61,7 @@ async def test_alias_history_fences_legacy_writers_and_current_permissions(
     assert (await executor.execute(command, context=ActingContext.direct(actor))).replayed
     with pytest.raises(AuthorizationError):
         await executor.execute(
-            saved.receipt.undo(saved.outcome.revisions), context=ActingContext.direct(Actor(discord_user_id=2))
+            saved.receipt.undo(saved.outcome.revisions), context=ActingContext.direct(UserActor(discord_user_id=2))
         )
     undone = await executor.execute(saved.receipt.undo(saved.outcome.revisions), context=ActingContext.direct(actor))
     assert undone.receipt is not None
@@ -69,7 +69,7 @@ async def test_alias_history_fences_legacy_writers_and_current_permissions(
         assert not await uow.restrictions.has_alias(definition.id, "Alternate")
     redone = await executor.execute(saved.receipt.redo(undone.outcome.revisions), context=ActingContext.direct(actor))
     assert redone.receipt is not None
-    await restrictions.add_alias("Restriction", "Other alias", context=ActingContext.direct(Actor()))
+    await restrictions.add_alias("Restriction", "Other alias", context=ActingContext.direct(AnonymousActor()))
     with pytest.raises(RevisionConflictError):
         await executor.execute(redone.receipt.undo(redone.outcome.revisions), context=ActingContext.direct(actor))
 
@@ -82,7 +82,7 @@ async def test_proposals_keep_identity_through_undo_and_moderation_is_final(
         account = await uow.accounts.create(consent=AccountConsent.grant_current())
         await uow.commit()
     tags = TagService(uow_factory=factory)
-    identity = await tags.reserve_identity(context=ActingContext.direct(Actor()))
+    identity = await tags.reserve_identity(context=ActingContext.direct(AnonymousActor()))
     executor = EditExecutor(
         factory,
         {
@@ -90,18 +90,18 @@ async def test_proposals_keep_identity_through_undo_and_moderation_is_final(
             MODERATION_EDIT: TagModerationEdit(PermissionService(uow_factory=factory)),
         },
     )
-    actor = Actor(account_id=account.id)
+    actor = UserActor(account_id=account.id)
     values = ProposalValues(display_name=" Compact ", value_type=TagValueType.NONE, query_name="compact")
     command = EditCommand(PROPOSAL_EDIT, (Revision(tag_target(identity), 0),), values.edit_values())
     created = await executor.execute(command, context=ActingContext.direct(actor))
     assert created.receipt is not None
-    assert [row.id for row in await tags.pending(context=ActingContext.direct(Actor()))] == [identity]
-    assert await tags.public_definition(identity, context=ActingContext.direct(Actor())) is None
+    assert [row.id for row in await tags.pending(context=ActingContext.direct(AnonymousActor()))] == [identity]
+    assert await tags.public_definition(identity, context=ActingContext.direct(AnonymousActor())) is None
     with pytest.raises(ConflictError):
         await executor.execute(
             EditCommand(
                 PROPOSAL_EDIT,
-                (Revision(tag_target(await tags.reserve_identity(context=ActingContext.direct(Actor()))), 0),),
+                (Revision(tag_target(await tags.reserve_identity(context=ActingContext.direct(AnonymousActor()))), 0),),
                 values.edit_values(),
             ),
             context=ActingContext.direct(actor),
@@ -110,12 +110,12 @@ async def test_proposals_keep_identity_through_undo_and_moderation_is_final(
         created.receipt.undo(created.outcome.revisions), context=ActingContext.direct(actor)
     )
     assert undone.receipt is not None
-    assert await tags.pending(context=ActingContext.direct(Actor())) == ()
+    assert await tags.pending(context=ActingContext.direct(AnonymousActor())) == ()
     assert (await executor.execute(command, context=ActingContext.direct(actor))).replayed
-    assert await tags.pending(context=ActingContext.direct(Actor())) == ()
+    assert await tags.pending(context=ActingContext.direct(AnonymousActor())) == ()
     redone = await executor.execute(created.receipt.redo(undone.outcome.revisions), context=ActingContext.direct(actor))
     assert redone.receipt is not None
-    (restored,) = await tags.pending(context=ActingContext.direct(Actor()))
+    (restored,) = await tags.pending(context=ActingContext.direct(AnonymousActor()))
     assert restored.id == identity
     assert restored.stable_key == values.stable_key
     moderation = EditCommand(
@@ -126,14 +126,16 @@ async def test_proposals_keep_identity_through_undo_and_moderation_is_final(
     with pytest.raises(AuthorizationError):
         await executor.execute(moderation, context=ActingContext.direct(actor))
     approved = await executor.execute(
-        moderation, context=ActingContext.direct(Actor(account_id=account.id, is_bot_owner=True))
+        moderation, context=ActingContext.direct(UserActor(account_id=account.id, is_bot_owner=True))
     )
     assert approved.receipt is not None
     assert approved.receipt.final
     with pytest.raises(InvalidStateError):
         approved.receipt.undo(approved.outcome.revisions)
-    assert [row.id for row in await tags.public_definitions(context=ActingContext.direct(Actor()))] == [identity]
-    assert await tags.public_definition(identity, context=ActingContext.direct(Actor())) is not None
+    assert [row.id for row in await tags.public_definitions(context=ActingContext.direct(AnonymousActor()))] == [
+        identity
+    ]
+    assert await tags.public_definition(identity, context=ActingContext.direct(AnonymousActor())) is not None
     with pytest.raises(ConflictError):
         await executor.execute(redone.receipt.undo(approved.outcome.revisions), context=ActingContext.direct(actor))
 
@@ -146,8 +148,8 @@ async def test_proposal_undo_refuses_a_definition_already_in_use(
         account = await uow.accounts.create(consent=AccountConsent.grant_current())
         await uow.commit()
     tags = TagService(uow_factory=factory)
-    identity = await tags.reserve_identity(context=ActingContext.direct(Actor()))
-    actor = Actor(account_id=account.id)
+    identity = await tags.reserve_identity(context=ActingContext.direct(AnonymousActor()))
+    actor = UserActor(account_id=account.id)
     executor = EditExecutor(factory, {PROPOSAL_EDIT: TagProposalEdit()})
     result = await executor.execute(
         EditCommand(

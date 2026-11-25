@@ -6,7 +6,7 @@ from typing import override
 
 import pytest
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, Actor, UserActor, WorkerActor
 from squid.core.voting.application import VoteService
 from squid.core.voting.application.recount import BallotRecounter, CardReactions
 from squid.core.voting.domain import (
@@ -47,7 +47,7 @@ class Votes(VoteService):
         count_revision: int | None = None,
         context: ActingContext,
     ) -> CastVoteResult:
-        assert context.effective.worker_name == "recount"
+        assert context.effective == WorkerActor(worker_name="recount")
         self.casts.append((voter.require_account_id(), option_id, emoji, False))
         return CastVoteResult(self.snapshot, self.rejection)
 
@@ -79,12 +79,14 @@ class Voters:
 class Actors:
     unreachable: frozenset[int] = frozenset()
 
-    async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> Actor | None:
+    async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> UserActor | None:
         if account_id in self.unreachable:
             return None
-        return Actor(account_id=account_id, discord_user_id=account_id - 1000, guild_id=guild_id)
+        return UserActor(account_id=account_id, discord_user_id=account_id - 1000, guild_id=guild_id)
 
-    async def resolve_many(self, account_ids: Sequence[int], guild_id: int, kind: VoteKind) -> dict[int, Actor | None]:
+    async def resolve_many(
+        self, account_ids: Sequence[int], guild_id: int, kind: VoteKind
+    ) -> dict[int, UserActor | None]:
         return {account_id: await self.resolve(account_id, guild_id, kind) for account_id in account_ids}
 
 

@@ -9,7 +9,7 @@ import pytest
 from whenever import Instant
 
 from squid.bot.submission import ingestion
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.builds.application.inference import BuildInferenceInput
 from squid.core.builds.domain import BuildCategory, BuildInput
 from squid.core.submissions.application.drafts import StoredDraft
@@ -150,7 +150,7 @@ async def test_complete_candidate_uses_shared_finalization(monkeypatch: pytest.M
     await ingestion.ingest_message_bundle([message()], [], h.services, model="test")
     h.materialize.assert_awaited_once()
     h.finalization.submit_calls.assert_awaited_once_with(
-        item.id, Actor(account_id=7, discord_user_id=42, guild_id=7), locale=None
+        item.id, UserActor(account_id=7, discord_user_id=42, guild_id=7), locale=None
     )
 
 
@@ -179,9 +179,9 @@ async def test_each_candidate_receives_only_its_unshared_files(monkeypatch: pyte
     second = replace(candidate(), source_files=(shared,))
     h = setup(monkeypatch, (first, second))
 
-    await ingestion.admit_candidates(h.services, (first, second), actor=Actor(account_id=7))
+    await ingestion.admit_candidates(h.services, (first, second), actor=UserActor(account_id=7))
 
-    h.download.assert_awaited_once_with(h.services, first.id, Actor(account_id=7), own.id)
+    h.download.assert_awaited_once_with(h.services, first.id, UserActor(account_id=7), own.id)
     assert h.finalization.submit_calls.await_count == 2
 
 
@@ -191,7 +191,7 @@ async def test_unknown_category_still_keeps_shared_files_unassigned(monkeypatch:
     unknown = replace(candidate(), facts=BuildInput(), source_files=(source,))
     h = setup(monkeypatch, (known, unknown))
 
-    await ingestion.admit_candidates(h.services, (known, unknown), actor=Actor(account_id=7))
+    await ingestion.admit_candidates(h.services, (known, unknown), actor=UserActor(account_id=7))
 
     h.download.assert_not_awaited()
     h.finalization.submit_calls.assert_awaited_once()
@@ -219,7 +219,7 @@ async def test_capacity_failure_stops_admission_instead_of_reporting_success(mon
     h.materialize.side_effect = DraftCapacityExceededError(1000)
 
     with pytest.raises(DraftCapacityExceededError):
-        await ingestion.admit_candidates(h.services, (item,), actor=Actor(account_id=7))
+        await ingestion.admit_candidates(h.services, (item,), actor=UserActor(account_id=7))
 
     h.finalization.submit_calls.assert_not_awaited()
 
@@ -238,7 +238,7 @@ async def test_replayed_delivery_uses_retained_candidates_without_reading_change
 async def test_staff_retry_is_attributed_to_the_staff_actor(monkeypatch: pytest.MonkeyPatch) -> None:
     item = candidate()
     h = setup(monkeypatch, (item,))
-    actor = Actor(account_id=19)
+    actor = UserActor(account_id=19)
 
     await ingestion.admit_candidates(h.services, (item,), actor=actor)
 
@@ -262,7 +262,7 @@ async def test_explicit_retry_resubmits_a_dead_job_without_another_model_call(mo
     h.inference.infer_calls.assert_not_awaited()
     cast(Any, ingestion.assemble_bundle).assert_not_awaited()
     h.finalization.submit_calls.assert_awaited_once_with(
-        item.id, Actor(account_id=7, discord_user_id=42, guild_id=7), locale=None
+        item.id, UserActor(account_id=7, discord_user_id=42, guild_id=7), locale=None
     )
 
 
@@ -289,7 +289,7 @@ async def test_retry_preserves_edits_and_missing_facts(
         issues=(SubmissionAttentionIssue("submission", reason),),
     )
 
-    await ingestion.admit_candidates(h.services, (item,), actor=Actor(account_id=7), retry_failed=retry_failed)
+    await ingestion.admit_candidates(h.services, (item,), actor=UserActor(account_id=7), retry_failed=retry_failed)
 
     h.finalization.submit_calls.assert_not_awaited()
 
@@ -309,7 +309,7 @@ async def test_missing_facts_are_reported_in_intake_logs(
         ),
     )
 
-    await ingestion.admit_candidates(h.services, (item,), actor=Actor(account_id=7))
+    await ingestion.admit_candidates(h.services, (item,), actor=UserActor(account_id=7))
 
     assert str(item.id) in caplog.text
     assert "needs attention: opening_width: required" in caplog.text
@@ -328,6 +328,6 @@ async def test_retry_resubmits_ingested_drafts_blocked_on_old_metadata_requireme
     stored = h.materialize.return_value
     h.materialize.return_value = replace(stored, inferred=True, inference_run_id=item.run_id)
 
-    await ingestion.admit_candidates(h.services, (item,), actor=Actor(account_id=7), retry_failed=True)
+    await ingestion.admit_candidates(h.services, (item,), actor=UserActor(account_id=7), retry_failed=True)
 
-    h.finalization.submit_calls.assert_awaited_once_with(item.id, Actor(account_id=7), locale=None)
+    h.finalization.submit_calls.assert_awaited_once_with(item.id, UserActor(account_id=7), locale=None)

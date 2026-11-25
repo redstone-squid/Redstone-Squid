@@ -116,7 +116,7 @@ class UnavailableDrafts(SubmissionDraftService):
 
     @override
     async def get_accessible(self, draft_id: UUID, *, context: ActingContext) -> StoredDraft:
-        self.lookups.append((draft_id, context.effective.account_id))
+        self.lookups.append((draft_id, context.effective.linked_account_id))
         raise self.error
 
 

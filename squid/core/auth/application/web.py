@@ -20,7 +20,7 @@ from collections.abc import Callable, Mapping
 
 from whenever import Instant
 
-from squid.core.actors import ActingContext, application_operation
+from squid.core.actors import ActingContext, UserActor, application_operation
 from squid.core.auth.application.ports import WebSessionUnitOfWork
 from squid.core.auth.application.providers import OAuthProvider
 from squid.core.auth.models.sessions import OAuthState
@@ -197,7 +197,11 @@ class WebSessionService:
     @staticmethod
     def _browser_account(context: ActingContext) -> int | None:
         actor = context.effective
-        if context.session_id is not None or not (actor.credential_id or "").startswith("browser:"):
+        if (
+            not isinstance(actor, UserActor)
+            or context.session_id is not None
+            or not (actor.credential_id or "").startswith("browser:")
+        ):
             return None
         return actor.account_id
 

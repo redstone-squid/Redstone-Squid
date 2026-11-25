@@ -28,7 +28,7 @@ from squid.bot.submission.ingestion import ingest_message_bundle, message_bundle
 from squid.bot.submission.message_context import assemble_bundle
 from squid.config import load_bot_process_config
 from squid.core.accounts.domain import IdentityProvider
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.runtime import BotServices
 
 logger = logging.getLogger(__name__)
@@ -128,7 +128,7 @@ async def iter_bundles(channel: discord.TextChannel, options: ImportOptions) -> 
 async def process_group(bundle: MessageBundle, services: BotServices, options: ImportOptions) -> ImportSummary:
     """Check consent and existing builds before inference; isolate failures per bundle."""
     primary = bundle.primary
-    author = Actor(discord_user_id=primary[0].author.id)
+    author = UserActor(discord_user_id=primary[0].author.id)
     worker = ActingContext.worker("historical-import")
     context = ActingContext(operator=worker.operator, effective=author, invocation_id=worker.invocation_id)
     with context.scope():

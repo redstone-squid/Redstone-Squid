@@ -12,7 +12,7 @@ from squid.core.accounts.application import AccountService
 from squid.core.accounts.application.edits import AccountEditorSnapshot
 from squid.core.accounts.domain import AccountConsent, IdentityProvider
 from squid.core.accounts.models import Account, AccountProfile
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.diagnostics.application import ErrorReportService
 from squid.core.diagnostics.models import ErrorReport
 from squid.core.notifications import (
@@ -26,7 +26,7 @@ from squid.core.notifications.models import InboxNotification
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.application.administration import PermissionAdministrationService
-from squid.core.permissions.application.ports import SubjectRecords
+from squid.core.permissions.application.ports import PermissionSubject, SubjectRecords
 from squid.core.permissions.domain import Effect, PermissionNode
 from squid.core.permissions.models import PermissionGrant
 from squid.core.settings.application import SettingsService
@@ -67,11 +67,11 @@ class WorkspaceRules:
     def __init__(self, nodes: tuple[PermissionNode, ...]) -> None:
         self.nodes = nodes
 
-    async def load_for_subject(self, subject: Actor) -> SubjectRecords:
+    async def load_for_subject(self, subject: PermissionSubject) -> SubjectRecords:
         grants = tuple(
             PermissionGrant(pattern=node.name, effect=Effect.ALLOW, subject_account_id=subject.account_id)
             for node in self.nodes
-            if subject.discord_guild_admin and subject.account_id is not None
+            if isinstance(subject, UserActor) and subject.discord_guild_admin and subject.account_id is not None
         )
         return SubjectRecords(1, subject, grants=grants)
 

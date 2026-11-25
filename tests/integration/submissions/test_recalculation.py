@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.core.accounts.models import Account
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.builds.application import BuildService
 from squid.core.builds.application.ports import BuildUnitOfWork
 from squid.core.builds.domain import BuildCategory
@@ -55,7 +55,7 @@ class EditPolicy(BuildService):
 
 async def prepared_proposal(
     sessions: async_sessionmaker[AsyncSession],
-) -> tuple[UnitOfWorkFactory[SqlAlchemyUnitOfWork], RecalculationProposal, Build, Actor, EditPolicy]:
+) -> tuple[UnitOfWorkFactory[SqlAlchemyUnitOfWork], RecalculationProposal, Build, UserActor, EditPolicy]:
     owner = await seed_account_and_version(sessions)
     builds = partial(SqlAlchemyUnitOfWork, sessions)
     build = submission_build(BuildCategory.DOOR, owner)
@@ -85,7 +85,7 @@ async def prepared_proposal(
     policy = EditPolicy()
     repository = partial(SqlAlchemyUnitOfWork, sessions)
     await transact(repository, lambda uow: uow.recalculation_proposals.create(proposal), commit=True)
-    return repository, proposal, build, Actor(account_id=owner), policy
+    return repository, proposal, build, UserActor(account_id=owner), policy
 
 
 async def test_approval_commits_once_and_preserves_build_identity(
@@ -212,8 +212,8 @@ async def test_history_authorizes_loaded_proposals_without_per_row_queries(
     )
     actor = {
         "owner": owner,
-        "requester": Actor(account_id=requester.id),
-        "staff": Actor(account_id=staff.id),
+        "requester": UserActor(account_id=requester.id),
+        "staff": UserActor(account_id=staff.id),
     }[role]
     service = RecalculationProposalService(builds, PermissionService(uow_factory=repository), uow_factory=repository)
 

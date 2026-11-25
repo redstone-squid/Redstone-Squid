@@ -1,12 +1,13 @@
 """Trusted identity and permission context shared by application operations."""
 
+from abc import ABC, abstractmethod
 from collections.abc import Callable, Coroutine, Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from functools import wraps
-from typing import Any
+from typing import Any, ClassVar, Literal
 from uuid import UUID, uuid4
 
 from squid.core.errors import AuthenticationError, AuthorizationError, InvalidStateError
@@ -23,21 +24,95 @@ class ActorKind(StrEnum):
     WORKER = "worker"
 
 
+class _Principal(ABC):
+    """Operations shared by every application principal."""
+
+    __slots__ = ()
+
+    @property
+    def linked_account_id(self) -> int | None:
+        return self.account_id if isinstance(self, UserActor) else None
+
+    @property
+    def credential_reference(self) -> str | None:
+        return self.credential_id if isinstance(self, UserActor | ServiceActor) else None
+
+    @property
+    def credential_limit(self) -> frozenset[str] | None:
+        return self.credential_scopes if isinstance(self, UserActor | ServiceActor) else None
+
+    @property
+    def audit_reference(self) -> UUID | None:
+        return self.audit_use_id if isinstance(self, UserActor) else None
+
+    def require_user(self) -> UserActor:
+        if not isinstance(self, UserActor):
+            raise AuthenticationError
+        return self
+
+    @property
+    @abstractmethod
+    def key(self) -> str: ...
+
+    @property
+    def reference(self) -> str:
+        """Nonsecret label used to attribute an operation."""
+        return self.key
+
+    @contextmanager
+    def audit_scope(self) -> Iterator[None]:
+        with impersonation_use.set(self.audit_reference or impersonation_use.get()):
+            yield
+
+    def require_account_id(self) -> int:
+        account_id = self.require_user().account_id
+        if account_id is None:
+            raise AuthenticationError
+        return account_id
+
+    def require_discord_user_id(self) -> int:
+        discord_id = self.require_user().discord_user_id
+        if discord_id is None:
+            raise AuthenticationError
+        return discord_id
+
+    def require_permission_rank(self) -> int:
+        rank = self.highest_permission_rank if isinstance(self, UserActor) else None
+        if rank is None:
+            message = "Permission administration requires a resolved role rank"
+            raise InvalidStateError(message)
+        return rank
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
-class Actor:
-    """The principal established by an application entry point.
+class AnonymousActor(_Principal):
+    kind: ClassVar[Literal[ActorKind.ANONYMOUS]] = ActorKind.ANONYMOUS
 
-    Adapters supply these facts, never request bodies. Anonymous actors are valid
-    permission inputs; operations requiring identity check it at their boundary.
-    Capabilities contain only the nodes requested by a feature, not a complete
-    permission cache. Permission services resolve current authority independently.
-    """
+    @property
+    def key(self) -> str:
+        message = "An edit requires an identified actor"
+        raise ValueError(message)
 
-    guest_session_id: UUID | None = None
-    service_id: str | None = None
-    worker_name: str | None = None
-    credential_id: str | None = None
-    credential_scopes: frozenset[str] | None = None
+    @property
+    def reference(self) -> str:
+        return "anonymous"
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class GuestActor(_Principal):
+    kind: ClassVar[Literal[ActorKind.GUEST]] = ActorKind.GUEST
+    guest_session_id: UUID
+
+    @property
+    def key(self) -> str:
+        return f"guest:{self.guest_session_id}"
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class UserActor(_Principal):
+    """Account or Discord identity with membership and credential facts from trusted adapters."""
+
+    kind: ClassVar[Literal[ActorKind.USER]] = ActorKind.USER
     account_id: int | None = None
     discord_user_id: int | None = None
     guild_id: int | None = None
@@ -46,78 +121,55 @@ class Actor:
     is_bot_owner: bool = False
     discord_guild_admin: bool = False
     highest_permission_rank: int | None = None
-
+    credential_id: str | None = None
+    credential_scopes: frozenset[str] | None = None
     audit_use_id: UUID | None = field(default=None, compare=False, repr=False)
 
     def __post_init__(self) -> None:
-        identities = (
-            self.account_id is not None or self.discord_user_id is not None,
-            self.guest_session_id is not None,
-            self.service_id is not None,
-            self.worker_name is not None,
-        )
-        if sum(identities) > 1:
-            message = "An actor must have a single principal kind"
+        if self.account_id is None and self.discord_user_id is None:
+            message = "A user requires an account or Discord identity"
             raise ValueError(message)
-        if self.worker_name == "" or self.service_id == "":
-            message = "Named principals require a nonempty identifier"
-            raise ValueError(message)
-
-    @property
-    def kind(self) -> ActorKind:
-        if self.worker_name is not None:
-            return ActorKind.WORKER
-        if self.service_id is not None:
-            return ActorKind.SERVICE
-        if self.guest_session_id is not None:
-            return ActorKind.GUEST
-        if self.account_id is not None or self.discord_user_id is not None:
-            return ActorKind.USER
-        return ActorKind.ANONYMOUS
-
-    @property
-    def reference(self) -> str:
-        """A nonsecret attribution label, including unidentified public traffic."""
-        return "anonymous" if self.kind is ActorKind.ANONYMOUS else self.key
-
-    @contextmanager
-    def audit_scope(self) -> Iterator[None]:
-        """Carry a callback's attribution into its transaction, including nested services."""
-        with impersonation_use.set(self.audit_use_id or impersonation_use.get()):
-            yield
 
     @property
     def key(self) -> str:
-        """Stable audit/replay identity, preferring the linked account."""
         if self.account_id is not None:
             return f"account:{self.account_id}"
-        if self.discord_user_id is not None:
-            return f"discord:{self.discord_user_id}"
-        if self.worker_name is not None:
-            return f"worker:{self.worker_name}"
-        if self.service_id is not None:
-            return f"service:{self.service_id}"
-        if self.guest_session_id is not None:
-            return f"guest:{self.guest_session_id}"
-        message = "An edit requires an identified actor"
-        raise ValueError(message)
+        return f"discord:{self.discord_user_id}"
 
-    def require_account_id(self) -> int:
-        if self.account_id is None:
-            raise AuthenticationError
-        return self.account_id
 
-    def require_discord_user_id(self) -> int:
-        if self.discord_user_id is None:
-            raise AuthenticationError
-        return self.discord_user_id
+@dataclass(frozen=True, slots=True, kw_only=True)
+class ServiceActor(_Principal):
+    kind: ClassVar[Literal[ActorKind.SERVICE]] = ActorKind.SERVICE
+    service_id: str
+    credential_id: str | None = None
+    credential_scopes: frozenset[str] | None = None
 
-    def require_permission_rank(self) -> int:
-        """Require administration to have resolved the actor's delegation rank."""
-        if self.highest_permission_rank is None:
-            message = "Permission administration requires a resolved role rank"
-            raise InvalidStateError(message)
-        return self.highest_permission_rank
+    def __post_init__(self) -> None:
+        if not self.service_id:
+            message = "A service requires a nonempty identifier"
+            raise ValueError(message)
+
+    @property
+    def key(self) -> str:
+        return f"service:{self.service_id}"
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class WorkerActor(_Principal):
+    kind: ClassVar[Literal[ActorKind.WORKER]] = ActorKind.WORKER
+    worker_name: str
+
+    def __post_init__(self) -> None:
+        if not self.worker_name:
+            message = "A worker requires a nonempty name"
+            raise ValueError(message)
+
+    @property
+    def key(self) -> str:
+        return f"worker:{self.worker_name}"
+
+
+Actor = AnonymousActor | GuestActor | UserActor | ServiceActor | WorkerActor
 
 
 @dataclass(frozen=True, slots=True)
@@ -153,24 +205,30 @@ class ActingContext:
     def with_actor(self, actor: Actor) -> ActingContext:
         """Attach verified guild or linked-account facts to this invocation."""
         effective = self.effective
-        same_discord = effective.discord_user_id is not None and effective.discord_user_id == actor.discord_user_id
-        if effective.reference != actor.reference and not (
-            same_discord and (effective.account_id is None or actor.account_id is None)
-        ):
+        if isinstance(effective, UserActor) and isinstance(actor, UserActor):
+            same_discord = effective.discord_user_id is not None and effective.discord_user_id == actor.discord_user_id
+            if effective.reference != actor.reference and not (
+                same_discord and (effective.account_id is None or actor.account_id is None)
+            ):
+                message = "Resolved identity differs from the current effective actor"
+                raise InvalidStateError(message)
+            resolved: Actor = replace(
+                actor,
+                account_id=effective.account_id if actor.account_id is None else actor.account_id,
+                credential_scopes=effective.credential_scopes,
+                credential_id=effective.credential_id,
+                audit_use_id=effective.audit_use_id,
+            )
+        elif effective.reference == actor.reference and effective.kind is actor.kind:
+            resolved = effective
+        else:
             message = "Resolved identity differs from the current effective actor"
             raise InvalidStateError(message)
-        resolved = replace(
-            actor,
-            account_id=actor.account_id or effective.account_id,
-            credential_scopes=effective.credential_scopes,
-            credential_id=effective.credential_id,
-            audit_use_id=effective.audit_use_id,
-        )
         operator = resolved if self.session_id is None and self.operator == effective else self.operator
         return replace(self, operator=operator, effective=resolved)
 
     def require_worker(self) -> str:
-        if self.effective.worker_name is None:
+        if not isinstance(self.effective, WorkerActor):
             raise AuthorizationError
         return self.effective.worker_name
 
@@ -180,12 +238,12 @@ class ActingContext:
 
     @classmethod
     def worker(cls, name: str) -> ActingContext:
-        return cls.direct(Actor(worker_name=name))
+        return cls.direct(WorkerActor(worker_name=name))
 
     @contextmanager
     def scope(self) -> Iterator[None]:
         """Bind attribution to nested operations for the lifetime of this invocation."""
-        with current_acting_context.set(self), impersonation_use.set(self.effective.audit_use_id):
+        with current_acting_context.set(self), impersonation_use.set(self.effective.audit_reference):
             yield
 
 

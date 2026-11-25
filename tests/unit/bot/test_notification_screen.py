@@ -10,7 +10,7 @@ from whenever import Instant
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.notifications_view import NotificationPanel
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, Actor, UserActor
 from squid.core.notifications import (
     DEFAULT_INBOX_VISIBILITY,
     InboxVisibility,
@@ -59,7 +59,7 @@ class NotificationRecorder(NotificationService):
 
     @override
     async def subscriptions(self, *, context: ActingContext) -> tuple[NotificationSubscription, ...]:
-        assert context.effective.account_id == 7
+        assert context.effective.linked_account_id == 7
         self.subscription_reads += 1
         return ()
 
@@ -137,7 +137,7 @@ def make_screen(
     notifications = NotificationRecorder()
 
     async def actor() -> Actor:
-        return Actor(account_id=7, discord_user_id=42)
+        return UserActor(account_id=7, discord_user_id=42)
 
     return ScreenHarness(
         NotificationPanel(
@@ -246,7 +246,7 @@ async def test_inbox_items_can_be_marked_read_and_unread_without_typing_ids() ->
     with sl.runtime.transaction():
         await press(screen.inbox, "mark_selected_unread")
 
-    assert harness.notifications.inbox_reads == [Actor(account_id=7, discord_user_id=42)] * 3
+    assert harness.notifications.inbox_reads == [UserActor(account_id=7, discord_user_id=42)] * 3
     assert harness.notifications.read_changes == [(7, 3, True, visibility), (7, 3, False, visibility)]
 
 

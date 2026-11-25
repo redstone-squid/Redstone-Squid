@@ -82,7 +82,7 @@ class BuildFieldsEdit:
         self._builds = builds
 
     async def prepare(self, uow: BuildFieldsUnitOfWork, actor: Actor, command: EditCommand) -> PreparedBuildEdit:
-        if actor.account_id is None:
+        if actor.linked_account_id is None:
             raise AccountRequiredError
         if len(command.expected) != 1 or command.expected[0].target.kind != "build":
             raise ValidationError
@@ -132,7 +132,7 @@ class BuildFieldsEdit:
         if decision is BuildEditDecision.REVIEW:
             settings = await uow.settings.runtime(RuntimeSettings())
             vote_id = await uow.votes.create_build_edit_session(
-                author_account_id=actor.account_id,
+                author_account_id=actor.linked_account_id,
                 pass_threshold=settings.build_vote_pass_threshold,
                 fail_threshold=settings.build_vote_fail_threshold,
                 target=BuildEditVoteTarget(build_id, expected.value, patch_values(candidate).unpack(), changes),
@@ -146,9 +146,9 @@ class BuildFieldsEdit:
         self, uow: BuildEditUnitOfWork, actor: Actor, command: EditCommand, prepared: PreparedEdit
     ) -> tuple[Revision, ...]:
         assert isinstance(prepared, PreparedBuildEdit)
-        assert actor.account_id is not None
+        assert actor.linked_account_id is not None
         async with uow.builds.editing(
-            actor=actor.account_id,
+            actor=actor.linked_account_id,
             source="versioned_editor",
             correlation_kind="edit_operation",
             correlation_id=str(command.operation_id),
@@ -164,7 +164,7 @@ class BuildStatusEdit:
         self._permissions = permissions
 
     async def prepare(self, uow: BuildFieldsUnitOfWork, actor: Actor, command: EditCommand) -> PreparedBuildEdit:
-        if actor.account_id is None:
+        if actor.linked_account_id is None:
             raise AccountRequiredError
         if len(command.expected) != 1 or command.expected[0].target.kind != "build":
             raise ValidationError
@@ -203,9 +203,9 @@ class BuildStatusEdit:
         self, uow: BuildEditUnitOfWork, actor: Actor, command: EditCommand, prepared: PreparedEdit
     ) -> tuple[Revision, ...]:
         assert isinstance(prepared, PreparedBuildEdit)
-        assert actor.account_id is not None
+        assert actor.linked_account_id is not None
         async with uow.builds.editing(
-            actor=actor.account_id,
+            actor=actor.linked_account_id,
             source="versioned_review",
             operation="moderation",
             correlation_kind="edit_operation",

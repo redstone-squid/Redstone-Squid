@@ -27,7 +27,7 @@ class SubscriptionProvider:
         self._notifications = notifications
 
     async def candidates(self, request: SuggestionRequest) -> tuple[Candidate, ...]:
-        account_id = request.viewer.account_id
+        account_id = request.viewer.linked_account_id
         if account_id is None:
             return ()
         return tuple(

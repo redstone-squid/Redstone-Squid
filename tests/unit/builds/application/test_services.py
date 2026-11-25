@@ -12,7 +12,7 @@ import anyio
 import pytest
 from whenever import Instant
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, Actor, AnonymousActor, UserActor, WorkerActor
 from squid.core.builds.application import BuildEditPatch, RestrictionDefinition
 from squid.core.builds.application.services import (
     BuildService,
@@ -30,7 +30,7 @@ from squid.core.builds.models import Build, DoorBuild, ExtenderBuild, OtherBuild
 from squid.core.errors import AuthorizationError, InvalidStateError
 from squid.core.messages.domain import MessageRef
 from squid.core.permissions.application import PermissionService
-from squid.core.permissions.application.ports import PermissionRepository, SubjectRecords
+from squid.core.permissions.application.ports import PermissionRepository, PermissionSubject, SubjectRecords
 from squid.core.permissions.models import PermissionGrant
 from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.core.tags.models import TagAssignment, TagDefinition
@@ -99,7 +99,7 @@ class FakeRestrictionRepository:
 
 
 class EmptyPermissions:
-    async def load_for_subject(self, subject: Actor) -> SubjectRecords:
+    async def load_for_subject(self, subject: PermissionSubject) -> SubjectRecords:
         return SubjectRecords(epoch=1, subject=subject)
 
     async def epoch(self) -> int:
@@ -488,7 +488,9 @@ async def test_classify_restrictions_replaces_existing_values_without_persisting
     service = build_service(repository)
     build = UtilityBuild(component_restrictions=["Old"], miscellaneous_restrictions=["Old"])
 
-    result = await service.classify_restrictions(build, ["seamless", "unknown"], context=ActingContext.direct(Actor()))
+    result = await service.classify_restrictions(
+        build, ["seamless", "unknown"], context=ActingContext.direct(AnonymousActor())
+    )
 
     assert result is build
     assert build.wiring_placement_restrictions == ["Seamless"]
@@ -508,7 +510,7 @@ async def test_prepare_for_account_does_not_require_a_discord_identity() -> None
         source_submission_draft_id=draft_id,
         display_name="  Workshop prototype  ",
         ai_generated=False,
-        context=ActingContext.direct(Actor(account_id=17)),
+        context=ActingContext.direct(UserActor(account_id=17)),
     )
 
     assert build.submitter_account_id == 17
@@ -558,13 +560,13 @@ async def test_save_commits_without_waiting_for_an_embedding() -> None:
 class TestAuthorizedEditing:
     """Pending submission owners can edit; other edits require the shared permission."""
 
-    OWNER = Actor(account_id=1)
-    STRANGER = Actor(account_id=2)
+    OWNER = UserActor(account_id=1)
+    STRANGER = UserActor(account_id=2)
 
     @staticmethod
     def _permissions(*held: str) -> PermissionRepository:
         class Store:
-            async def load_for_subject(self, subject: Actor) -> SubjectRecords:
+            async def load_for_subject(self, subject: PermissionSubject) -> SubjectRecords:
                 return SubjectRecords(
                     epoch=1,
                     grants=tuple(PermissionGrant(pattern=node, effect=1, subject_account_id=2) for node in held),
@@ -579,14 +581,14 @@ class TestAuthorizedEditing:
     @pytest.mark.parametrize(
         ("actor", "granted", "visible"),
         [
-            (Actor(), "", False),
-            (Actor(account_id=1), "", True),
-            (Actor(account_id=2), "", False),
-            (Actor(account_id=2), "build.submission.edit", True),
-            (Actor(account_id=2), "build.submission.view_pending", True),
-            (Actor(account_id=2, credential_scopes=frozenset()), "build.submission.edit", False),
-            (Actor(account_id=1, credential_scopes=frozenset({"account.self.read"})), "", False),
-            (Actor(worker_name="submission-finalization"), "", True),
+            (AnonymousActor(), "", False),
+            (UserActor(account_id=1), "", True),
+            (UserActor(account_id=2), "", False),
+            (UserActor(account_id=2), "build.submission.edit", True),
+            (UserActor(account_id=2), "build.submission.view_pending", True),
+            (UserActor(account_id=2, credential_scopes=frozenset()), "build.submission.edit", False),
+            (UserActor(account_id=1, credential_scopes=frozenset({"account.self.read"})), "", False),
+            (WorkerActor(worker_name="submission-finalization"), "", True),
         ],
     )
     async def test_private_build_lookups_share_visibility(self, actor: Actor, granted: str, visible: bool) -> None:
@@ -678,7 +680,7 @@ class TestAuthorizedEditing:
     async def test_a_creator_can_edit_published_description(self, existing_build: DoorBuild) -> None:
         existing_build.submission_status = BuildStatus.APPROVED
         existing_build.credited_creator_account_ids = frozenset({2})
-        await apply_build_tags(existing_build, FakeTagResolver(), context=ActingContext.direct(Actor()))
+        await apply_build_tags(existing_build, FakeTagResolver(), context=ActingContext.direct(AnonymousActor()))
         repository = FakeBuildRepository(existing_build)
         service = build_service(repository, permissions=self._permissions())
 
@@ -724,7 +726,7 @@ async def test_permission_revoked_during_preparation_prevents_commit(
         held = True
 
         @override
-        async def load_for_subject(self, subject: Actor) -> SubjectRecords:
+        async def load_for_subject(self, subject: PermissionSubject) -> SubjectRecords:
             return SubjectRecords(
                 epoch=1,
                 grants=(PermissionGrant(pattern="build.submission.edit", effect=1, subject_account_id=2),)
@@ -746,7 +748,7 @@ async def test_permission_revoked_during_preparation_prevents_commit(
     monkeypatch.setattr(service, "_prepare_for_persistence", prepare_and_change)
     with pytest.raises(AuthorizationError):
         await service.apply_edit(
-            42, BuildEditPatch(extra_user_info="denied"), context=ActingContext.for_actor(Actor(account_id=2))
+            42, BuildEditPatch(extra_user_info="denied"), context=ActingContext.for_actor(UserActor(account_id=2))
         )
     assert repository.saved == []
 
@@ -754,7 +756,7 @@ async def test_permission_revoked_during_preparation_prevents_commit(
 async def test_unresolved_names_are_kept_until_an_official_tag_matches_them() -> None:
     build = DoorBuild(component_restrictions=["No Slime"], patterns=["Spiral"])
 
-    await apply_build_tags(build, FakeTagResolver(), context=ActingContext.direct(Actor()))
+    await apply_build_tags(build, FakeTagResolver(), context=ActingContext.direct(AnonymousActor()))
 
     assert build.component_restrictions == []
     assert build.patterns == []
@@ -764,12 +766,12 @@ async def test_unresolved_names_are_kept_until_an_official_tag_matches_them() ->
     }
 
     # An unrelated edit keeps the names, and does not add Regular in place of the unresolved pattern.
-    await apply_build_tags(build, FakeTagResolver(), context=ActingContext.direct(Actor()))
+    await apply_build_tags(build, FakeTagResolver(), context=ActingContext.direct(AnonymousActor()))
     assert build.patterns == []
     assert build.extra_info.get("unknown_patterns") == ["Spiral"]
 
     resolver = FakeTagResolver(known_restrictions={"No Slime": "component"}, known_patterns=("Spiral",))
-    await apply_build_tags(build, resolver, context=ActingContext.direct(Actor()))
+    await apply_build_tags(build, resolver, context=ActingContext.direct(AnonymousActor()))
 
     assert build.component_restrictions == ["No Slime"]
     assert build.patterns == ["Spiral"]

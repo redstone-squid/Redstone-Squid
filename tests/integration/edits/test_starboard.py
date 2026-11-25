@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, AnonymousActor, UserActor
 from squid.core.edits.application import EditExecutor
 from squid.core.edits.domain import EditCommand, EditResult, EditValues, Revision, RevisionConflictError
 from squid.core.errors import AuthorizationError, ConflictError
@@ -31,7 +31,7 @@ from squid.core.starboard.application.snapshots import StarboardSnapshot
 from squid.core.starboard.models import OriginMessage, StarboardConfig, StarboardEmoji
 from tests.support.starboard_setup import create_starboard
 
-ACTOR = Actor(guild_id=10, is_bot_owner=True, discord_user_id=42)
+ACTOR = UserActor(guild_id=10, is_bot_owner=True, discord_user_id=42)
 
 
 async def test_configuration_children_share_revision_and_undo_checks_current_authority(
@@ -41,7 +41,7 @@ async def test_configuration_children_share_revision_and_undo_checks_current_aut
     service = StarboardService(uow_factory=factory)
     executor = EditExecutor(factory, {STARBOARD_EDIT: StarboardEdit(PermissionService(uow_factory=factory))})
     row = await create_starboard(factory, 10, 20)
-    snapshot = await service.snapshot(row.id, context=ActingContext.direct(Actor()))
+    snapshot = await service.snapshot(row.id, context=ActingContext.direct(AnonymousActor()))
     assert snapshot is not None
     expected = (Revision(starboard_target(row.id), snapshot.revision),)
     results: list[EditResult | RevisionConflictError] = []
@@ -66,11 +66,11 @@ async def test_configuration_children_share_revision_and_undo_checks_current_aut
     with pytest.raises(AuthorizationError):
         await executor.execute(
             saved.receipt.undo(saved.outcome.revisions),
-            context=ActingContext.direct(Actor(guild_id=10, discord_user_id=42)),
+            context=ActingContext.direct(UserActor(guild_id=10, discord_user_id=42)),
         )
     undone = await executor.execute(saved.receipt.undo(saved.outcome.revisions), context=ActingContext.direct(ACTOR))
     assert undone.receipt is not None
-    current = await service.snapshot(row.id, context=ActingContext.direct(Actor()))
+    current = await service.snapshot(row.id, context=ActingContext.direct(AnonymousActor()))
     assert current is not None
     values = BoardValues.capture(current).model_copy(
         update={"emojis": (EmojiValues(emoji="✅", direction="up", position=0, multiplier=1.0),)}
@@ -80,8 +80,8 @@ async def test_configuration_children_share_revision_and_undo_checks_current_aut
     )
     with pytest.raises(RevisionConflictError):
         await executor.execute(saved.receipt.redo(undone.outcome.revisions), context=ActingContext.direct(ACTOR))
-    assert await service.is_relevant_emoji(10, "✅", context=ActingContext.direct(Actor()))
-    assert not await service.is_relevant_emoji(10, "⭐", context=ActingContext.direct(Actor()))
+    assert await service.is_relevant_emoji(10, "✅", context=ActingContext.direct(AnonymousActor()))
+    assert not await service.is_relevant_emoji(10, "⭐", context=ActingContext.direct(AnonymousActor()))
 
 
 async def test_creation_retains_identity_and_revision_and_refuses_name_reuse(
@@ -90,7 +90,7 @@ async def test_creation_retains_identity_and_revision_and_refuses_name_reuse(
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     service = StarboardService(uow_factory=factory)
     executor = EditExecutor(factory, {STARBOARD_CREATE: StarboardCreation(PermissionService(uow_factory=factory))})
-    identity = await service.reserve_id(context=ActingContext.direct(Actor()))
+    identity = await service.reserve_id(context=ActingContext.direct(AnonymousActor()))
     config = StarboardConfig(
         id=identity, guild_id=10, channel_id=20, name=" main ", emojis=(StarboardEmoji(emoji="⭐", direction="up"),)
     )
@@ -105,11 +105,11 @@ async def test_creation_retains_identity_and_revision_and_refuses_name_reuse(
         created.receipt.undo(created.outcome.revisions), context=ActingContext.direct(ACTOR)
     )
     assert undone.receipt is not None
-    assert await service.get(10, "main", context=ActingContext.direct(Actor())) is None
+    assert await service.get(10, "main", context=ActingContext.direct(AnonymousActor())) is None
     redone = await executor.execute(created.receipt.redo(undone.outcome.revisions), context=ActingContext.direct(ACTOR))
     assert redone.receipt is not None
     assert redone.outcome.revisions == (Revision(starboard_target(identity), 3),)
-    restored = await service.get(10, "main", context=ActingContext.direct(Actor()))
+    restored = await service.get(10, "main", context=ActingContext.direct(AnonymousActor()))
     assert restored is not None
     assert restored.id == identity
     undone_again = await executor.execute(
@@ -136,7 +136,7 @@ async def test_used_board_refuses_creation_undo_but_explicit_delete_is_final(
     executor = EditExecutor(
         factory, {STARBOARD_CREATE: StarboardCreation(permissions), STARBOARD_DELETE: StarboardDeletion(permissions)}
     )
-    identity = await service.reserve_id(context=ActingContext.direct(Actor()))
+    identity = await service.reserve_id(context=ActingContext.direct(AnonymousActor()))
     config = StarboardConfig(
         id=identity, guild_id=10, channel_id=20, name="main", emojis=(StarboardEmoji(emoji="⭐", direction="up"),)
     )
@@ -153,7 +153,7 @@ async def test_used_board_refuses_creation_undo_but_explicit_delete_is_final(
             id=100, guild_id=10, channel_id=30, author_id=40, created_at=Instant.now().subtract(seconds=60)
         ),
     )
-    await service.record_vote(origin, "⭐", context=ActingContext.for_actor(Actor(discord_user_id=50, guild_id=10)))
+    await service.record_vote(origin, "⭐", context=ActingContext.for_actor(UserActor(discord_user_id=50, guild_id=10)))
     with pytest.raises(ConflictError, match="already in use"):
         await executor.execute(created.receipt.undo(created.outcome.revisions), context=ActingContext.direct(ACTOR))
     deleted = await executor.execute(
@@ -161,10 +161,10 @@ async def test_used_board_refuses_creation_undo_but_explicit_delete_is_final(
     )
     assert deleted.receipt is not None
     assert deleted.receipt.final
-    assert await service.list_for_guild(10, context=ActingContext.direct(Actor())) == ()
-    assert not await service.is_relevant_emoji(10, "⭐", context=ActingContext.direct(Actor()))
+    assert await service.list_for_guild(10, context=ActingContext.direct(AnonymousActor())) == ()
+    assert not await service.is_relevant_emoji(10, "⭐", context=ActingContext.direct(AnonymousActor()))
     ignored = await service.record_vote(
-        origin, "⭐", context=ActingContext.for_actor(Actor(discord_user_id=51, guild_id=10))
+        origin, "⭐", context=ActingContext.for_actor(UserActor(discord_user_id=51, guild_id=10))
     )
     assert ignored.keys == ()
 
@@ -175,7 +175,7 @@ async def test_first_vote_and_creation_undo_cannot_both_win(
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     service = StarboardService(uow_factory=factory)
     executor = EditExecutor(factory, {STARBOARD_CREATE: StarboardCreation(PermissionService(uow_factory=factory))})
-    identity = await service.reserve_id(context=ActingContext.direct(Actor()))
+    identity = await service.reserve_id(context=ActingContext.direct(AnonymousActor()))
     config = StarboardConfig(
         id=identity, guild_id=10, channel_id=20, name="main", emojis=(StarboardEmoji(emoji="⭐", direction="up"),)
     )
@@ -204,7 +204,7 @@ async def test_first_vote_and_creation_undo_cannot_both_win(
     async with anyio.create_task_group() as tasks:
         tasks.start_soon(undo)
         tasks.start_soon(
-            partial(service.record_vote, context=ActingContext.direct(Actor(discord_user_id=50, guild_id=10))),
+            partial(service.record_vote, context=ActingContext.direct(UserActor(discord_user_id=50, guild_id=10))),
             origin,
             "⭐",
         )

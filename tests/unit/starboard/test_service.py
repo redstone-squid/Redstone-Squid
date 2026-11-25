@@ -5,10 +5,10 @@ from typing import Any
 import pytest
 from whenever import Instant
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, Actor, AnonymousActor, UserActor, WorkerActor
 from squid.core.errors import AuthenticationError, AuthorizationError
 from squid.core.messages.models import Message
-from squid.core.permissions.application.ports import PermissionRepository, SubjectRecords
+from squid.core.permissions.application.ports import PermissionRepository, PermissionSubject, SubjectRecords
 from squid.core.starboard.application import PendingVote, StarboardService
 from squid.core.starboard.models import OriginMessage, StarboardConfig, StarboardEmoji
 from tests.support.unit_of_work import CommittedState, FakeUnitOfWork
@@ -54,7 +54,7 @@ class FakeStarboardUnitOfWork(FakeUnitOfWork[FakeRepository]):
     async def epoch(self) -> int:
         return 1
 
-    async def load_for_subject(self, subject: Actor) -> SubjectRecords:
+    async def load_for_subject(self, subject: PermissionSubject) -> SubjectRecords:
         return SubjectRecords(1, subject)
 
     @property
@@ -99,11 +99,11 @@ async def test_service_reads_current_emojis_across_edits() -> None:
     committed = CommittedState(repository, clone=_copy_repository)
     service = StarboardService(uow_factory=partial(FakeStarboardUnitOfWork, committed))  # type: ignore[arg-type]
 
-    assert await service.is_relevant_emoji(10, "⭐", context=ActingContext.direct(Actor()))
+    assert await service.is_relevant_emoji(10, "⭐", context=ActingContext.direct(AnonymousActor()))
 
     committed.value.config = replace(committed.value.config, emojis=())
 
-    assert not await service.is_relevant_emoji(10, "⭐", context=ActingContext.direct(Actor()))
+    assert not await service.is_relevant_emoji(10, "⭐", context=ActingContext.direct(AnonymousActor()))
 
 
 async def test_service_combines_highest_role_and_emoji_multiplier() -> None:
@@ -114,7 +114,7 @@ async def test_service_combines_highest_role_and_emoji_multiplier() -> None:
     result = await service.record_vote(
         make_origin(),
         "⭐",
-        context=ActingContext.for_actor(Actor(discord_user_id=41, guild_id=10, discord_role_ids=frozenset({50}))),
+        context=ActingContext.for_actor(UserActor(discord_user_id=41, guild_id=10, discord_role_ids=frozenset({50}))),
     )
 
     assert not result.remove_reaction
@@ -128,7 +128,7 @@ async def test_service_only_requests_invalid_reaction_removal_when_configured() 
     service = StarboardService(uow_factory=partial(FakeStarboardUnitOfWork, committed))  # type: ignore[arg-type]
 
     result = await service.record_vote(
-        make_origin(), "⭐", context=ActingContext.for_actor(Actor(discord_user_id=41, guild_id=10))
+        make_origin(), "⭐", context=ActingContext.for_actor(UserActor(discord_user_id=41, guild_id=10))
     )
 
     assert result.remove_reaction
@@ -139,14 +139,14 @@ async def test_account_identity_cannot_stand_in_for_a_discord_reaction() -> None
     repository = FakeRepository(make_config())
     committed = CommittedState(repository, clone=_copy_repository)
     service = StarboardService(uow_factory=partial(FakeStarboardUnitOfWork, committed))  # type: ignore[arg-type]
-    actor = Actor(account_id=7, guild_id=10)
+    actor = UserActor(account_id=7, guild_id=10)
     with pytest.raises(AuthenticationError):
         await service.record_vote(make_origin(), "⭐", context=ActingContext.for_actor(actor))
     with pytest.raises(AuthenticationError):
         await service.recount(
             make_origin(),
             ((actor, "⭐"),),
-            context=ActingContext.direct(Actor(discord_user_id=64, guild_id=10, is_bot_owner=True)),
+            context=ActingContext.direct(UserActor(discord_user_id=64, guild_id=10, is_bot_owner=True)),
         )
     assert committed.value.recorded == []
 
@@ -154,17 +154,17 @@ async def test_account_identity_cannot_stand_in_for_a_discord_reaction() -> None
 async def test_withdrawal_only_removes_the_invoking_discord_users_vote() -> None:
     committed = CommittedState(FakeRepository(make_config()), clone=_copy_repository)
     service = StarboardService(uow_factory=partial(FakeStarboardUnitOfWork, committed))  # type: ignore[arg-type]
-    await service.withdraw_vote(100, "⭐", context=ActingContext.direct(Actor(discord_user_id=51, guild_id=10)))
+    await service.withdraw_vote(100, "⭐", context=ActingContext.direct(UserActor(discord_user_id=51, guild_id=10)))
     assert committed.value.withdrawn == [51]
 
 
 @pytest.mark.parametrize(
     "actor",
     [
-        Actor(account_id=1, guild_id=11, is_bot_owner=True),
-        Actor(worker_name="other"),
-        Actor(discord_user_id=7, guild_id=10),
-        Actor(account_id=1, guild_id=10, is_bot_owner=True, credential_scopes=frozenset()),
+        UserActor(account_id=1, guild_id=11, is_bot_owner=True),
+        WorkerActor(worker_name="other"),
+        UserActor(discord_user_id=7, guild_id=10),
+        UserActor(account_id=1, guild_id=10, is_bot_owner=True, credential_scopes=frozenset()),
     ],
 )
 async def test_recount_requires_the_guild_and_current_permission(actor: Actor) -> None:
@@ -177,7 +177,7 @@ async def test_recount_requires_the_guild_and_current_permission(actor: Actor) -
 async def test_gateway_cleanup_rejects_human_callers() -> None:
     committed = CommittedState(FakeRepository(make_config()), clone=_copy_repository)
     service = StarboardService(uow_factory=partial(FakeStarboardUnitOfWork, committed))  # type: ignore[arg-type]
-    context = ActingContext.direct(Actor(discord_user_id=51, guild_id=10, is_bot_owner=True))
+    context = ActingContext.direct(UserActor(discord_user_id=51, guild_id=10, is_bot_owner=True))
     with pytest.raises(AuthorizationError):
         await service.clear_votes(100, context=context)
     with pytest.raises(AuthorizationError):
@@ -187,7 +187,7 @@ async def test_gateway_cleanup_rejects_human_callers() -> None:
 async def test_authorized_recount_records_the_observed_voter() -> None:
     committed = CommittedState(FakeRepository(make_config()), clone=_copy_repository)
     service = StarboardService(uow_factory=partial(FakeStarboardUnitOfWork, committed))  # type: ignore[arg-type]
-    voter = Actor(discord_user_id=51, guild_id=10)
-    requester = ActingContext.direct(Actor(account_id=1, guild_id=10, is_bot_owner=True))
+    voter = UserActor(discord_user_id=51, guild_id=10)
+    requester = ActingContext.direct(UserActor(account_id=1, guild_id=10, is_bot_owner=True))
     await service.recount(make_origin(), ((voter, "⭐"),), context=requester)
     assert len(committed.value.recorded) == 1

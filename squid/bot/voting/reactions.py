@@ -25,7 +25,7 @@ from squid.bot.reactions import (
 )
 from squid.bot.ui import render_payload, text_node
 from squid.bot.voting.actors import describe_rejection, resolve_actor
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.locks import KeyedLock
 from squid.core.voting.application.accounts import AccountConsentedVoterLookup
 from squid.core.voting.application.ports import VoteActorResolver
@@ -223,7 +223,7 @@ class VoteReactionHandler:
         return changed
 
     async def _set_reaction_selection(
-        self, snapshot: VoteSessionSnapshot, actor: Actor, emoji: str, *, selected: bool
+        self, snapshot: VoteSessionSnapshot, actor: UserActor, emoji: str, *, selected: bool
     ) -> tuple[CastVoteResult, bool]:
         """Make the stored ballot match whether this reaction is present.
 

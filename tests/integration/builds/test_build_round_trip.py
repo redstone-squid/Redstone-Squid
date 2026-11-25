@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.core.accounts.models import Account, AccountIdentity, CreatorAlias
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, AnonymousActor
 from squid.core.builds.application.tag_service import BuildTagService
 from squid.core.builds.application.tags import apply_build_tags, replace_showcase_tags
 from squid.core.builds.domain import BuildCategory, BuildStatus, ShowcaseTag
@@ -256,7 +256,7 @@ async def _resolve_and_save(
     await apply_build_tags(
         build,
         BuildTagService(uow_factory=partial(SqlAlchemyUnitOfWork, session_factory)),
-        context=ActingContext.direct(Actor()),
+        context=ActingContext.direct(AnonymousActor()),
     )
     await transact(
         repository,
@@ -572,7 +572,7 @@ async def test_unknown_restriction_is_recorded_at_edit_time_and_round_trips(
     await apply_build_tags(
         build,
         BuildTagService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)),
-        context=ActingContext.direct(Actor()),
+        context=ActingContext.direct(AnonymousActor()),
     )
 
     # Retain the unrecognized name in extra_info and remove it from the resolved
@@ -648,7 +648,7 @@ async def test_apply_build_tags_defaults_door_pattern(
     await apply_build_tags(
         build,
         BuildTagService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)),
-        context=ActingContext.direct(Actor()),
+        context=ActingContext.direct(AnonymousActor()),
     )
 
     # The default pattern is materialized visibly at edit time.
@@ -934,7 +934,7 @@ async def test_showcase_tags_are_replaced_by_key_beside_resolved_restrictions(
     restrictions = loaded.restrictions
 
     tags = BuildTagService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
-    await replace_showcase_tags(loaded, [ShowcaseTag("compact")], tags, context=ActingContext.direct(Actor()))
+    await replace_showcase_tags(loaded, [ShowcaseTag("compact")], tags, context=ActingContext.direct(AnonymousActor()))
     await _resolve_and_save(migrated_session_factory, repository, loaded)
 
     reloaded = await transact(repository, lambda uow: uow.builds.get_by_id(build.id))

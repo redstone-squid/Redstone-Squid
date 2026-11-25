@@ -7,7 +7,7 @@ from unittest.mock import AsyncMock
 import squid_ui as sl
 from squid.bot.admin_cog import Admin
 from squid.bot.tags_view import TagsScreen
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.builds.application.restrictions import RestrictionService
 from squid.core.edits.application import EditRunner
 from squid.core.edits.domain import (
@@ -165,7 +165,7 @@ def make_screen(
             tags,
             restrictions,
             TagEditRecorder(tags, restrictions),
-            AsyncMock(return_value=Actor(account_id=account_id)),
+            AsyncMock(return_value=UserActor(account_id=account_id)),
             actor_account_id=account_id,
             grants=grants(*capabilities, current=allowed),
         ),

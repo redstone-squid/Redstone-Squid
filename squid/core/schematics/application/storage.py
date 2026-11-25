@@ -120,8 +120,8 @@ class SchematicStorageService:
         async with (
             self._uow_factory() as uow,
             uow.builds.editing(
-                actor=context.effective.account_id
-                if context.effective.account_id is not None
+                actor=context.effective.linked_account_id
+                if context.effective.linked_account_id is not None
                 else context.effective.reference,
                 operation="schematic",
                 source="schematic_attachment",
@@ -133,7 +133,7 @@ class SchematicStorageService:
                 analysis,
                 primary=primary,
                 original_filename=original_filename,
-                uploaded_by_account_id=context.effective.account_id,
+                uploaded_by_account_id=context.effective.linked_account_id,
                 publication=publication,
             )
             await uow.commit()

@@ -9,8 +9,8 @@ from sqlalchemy.engine import Row
 from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
-from squid.core.actors import Actor
-from squid.core.permissions.application.ports import AuditEntry, SubjectRecords
+from squid.core.actors import UserActor
+from squid.core.permissions.application.ports import AuditEntry, PermissionSubject, SubjectRecords
 from squid.core.permissions.domain.models import PatternMode
 from squid.core.permissions.models import (
     PermissionAuditEntry,
@@ -68,13 +68,14 @@ class PostgresPermissionRepository:
         version = await session.scalar(select(PermissionEpoch.version).where(PermissionEpoch.id == 1))
         return version or 0
 
-    async def load_for_subject(self, subject: Actor) -> SubjectRecords:
+    async def load_for_subject(self, subject: PermissionSubject) -> SubjectRecords:
         """Load the epoch, all role definitions, and grants and assignments for one subject.
 
         Loading all roles allows composition to be resolved without recursive database
         queries. Expiry and permission scope are checked by the resolver, not this query.
         """
-        account_id, guild_id = subject.account_id, subject.guild_id
+        account_id = subject.account_id if isinstance(subject, UserActor) else None
+        guild_id = subject.guild_id
         role_ids = tuple(sorted(subject.discord_role_ids))
 
         session = self._session()

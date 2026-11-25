@@ -77,7 +77,7 @@ class NotificationEditUnitOfWork(NotificationUnitOfWork, EditUnitOfWork, Permiss
 async def authorize(
     uow: NotificationEditUnitOfWork, permissions: PermissionService, actor: Actor, account_id: int
 ) -> None:
-    if actor.account_id != account_id:
+    if actor.linked_account_id != account_id:
         raise OwnershipRequiredError
     await permissions.require(actor, ACCOUNT_SELF_MANAGE, uow=uow)
     if not (await uow.notifications.get_preferences(account_id)).has_current_consent:
@@ -300,7 +300,7 @@ class InboxReadEdit:
     async def rows(
         self, uow: NotificationEditUnitOfWork, actor: Actor, command: EditCommand
     ) -> Sequence[InboxNotification]:
-        account_id = actor.account_id
+        account_id = actor.linked_account_id
         if account_id is None:
             raise AccountRequiredError
         await uow.notifications.lock_settings(account_id)

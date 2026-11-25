@@ -10,7 +10,7 @@ from whenever import Instant
 from squid.core.accounts.domain import IdentityProvider
 from squid.core.accounts.infrastructure.repository import AccountRepository
 from squid.core.accounts.models import Account
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.auth.infrastructure.viewer import SessionCounts, ViewerQueries
 from squid.core.notifications.domain import SubscriptionKind
 from squid.core.notifications.models import NotificationSubscription
@@ -53,8 +53,8 @@ async def test_browser_reads_and_links_are_scoped_to_the_account(
     views = ViewerQueries(
         migrated_session_factory, PermissionService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
     )
-    owner_context = ActingContext.direct(Actor(account_id=owner.id))
-    staff = Actor(account_id=other.id, is_bot_owner=True)
+    owner_context = ActingContext.direct(UserActor(account_id=owner.id))
+    staff = UserActor(account_id=other.id, is_bot_owner=True)
     staff_context = ActingContext.direct(staff)
     user, counts, allowed = await views.session(context=owner_context)
     assert BUILD_SUBMISSION_VIEW_PENDING.name not in allowed

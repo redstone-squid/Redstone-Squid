@@ -14,6 +14,7 @@ from squid.core.errors import NotFoundError
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.application.ports import PermissionUnitOfWork
 from squid.core.permissions.domain import CheckMode, Decision, PermissionCheck, PermissionNode, Reason
+from squid.core.permissions.domain.models import RolePermissionSubject
 from squid.core.suggestions.application import (
     Candidate,
     SuggestionRegistry,
@@ -67,7 +68,7 @@ class PermissionAnswer(PermissionService):
     @override
     async def check(
         self,
-        subject: Actor,
+        subject: Actor | RolePermissionSubject,
         *nodes: PermissionNode | str,
         uow: PermissionUnitOfWork | None = None,
         mode: CheckMode = "all",
@@ -186,7 +187,7 @@ async def test_the_signed_in_account_reaches_viewer_scoped_providers() -> None:
         visibility=Visibility.VIEWER_SCOPED,
     )
     await suggest.fn("approved_restrictions", request_for(), service(source), caller(anonymous=False))
-    assert provider.requests[0].viewer.account_id == 1
+    assert provider.requests[0].viewer.linked_account_id == 1
 
 
 async def test_sources_are_published_so_a_client_need_not_hardcode_them() -> None:

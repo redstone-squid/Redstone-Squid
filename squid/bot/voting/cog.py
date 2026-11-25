@@ -31,7 +31,7 @@ from squid.bot.voting.reactions import VoteReactionHandler
 from squid.bot.voting.sessions import start_delete_log_vote
 from squid.bot.voting.spec import VotingExports, extension
 from squid.core.accounts.domain import IdentityProvider
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.i18n import tr
 from squid.core.permissions.domain.catalogue import VOTE_POLL_CLOSE_ANY, VOTE_POLL_NETWORK_CREATE, VOTE_POLL_RECOUNT
 from squid.core.voting.domain import PollScope, VoteKind, VoteOption, VoteStatus, VoteVisibility
@@ -314,7 +314,7 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             await start_delete_log_vote(
                 self.bot,
                 context=ActingContext.current().with_actor(
-                    replace(ActingContext.current().effective, account_id=author_account_id)
+                    replace(ActingContext.current().effective.require_user(), account_id=author_account_id)
                 ),
                 target_message=message,
                 published_message=published,
@@ -325,7 +325,7 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             raise
         return await request.respond(text_node(tr(t"bot-voting-vote-deletion-vote-opened = Deletion vote opened.")))
 
-    async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> Actor | None:
+    async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> UserActor | None:
         """Resolve member roles and capabilities for a persisted voter's weight refresh.
 
         No linked Discord identity or a confirmed missing member produces an
@@ -334,17 +334,19 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         """
         return (await self.resolve_many((account_id,), guild_id, kind))[account_id]
 
-    async def resolve_many(self, account_ids: Sequence[int], guild_id: int, kind: VoteKind) -> dict[int, Actor | None]:
+    async def resolve_many(
+        self, account_ids: Sequence[int], guild_id: int, kind: VoteKind
+    ) -> dict[int, UserActor | None]:
         """Read accounts together and resolve uncached Discord members in batches."""
         accounts = await self.bot.services.accounts.get_accounts(account_ids)
-        result: dict[int, Actor | None] = {}
+        result: dict[int, UserActor | None] = {}
         discord_ids: dict[int, int] = {}
         for account_id in dict.fromkeys(account_ids):
             account = accounts.get(account_id)
             identity = None if account is None else account.most_recent_identity_for(IdentityProvider.DISCORD)
             discord_id = None if identity is None else identity.discord_id
             if discord_id is None:
-                result[account_id] = Actor(account_id=account_id, discord_user_id=None, guild_id=guild_id)
+                result[account_id] = UserActor(account_id=account_id, guild_id=guild_id)
             else:
                 discord_ids[account_id] = discord_id
         guild = self.bot.get_guild(guild_id)
@@ -353,7 +355,7 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             if discord_id not in members:
                 result[account_id] = None
             elif (member := members[discord_id]) is None:
-                result[account_id] = Actor(account_id=account_id, discord_user_id=discord_id, guild_id=guild_id)
+                result[account_id] = UserActor(account_id=account_id, discord_user_id=discord_id, guild_id=guild_id)
             else:
                 result[account_id] = await resolve_actor(self.bot, member, account_id=account_id)
         return result

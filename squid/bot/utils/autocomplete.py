@@ -16,7 +16,7 @@ from discord import app_commands
 
 import squid_ui.ext.discord as sd
 from squid.bot.utils.permissions import allows
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, Actor, UserActor
 from squid.core.observability import trace_span
 from squid.core.suggestions.application import SuggestionSource
 from squid.core.suggestions.domain import (
@@ -151,10 +151,10 @@ async def _viewer(
 ) -> Actor:
     """Resolve the caller's identity, paying for the account lookup only when a source needs it."""
     if source.visibility is not Visibility.VIEWER_SCOPED:
-        return Actor(discord_user_id=interaction.user.id, guild_id=interaction.guild_id)
+        return UserActor(discord_user_id=interaction.user.id, guild_id=interaction.guild_id)
     bot = interaction.client
     account_id = await bot.account_ids.resolve(bot.services.accounts, interaction.user.id)
-    return Actor(account_id=account_id, discord_user_id=interaction.user.id, guild_id=interaction.guild_id)
+    return UserActor(account_id=account_id, discord_user_id=interaction.user.id, guild_id=interaction.guild_id)
 
 
 def _split(current: str, separator: str | None) -> tuple[str, str]:

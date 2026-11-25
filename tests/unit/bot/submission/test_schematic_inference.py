@@ -7,7 +7,7 @@ from uuid import uuid4
 
 import pytest
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.schematics.domain.doors.detection import detect_cycle
 from squid.core.submissions.application.intake import SuppliedAttachment
 from squid.core.submissions.application.schematic_inference import (
@@ -63,7 +63,7 @@ async def test_submit_panel_infers_missing_values_without_overwriting_command_op
     assert "Hallway candidates and block coordinates" in labels(editor.render())
     assert len(editor.workspace.edits.undoable) == 1
     schematics.suggestions.assert_awaited_once_with(
-        drafts.current.snapshot.id, source_id, context=ActingContext.direct(Actor(account_id=7))
+        drafts.current.snapshot.id, source_id, context=ActingContext.direct(UserActor(account_id=7))
     )
 
 

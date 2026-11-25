@@ -8,7 +8,7 @@ import pytest
 
 from squid.api.security import Caller
 from squid.api.v1.votes import VoteInput, cast_vote, clear_vote
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, Actor, UserActor
 from squid.core.errors import AuthenticationError, AuthorizationError, ConflictError, ValidationError
 from squid.core.voting.application import VoteService
 from squid.core.voting.domain import (
@@ -111,7 +111,7 @@ class MemberRecorder:
 @pytest.mark.asyncio
 async def test_vote_keeps_the_option_id_stable_across_guild_aliases(guild_id: int) -> None:
     session = snapshot()
-    actor = Actor(account_id=1, discord_user_id=7, guild_id=guild_id, discord_role_ids=frozenset({99}))
+    actor = UserActor(account_id=1, discord_user_id=7, guild_id=guild_id, discord_role_ids=frozenset({99}))
     votes = VoteRecorder(session)
     members = MemberRecorder(actor)
 
@@ -132,7 +132,7 @@ async def test_vote_keeps_the_option_id_stable_across_guild_aliases(guild_id: in
 async def test_a_cli_caller_with_no_discord_identity_can_vote() -> None:
     """The route resolves guild membership from the account-backed CLI caller."""
     session = snapshot()
-    actor = Actor(account_id=1, discord_user_id=7, guild_id=10, discord_role_ids=frozenset({99}))
+    actor = UserActor(account_id=1, discord_user_id=7, guild_id=10, discord_role_ids=frozenset({99}))
     votes = VoteRecorder(session)
     members = MemberRecorder(actor)
     cli = Caller(
@@ -175,7 +175,7 @@ async def test_every_vote_rejection_maps_to_a_typed_api_error(
 ) -> None:
     session = snapshot()
     votes = VoteRecorder(session, rejection=rejection)
-    members = MemberRecorder(Actor(account_id=1, discord_user_id=7, guild_id=10))
+    members = MemberRecorder(UserActor(account_id=1, discord_user_id=7, guild_id=10))
 
     with pytest.raises(error_type):
         await cast_vote.fn(
@@ -188,7 +188,7 @@ async def test_every_vote_rejection_maps_to_a_typed_api_error(
 
 
 async def test_clear_resolves_the_authenticated_member() -> None:
-    actor = Actor(account_id=1, discord_user_id=7, guild_id=10)
+    actor = UserActor(account_id=1, discord_user_id=7, guild_id=10)
     votes = VoteRecorder(snapshot())
     members = MemberRecorder(actor)
     await clear_vote.fn(12, 10, votes, members, account())

@@ -15,7 +15,7 @@ from aiohttp import ClientResponse
 from discord.errors import DiscordServerError, Forbidden, HTTPException, NotFound, RateLimited
 from discord.http import HTTPClient, Route
 
-from squid.core.actors import Actor
+from squid.core.actors import Actor, UserActor
 from squid.core.permissions.domain import Decision, PermissionCheck, Reason
 from squid.core.voting.domain import VoteKind
 from squid.core.voting.errors import DiscordMemberServiceUnavailableError
@@ -63,7 +63,11 @@ class FakePermissions:
         self.allowed = True
 
     async def check(self, actor: Actor, *nodes: str) -> PermissionCheck:
-        held = "vote.log_delete.cast" if self.allowed and 11 in actor.discord_role_ids else ""
+        held = (
+            "vote.log_delete.cast"
+            if self.allowed and isinstance(actor, UserActor) and 11 in actor.discord_role_ids
+            else ""
+        )
         return PermissionCheck(tuple(Decision(node, allowed=node == held, reason=Reason.DEFAULT) for node in nodes))
 
 

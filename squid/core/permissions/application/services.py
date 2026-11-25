@@ -14,10 +14,10 @@ from contextlib import nullcontext
 
 from whenever import Instant
 
-from squid.core.actors import Actor
+from squid.core.actors import Actor, ServiceActor, UserActor
 from squid.core.errors import InvalidStateError
 from squid.core.permissions.application.cache import SubjectRuleCache, cache_key
-from squid.core.permissions.application.ports import PermissionUnitOfWork
+from squid.core.permissions.application.ports import PermissionSubject, PermissionUnitOfWork
 from squid.core.permissions.application.roles import PermissionRuleSnapshot
 from squid.core.permissions.domain import (
     CATALOGUE,
@@ -31,6 +31,7 @@ from squid.core.permissions.domain import (
     Rule,
     resolve,
 )
+from squid.core.permissions.domain.models import RolePermissionSubject
 from squid.core.permissions.errors import require_check
 from squid.core.unit_of_work import UnitOfWorkFactory
 
@@ -56,7 +57,7 @@ class PermissionService:
 
     async def check(
         self,
-        subject: Actor,
+        subject: Actor | RolePermissionSubject,
         *nodes: PermissionNode | str,
         uow: PermissionUnitOfWork | None = None,
         mode: CheckMode = "all",
@@ -67,25 +68,26 @@ class PermissionService:
         the cache, and leaves its transaction lifecycle to the caller. Otherwise
         the service uses its normal cached lookup.
         """
-        scopes = subject.credential_scopes
+        scopes = subject.credential_scopes if isinstance(subject, UserActor | ServiceActor) else None
         patterns = tuple(Pattern.parse(raw) for raw in scopes) if scopes is not None else None
-        rules = () if subject.service_id is not None else await self._rules_for(subject, uow=uow)
+        authority = subject if isinstance(subject, UserActor | RolePermissionSubject) else None
+        rules = await self._rules_for(authority, uow=uow) if authority is not None else ()
         now = Instant.now()
         decisions: list[Decision] = []
         for node in nodes:
             permission = self._catalogue[node] if isinstance(node, str) else node
             within_scope = patterns is None or any(pattern.matches(permission) for pattern in patterns)
-            if subject.service_id is not None or not within_scope:
+            if isinstance(subject, ServiceActor) or not within_scope:
                 decisions.append(
                     Decision(permission.name, allowed=patterns is not None and within_scope, reason=Reason.CREDENTIAL)
                 )
             else:
-                decisions.append(resolve(permission, subject, rules, catalogue=self._catalogue, now=now))
+                decisions.append(resolve(permission, authority, rules, catalogue=self._catalogue, now=now))
         return PermissionCheck(tuple(decisions), mode=mode)
 
     async def require(
         self,
-        subject: Actor,
+        subject: Actor | RolePermissionSubject,
         *nodes: PermissionNode | str,
         uow: PermissionUnitOfWork | None = None,
         mode: CheckMode = "all",
@@ -93,7 +95,7 @@ class PermissionService:
         """Enforce the same check and raise the shared explanatory ACL error on denial."""
         require_check(await self.check(subject, *nodes, uow=uow, mode=mode))
 
-    async def _rules_for(self, subject: Actor, *, uow: PermissionUnitOfWork | None) -> tuple[Rule, ...]:
+    async def _rules_for(self, subject: PermissionSubject, *, uow: PermissionUnitOfWork | None) -> tuple[Rule, ...]:
         if subject.is_bot_owner:
             return ()
         cache = self._cache if uow is None else None

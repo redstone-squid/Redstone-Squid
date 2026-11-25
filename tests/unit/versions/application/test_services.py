@@ -4,7 +4,7 @@ from functools import partial
 
 import pytest
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, AnonymousActor, UserActor
 from squid.core.errors import AuthorizationError
 from squid.core.versions.application.services import VersionService
 from squid.core.versions.domain import Edition, MinecraftVersion
@@ -44,7 +44,7 @@ class FakeVersionUnitOfWork(FakeUnitOfWork[FakeVersionRepository]):
 async def test_manual_version_add_checks_authority_and_named_announcement_worker_can_publish() -> None:
     committed = CommittedState(FakeVersionRepository())
     service = VersionService(uow_factory=partial(FakeVersionUnitOfWork, committed))
-    for context in (ActingContext.direct(Actor(account_id=55)), ActingContext.worker("unrelated")):
+    for context in (ActingContext.direct(UserActor(account_id=55)), ActingContext.worker("unrelated")):
         with pytest.raises(AuthorizationError):
             await service.add("1.21.4", context=context)
     assert await service.add(
@@ -57,7 +57,7 @@ async def test_version_service_honors_explicit_edition() -> None:
     service = VersionService(uow_factory=partial(FakeVersionUnitOfWork, committed))
 
     version = await service.add(
-        "1.21.4", edition="Bedrock", context=ActingContext.direct(Actor(account_id=1, is_bot_owner=True))
+        "1.21.4", edition="Bedrock", context=ActingContext.direct(UserActor(account_id=1, is_bot_owner=True))
     )
 
     assert version == MinecraftVersion("Bedrock", 1, 21, 4)
@@ -70,7 +70,7 @@ async def test_version_service_lists_both_editions() -> None:
 
     assert (
         await VersionService(uow_factory=partial(FakeVersionUnitOfWork, committed)).list_all(
-            context=ActingContext.direct(Actor())
+            context=ActingContext.direct(AnonymousActor())
         )
         == committed.value.versions
     )
@@ -86,8 +86,8 @@ async def test_version_service_resolves_ranges_and_newest_version() -> None:
     ]
     service = VersionService(uow_factory=partial(FakeVersionUnitOfWork, committed))
 
-    assert await service.newest("Java", context=ActingContext.direct(Actor())) == "Java 1.21.0"
-    assert await service.resolve_spec("1.19 - 1.20, 1.21+", context=ActingContext.direct(Actor())) == [
+    assert await service.newest("Java", context=ActingContext.direct(AnonymousActor())) == "Java 1.21.0"
+    assert await service.resolve_spec("1.19 - 1.20, 1.21+", context=ActingContext.direct(AnonymousActor())) == [
         "Java 1.19.0",
         "Java 1.19.1",
         "Java 1.20.0",
@@ -100,7 +100,7 @@ async def test_version_service_reports_an_empty_catalog_as_infrastructure_failur
     service = VersionService(uow_factory=partial(FakeVersionUnitOfWork, committed))
 
     with pytest.raises(VersionCatalogUnavailableError) as exc_info:
-        await service.newest("Bedrock", context=ActingContext.direct(Actor()))
+        await service.newest("Bedrock", context=ActingContext.direct(AnonymousActor()))
 
     assert exc_info.value.context == {"edition": "Bedrock"}
 
@@ -117,7 +117,9 @@ async def test_version_ranges_accept_message_separators(separator: str) -> None:
     ]
     service = VersionService(uow_factory=partial(FakeVersionUnitOfWork, committed))
 
-    assert await service.resolve_spec(f"Java 1.16.5{separator}1.17", context=ActingContext.direct(Actor())) == [
+    assert await service.resolve_spec(
+        f"Java 1.16.5{separator}1.17", context=ActingContext.direct(AnonymousActor())
+    ) == [
         "Java 1.16.5",
         "Java 1.17.0",
         "Java 1.17.1",
@@ -129,7 +131,7 @@ async def test_edition_without_a_version_does_not_claim_compatibility_with_every
     committed = CommittedState(FakeVersionRepository())
     committed.value.versions = [MinecraftVersion("Java", 1, 21, 5), MinecraftVersion("Bedrock", 1, 21, 50)]
     service = VersionService(uow_factory=partial(FakeVersionUnitOfWork, committed))
-    assert await service.resolve_spec(edition, context=ActingContext.direct(Actor())) == []
+    assert await service.resolve_spec(edition, context=ActingContext.direct(AnonymousActor())) == []
 
 
 @pytest.mark.parametrize(
@@ -157,4 +159,4 @@ async def test_version_exclusions_do_not_claim_broken_releases(spec: str, expect
     ]
     service = VersionService(uow_factory=partial(FakeVersionUnitOfWork, committed))
 
-    assert await service.resolve_spec(spec, context=ActingContext.direct(Actor())) == expected
+    assert await service.resolve_spec(spec, context=ActingContext.direct(AnonymousActor())) == expected

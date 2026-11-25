@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from squid.core.actors import Actor
+from squid.core.actors import UserActor
 from squid.core.builds.application.edits import BUILD_STATUS_EDIT, BuildEditUnitOfWork, BuildStatusEdit, build_target
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import DoorBuild
@@ -21,7 +21,7 @@ async def test_review_captures_status_and_checks_current_permission(status: Buil
     uow.builds.get_for_update.return_value = DoorBuild(id=7, revision=3, submission_status=BuildStatus.PENDING)
     permissions = AsyncMock(spec=PermissionService)
     permissions.require.return_value = None
-    actor = Actor(account_id=1)
+    actor = UserActor(account_id=1)
     command = EditCommand(
         BUILD_STATUS_EDIT, (Revision(build_target(7), 3),), EditValues.of({"submission_status": status})
     )
@@ -44,11 +44,11 @@ async def test_review_rejects_stale_revision_and_already_decided_build() -> None
     values = EditValues.of({"submission_status": BuildStatus.APPROVED})
     with pytest.raises(RevisionConflictError):
         await handler.prepare(
-            uow, Actor(account_id=1), EditCommand(BUILD_STATUS_EDIT, (Revision(build_target(7), 3),), values)
+            uow, UserActor(account_id=1), EditCommand(BUILD_STATUS_EDIT, (Revision(build_target(7), 3),), values)
         )
     with pytest.raises(InvalidStateError):
         await handler.prepare(
-            uow, Actor(account_id=1), EditCommand(BUILD_STATUS_EDIT, (Revision(build_target(7), 4),), values)
+            uow, UserActor(account_id=1), EditCommand(BUILD_STATUS_EDIT, (Revision(build_target(7), 4),), values)
         )
 
 
@@ -58,7 +58,7 @@ async def test_undo_requires_the_original_decision_permission() -> None:
     uow.builds.get_for_update.return_value = DoorBuild(id=7, revision=4, submission_status=BuildStatus.REJECTED)
     permissions = AsyncMock(spec=PermissionService)
     permissions.require.side_effect = AuthorizationError
-    actor = Actor(account_id=1)
+    actor = UserActor(account_id=1)
     command = EditCommand(
         BUILD_STATUS_EDIT,
         (Revision(build_target(7), 4),),

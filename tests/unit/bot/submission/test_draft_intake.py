@@ -17,7 +17,7 @@ import pytest
 import wrapture
 
 from squid.bot.submission.draft_intake import receive_attachments, receive_retained_file, register_uploaded_file
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.errors import ValidationError
 from squid.core.media.application.jobs import MediaProcessingJobService
 from squid.core.media.domain import MediaLimits
@@ -86,7 +86,7 @@ async def test_reserves_all_files_before_download_and_retains_partial_failure() 
         Attachment(1, intake, fails=True, expected_reservations=2),
         Attachment(2, intake, expected_reservations=2),
     ]
-    await receive_attachments(services, uuid4(), Actor(account_id=7), cast(list[discord.Attachment], attachments))
+    await receive_attachments(services, uuid4(), UserActor(account_id=7), cast(list[discord.Attachment], attachments))
     assert [item.status for item in intake.files.values()] == [IntakeStatus.FAILED, IntakeStatus.READY]
     assert intake.registered == [b"file"]
 
@@ -96,7 +96,7 @@ async def test_oversized_source_is_retained_without_downloading(size: int) -> No
     intake = Intake()
     services = bot_services(submission_intake=intake)
     await receive_attachments(
-        services, uuid4(), Actor(account_id=7), cast(list[discord.Attachment], [Attachment(1, intake, size=size)])
+        services, uuid4(), UserActor(account_id=7), cast(list[discord.Attachment], [Attachment(1, intake, size=size)])
     )
     assert [item.status for item in intake.files.values()] == [IntakeStatus.FAILED]
     assert intake.registered == []
@@ -110,7 +110,7 @@ async def test_download_uses_limit_for_file_type(filename: str) -> None:
         1, intake, filename=filename, content_type="application/octet-stream", size=len(data), data=data
     )
     await receive_attachments(
-        bot_services(submission_intake=intake), uuid4(), Actor(account_id=7), [cast(discord.Attachment, attachment)]
+        bot_services(submission_intake=intake), uuid4(), UserActor(account_id=7), [cast(discord.Attachment, attachment)]
     )
     expected = IntakeStatus.FAILED if filename.endswith(".schem") else IntakeStatus.READY
     assert [item.status for item in intake.files.values()] == [expected]
@@ -148,7 +148,9 @@ async def test_retained_download_enforces_configured_limit(declared_size: int) -
     get = wrapture.binding(aiohttp.ClientSession, "get").on_call.returns(cdn_response(b"1234", b"56789"))
     with wrapture.timeline(get):
         with pytest.raises(ValidationError, match="limit"):
-            await receive_retained_file(bot_services(submission_intake=intake), uuid4(), Actor(account_id=7), source.id)
+            await receive_retained_file(
+                bot_services(submission_intake=intake), uuid4(), UserActor(account_id=7), source.id
+            )
         get.events.assert_times(int(declared_size <= 8))
 
     assert intake.files[source.id].status is IntakeStatus.FAILED
@@ -162,7 +164,7 @@ async def test_retained_video_larger_than_schematic_limit_is_registered() -> Non
     intake.files[source.id] = SuppliedAttachment(source.id, source.filename, "video", IntakeStatus.PENDING, source)
     get = wrapture.binding(aiohttp.ClientSession, "get").on_call.returns(cdn_response(data))
     with wrapture.timeline(get):
-        await receive_retained_file(bot_services(submission_intake=intake), uuid4(), Actor(account_id=7), source.id)
+        await receive_retained_file(bot_services(submission_intake=intake), uuid4(), UserActor(account_id=7), source.id)
         get.events.with_args(url=source.url, allow_redirects=False).assert_once()
 
     assert intake.files[source.id].status is IntakeStatus.READY
@@ -179,9 +181,9 @@ async def test_uploaded_video_larger_than_schematic_limit_is_registered() -> Non
 
     source = UploadedFile("clip.mp4", "video/mp4", len(data), "", read)
     await intake.reserve(
-        draft_id, source_id, source.name, source.media_type, context=ActingContext.for_actor(Actor(account_id=7))
+        draft_id, source_id, source.name, source.media_type, context=ActingContext.for_actor(UserActor(account_id=7))
     )
     await register_uploaded_file(
-        bot_services(submission_intake=intake), draft_id, Actor(account_id=7), source_id, source
+        bot_services(submission_intake=intake), draft_id, UserActor(account_id=7), source_id, source
     )
     assert intake.registered == [data]

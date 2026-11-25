@@ -6,7 +6,7 @@ Public application operations receive a required, keyword-only `context: ActingC
 
 `context.operator` identifies the authenticated principal. `context.effective` identifies the principal whose authority applies, including during impersonation. For example, a moderator viewing another account's draft retains the moderator's identity for attribution while the operation evaluates the effective account's rights. An invocation ID follows both through nested service calls. Trusted adapters can enrich the effective actor with verified Discord membership or linked-account facts using `with_actor`.
 
-An actor can identify a user, service credential, named worker, anonymous visitor or guest session. Anonymous browsing uses no cookie. The guest variant reserves an identity namespace for future work. This refactor adds no guest credentials, sessions or application features.
+The `Actor` type is a union of `UserActor`, `ServiceActor`, `WorkerActor`, `AnonymousActor` and `GuestActor`. Construct the concrete principal at the entry point. A user has a verified account ID, Discord ID, or both. Each other identified principal carries its own required identifier. Anonymous browsing uses no cookie. The guest variant reserves an identity namespace for future work. This refactor adds no guest credentials, sessions or application features.
 
 Derive the caller from the context. Keep a resource owner, recipient or voter being recounted as an explicit argument when the operation can legitimately act on someone else's behalf. Enforce access in the application operation, checking current grants inside the writing transaction where the authorization and mutation must be atomic. Credential scopes limit the permissions available to an account.
 

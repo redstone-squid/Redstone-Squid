@@ -22,7 +22,7 @@ from squid.core.accounts.domain import (
     IdentityProvider,
     LinkPreview,
 )
-from squid.core.actors import Actor
+from squid.core.actors import Actor, UserActor
 from squid.core.errors import AuthorizationError
 from squid.core.sentinel import NOT_ASKED
 from squid_i18n import md_tr
@@ -326,7 +326,7 @@ async def ensure_consented_account(
     Awaits the answer, so it belongs to a command rather than to a mounted action handler;
     `with_consented_account` is the form for the latter.
     """
-    actor = await resolve_actor() if resolve_actor else Actor(discord_user_id=request.user.id)
+    actor = (await resolve_actor()).require_user() if resolve_actor else UserActor(discord_user_id=request.user.id)
     user_id = actor.require_discord_user_id()
     account = await accounts.get_account_by_identity(IdentityProvider.DISCORD, str(user_id))
     if (
@@ -346,7 +346,7 @@ async def ensure_consented_account(
         return None
 
     if resolve_actor is not None:
-        current = await resolve_actor()
+        current = (await resolve_actor()).require_user()
         if current.discord_user_id != user_id or current.account_id != actor.account_id:
             raise AuthorizationError
         actor = current

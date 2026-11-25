@@ -38,7 +38,7 @@ from squid.core.accounts.domain import (
 )
 from squid.core.accounts.errors import AccountNotFoundError
 from squid.core.accounts.models import Account, AccountIdentity, AccountProfile, AliasClaim, CreatorAlias
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, Actor, UserActor
 from squid.core.notifications import NotificationPreferences, NotificationService
 from squid.core.notifications.application import NotificationEditorSnapshot
 from squid.core.pagination import Page
@@ -61,7 +61,7 @@ JAVA = replace(AccountIdentity.java(JAVA_UUID, username="Notch"), id=2, verified
 
 
 async def edit_actor() -> Actor:
-    return Actor(account_id=ACCOUNT_ID, discord_user_id=AUTHOR_ID)
+    return UserActor(account_id=ACCOUNT_ID, discord_user_id=AUTHOR_ID)
 
 
 def _workspace(

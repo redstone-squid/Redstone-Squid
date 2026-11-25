@@ -82,7 +82,7 @@ async def test_public_poll_reaction_casts_and_withdraws_a_ballot(monkeypatch: py
         def cast(session_id: int, option_id: str, *, emoji: str, context: ActingContext) -> CastVoteResult:
             nonlocal session
             assert session_id == session.id
-            actor = context.effective
+            actor = context.effective.require_user()
             previous = session.selection_for(actor.require_account_id())
             selections = (
                 () if previous else (VoteSelection(actor.require_account_id(), actor.guild_id, option_id, emoji, 1),)

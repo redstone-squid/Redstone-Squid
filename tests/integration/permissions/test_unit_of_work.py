@@ -7,11 +7,17 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.accounts.models import Account
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.permissions.application import PermissionEpochWatcher, PermissionService, SubjectRuleCache
 from squid.core.permissions.application.administration import PermissionAdministrationService
 from squid.core.permissions.application.ports import AuditEntry
-from squid.core.permissions.domain.models import AuditAction, AuditSubjectKind, ExternalRoleGrantSubject, PatternMode
+from squid.core.permissions.domain.models import (
+    AuditAction,
+    AuditSubjectKind,
+    ExternalRoleGrantSubject,
+    PatternMode,
+    RolePermissionSubject,
+)
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
 
@@ -28,7 +34,7 @@ async def test_permission_writes_audit_and_epoch_share_the_callers_transaction(
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     cache = SubjectRuleCache()
     permissions = PermissionService(uow_factory=factory, cache=cache)
-    subject = Actor(account_id=account_id)
+    subject = UserActor(account_id=account_id)
     node = "build.submission.approve"
     assert not (await permissions.check(subject, node)).allowed
     async with factory() as uow:
@@ -68,11 +74,15 @@ async def test_role_creation_commits_with_audit_and_rolls_back_if_audit_fails(
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     permissions = PermissionService(uow_factory=factory)
     admin = PermissionAdministrationService(permissions, uow_factory=factory)
-    actor = await admin.resolve_actor(context=ActingContext.direct(Actor(is_bot_owner=True)))
+    actor = await admin.resolve_actor(context=ActingContext.direct(UserActor(discord_user_id=1, is_bot_owner=True)))
     role = await admin.create_role(context=ActingContext.direct(actor), slug="uow-reviewer", name="Reviewer", rank=3)
     assert role.id > 0
-    assert (await admin.role("uow-reviewer", context=ActingContext.direct(Actor(is_bot_owner=True)))).id == role.id
-    assert (await admin.audit(context=ActingContext.direct(Actor(is_bot_owner=True))))[0].role_id == role.id
+    assert (
+        await admin.role("uow-reviewer", context=ActingContext.direct(UserActor(discord_user_id=1, is_bot_owner=True)))
+    ).id == role.id
+    assert (await admin.audit(context=ActingContext.direct(UserActor(discord_user_id=1, is_bot_owner=True))))[
+        0
+    ].role_id == role.id
 
     async with factory() as uow:
         with pytest.raises(IntegrityError):
@@ -96,7 +106,7 @@ async def test_role_aggregation_preserves_empty_roles_and_independent_pattern_ed
 ) -> None:
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     admin = PermissionAdministrationService(PermissionService(uow_factory=factory), uow_factory=factory)
-    actor = await admin.resolve_actor(context=ActingContext.direct(Actor(is_bot_owner=True)))
+    actor = await admin.resolve_actor(context=ActingContext.direct(UserActor(discord_user_id=1, is_bot_owner=True)))
     empty = await admin.create_role(context=ActingContext.direct(actor), slug="empty", name="Empty", rank=1)
     child = await admin.create_role(context=ActingContext.direct(actor), slug="child", name="Child", rank=1)
     parent = await admin.create_role(context=ActingContext.direct(actor), slug="parent", name="Parent", rank=2)
@@ -105,7 +115,10 @@ async def test_role_aggregation_preserves_empty_roles_and_independent_pattern_ed
     await admin.add_pattern(parent, "@destructive", context=ActingContext.direct(actor), mode=PatternMode.EXCLUDE)
     await admin.add_include(parent, empty, context=ActingContext.direct(actor))
     await admin.add_include(parent, child, context=ActingContext.direct(actor))
-    roles = {role.id: role for role in await admin.roles(context=ActingContext.direct(Actor(is_bot_owner=True)))}
+    roles = {
+        role.id: role
+        for role in await admin.roles(context=ActingContext.direct(UserActor(discord_user_id=1, is_bot_owner=True)))
+    }
     assert roles[empty.id].includes == ()
     assert roles[empty.id].includes_roles == ()
     assert roles[parent.id].includes == ("build.**", "vote.**")
@@ -119,7 +132,7 @@ async def test_tagged_role_subject_retains_guild_identity_and_audit(
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     permissions = PermissionService(uow_factory=factory)
     admin = PermissionAdministrationService(permissions, uow_factory=factory)
-    owner = await admin.resolve_actor(context=ActingContext.direct(Actor(is_bot_owner=True)))
+    owner = await admin.resolve_actor(context=ActingContext.direct(UserActor(discord_user_id=1, is_bot_owner=True)))
     await admin.grant(
         context=ActingContext.direct(owner),
         subject=ExternalRoleGrantSubject(100, 200),
@@ -127,12 +140,16 @@ async def test_tagged_role_subject_retains_guild_identity_and_audit(
         scope_guild_id=100,
     )
     assert (
-        await permissions.check(Actor(guild_id=100, discord_role_ids=frozenset({200})), "settings.server.edit")
+        await permissions.check(
+            RolePermissionSubject(guild_id=100, discord_role_ids=frozenset({200})), "settings.server.edit"
+        )
     ).allowed
     assert not (
-        await permissions.check(Actor(guild_id=101, discord_role_ids=frozenset({200})), "settings.server.edit")
+        await permissions.check(
+            RolePermissionSubject(guild_id=101, discord_role_ids=frozenset({200})), "settings.server.edit"
+        )
     ).allowed
-    entry = (await admin.audit(context=ActingContext.direct(Actor(is_bot_owner=True))))[0]
+    entry = (await admin.audit(context=ActingContext.direct(UserActor(discord_user_id=1, is_bot_owner=True))))[0]
     assert entry.subject_kind == "discord_role"
     assert entry.subject_id == 200
     assert entry.subject_guild_id == 100

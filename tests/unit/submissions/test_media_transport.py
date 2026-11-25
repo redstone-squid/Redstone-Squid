@@ -18,7 +18,7 @@ from litestar.types import ReceiveMessage
 
 from squid.api.v1 import submission_media
 from squid.api.v1.submission_media import upload_draft_media
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.media.domain import MediaKind
 from squid.core.media.errors import DraftMediaRequestError
 from squid.core.submissions.application import DraftAttachmentService
@@ -72,7 +72,7 @@ async def upload_image(request: Request, media: FakeMedia | None = None) -> None
         kind=MediaKind.IMAGE,
         request=request,
         attachments=DraftAttachmentService(FakeDrafts(media.events), media),
-        context=ActingContext.direct(Actor(account_id=ACCOUNT_ID)),
+        context=ActingContext.direct(UserActor(account_id=ACCOUNT_ID)),
         upload_id=UPLOAD_ID,
     )
 

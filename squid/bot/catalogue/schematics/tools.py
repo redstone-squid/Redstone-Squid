@@ -154,7 +154,7 @@ class SchematicTools(sl.Component[ComponentsV2Target, SchematicRequest]):
         if stored is None:
             await event.notice(tr(t"build-schematic-missing = This build has no schematic attached."))
             return None
-        account_id = context.effective.account_id
+        account_id = context.effective.linked_account_id
         is_uploader = account_id is not None and stored.uploaded_by_account_id == account_id
         if not (stored.publication.is_public_downloadable or is_uploader or await self.grants.allows(private_access)):
             await event.notice(tr(t"build-schematic-not-public = This schematic is not publicly available."))
@@ -210,7 +210,7 @@ class SchematicTools(sl.Component[ComponentsV2Target, SchematicRequest]):
         context = ActingContext.current()
         stored = await self._primary(event, BUILD_SCHEMATIC_VIEW_PRIVATE)
         service = self._schematics.videos
-        if stored is None or service is None or context.effective.account_id is None:
+        if stored is None or service is None or context.effective.linked_account_id is None:
             return
         await self._queue_recipe(request, stored, context, recipe, event)
 
@@ -270,7 +270,7 @@ class SchematicTools(sl.Component[ComponentsV2Target, SchematicRequest]):
     async def _deliver_video_once(self, request: SchematicRequest, job_id: int, session_id: UUID | None) -> bool:
         service = self._schematics.videos
         context = await request.client.actors.acting_context(request, session_id, "schematic_video_delivery")
-        if service is None or context.effective.account_id is None:
+        if service is None or context.effective.linked_account_id is None:
             return True
         status = await service.get_video(job_id, context=context)
         if status.status in ("queued", "running"):

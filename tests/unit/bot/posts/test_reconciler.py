@@ -17,7 +17,7 @@ from squid.bot.app import RedstoneSquid
 from squid.bot.posts.reconciler import PostReconciler
 from squid.bot.posts.renderer import DesiredPost
 from squid.bot.posts.submission_renderer import SubmissionStatusRenderer
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, AnonymousActor
 from squid.core.messages.application import MessageService
 from squid.core.messages.domain import MessageSnapshot
 from squid.core.posts.application import PostService
@@ -284,7 +284,7 @@ async def test_inference_status_refresh_removes_legacy_posts_without_sending_new
         resource_key="42",
         surface="submission_status",
         applied_revision=1,
-        context=ActingContext.direct(Actor()),
+        context=ActingContext.direct(AnonymousActor()),
     )
     renderer = SubmissionStatusRenderer(cast(RedstoneSquid, bot))
     reconciler = PostReconciler(cast(RedstoneSquid, bot), [renderer])
@@ -296,7 +296,10 @@ async def test_inference_status_refresh_removes_legacy_posts_without_sending_new
     assert not source.deleted
     assert channel.sent == []
     assert (
-        await bot.services.posts.list_for_resource("inference_run", "42", context=ActingContext.direct(Actor())) == []
+        await bot.services.posts.list_for_resource(
+            "inference_run", "42", context=ActingContext.direct(AnonymousActor())
+        )
+        == []
     )
 
 

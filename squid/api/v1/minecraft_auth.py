@@ -43,7 +43,7 @@ from squid.api.v1.schemas.minecraft_auth import (
     PaperChallengeExchangeRequest,
     ServerProfileSchema,
 )
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, ServiceActor
 from squid.core.errors import NotFoundError, ServiceUnavailableError
 from squid.core.minecraft_auth.application.crypto import (
     MAX_INSTALLATION_ID_CHARS,
@@ -107,7 +107,7 @@ async def enforce_paper_request_idempotency(
     credential cannot replay its response under the replacement credential.
     """
     namespace = f"minecraft-installation:{installation.id}:{installation.credential_version}"
-    installation_actor = Actor(service_id=f"minecraft-installation:{installation.id}", credential_id=namespace)
+    installation_actor = ServiceActor(service_id=f"minecraft-installation:{installation.id}", credential_id=namespace)
     installation_context = ActingContext(
         installation_actor, installation_actor, invocation_id=caller.context().invocation_id
     )

@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.core.accounts.models import Account
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, AnonymousActor
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import OtherBuild
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
@@ -107,7 +107,7 @@ async def test_keyword_aliases_and_exact_filters_keep_display_names(
     service = SearchService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
     page = await service.search(
         SearchRequest("observerless", scope=SearchScope.BUILDS, group_by_build=True),
-        context=ActingContext.direct(Actor()),
+        context=ActingContext.direct(AnonymousActor()),
     )
     assert _ids(page) == {target_id, textual_id}
     target = next(hit for hit in page.hits if hit.source_id == str(target_id))
@@ -130,27 +130,30 @@ async def test_keyword_aliases_and_exact_filters_keep_display_names(
         "restriction:observerless OR pattern:missing",
     ):
         page = await service.search(
-            SearchRequest(query, scope=SearchScope.BUILDS, group_by_build=True), context=ActingContext.direct(Actor())
+            SearchRequest(query, scope=SearchScope.BUILDS, group_by_build=True),
+            context=ActingContext.direct(AnonymousActor()),
         )
         assert _ids(page) == {target_id}, query
         assert page.total == 1
 
     for query in ('"pocket sized"', "laced"):
         page = await service.search(
-            SearchRequest(query, scope=SearchScope.BUILDS), context=ActingContext.direct(Actor())
+            SearchRequest(query, scope=SearchScope.BUILDS), context=ActingContext.direct(AnonymousActor())
         )
         assert _ids(page) == {target_id}, query
 
     for query in ("NOT restriction:observerless", "NOT restriction:observerless AND NOT pattern:laced"):
         assert _ids(
-            await service.search(SearchRequest(query, scope=SearchScope.BUILDS), context=ActingContext.direct(Actor()))
+            await service.search(
+                SearchRequest(query, scope=SearchScope.BUILDS), context=ActingContext.direct(AnonymousActor())
+            )
         ) == {textual_id}
 
     for query in ("ghostkeyword", "restriction:ghostkeyword", "tag:ghostkeyword", "restriction:observers"):
         assert (
             _ids(
                 await service.search(
-                    SearchRequest(query, scope=SearchScope.BUILDS), context=ActingContext.direct(Actor())
+                    SearchRequest(query, scope=SearchScope.BUILDS), context=ActingContext.direct(AnonymousActor())
                 )
             )
             == set()
@@ -158,11 +161,12 @@ async def test_keyword_aliases_and_exact_filters_keep_display_names(
 
     sorted_page = await service.search(
         SearchRequest("restriction:observerless", scope=SearchScope.BUILDS, sort=SearchSort("created_at")),
-        context=ActingContext.direct(Actor()),
+        context=ActingContext.direct(AnonymousActor()),
     )
     assert _ids(sorted_page) == {target_id}
     metadata = await service.search(
-        SearchRequest("restriction:observerless", scope=SearchScope.METADATA), context=ActingContext.direct(Actor())
+        SearchRequest("restriction:observerless", scope=SearchScope.METADATA),
+        context=ActingContext.direct(AnonymousActor()),
     )
     assert [hit.title for hit in metadata.hits] == ["No Observers"]
 
@@ -209,7 +213,7 @@ async def test_alias_addition_rename_and_removal_refresh_assigned_builds(
             for query in (f'"{new}"', f'restriction:"{new}"'):
                 assert _ids(
                     await service.search(
-                        SearchRequest(query, scope=SearchScope.BUILDS), context=ActingContext.direct(Actor())
+                        SearchRequest(query, scope=SearchScope.BUILDS), context=ActingContext.direct(AnonymousActor())
                     )
                 ) == {target_id}
         if old is not None:
@@ -217,7 +221,7 @@ async def test_alias_addition_rename_and_removal_refresh_assigned_builds(
                 _ids(
                     await service.search(
                         SearchRequest(f'restriction:"{old}"', scope=SearchScope.BUILDS),
-                        context=ActingContext.direct(Actor()),
+                        context=ActingContext.direct(AnonymousActor()),
                     )
                 )
                 == set()
@@ -259,7 +263,8 @@ async def test_migration_requeues_existing_builds_and_tag_metadata(
     service = SearchService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
     assert _ids(
         await service.search(
-            SearchRequest("restriction:observerless", scope=SearchScope.BUILDS), context=ActingContext.direct(Actor())
+            SearchRequest("restriction:observerless", scope=SearchScope.BUILDS),
+            context=ActingContext.direct(AnonymousActor()),
         )
     ) == {target_id}
 
@@ -317,7 +322,7 @@ async def test_record_category_filters_match_without_holders_and_refresh_aliases
 
     async def matches(query: str) -> set[str]:
         page = await service.search(
-            SearchRequest(query, scope=SearchScope.RECORDS), context=ActingContext.direct(Actor())
+            SearchRequest(query, scope=SearchScope.RECORDS), context=ActingContext.direct(AnonymousActor())
         )
         return {hit.source_id for hit in page.hits}
 

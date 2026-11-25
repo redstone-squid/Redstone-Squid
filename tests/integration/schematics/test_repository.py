@@ -18,7 +18,7 @@ from whenever import Instant
 
 import squid.core.persistence.model_registry  # noqa: F401
 from squid.core.accounts.models import Account
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, AnonymousActor, UserActor
 from squid.core.artifacts import ArtifactMetadata
 from squid.core.artifacts.infrastructure import LocalArtifactStore
 from squid.core.builds.infrastructure.schematic_summary import SchematicServiceSummaryProvider
@@ -176,7 +176,7 @@ async def test_uploader_account_attribution_reaches_the_persisted_attachment(
         digest,
         make_analysis(),
         primary=True,
-        context=ActingContext.direct(Actor(account_id=account_id)),
+        context=ActingContext.direct(UserActor(account_id=account_id)),
     )
 
     async with async_session_factory() as session:
@@ -771,7 +771,7 @@ async def test_card_measurements_and_refresh_follow_replacement_and_withdrawal(
     await repository.record_analysis(
         1, first_digest, make_analysis(), context=ActingContext.worker("test"), primary=True, publication=publication
     )
-    first = await provider.summary_for(1, context=ActingContext.direct(Actor()))
+    first = await provider.summary_for(1, context=ActingContext.direct(AnonymousActor()))
     assert first is not None
     first_generation = await generation()
 
@@ -784,7 +784,7 @@ async def test_card_measurements_and_refresh_follow_replacement_and_withdrawal(
         primary=True,
         publication=publication,
     )
-    second = await provider.summary_for(1, context=ActingContext.direct(Actor()))
+    second = await provider.summary_for(1, context=ActingContext.direct(AnonymousActor()))
     assert second is not None
     assert second.download_url != first.download_url
     assert (second.width, second.height, second.length) == (8, 9, 10)
@@ -795,5 +795,5 @@ async def test_card_measurements_and_refresh_follow_replacement_and_withdrawal(
         await session.execute(
             text("UPDATE build_schematics SET withdrawn_at = now() WHERE id = :id"), {"id": second_id}
         )
-    assert await provider.summary_for(1, context=ActingContext.direct(Actor())) is None
+    assert await provider.summary_for(1, context=ActingContext.direct(AnonymousActor())) is None
     assert await generation() > second_generation

@@ -476,7 +476,7 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
                         code,
                         consent=consent,
                         context=ActingContext.for_actor(
-                            replace(await self._edit_actor(), account_id=linked_account_id)
+                            replace((await self._edit_actor()).require_user(), account_id=linked_account_id)
                         ),
                         reservation=reservation,
                     )

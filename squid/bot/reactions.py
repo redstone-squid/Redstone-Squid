@@ -69,7 +69,7 @@ from typing import TYPE_CHECKING, Any, Literal, cast, overload
 import anyio
 import discord
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.concurrency import run_all
 from squid.core.observability import add_counter, record_gauge, record_histogram
 from squid.runtime import BackgroundTaskSupervisor, JobHandle
@@ -152,7 +152,7 @@ class ReactionEvent:
 
     @property
     def acting_context(self) -> ActingContext:
-        return ActingContext.direct(Actor(discord_user_id=self.payload.user_id, guild_id=self.payload.guild_id))
+        return ActingContext.direct(UserActor(discord_user_id=self.payload.user_id, guild_id=self.payload.guild_id))
 
     @property
     def is_own_reaction(self) -> bool:

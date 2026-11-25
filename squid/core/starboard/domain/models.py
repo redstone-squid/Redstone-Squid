@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Literal
 
 from whenever import Instant
 
-from squid.core.actors import Actor
+from squid.core.actors import UserActor
 from squid.core.scores import round_score
 
 type StarboardDirection = Literal["up", "down"]
@@ -64,7 +64,7 @@ class VoteVerdict:
 def evaluate_vote(
     config: StarboardConfig,
     origin: OriginMessage,
-    actor: Actor,
+    actor: UserActor,
     emoji: str,
     *,
     now: Instant | None = None,

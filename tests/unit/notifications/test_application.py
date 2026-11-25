@@ -7,7 +7,7 @@ import pytest
 from pydantic import JsonValue
 
 from squid.core.accounts.errors import ConsentRequiredError
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.edits.domain import EditCommand, EditValues, Revision
 from squid.core.notifications import NotificationPreferences, NotificationService
 from squid.core.notifications.application import NotificationRepository
@@ -45,7 +45,9 @@ async def test_edits_require_consent_before_target_lookup(kind: str) -> None:
     )
     with pytest.raises(ConsentRequiredError):
         await handler.prepare(
-            uow, Actor(account_id=7), EditCommand(kind, (Revision(notification_target(7), 1),), EditValues.of(values))
+            uow,
+            UserActor(account_id=7),
+            EditCommand(kind, (Revision(notification_target(7), 1),), EditValues.of(values)),
         )
     uow.notifications.subscription_target_exists.assert_not_called()
 
@@ -61,7 +63,7 @@ async def test_subscription_target_is_checked_before_persistence() -> None:
     with pytest.raises(NotificationSubscriptionNotFoundError):
         await NotificationSubscriptionsEdit(permissions).prepare(
             uow,
-            Actor(account_id=7),
+            UserActor(account_id=7),
             EditCommand(
                 SUBSCRIPTIONS_EDIT,
                 (Revision(notification_target(7), 1),),
@@ -101,7 +103,7 @@ async def test_inbox_checks_the_reader_and_filters_staff_rows(staff: bool) -> No
     permissions = AsyncMock(spec=PermissionService)
     permissions.check.return_value.allowed = staff
     service = NotificationService(permissions=permissions, uow_factory=lambda: NotificationUnitOfWork(repository))
-    context = ActingContext.direct(Actor(account_id=7))
+    context = ActingContext.direct(UserActor(account_id=7))
     await service.inbox(context=context)
     permissions.require.assert_awaited_once_with(context.effective, ACCOUNT_SELF_READ)
     permissions.check.assert_awaited_once_with(context.effective, BUILD_SUBMISSION_VIEW_PENDING)

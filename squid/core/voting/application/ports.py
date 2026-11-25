@@ -5,7 +5,7 @@ from typing import Protocol
 
 from whenever import Instant
 
-from squid.core.actors import Actor
+from squid.core.actors import UserActor
 from squid.core.permissions.application.ports import PermissionUnitOfWork
 from squid.core.voting.domain import (
     EmojiPreset,
@@ -27,20 +27,22 @@ class VoteWeightPolicy(Protocol):
     VoteService applies the selected option's multiplier to this weight.
     """
 
-    async def calculate(self, actor: Actor, session: VoteSessionSnapshot) -> float | None: ...
+    async def calculate(self, actor: UserActor, session: VoteSessionSnapshot) -> float | None: ...
 
 
 class VoteActorResolver(Protocol):
     """Resolve membership in the guild whose roles determine ballot weight."""
 
-    async def resolve_many(self, account_ids: Sequence[int], guild_id: int, kind: VoteKind) -> dict[int, Actor | None]:
+    async def resolve_many(
+        self, account_ids: Sequence[int], guild_id: int, kind: VoteKind
+    ) -> dict[int, UserActor | None]:
         """Resolve accounts together, preserving unknown membership as None."""
         ...
 
-    async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> Actor | None:
+    async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> UserActor | None:
         """Return the account's membership facts in `guild_id`.
 
-        An account that is definitely not a member resolves to a `Actor` with
+        An account that is definitely not a member resolves to a `UserActor` with
         no roles or capabilities. The policy then determines whether the account is
         still eligible and what weight it receives. `None` means membership could
         not be established; refreshes preserve the ballot's cached weight.
@@ -51,7 +53,7 @@ class VoteActorResolver(Protocol):
 class InteractiveVoteActorResolver(VoteActorResolver, Protocol):
     """Resolve membership for an interactive transport and surface dependency failure."""
 
-    async def member(self, account_id: int, guild_id: int, kind: VoteKind) -> Actor | None: ...
+    async def member(self, account_id: int, guild_id: int, kind: VoteKind) -> UserActor | None: ...
 
 
 class VoteRepository(Protocol):

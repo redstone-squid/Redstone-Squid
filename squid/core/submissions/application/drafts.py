@@ -64,7 +64,7 @@ def draft_actor_id(actor: Actor) -> int:
     if not isinstance(actor, Actor):
         message = "Draft authorization requires an Actor."
         raise InvalidStateError(message)
-    identifier = actor.account_id
+    identifier = actor.linked_account_id
     if identifier is None or identifier < 1:
         raise DraftAccessDeniedError(reason="missing_account")
     return identifier

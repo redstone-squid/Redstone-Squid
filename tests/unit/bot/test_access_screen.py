@@ -13,7 +13,7 @@ from squid.bot.access_view import AccessScreen
 from squid.bot.permissions_cog import ACCESS_NODES
 from squid.core.accounts.domain import IdentityProvider
 from squid.core.accounts.models import Account, AccountIdentity
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, Actor, UserActor
 from squid.core.edits.application import EditRunner
 from squid.core.edits.domain import (
     EditCommand,
@@ -42,6 +42,7 @@ from squid.core.permissions.application.edits import (
 )
 from squid.core.permissions.domain import CATALOGUE, Decision, PermissionCheck, Reason
 from squid.core.permissions.domain.catalogue import PERM_GRANT_GLOBAL, PERM_GRANT_GUILD, PERM_SUBJECT_INSPECT
+from squid.core.permissions.domain.models import RolePermissionSubject
 from squid.core.permissions.models import PermissionAuditEntry, PermissionRole, PermissionRoleAssignment
 from squid_ui.ext.discord.testing import assert_within_limits, commit_render, delivered_to, message_harness, stage
 from squid_ui.interactions import Actor as UIActor
@@ -82,7 +83,7 @@ class PermissionEdits:
 
 
 async def admin_actor() -> Actor:
-    return Actor(account_id=1)
+    return UserActor(account_id=1)
 
 
 async def test_access_modal_does_not_rebase_and_final_delete_discards_graph_history() -> None:
@@ -291,7 +292,7 @@ async def test_check_uses_selected_membership_or_only_the_selected_role(role_id:
     guild = client.get_guild.return_value
     guild.id = 42
     guild.fetch_member = AsyncMock()
-    actor = Actor(account_id=2, discord_user_id=123, guild_id=42, discord_role_ids=frozenset({8, 99}))
+    actor = UserActor(account_id=2, discord_user_id=123, guild_id=42, discord_role_ids=frozenset({8, 99}))
     client.actors.resolve = AsyncMock(return_value=actor)
     node = next(iter(CATALOGUE))
     client.services.permissions.check = AsyncMock(
@@ -321,7 +322,7 @@ async def test_check_uses_selected_membership_or_only_the_selected_role(role_id:
     assert "Redstone Lab" in rendered
     if role_id:
         client.services.permissions.check.assert_awaited_once_with(
-            Actor(guild_id=42, discord_role_ids=frozenset({99})), *(n.name for n in CATALOGUE.values())
+            RolePermissionSubject(guild_id=42, discord_role_ids=frozenset({99})), *(n.name for n in CATALOGUE.values())
         )
         assert "contributes no rule" in rendered
         guild.fetch_member.assert_not_awaited()
@@ -357,7 +358,7 @@ async def test_subject_overview_displays_inherited_privileges_next_to_recorded_a
     client = MagicMock()
     guild = client.get_guild.return_value
     guild.fetch_member = AsyncMock()
-    client.actors.resolve = AsyncMock(return_value=Actor(account_id=2, discord_user_id=123, guild_id=42))
+    client.actors.resolve = AsyncMock(return_value=UserActor(account_id=2, discord_user_id=123, guild_id=42))
     client.services.permissions.check = AsyncMock(
         return_value=PermissionCheck(tuple(Decision(node, allowed=True, reason=Reason.OWNER) for node in CATALOGUE))
     )
@@ -378,7 +379,7 @@ async def test_subject_overview_displays_inherited_privileges_next_to_recorded_a
         subject_label="Alex",
         grants=grants(*ACCESS_NODES),
         bot=client,
-        actor=AsyncMock(return_value=Actor(account_id=1)),
+        actor=AsyncMock(return_value=UserActor(account_id=1)),
     )
     root = make_layout_bot().ui.mount(screen, access=sd.Owner(7), timeout=300)
     await root.send(delivered_to(message_harness()))

@@ -14,7 +14,7 @@ from uuid import UUID
 
 from whenever import Instant
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, Actor, AnonymousActor, UserActor
 from squid.core.errors import DataIntegrityError, InvalidStateError
 from squid.core.i18n import tr
 from squid.core.permissions.errors import PermissionDeniedError
@@ -357,9 +357,14 @@ class SubmissionFinalizationService:
             for draft in drafts:
                 with worker_execution("submission-preparation", draft.preparation_attempt) as attempt:
                     try:
+                        requester = (
+                            UserActor(account_id=draft.submission_actor_account_id)
+                            if draft.submission_actor_account_id is not None
+                            else AnonymousActor()
+                        )
                         await self._submit(
                             draft,
-                            Actor(account_id=draft.submission_actor_account_id),
+                            requester,
                             locale=None,
                             now=now,
                             refresh_retention=False,

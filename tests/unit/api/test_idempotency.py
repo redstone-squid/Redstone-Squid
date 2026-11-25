@@ -30,7 +30,7 @@ from squid.api.idempotency import (
     reserve_idempotent_request,
 )
 from squid.api.security import current_caller
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.edits.application import EditExecutor
 from squid.core.errors import ErrorCode
 from squid.core.idempotency import IdempotencyService, PendingRequest, StoredResponse
@@ -157,7 +157,7 @@ async def run_completion_middleware(
                 "squid_idempotency": IdempotencyReservationState(
                     cast(IdempotencyService, recorder),
                     PendingRequest(uuid4()),
-                    ActingContext.direct(Actor(account_id=1)),
+                    ActingContext.direct(UserActor(account_id=1)),
                 )
             },
         },
@@ -292,7 +292,7 @@ async def test_pending_key_blocks_concurrent_duplicate_but_is_scoped_per_caller(
     async def reserve_for(caller: str) -> PendingRequest | StoredResponse:
         return await service.reserve(
             caller=caller,
-            context=ActingContext.direct(Actor(account_id=int(caller.split(":")[1]))),
+            context=ActingContext.direct(UserActor(account_id=int(caller.split(":")[1]))),
             key="concurrent-request",
             fingerprint=b"same-request",
             method=UnsafeHttpMethod.POST,

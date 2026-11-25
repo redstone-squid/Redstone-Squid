@@ -1,6 +1,6 @@
 """Create starboards through the production edit handlers in integration fixtures."""
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, AnonymousActor, UserActor
 from squid.core.edits.application import EditExecutor
 from squid.core.edits.domain import EditCommand, Revision
 from squid.core.permissions.application.services import PermissionService
@@ -26,7 +26,7 @@ async def create_starboard(
     required: float = 3.0,
 ) -> StarboardConfig:
     service = StarboardService(uow_factory=factory)
-    identity = await service.reserve_id(context=ActingContext.direct(Actor()))
+    identity = await service.reserve_id(context=ActingContext.direct(AnonymousActor()))
     config = StarboardConfig(
         id=identity,
         guild_id=guild_id,
@@ -39,8 +39,8 @@ async def create_starboard(
     executor = EditExecutor(factory, {STARBOARD_CREATE: StarboardCreation(PermissionService(uow_factory=factory))})
     await executor.execute(
         EditCommand(STARBOARD_CREATE, (Revision(starboard_target(identity), 0),), values.values()),
-        context=ActingContext.direct(Actor(discord_user_id=42, guild_id=guild_id, is_bot_owner=True)),
+        context=ActingContext.direct(UserActor(discord_user_id=42, guild_id=guild_id, is_bot_owner=True)),
     )
-    stored = await service.get(guild_id, "main", context=ActingContext.direct(Actor()))
+    stored = await service.get(guild_id, "main", context=ActingContext.direct(AnonymousActor()))
     assert stored is not None
     return stored

@@ -5,7 +5,7 @@ from unittest.mock import Mock, create_autospec
 
 import pytest
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, AnonymousActor, UserActor
 from squid.core.errors import AuthorizationError
 from squid.core.permissions.application.services import PermissionService
 from squid.core.permissions.domain.catalogue import SETTINGS_RUNTIME_EDIT, SETTINGS_RUNTIME_VIEW
@@ -20,15 +20,15 @@ async def test_membership_changes_commit_without_clearing_settings() -> None:
         permissions=create_autospec(PermissionService, instance=True),
         uow_factory=partial(FakeSettingsUnitOfWork, committed),
     )
-    await service.guild_removed(1, context=ActingContext.direct(Actor()))
+    await service.guild_removed(1, context=ActingContext.direct(AnonymousActor()))
     assert committed.value == {}
-    await service.guild_joined(1, context=ActingContext.direct(Actor()))
+    await service.guild_joined(1, context=ActingContext.direct(AnonymousActor()))
     assert committed.value[1].in_server
     committed.value[1].locale = "fr"
-    await service.guild_removed(1, context=ActingContext.direct(Actor()))
+    await service.guild_removed(1, context=ActingContext.direct(AnonymousActor()))
     assert not committed.value[1].in_server
     assert committed.value[1].locale == "fr"
-    await service.guild_joined(1, context=ActingContext.direct(Actor()))
+    await service.guild_joined(1, context=ActingContext.direct(AnonymousActor()))
     assert committed.value[1].in_server
     assert committed.value[1].locale == "fr"
 
@@ -39,11 +39,14 @@ async def test_reads_preserve_missing_server_semantics() -> None:
         permissions=create_autospec(PermissionService, instance=True),
         uow_factory=partial(FakeSettingsUnitOfWork, committed),
     )
-    assert await service.get_many(iter([1, 2, 3]), "Vote", context=ActingContext.direct(Actor())) == {1: 123, 2: None}
-    assert await service.get(3, "Vote", context=ActingContext.direct(Actor())) is None
-    assert await service.get_locale(3, context=ActingContext.direct(Actor())) is None
-    assert await service.get_all(3, context=ActingContext.direct(Actor())) == {}
-    assert await service.get_all(1, context=ActingContext.direct(Actor())) == {
+    assert await service.get_many(iter([1, 2, 3]), "Vote", context=ActingContext.direct(AnonymousActor())) == {
+        1: 123,
+        2: None,
+    }
+    assert await service.get(3, "Vote", context=ActingContext.direct(AnonymousActor())) is None
+    assert await service.get_locale(3, context=ActingContext.direct(AnonymousActor())) is None
+    assert await service.get_all(3, context=ActingContext.direct(AnonymousActor())) == {}
+    assert await service.get_all(1, context=ActingContext.direct(AnonymousActor())) == {
         "Smallest": None,
         "Fastest": None,
         "First": None,
@@ -59,7 +62,7 @@ async def test_reading_a_runtime_revision_checks_permission_before_persisting_de
     permissions.require.side_effect = AuthorizationError
     factory = Mock()
     settings = SettingsService(uow_factory=factory, permissions=permissions)
-    context = ActingContext.direct(Actor(account_id=42))
+    context = ActingContext.direct(UserActor(account_id=42))
     with pytest.raises(AuthorizationError):
         await settings.runtime_snapshot(context=context, for_edit=editing)
     permissions.require.assert_awaited_once_with(

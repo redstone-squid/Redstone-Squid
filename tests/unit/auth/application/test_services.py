@@ -7,12 +7,12 @@ from typing import Literal
 import pytest
 from whenever import Instant
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, Actor, AnonymousActor, UserActor
 from squid.core.auth.application.services import LAST_USED_WRITE_INTERVAL_SECONDS, ApiKeyService, hash_api_key_secret
 from squid.core.auth.models.entities import ApiKey
 from squid.core.errors import AuthorizationError, InvalidStateError
 from squid.core.permissions.application import PermissionService
-from squid.core.permissions.application.ports import PermissionRepository, SubjectRecords
+from squid.core.permissions.application.ports import PermissionRepository, PermissionSubject, SubjectRecords
 from squid.core.permissions.domain import InvalidPatternError, Pattern
 from squid.core.permissions.models import PermissionGrant
 from tests.support.permissions import permission_uow_factory
@@ -120,7 +120,7 @@ async def test_issue_returns_secret_once_and_stores_only_its_hmac() -> None:
         label="Minecraft server",
         scopes={"account.verify.relay", "build.submission.create"},
         owner_account_id=4,
-        context=ActingContext.direct(Actor(account_id=7, is_bot_owner=True)),
+        context=ActingContext.direct(UserActor(account_id=7, is_bot_owner=True)),
     )
 
     assert issued.token.startswith(f"sq_{issued.key.key_id}_")
@@ -311,7 +311,7 @@ class TestIssuanceBoundary:
     @staticmethod
     def _authorized_service(repository: CommittedState[FakeApiKeyRepository], *held: str) -> ApiKeyService:
         class Store:
-            async def load_for_subject(self, subject: Actor) -> SubjectRecords:
+            async def load_for_subject(self, subject: PermissionSubject) -> SubjectRecords:
                 return SubjectRecords(
                     epoch=1,
                     grants=tuple(PermissionGrant(pattern=node, effect=1, subject_account_id=4) for node in held),
@@ -336,7 +336,7 @@ class TestIssuanceBoundary:
             label="CI",
             scopes={"build.submission.create"},
             owner_account_id=4,
-            context=ActingContext.direct(Actor(account_id=4)),
+            context=ActingContext.direct(UserActor(account_id=4)),
         )
 
         assert issued.key.scopes == nodes("build.submission.create")
@@ -351,7 +351,7 @@ class TestIssuanceBoundary:
                 label="CI",
                 scopes={"bot.tree.sync"},
                 owner_account_id=4,
-                context=ActingContext.direct(Actor(account_id=4)),
+                context=ActingContext.direct(UserActor(account_id=4)),
             )
 
         assert repository.value.keys == {}
@@ -367,7 +367,9 @@ class TestIssuanceBoundary:
         assert issued.key.scopes == nodes("bot.tree.sync")
 
 
-@pytest.mark.parametrize("actor", [Actor(), Actor(account_id=4), Actor(account_id=4, credential_scopes=frozenset())])
+@pytest.mark.parametrize(
+    "actor", [AnonymousActor(), UserActor(account_id=4), UserActor(account_id=4, credential_scopes=frozenset())]
+)
 async def test_ordinary_callers_cannot_bootstrap_ownerless_keys(actor: Actor) -> None:
     repository = _state()
     with pytest.raises(AuthorizationError):

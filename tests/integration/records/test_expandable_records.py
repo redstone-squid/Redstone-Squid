@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.core.accounts.models import Account
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, AnonymousActor, UserActor
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import DoorBuild
 from squid.core.permissions.application.services import PermissionService
@@ -60,7 +60,7 @@ async def test_ordinary_publication_uses_saved_configuration_and_survives_source
         family_id, fixed_id = family.id, fixed.id
     factory = partial(SqlAlchemyUnitOfWork, sessions)
     computation = RecordComputationService(uow_factory=factory)
-    await computation.rebuild(kinds=(BuildKind.DOOR,), context=ActingContext.direct(Actor()))
+    await computation.rebuild(kinds=(BuildKind.DOOR,), context=ActingContext.direct(AnonymousActor()))
     async with factory() as uow:
         listing = await uow.records.list_published_records(
             offset=0, after_id=None, before_id=None, descending=False, limit=20
@@ -113,7 +113,7 @@ async def test_ordinary_publication_uses_saved_configuration_and_survives_source
         unchanged = await uow.records.get_published_record(smallest.result_id)
         assert unchanged is not None
         assert unchanged.door_evidence == original_evidence
-    await computation.rebuild(kinds=(BuildKind.DOOR,), context=ActingContext.direct(Actor()))
+    await computation.rebuild(kinds=(BuildKind.DOOR,), context=ActingContext.direct(AnonymousActor()))
     async with factory() as uow:
         listing = await uow.records.list_published_records(
             offset=0, after_id=None, before_id=None, descending=False, limit=20
@@ -126,7 +126,7 @@ async def test_ordinary_publication_uses_saved_configuration_and_survives_source
     service = RecordService(computation, permissions=PermissionService(uow_factory=factory), uow_factory=factory)
     await service.lookup_or_materialize(
         RecordLookupRequest(kind=BuildKind.DOOR, base_key="door|9999x3|t[]|Door", restriction_ids=frozenset()),
-        context=ActingContext.direct(Actor(account_id=1, is_bot_owner=True)),
+        context=ActingContext.direct(UserActor(account_id=1, is_bot_owner=True)),
     )
     async with factory() as uow:
         listing = await uow.records.list_published_records(

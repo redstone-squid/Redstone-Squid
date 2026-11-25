@@ -6,8 +6,8 @@ here. Stored rows remain separate from the caller's mutable Discord membership.
 
 from collections.abc import Iterable
 
-from squid.core.actors import Actor
-from squid.core.permissions.application.ports import SubjectRecords
+from squid.core.actors import UserActor
+from squid.core.permissions.application.ports import PermissionSubject, SubjectRecords
 from squid.core.permissions.domain import (
     BUILTIN_ROLES_BY_KEY,
     BuiltinRoleKeys,
@@ -61,14 +61,14 @@ class PermissionRuleSnapshot:
         self,
         records: SubjectRecords,
         graph: RoleGraph,
-        subject: Actor,
+        subject: PermissionSubject,
     ) -> list[Rule]:
         """Add guild-admin rules for Discord members with Manage Server.
 
         The bridge has the lowest origin rank. Specificity, scope, and subject rank
         still take precedence, so an explicit rule does not always outrank it.
         """
-        if not subject.discord_guild_admin or subject.guild_id is None:
+        if not isinstance(subject, UserActor) or not subject.discord_guild_admin or subject.guild_id is None:
             return []
         key = next((str(role.id) for role in records.roles if role.builtin_key == BuiltinRoleKeys.GUILD_ADMIN), None)
         if key is None:

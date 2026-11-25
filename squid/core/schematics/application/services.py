@@ -7,7 +7,7 @@ from collections.abc import Generator, Iterable, Sequence
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING
 
-from squid.core.actors import ActingContext
+from squid.core.actors import ActingContext, WorkerActor
 from squid.core.errors import DataIntegrityError, SquidError
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, offset_page
 from squid.core.permissions.domain.catalogue import (
@@ -242,13 +242,13 @@ class SchematicService:
         with context.scope():
             rows = await self._store.list_for_build(build_id)
             actor = context.effective
-            if actor.worker_name is not None:
+            if isinstance(actor, WorkerActor):
                 return rows
             visible = [
                 row
                 for row in rows
                 if row.publication.is_public_downloadable
-                or (actor.account_id is not None and row.uploaded_by_account_id == actor.account_id)
+                or (actor.linked_account_id is not None and row.uploaded_by_account_id == actor.linked_account_id)
             ]
             if (
                 len(visible) == len(rows)
@@ -316,8 +316,8 @@ class SchematicService:
             if stored is None or stored.publication.is_public_downloadable:
                 return stored
             actor = context.effective
-            if actor.worker_name is not None or (
-                actor.account_id is not None and stored.uploaded_by_account_id == actor.account_id
+            if isinstance(actor, WorkerActor) or (
+                actor.linked_account_id is not None and stored.uploaded_by_account_id == actor.linked_account_id
             ):
                 return stored
             access = await self._permissions.check(
@@ -566,8 +566,10 @@ class SchematicService:
                 raise SchematicNotFoundError(context={"build_id": build_id}, public_context={"build_id": build_id})
 
             actor = context.effective
-            is_uploader = actor.account_id is not None and actor.account_id == stored.uploaded_by_account_id
-            if not stored.publication.is_public_downloadable and not is_uploader and actor.worker_name is None:
+            is_uploader = (
+                actor.linked_account_id is not None and actor.linked_account_id == stored.uploaded_by_account_id
+            )
+            if not stored.publication.is_public_downloadable and not is_uploader and not isinstance(actor, WorkerActor):
                 await self._permissions.require(actor, BUILD_SCHEMATIC_DOWNLOAD_PRIVATE)
             data = await self._store.get_file(stored.file_sha256)
             if data is None:
@@ -602,7 +604,7 @@ class SchematicService:
     ) -> SimulationResult:
         """Run and persist staff-facing timing evidence without editing the build timing."""
         with context.scope():
-            if context.effective.worker_name is None:
+            if not isinstance(context.effective, WorkerActor):
                 await self._permissions.require(context.effective, BUILD_SCHEMATIC_MEASURE_TIMING)
             self._require_available()
             capabilities = await self._analyzer.capabilities()

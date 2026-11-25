@@ -21,7 +21,7 @@ from squid.core.accounts.domain import CreatorProfile
 from squid.core.accounts.domain.profiles import PublicCreatorProfile
 from squid.core.accounts.errors import MinecraftAccountNotFoundError
 from squid.core.accounts.models import AccountIdentity, AccountProfile, CreatorAlias
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext
 from squid.core.auth.application.web import WebSessionService
 from squid.core.auth.impersonation import ImpersonationService
 from squid.core.auth.infrastructure.viewer import ViewerQueries
@@ -64,6 +64,7 @@ from squid.core.notifications.models import InboxNotification, NotificationSubsc
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector
 from squid.core.permissions.application import PermissionService, SubjectRecords
 from squid.core.permissions.application.epoch import PermissionEpochWatcher, WakeListener
+from squid.core.permissions.application.ports import PermissionSubject
 from squid.core.permissions.domain import Pattern
 from squid.core.records.application import PublicRecordQueryService, RecordService
 from squid.core.records.application.models import PublicRecordDetail, PublishedRecordResult
@@ -612,7 +613,7 @@ class MockNotifications(NotificationService):
 class EmptyPermissionStore:
     """No stored rules, and a fixed epoch."""
 
-    async def load_for_subject(self, subject: Actor) -> SubjectRecords:
+    async def load_for_subject(self, subject: PermissionSubject) -> SubjectRecords:
         return SubjectRecords(epoch=1, subject=subject)
 
     async def epoch(self) -> int:

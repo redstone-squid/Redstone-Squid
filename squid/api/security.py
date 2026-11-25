@@ -13,7 +13,7 @@ from litestar.handlers import BaseRouteHandler
 from litestar.params import SkipValidation
 
 from squid.core.accounts.errors import ConsentRequiredError
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, Actor, AnonymousActor, ServiceActor, UserActor
 from squid.core.cli_auth.application import CLI_SESSION_TOKEN_PREFIX
 from squid.core.cli_auth.errors import CliAuthorizationError
 from squid.core.errors import AuthenticationError, AuthorizationError, DomainError
@@ -106,18 +106,18 @@ class Caller:
         if self.acting_context is not None:
             return self.acting_context.effective
         if self.kind == "anonymous":
-            return Actor()
+            return AnonymousActor()
         credential_id = f"browser:{self.browser_session_id}" if self.browser_session_id else self.subject
-        return Actor(
-            account_id=self.account_id,
-            service_id=self.subject if self.kind == "service" and self.account_id is None else None,
-            credential_id=credential_id,
-            credential_scopes=(
-                frozenset(pattern.raw for pattern in self.nodes)
-                if self.kind == "service" or self.nodes != UNBOUNDED
-                else None
-            ),
+        scopes = (
+            frozenset(pattern.raw for pattern in self.nodes)
+            if self.kind == "service" or self.nodes != UNBOUNDED
+            else None
         )
+        if self.kind == "service" and self.account_id is None:
+            return ServiceActor(service_id=self.subject, credential_id=credential_id, credential_scopes=scopes)
+        if self.account_id is None:
+            raise AuthenticationError
+        return UserActor(account_id=self.account_id, credential_id=credential_id, credential_scopes=scopes)
 
     def context(self) -> ActingContext:
         """Identify the HTTP operator and the subject of application work."""
@@ -177,6 +177,8 @@ async def current_caller(request: Request) -> Caller:
             raise AuthorizationError from None
         binding = caller.browser_binding()
         operator = caller.to_actor()
+        if not isinstance(operator, UserActor):
+            raise AuthorizationError
         operation = getattr(request.scope.get("route_handler"), "operation_id", None) or request.method
         resource_ids = [f"{key}={value}" for key, value in request.path_params.items() if isinstance(value, int | UUID)]
         operation = " ".join((operation, *resource_ids))

@@ -8,7 +8,7 @@ from enum import StrEnum
 from typing import Literal, Protocol, get_args
 from urllib.parse import urlsplit
 
-from squid.core.actors import ActingContext
+from squid.core.actors import ActingContext, WorkerActor
 from squid.core.builds.domain import BuildCategory, BuildStatus
 from squid.core.builds.domain.credits import CreditAttribution, CreditKind, CreditRole
 from squid.core.builds.errors import BuildNotFoundError
@@ -233,12 +233,12 @@ async def visible_builds(
 ) -> Sequence[Build]:
     """Include private builds for the submitter, permitted staff, and background processors."""
     actor = context.effective
-    if actor.worker_name is not None:
+    if isinstance(actor, WorkerActor):
         return builds
-    owner_id = actor.account_id
-    if owner_id is not None and actor.credential_scopes is not None:
+    owner_id = actor.linked_account_id
+    if owner_id is not None and actor.credential_limit is not None:
         owner_nodes = (BUILD_SUBMISSION_READ, BUILD_SUBMISSION_CREATE) if editing else (BUILD_SUBMISSION_READ,)
-        if not any(Pattern.parse(raw).matches(node) for raw in actor.credential_scopes for node in owner_nodes):
+        if not any(Pattern.parse(raw).matches(node) for raw in actor.credential_limit for node in owner_nodes):
             owner_id = None
     visible = [
         build
@@ -288,7 +288,7 @@ class BuildQueryService:
     async def pending(self, *, context: ActingContext) -> Sequence[Build]:
         with context.scope():
             async with self._uow_factory() as uow:
-                if context.effective.worker_name is None:
+                if not isinstance(context.effective, WorkerActor):
                     await self._permissions.require(context.effective, BUILD_SUBMISSION_VIEW_PENDING)
                 return await uow.builds.get_pending()
 
@@ -323,8 +323,8 @@ class BuildQueryService:
         """
         with context.scope():
             actor = context.effective
-            own_submissions = actor.account_id is not None and submitter_account_id == actor.account_id
-            if statuses != {BuildStatus.APPROVED} and actor.worker_name is None and not own_submissions:
+            own_submissions = actor.linked_account_id is not None and submitter_account_id == actor.linked_account_id
+            if statuses != {BuildStatus.APPROVED} and not isinstance(actor, WorkerActor) and not own_submissions:
                 await self._permissions.require(actor, BUILD_SUBMISSION_VIEW_PENDING)
             async with self._uow_factory() as uow:
                 rows = await uow.builds.list_page(

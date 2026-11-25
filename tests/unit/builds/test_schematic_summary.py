@@ -5,7 +5,7 @@ from dataclasses import replace
 import pytest
 from whenever import Instant
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, AnonymousActor
 from squid.core.builds.infrastructure.schematic_summary import SchematicServiceSummaryProvider
 from squid.core.permissions.application import PermissionService
 from squid.core.schematics.application import SchematicPublication, SchematicService, StoredSchematic
@@ -47,20 +47,20 @@ async def test_summary_tracks_featured_file_and_withdrawal_without_engine() -> N
     provider = SchematicServiceSummaryProvider(schematics, public_base_url="https://api.example.com/")
     first = public_attachment()
     store.stored = [first]
-    summary = await provider.summary_for(7, context=ActingContext.direct(Actor()))
+    summary = await provider.summary_for(7, context=ActingContext.direct(AnonymousActor()))
     assert summary is not None
     assert (summary.width, summary.height, summary.length) == (3, 4, 5)
     assert summary.download_url == "https://api.example.com/v1/builds/7/schematics/12/content"
     assert not summary.multiple_files
     second = replace(first, id=13, file_sha256="1" * 64, analysis=make_analysis(dimensions=(8, 9, 10)))
     store.stored = [replace(first, is_primary=False), second]
-    summary = await provider.summary_for(7, context=ActingContext.direct(Actor()))
+    summary = await provider.summary_for(7, context=ActingContext.direct(AnonymousActor()))
     assert summary is not None
     assert (summary.width, summary.height, summary.length) == (8, 9, 10)
     assert summary.download_url.endswith("/13/content")
     assert summary.multiple_files
     store.stored[1] = replace(second, publication=replace(second.publication, withdrawn_at=Instant.now()))
-    assert await provider.summary_for(7, context=ActingContext.direct(Actor())) is None
+    assert await provider.summary_for(7, context=ActingContext.direct(AnonymousActor())) is None
     assert analyzer.analyze_calls == []
 
 
@@ -82,4 +82,4 @@ async def test_ineligible_schematics_have_no_card_summary(kind: str) -> None:
         schematics,
         public_base_url=None if kind == "no_origin" else "https://api.example.com",
     )
-    assert await provider.summary_for(7, context=ActingContext.direct(Actor())) is None
+    assert await provider.summary_for(7, context=ActingContext.direct(AnonymousActor())) is None

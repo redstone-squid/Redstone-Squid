@@ -10,7 +10,7 @@ from unittest.mock import Mock, create_autospec
 import anyio
 import pytest
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, AnonymousActor, UserActor
 from squid.core.builds.application.queries import PublicBuildDimensions, PublicBuildStatus, PublicBuildSummary
 from squid.core.builds.domain import BuildCategory
 from squid.core.builds.domain.expansion import DoorExpansion, ExpansionBranch, ExpansionParameter, ExpansionTiming
@@ -320,7 +320,7 @@ async def test_rebuild_computes_eager_subsets_and_all_door_base_titles() -> None
     runs = FakeRuns()
     service = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
 
-    summary = await service.rebuild(kinds=(BuildKind.DOOR,), context=ActingContext.direct(Actor()))
+    summary = await service.rebuild(kinds=(BuildKind.DOOR,), context=ActingContext.direct(AnonymousActor()))
 
     assert summary.run_ids == (1,)
     assert summary.definitions == 20
@@ -370,7 +370,7 @@ async def test_parameterized_at_most_restriction_derives_weaker_thresholds() -> 
         )
     )
 
-    await service.rebuild(kinds=(BuildKind.DOOR,), context=ActingContext.direct(Actor()))
+    await service.rebuild(kinds=(BuildKind.DOOR,), context=ActingContext.direct(AnonymousActor()))
 
     threshold_three = [
         record
@@ -405,7 +405,7 @@ async def test_rebuild_creates_empty_extender_run() -> None:
     runs = FakeRuns()
     service = RecordComputationService(uow_factory=lambda: RecordScope(FakeCandidates(()), runs))
 
-    summary = await service.rebuild(kinds=(BuildKind.EXTENDER,), context=ActingContext.direct(Actor()))
+    summary = await service.rebuild(kinds=(BuildKind.EXTENDER,), context=ActingContext.direct(AnonymousActor()))
 
     assert summary.run_ids == (1,)
     assert summary.definitions == 0
@@ -424,7 +424,7 @@ async def test_current_version_run_filters_incompatible_candidates() -> None:
     runs = FakeRuns()
     service = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
 
-    await service.rebuild(current_version_id=3, kinds=(BuildKind.DOOR,), context=ActingContext.direct(Actor()))
+    await service.rebuild(current_version_id=3, kinds=(BuildKind.DOOR,), context=ActingContext.direct(AnonymousActor()))
 
     assert len(runs.batches) == 2
     current = runs.batches[1]
@@ -460,7 +460,7 @@ async def test_eager_categories_never_exceed_eight_restrictions() -> None:
         )
     )
 
-    await service.rebuild(kinds=(BuildKind.DOOR,), context=ActingContext.direct(Actor()))
+    await service.rebuild(kinds=(BuildKind.DOOR,), context=ActingContext.direct(AnonymousActor()))
 
     assert max(len(record.category.identity.restriction_ids) for record in runs.batches[0].records) == 8
     assert all(len(record.category.identity.restriction_ids) <= 8 for record in runs.batches[0].records)
@@ -493,7 +493,7 @@ async def test_lookup_materializes_large_exact_category_and_rebuilds_full_kind()
             base_key="door|2x2|t[20]|Door",
             restriction_ids=frozenset(range(1, 10)),
         ),
-        context=ActingContext.direct(Actor()),
+        context=ActingContext.direct(AnonymousActor()),
     )
 
     assert summary.run_ids == (1,)
@@ -521,7 +521,9 @@ async def test_materialize_definition_round_trips_the_stored_identity() -> None:
         uow_factory=lambda: RecordScope(candidates, runs),
     )
 
-    summary = await service.materialize_definition(42, kind=BuildKind.DOOR, context=ActingContext.direct(Actor()))
+    summary = await service.materialize_definition(
+        42, kind=BuildKind.DOOR, context=ActingContext.direct(AnonymousActor())
+    )
 
     assert summary.run_ids == (1,)
     assert runs.requested[BuildKind.DOOR] == [identity]
@@ -538,7 +540,7 @@ async def test_materialize_definition_rejects_unknown_id() -> None:
     )
 
     with pytest.raises(RecordDefinitionNotFoundError):
-        await service.materialize_definition(999, context=ActingContext.direct(Actor()))
+        await service.materialize_definition(999, context=ActingContext.direct(AnonymousActor()))
 
 
 @pytest.mark.asyncio
@@ -553,7 +555,9 @@ async def test_materialize_definition_rejects_kind_mismatch() -> None:
     )
 
     with pytest.raises(ValidationError):
-        await service.materialize_definition(42, kind=BuildKind.EXTENDER, context=ActingContext.direct(Actor()))
+        await service.materialize_definition(
+            42, kind=BuildKind.EXTENDER, context=ActingContext.direct(AnonymousActor())
+        )
 
 
 @pytest.mark.asyncio
@@ -573,7 +577,7 @@ async def test_lookup_rejects_category_without_confirmed_candidate() -> None:
                 base_key="door|3x3|t[20]|Door",
                 restriction_ids=frozenset(),
             ),
-            context=ActingContext.direct(Actor()),
+            context=ActingContext.direct(AnonymousActor()),
         )
 
 
@@ -597,7 +601,7 @@ async def test_gaps_delegates_active_result_query() -> None:
         uow_factory=lambda: RecordScope(candidates, runs),
     )
 
-    assert await service.gaps(kind=BuildKind.DOOR, context=ActingContext.direct(Actor())) == (gap,)
+    assert await service.gaps(kind=BuildKind.DOOR, context=ActingContext.direct(AnonymousActor())) == (gap,)
 
 
 @pytest.mark.asyncio
@@ -607,7 +611,7 @@ async def test_public_record_query_preserves_holder_order() -> None:
     builds = FakePublicBuilds((_public_build(42), _public_build(41)))
     service = PublicRecordQueryService(builds, uow_factory=lambda: RecordQueryScope(runs))
 
-    detail = await service.get(runs.published_records[7].record_id, context=ActingContext.direct(Actor()))
+    detail = await service.get(runs.published_records[7].record_id, context=ActingContext.direct(AnonymousActor()))
 
     assert detail is not None
     assert [build.id for build in detail.holder_builds] == [41, 42]
@@ -623,7 +627,7 @@ async def test_public_record_query_rejects_unavailable_holder() -> None:
     )
 
     with pytest.raises(DataIntegrityError) as exc_info:
-        await service.get(runs.published_records[7].record_id, context=ActingContext.direct(Actor()))
+        await service.get(runs.published_records[7].record_id, context=ActingContext.direct(AnonymousActor()))
 
     assert exc_info.value.context == {
         "record_id": str(runs.published_records[7].record_id),
@@ -642,7 +646,7 @@ async def test_public_record_query_accepts_empty_nonresolved_result() -> None:
     builds = FakePublicBuilds(())
     service = PublicRecordQueryService(builds, uow_factory=lambda: RecordQueryScope(runs))
 
-    detail = await service.get(runs.published_records[7].record_id, context=ActingContext.direct(Actor()))
+    detail = await service.get(runs.published_records[7].record_id, context=ActingContext.direct(AnonymousActor()))
 
     assert detail is not None
     assert detail.holder_builds == ()
@@ -665,7 +669,7 @@ async def test_public_record_query_rejects_status_holder_corruption(result: Publ
     )
 
     with pytest.raises(DataIntegrityError, match="status contradicts") as exc_info:
-        await service.get(runs.published_records[7].record_id, context=ActingContext.direct(Actor()))
+        await service.get(runs.published_records[7].record_id, context=ActingContext.direct(AnonymousActor()))
 
     assert exc_info.value.context == {
         "record_id": str(runs.published_records[7].record_id),
@@ -678,7 +682,7 @@ async def test_public_record_query_rejects_status_holder_corruption(result: Publ
 async def test_public_record_query_returns_none_for_unknown_record() -> None:
     service = PublicRecordQueryService(FakePublicBuilds(()), uow_factory=lambda: RecordQueryScope(FakeRuns()))
 
-    assert await service.get(uuid.UUID(int=999), context=ActingContext.direct(Actor())) is None
+    assert await service.get(uuid.UUID(int=999), context=ActingContext.direct(AnonymousActor())) is None
 
 
 @pytest.mark.asyncio
@@ -698,7 +702,7 @@ async def test_title_gaps_delegates_active_definition_query() -> None:
         uow_factory=lambda: RecordScope(candidates, runs),
     )
 
-    assert await service.title_gaps(kind=BuildKind.DOOR, context=ActingContext.direct(Actor())) == (gap,)
+    assert await service.title_gaps(kind=BuildKind.DOOR, context=ActingContext.direct(AnonymousActor())) == (gap,)
 
 
 @pytest.mark.asyncio
@@ -756,7 +760,9 @@ async def test_rebuild_rolls_back_all_scopes_when_later_activation_fails() -> No
     computation = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
 
     with pytest.raises(RuntimeError, match="second activation"):
-        await computation.rebuild(kinds=(BuildKind.DOOR,), current_version_id=3, context=ActingContext.direct(Actor()))
+        await computation.rebuild(
+            kinds=(BuildKind.DOOR,), current_version_id=3, context=ActingContext.direct(AnonymousActor())
+        )
 
     assert runs.batches == []
 
@@ -804,7 +810,7 @@ async def test_live_door_lookup_applies_tags_version_and_thresholds_without_writ
             restriction_values=((7, "at_most", "4"),),
             version_id=3,
         ),
-        context=ActingContext.direct(Actor()),
+        context=ActingContext.direct(AnonymousActor()),
     )
     assert result.resolution.holder_ids == (2,)
     assert {configuration.build_id for configuration in result.configurations} == {1, 2}
@@ -838,7 +844,7 @@ async def test_live_lookup_rejects_incompatible_threshold_without_crashing(thres
             restriction_ids=frozenset({7}),
             restriction_values=((7, "at_most", threshold),),
         ),
-        context=ActingContext.direct(Actor()),
+        context=ActingContext.direct(AnonymousActor()),
     )
     assert result.resolution.status is ResolutionStatus.NO_CANDIDATE
 
@@ -868,7 +874,7 @@ async def test_width_lookup_filters_tags_and_versions_without_writes() -> None:
         range_analyzer=SubprocessRangeAnalyzer(),
     )
     result = await service.lookup_door_ranges(
-        DoorRangeQuery(height=2, type_ids=frozenset({20}), version_id=3), context=ActingContext.direct(Actor())
+        DoorRangeQuery(height=2, type_ids=frozenset({20}), version_id=3), context=ActingContext.direct(AnonymousActor())
     )
     assert result.analysis.status is RegionAnalysisStatus.EXACT
     assert [(r.domain.minimum, r.domain.maximum, r.resolution.holder_ids) for r in result.analysis.regions] == [
@@ -904,15 +910,17 @@ async def test_range_admission_precedes_loading_and_releases_on_cancellation() -
     request = DoorRangeQuery(height=3)
     with anyio.fail_after(5):
         async with anyio.create_task_group() as group:
-            group.start_soon(partial(service.lookup_door_ranges, context=ActingContext.direct(Actor())), request)
+            group.start_soon(
+                partial(service.lookup_door_ranges, context=ActingContext.direct(AnonymousActor())), request
+            )
             await started.wait()
             with pytest.raises(ServiceUnavailableError):
-                await service.lookup_door_ranges(request, context=ActingContext.direct(Actor()))
+                await service.lookup_door_ranges(request, context=ActingContext.direct(AnonymousActor()))
             candidates.list_for_door_widths.assert_awaited_once()
             group.cancel_scope.cancel()
     analyzer.analyze.side_effect = None
     analyzer.analyze.return_value = analyze_door_widths((), height=3)
-    result = await service.lookup_door_ranges(request, context=ActingContext.direct(Actor()))
+    result = await service.lookup_door_ranges(request, context=ActingContext.direct(AnonymousActor()))
     assert result.query == request
     assert result.analysis.status is RegionAnalysisStatus.EXACT
     assert candidates.list_for_door_widths.await_count == 2
@@ -964,7 +972,7 @@ async def test_ordinary_records_evaluate_families_and_keep_the_source_evidence()
     candidates = FakeCandidates((fixed, family))
     runs = FakeRuns()
     service = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
-    await service.rebuild(kinds=(BuildKind.DOOR,), context=ActingContext.direct(Actor()))
+    await service.rebuild(kinds=(BuildKind.DOOR,), context=ActingContext.direct(AnonymousActor()))
     assert len(runs.batches[0].records) == 5
     for record in runs.batches[0].records:
         assert record.door_evidence is not None
@@ -983,7 +991,7 @@ async def test_family_sample_never_seeds_categories_but_explicit_large_request_d
     candidates = FakeCandidates((_expanding_door(),))
     runs = FakeRuns()
     computation = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
-    await computation.rebuild(kinds=(BuildKind.DOOR,), context=ActingContext.direct(Actor()))
+    await computation.rebuild(kinds=(BuildKind.DOOR,), context=ActingContext.direct(AnonymousActor()))
     assert runs.batches[0].records == ()
     service = RecordService(
         computation,
@@ -992,7 +1000,7 @@ async def test_family_sample_never_seeds_categories_but_explicit_large_request_d
     )
     await service.lookup_or_materialize(
         RecordLookupRequest(kind=BuildKind.DOOR, base_key="door|9999x2|t[20]|Door", restriction_ids=frozenset()),
-        context=ActingContext.direct(Actor()),
+        context=ActingContext.direct(AnonymousActor()),
     )
     records = runs.batches[-1].records
     assert len(records) == 5
@@ -1013,7 +1021,7 @@ async def test_ordinary_records_exclude_unproven_expansion_sizes(unknown: bool) 
     )
     runs = FakeRuns()
     computation = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
-    await computation.rebuild(kinds=(BuildKind.DOOR,), context=ActingContext.direct(Actor()))
+    await computation.rebuild(kinds=(BuildKind.DOOR,), context=ActingContext.direct(AnonymousActor()))
     smallest = next(r for r in runs.batches[0].records if r.criterion is RecordCriterion.SMALLEST)
     assert smallest.resolution.status is ResolutionStatus.RESOLVED
     assert smallest.resolution.holder_ids == (1,)
@@ -1036,7 +1044,9 @@ async def test_family_population_respects_version_and_category_identity() -> Non
     candidates = FakeCandidates((fixed, family, wrong_orientation, wrong_type))
     runs = FakeRuns()
     computation = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
-    await computation.rebuild(kinds=(BuildKind.DOOR,), current_version_id=3, context=ActingContext.direct(Actor()))
+    await computation.rebuild(
+        kinds=(BuildKind.DOOR,), current_version_id=3, context=ActingContext.direct(AnonymousActor())
+    )
     all_time = next(r for r in runs.batches[0].records if r.criterion is RecordCriterion.SMALLEST)
     assert all_time.resolution.holder_ids == (2,)
     assert all_time.door_evidence is not None
@@ -1069,7 +1079,7 @@ async def test_family_absent_from_a_size_leaves_that_category_alone() -> None:
     candidates = FakeCandidates((_door(1, volume=100, opening=10, restrictions=()), family))
     runs = FakeRuns()
     await RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs)).rebuild(
-        kinds=(BuildKind.DOOR,), context=ActingContext.direct(Actor())
+        kinds=(BuildKind.DOOR,), context=ActingContext.direct(AnonymousActor())
     )
     records = runs.batches[0].records
     # No empty "Flush 2x2" category appears, and the fixed-only category keeps its history.
@@ -1106,7 +1116,7 @@ async def test_record_inspection_rejects_callers_outside_the_credential_ceiling_
     service = RecordService(
         RecordComputationService(uow_factory=uow_factory), permissions=permissions, uow_factory=uow_factory
     )
-    context = ActingContext.direct(Actor(account_id=1, is_bot_owner=True, credential_scopes=frozenset()))
+    context = ActingContext.direct(UserActor(account_id=1, is_bot_owner=True, credential_scopes=frozenset()))
     with pytest.raises(PermissionDeniedError):
         await service.gaps(context=context)
     with pytest.raises(PermissionDeniedError):

@@ -25,7 +25,7 @@ from squid.core.accounts.models import AccountIdentity as AccountIdentityModel
 from squid.core.accounts.models import AccountIdentity as AccountIdentityValue
 from squid.core.accounts.models import AccountProfile as AccountProfileModel
 from squid.core.accounts.models import CreatorAlias as CreatorAliasModel
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.persistence.base import Base
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.unit_of_work import UnitOfWorkFactory
@@ -483,7 +483,9 @@ class TestIdentityVisibilityAndUnlink:
         assert profile.avatar_identity_id == remaining.id
         assert [
             identity.id
-            for identity in await service.list_identities(context=ActingContext.direct(Actor(account_id=account_id)))
+            for identity in await service.list_identities(
+                context=ActingContext.direct(UserActor(account_id=account_id))
+            )
         ] == [remaining.id]
         assert (
             await transact(repository, lambda uow: uow.accounts.unlink_identity(account_id, 9999), commit=True) is None

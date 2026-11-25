@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.core.accounts.models import Account
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.edits.application import EditExecutor
 from squid.core.edits.domain import OperationReuseError, RevisionConflictError
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
@@ -41,7 +41,7 @@ async def test_answers_undo_replay_and_external_change_conflict(
         account = Account()
         session.add(account)
         await session.flush()
-        actor = Actor(account_id=account.id)
+        actor = UserActor(account_id=account.id)
     now = Instant.now()
     draft = StoredDraft(
         DraftSnapshot(

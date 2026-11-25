@@ -11,7 +11,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from testcontainers.postgres import PostgresContainer
 
-from squid.core.actors import Actor
+from squid.core.actors import Actor, UserActor
 from squid.core.permissions.application import PermissionService
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
@@ -100,12 +100,12 @@ async def backfilled(
 def _subject(accounts: dict[str, int], who: str) -> Actor:
     """The subject each legacy tier used to describe."""
     if who == "trusted_member":
-        return Actor(
+        return UserActor(
             account_id=accounts[who],
             discord_role_ids=frozenset({TRUSTED_ROLE}),
             guild_id=GUILD,
         )
-    return Actor(account_id=accounts[who], discord_role_ids=frozenset({OTHER_ROLE}), guild_id=GUILD)
+    return UserActor(account_id=accounts[who], discord_role_ids=frozenset({OTHER_ROLE}), guild_id=GUILD)
 
 
 @pytest.mark.parametrize(

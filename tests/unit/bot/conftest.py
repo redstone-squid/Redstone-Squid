@@ -8,7 +8,7 @@ from typing import Any
 import anyio
 import pytest
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid_ui.ext.discord import MessageRoot
 from squid_ui.runtime import UIExecutionHost
 
@@ -69,7 +69,7 @@ def _fail_on_missed_redraws(caplog: pytest.LogCaptureFixture) -> Iterator[None]:
 @pytest.fixture
 def discord_screen_context() -> Iterator[ActingContext]:
     """Supply the member used by a standalone Discord test interaction."""
-    context = ActingContext.direct(Actor(discord_user_id=1))
+    context = ActingContext.direct(UserActor(discord_user_id=1))
     with context.scope():
         yield context
 

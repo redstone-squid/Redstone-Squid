@@ -16,7 +16,7 @@ from whenever import Instant
 from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
 from squid.core.accounts.models import Account, AccountIdentity
 from squid.core.accounts.models import AccountIdentity as AccountIdentityValue
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.builds.application import BuildService
 from squid.core.builds.application.locks import BuildLockService
 from squid.core.builds.application.restrictions import RestrictionService
@@ -1191,7 +1191,7 @@ async def test_ingested_versions_and_restriction_categories_survive_durable_fina
     owner = await seed_account_and_version(migrated_session_factory)
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     versions = VersionService(uow_factory=factory)
-    await versions.add("Java 1.21.1", context=ActingContext.direct(Actor(account_id=1, is_bot_owner=True)))
+    await versions.add("Java 1.21.1", context=ActingContext.direct(UserActor(account_id=1, is_bot_owner=True)))
     builds = BuildService(
         BuildLockService(uow_factory=factory),
         RestrictionService(uow_factory=factory),

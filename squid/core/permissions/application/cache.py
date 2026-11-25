@@ -21,8 +21,9 @@ from dataclasses import dataclass
 
 from whenever import Instant
 
-from squid.core.actors import Actor
+from squid.core.actors import UserActor
 from squid.core.observability import add_counter
+from squid.core.permissions.application.ports import PermissionSubject
 from squid.core.permissions.domain import Rule
 
 MAX_ENTRIES = 4096
@@ -34,12 +35,14 @@ MAX_AGE_SECONDS = 30.0
 type CacheKey = tuple[int | None, frozenset[int], int | None, bool]
 
 
-def cache_key(subject: Actor) -> CacheKey:
+def cache_key(subject: PermissionSubject) -> CacheKey:
     """Include every subject fact that changes its assembled rules.
 
     The Manage Server flag contributes bridge rules. The owner flag is omitted
     because the service bypasses the cache for owners.
     """
+    if not isinstance(subject, UserActor):
+        return (None, subject.discord_role_ids, subject.guild_id, False)
     return (subject.account_id, subject.discord_role_ids, subject.guild_id, subject.discord_guild_admin)
 
 

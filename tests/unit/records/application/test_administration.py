@@ -4,7 +4,7 @@ from unittest.mock import Mock, create_autospec
 
 import pytest
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.errors import AuthorizationError
 from squid.core.permissions.application.services import PermissionService
 from squid.core.permissions.domain.catalogue import RECORD_ENTRY_REBUILD
@@ -18,7 +18,7 @@ async def test_rebuild_denial_precedes_pin_and_computation() -> None:
     permissions = create_autospec(PermissionService, instance=True)
     permissions.require.side_effect = AuthorizationError
     service = RecordAdministrationService(computation, permissions, uow_factory=factory)
-    context = ActingContext(Actor(account_id=1), Actor(account_id=2))
+    context = ActingContext(UserActor(account_id=1), UserActor(account_id=2))
 
     with pytest.raises(AuthorizationError):
         await service.rebuild(context=context, current_version_id=3, kinds=(BuildKind.DOOR,))

@@ -3,7 +3,7 @@
 from collections.abc import Awaitable, Callable, Sequence
 from typing import override
 
-from squid.core.actors import Actor
+from squid.core.actors import UserActor
 from squid.core.permissions.domain.catalogue import VOTE_LOG_DELETE_CAST, VOTE_WEIGHT_STAFF
 from squid.core.reactions.application import RoleWeightPolicy
 from squid.core.reactions.domain import RoleMultiplier, WeightScope
@@ -36,7 +36,7 @@ class RoleVoteWeightPolicy(VoteWeightPolicy):
         )
 
     @override
-    async def calculate(self, actor: Actor, session: VoteSessionSnapshot) -> float | None:
+    async def calculate(self, actor: UserActor, session: VoteSessionSnapshot) -> float | None:
         if actor.guild_id is None:
             return None
         return await self._policy.calculate(actor, WeightScope(actor.guild_id, session.kind))

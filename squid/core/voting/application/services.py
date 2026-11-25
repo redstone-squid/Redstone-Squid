@@ -8,7 +8,7 @@ from math import isfinite
 import anyio
 from whenever import Instant
 
-from squid.core.actors import ActingContext, Actor, application_operation
+from squid.core.actors import ActingContext, Actor, UserActor, WorkerActor, application_operation
 from squid.core.errors import AuthorizationError
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.domain.catalogue import (
@@ -103,8 +103,8 @@ class VoteService:
                 return snapshot.poll.guild_id if snapshot.poll is not None else None
 
     async def _weight_actor(
-        self, actor: Actor, snapshot: VoteSessionSnapshot, owner_guild_id: int | None
-    ) -> Actor | None:
+        self, actor: UserActor, snapshot: VoteSessionSnapshot, owner_guild_id: int | None
+    ) -> UserActor | None:
         """Resolve the voter in the guild whose role weights govern the session.
 
         With no owner guild, retain the supplied actor for eligibility checks. With no
@@ -114,7 +114,9 @@ class VoteService:
         if owner_guild_id is None or actor.guild_id == owner_guild_id:
             return actor
         if self._actor_resolver is None:
-            return Actor(account_id=actor.account_id, discord_user_id=actor.discord_user_id, guild_id=owner_guild_id)
+            return UserActor(
+                account_id=actor.require_account_id(), discord_user_id=actor.discord_user_id, guild_id=owner_guild_id
+            )
         return await self._actor_resolver.resolve(actor.require_account_id(), owner_guild_id, snapshot.kind)
 
     @application_operation
@@ -189,7 +191,7 @@ class VoteService:
     ) -> int:
         """Create a message-deletion vote and its target atomically."""
         author_account_id = context.effective.require_account_id()
-        if context.effective.guild_id != server_id:
+        if context.effective.require_user().guild_id != server_id:
             raise AuthorizationError
         async with self._uow_factory() as uow:
             await self._permissions.require(context.effective, VOTE_POLL_CREATE, uow=uow)
@@ -223,7 +225,7 @@ class VoteService:
         Publication is separate, so creating a poll does not require a Discord message.
         Network polls require an owning guild and options usable in every guild.
         """
-        actor = context.effective
+        actor = context.effective.require_user()
         author_account_id = actor.require_account_id()
         if actor.guild_id != guild_id:
             raise AuthorizationError
@@ -311,7 +313,7 @@ class VoteService:
         multiplier. Unresolved existing ballots retain their cached weights.
         """
         return await self._apply_ballot(
-            context.effective,
+            context.effective.require_user(),
             vote_session_id,
             option_id,
             emoji=emoji,
@@ -323,7 +325,7 @@ class VoteService:
     @application_operation
     async def _record_observed_reaction(
         self,
-        voter: Actor,
+        voter: UserActor,
         vote_session_id: int,
         option_id: str,
         *,
@@ -344,7 +346,7 @@ class VoteService:
 
     async def _apply_ballot(
         self,
-        actor: Actor,
+        actor: UserActor,
         vote_session_id: int,
         option_id: str,
         *,
@@ -442,7 +444,7 @@ class VoteService:
     @application_operation
     async def clear_vote(self, vote_session_id: int, *, context: ActingContext) -> CastVoteResult:
         """Remove the actor's ballot while the session is open, without toggling it back on."""
-        actor = context.effective
+        actor = context.effective.require_user()
         account_id = actor.require_account_id()
         snapshot = await self.get_session(vote_session_id, context=context)
         if snapshot is None:
@@ -474,7 +476,7 @@ class VoteService:
         if snapshot is None:
             return VoteRefreshResult(None)
         return await self._refresh_snapshot(
-            snapshot, actor=context.effective if context.effective.worker_name is None else None
+            snapshot, actor=context.effective if not isinstance(context.effective, WorkerActor) else None
         )
 
     async def _refresh_snapshot(
@@ -504,7 +506,7 @@ class VoteService:
         self, vote_session_id: int, *, recount: FinalRecount | None = None, context: ActingContext
     ) -> CastVoteResult:
         """Refresh and close a generic poll if its author or an authorized actor requests it."""
-        actor = context.effective
+        actor = context.effective.require_user()
         actor.require_account_id()
         snapshot = await self.get_session(vote_session_id, context=context)
         if snapshot is None:
@@ -530,6 +532,8 @@ class VoteService:
         ):
             return VoteRejection.CLOSED
         permissions = await self._permissions.check(actor, VOTE_POLL_CLOSE_ANY, VOTE_POLL_RECOUNT, uow=uow)
+        if not isinstance(actor, UserActor):
+            return VoteRejection.NOT_AUTHORIZED
         actor = replace(actor, capabilities=permissions.allowed_nodes)
         if review_action is None:
             if (
@@ -617,7 +621,7 @@ class VoteService:
     @application_operation
     async def pending_reviews(self, guild_id: int, *, context: ActingContext) -> Sequence[int]:
         async with self._uow_factory() as uow:
-            if context.effective.guild_id != guild_id:
+            if not isinstance(context.effective, UserActor) or context.effective.guild_id != guild_id:
                 raise AuthorizationError
             await self._permissions.require(
                 context.effective, VOTE_POLL_CLOSE_ANY, VOTE_POLL_RECOUNT, mode="any", uow=uow
@@ -636,7 +640,7 @@ class VoteService:
         context: ActingContext,
     ) -> CastVoteResult:
         """Apply a staff decision to the exact review revision the actor inspected."""
-        actor = context.effective
+        actor = context.effective.require_user()
         if snapshot.poll is None or snapshot.status is not VoteStatus.REVIEW:
             return CastVoteResult(snapshot, VoteRejection.CLOSED)
         account = actor.require_account_id()
@@ -732,7 +736,7 @@ class VoteService:
                 await self._refresh_snapshot(snapshot)
 
     async def _calculate_refresh(
-        self, snapshot: VoteSessionSnapshot, *, replacing: Actor | None = None
+        self, snapshot: VoteSessionSnapshot, *, replacing: UserActor | None = None
     ) -> tuple[dict[int, float], list[int]]:
         """Calculate replacement weights without changing stored ballots.
 
@@ -749,7 +753,7 @@ class VoteService:
                 continue
             guild_id = owner_guild_id if owner_guild_id is not None else selection.guild_id or 0
             by_guild.setdefault(guild_id, set()).add(selection.account_id)
-        actors: dict[tuple[int, int], Actor | None] = {}
+        actors: dict[tuple[int, int], UserActor | None] = {}
         for guild_id, account_ids in by_guild.items():
             resolved = await self._actor_resolver.resolve_many(sorted(account_ids), guild_id, snapshot.kind)
             actors.update(((guild_id, account_id), actor) for account_id, actor in resolved.items())

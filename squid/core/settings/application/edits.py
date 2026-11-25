@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import Protocol, override
 
-from squid.core.actors import Actor
+from squid.core.actors import Actor, UserActor
 from squid.core.edits.application import EditUnitOfWork
 from squid.core.edits.domain import EditCommand, EditTarget, Revision
 from squid.core.edits.fields import Aggregate, FieldCommand
@@ -43,7 +43,7 @@ class RuntimeSettingsEdit(FieldCommand[SettingsEditUnitOfWork, RuntimeSetting, R
             return await uow.settings.flush_runtime_revision(row, expected)
 
         async def authorize(uow: SettingsEditUnitOfWork, actor: Actor, row: RuntimeSetting) -> None:
-            if actor.account_id is None:
+            if actor.linked_account_id is None:
                 raise AccountRequiredError
             await permissions.require(actor, SETTINGS_RUNTIME_EDIT, uow=uow)
 
@@ -104,7 +104,7 @@ class GuildSettingsEdit(FieldCommand[SettingsEditUnitOfWork, GuildEditState, Gui
             return await uow.settings.flush_guild_revision(state.row, expected)
 
         async def authorize(uow: SettingsEditUnitOfWork, actor: Actor, state: GuildEditState) -> None:
-            if actor.guild_id != state.row.server_id:
+            if not isinstance(actor, UserActor) or actor.guild_id != state.row.server_id:
                 raise GuildContextRequiredError
 
         super().__init__(

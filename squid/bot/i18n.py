@@ -7,7 +7,7 @@ from discord import app_commands
 from discord.ext import commands
 
 from squid.bot.chrome import CHROME
-from squid.core.actors import ActingContext, Actor, current_acting_context
+from squid.core.actors import ActingContext, UserActor, current_acting_context
 from squid.core.i18n import DEFAULT_LOCALE, localization_for, negotiate_locale
 from squid.core.settings.application import SettingsService
 from squid_i18n import Localization, Text, localization_scope
@@ -34,7 +34,7 @@ async def resolve_locale(
         if context is None:
             # Discord resolves localization while constructing requests, before action middleware.
             user = target.author if hasattr(target, "author") else cast(discord.Interaction[Any], target).user
-            context = ActingContext.direct(Actor(discord_user_id=user.id, guild_id=guild.id))
+            context = ActingContext.direct(UserActor(discord_user_id=user.id, guild_id=guild.id))
         override = await settings_service.get_locale(guild.id, context=context)
         if override is not None:
             return negotiate_locale(override)

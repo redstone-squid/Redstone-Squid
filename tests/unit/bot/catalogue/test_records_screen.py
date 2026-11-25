@@ -10,7 +10,7 @@ import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.catalogue.records import RecordsScreen
 from squid.bot.utils.permissions import Grants
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.permissions.domain import PermissionNode
 from squid.core.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD
 from squid.core.records.application import (
@@ -158,7 +158,7 @@ async def test_rebuild_uses_the_existing_default_kinds() -> None:
     assert screen._tabs is not None
     await press(screen._tabs, "records-tabs.maintenance")
 
-    context = ActingContext.direct(Actor(discord_user_id=10))
+    context = ActingContext.direct(UserActor(discord_user_id=10))
     with context.scope():
         await submit(screen._tabs, "rebuild", {"kind": None, "version_id": None})
     assert harness.computation.contexts == [context]
@@ -199,7 +199,7 @@ async def test_rebuild_explicitly_sets_the_shared_current_version() -> None:
     assert harness.screen._tabs is not None
     await press(harness.screen._tabs, "records-tabs.maintenance")
 
-    with ActingContext.direct(Actor(discord_user_id=10)).scope():
+    with ActingContext.direct(UserActor(discord_user_id=10)).scope():
         await submit(harness.screen._tabs, "rebuild", {"kind": None, "version_id": 3})
 
     assert harness.computation.rebuild_calls == [(3, (BuildKind.DOOR, BuildKind.EXTENDER))]

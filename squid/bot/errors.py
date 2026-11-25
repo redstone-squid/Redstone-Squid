@@ -20,7 +20,7 @@ import squid_ui.ext.discord as sd
 from squid.bot.limits import CommandLimits
 from squid.bot.ui import error_node
 from squid.core.accounts.errors import ConsentRequiredError
-from squid.core.actors import ActingContext, Actor, current_acting_context
+from squid.core.actors import ActingContext, UserActor, current_acting_context
 from squid.core.diagnostics.application import ErrorReportService
 from squid.core.diagnostics.log_capture import captured
 from squid.core.errors import DomainError, JSONValue, RateLimitedError, ServiceUnavailableError, SquidError
@@ -485,7 +485,7 @@ class SquidCommandTree[ClientT: discord.Client](app_commands.CommandTree[ClientT
 
     @override
     async def _call(self, interaction: discord.Interaction[ClientT]) -> None:
-        actor = Actor(discord_user_id=interaction.user.id, guild_id=interaction.guild_id)
+        actor = UserActor(discord_user_id=interaction.user.id, guild_id=interaction.guild_id)
         with ActingContext.direct(actor).scope():
             await self._dispatch_command(interaction)
 

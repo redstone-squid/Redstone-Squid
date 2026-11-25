@@ -20,7 +20,7 @@ from squid.bot.submission.message_intake import BuildMessageIntake
 from squid.core.accounts.application import AccountService
 from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, IdentityProvider
 from squid.core.accounts.models import Account, AccountIdentity
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.settings.application import SettingsService
 from squid.core.settings.domain.runtime import RuntimeSettings
 from squid.core.submissions.errors import DraftCapacityExceededError
@@ -162,7 +162,7 @@ async def test_unconsented_message_triggers_sticky_and_skips_ingestion(
     mock_ingest = AsyncCallRecorder()
     monkeypatch.setattr("squid.bot.submission.message_intake.ingest_message_bundle", mock_ingest)
 
-    with ActingContext.direct(Actor(discord_user_id=message.author.id)).scope():
+    with ActingContext.direct(UserActor(discord_user_id=message.author.id)).scope():
         await intake.infer_build_from_message(message)
 
     assert isinstance(intake.consent_sticky, StickyRecorder)
@@ -179,7 +179,7 @@ async def test_consented_message_records_activity_and_proceeds_with_ingestion(
     mock_ingest = AsyncCallRecorder(result=[])
     monkeypatch.setattr("squid.bot.submission.message_intake.ingest_message_bundle", mock_ingest)
 
-    with ActingContext.direct(Actor(discord_user_id=message.author.id)).scope():
+    with ActingContext.direct(UserActor(discord_user_id=message.author.id)).scope():
         await intake.infer_build_from_message(message)
 
     assert isinstance(intake.consent_sticky, StickyRecorder)
@@ -197,7 +197,7 @@ async def test_full_inference_intake_logs_without_replying_to_the_source_channel
     mock_ingest = AsyncCallRecorder(error=DraftCapacityExceededError(1_000))
     monkeypatch.setattr("squid.bot.submission.message_intake.ingest_message_bundle", mock_ingest)
 
-    with ActingContext.direct(Actor(discord_user_id=message.author.id)).scope():
+    with ActingContext.direct(UserActor(discord_user_id=message.author.id)).scope():
         await intake.infer_build_from_message(message)
 
     send = cast(AsyncCallRecorder, message.channel.send)

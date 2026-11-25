@@ -88,7 +88,7 @@ class AccountEdits:
         self.aggregate = Aggregate("account", load, lambda account: account.revision, flush)
 
     async def authorize(self, uow: AccountEditUnitOfWork, actor: Actor, account: Account) -> None:
-        if actor.account_id != account.id:
+        if actor.linked_account_id != account.id:
             raise OwnershipRequiredError
         await self._permissions.require(actor, ACCOUNT_SELF_MANAGE, uow=uow)
         if not await uow.accounts.has_current_consent(account.id):
@@ -182,7 +182,7 @@ class AccountProfileClear(AccountEdits):
     async def prepare(self, uow: AccountEditUnitOfWork, actor: Actor, command: EditCommand) -> PreparedEdit:
         if command.values.unpack() or command.purpose != "edit":
             raise ValidationError
-        if actor.account_id is None:
+        if actor.linked_account_id is None:
             raise AccountRequiredError
         await self._permissions.require(actor, ACCOUNT_PROFILE_MODERATE, uow=uow)
         account = await self.aggregate.lock(uow, command)

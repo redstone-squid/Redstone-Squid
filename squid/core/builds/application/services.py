@@ -6,7 +6,7 @@ from uuid import UUID
 
 from whenever import Instant
 
-from squid.core.actors import ActingContext, Actor, application_operation
+from squid.core.actors import ActingContext, Actor, WorkerActor, application_operation
 from squid.core.builds.application.edit_values import build_values, changed_build_values
 from squid.core.builds.application.editing import BuildEditPatch
 from squid.core.builds.application.ports import (
@@ -156,7 +156,10 @@ class BuildService:
         context: ActingContext,
     ) -> Build:
         """Resolve submission metadata and derived values before the caller's transaction."""
-        if context.effective.worker_name is None and context.effective.require_account_id() != submitter_account_id:
+        if (
+            not isinstance(context.effective, WorkerActor)
+            and context.effective.require_account_id() != submitter_account_id
+        ):
             raise AuthorizationError
         build.submitter_account_id = submitter_account_id
         build.source_submission_draft_id = source_submission_draft_id
@@ -200,7 +203,7 @@ class BuildService:
     ) -> Build:
         """Prepare an edit, then recheck current authority and revision before writing."""
         actor = context.effective
-        if actor.account_id is None:
+        if actor.linked_account_id is None:
             raise AccountRequiredError
         build = await self._get_required(build_id)
         self._check_revision(build, expected_revision)
@@ -210,7 +213,7 @@ class BuildService:
             build,
             actor=actor,
             changes_extra_info=changes_extra_info,
-            context=BuildEditContext(operation="edit", source=source, actor_account_id=actor.account_id),
+            context=BuildEditContext(operation="edit", source=source, actor_account_id=actor.linked_account_id),
         )
         return build
 
@@ -245,7 +248,7 @@ class BuildService:
         return decide_build_edit(
             fields,
             status=build.submission_status,
-            is_creator=build.is_creator(actor.account_id),
+            is_creator=build.is_creator(actor.linked_account_id),
             is_moderator=is_moderator,
         )
 
@@ -304,7 +307,8 @@ class BuildService:
         context: ActingContext,
     ) -> Build:
         """Apply a vote approval under the build lease, ignoring builds already reviewed."""
-        actor = context.effective.worker_name or context.effective.require_account_id()
+        principal = context.effective
+        actor = principal.worker_name if isinstance(principal, WorkerActor) else principal.require_account_id()
         history = BuildEditContext.from_actor(
             actor, source=source, operation=operation, correlation_kind=correlation_kind, correlation_id=correlation_id
         )
@@ -319,8 +323,11 @@ class BuildService:
                 correlation_id=history.correlation_id,
             ),
         ):
-            if context.effective.worker_name != "events.core.vote_session.closed":
-                if context.effective.worker_name is not None or self._permissions is None:
+            if isinstance(principal, WorkerActor):
+                if principal.worker_name != "events.core.vote_session.closed":
+                    raise AuthorizationError
+            else:
+                if self._permissions is None:
                     raise AuthorizationError
                 await self._permissions.require(context.effective, BUILD_SUBMISSION_APPROVE, uow=uow)
             build = await self._get_for_update(uow, build_id)
@@ -342,7 +349,8 @@ class BuildService:
         context: ActingContext,
     ) -> Build:
         """Apply a vote rejection under the build lease, ignoring builds already reviewed."""
-        actor = context.effective.worker_name or context.effective.require_account_id()
+        principal = context.effective
+        actor = principal.worker_name if isinstance(principal, WorkerActor) else principal.require_account_id()
         history = BuildEditContext.from_actor(
             actor, source=source, operation=operation, correlation_kind=correlation_kind, correlation_id=correlation_id
         )
@@ -357,8 +365,11 @@ class BuildService:
                 correlation_id=history.correlation_id,
             ),
         ):
-            if context.effective.worker_name != "events.core.vote_session.closed":
-                if context.effective.worker_name is not None or self._permissions is None:
+            if isinstance(principal, WorkerActor):
+                if principal.worker_name != "events.core.vote_session.closed":
+                    raise AuthorizationError
+            else:
+                if self._permissions is None:
                     raise AuthorizationError
                 await self._permissions.require(context.effective, BUILD_SUBMISSION_REJECT, uow=uow)
             build = await self._get_for_update(uow, build_id)

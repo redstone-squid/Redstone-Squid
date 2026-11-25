@@ -22,6 +22,7 @@ from uuid import uuid4
 from litestar import Request, Response
 from litestar.datastructures import MutableScopeHeaders
 from litestar.di import NamedDependency
+from litestar.params import SkipValidation
 from litestar.types import ASGIApp, Message, Receive, Scope, Send
 from redis.asyncio import Redis
 from redis.asyncio.retry import Retry
@@ -467,7 +468,7 @@ class RateLimitMiddleware:
 
 async def enforce_route_rate_limits(
     request: Request,
-    caller: NamedDependency[Caller],
+    caller: NamedDependency[SkipValidation[Caller]],
 ) -> None:
     """Apply caller quotas and any write, suggestion, render, or authorization quota for this route."""
     if request.state.get("route_rate_limits_checked", False):

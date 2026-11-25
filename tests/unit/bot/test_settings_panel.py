@@ -13,7 +13,7 @@ import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.settings.screen import SettingsPanel
 from squid.bot.utils.permissions import Grants
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, Actor, UserActor
 from squid.core.edits.domain import (
     EditCommand,
     EditOutcome,
@@ -175,7 +175,7 @@ def make_component_panel(
     votes = settings.votes
 
     async def actor() -> Actor:
-        return Actor(account_id=1, guild_id=GUILD_ID)
+        return UserActor(account_id=1, guild_id=GUILD_ID)
 
     async def execute(command: EditCommand, *, context: ActingContext) -> EditResult:
         actor = context.effective

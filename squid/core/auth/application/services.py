@@ -8,7 +8,7 @@ from collections.abc import Callable, Iterable
 
 from whenever import Instant
 
-from squid.core.actors import ActingContext, Actor, application_operation
+from squid.core.actors import ActingContext, UserActor, WorkerActor, application_operation
 from squid.core.auth.application.ports import ApiKeyUnitOfWork
 from squid.core.auth.domain import IssuedApiKey
 from squid.core.auth.models.entities import ApiKey
@@ -86,8 +86,9 @@ class ApiKeyService:
         that boundary check; their callers must authorize issuance.
         """
         actor = context.effective
-        if actor.worker_name is None and (
-            actor.account_id is None
+        if not isinstance(actor, WorkerActor) and (
+            not isinstance(actor, UserActor)
+            or actor.account_id is None
             or actor.credential_scopes is not None
             or (not actor.is_bot_owner and actor.account_id != owner_account_id)
         ):
@@ -105,7 +106,7 @@ class ApiKeyService:
                 label=label,
                 scopes=requested,
                 owner_account_id=owner_account_id,
-                created_by_account_id=actor.account_id,
+                created_by_account_id=actor.linked_account_id,
                 expires_at=expires_at,
             )
             result = IssuedApiKey(key=key, token=f"{API_KEY_PREFIX}_{key_id}_{secret}")
@@ -122,7 +123,7 @@ class ApiKeyService:
         """
         if self._permissions is None or owner_account_id is None:
             return
-        subject = Actor(account_id=owner_account_id)
+        subject = UserActor(account_id=owner_account_id)
         requested_nodes = frozenset(node for pattern in patterns for node in CATALOGUE.expand(pattern))
         held = (await self._permissions.check(subject, *requested_nodes, uow=uow)).allowed_nodes
         for pattern in patterns:

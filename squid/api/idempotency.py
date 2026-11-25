@@ -18,7 +18,7 @@ from litestar import Litestar, Request, Response
 from litestar.di import NamedDependency
 from litestar.exceptions import ValidationException
 from litestar.middleware import DefineMiddleware
-from litestar.params import HeaderParameter
+from litestar.params import HeaderParameter, SkipValidation
 from litestar.response import Stream
 from litestar.response.base import ASGIResponse
 from litestar.types import ASGIApp, Message, Receive, Scope, Send
@@ -67,7 +67,7 @@ class IdempotencyReservationState:
 
 async def reserve_idempotent_request(
     request: Request,
-    caller: NamedDependency[Caller],
+    caller: NamedDependency[SkipValidation[Caller]],
     idempotency_key: IdempotencyKey = None,
 ) -> None:
     """Reserve a caller key when an unsafe request supplies one."""
@@ -76,7 +76,7 @@ async def reserve_idempotent_request(
 
 async def reserve_edit_request(
     request: Request,
-    caller: NamedDependency[Caller],
+    caller: NamedDependency[SkipValidation[Caller]],
     idempotency_key: IdempotencyKey = None,
 ) -> None:
     """Resume unfinished requests only for routes whose every write uses EditExecutor."""

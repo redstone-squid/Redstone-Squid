@@ -6,7 +6,7 @@ from functools import partial
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, AnonymousActor
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.search.application import SearchService
 from squid.core.search.domain import BuildSearchHit, RecordSearchHit, SearchRequest, SearchScope
@@ -49,9 +49,11 @@ async def test_record_heading_and_holder_matches(migrated_session_factory: async
         ("creator:Bob", "result:1"),
     ):
         for scope in (SearchScope.ALL, SearchScope.RECORDS):
-            result = await service.search(SearchRequest(query, scope=scope), context=ActingContext.direct(Actor()))
+            result = await service.search(
+                SearchRequest(query, scope=scope), context=ActingContext.direct(AnonymousActor())
+            )
             assert result.hits[0].source_id == expected
-    page = await service.search(SearchRequest("seamless Alice"), context=ActingContext.direct(Actor()))
+    page = await service.search(SearchRequest("seamless Alice"), context=ActingContext.direct(AnonymousActor()))
     assert page.total == 2
     general = next(hit for hit in page.hits if hit.source_id == "result:1")
     assert isinstance(general, RecordSearchHit)
@@ -87,7 +89,9 @@ async def test_record_measurements_match_one_known_holder(
     service = SearchService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
     for scope in (SearchScope.RECORDS, SearchScope.ALL):
         query = "criterion:fastest volume<=100 opening_time<=0.5s"
-        (hit,) = (await service.search(SearchRequest(query, scope=scope), context=ActingContext.direct(Actor()))).hits
+        (hit,) = (
+            await service.search(SearchRequest(query, scope=scope), context=ActingContext.direct(AnonymousActor()))
+        ).hits
         assert isinstance(hit, RecordSearchHit)
         assert hit.build_id == compact.build_id
         assert hit.metrics == {"volume": 80, "opening_time": 10, "visible_opening_time": 15}
@@ -96,7 +100,7 @@ async def test_record_measurements_match_one_known_holder(
 
         (grouped,) = (
             await service.search(
-                SearchRequest(query, scope=scope, group_by_build=True), context=ActingContext.direct(Actor())
+                SearchRequest(query, scope=scope, group_by_build=True), context=ActingContext.direct(AnonymousActor())
             )
         ).hits
         assert isinstance(grouped, BuildSearchHit)
@@ -110,16 +114,19 @@ async def test_record_measurements_match_one_known_holder(
             "volume IS NOT SET visible_opening_time>0",
         ):
             assert (
-                await service.search(SearchRequest(impossible, scope=scope), context=ActingContext.direct(Actor()))
+                await service.search(
+                    SearchRequest(impossible, scope=scope), context=ActingContext.direct(AnonymousActor())
+                )
             ).total == 0
 
     outside = await service.search(
         SearchRequest("status:no_candidate OR NOT volume<=100", scope=SearchScope.RECORDS),
-        context=ActingContext.direct(Actor()),
+        context=ActingContext.direct(AnonymousActor()),
     )
     assert {result.source_id for result in outside.hits} == {"result:1", "result:2"}
     only = await service.search(
-        SearchRequest("NOT volume:[1 TO 200]", scope=SearchScope.RECORDS), context=ActingContext.direct(Actor())
+        SearchRequest("NOT volume:[1 TO 200]", scope=SearchScope.RECORDS),
+        context=ActingContext.direct(AnonymousActor()),
     )
     assert only.total == 0
 
@@ -129,14 +136,16 @@ async def test_record_measurements_match_one_known_holder(
         ("NOT (volume IS SET) visible_opening_time IS SET", unknown.build_id),
     ):
         (hit,) = (
-            await service.search(SearchRequest(query, scope=SearchScope.RECORDS), context=ActingContext.direct(Actor()))
+            await service.search(
+                SearchRequest(query, scope=SearchScope.RECORDS), context=ActingContext.direct(AnonymousActor())
+            )
         ).hits
         assert isinstance(hit, RecordSearchHit)
         assert hit.build_id == holder_id
 
     no_holder = await service.search(
         SearchRequest("status:no_candidate AND volume IS NOT SET", scope=SearchScope.RECORDS),
-        context=ActingContext.direct(Actor()),
+        context=ActingContext.direct(AnonymousActor()),
     )
     assert no_holder.total == 0
 
@@ -165,6 +174,8 @@ async def test_build_presence_matches_indexed_values_and_document_text(
         ("title IS SET description IS SET", "1"),
     ):
         (hit,) = (
-            await service.search(SearchRequest(query, scope=SearchScope.BUILDS), context=ActingContext.direct(Actor()))
+            await service.search(
+                SearchRequest(query, scope=SearchScope.BUILDS), context=ActingContext.direct(AnonymousActor())
+            )
         ).hits
         assert hit.source_id == expected

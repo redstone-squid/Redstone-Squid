@@ -12,7 +12,7 @@ from uuid import UUID, uuid4
 
 import anyio
 
-from squid.core.actors import ActingContext
+from squid.core.actors import ActingContext, WorkerActor
 from squid.core.artifacts import ArtifactStore
 from squid.core.errors import DataIntegrityError, InvalidStateError, NotFoundError, ValidationError
 from squid.core.schematics.application import IngestedSchematic, IngestRequest
@@ -285,7 +285,7 @@ class DraftSchematicService:
     async def read_for_draft(self, draft_id: UUID, *, context: ActingContext) -> DraftSchematicSnapshot:
         """Read retained schematic state for submission preparation."""
         async with self._uow_factory() as uow:
-            if context.effective.worker_name is None:
+            if not isinstance(context.effective, WorkerActor):
                 await self._drafts.get_accessible_in(uow, draft_id, context.effective)
             return await uow.draft_schematics.read_for_draft(draft_id)
 

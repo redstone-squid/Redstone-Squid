@@ -11,7 +11,7 @@ import aiohttp
 import discord
 from discord.errors import DiscordException, Forbidden, NotFound
 
-from squid.core.actors import Actor
+from squid.core.actors import UserActor
 from squid.core.permissions.application.ports import ActorPermissionChecker
 from squid.core.permissions.domain.catalogue import VOTE_LOG_DELETE_CAST, VOTE_POLL_CLOSE_ANY, VOTE_WEIGHT_STAFF
 from squid.core.voting.domain import VoteKind
@@ -36,7 +36,7 @@ class _NotAMember(enum.Enum):
     """The bot cannot read the guild, so membership is unproven either way."""
 
 
-type _Membership = Actor | _NotAMember
+type _Membership = UserActor | _NotAMember
 
 
 class DiscordRestActorResolver:
@@ -68,7 +68,7 @@ class DiscordRestActorResolver:
         self._clock = clock
         self._cache: dict[tuple[int, int], tuple[float, _Membership]] = {}
 
-    async def member(self, account_id: int, guild_id: int, kind: VoteKind) -> Actor | None:
+    async def member(self, account_id: int, guild_id: int, kind: VoteKind) -> UserActor | None:
         """Return cached or fetched membership facts for an interactive request.
 
         Missing identities, absent members, and unreadable guilds return None. Other
@@ -79,9 +79,9 @@ class DiscordRestActorResolver:
         if discord_id is None:
             return None
         membership = await self._membership(account_id, discord_id, guild_id)
-        return membership if isinstance(membership, Actor) else None
+        return membership if isinstance(membership, UserActor) else None
 
-    async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> Actor | None:
+    async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> UserActor | None:
         """Return membership for a weight refresh, or None when the lookup cannot answer.
 
         A known non-member becomes an actor without roles or capabilities. The
@@ -94,7 +94,7 @@ class DiscordRestActorResolver:
             discord_id = await self._discord_id(account_id)
             if discord_id is None:
                 # No Discord identity means no guild membership and so no role weight.
-                return Actor(account_id=account_id, discord_user_id=None, guild_id=guild_id)
+                return UserActor(account_id=account_id, guild_id=guild_id)
             membership = await self._membership(account_id, discord_id, guild_id)
         except Exception:
             logger.warning(
@@ -104,14 +104,16 @@ class DiscordRestActorResolver:
             )
             return None
         match membership:
-            case Actor():
+            case UserActor():
                 return membership
             case _NotAMember.ABSENT:
-                return Actor(account_id=account_id, discord_user_id=discord_id, guild_id=guild_id)
+                return UserActor(account_id=account_id, discord_user_id=discord_id, guild_id=guild_id)
             case _NotAMember.UNKNOWN:
                 return None
 
-    async def resolve_many(self, account_ids: Sequence[int], guild_id: int, kind: VoteKind) -> dict[int, Actor | None]:
+    async def resolve_many(
+        self, account_ids: Sequence[int], guild_id: int, kind: VoteKind
+    ) -> dict[int, UserActor | None]:
         """Use the REST membership cache; Discord's REST API has no bulk lookup."""
         return {account_id: await self.resolve(account_id, guild_id, kind) for account_id in dict.fromkeys(account_ids)}
 
@@ -130,7 +132,7 @@ class DiscordRestActorResolver:
         else:
             membership = await self._fetch_membership(account_id, discord_id, guild_id)
             self._cache[cache_key] = (now + self._cache_ttl_seconds, membership)
-        if not isinstance(membership, Actor):
+        if not isinstance(membership, UserActor):
             return membership
         # Cache Discord facts, not account ownership or permission decisions. A
         # merge can move an identity, and permission epochs can change mid-TTL.
@@ -165,7 +167,7 @@ class DiscordRestActorResolver:
             ) from error
         return await self._actor_from_payload(payload, account_id, discord_id, guild_id)
 
-    async def _actor_from_payload(self, payload: object, account_id: int, discord_id: int, guild_id: int) -> Actor:
+    async def _actor_from_payload(self, payload: object, account_id: int, discord_id: int, guild_id: int) -> UserActor:
         """Validate member roles and resolve voting capabilities from account and role grants.
 
         The member payload does not establish Manage Server or bot-owner status, so
@@ -177,7 +179,9 @@ class DiscordRestActorResolver:
             role_ids = frozenset(int(role_id) for role_id in payload["roles"])
         except (TypeError, ValueError) as error:
             raise self._malformed_member(guild_id) from error
-        return Actor(account_id=account_id, discord_user_id=discord_id, guild_id=guild_id, discord_role_ids=role_ids)
+        return UserActor(
+            account_id=account_id, discord_user_id=discord_id, guild_id=guild_id, discord_role_ids=role_ids
+        )
 
     @staticmethod
     def _malformed_member(guild_id: int) -> DiscordMemberServiceUnavailableError:

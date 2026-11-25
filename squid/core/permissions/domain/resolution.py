@@ -349,13 +349,13 @@ def rules_from_role(
 def _applicable(
     rule: Rule,
     node: PermissionNode,
-    subject: PermissionContext,
+    subject: PermissionContext | None,
     now: Instant,
 ) -> bool:
     if rule.expires_at is not None and rule.expires_at <= now:
         return False
     if rule.scope_guild_id is not None:
-        if rule.scope_guild_id != subject.guild_id:
+        if subject is None or rule.scope_guild_id != subject.guild_id:
             return False
         # A guild-scoped rule can never satisfy a global node. The test is on the
         # node's declared scope at evaluation time rather than on anything stored
@@ -390,7 +390,7 @@ def _lost_on(winner: Rank, loser: Rank) -> LossReason:
 
 def resolve(
     node: PermissionNode | str,
-    subject: PermissionContext,
+    subject: PermissionContext | None,
     rules: Sequence[Rule] = (),
     *,
     catalogue: Catalogue = CATALOGUE,
@@ -405,7 +405,7 @@ def resolve(
     resolved = catalogue[node] if isinstance(node, str) else node
     instant = now if now is not None else Instant.now()
 
-    if subject.is_bot_owner:
+    if subject is not None and subject.is_bot_owner:
         # Before the forbid check and before any rule is read, so no stored rule
         # can lock the owner out of their own bot.
         return Decision(resolved.name, allowed=True, reason=Reason.OWNER)
@@ -440,7 +440,7 @@ def resolve(
 
 def resolve_many(
     nodes: Iterable[PermissionNode | str],
-    subject: PermissionContext,
+    subject: PermissionContext | None,
     rules: Sequence[Rule] = (),
     *,
     catalogue: Catalogue = CATALOGUE,

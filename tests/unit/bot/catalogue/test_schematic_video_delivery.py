@@ -10,7 +10,7 @@ import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.catalogue.schematics.tools import SchematicTools, _video_failure_reason
 from squid.bot.catalogue.schematics.video import VideoEditor
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.schematics.application.services import SchematicService
 from squid.core.schematics.application.video import VideoRenderRequest
 from squid.core.schematics.application.video_service import SchematicVideoService, VideoStatus
@@ -33,7 +33,7 @@ def delivery() -> tuple[SchematicTools, Mock, Mock]:
     request.interaction.is_expired.return_value = False
     request.respond = AsyncMock()
     request.client = Mock()
-    request.client.actors.acting_context = AsyncMock(return_value=ActingContext.direct(Actor(account_id=10)))
+    request.client.actors.acting_context = AsyncMock(return_value=ActingContext.direct(UserActor(account_id=10)))
     return component, request, service
 
 
@@ -44,7 +44,7 @@ async def test_completed_video_is_attached_once_and_privately(delivery: tuple[Sc
     request.respond.assert_awaited_once()
     assert request.respond.call_args.kwargs["audience"] == "personal"
     context = service.get_video.await_args.kwargs["context"]
-    assert context.effective == Actor(account_id=10)
+    assert context.effective == UserActor(account_id=10)
     service.open_video_content.assert_awaited_once_with(41, context=context)
 
 
@@ -155,7 +155,7 @@ async def test_automatic_delivery_sends_a_visible_video_followup(
         VideoStatus(id=41, build_id=7, schematic_id=1, status="succeeded"),
     ]
     client = Mock(spec=discord.Client)
-    client.actors = Mock(acting_context=AsyncMock(return_value=ActingContext.direct(Actor(account_id=10))))
+    client.actors = Mock(acting_context=AsyncMock(return_value=ActingContext.direct(UserActor(account_id=10))))
     runtime = sd.install(client)
     scope = runtime.scope(object())
     interaction = InteractionHarness(client=client)

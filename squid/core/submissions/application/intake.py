@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Protocol
 from uuid import UUID
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, Actor, WorkerActor
 from squid.core.errors import ConflictError, NotFoundError, ValidationError
 from squid.core.media.application.jobs import (
     MediaDraftUploadAuthorization,
@@ -211,7 +211,7 @@ class SubmissionAttachmentIntake:
     async def issues_for_draft(self, draft_id: UUID, *, context: ActingContext) -> tuple[SubmissionAttentionIssue, ...]:
         """Read unresolved attachment requirements for submission preparation."""
         async with self._uow_factory() as uow:
-            if context.effective.worker_name is None:
+            if not isinstance(context.effective, WorkerActor):
                 await self._drafts.get_accessible_in(uow, draft_id, context.effective)
             return await uow.attachment_intake.issues_for_draft(draft_id)
 

@@ -14,7 +14,7 @@ from squid.bot.starboard.debounce import EntryDebouncer, EntryKey
 from squid.bot.starboard.screen import StarboardScreen
 from squid.bot.starboard.spec import StarboardExports, extension
 from squid.bot.utils.permissions import Grants, enforce, hide_unless
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, Actor, UserActor
 from squid.core.errors import ValidationError
 from squid.core.i18n import tr
 from squid.core.messages.models import Message
@@ -80,7 +80,7 @@ class StarboardCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             origin,
             event.emoji,
             context=ActingContext.for_actor(
-                Actor(
+                UserActor(
                     discord_user_id=member.id,
                     guild_id=member.guild.id,
                     discord_role_ids=frozenset(role.id for role in member.roles),
@@ -148,7 +148,7 @@ class StarboardCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         guild = message.guild
         if guild is None:
             return ()
-        reactions: list[tuple[Actor, str]] = []
+        reactions: list[tuple[UserActor, str]] = []
         for reaction in message.reactions:
             emoji = str(reaction.emoji)
             if not await self.service.is_relevant_emoji(guild.id, emoji, context=ActingContext.current()):
@@ -158,7 +158,7 @@ class StarboardCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
                     continue
                 member = user if isinstance(user, discord.Member) else await self._member(guild, user.id)
                 if member is not None:
-                    actor = Actor(
+                    actor = UserActor(
                         discord_user_id=member.id,
                         guild_id=guild.id,
                         discord_role_ids=frozenset(role.id for role in member.roles),

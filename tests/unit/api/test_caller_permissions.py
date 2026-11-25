@@ -7,7 +7,7 @@ import pytest
 from pytest_mock import MockerFixture
 
 from squid.api.security import ANONYMOUS, UNBOUNDED, Caller
-from squid.core.actors import Actor
+from squid.core.actors import AnonymousActor, ServiceActor, UserActor
 from squid.core.errors import AuthenticationError
 from squid.core.permissions.application.ports import SubjectRecords
 from squid.core.permissions.application.services import PermissionService
@@ -52,8 +52,8 @@ async def test_owned_credentials_consult_current_account_authority_without_a_gui
     caller = Caller(kind=kind, subject="owned", account_id=7, nodes=UNBOUNDED)
 
     assert await caller.allows(permissions, BUILD_SUBMISSION_VIEW_PENDING) is allowed
-    assert caller.to_actor().account_id == 7
-    assert caller.to_actor().guild_id is None
+    assert caller.to_actor().linked_account_id == 7
+    assert caller.to_actor().require_user().guild_id is None
     permissions.require.assert_awaited_once_with(caller.to_actor(), BUILD_SUBMISSION_VIEW_PENDING)
 
 
@@ -67,7 +67,7 @@ async def test_anonymous_authority_is_resolved_by_the_permission_service(mocker:
     )
 
     assert await ANONYMOUS.allows(permissions, BUILD_SUBMISSION_VIEW_PENDING) is allowed
-    permissions.require.assert_awaited_once_with(Actor(account_id=None, guild_id=None), BUILD_SUBMISSION_VIEW_PENDING)
+    permissions.require.assert_awaited_once_with(AnonymousActor(), BUILD_SUBMISSION_VIEW_PENDING)
 
 
 @pytest.mark.parametrize("scoped", [False, True])
@@ -103,12 +103,18 @@ async def test_require_distinguishes_credential_scope_from_account_acl(scoped: b
 @pytest.mark.parametrize("owner", [None, 7])
 async def test_core_permission_checks_enforce_the_service_credentials_ceiling(owner: int | None) -> None:
     actor = Caller(kind="service", subject="api-key:42", account_id=owner).to_actor()
-    assert actor.credential_id == "api-key:42"
-    assert actor.service_id == ("api-key:42" if owner is None else None)
+    assert actor.credential_reference == "api-key:42"
+    if owner is None:
+        assert isinstance(actor, ServiceActor)
+        assert actor.service_id == "api-key:42"
+    else:
+        assert isinstance(actor, UserActor)
+        assert actor.account_id == owner
     uow = AsyncMock()
     uow.__aenter__.return_value = uow
-    grant = PermissionGrant(pattern="**", effect=int(Effect.ALLOW), subject_account_id=owner)
-    uow.permissions.load_for_subject.return_value = SubjectRecords(subject=actor, epoch=1, grants=(grant,))
+    if isinstance(actor, UserActor):
+        grant = PermissionGrant(pattern="**", effect=int(Effect.ALLOW), subject_account_id=actor.require_account_id())
+        uow.permissions.load_for_subject.return_value = SubjectRecords(subject=actor, epoch=1, grants=(grant,))
     permissions = PermissionService(uow_factory=lambda: uow)
     check = await permissions.check(actor, BUILD_SUBMISSION_VIEW_PENDING)
     assert not check.allowed
@@ -120,8 +126,8 @@ def test_scoped_account_sessions_carry_their_ceiling_into_core(
     kind: Literal["account", "cli", "minecraft_player"],
 ) -> None:
     caller = Caller(kind=kind, subject="session:42", account_id=7, nodes=frozenset())
-    assert caller.context().effective.credential_scopes == frozenset()
+    assert caller.context().effective.credential_limit == frozenset()
     assert (
-        Caller(kind=kind, subject="session:43", account_id=7, nodes=UNBOUNDED).context().effective.credential_scopes
+        Caller(kind=kind, subject="session:43", account_id=7, nodes=UNBOUNDED).context().effective.credential_limit
         is None
     )

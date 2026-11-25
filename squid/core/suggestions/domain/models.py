@@ -8,7 +8,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from squid.core.actors import Actor
+from squid.core.actors import Actor, AnonymousActor
 
 MAX_QUERY_SUGGESTIONS = 25
 """Maximum results for a bounded query; full catalogue enumeration is exempt."""
@@ -92,7 +92,7 @@ class SuggestionRequest:
     """Source-specific scoping, such as the build category an option set belongs to."""
 
     locale: str | None = None
-    viewer: Actor = Actor()
+    viewer: Actor = AnonymousActor()
     cursor: int | None = None
     """Python character offset in `query`; `None` places the caret at the end."""
 

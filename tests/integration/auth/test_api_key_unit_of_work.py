@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.accounts.models import Account
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.auth.application import ApiKeyService
 from squid.core.auth.models.entities import ApiKey
 from squid.core.errors import AuthorizationError
@@ -29,7 +29,7 @@ async def test_issuance_checks_current_authority_despite_a_cached_grant(
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     permissions = PermissionService(uow_factory=factory, cache=SubjectRuleCache())
     api_keys = ApiKeyService("test-pepper", uow_factory=factory, permissions=permissions)
-    subject = Actor(account_id=account_id)
+    subject = UserActor(account_id=account_id)
     node = "build.submission.approve"
     async with factory() as uow:
         await uow.permission_admin.upsert_grant(
@@ -52,7 +52,7 @@ async def test_issuance_checks_current_authority_despite_a_cached_grant(
         label="Before revocation",
         scopes=[node],
         owner_account_id=account_id,
-        context=ActingContext.direct(Actor(account_id=account_id)),
+        context=ActingContext.direct(UserActor(account_id=account_id)),
     )
     assert issued.key.id > 0
 
@@ -74,7 +74,7 @@ async def test_issuance_checks_current_authority_despite_a_cached_grant(
             label="After revocation",
             scopes=[node],
             owner_account_id=account_id,
-            context=ActingContext.direct(Actor(account_id=account_id)),
+            context=ActingContext.direct(UserActor(account_id=account_id)),
         )
     async with migrated_session_factory() as session:
         assert await session.scalar(select(func.count()).select_from(ApiKey)) == 1

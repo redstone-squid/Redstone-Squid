@@ -7,7 +7,7 @@ from typing import override
 import pytest
 from whenever import Instant
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.errors import AuthorizationError, InvalidStateError
 from squid.core.events import DomainEvent, DomainEventDelivery, DomainEventRepository, DomainEventService
 from tests.support.delivery_uow import DomainEventUnitOfWork
@@ -98,4 +98,4 @@ def test_service_rejects_a_non_positive_attempt_ceiling() -> None:
 async def test_user_cannot_lease_worker_deliveries() -> None:
     service = DomainEventService(uow_factory=lambda: DomainEventUnitOfWork(EventRepositoryRecorder()))
     with pytest.raises(AuthorizationError):
-        await service.claim("discord", context=ActingContext.direct(Actor(account_id=42)))
+        await service.claim("discord", context=ActingContext.direct(UserActor(account_id=42)))

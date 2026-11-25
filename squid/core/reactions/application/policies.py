@@ -4,13 +4,13 @@ from collections.abc import Callable
 from math import isfinite
 from typing import override
 
-from squid.core.actors import Actor
+from squid.core.actors import UserActor
 from squid.core.errors import InvalidStateError
 from squid.core.i18n import tr
 from squid.core.reactions.application.ports import RoleMultiplierProvider, WeightPolicy
 from squid.core.reactions.domain import WeightScope
 
-type Eligibility = Callable[[Actor, WeightScope], bool]
+type Eligibility = Callable[[UserActor, WeightScope], bool]
 
 
 class RoleWeightPolicy(WeightPolicy):
@@ -39,7 +39,7 @@ class RoleWeightPolicy(WeightPolicy):
         self._staff_multiplier = staff_multiplier
 
     @override
-    async def calculate(self, actor: Actor, scope: WeightScope) -> float | None:
+    async def calculate(self, actor: UserActor, scope: WeightScope) -> float | None:
         if self._eligibility is not None and not self._eligibility(actor, scope):
             return None
         multipliers = await self._provider(scope)

@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING
 import discord
 
 from squid.bot.ui import tr
-from squid.core.actors import Actor
+from squid.core.actors import UserActor
 from squid.core.permissions.domain.catalogue import (
     VOTE_LOG_DELETE_CAST,
     VOTE_POLL_CLOSE_ANY,
@@ -43,7 +43,7 @@ def describe_rejection(rejection: VoteRejection) -> Text:
     return REJECTION_MESSAGES[rejection]
 
 
-async def resolve_actor(bot: squid.bot.app.RedstoneSquid, member: discord.Member, *, account_id: int) -> Actor:
+async def resolve_actor(bot: squid.bot.app.RedstoneSquid, member: discord.Member, *, account_id: int) -> UserActor:
     """Resolve the member's vote capabilities in one permission query.
 
     The caller supplies an account ID after checking consent when needed. This

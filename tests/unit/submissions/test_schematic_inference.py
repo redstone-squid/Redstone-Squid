@@ -6,7 +6,7 @@ from uuid import uuid4
 import pytest
 from pytest_mock import MockerFixture
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, AnonymousActor, UserActor
 from squid.core.errors import NotFoundError
 from squid.core.schematics.domain.doors.detection import detect_cycle
 from squid.core.schematics.infrastructure import wire
@@ -54,7 +54,7 @@ async def test_suggestions_preserve_player_answers_and_leave_semantic_fields_unk
         ),
     )
     result = await inference.suggest(
-        draft, uuid4(), DraftSchematicState.READY, analysis, context=ActingContext.direct(Actor())
+        draft, uuid4(), DraftSchematicState.READY, analysis, context=ActingContext.direct(AnonymousActor())
     )
     values = {suggestion.field_id: suggestion.value for suggestion in result.suggestions}
     assert values["capture_width"] == 3
@@ -83,7 +83,7 @@ async def test_old_analysis_does_not_claim_absent_components(inference: Schemati
     draft = stored_draft()
     draft = replace(draft, snapshot=replace(draft.snapshot, schema_revision=8))
     result = await inference.suggest(
-        draft, uuid4(), DraftSchematicState.READY, make_analysis(), context=ActingContext.direct(Actor())
+        draft, uuid4(), DraftSchematicState.READY, make_analysis(), context=ActingContext.direct(AnonymousActor())
     )
     assert "restrictions" not in {suggestion.field_id for suggestion in result.suggestions}
 
@@ -104,7 +104,7 @@ async def test_untrusted_metadata_is_validated_and_source_version_respects_origi
         ),
     )
     result = await inference.suggest(
-        draft, uuid4(), DraftSchematicState.READY, analysis, context=ActingContext.direct(Actor())
+        draft, uuid4(), DraftSchematicState.READY, analysis, context=ActingContext.direct(AnonymousActor())
     )
     assert {suggestion.field_id for suggestion in result.suggestions} == {
         "capture_width",
@@ -119,7 +119,7 @@ async def test_unready_uploads_offer_no_suggestions(
     state: DraftSchematicState,
 ) -> None:
     result = await inference.suggest(
-        stored_draft(), uuid4(), state, make_analysis(), context=ActingContext.direct(Actor())
+        stored_draft(), uuid4(), state, make_analysis(), context=ActingContext.direct(AnonymousActor())
     )
     assert not result.suggestions
     assert not result.detections
@@ -137,15 +137,19 @@ async def test_draft_and_file_access_are_checked_before_returning_metadata(mocke
     scope.__aenter__.return_value = uow
     service = DraftSchematicService(drafts, mocker.Mock(), uow_factory=lambda: scope)
     with pytest.raises(NotFoundError):
-        await service.suggestions(draft.snapshot.id, uuid4(), context=ActingContext.for_actor(Actor(account_id=42)))
+        await service.suggestions(draft.snapshot.id, uuid4(), context=ActingContext.for_actor(UserActor(account_id=42)))
     uow.draft_schematics.analysis_for_draft.assert_not_called()
     source = DraftSchematic(uuid4(), "private.schem", "a" * 64, 1, DraftSchematicState.READY, discarded=True)
     uow.draft_schematics.list.return_value = (source,)
     with pytest.raises(NotFoundError):
-        await service.suggestions(draft.snapshot.id, source.id, context=ActingContext.for_actor(Actor(account_id=42)))
+        await service.suggestions(
+            draft.snapshot.id, source.id, context=ActingContext.for_actor(UserActor(account_id=42))
+        )
     drafts.get_accessible_in.side_effect = DraftAccessDeniedError()
     with pytest.raises(DraftAccessDeniedError):
-        await service.suggestions(draft.snapshot.id, source.id, context=ActingContext.for_actor(Actor(account_id=43)))
+        await service.suggestions(
+            draft.snapshot.id, source.id, context=ActingContext.for_actor(UserActor(account_id=43))
+        )
     uow.draft_schematics.analysis_for_draft.assert_not_called()
 
 
@@ -158,7 +162,7 @@ async def test_inference_reports_shared_dimensions_with_ambiguous_block_placemen
     analysis = replace(make_analysis(), door=door)
     restored = wire.decode_analysis(wire.encode_analysis(analysis))
     result = await inference.suggest(
-        stored_draft(), uuid4(), DraftSchematicState.READY, restored, context=ActingContext.direct(Actor())
+        stored_draft(), uuid4(), DraftSchematicState.READY, restored, context=ActingContext.direct(AnonymousActor())
     )
     assert result.door == door
     assert door.candidates[0].disputed_blocks == ((0, 0, 0), (0, 0, 1))

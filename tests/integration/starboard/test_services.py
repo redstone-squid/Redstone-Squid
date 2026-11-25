@@ -8,7 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, AnonymousActor, UserActor
 from squid.core.errors import InvalidStateError
 from squid.core.messages.models import Message
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
@@ -37,22 +37,22 @@ async def test_concurrent_votes_commit_and_abandoned_votes_leave_no_entry(
         repository = uow.starboards
         await repository.record_votes(origin, 50, [PendingVote(config, "⭐", "up", 1.0)])
         assert await uow.starboards.entry_state(config.id, origin.id) is not None
-    assert await service.entry_state(config.id, origin.id, context=ActingContext.direct(Actor())) is None
+    assert await service.entry_state(config.id, origin.id, context=ActingContext.direct(AnonymousActor())) is None
     with pytest.raises(InvalidStateError):
         await repository.record_votes(origin, 50, ())
 
     async with create_task_group() as tasks:
         tasks.start_soon(
-            partial(service.record_vote, context=ActingContext.direct(Actor(discord_user_id=50, guild_id=10))),
+            partial(service.record_vote, context=ActingContext.direct(UserActor(discord_user_id=50, guild_id=10))),
             origin,
             "⭐",
         )
         tasks.start_soon(
-            partial(service.record_vote, context=ActingContext.direct(Actor(discord_user_id=51, guild_id=10))),
+            partial(service.record_vote, context=ActingContext.direct(UserActor(discord_user_id=51, guild_id=10))),
             origin,
             "⭐",
         )
-    stored = await service.entry_state(config.id, origin.id, context=ActingContext.direct(Actor()))
+    stored = await service.entry_state(config.id, origin.id, context=ActingContext.direct(AnonymousActor()))
     assert stored is not None
     assert stored.entry.score == 2.0
     assert stored.entry.raw_count == 2
@@ -97,7 +97,7 @@ async def test_shared_deletion_survives_reactions_and_recounts(
             else:
                 await uow.starboards.record_votes(origin, 50, [vote])
             await uow.commit()
-        state = await service.entry_state(config.id, origin.id, context=ActingContext.direct(Actor()))
+        state = await service.entry_state(config.id, origin.id, context=ActingContext.direct(AnonymousActor()))
         assert state is not None
         assert not state.origin.present
         assert state.origin.deleted_at == deleted_at

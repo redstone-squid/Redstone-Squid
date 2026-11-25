@@ -4,7 +4,7 @@ from collections.abc import Iterator, Sequence
 
 import pytest
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, AnonymousActor
 from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldDefinition, FieldRegistry, FieldType
 from squid.core.suggestions.application.queries import TagEntry
 from squid.core.suggestions.domain import SuggestionRequest
@@ -14,7 +14,7 @@ from squid.core.suggestions.infrastructure.providers.search_query import SearchQ
 
 @pytest.fixture(autouse=True)
 def public_query() -> Iterator[None]:
-    with ActingContext.direct(Actor()).scope():
+    with ActingContext.direct(AnonymousActor()).scope():
         yield
 
 

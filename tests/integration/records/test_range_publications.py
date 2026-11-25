@@ -12,7 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.accounts.models import Account
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, AnonymousActor, UserActor
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import DoorBuild
 from squid.core.errors import InvalidStateError
@@ -32,7 +32,7 @@ from squid.core.records.models import DoorRangeRecomputeQueueItem, DoorRangeSnap
 from tests.support.build_edits import build_edit_session
 from tests.unit.records.application.test_expansion_regions import branch, family
 
-ADMIN = ActingContext.direct(Actor(account_id=7, is_bot_owner=True))
+ADMIN = ActingContext.direct(UserActor(account_id=7, is_bot_owner=True))
 
 
 async def test_snapshots_are_immutable_and_old_workers_cannot_replace_newer_attempts(
@@ -198,10 +198,10 @@ async def test_publication_uses_saved_inputs_despite_live_edits_and_queue_refres
         uow_factory=factory,
         analyzer=EditingAnalyzer(),
     )
-    first = await publisher.publish(DoorRangeQuery(height=3), context=ActingContext.direct(Actor()))
+    first = await publisher.publish(DoorRangeQuery(height=3), context=ActingContext.direct(AnonymousActor()))
     assert first.active is not None
     first_run_id = first.active.id
-    point = await publisher.get_point(first.query_id, 6, context=ActingContext.direct(Actor()))
+    point = await publisher.get_point(first.query_id, 6, context=ActingContext.direct(AnonymousActor()))
     assert point is not None
     assert point.region is not None
     assert point.region.resolution.holder_ids == (build_id,)
@@ -213,11 +213,11 @@ async def test_publication_uses_saved_inputs_despite_live_edits_and_queue_refres
         assert saved.sources[0].expansion is not None
         assert saved.sources[0].expansion.branches[0].volume == "10n"
     await publisher.process_queue(context=ActingContext.worker("test-worker"))
-    refreshed = await publisher.get(first.query_id, context=ActingContext.direct(Actor()))
+    refreshed = await publisher.get(first.query_id, context=ActingContext.direct(AnonymousActor()))
     assert refreshed is not None
     assert refreshed.active is not None
     assert refreshed.active.id != first_run_id
-    point = await publisher.get_point(first.query_id, 6, context=ActingContext.direct(Actor()))
+    point = await publisher.get_point(first.query_id, 6, context=ActingContext.direct(AnonymousActor()))
     assert point is not None
     assert point.region is not None
     assert point.region.resolution.holder_ids == (fixed_id,)
@@ -245,7 +245,7 @@ async def test_cancelled_publication_records_failure_and_preserves_previous_resu
         analyzer=analyzer,
     )
     query = DoorRangeQuery(height=3)
-    first = await publisher.publish(query, context=ActingContext.direct(Actor()))
+    first = await publisher.publish(query, context=ActingContext.direct(AnonymousActor()))
     assert first.active is not None
     started = anyio.Event()
 
@@ -260,14 +260,14 @@ async def test_cancelled_publication_records_failure_and_preserves_previous_resu
             group.start_soon(partial(publisher.publish, query, context=ActingContext.worker("records")))
             await started.wait()
             group.cancel_scope.cancel()
-    state = await publisher.get(first.query_id, context=ActingContext.direct(Actor()))
+    state = await publisher.get(first.query_id, context=ActingContext.direct(AnonymousActor()))
     assert state is not None
     assert state.active is not None
     assert state.latest is not None
     assert state.active.id == first.active.id
     assert state.latest.error == "cancelled"
     analyzer.analyze.side_effect = None
-    replacement = await publisher.publish(query, context=ActingContext.direct(Actor()))
+    replacement = await publisher.publish(query, context=ActingContext.direct(AnonymousActor()))
     assert replacement.active is not None
     assert replacement.active.id == first.active.id
     assert replacement.latest is not None
@@ -318,7 +318,7 @@ async def test_registration_deduplicates_and_refresh_preserves_new_queue_work(
         height=3, restriction_ids=frozenset({7, 8}), restriction_values=((7, "exact", "3"), (8, "at_most", "4"))
     )
     with pytest.raises(PermissionDeniedError):
-        await publisher.register(query, context=ActingContext.direct(Actor()))
+        await publisher.register(query, context=ActingContext.direct(AnonymousActor()))
     async with factory() as uow:
         assert not await uow.record_ranges.list_registered()
     query_id = await publisher.register(query, context=ADMIN)
@@ -365,8 +365,8 @@ async def test_refresh_attempts_every_query_before_reporting_a_failure(
 
     analyzer.analyze.side_effect = analyze
     assert await publisher.process_queue(context=ActingContext.worker("test-worker")) == (1, 1)
-    failed = await publisher.get(broken, context=ActingContext.direct(Actor()))
-    refreshed = await publisher.get(healthy, context=ActingContext.direct(Actor()))
+    failed = await publisher.get(broken, context=ActingContext.direct(AnonymousActor()))
+    refreshed = await publisher.get(healthy, context=ActingContext.direct(AnonymousActor()))
     assert failed is not None
     assert failed.active is None
     assert failed.latest is not None
@@ -401,7 +401,7 @@ async def test_query_with_too_many_sources_saves_no_snapshot(
         uow_factory=factory,
         analyzer=analyzer,
     )
-    publication = await publisher.publish(DoorRangeQuery(height=3), context=ActingContext.direct(Actor()))
+    publication = await publisher.publish(DoorRangeQuery(height=3), context=ActingContext.direct(AnonymousActor()))
     assert publication.active is None
     assert publication.latest is not None
     assert publication.latest.error == "too_many_sources"
@@ -424,7 +424,7 @@ async def test_inexact_refresh_keeps_publication_and_retries_only_that_query(
     )
     query_id = await publisher.register(DoorRangeQuery(height=3), context=ADMIN)
     assert await publisher.process_queue(context=ActingContext.worker("test-worker")) == (1, 0)
-    first = await publisher.get(query_id, context=ActingContext.direct(Actor()))
+    first = await publisher.get(query_id, context=ActingContext.direct(AnonymousActor()))
     assert first is not None
     assert first.active is not None
 
@@ -432,7 +432,7 @@ async def test_inexact_refresh_keeps_publication_and_retries_only_that_query(
     await publisher.request_refresh(query_id, context=ADMIN)
     assert await publisher.process_queue(context=ActingContext.worker("test-worker")) == (0, 1)
 
-    current = await publisher.get(query_id, context=ActingContext.direct(Actor()))
+    current = await publisher.get(query_id, context=ActingContext.direct(AnonymousActor()))
     assert current is not None
     assert current.active is not None
     assert current.active.id == first.active.id
@@ -459,19 +459,19 @@ async def test_unchanged_range_keeps_publication_and_advances_last_checked(
     )
     query_id = await publisher.register(DoorRangeQuery(height=3), context=ADMIN)
     assert await publisher.process_queue(context=ActingContext.worker("test-worker")) == (1, 0)
-    first = await publisher.get(query_id, context=ActingContext.direct(Actor()))
+    first = await publisher.get(query_id, context=ActingContext.direct(AnonymousActor()))
     assert first is not None
     assert first.active is not None
     assert first.last_checked_at is not None
     assert not first.refresh_pending
 
     await publisher.request_refresh(query_id, context=ADMIN)
-    pending = await publisher.get(query_id, context=ActingContext.direct(Actor()))
+    pending = await publisher.get(query_id, context=ActingContext.direct(AnonymousActor()))
     assert pending is not None
     assert pending.refresh_pending
     assert await publisher.process_queue(context=ActingContext.worker("test-worker")) == (1, 0)
 
-    checked = await publisher.get(query_id, context=ActingContext.direct(Actor()))
+    checked = await publisher.get(query_id, context=ActingContext.direct(AnonymousActor()))
     assert checked is not None
     assert checked.active is not None
     assert checked.latest is not None

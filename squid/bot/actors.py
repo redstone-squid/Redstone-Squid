@@ -11,7 +11,7 @@ from whenever import Instant
 import squid_ui.ext.discord as sd
 from squid.core.accounts.application import AccountService
 from squid.core.accounts.domain import IdentityProvider
-from squid.core.actors import ActingContext, Actor, current_acting_context, impersonation_use
+from squid.core.actors import ActingContext, UserActor, current_acting_context, impersonation_use
 from squid.core.errors import AuthorizationError
 from squid_ui.interactions import ActionMiddleware, ActionProceed, ActionRequest
 
@@ -85,16 +85,19 @@ class DiscordActorResolver:
 
     async def request_actor(
         self, request: sd.Request[Any, RedstoneSquid], session_id: UUID | None, operation: str
-    ) -> Actor:
+    ) -> UserActor:
         context = await self.acting_context(request, session_id, operation)
         active = current_acting_context.get()
         if active is not None:
             # The ingress scope restores both bindings when this callback ends.
-            if active.operator.discord_user_id != context.operator.discord_user_id:
+            if (
+                not isinstance(active.operator, UserActor)
+                or active.operator.discord_user_id != context.operator.require_discord_user_id()
+            ):
                 raise AuthorizationError
             current_acting_context.set(replace(context, invocation_id=active.invocation_id))
-            impersonation_use.set(context.effective.audit_use_id)
-        return context.effective
+            impersonation_use.set(context.effective.audit_reference)
+        return context.effective.require_user()
 
     async def acting_context(
         self, request: sd.Request[Any, RedstoneSquid], session_id: UUID | None, operation: str
@@ -102,7 +105,11 @@ class DiscordActorResolver:
         """Resolve a private workspace callback against the session it opened with."""
         operator = await self.resolve(request, refresh=True)
         active = current_acting_context.get()
-        if active is not None and active.operator.discord_user_id == operator.discord_user_id:
+        if (
+            active is not None
+            and isinstance(active.operator, UserActor)
+            and active.operator.discord_user_id == operator.discord_user_id
+        ):
             operator_context = replace(active, operator=operator, effective=operator, session_id=None)
         else:
             operator_context = ActingContext.direct(operator)
@@ -136,7 +143,7 @@ class DiscordActorResolver:
         *,
         refresh: bool = False,
         account_id: int | None = None,
-    ) -> Actor:
+    ) -> UserActor:
         """Resolve a request, command context, or already-fetched member.
 
         Normal checks use the supplied membership and cached account lookup.
@@ -154,7 +161,7 @@ class DiscordActorResolver:
         else:
             user, guild = source.author, source.guild
             memoize = not refresh and account_id is None
-            if memoize and isinstance(memoized := getattr(source, _ACTOR_ATTRIBUTE, None), Actor):
+            if memoize and isinstance(memoized := getattr(source, _ACTOR_ATTRIBUTE, None), UserActor):
                 return memoized
 
         member = user if isinstance(user, discord.Member) and guild is not None else None
@@ -172,7 +179,7 @@ class DiscordActorResolver:
         elif account_id is None:
             account_id = await self._bot.account_ids.resolve(self._bot.services.accounts, user.id)
 
-        actor = Actor(
+        actor = UserActor(
             discord_user_id=user.id,
             account_id=account_id,
             discord_role_ids=frozenset(role.id for role in member.roles) if member is not None else frozenset(),

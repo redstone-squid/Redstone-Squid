@@ -18,7 +18,7 @@ from squid.core.accounts.application import AccountService
 from squid.core.accounts.domain import ClaimStatus
 from squid.core.accounts.errors import AliasAlreadyClaimedError
 from squid.core.accounts.models import Account, AccountIdentity, AliasClaim
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.permissions.domain.catalogue import ACCOUNT_CLAIM_APPROVE, ACCOUNT_CLAIM_REJECT
 from squid_ui.ext.discord.testing import (
     AsyncCallRecorder,
@@ -90,7 +90,7 @@ def make_component(claims: tuple[AliasClaim, ...], *, conflict: bool = False) ->
         ClaimReviewComponent(
             accounts,
             claims,
-            actor=AsyncMock(return_value=Actor(account_id=AUTHOR_ID)),
+            actor=AsyncMock(return_value=UserActor(account_id=AUTHOR_ID)),
             author_id=AUTHOR_ID,
             grants=grants(ACCOUNT_CLAIM_APPROVE, ACCOUNT_CLAIM_REJECT),
         ),

@@ -1,6 +1,6 @@
 """Discord-facing permission checks over the node engine."""
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import cast, override
 from unittest.mock import AsyncMock, Mock
 
@@ -21,9 +21,8 @@ from squid.bot.utils.permissions import (
 from squid.core.accounts.application import AccountService
 from squid.core.accounts.domain import IdentityProvider
 from squid.core.accounts.models import Account
-from squid.core.actors import Actor
 from squid.core.permissions.application import PermissionService
-from squid.core.permissions.application.ports import SubjectRecords
+from squid.core.permissions.application.ports import PermissionSubject, SubjectRecords
 from squid.core.permissions.domain import BUILTIN_ROLES_BY_KEY, Effect
 from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 from squid.core.permissions.models import PermissionGrant, PermissionRole, PermissionRoleAssignment
@@ -55,12 +54,13 @@ class FakePermissionStore:
     def __init__(
         self, *, grants: tuple[PermissionGrant, ...] = (), assignments: tuple[PermissionRoleAssignment, ...] = ()
     ) -> None:
-        self._records = SubjectRecords(
-            subject=Actor(), epoch=1, roles=BUILTIN_ROWS, grants=grants, assignments=assignments
-        )
+        self.grants = grants
+        self.assignments = assignments
 
-    async def load_for_subject(self, subject: Actor) -> SubjectRecords:
-        return replace(self._records, subject=subject)
+    async def load_for_subject(self, subject: PermissionSubject) -> SubjectRecords:
+        return SubjectRecords(
+            subject=subject, epoch=1, roles=BUILTIN_ROWS, grants=self.grants, assignments=self.assignments
+        )
 
     async def epoch(self) -> int:
         return 1

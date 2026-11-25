@@ -7,7 +7,7 @@ from whenever import Instant
 
 from squid.core.accounts.domain import IdentityProvider
 from squid.core.accounts.models import Account
-from squid.core.actors import ActingContext, Actor, application_operation
+from squid.core.actors import ActingContext, Actor, UserActor, application_operation
 from squid.core.auth.application.ports import ImpersonationUnitOfWork
 from squid.core.auth.models.sessions import ImpersonationSession
 from squid.core.errors import AuthorizationError, NotFoundError, ValidationError
@@ -29,9 +29,10 @@ class ImpersonationService:
         self.permissions = permissions
 
     async def _authorize(self, operator: Actor, uow: ImpersonationUnitOfWork) -> None:
+        operator = operator.require_user()
         # Guild roles and guild-scoped rules cannot confer installation-wide access.
         await self.permissions.require(
-            Actor(
+            UserActor(
                 account_id=operator.require_account_id(),
                 is_bot_owner=operator.is_bot_owner,
                 credential_id=operator.credential_id,

@@ -47,7 +47,7 @@ from squid.config import (
     load_bot_process_config,
     load_or_exit,
 )
-from squid.core.actors import ActingContext, Actor, current_acting_context
+from squid.core.actors import ActingContext, UserActor, current_acting_context
 from squid.core.errors import RateLimitedError
 from squid.core.observability import TraceSurface, correlation_scope, trace_span
 from squid.core.posts.domain import ResourceKind
@@ -258,7 +258,7 @@ class RedstoneSquid(Bot):
         """Bind gateway listeners before discord.py schedules their individual tasks."""
         source = args[0] if args else None
         if event_name == "message" and isinstance(source, discord.Message):
-            actor = Actor(discord_user_id=source.author.id, guild_id=source.guild.id if source.guild else None)
+            actor = UserActor(discord_user_id=source.author.id, guild_id=source.guild.id if source.guild else None)
             context = ActingContext.direct(actor)
         elif event_name in {"command", "command_completion", "command_error"} and (
             active := current_acting_context.get()
@@ -339,9 +339,13 @@ class RedstoneSquid(Bot):
         with trace_span(f"discord.command {command_name}", attributes) as span, correlation_scope():
             request = await sd.request(ctx)
             active = current_acting_context.get()
-            if active is None or active.operator.discord_user_id != ctx.author.id:
+            if (
+                active is None
+                or not isinstance(active.operator, UserActor)
+                or active.operator.discord_user_id != ctx.author.id
+            ):
                 active = ActingContext.direct(
-                    Actor(discord_user_id=ctx.author.id, guild_id=ctx.guild.id if ctx.guild else None)
+                    UserActor(discord_user_id=ctx.author.id, guild_id=ctx.guild.id if ctx.guild else None)
                 )
             with active.scope(), localization_scope(request.localization):
                 await super().invoke(ctx)

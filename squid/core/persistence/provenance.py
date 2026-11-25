@@ -52,9 +52,9 @@ async def bind_work_attribution(session: AsyncSession, *, reset: bool = False) -
         "invocation_id": str(context.invocation_id),
         "operator": context.operator.reference,
         "effective": context.effective.reference,
-        "credential_id": context.operator.credential_id,
+        "credential_id": context.operator.credential_reference,
         "impersonation_session_id": str(context.session_id) if context.session_id else None,
-        "impersonation_use_id": str(context.effective.audit_use_id) if context.effective.audit_use_id else None,
+        "impersonation_use_id": str(context.effective.audit_reference) if context.effective.audit_reference else None,
         "parent_claim": current_claim_reference.get(),
     }
     # SET LOCAL preserves the caller's ability to select transaction isolation before its first query.

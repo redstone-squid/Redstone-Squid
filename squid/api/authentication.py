@@ -32,5 +32,5 @@ class CallerAuthenticationMiddleware(AbstractAuthenticationMiddleware):
         caller = await current_caller(request)
         context = caller.context()
         current_acting_context.set(context)
-        impersonation_use.set(context.effective.audit_use_id)
+        impersonation_use.set(context.effective.audit_reference)
         return AuthenticationResult(user=caller, auth=caller.kind)

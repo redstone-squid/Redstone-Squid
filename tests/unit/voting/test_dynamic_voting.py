@@ -9,7 +9,7 @@ from whenever import Instant
 
 from squid.bot.voting.poll_wizard import format_duration, parse_option_lines, parse_poll_choices, parse_poll_duration
 from squid.bot.voting.rendering import generic_poll_text, render_generic_poll
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.permissions.domain.catalogue import VOTE_LOG_DELETE_CAST, VOTE_POLL_CLOSE_ANY, VOTE_WEIGHT_STAFF
 from squid.core.voting.application import RoleVoteWeightPolicy, VoteService
 from squid.core.voting.domain import (
@@ -54,14 +54,15 @@ async def test_role_policy_uses_highest_matching_multiplier_and_staff_fallback()
 
     assert (
         await policy.calculate(
-            Actor(account_id=1, discord_user_id=100, guild_id=10, discord_role_ids=frozenset({20, 30})), snapshot
+            UserActor(account_id=1, discord_user_id=100, guild_id=10, discord_role_ids=frozenset({20, 30})), snapshot
         )
         == 2.5
     )
     assert (
-        await policy.calculate(Actor(account_id=1, discord_user_id=100, guild_id=10, capabilities=STAFF), snapshot) == 3
+        await policy.calculate(UserActor(account_id=1, discord_user_id=100, guild_id=10, capabilities=STAFF), snapshot)
+        == 3
     )
-    assert await policy.calculate(Actor(account_id=1, discord_user_id=100, guild_id=10), snapshot) == 1
+    assert await policy.calculate(UserActor(account_id=1, discord_user_id=100, guild_id=10), snapshot) == 1
 
 
 async def test_delete_policy_rejects_a_member_without_the_delete_log_node() -> None:
@@ -74,9 +75,11 @@ async def test_delete_policy_rejects_a_member_without_the_delete_log_node() -> N
         options=(VoteOption("👍", VoteChoice.APPROVE), VoteOption("👎", VoteChoice.DENY)),
     )
 
-    assert await policy.calculate(Actor(account_id=1, discord_user_id=100, guild_id=10), snapshot) is None
+    assert await policy.calculate(UserActor(account_id=1, discord_user_id=100, guild_id=10), snapshot) is None
     assert (
-        await policy.calculate(Actor(account_id=1, discord_user_id=100, guild_id=10, capabilities=DELETE_LOG), snapshot)
+        await policy.calculate(
+            UserActor(account_id=1, discord_user_id=100, guild_id=10, capabilities=DELETE_LOG), snapshot
+        )
         == 1
     )
 
@@ -207,17 +210,17 @@ def test_threshold_kinds_never_carry_anonymity_metadata(kind: VoteKind) -> None:
 def test_poll_creator_and_staff_may_close_but_a_bystander_may_not() -> None:
     snapshot = poll_snapshot(author_account_id=7, guild_id=10)
 
-    assert snapshot.can_close(Actor(account_id=7, discord_user_id=70, guild_id=10)) is None
-    assert snapshot.can_close(Actor(account_id=8, discord_user_id=80, guild_id=10, capabilities=CLOSE_ANY)) is None
-    assert snapshot.can_close(Actor(account_id=8, discord_user_id=80, guild_id=10)) is VoteRejection.NOT_AUTHORIZED
-    assert snapshot.can_close(Actor(account_id=7, discord_user_id=70, guild_id=999)) is VoteRejection.WRONG_GUILD
+    assert snapshot.can_close(UserActor(account_id=7, discord_user_id=70, guild_id=10)) is None
+    assert snapshot.can_close(UserActor(account_id=8, discord_user_id=80, guild_id=10, capabilities=CLOSE_ANY)) is None
+    assert snapshot.can_close(UserActor(account_id=8, discord_user_id=80, guild_id=10)) is VoteRejection.NOT_AUTHORIZED
+    assert snapshot.can_close(UserActor(account_id=7, discord_user_id=70, guild_id=999)) is VoteRejection.WRONG_GUILD
 
 
 @pytest.mark.parametrize("kind", [VoteKind.BUILD, VoteKind.DELETE_LOG])
 def test_threshold_kinds_are_not_closable_by_the_poll_command(kind: VoteKind) -> None:
     snapshot = build_snapshot(kind=kind)
 
-    assert snapshot.can_close(Actor(account_id=7, discord_user_id=70, guild_id=10)) is VoteRejection.NOT_AUTHORIZED
+    assert snapshot.can_close(UserActor(account_id=7, discord_user_id=70, guild_id=10)) is VoteRejection.NOT_AUTHORIZED
 
 
 @pytest.mark.parametrize("kind", [VoteKind.BUILD, VoteKind.DELETE_LOG])
@@ -378,8 +381,8 @@ def test_option_lines_reject_duplicates_bad_counts_and_unusable_emojis() -> None
 def test_a_guild_poll_may_only_be_closed_from_the_guild_that_owns_it() -> None:
     poll = poll_snapshot(author_account_id=7, guild_id=10, scope=PollScope.GUILD)
 
-    assert poll.can_close(Actor(account_id=7, discord_user_id=70, guild_id=10)) is None
-    assert poll.can_close(Actor(account_id=7, discord_user_id=70, guild_id=999)) is VoteRejection.WRONG_GUILD
+    assert poll.can_close(UserActor(account_id=7, discord_user_id=70, guild_id=10)) is None
+    assert poll.can_close(UserActor(account_id=7, discord_user_id=70, guild_id=999)) is VoteRejection.WRONG_GUILD
 
 
 def test_a_network_poll_follows_its_author_but_pins_everyone_else() -> None:
@@ -387,14 +390,14 @@ def test_a_network_poll_follows_its_author_but_pins_everyone_else() -> None:
     close_any = frozenset({VOTE_POLL_CLOSE_ANY.name})
 
     # A network poll's author may close it from a different guild.
-    assert poll.can_close(Actor(account_id=7, discord_user_id=70, guild_id=999)) is None
+    assert poll.can_close(UserActor(account_id=7, discord_user_id=70, guild_id=999)) is None
     # Staff elsewhere hold a capability resolved in the wrong guild.
     assert (
-        poll.can_close(Actor(account_id=8, discord_user_id=80, guild_id=999, capabilities=close_any))
+        poll.can_close(UserActor(account_id=8, discord_user_id=80, guild_id=999, capabilities=close_any))
         is VoteRejection.WRONG_GUILD
     )
-    assert poll.can_close(Actor(account_id=8, discord_user_id=80, guild_id=10, capabilities=close_any)) is None
-    assert poll.can_close(Actor(account_id=8, discord_user_id=80, guild_id=10)) is VoteRejection.NOT_AUTHORIZED
+    assert poll.can_close(UserActor(account_id=8, discord_user_id=80, guild_id=10, capabilities=close_any)) is None
+    assert poll.can_close(UserActor(account_id=8, discord_user_id=80, guild_id=10)) is VoteRejection.NOT_AUTHORIZED
 
 
 async def test_publishing_a_network_poll_unscopes_its_options() -> None:
@@ -454,7 +457,7 @@ async def test_publishing_a_network_poll_unscopes_its_options() -> None:
     publisher = PublisherRecorder(cast(Any, Bot(services=bot_services(votes=votes))))
 
     await publisher.create_and_publish(
-        context=ActingContext.direct(Actor(account_id=1)),
+        context=ActingContext.direct(UserActor(account_id=1)),
         channel=cast(Any, channel),
         question="Which?",
         visibility=VoteVisibility.ANONYMOUS_LIVE,

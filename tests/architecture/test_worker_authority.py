@@ -5,7 +5,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, Actor, AnonymousActor, ServiceActor, UserActor
 from squid.core.builds.application import BuildService
 from squid.core.errors import AuthorizationError
 from squid.core.events.application import DomainEventService
@@ -24,7 +24,9 @@ WORKER_OPERATIONS = {
 }
 
 
-@pytest.mark.parametrize("actor", [Actor(), Actor(account_id=1, is_bot_owner=True), Actor(service_id="indexer")])
+@pytest.mark.parametrize(
+    "actor", [AnonymousActor(), UserActor(account_id=1, is_bot_owner=True), ServiceActor(service_id="indexer")]
+)
 async def test_worker_operations_reject_other_principal_kinds_before_io(actor: Actor) -> None:
     for service, names in WORKER_OPERATIONS.items():
         for name in names:

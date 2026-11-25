@@ -171,7 +171,7 @@ class SuggestionService:
             case Visibility.PUBLIC:
                 return True
             case Visibility.VIEWER_SCOPED:
-                return request.viewer.account_id is not None
+                return request.viewer.linked_account_id is not None
             case Visibility.REQUIRES_NODE:
                 assert source.required_node is not None
                 if authorizer is None:

@@ -7,7 +7,7 @@ import discord
 
 import squid_ui.ext.discord as sd
 from squid.bot.ui import text_node
-from squid.core.actors import ActingContext, Actor, current_acting_context
+from squid.core.actors import ActingContext, UserActor, current_acting_context
 from squid.core.observability import TraceSurface, correlation_scope, trace_span
 from squid_i18n import TextLike
 from squid_ui.content.text import localization_scope
@@ -58,8 +58,12 @@ async def deliver(request: AppRequest, match: RouteMatch[AppRequest], proceed: P
         "squid.route.format": match.endpoint.path,
     }
     context = current_acting_context.get()
-    if context is None or context.operator.discord_user_id != request.user.id:
-        actor = Actor(discord_user_id=request.user.id, guild_id=request.guild.id if request.guild else None)
+    if (
+        context is None
+        or not isinstance(context.operator, UserActor)
+        or context.operator.discord_user_id != request.user.id
+    ):
+        actor = UserActor(discord_user_id=request.user.id, guild_id=request.guild.id if request.guild else None)
         context = ActingContext.direct(actor)
     with (
         context.scope(),

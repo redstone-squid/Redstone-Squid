@@ -8,7 +8,7 @@ from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.accounts.models import Account
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.errors import AuthorizationError
 from squid.core.permissions.models import PermissionGrant
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
@@ -28,7 +28,7 @@ async def test_poll_creation_and_closure_recheck_grants_and_credential_scope(
         await session.flush()
         session.add(PermissionGrant(pattern="vote.poll.create", effect=1, subject_account_id=creator.id))
         session.add(PermissionGrant(pattern="vote.poll.close_any", effect=1, subject_account_id=moderator.id))
-    operator = Actor(account_id=creator.id, guild_id=10, capabilities=frozenset({"vote.poll.network_create"}))
+    operator = UserActor(account_id=creator.id, guild_id=10, capabilities=frozenset({"vote.poll.network_create"}))
     options = tuple(replace(option, guild_id=None) for option in GENERIC_OPTIONS)
 
     async def create(context: ActingContext, scope: PollScope) -> int:
@@ -49,7 +49,7 @@ async def test_poll_creation_and_closure_recheck_grants_and_credential_scope(
             ActingContext.direct(replace(operator, credential_scopes=frozenset({"vote.poll.cast"}))), PollScope.GUILD
         )
     session_id = await create(ActingContext.direct(operator), PollScope.GUILD)
-    reviewer = Actor(account_id=moderator.id, guild_id=10, capabilities=frozenset({"vote.poll.close_any"}))
+    reviewer = UserActor(account_id=moderator.id, guild_id=10, capabilities=frozenset({"vote.poll.close_any"}))
     async with sessions.begin() as session:
         await session.execute(delete(PermissionGrant).where(PermissionGrant.subject_account_id == moderator.id))
     refusal = await service.close(session_id, context=ActingContext.direct(reviewer))

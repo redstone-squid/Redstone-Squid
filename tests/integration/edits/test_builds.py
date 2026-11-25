@@ -12,7 +12,7 @@ from whenever import Instant
 
 from squid.config import EMBEDDING_DIMENSION
 from squid.core.accounts.models import Account, AccountIdentity
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, AnonymousActor, UserActor
 from squid.core.builds.application import BuildEditPatch, BuildService
 from squid.core.builds.application.category_edits import BUILD_CATEGORY_EDIT, BuildCategoryEdit
 from squid.core.builds.application.edits import (
@@ -52,7 +52,7 @@ from tests.support.submission_targets import seed_account_and_version
 
 async def setup(
     sessions: async_sessionmaker[AsyncSession],
-) -> tuple[BuildService, EditExecutor[SqlAlchemyUnitOfWork], Actor, Build]:
+) -> tuple[BuildService, EditExecutor[SqlAlchemyUnitOfWork], UserActor, Build]:
     account_id = await seed_account_and_version(sessions)
     factory = partial(SqlAlchemyUnitOfWork, sessions)
     service = BuildService(
@@ -75,7 +75,7 @@ async def setup(
     return (
         service,
         EditExecutor(factory, {BUILD_EDIT: BuildFieldsEdit(service)}),
-        Actor(account_id=account_id),
+        UserActor(account_id=account_id),
         build,
     )
 
@@ -86,7 +86,7 @@ async def test_moderator_changes_category_in_place_and_archives_old_timing_varia
     sessions = migrated_session_factory
     factory = partial(SqlAlchemyUnitOfWork, sessions)
     account_id = await seed_account_and_version(sessions)
-    actor = Actor(account_id=account_id)
+    actor = UserActor(account_id=account_id)
     edits = EditExecutor(factory, {BUILD_CATEGORY_EDIT: BuildCategoryEdit(PermissionService(uow_factory=factory))})
     door = DoorBuild(
         submitter_account_id=account_id,
@@ -164,8 +164,8 @@ async def test_credited_creator_proposes_published_changes_and_vote_applies_the_
         context=ActingContext.worker("test"),
     )
     await service.approve(build.id, source="test", context=ActingContext.worker("events.core.vote_session.closed"))
-    actor = Actor(account_id=creator.id)
-    current = await service.get(build.id, context=ActingContext.direct(Actor()))
+    actor = UserActor(account_id=creator.id)
+    current = await service.get(build.id, context=ActingContext.direct(AnonymousActor()))
     assert current is not None
     assert current.is_creator(actor.account_id)
     target = build_target(build.id)
@@ -186,11 +186,13 @@ async def test_credited_creator_proposes_published_changes_and_vote_applies_the_
     assert vote_id is not None
     assert not result.outcome.changed
     assert (await executor.execute(command, context=ActingContext.direct(actor))).outcome.review_vote_id == vote_id
-    published = await service.get(build.id, context=ActingContext.direct(Actor()))
+    published = await service.get(build.id, context=ActingContext.direct(AnonymousActor()))
     assert published is not None
     assert published.description == "original"
     assert published.revision == current.revision
-    snapshot = await VoteService(uow_factory=factory).get_session(vote_id, context=ActingContext.direct(Actor()))
+    snapshot = await VoteService(uow_factory=factory).get_session(
+        vote_id, context=ActingContext.direct(AnonymousActor())
+    )
     assert snapshot is not None
     assert snapshot.kind is VoteKind.BUILD_EDIT
     assert isinstance(snapshot.target, BuildEditVoteTarget)
@@ -200,7 +202,7 @@ async def test_credited_creator_proposes_published_changes_and_vote_applies_the_
         mutation = await uow.votes.cast_vote(vote_id, owner.account_id, 1, option, 3)
         assert mutation is not None
         await uow.commit()
-    closed = await VoteService(uow_factory=factory).get_session(vote_id, context=ActingContext.direct(Actor()))
+    closed = await VoteService(uow_factory=factory).get_session(vote_id, context=ActingContext.direct(AnonymousActor()))
     assert closed is not None
     assert closed.result is VoteSessionResult.APPROVED
     handler = ApplyBuildVoteOutcomeHandler(VoteService(uow_factory=factory), service)
@@ -214,7 +216,7 @@ async def test_credited_creator_proposes_published_changes_and_vote_applies_the_
     with ActingContext.worker("events.core.vote_session.closed").scope():
         await handler.handle(event)
         await handler.handle(event)
-    updated = await service.get(build.id, context=ActingContext.direct(Actor()))
+    updated = await service.get(build.id, context=ActingContext.direct(AnonymousActor()))
     assert updated is not None
     assert updated.dimensions == (1, 2, 3)
     assert updated.description == "reviewed"
@@ -349,7 +351,7 @@ async def test_competing_build_edits_and_unrelated_child_write_fence_undo(
         other = Account()
         session.add(other)
         await session.flush()
-        outsider = Actor(account_id=other.id)
+        outsider = UserActor(account_id=other.id)
     assert await service.get(build.id, context=ActingContext.direct(outsider)) is None
     with pytest.raises(BuildNotFoundError):
         await executor.execute(
@@ -536,13 +538,13 @@ async def test_submitter_can_edit_showcase_tags_and_description_after_confirmati
         context=ActingContext.direct(actor),
     )
     assert revalued.receipt is not None
-    current = await service.get(build.id, context=ActingContext.direct(Actor()))
+    current = await service.get(build.id, context=ActingContext.direct(AnonymousActor()))
     assert current is not None
     assert {tag.definition.stable_key: tag.value for tag in current.tags} == {"compact": None, "speed": Decimal(2)}
     reverted = await executor.execute(
         revalued.receipt.undo(revalued.outcome.revisions), context=ActingContext.direct(actor)
     )
-    current = await service.get(build.id, context=ActingContext.direct(Actor()))
+    current = await service.get(build.id, context=ActingContext.direct(AnonymousActor()))
     assert current is not None
     assert {tag.definition.stable_key: tag.value for tag in current.tags} == {"compact": None, "speed": Decimal("1.5")}
     assert reverted.receipt is not None
@@ -550,7 +552,7 @@ async def test_submitter_can_edit_showcase_tags_and_description_after_confirmati
     undone = await executor.execute(
         tagged.receipt.undo(reverted.outcome.revisions), context=ActingContext.direct(actor)
     )
-    current = await service.get(build.id, context=ActingContext.direct(Actor()))
+    current = await service.get(build.id, context=ActingContext.direct(AnonymousActor()))
     assert current is not None
     assert current.tags == []
 

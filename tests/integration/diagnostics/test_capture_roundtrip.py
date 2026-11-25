@@ -12,7 +12,7 @@ from unittest.mock import create_autospec
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.diagnostics.application import ErrorReportService
 from squid.core.diagnostics.domain import ErrorReportNotFoundError
 from squid.core.errors import InternalError
@@ -27,7 +27,7 @@ from squid.core.permissions.application.services import PermissionService
 from squid.core.persistence.base import Base
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
-READER = ActingContext.direct(Actor(account_id=7))
+READER = ActingContext.direct(UserActor(account_id=7))
 _TABLES = [Base.metadata.tables["error_reports"]]
 
 

@@ -6,7 +6,7 @@ from typing import Protocol, Self, override
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, model_validator
 from whenever import Instant
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, Actor, UserActor
 from squid.core.edits.application import EditUnitOfWork
 from squid.core.edits.domain import EditCommand, EditTarget, EditValues, Revision
 from squid.core.edits.fields import Aggregate, FieldCommand, PreparedFields
@@ -124,7 +124,7 @@ class PermissionGraph:
     revision: int
     admin: PermissionAdministrationService
     roles: tuple[PermissionRole, ...]
-    actor: Actor | None = None
+    actor: UserActor | None = None
 
     def role(self, identity: int) -> PermissionRole:
         for role in self.roles:
@@ -133,7 +133,7 @@ class PermissionGraph:
         raise NotFoundError
 
     @property
-    def current_actor(self) -> Actor:
+    def current_actor(self) -> UserActor:
         assert self.actor is not None
         return self.actor
 

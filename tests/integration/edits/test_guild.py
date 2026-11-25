@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, AnonymousActor, UserActor
 from squid.core.edits.application import EditExecutor
 from squid.core.edits.domain import EditCommand, EditValues, Revision, RevisionConflictError
 from squid.core.errors import AuthorizationError
@@ -27,8 +27,8 @@ async def test_guild_child_writes_advance_root_and_block_stale_undo(
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     settings = SettingsService(uow_factory=factory, permissions=PermissionService(uow_factory=factory))
     executor = EditExecutor(factory, {GUILD_EDIT: GuildSettingsEdit(PermissionService(uow_factory=factory))})
-    actor = Actor(account_id=None, guild_id=GUILD, is_bot_owner=True, discord_user_id=17)
-    _, revision = await settings.guild_snapshot(GUILD, context=ActingContext.direct(Actor()))
+    actor = UserActor(account_id=None, guild_id=GUILD, is_bot_owner=True, discord_user_id=17)
+    _, revision = await settings.guild_snapshot(GUILD, context=ActingContext.direct(AnonymousActor()))
     saved = await executor.execute(
         EditCommand(GUILD_EDIT, (Revision(guild_target(GUILD), revision),), EditValues.of({"locale": "zh-CN"})),
         context=ActingContext.direct(actor),
@@ -37,7 +37,7 @@ async def test_guild_child_writes_advance_root_and_block_stale_undo(
     async with factory() as uow:
         await uow.votes.set_role_weight(RoleWeight(GUILD, VoteKind.BUILD, 99, 2))
         await uow.commit()
-    snapshot, current = await settings.guild_snapshot(GUILD, context=ActingContext.direct(Actor()))
+    snapshot, current = await settings.guild_snapshot(GUILD, context=ActingContext.direct(AnonymousActor()))
     assert current > saved.outcome.revisions[0].value
     assert snapshot.voting[VoteKind.BUILD].weights == (RoleWeight(GUILD, VoteKind.BUILD, 99, 2),)
     with pytest.raises(RevisionConflictError):
@@ -58,8 +58,8 @@ async def test_guild_voting_round_trip_and_current_authority(
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     settings = SettingsService(uow_factory=factory, permissions=PermissionService(uow_factory=factory))
     executor = EditExecutor(factory, {GUILD_EDIT: GuildSettingsEdit(PermissionService(uow_factory=factory))})
-    actor = Actor(guild_id=GUILD, is_bot_owner=True, discord_user_id=17)
-    snapshot, revision = await settings.guild_snapshot(GUILD, context=ActingContext.direct(Actor()))
+    actor = UserActor(guild_id=GUILD, is_bot_owner=True, discord_user_id=17)
+    snapshot, revision = await settings.guild_snapshot(GUILD, context=ActingContext.direct(AnonymousActor()))
     voting = snapshot.voting | {VoteKind.BUILD: VoteConfiguration(None, (RoleWeight(GUILD, VoteKind.BUILD, 99, 2),))}
     replacement = snapshot.model_copy(update={"voting": voting})
     saved = await executor.execute(
@@ -84,11 +84,11 @@ async def test_guild_voting_round_trip_and_current_authority(
             )
         ).all()
         assert len(queued) == 1
-    revoked = Actor(guild_id=GUILD, discord_user_id=17)
+    revoked = UserActor(guild_id=GUILD, discord_user_id=17)
     with pytest.raises(AuthorizationError):
         await executor.execute(saved.receipt.undo(saved.outcome.revisions), context=ActingContext.direct(revoked))
     undone = await executor.execute(saved.receipt.undo(saved.outcome.revisions), context=ActingContext.direct(actor))
     assert undone.outcome.revisions[0].value > saved.outcome.revisions[0].value
-    assert (await settings.guild_snapshot(GUILD, context=ActingContext.direct(Actor())))[0].voting[
+    assert (await settings.guild_snapshot(GUILD, context=ActingContext.direct(AnonymousActor())))[0].voting[
         VoteKind.BUILD
     ].weights == ()

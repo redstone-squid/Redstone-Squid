@@ -14,7 +14,7 @@ import pytest
 from whenever import Instant
 
 from squid.bot.voting.publisher import DiscordPollPublisher, PollPublication, PollPublicationError
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.messages.application.services import MessageService
 from squid.core.messages.domain import MessageSnapshot
 from squid.core.voting.application import VoteService
@@ -112,7 +112,7 @@ class PublisherRecorder(DiscordPollPublisher):
 
 async def _publish(publisher: DiscordPollPublisher, channel: Channel) -> PollPublication:
     return await publisher.create_and_publish(
-        context=ActingContext.direct(Actor(account_id=7)),
+        context=ActingContext.direct(UserActor(account_id=7)),
         channel=cast(Any, channel),
         question="Which?",
         visibility=VoteVisibility.ANONYMOUS_LIVE,
@@ -159,7 +159,7 @@ async def test_a_send_failure_preserves_the_session_for_a_later_send() -> None:
     publisher.send_failure = None
     publisher.message = message
     completed = await publisher.resume(
-        raised.value.pending, cast(Any, channel), context=ActingContext.direct(Actor(account_id=7))
+        raised.value.pending, cast(Any, channel), context=ActingContext.direct(UserActor(account_id=7))
     )
 
     assert completed.message is message

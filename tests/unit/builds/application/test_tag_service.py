@@ -4,7 +4,7 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, AnonymousActor
 from squid.core.builds.application.tag_service import BuildTagService
 from squid.core.builds.application.tags import TagResolution
 from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
@@ -38,7 +38,7 @@ async def test_restriction_aliases_are_canonical_and_deduplicated() -> None:
     recognized, unknown = await service.validate_restrictions(
         ["OBSLESS", " No   Observers ", "observerless", "Sandless", "Full Seamless"],
         "component",
-        context=ActingContext.direct(Actor()),
+        context=ActingContext.direct(AnonymousActor()),
     )
 
     assert recognized == ["No Observers"]
@@ -57,7 +57,7 @@ async def test_ambiguous_alias_stays_unknown_even_when_a_canonical_name_also_mat
     service = BuildTagService(uow_factory=lambda: scope)
 
     assert await service.validate_restrictions(
-        ["No Slime Blocks", "Pistonless"], "component", context=ActingContext.direct(Actor())
+        ["No Slime Blocks", "Pistonless"], "component", context=ActingContext.direct(AnonymousActor())
     ) == (
         ["No Slime Blocks"],
         ["Pistonless"],
@@ -72,7 +72,9 @@ async def test_pattern_aliases_use_the_door_catalogue() -> None:
     scope.__aenter__.return_value = scope
     service = BuildTagService(uow_factory=lambda: scope)
 
-    assert await service.validate_door_types(["LAMP DOOR", "Glass"], context=ActingContext.direct(Actor())) == (
+    assert await service.validate_door_types(
+        ["LAMP DOOR", "Glass"], context=ActingContext.direct(AnonymousActor())
+    ) == (
         ["Full Lamp"],
         ["Glass"],
     )
@@ -93,7 +95,9 @@ async def test_combined_negative_placement_shorthand_keeps_both_constraints(phra
     scope.__aenter__.return_value = scope
     service = BuildTagService(uow_factory=lambda: scope)
 
-    assert await service.validate_restrictions([phrase], "miscellaneous", context=ActingContext.direct(Actor())) == (
+    assert await service.validate_restrictions(
+        [phrase], "miscellaneous", context=ActingContext.direct(AnonymousActor())
+    ) == (
         ["Not Locational", "Not Directional"],
         [],
     )
@@ -110,7 +114,9 @@ async def test_placement_shorthand_keeps_qualifications_instead_of_claiming_reli
     scope.__aenter__.return_value = scope
     service = BuildTagService(uow_factory=lambda: scope)
 
-    assert await service.validate_restrictions([phrase], "miscellaneous", context=ActingContext.direct(Actor())) == (
+    assert await service.validate_restrictions(
+        [phrase], "miscellaneous", context=ActingContext.direct(AnonymousActor())
+    ) == (
         [],
         [phrase],
     )

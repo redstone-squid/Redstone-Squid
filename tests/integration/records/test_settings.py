@@ -6,7 +6,7 @@ from functools import partial
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, AnonymousActor, UserActor
 from squid.core.permissions.application.services import PermissionService
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery, analyze_door_widths
@@ -96,10 +96,10 @@ async def test_current_ranges_follow_the_pin_without_changing_fixed_queries(
         analyzer=PinChangingAnalyzer(),
     )
     fixed = await publisher.publish(
-        DoorRangeQuery(height=3, version_id=first_id), context=ActingContext.direct(Actor())
+        DoorRangeQuery(height=3, version_id=first_id), context=ActingContext.direct(AnonymousActor())
     )
     current = await publisher.publish(
-        DoorRangeQuery(height=3, follow_current_version=True), context=ActingContext.direct(Actor())
+        DoorRangeQuery(height=3, follow_current_version=True), context=ActingContext.direct(AnonymousActor())
     )
     assert current.query_id != fixed.query_id
     assert current.active is None
@@ -110,8 +110,8 @@ async def test_current_ranges_follow_the_pin_without_changing_fixed_queries(
 
     await publisher.process_queue(context=ActingContext.worker("test-worker"))
 
-    current = await publisher.get(current.query_id, context=ActingContext.direct(Actor()))
-    fixed = await publisher.get(fixed.query_id, context=ActingContext.direct(Actor()))
+    current = await publisher.get(current.query_id, context=ActingContext.direct(AnonymousActor()))
+    fixed = await publisher.get(fixed.query_id, context=ActingContext.direct(AnonymousActor()))
     assert current is not None
     assert current.active is not None
     assert current.active.resolved_version_id == second_id
@@ -132,10 +132,10 @@ async def test_current_range_without_a_pin_stays_pending(
     )
     query_id = await publisher.register(
         DoorRangeQuery(height=3, follow_current_version=True),
-        context=ActingContext.direct(Actor(is_bot_owner=True, account_id=7)),
+        context=ActingContext.direct(UserActor(is_bot_owner=True, account_id=7)),
     )
     assert await publisher.process_queue(context=ActingContext.worker("test-worker")) == (0, 1)
-    publication = await publisher.get(query_id, context=ActingContext.direct(Actor()))
+    publication = await publisher.get(query_id, context=ActingContext.direct(AnonymousActor()))
     assert publication is not None
     assert publication.active is None
     assert publication.latest is not None

@@ -16,7 +16,7 @@ from squid.api.v1.schematics import (
     render_build_schematic,
     router,
 )
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, AnonymousActor
 from squid.core.builds.application import BuildQueryService
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.errors import BuildNotFoundError
@@ -64,7 +64,7 @@ def _public_publication() -> SchematicPublication:
 
 @pytest.fixture(autouse=True)
 def public_request_context() -> Iterator[None]:
-    with ActingContext.direct(Actor()).scope():
+    with ActingContext.direct(AnonymousActor()).scope():
         yield
 
 

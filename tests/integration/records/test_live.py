@@ -7,7 +7,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.accounts.models import Account
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, AnonymousActor
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.domain.expansion import DoorExpansion, ExpansionBranch, ExpansionParameter, ExpansionTiming
 from squid.core.builds.models import BuildVersion, DoorBuild, ExtenderBuild
@@ -139,19 +139,23 @@ async def test_live_lookup_does_not_materialize_large_sizes(
         range_analyzer=SubprocessRangeAnalyzer(),
     )
     with record_queries(sessions) as statements:
-        result = await service.lookup_door(DoorRecordLookup(opening=(6, 3, 1)), context=ActingContext.direct(Actor()))
+        result = await service.lookup_door(
+            DoorRecordLookup(opening=(6, 3, 1)), context=ActingContext.direct(AnonymousActor())
+        )
         assert result.resolution.holder_ids == (family_id,)
         assert {c.build_id for c in result.configurations} == {family_id, fixed_id}
         fastest = await service.lookup_door(
             DoorRecordLookup(opening=(6, 3, 1), criterion=RecordCriterion.FASTEST),
-            context=ActingContext.direct(Actor()),
+            context=ActingContext.direct(AnonymousActor()),
         )
         assert fastest.resolution.holder_ids == (family_id,)
-        large = await service.lookup_door(DoorRecordLookup(opening=(9999, 3, 1)), context=ActingContext.direct(Actor()))
+        large = await service.lookup_door(
+            DoorRecordLookup(opening=(9999, 3, 1)), context=ActingContext.direct(AnonymousActor())
+        )
         assert large.resolution.holder_ids == (family_id,)
         assert large.configurations[0].volume == 50000
         no_version = await service.lookup_door(
-            DoorRecordLookup(opening=(6, 3, 1), version_id=32767), context=ActingContext.direct(Actor())
+            DoorRecordLookup(opening=(6, 3, 1), version_id=32767), context=ActingContext.direct(AnonymousActor())
         )
         assert no_version.resolution.status is ResolutionStatus.NO_CANDIDATE
     assert not any(statement.lstrip().upper().startswith(("INSERT", "UPDATE", "DELETE")) for statement in statements)
@@ -277,14 +281,15 @@ async def test_width_lookup_reads_stored_families_and_fixed_exceptions_without_w
     )
     with record_queries(sessions) as statements:
         result = await service.lookup_door_ranges(
-            DoorRangeQuery(height=3, version_id=version_id), context=ActingContext.direct(Actor())
+            DoorRangeQuery(height=3, version_id=version_id), context=ActingContext.direct(AnonymousActor())
         )
         assert result.analysis.status is RegionAnalysisStatus.EXACT
         assert {c.build_id for c in result.configurations} == {family_id, fixed_id}
         for width in (1, 2, 5, 6, 7, 9, 9999):
             region = next(r for r in result.analysis.regions if r.domain.contains(width))
             expected = await service.lookup_door(
-                DoorRecordLookup(opening=(width, 3, 1), version_id=version_id), context=ActingContext.direct(Actor())
+                DoorRecordLookup(opening=(width, 3, 1), version_id=version_id),
+                context=ActingContext.direct(AnonymousActor()),
             )
             assert region.resolution == expected.resolution
         clipped = await service.lookup_door_ranges(
@@ -294,12 +299,12 @@ async def test_width_lookup_reads_stored_families_and_fixed_exceptions_without_w
                 maximum=9999,
                 version_id=version_id,
             ),
-            context=ActingContext.direct(Actor()),
+            context=ActingContext.direct(AnonymousActor()),
         )
         assert {c.build_id for c in clipped.configurations} == {family_id}
         assert all(r.resolution.holder_ids == (family_id,) for r in clipped.analysis.regions)
         empty = await service.lookup_door_ranges(
-            DoorRangeQuery(height=3, orientation="Skydoor"), context=ActingContext.direct(Actor())
+            DoorRangeQuery(height=3, orientation="Skydoor"), context=ActingContext.direct(AnonymousActor())
         )
         assert empty.analysis.status is RegionAnalysisStatus.EXACT
         assert empty.analysis.regions[0].resolution.status is ResolutionStatus.NO_CANDIDATE

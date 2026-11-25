@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, Actor, AnonymousActor, UserActor
 from squid.core.builds.domain import BuildCategory
 from squid.core.builds.models import Build
 from squid.core.errors import AuthorizationError
@@ -107,7 +107,7 @@ async def test_executor_commits_build_receipt_and_event_once(
     )
     with pytest.raises(AuthorizationError):
         await executor.execute(
-            claim, now=Instant.now(), context=ActingContext.direct(Actor(account_id=claim.requested_by_account_id))
+            claim, now=Instant.now(), context=ActingContext.direct(UserActor(account_id=claim.requested_by_account_id))
         )
     result = await executor.execute(claim, now=Instant.now(), context=ActingContext.worker("submission-finalization"))
     assert isinstance(result, FinalizedBuild)
@@ -346,7 +346,7 @@ async def test_executor_recovers_a_loaded_source_build(
 ) -> None:
     claim = await claimed_submission(migrated_session_factory)
     repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
-    existing = await PreparedBuilds().prepare(claim.payload, context=ActingContext.direct(Actor()))
+    existing = await PreparedBuilds().prepare(claim.payload, context=ActingContext.direct(AnonymousActor()))
     await transact(
         repository,
         lambda uow: uow.builds.save(existing),

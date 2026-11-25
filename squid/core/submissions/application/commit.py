@@ -5,7 +5,7 @@ from uuid import UUID
 
 from whenever import Instant
 
-from squid.core.actors import ActingContext, Actor, application_operation
+from squid.core.actors import ActingContext, UserActor, application_operation
 from squid.core.builds.application.ports import BuildUnitOfWork
 from squid.core.builds.models import Build
 from squid.core.errors import InvalidStateError
@@ -134,9 +134,11 @@ class BuildSubmissionExecutor:
         return result
 
     async def _authorized(self, job: ClaimedFinalizationJob, uow: DraftUnitOfWork | None = None) -> bool:
-        actor = Actor(account_id=job.requested_by_account_id)
+        if job.requested_by_account_id is None:
+            return False
+        actor = UserActor(account_id=job.requested_by_account_id)
         if self._drafts is None:
-            return actor.account_id == job.payload.owner_account_id
+            return job.requested_by_account_id == job.payload.owner_account_id
         try:
             if uow is None:
                 async with self._uow_factory() as check:

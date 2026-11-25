@@ -230,11 +230,11 @@ def test_impersonation_header_is_request_scoped_and_bound_to_browser_login(login
     async def probe(caller: CurrentCaller) -> int:
         context = current_acting_context.get()
         assert context is not None
-        assert context.operator.account_id == login.sessions.account_id
+        assert context.operator.linked_account_id == login.sessions.account_id
         assert context is caller.context()
         assert context.effective == caller.to_actor()
-        assert context.operator.credential_id == "browser:session-id"
-        assert context.effective.audit_use_id == (use_id if context.session_id else None)
+        assert context.operator.credential_reference == "browser:session-id"
+        assert context.effective.audit_reference == (use_id if context.session_id else None)
         return context.effective.require_account_id()
 
     login.client.app.register(probe)

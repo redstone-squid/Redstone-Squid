@@ -5,11 +5,11 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
-from squid.core.actors import Actor
+from squid.core.actors import UserActor
 from squid.core.errors import InvalidStateError
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.application.cache import SubjectRuleCache
-from squid.core.permissions.application.ports import PermissionUnitOfWork, SubjectRecords
+from squid.core.permissions.application.ports import PermissionSubject, PermissionUnitOfWork, SubjectRecords
 from squid.core.permissions.domain import BUILTIN_ROLES_BY_KEY, CheckMode, Effect, Origin, Reason
 from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
 from squid.core.permissions.errors import PermissionDeniedError
@@ -39,7 +39,7 @@ class FakeStore:
         self.records = records
         self.loads = 0
 
-    async def load_for_subject(self, subject: Actor) -> SubjectRecords:
+    async def load_for_subject(self, subject: PermissionSubject) -> SubjectRecords:
         self.loads += 1
         return replace(self.records, subject=subject)
 
@@ -53,7 +53,9 @@ def service(
     grants: tuple[PermissionGrant, ...] = (),
     assignments: tuple[PermissionRoleAssignment, ...] = (),
 ) -> tuple[PermissionService, FakeStore]:
-    store = FakeStore(SubjectRecords(subject=Actor(), epoch=1, roles=roles, grants=grants, assignments=assignments))
+    store = FakeStore(
+        SubjectRecords(subject=UserActor(account_id=7), epoch=1, roles=roles, grants=grants, assignments=assignments)
+    )
     return PermissionService(uow_factory=permission_uow_factory(store)), store
 
 
@@ -62,7 +64,7 @@ async def test_a_builtin_role_uses_the_pattern_list_defined_in_code() -> None:
     permissions, _ = service(
         assignments=(PermissionRoleAssignment(role_id=ROLE_ID["global-admin"], subject_account_id=7),),
     )
-    subject = Actor(account_id=7, guild_id=GUILD)
+    subject = UserActor(account_id=7, guild_id=GUILD)
 
     assert (await permissions.check(subject, "build.submission.approve")).allowed
     assert not (await permissions.check(subject, "record.entry.rebuild")).allowed
@@ -90,7 +92,7 @@ async def test_stored_patterns_extend_a_builtin_rather_than_replacing_it() -> No
         roles=widened("guild-admin", "perm.audit.view"),
         assignments=(PermissionRoleAssignment(role_id=ROLE_ID["guild-admin"], subject_account_id=7),),
     )
-    subject = Actor(account_id=7, guild_id=GUILD)
+    subject = UserActor(account_id=7, guild_id=GUILD)
 
     assert (await permissions.check(subject, "perm.audit.view")).allowed
     assert (await permissions.check(subject, "settings.server.edit")).allowed
@@ -102,7 +104,7 @@ async def test_a_stored_pattern_cannot_punch_through_a_builtins_exclude() -> Non
         roles=widened("global-admin", "bot.**", "record.entry.rebuild"),
         assignments=(PermissionRoleAssignment(role_id=ROLE_ID["global-admin"], subject_account_id=7),),
     )
-    subject = Actor(account_id=7, guild_id=GUILD)
+    subject = UserActor(account_id=7, guild_id=GUILD)
 
     assert not (await permissions.check(subject, "bot.tree.sync")).allowed
     assert not (await permissions.check(subject, "record.entry.rebuild")).allowed
@@ -112,7 +114,7 @@ async def test_a_role_assignment_to_a_discord_role_reaches_its_holders() -> None
     permissions, _ = service(
         assignments=(PermissionRoleAssignment(role_id=ROLE_ID["trusted"], subject_role_id=99, subject_guild_id=GUILD),),
     )
-    subject = Actor(account_id=7, discord_role_ids=frozenset({99}), guild_id=GUILD)
+    subject = UserActor(account_id=7, discord_role_ids=frozenset({99}), guild_id=GUILD)
 
     assert (await permissions.check(subject, "vote.log_delete.cast")).allowed
 
@@ -120,14 +122,14 @@ async def test_a_role_assignment_to_a_discord_role_reaches_its_holders() -> None
 class TestGuildAdminBridge:
     async def test_manage_server_confers_the_guild_nodes(self) -> None:
         permissions, _ = service()
-        subject = Actor(account_id=7, guild_id=GUILD, discord_guild_admin=True)
+        subject = UserActor(account_id=7, guild_id=GUILD, discord_guild_admin=True)
 
         assert (await permissions.check(subject, "settings.server.edit")).allowed
         assert not (await permissions.check(subject, "build.submission.approve")).allowed
 
     async def test_it_is_absent_without_manage_server(self) -> None:
         permissions, _ = service()
-        subject = Actor(account_id=7, guild_id=GUILD)
+        subject = UserActor(account_id=7, guild_id=GUILD)
 
         assert not (await permissions.check(subject, "settings.server.edit")).allowed
 
@@ -136,7 +138,7 @@ class TestGuildAdminBridge:
         permissions, _ = service(
             grants=(PermissionGrant(pattern="settings.server.edit", effect=int(Effect.DENY), subject_account_id=7),),
         )
-        subject = Actor(account_id=7, guild_id=GUILD, discord_guild_admin=True)
+        subject = UserActor(account_id=7, guild_id=GUILD, discord_guild_admin=True)
         decision = (await permissions.check(subject, "settings.server.edit")).decisions[0]
 
         assert not decision.allowed
@@ -146,7 +148,7 @@ class TestGuildAdminBridge:
     async def test_it_cannot_reach_a_global_node_even_if_widened(self) -> None:
         """Storage lets someone add a global pattern; resolution still refuses it."""
         permissions, _ = service(roles=widened("guild-admin", "build.**"))
-        subject = Actor(account_id=7, guild_id=GUILD, discord_guild_admin=True)
+        subject = UserActor(account_id=7, guild_id=GUILD, discord_guild_admin=True)
 
         assert not (await permissions.check(subject, "build.submission.approve")).allowed
 
@@ -155,7 +157,7 @@ class TestLoadCost:
     async def test_the_owner_short_circuits_without_touching_the_store(self) -> None:
         permissions, store = service()
 
-        assert (await permissions.check(Actor(account_id=1, is_bot_owner=True), "record.entry.rebuild")).allowed
+        assert (await permissions.check(UserActor(account_id=1, is_bot_owner=True), "record.entry.rebuild")).allowed
         assert store.loads == 0
 
     async def test_resolving_many_nodes_costs_one_load(self) -> None:
@@ -165,7 +167,7 @@ class TestLoadCost:
         )
         held = (
             await permissions.check(
-                Actor(account_id=7, guild_id=GUILD),
+                UserActor(account_id=7, guild_id=GUILD),
                 *["build.submission.approve", "build.submission.reject", "tag.proposal.approve", "bot.tree.sync"],
             )
         ).allowed_nodes
@@ -182,14 +184,14 @@ async def test_an_expired_assignment_stops_applying() -> None:
         assignments=(PermissionRoleAssignment(role_id=ROLE_ID["trusted"], subject_account_id=7, expires_at=expired),),
     )
 
-    decision = (await permissions.check(Actor(account_id=7, guild_id=GUILD), "vote.log_delete.cast")).decisions[0]
+    decision = (await permissions.check(UserActor(account_id=7, guild_id=GUILD), "vote.log_delete.cast")).decisions[0]
 
     assert decision.reason is Reason.DEFAULT
 
 
 async def test_current_permission_rules_ignore_actor_capability_snapshots() -> None:
     permissions, _ = service()
-    actor = Actor(account_id=7, capabilities=frozenset({"record.entry.rebuild"}), highest_permission_rank=999)
+    actor = UserActor(account_id=7, capabilities=frozenset({"record.entry.rebuild"}), highest_permission_rank=999)
     assert not (await permissions.check(actor, "record.entry.rebuild")).allowed
 
 
@@ -202,7 +204,7 @@ async def test_transactional_explanations_preserve_acl_decisions(effect: Effect 
         else (PermissionGrant(pattern="build.submission.edit", effect=int(effect), subject_account_id=7),)
     )
     permissions, store = service(grants=grants)
-    subject = Actor(account_id=7, is_bot_owner=bot_owner)
+    subject = UserActor(account_id=7, is_bot_owner=bot_owner)
     async with permission_uow_factory(store)() as uow:
         result = await permissions.check(subject, BUILD_SUBMISSION_EDIT, uow=uow)
     decision = result.decisions[0]
@@ -244,7 +246,7 @@ async def test_enforcement_reports_denied_nodes_without_rejecting_allowed_altern
             PermissionGrant(pattern=second, effect=int(Effect.FORBID), subject_account_id=7),
         )
     )
-    actor = Actor(account_id=7)
+    actor = UserActor(account_id=7)
     async with permission_uow_factory(store)() as uow:
 
         async def enforce() -> None:
@@ -274,7 +276,7 @@ async def test_transactional_enforcement_rechecks_a_revoked_cached_grant() -> No
     )
     factory = permission_uow_factory(store)
     permissions = PermissionService(uow_factory=factory, cache=SubjectRuleCache())
-    actor = Actor(account_id=7)
+    actor = UserActor(account_id=7)
     await permissions.require(actor, "build.submission.edit")
     store.records = replace(store.records, epoch=2, grants=())
     async with factory() as uow:
@@ -287,10 +289,10 @@ async def test_transactional_enforcement_rechecks_a_revoked_cached_grant() -> No
 async def test_empty_enforcement_is_a_programming_error() -> None:
     permissions, store = service()
     with pytest.raises(ValueError, match="at least one node"):
-        await permissions.require(Actor(is_bot_owner=True))
+        await permissions.require(UserActor(discord_user_id=1, is_bot_owner=True))
     async with permission_uow_factory(store)() as uow:
         with pytest.raises(ValueError, match="at least one node"):
-            await permissions.require(Actor(is_bot_owner=True), mode="any", uow=uow)
+            await permissions.require(UserActor(discord_user_id=1, is_bot_owner=True), mode="any", uow=uow)
 
 
 async def test_supplied_transaction_bypasses_cache_without_owning_its_lifecycle() -> None:
@@ -299,7 +301,7 @@ async def test_supplied_transaction_bypasses_cache_without_owning_its_lifecycle(
     )
     factory = Mock(wraps=permission_uow_factory(store))
     permissions = PermissionService(uow_factory=factory, cache=SubjectRuleCache())
-    actor = Actor(account_id=7)
+    actor = UserActor(account_id=7)
     assert (await permissions.check(actor, "build.submission.edit")).allowed
     store.records = replace(store.records, epoch=2, grants=())
     borrowed = AsyncMock(spec=PermissionUnitOfWork)
@@ -324,7 +326,7 @@ async def test_uncommitted_grants_do_not_enter_the_rule_cache() -> None:
         grants=(PermissionGrant(pattern="build.submission.edit", effect=int(Effect.ALLOW), subject_account_id=7),)
     )
     permissions = PermissionService(uow_factory=permission_uow_factory(committed), cache=SubjectRuleCache())
-    actor = Actor(account_id=7)
+    actor = UserActor(account_id=7)
     async with permission_uow_factory(uncommitted)() as uow:
         assert (await permissions.check(actor, "build.submission.edit", uow=uow)).allowed
     assert not (await permissions.check(actor, "build.submission.edit")).allowed
@@ -333,6 +335,6 @@ async def test_uncommitted_grants_do_not_enter_the_rule_cache() -> None:
 
 async def test_loaded_inputs_cannot_be_paired_with_another_identity() -> None:
     permissions, store = service()
-    store.load_for_subject = AsyncMock(return_value=SubjectRecords(epoch=1, subject=Actor(account_id=99)))
+    store.load_for_subject = AsyncMock(return_value=SubjectRecords(epoch=1, subject=UserActor(account_id=99)))
     with pytest.raises(InvalidStateError, match="different identity or context"):
-        await permissions.check(Actor(account_id=7), "build.submission.edit")
+        await permissions.check(UserActor(account_id=7), "build.submission.edit")

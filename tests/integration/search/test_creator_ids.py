@@ -10,7 +10,7 @@ from whenever import Instant
 
 from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, ClaimMethod
 from squid.core.accounts.models import AccountIdentity, CreatorAlias
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, AnonymousActor
 from squid.core.persistence.base import Base
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.search.application import SearchService
@@ -59,7 +59,9 @@ async def _owners(uow_factory: partial[SqlAlchemyUnitOfWork], build_id: int) -> 
 async def _found(service: SearchService, query: str, scope: SearchScope = SearchScope.BUILDS) -> set[str]:
     return {
         hit.source_id
-        for hit in (await service.search(SearchRequest(query, scope=scope), context=ActingContext.direct(Actor()))).hits
+        for hit in (
+            await service.search(SearchRequest(query, scope=scope), context=ActingContext.direct(AnonymousActor()))
+        ).hits
     }
 
 

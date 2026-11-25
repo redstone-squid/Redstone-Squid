@@ -194,7 +194,7 @@ class FakeSchematicStore:
         publication: SchematicPublication | None = None,
     ) -> int:
         self.records.append((build_id, sha256, analysis, primary))
-        self.uploaded_by_account_ids.append(context.effective.account_id)
+        self.uploaded_by_account_ids.append(context.effective.linked_account_id)
         if primary:
             self.stored = [
                 StoredSchematic(
@@ -220,7 +220,7 @@ class FakeSchematicStore:
             original_filename=original_filename,
             analysis=analysis,
             publication=publication or SchematicPublication(),
-            uploaded_by_account_id=context.effective.account_id,
+            uploaded_by_account_id=context.effective.linked_account_id,
         )
         self.stored.append(stored)
         return stored.id

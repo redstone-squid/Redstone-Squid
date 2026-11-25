@@ -24,7 +24,7 @@ from squid.bot.submission.ui.drafts import (
     Phase,
 )
 from squid.bot.submission.ui.sections import SectionEditorScreen, _DimensionsField, modal_chunks, present_chunk_form
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, Actor, UserActor
 from squid.core.builds.application.input import parse_build_ticks
 from squid.core.builds.domain.credits import Credit, CreditAttribution, CreditKind, CreditRole
 from squid.core.builds.models import Build, DoorBuild
@@ -206,7 +206,7 @@ async def open_editor(
     editor = await DraftEditorScreen.load(
         services,
         drafts.current.snapshot.id,
-        resolve_actor=AsyncMock(return_value=Actor(account_id=actor)),
+        resolve_actor=AsyncMock(return_value=UserActor(account_id=actor)),
         changes=LocalTopicBus().topic("submission_draft", str(drafts.current.snapshot.id)),
         render_card=render_card,
     )
@@ -238,8 +238,8 @@ async def test_reopening_reads_saved_answers_and_pinned_manifest() -> None:
 @pytest.mark.parametrize(
     "actor",
     [
-        Actor(account_id=99, discord_user_id=123, is_bot_owner=True),
-        Actor(account_id=99, discord_user_id=123, guild_id=456, discord_role_ids=frozenset({789})),
+        UserActor(account_id=99, discord_user_id=123, is_bot_owner=True),
+        UserActor(account_id=99, discord_user_id=123, guild_id=456, discord_role_ids=frozenset({789})),
     ],
 )
 async def test_staff_authority_survives_open_refresh_save_and_submit(
@@ -279,7 +279,7 @@ async def test_staff_authority_survives_open_refresh_save_and_submit(
     submit.assert_awaited_once_with(draft_id, context=ActingContext.direct(actor), locale=None)
 
     # The same open workspace must stop using staff authority after it is revoked.
-    resolve_actor.return_value = Actor(account_id=99, discord_user_id=123, guild_id=456)
+    resolve_actor.return_value = UserActor(account_id=99, discord_user_id=123, guild_id=456)
     assert not await ws.may_edit()
     with pytest.raises(DraftAccessDeniedError):
         await ws.reload()
@@ -291,7 +291,7 @@ async def test_staff_authority_survives_open_refresh_save_and_submit(
 
 async def test_undo_resolves_the_current_actor() -> None:
     services, drafts = setup()
-    resolve_actor = AsyncMock(return_value=Actor(account_id=7))
+    resolve_actor = AsyncMock(return_value=UserActor(account_id=7))
     editor = await DraftEditorScreen.load(
         services,
         drafts.current.snapshot.id,
@@ -301,12 +301,12 @@ async def test_undo_resolves_the_current_actor() -> None:
     await editor.workspace.projection.reload()
     with transaction() as tx:
         await editor.workspace.save_values(tx, {"description": "Correction"})
-    resolve_actor.return_value = Actor(account_id=99)
+    resolve_actor.return_value = UserActor(account_id=99)
     drafts.actors.clear()
     with transaction():
         await editor.workspace.edits.undo()
     assert drafts.actors
-    assert all(actor == Actor(account_id=99) for actor in drafts.actors)
+    assert all(actor == UserActor(account_id=99) for actor in drafts.actors)
     assert "description" not in drafts.current.snapshot.answers
 
 
@@ -781,8 +781,8 @@ async def test_file_actions_refresh_staff_authority(operation: str) -> None:
     intake, edits = FileActionIntake(), AttachmentEditRecorder(drafts)
     uploads = AsyncMock(spec=DraftAttachmentUploads)
     services = replace(services, submission_uploads=uploads, submission_intake=intake, edits=edits)
-    owner = Actor(account_id=7)
-    staff = Actor(account_id=99, discord_user_id=123, guild_id=456, discord_role_ids=frozenset({789}))
+    owner = UserActor(account_id=7)
+    staff = UserActor(account_id=99, discord_user_id=123, guild_id=456, discord_role_ids=frozenset({789}))
     resolve_actor = AsyncMock(return_value=owner)
     draft_id = drafts.current.snapshot.id
     ws = (

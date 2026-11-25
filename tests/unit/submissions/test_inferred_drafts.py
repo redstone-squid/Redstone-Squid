@@ -7,7 +7,7 @@ from uuid import uuid4
 import pytest
 from whenever import Instant
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.builds.domain import BuildCategory, BuildInput, DoorDraftDetails
 from squid.core.errors import ValidationError
 from squid.core.messages.domain import MessageSnapshot
@@ -71,7 +71,10 @@ async def test_materialization_reuses_identity_without_overwriting_corrections()
         BuildInput(category=BuildCategory.DOOR, details=DoorDraftDetails(door_width=3), source_messages=(source,)),
     )
     first = await materialize_candidate(
-        candidate, cast(SubmissionDraftService, drafts), cast(SubmissionFormService, Forms()), actor=Actor(account_id=7)
+        candidate,
+        cast(SubmissionDraftService, drafts),
+        cast(SubmissionFormService, Forms()),
+        actor=UserActor(account_id=7),
     )
     assert first.snapshot.id == candidate.id
     assert first.source_messages == (source,)
@@ -80,7 +83,10 @@ async def test_materialization_reuses_identity_without_overwriting_corrections()
     assert "opening_height" not in first.snapshot.answers
     assert "source_version" not in first.snapshot.answers
     replay = await materialize_candidate(
-        candidate, cast(SubmissionDraftService, drafts), cast(SubmissionFormService, Forms()), actor=Actor(account_id=7)
+        candidate,
+        cast(SubmissionDraftService, drafts),
+        cast(SubmissionFormService, Forms()),
+        actor=UserActor(account_id=7),
     )
     assert replay == first
     assert drafts.changes == 1
@@ -94,14 +100,14 @@ async def test_unknown_category_requires_explicit_selection() -> None:
             candidate,
             cast(SubmissionDraftService, drafts),
             cast(SubmissionFormService, Forms()),
-            actor=Actor(account_id=7),
+            actor=UserActor(account_id=7),
         )
     assert drafts.current is None
     result = await materialize_candidate(
         candidate,
         cast(SubmissionDraftService, drafts),
         cast(SubmissionFormService, Forms()),
-        actor=Actor(account_id=7),
+        actor=UserActor(account_id=7),
         category=BuildCategory.EXTENDER,
     )
     assert result.snapshot.category == "extender"
@@ -117,7 +123,7 @@ async def test_expansion_survives_materialization_outside_the_form_answers() -> 
         candidate,
         cast(SubmissionDraftService, Drafts()),
         cast(SubmissionFormService, Forms()),
-        actor=Actor(account_id=7),
+        actor=UserActor(account_id=7),
     )
     assert stored.door_expansion == document
     assert "door_expansion" not in stored.snapshot.answers

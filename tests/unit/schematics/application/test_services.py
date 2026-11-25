@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock
 import pytest
 from whenever import Instant
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.errors import DataIntegrityError
 from squid.core.permissions.application import PermissionService
 from squid.core.schematics.application import (
@@ -178,7 +178,7 @@ async def test_record_preserves_provider_neutral_uploader_account_identity() -> 
     await schematics.attach(
         7,
         IngestRequest(data=litematic_bytes(), filename="door.litematic"),
-        context=ActingContext.direct(Actor(account_id=314)),
+        context=ActingContext.direct(UserActor(account_id=314)),
     )
 
     assert store.uploaded_by_account_ids == [314]
@@ -186,8 +186,8 @@ async def test_record_preserves_provider_neutral_uploader_account_identity() -> 
 
 async def test_private_attachment_reads_check_the_effective_actor() -> None:
     schematics, _, _ = service()
-    owner = ActingContext.direct(Actor(account_id=314))
-    other = ActingContext.direct(Actor(account_id=315))
+    owner = ActingContext.direct(UserActor(account_id=314))
+    other = ActingContext.direct(UserActor(account_id=315))
     await schematics.attach(7, IngestRequest(data=litematic_bytes(), filename="door.litematic"), context=owner)
 
     assert await schematics.featured_for_build(7, context=other) is None

@@ -1,7 +1,7 @@
 """Small in-memory build editor for transport tests; database tests exercise the handler."""
 
 from squid.bot.submission.ui.build_edit import BuildEditWorkspace
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, Actor, UserActor
 from squid.core.builds.application.editing import BuildEditPatch
 from squid.core.builds.application.edits import build_values
 from squid.core.builds.models import Build, DoorBuild
@@ -18,7 +18,7 @@ from squid.core.submissions.domain import ChoiceOption
 
 
 async def build_edit_actor() -> Actor:
-    return Actor(account_id=1)
+    return UserActor(account_id=1)
 
 
 class BuildEditRecorder:

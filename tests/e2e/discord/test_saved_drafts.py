@@ -12,8 +12,9 @@ from squid.bot.submission.ui.drafts import DraftEditorScreen
 from squid.bot.submission.ui.inference import reopen_inference
 from squid.core.accounts.domain import AccountConsent
 from squid.core.accounts.models import Account
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, Actor, UserActor
 from squid.core.permissions.application import PermissionService, SubjectRecords
+from squid.core.permissions.application.ports import PermissionSubject
 from squid.core.permissions.domain import Effect
 from squid.core.permissions.models import PermissionGrant
 from squid.core.submissions.application import CheckedInFormManifestRegistry, StoredDraft, SubmissionDraftService
@@ -88,7 +89,7 @@ async def test_saved_drafts_preserves_bot_owner_authority(inbox: bool) -> None:
 
         result = await owner.slash("build drafts", inbox=inbox)
 
-        actor = Actor(account_id=1, discord_user_id=owner.id, is_bot_owner=True)
+        actor = UserActor(account_id=1, discord_user_id=owner.id, is_bot_owner=True)
         assert drafts.staff == ([actor] if inbox else [])
         assert drafts.owners == ([] if inbox else [1])
         assert runs.requests == [(actor, inbox)]
@@ -165,7 +166,7 @@ async def test_staff_loses_access_to_an_inbox_draft_after_authority_is_revoked(b
             subject_guild_id=guild.id,
         )
 
-        async def records(subject: Actor) -> SubjectRecords:
+        async def records(subject: PermissionSubject) -> SubjectRecords:
             allowed = subject.guild_id == guild.id and role.id in subject.discord_role_ids
             return SubjectRecords(subject=subject, epoch=1, grants=(grant,) if allowed else ())
 

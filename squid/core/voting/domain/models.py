@@ -19,7 +19,7 @@ from math import isfinite
 
 from whenever import Instant
 
-from squid.core.actors import Actor
+from squid.core.actors import Actor, UserActor
 from squid.core.errors import JSONValue
 from squid.core.permissions.domain.catalogue import VOTE_POLL_CLOSE_ANY, VOTE_POLL_RECOUNT
 from squid.core.scores import round_score
@@ -342,7 +342,7 @@ class VoteSessionSnapshot:
 
     def can_close(self, actor: Actor) -> VoteRejection | None:
         """Return why `actor` may not close this session, or None when they may."""
-        if self.kind is not VoteKind.GENERIC or self.poll is None:
+        if not isinstance(actor, UserActor) or self.kind is not VoteKind.GENERIC or self.poll is None:
             return VoteRejection.NOT_AUTHORIZED
         author = actor.account_id == self.author_account_id
         elsewhere = self.poll.guild_id is not None and self.poll.guild_id != actor.guild_id
@@ -355,7 +355,7 @@ class VoteSessionSnapshot:
         return None
 
     def can_review_poll(self, actor: Actor, *, recount_only: bool) -> bool:
-        if self.poll is None or actor.guild_id is None:
+        if not isinstance(actor, UserActor) or self.poll is None or actor.guild_id is None:
             return False
         if self.poll.guild_id is None:
             if actor.guild_id not in {card.guild_id for card in self.messages}:

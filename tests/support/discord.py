@@ -21,6 +21,7 @@ from squid.core.diagnostics.application import ErrorReportService
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.application.ports import PermissionUnitOfWork
 from squid.core.permissions.domain import CheckMode, Decision, PermissionCheck, PermissionNode, Reason
+from squid.core.permissions.domain.models import RolePermissionSubject
 from squid.core.suggestions.application import SuggestionService
 from squid.runtime import BotServices
 from squid_reactivity import LocalTopicBus
@@ -176,7 +177,7 @@ class _AutocompletePermissions(PermissionService):
     @override
     async def check(
         self,
-        subject: Actor,
+        subject: Actor | RolePermissionSubject,
         *nodes: PermissionNode | str,
         uow: PermissionUnitOfWork | None = None,
         mode: CheckMode = "all",

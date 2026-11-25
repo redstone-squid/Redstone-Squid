@@ -149,7 +149,7 @@ class SubmissionInferenceRuns:
                 if self._permissions is None:
                     raise AuthorizationError
                 await self._permissions.require(context.effective, BUILD_SUBMISSION_RECALC, uow=uow)
-            elif context.effective.account_id != owner:
+            elif context.effective.linked_account_id != owner:
                 await self._require_staff(uow, context.effective)
             claim = await uow.inference_runs.begin(run_id, owner, inputs, capacity=self._capacity)
             await uow.commit()
@@ -185,7 +185,7 @@ class SubmissionInferenceRuns:
                 owner, inputs, completed, candidates = retained
                 if inputs.get("purpose") != "submission":
                     raise AuthorizationError
-                if actor.account_id != owner:
+                if actor.linked_account_id != owner:
                     await self._require_staff(uow, actor)
                 if completed:
                     return candidates
@@ -223,7 +223,7 @@ class SubmissionInferenceRuns:
                 if result is None:
                     raise NotFoundError
                 owner, candidates = result
-                if actor.account_id != owner:
+                if actor.linked_account_id != owner:
                     await self._require_staff(uow, actor)
                 return candidates
 
@@ -238,11 +238,11 @@ class SubmissionInferenceRuns:
         actor = context.effective
         with context.scope():
             async with self._uow_factory() as uow:
-                if actor.account_id is None:
+                if actor.linked_account_id is None:
                     raise AccountRequiredError
                 if inbox:
                     await self._require_staff(uow, actor)
-                return await uow.inference_runs.list_active(None if inbox else actor.account_id)
+                return await uow.inference_runs.list_active(None if inbox else actor.linked_account_id)
 
     @application_operation
     async def public_status(self, run_id: UUID, *, context: ActingContext) -> InferenceStatus | None:

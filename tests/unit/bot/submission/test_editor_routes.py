@@ -24,6 +24,7 @@ from squid.core.builds.models import DoorBuild
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.application.ports import PermissionUnitOfWork
 from squid.core.permissions.domain import CheckMode, Decision, PermissionCheck, PermissionNode, Reason
+from squid.core.permissions.domain.models import RolePermissionSubject
 from squid.core.settings.application import SettingsService
 from squid.core.submissions.application import FormOptionSet, SubmissionFormService
 from squid.core.submissions.application.forms import build_edit_manifest
@@ -97,7 +98,7 @@ class PermissionRecorder(PermissionService):
     @override
     async def check(
         self,
-        subject: Actor,
+        subject: Actor | RolePermissionSubject,
         *nodes: PermissionNode | str,
         uow: PermissionUnitOfWork | None = None,
         mode: CheckMode = "all",

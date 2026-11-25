@@ -8,7 +8,7 @@ from uuid import UUID
 import pytest
 from whenever import Instant
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, AnonymousActor, UserActor
 from squid.core.minecraft_auth.application.crypto import MinecraftSecretCodec
 from squid.core.minecraft_auth.application.services import InstallationCredentialService, PlayerAuthorizationService
 from squid.core.minecraft_auth.domain import MinecraftClientOrigin, PublicServerProfile
@@ -100,7 +100,7 @@ async def test_installation_secret_is_one_time_hash_only_and_never_player_author
     repository, _, _, installations, players = services()
 
     issued = await installations.register(
-        label=" Private server ", context=ActingContext.direct(Actor(account_id=ACCOUNT_ID))
+        label=" Private server ", context=ActingContext.direct(UserActor(account_id=ACCOUNT_ID))
     )
     authenticated = await installations.authenticate(issued.token)
 
@@ -115,7 +115,7 @@ async def test_installation_secret_is_one_time_hash_only_and_never_player_author
 async def test_installation_headers_are_parsed_and_failed_indistinguishably_by_the_service() -> None:
     _, _, _, installations, _ = services()
     issued = await installations.register(
-        label="Private server", context=ActingContext.direct(Actor(account_id=ACCOUNT_ID))
+        label="Private server", context=ActingContext.direct(UserActor(account_id=ACCOUNT_ID))
     )
     _prefix, installation_id, secret = issued.token.split("_", 2)
 
@@ -140,28 +140,30 @@ async def test_registration_requires_current_consent_and_profile_is_explicit_opt
     accounts.consented.clear()
 
     with pytest.raises(AccountConsentRequiredError):
-        await installations.register(label="Server", context=ActingContext.direct(Actor(account_id=ACCOUNT_ID)))
+        await installations.register(label="Server", context=ActingContext.direct(UserActor(account_id=ACCOUNT_ID)))
     with pytest.raises(ValueError, match="Sponsor opt-in"):
         PublicServerProfile(sponsor_opt_in=True)
 
 
 async def test_public_listing_is_an_explicit_secret_free_projection() -> None:
     _, _, _, installations, _ = services()
-    private = await installations.register(label="Private", context=ActingContext.direct(Actor(account_id=ACCOUNT_ID)))
-    assert await installations.public_servers(context=ActingContext.direct(Actor())) == ()
+    private = await installations.register(
+        label="Private", context=ActingContext.direct(UserActor(account_id=ACCOUNT_ID))
+    )
+    assert await installations.public_servers(context=ActingContext.direct(AnonymousActor())) == ()
 
     profile = PublicServerProfile(enabled=True, display_name="Community", sponsor_opt_in=True)
     await installations.update_profile(
         installation_id=private.installation.id,
         profile=profile,
-        context=ActingContext.direct(Actor(account_id=ACCOUNT_ID)),
+        context=ActingContext.direct(UserActor(account_id=ACCOUNT_ID)),
     )
 
-    (published,) = await installations.public_servers(context=ActingContext.direct(Actor()))
+    (published,) = await installations.public_servers(context=ActingContext.direct(AnonymousActor()))
     assert published.installation_id == private.installation.id
     assert published.profile == profile
     assert (
-        await installations.get_public_server(private.installation.id, context=ActingContext.direct(Actor()))
+        await installations.get_public_server(private.installation.id, context=ActingContext.direct(AnonymousActor()))
         == published
     )
     assert not hasattr(published, "secret_hash")
@@ -169,18 +171,21 @@ async def test_public_listing_is_an_explicit_secret_free_projection() -> None:
     await installations.update_profile(
         installation_id=private.installation.id,
         profile=PublicServerProfile(enabled=True, display_name="Listed without sponsor consent"),
-        context=ActingContext.direct(Actor(account_id=ACCOUNT_ID)),
+        context=ActingContext.direct(UserActor(account_id=ACCOUNT_ID)),
     )
-    assert len(await installations.public_servers(context=ActingContext.direct(Actor()))) == 1
-    assert await installations.get_public_server(private.installation.id, context=ActingContext.direct(Actor())) is None
+    assert len(await installations.public_servers(context=ActingContext.direct(AnonymousActor()))) == 1
+    assert (
+        await installations.get_public_server(private.installation.id, context=ActingContext.direct(AnonymousActor()))
+        is None
+    )
 
 
 async def test_rotation_invalidates_old_secret_and_increments_fence() -> None:
     _, _, _, installations, _ = services()
-    first = await installations.register(label="Server", context=ActingContext.direct(Actor(account_id=ACCOUNT_ID)))
+    first = await installations.register(label="Server", context=ActingContext.direct(UserActor(account_id=ACCOUNT_ID)))
 
     second = await installations.rotate(
-        installation_id=first.installation.id, context=ActingContext.direct(Actor(account_id=ACCOUNT_ID))
+        installation_id=first.installation.id, context=ActingContext.direct(UserActor(account_id=ACCOUNT_ID))
     )
 
     assert second.installation.id == first.installation.id
@@ -193,7 +198,7 @@ async def test_rotation_invalidates_old_secret_and_increments_fence() -> None:
 async def test_paper_flow_binds_account_uuid_origin_and_installation() -> None:
     repository, _, _, installations, players = services()
     installation_issue = await installations.register(
-        label="Server", context=ActingContext.direct(Actor(account_id=ACCOUNT_ID))
+        label="Server", context=ActingContext.direct(UserActor(account_id=ACCOUNT_ID))
     )
     installation = await installations.authenticate(installation_issue.token)
     challenge = await players.start_paper_challenge(installation=installation, java_uuid=JAVA_UUID)
@@ -201,7 +206,7 @@ async def test_paper_flow_binds_account_uuid_origin_and_installation() -> None:
     with pytest.raises(AuthorizationPendingError):
         await players.exchange_paper(device_code=challenge.device_code, installation=installation)
     await players.approve(
-        user_code=challenge.user_code.lower(), context=ActingContext.direct(Actor(account_id=ACCOUNT_ID))
+        user_code=challenge.user_code.lower(), context=ActingContext.direct(UserActor(account_id=ACCOUNT_ID))
     )
     issued = await players.exchange_paper(device_code=challenge.device_code, installation=installation)
     context = await players.authenticate_paper_player(issued.token, installation)
@@ -218,7 +223,7 @@ async def test_paper_flow_binds_account_uuid_origin_and_installation() -> None:
 async def test_approval_requires_exact_verified_identity_with_current_consent() -> None:
     _, accounts, _, installations, players = services()
     installation_issue = await installations.register(
-        label="Server", context=ActingContext.direct(Actor(account_id=ACCOUNT_ID))
+        label="Server", context=ActingContext.direct(UserActor(account_id=ACCOUNT_ID))
     )
     installation = await installations.authenticate(installation_issue.token)
     challenge = await players.start_paper_challenge(installation=installation, java_uuid=JAVA_UUID)
@@ -226,17 +231,19 @@ async def test_approval_requires_exact_verified_identity_with_current_consent() 
 
     with pytest.raises(ChallengeApprovalDeniedError):
         await players.approve(
-            user_code=challenge.user_code, context=ActingContext.direct(Actor(account_id=OTHER_ACCOUNT_ID))
+            user_code=challenge.user_code, context=ActingContext.direct(UserActor(account_id=OTHER_ACCOUNT_ID))
         )
     accounts.consented.remove(ACCOUNT_ID)
     with pytest.raises(ChallengeApprovalDeniedError):
-        await players.approve(user_code=challenge.user_code, context=ActingContext.direct(Actor(account_id=ACCOUNT_ID)))
+        await players.approve(
+            user_code=challenge.user_code, context=ActingContext.direct(UserActor(account_id=ACCOUNT_ID))
+        )
 
 
 async def test_fabric_requires_pkce_and_origin_cannot_be_reasserted() -> None:
     _, _, _, installations, players = services()
     challenge = await players.start_fabric_challenge(java_uuid=JAVA_UUID, pkce_s256_challenge=PKCE_CHALLENGE)
-    await players.approve(user_code=challenge.user_code, context=ActingContext.direct(Actor(account_id=ACCOUNT_ID)))
+    await players.approve(user_code=challenge.user_code, context=ActingContext.direct(UserActor(account_id=ACCOUNT_ID)))
 
     with pytest.raises(InvalidPkceError):
         await players.exchange_fabric(device_code=challenge.device_code, pkce_verifier="stolen-device-code")
@@ -245,7 +252,7 @@ async def test_fabric_requires_pkce_and_origin_cannot_be_reasserted() -> None:
 
     assert context.origin is MinecraftClientOrigin.FABRIC
     installation_issue = await installations.register(
-        label="Server", context=ActingContext.direct(Actor(account_id=ACCOUNT_ID))
+        label="Server", context=ActingContext.direct(UserActor(account_id=ACCOUNT_ID))
     )
     installation = await installations.authenticate(installation_issue.token)
     with pytest.raises(InvalidPlayerTokenError):
@@ -254,14 +261,14 @@ async def test_fabric_requires_pkce_and_origin_cannot_be_reasserted() -> None:
 
 async def test_rotating_paper_installation_revokes_bound_grant() -> None:
     _, _, _, installations, players = services()
-    first = await installations.register(label="Server", context=ActingContext.direct(Actor(account_id=ACCOUNT_ID)))
+    first = await installations.register(label="Server", context=ActingContext.direct(UserActor(account_id=ACCOUNT_ID)))
     authenticated = await installations.authenticate(first.token)
     challenge = await players.start_paper_challenge(installation=authenticated, java_uuid=JAVA_UUID)
-    await players.approve(user_code=challenge.user_code, context=ActingContext.direct(Actor(account_id=ACCOUNT_ID)))
+    await players.approve(user_code=challenge.user_code, context=ActingContext.direct(UserActor(account_id=ACCOUNT_ID)))
     grant = await players.exchange_paper(device_code=challenge.device_code, installation=authenticated)
 
     await installations.rotate(
-        installation_id=authenticated.id, context=ActingContext.direct(Actor(account_id=ACCOUNT_ID))
+        installation_id=authenticated.id, context=ActingContext.direct(UserActor(account_id=ACCOUNT_ID))
     )
 
     with pytest.raises(InvalidPlayerTokenError):
@@ -284,4 +291,6 @@ async def test_expired_challenge_cannot_be_approved() -> None:
     clock.current = challenge.expires_at
 
     with pytest.raises(ChallengeExpiredError):
-        await players.approve(user_code=challenge.user_code, context=ActingContext.direct(Actor(account_id=ACCOUNT_ID)))
+        await players.approve(
+            user_code=challenge.user_code, context=ActingContext.direct(UserActor(account_id=ACCOUNT_ID))
+        )

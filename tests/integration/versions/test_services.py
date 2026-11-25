@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, AnonymousActor, UserActor
 from squid.core.errors import InvalidStateError
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.versions.application.services import VersionService
@@ -18,17 +18,17 @@ async def test_version_service_commits_and_lists_versions_in_numeric_order(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     service = VersionService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
-    newer = await service.add("99.10.0", context=ActingContext.direct(Actor(account_id=1, is_bot_owner=True)))
-    older = await service.add("99.2.0", context=ActingContext.direct(Actor(account_id=1, is_bot_owner=True)))
+    newer = await service.add("99.10.0", context=ActingContext.direct(UserActor(account_id=1, is_bot_owner=True)))
+    older = await service.add("99.2.0", context=ActingContext.direct(UserActor(account_id=1, is_bot_owner=True)))
     bedrock = await service.add(
-        "99.3.0", edition="Bedrock", context=ActingContext.direct(Actor(account_id=1, is_bot_owner=True))
+        "99.3.0", edition="Bedrock", context=ActingContext.direct(UserActor(account_id=1, is_bot_owner=True))
     )
 
-    assert (await service.list_versions("Java", context=ActingContext.direct(Actor())))[-2:] == [older, newer]
-    assert await service.newest("Java", context=ActingContext.direct(Actor())) == "Java 99.10.0"
-    assert bedrock in await service.list_all(context=ActingContext.direct(Actor()))
-    assert bedrock not in await service.list_versions("Java", context=ActingContext.direct(Actor()))
-    assert await service.resolve_spec("99.2 - 99.10", context=ActingContext.direct(Actor())) == [
+    assert (await service.list_versions("Java", context=ActingContext.direct(AnonymousActor())))[-2:] == [older, newer]
+    assert await service.newest("Java", context=ActingContext.direct(AnonymousActor())) == "Java 99.10.0"
+    assert bedrock in await service.list_all(context=ActingContext.direct(AnonymousActor()))
+    assert bedrock not in await service.list_versions("Java", context=ActingContext.direct(AnonymousActor()))
+    assert await service.resolve_spec("99.2 - 99.10", context=ActingContext.direct(AnonymousActor())) == [
         "Java 99.2.0",
         "Java 99.10.0",
     ]
@@ -36,8 +36,8 @@ async def test_version_service_commits_and_lists_versions_in_numeric_order(
     # The schema stores version components as small integers; commit must fail
     # before the service returns a value that was never persisted.
     with pytest.raises(DBAPIError):
-        await service.add("40000.0.0", context=ActingContext.direct(Actor(account_id=1, is_bot_owner=True)))
-    assert await service.newest("Java", context=ActingContext.direct(Actor())) == "Java 99.10.0"
+        await service.add("40000.0.0", context=ActingContext.direct(UserActor(account_id=1, is_bot_owner=True)))
+    assert await service.newest("Java", context=ActingContext.direct(AnonymousActor())) == "Java 99.10.0"
 
 
 async def test_uncommitted_versions_roll_back_after_autoflush(
@@ -70,9 +70,9 @@ async def test_data_version_lookups_use_shared_catalogue(
         await session.commit()
 
     service = VersionService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
-    assert await service.data_version_for("Java 99.2.0", context=ActingContext.direct(Actor())) == 99002
-    assert await service.label_for_data_version(99002, context=ActingContext.direct(Actor())) == "Java 99.1.0"
-    assert await service.data_version_for("Bedrock 99.1.0", context=ActingContext.direct(Actor())) is None
-    assert await service.data_version_for("Java 99.99.0", context=ActingContext.direct(Actor())) is None
-    assert await service.data_version_for("not a version", context=ActingContext.direct(Actor())) is None
-    assert await service.label_for_data_version(99999, context=ActingContext.direct(Actor())) is None
+    assert await service.data_version_for("Java 99.2.0", context=ActingContext.direct(AnonymousActor())) == 99002
+    assert await service.label_for_data_version(99002, context=ActingContext.direct(AnonymousActor())) == "Java 99.1.0"
+    assert await service.data_version_for("Bedrock 99.1.0", context=ActingContext.direct(AnonymousActor())) is None
+    assert await service.data_version_for("Java 99.99.0", context=ActingContext.direct(AnonymousActor())) is None
+    assert await service.data_version_for("not a version", context=ActingContext.direct(AnonymousActor())) is None
+    assert await service.label_for_data_version(99999, context=ActingContext.direct(AnonymousActor())) is None

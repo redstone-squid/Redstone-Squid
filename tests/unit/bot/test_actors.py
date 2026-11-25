@@ -13,7 +13,7 @@ from squid.bot.actors import AccountIdCache, DiscordActorResolver
 from squid.bot.app import RedstoneSquid
 from squid.core.accounts.domain import AccountConsent
 from squid.core.accounts.models import Account, AccountIdentity
-from squid.core.actors import ActingContext, Actor, current_acting_context, impersonation_use
+from squid.core.actors import ActingContext, UserActor, current_acting_context, impersonation_use
 from squid.core.auth.impersonation import AuthorizedImpersonation
 from squid.core.errors import AuthorizationError
 
@@ -161,7 +161,7 @@ async def test_debugger_uses_target_membership_for_every_callback(bot: Mock, mem
     channel.permissions_for.return_value = discord.Permissions(view_channel=True)
     request = Mock(spec=sd.Request, user=member, guild=member.guild, channel=channel)
     session_id = uuid4()
-    ingress = ActingContext.direct(Actor(discord_user_id=member.id))
+    ingress = ActingContext.direct(UserActor(discord_user_id=member.id))
     with ingress.scope():
         effective = await bot.actors.request_actor(request, session_id, "draft:example")
         context = ActingContext.current()
@@ -170,7 +170,7 @@ async def test_debugger_uses_target_membership_for_every_callback(bot: Mock, mem
         assert impersonation_use.get() == use_id
     assert current_acting_context.get() is None
     assert impersonation_use.get() is None
-    assert context.operator.is_bot_owner
+    assert context.operator.require_user().is_bot_owner
     assert context.effective.account_id == account.id
     assert context.effective.discord_role_ids == {55}
     assert not context.effective.is_bot_owner

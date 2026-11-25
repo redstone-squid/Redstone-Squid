@@ -10,7 +10,7 @@ import pytest
 from pydantic import BaseModel, ConfigDict, JsonValue
 from whenever import Instant
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, Actor, UserActor
 from squid.core.edits.application import EditExecutor
 from squid.core.edits.domain import (
     EditCommand,
@@ -30,7 +30,7 @@ from squid.core.errors import AuthorizationError, ErrorCode, InvalidStateError, 
 from tests.support.unit_of_work import CommittedState, FakeUnitOfWork
 
 TARGET = EditTarget("example", "1")
-ACTOR = Actor(account_id=7)
+ACTOR = UserActor(account_id=7)
 
 
 @dataclass
@@ -72,7 +72,7 @@ class Handler(FieldCommand[Work, Store, Values]):
             return Revision(TARGET, root.revision)
 
         async def authorize(uow: Work, actor: Actor, root: Store) -> None:
-            if not root.allowed or actor.account_id != 7:
+            if not root.allowed or actor.linked_account_id != 7:
                 raise AuthorizationError
 
         super().__init__(Aggregate(TARGET, load, lambda root: root.revision, flush), Values, authorize)
@@ -166,7 +166,7 @@ async def test_operation_reuse_and_expired_attempts_cannot_write() -> None:
         )
     assert conflict.value.code is ErrorCode.IDEMPOTENCY_CONFLICT
     with pytest.raises(OperationReuseError):
-        await executor.execute(edit, context=ActingContext.direct(Actor(account_id=8)))
+        await executor.execute(edit, context=ActingContext.direct(UserActor(account_id=8)))
     expired = replace(command(revision=2), issued_at=Instant.now().subtract(hours=25))
     with pytest.raises(EditExpiredError):
         await executor.execute(expired, context=ActingContext.direct(ACTOR))
@@ -271,7 +271,7 @@ async def test_replay_preserves_the_credential_and_impersonation_boundary() -> N
     executor = EditExecutor(partial(Work, state), {"example": Handler()})
     edit = command()
     actor = replace(ACTOR, credential_id="api-key:42", credential_scopes=frozenset({"build.**"}))
-    operator = Actor(account_id=13)
+    operator = UserActor(account_id=13)
     context = ActingContext(operator, actor, uuid4())
     await executor.execute(edit, context=context)
     retry = replace(context, invocation_id=uuid4())
@@ -279,7 +279,7 @@ async def test_replay_preserves_the_credential_and_impersonation_boundary() -> N
 
     for changed in (
         replace(context, session_id=uuid4()),
-        replace(context, operator=Actor(account_id=42)),
+        replace(context, operator=UserActor(account_id=42)),
         replace(context, effective=replace(actor, credential_scopes=frozenset())),
         replace(context, effective=replace(actor, credential_id="api-key:other")),
         ActingContext.direct(ACTOR),

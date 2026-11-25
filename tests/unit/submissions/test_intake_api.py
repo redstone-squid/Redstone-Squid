@@ -8,7 +8,7 @@ import pytest
 from litestar import Request
 
 from squid.api.v1.submission_intake import upload_file
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.errors import ValidationError
 from squid.core.submissions.application.intake import SubmissionAttachmentIntake, SuppliedAttachment
 from squid.core.submissions.domain.intake import IntakeStatus
@@ -62,7 +62,7 @@ async def test_replacement_registers_bytes_before_discarding_original_requiremen
         uuid4(),
         uuid4(),
         request(b"source bytes"),
-        ActingContext.direct(Actor(account_id=7)),
+        ActingContext.direct(UserActor(account_id=7)),
         cast(SubmissionAttachmentIntake, intake),
         "image.png",
         replaces=uuid4(),
@@ -80,7 +80,7 @@ async def test_oversized_upload_is_retained_as_failed(monkeypatch: pytest.Monkey
             uuid4(),
             uuid4(),
             request(b"too large"),
-            ActingContext.direct(Actor(account_id=7)),
+            ActingContext.direct(UserActor(account_id=7)),
             cast(SubmissionAttachmentIntake, intake),
             "image.png",
         )

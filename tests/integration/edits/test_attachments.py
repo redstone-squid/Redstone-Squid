@@ -8,7 +8,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.edits.application import EditExecutor
 from squid.core.edits.domain import EditCommand, LatestRevision, Revision, RevisionConflictError
 from squid.core.errors import ConflictError
@@ -46,7 +46,7 @@ async def test_schematic_removal_restores_analysis_and_primary_until_the_draft_e
 ) -> None:
     sessions = migrated_session_factory
     owner = await seed_account_and_version(sessions)
-    actor = Actor(account_id=owner)
+    actor = UserActor(account_id=owner)
     draft = await create_draft(sessions, owner)
     factory = partial(SqlAlchemyUnitOfWork, sessions)
     service = SubmissionDraftService(CheckedInFormManifestRegistry(), uow_factory=factory)
@@ -120,7 +120,7 @@ async def test_media_removal_preserves_job_and_hidden_intake_completion(
 ) -> None:
     sessions = migrated_session_factory
     owner = await seed_account_and_version(sessions)
-    actor = Actor(account_id=owner)
+    actor = UserActor(account_id=owner)
     draft = await create_draft(sessions, owner)
     factory = partial(SqlAlchemyUnitOfWork, sessions)
     service = SubmissionDraftService(CheckedInFormManifestRegistry(), uow_factory=factory)
@@ -181,7 +181,7 @@ async def test_staged_replacement_commits_once_and_redo_reuses_sources(
 ) -> None:
     sessions = migrated_session_factory
     owner = await seed_account_and_version(sessions)
-    actor = Actor(account_id=owner)
+    actor = UserActor(account_id=owner)
     draft = await create_draft(sessions, owner)
     factory = partial(SqlAlchemyUnitOfWork, sessions)
     service = SubmissionDraftService(CheckedInFormManifestRegistry(), uow_factory=factory)
@@ -237,7 +237,7 @@ async def test_staged_files_stay_hidden_until_a_membership_edit_accepts_them(
 ) -> None:
     sessions = migrated_session_factory
     owner = await seed_account_and_version(sessions)
-    actor = Actor(account_id=owner)
+    actor = UserActor(account_id=owner)
     draft = await create_draft(sessions, owner)
     factory = partial(SqlAlchemyUnitOfWork, sessions)
     service = SubmissionDraftService(CheckedInFormManifestRegistry(), uow_factory=factory)

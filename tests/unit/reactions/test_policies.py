@@ -2,7 +2,7 @@ from math import inf, nan
 
 import pytest
 
-from squid.core.actors import Actor
+from squid.core.actors import UserActor
 from squid.core.errors import InvalidStateError, ValidationError
 from squid.core.reactions.application import RoleWeightPolicy
 from squid.core.reactions.domain import RoleMultiplier, WeightScope
@@ -18,10 +18,10 @@ async def test_role_policy_uses_highest_matching_multiplier() -> None:
     policy = RoleWeightPolicy(multipliers, staff_multiplier=1)
 
     assert (
-        await policy.calculate(Actor(discord_user_id=1, guild_id=10, discord_role_ids=frozenset({20, 30})), scope)
+        await policy.calculate(UserActor(discord_user_id=1, guild_id=10, discord_role_ids=frozenset({20, 30})), scope)
         == 2.5
     )
-    assert await policy.calculate(Actor(discord_user_id=1, guild_id=10), scope) == 1
+    assert await policy.calculate(UserActor(discord_user_id=1, guild_id=10), scope) == 1
 
 
 async def test_role_policy_applies_eligibility_before_loading_configuration() -> None:
@@ -33,10 +33,11 @@ async def test_role_policy_applies_eligibility_before_loading_configuration() ->
         return ()
 
     policy = RoleWeightPolicy(
-        multipliers, eligibility=lambda actor, scope: "vote.log_delete.cast" in actor.capabilities
+        multipliers,
+        eligibility=lambda actor, scope: isinstance(actor, UserActor) and "vote.log_delete.cast" in actor.capabilities,
     )
 
-    assert await policy.calculate(Actor(discord_user_id=1), WeightScope(10, "delete_log")) is None
+    assert await policy.calculate(UserActor(discord_user_id=1), WeightScope(10, "delete_log")) is None
     assert not called
 
 

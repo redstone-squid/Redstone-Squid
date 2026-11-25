@@ -12,7 +12,7 @@ import discord
 
 from squid.bot.starboard.cog import StarboardCog
 from squid.bot.starboard.debounce import EntryDebouncer, EntryKey
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, Actor, UserActor
 from squid.core.starboard.application import StarboardService
 from squid.core.starboard.models import OriginMessage
 from squid.runtime import BackgroundTaskSupervisor
@@ -203,8 +203,8 @@ async def test_recount_reads_relevant_reactions_from_humans_with_their_roles() -
         (
             100,
             (
-                (Actor(discord_user_id=1, guild_id=10, discord_role_ids=frozenset({50})), "⭐"),
-                (Actor(discord_user_id=2, guild_id=10, discord_role_ids=frozenset()), "⭐"),
+                (UserActor(discord_user_id=1, guild_id=10, discord_role_ids=frozenset({50})), "⭐"),
+                (UserActor(discord_user_id=2, guild_id=10, discord_role_ids=frozenset()), "⭐"),
             ),
         )
     ]

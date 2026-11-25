@@ -7,7 +7,7 @@ from pytest_mock import MockerFixture
 
 from squid.api.v1.submission_schematics import router, schematic_service
 from squid.api.v1.submissions import authenticated_submission_context
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.submissions.application.schematic_inference import SchematicDetection, SchematicSubmissionSuggestions
 from squid.core.submissions.domain.schematics import DraftSchematicState
 from tests.support.litestar import asgi_transport, route_app
@@ -25,7 +25,7 @@ async def test_suggestion_response_includes_explicit_detection_failures(mocker: 
         [router],
         overrides={
             schematic_service: lambda: service,
-            authenticated_submission_context: lambda: ActingContext.direct(Actor(account_id=42)),
+            authenticated_submission_context: lambda: ActingContext.direct(UserActor(account_id=42)),
         },
     )
     async with AsyncClient(transport=asgi_transport(app), base_url="http://test") as client:

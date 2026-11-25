@@ -3,7 +3,7 @@
 from collections.abc import Collection
 from dataclasses import dataclass
 
-from squid.core.actors import ActingContext, Actor, ActorKind, application_operation
+from squid.core.actors import ActingContext, UserActor, application_operation
 from squid.core.errors import AuthorizationError
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.domain.catalogue import STARBOARD_BOARD_RECOUNT
@@ -69,7 +69,7 @@ class StarboardService:
         Removal is requested if any rejecting board asks for cleanup, even when
         another board accepts the same reaction.
         """
-        actor = context.effective
+        actor = context.effective.require_user()
         user_id = actor.require_discord_user_id()
         if actor.guild_id != origin.guild_id:
             raise AuthorizationError
@@ -106,7 +106,7 @@ class StarboardService:
 
     @application_operation
     async def recount(
-        self, origin: OriginMessage, reactions: tuple[tuple[Actor, str], ...], *, context: ActingContext
+        self, origin: OriginMessage, reactions: tuple[tuple[UserActor, str], ...], *, context: ActingContext
     ) -> tuple[EntryKey, ...]:
         """Replace the origin's stored votes from a complete reaction snapshot.
 
@@ -115,7 +115,7 @@ class StarboardService:
         including votes whose boards no longer accept the source.
         """
         requester = context.effective
-        if requester.kind is not ActorKind.USER or requester.guild_id != origin.guild_id:
+        if not isinstance(requester, UserActor) or requester.guild_id != origin.guild_id:
             raise AuthorizationError
         async with self._uow_factory() as uow:
             await self._permissions.require(requester, STARBOARD_BOARD_RECOUNT, uow=uow)

@@ -47,7 +47,7 @@ class NotificationEditRecorder:
     async def execute(self, command: EditCommand, *, context: ActingContext) -> EditResult:
         actor = context.effective
         self.commands.append(command)
-        account_id = actor.account_id
+        account_id = actor.linked_account_id
         assert account_id is not None
         values = command.values.unpack()
         after = command.values

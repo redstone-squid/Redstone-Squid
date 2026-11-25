@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from squid.core.accounts.models import Account
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, AnonymousActor
 from squid.core.errors import InvalidStateError, ValidationError
 from squid.core.permissions.application.services import PermissionService
 from squid.core.persistence.base import Base
@@ -71,9 +71,9 @@ async def test_guild_remove_persists_membership_and_allows_rejoining(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     await _seed_channel(service, 123, "Vote", 1002)
-    await service.guild_joined(123, context=ActingContext.direct(Actor()))
+    await service.guild_joined(123, context=ActingContext.direct(AnonymousActor()))
 
-    await service.guild_removed(123, context=ActingContext.direct(Actor()))
+    await service.guild_removed(123, context=ActingContext.direct(AnonymousActor()))
 
     async with async_session_factory() as session:
         row = await session.get(ServerSetting, 123)
@@ -81,7 +81,7 @@ async def test_guild_remove_persists_membership_and_allows_rejoining(
         assert row.in_server is False
         assert row.voting_channel_id == 1002
 
-    await service.guild_joined(123, context=ActingContext.direct(Actor()))
+    await service.guild_joined(123, context=ActingContext.direct(AnonymousActor()))
 
     async with async_session_factory() as session:
         row = await session.get(ServerSetting, 123)
@@ -96,17 +96,17 @@ async def test_sync_presence_creates_missing_guilds_and_marks_absent_ones(
 ) -> None:
     # 123 was left while offline, 456 is still present, 789 was joined while offline.
     await _seed_channel(service, 123, "Vote", 1002)
-    await service.guild_joined(456, context=ActingContext.direct(Actor()))
+    await service.guild_joined(456, context=ActingContext.direct(AnonymousActor()))
 
-    joined, left = await service.sync_presence([456, 789], context=ActingContext.direct(Actor()))
+    joined, left = await service.sync_presence([456, 789], context=ActingContext.direct(AnonymousActor()))
 
     assert (joined, left) == ([789], [123])
     async with async_session_factory() as session:
         rows = {row.server_id: row for row in (await session.scalars(select(ServerSetting))).all()}
     assert {server_id: row.in_server for server_id, row in rows.items()} == {123: False, 456: True, 789: True}
     assert rows[123].voting_channel_id == 1002
-    assert await service.sync_presence([456, 789], context=ActingContext.direct(Actor())) == ([], [])
-    assert await service.sync_presence([123, 456, 789], context=ActingContext.direct(Actor())) == ([123], [])
+    assert await service.sync_presence([456, 789], context=ActingContext.direct(AnonymousActor())) == ([], [])
+    assert await service.sync_presence([123, 456, 789], context=ActingContext.direct(AnonymousActor())) == ([123], [])
 
 
 async def test_ensure_server_settings_creates_only_missing_rows(
@@ -119,8 +119,8 @@ async def test_ensure_server_settings_creates_only_missing_rows(
         created = await ensure_server_settings(session, [123, None, 456, 456])
 
     assert created == [456]
-    assert await service.get_locale(123, context=ActingContext.direct(Actor())) == "fr"
-    assert await service.get_all(456, context=ActingContext.direct(Actor())) == dict.fromkeys(
+    assert await service.get_locale(123, context=ActingContext.direct(AnonymousActor())) == "fr"
+    assert await service.get_all(456, context=ActingContext.direct(AnonymousActor())) == dict.fromkeys(
         ("Smallest", "Fastest", "First", "Builds", "Vote")
     )
 
@@ -130,19 +130,21 @@ async def test_forget_channels_clears_only_matching_settings(service: SettingsSe
     await _seed_channel(service, 123, "Builds", 1003)
     await _seed_channel(service, 123, "Fastest", 1004)
 
-    assert await service.referenced_channels(123, context=ActingContext.direct(Actor())) == {1002, 1003, 1004}
-    assert set(await service.forget_channels(123, {1002, 1004, 9999}, context=ActingContext.direct(Actor()))) == {
+    assert await service.referenced_channels(123, context=ActingContext.direct(AnonymousActor())) == {1002, 1003, 1004}
+    assert set(
+        await service.forget_channels(123, {1002, 1004, 9999}, context=ActingContext.direct(AnonymousActor()))
+    ) == {
         "Vote",
         "Fastest",
     }
 
-    assert await service.referenced_channels(123, context=ActingContext.direct(Actor())) == {1003}
-    assert await service.forget_channels(456, {1003}, context=ActingContext.direct(Actor())) == ()
+    assert await service.referenced_channels(123, context=ActingContext.direct(AnonymousActor())) == {1003}
+    assert await service.forget_channels(456, {1003}, context=ActingContext.direct(AnonymousActor())) == ()
 
 
 async def test_locale_service_creates_missing_settings(service: SettingsService) -> None:
     await _seed_locale(service, 123, "fr")
-    assert await service.get_locale(123, context=ActingContext.direct(Actor())) == "fr"
+    assert await service.get_locale(123, context=ActingContext.direct(AnonymousActor())) == "fr"
 
 
 async def test_uow_commit_returns_loaded_detached_entities(
@@ -158,7 +160,7 @@ async def test_uow_commit_returns_loaded_detached_entities(
     assert inspect(settings).detached
     assert settings.locale == "fr"
     settings.locale = "de"
-    assert await service.get_locale(123, context=ActingContext.direct(Actor())) == "fr"
+    assert await service.get_locale(123, context=ActingContext.direct(AnonymousActor())) == "fr"
 
 
 @pytest.mark.parametrize("raise_error", [False, True])
@@ -180,9 +182,9 @@ async def test_uow_exit_without_commit_rolls_back_all_rows(
             second.locale = "de"
             if raise_error:
                 raise RuntimeError("abort")
-    assert await service.get_locale(123, context=ActingContext.direct(Actor())) is None
-    assert await service.get(123, "Vote", context=ActingContext.direct(Actor())) == 1002
-    assert await service.get_all(456, context=ActingContext.direct(Actor())) == {}
+    assert await service.get_locale(123, context=ActingContext.direct(AnonymousActor())) is None
+    assert await service.get(123, "Vote", context=ActingContext.direct(AnonymousActor())) == 1002
+    assert await service.get_all(456, context=ActingContext.direct(AnonymousActor())) == {}
     async with factory() as uow:
         first = await uow.settings.get(123)
         assert first is not None
@@ -228,7 +230,7 @@ async def test_cancelled_uow_rolls_back_and_releases_its_connection(
         assert settings.locale is None
         settings.locale = "de"
         await uow.commit()
-    assert await service.get_locale(123, context=ActingContext.direct(Actor())) == "de"
+    assert await service.get_locale(123, context=ActingContext.direct(AnonymousActor())) == "de"
 
 
 async def test_concurrent_first_writes_preserve_different_settings(service: SettingsService) -> None:
@@ -236,8 +238,8 @@ async def test_concurrent_first_writes_preserve_different_settings(service: Sett
         tasks.start_soon(_seed_locale, service, 123, "fr")
         tasks.start_soon(_seed_channel, service, 123, "Vote", 1003)
         tasks.start_soon(partial(service.guild_joined, context=ActingContext.worker("guild-join")), 123)
-    assert await service.get_locale(123, context=ActingContext.direct(Actor())) == "fr"
-    assert await service.get(123, "Vote", context=ActingContext.direct(Actor())) == 1003
+    assert await service.get_locale(123, context=ActingContext.direct(AnonymousActor())) == "fr"
+    assert await service.get(123, "Vote", context=ActingContext.direct(AnonymousActor())) == 1003
 
 
 async def test_failed_commit_rolls_back_and_finishes_the_uow(
@@ -256,8 +258,8 @@ async def test_failed_commit_rolls_back_and_finishes_the_uow(
             await uow.commit()
         with pytest.raises(InvalidStateError):
             await uow.commit()
-    assert await service.get_locale(456, context=ActingContext.direct(Actor())) is None
-    assert await service.get(456, "Smallest", context=ActingContext.direct(Actor())) == 1002
+    assert await service.get_locale(456, context=ActingContext.direct(AnonymousActor())) is None
+    assert await service.get(456, "Smallest", context=ActingContext.direct(AnonymousActor())) == 1002
 
 
 async def test_exception_after_commit_does_not_undo_the_commit(
@@ -275,30 +277,30 @@ async def test_exception_after_commit_does_not_undo_the_commit(
 
     with pytest.raises(RuntimeError, match="after commit"):
         await commit_then_fail()
-    assert await service.get_locale(123, context=ActingContext.direct(Actor())) == "fr"
+    assert await service.get_locale(123, context=ActingContext.direct(AnonymousActor())) == "fr"
 
 
 async def test_channel_reads_and_clears_preserve_missing_server_semantics(service: SettingsService) -> None:
-    assert await service.get_all(789, context=ActingContext.direct(Actor())) == {}
-    await service.guild_removed(789, context=ActingContext.direct(Actor()))
-    assert await service.get_all(789, context=ActingContext.direct(Actor())) == {}
+    assert await service.get_all(789, context=ActingContext.direct(AnonymousActor())) == {}
+    await service.guild_removed(789, context=ActingContext.direct(AnonymousActor()))
+    assert await service.get_all(789, context=ActingContext.direct(AnonymousActor())) == {}
     await _seed_channel(service, 123, "Vote", 1001)
-    await service.guild_joined(456, context=ActingContext.direct(Actor()))
-    assert await service.get_many(iter([123, 456, 789]), "Vote", context=ActingContext.direct(Actor())) == {
+    await service.guild_joined(456, context=ActingContext.direct(AnonymousActor()))
+    assert await service.get_many(iter([123, 456, 789]), "Vote", context=ActingContext.direct(AnonymousActor())) == {
         123: 1001,
         456: None,
     }
-    assert await service.get_many([], "Vote", context=ActingContext.direct(Actor())) == {}
-    assert await service.get(789, "Vote", context=ActingContext.direct(Actor())) is None
+    assert await service.get_many([], "Vote", context=ActingContext.direct(AnonymousActor())) == {}
+    assert await service.get(789, "Vote", context=ActingContext.direct(AnonymousActor())) is None
     await _seed_channel(service, 123, "Vote", None)
-    assert await service.get_all(123, context=ActingContext.direct(Actor())) == {
+    assert await service.get_all(123, context=ActingContext.direct(AnonymousActor())) == {
         "Smallest": None,
         "Fastest": None,
         "First": None,
         "Builds": None,
         "Vote": None,
     }
-    assert await service.get_all(789, context=ActingContext.direct(Actor())) == {}
+    assert await service.get_all(789, context=ActingContext.direct(AnonymousActor())) == {}
 
 
 @pytest.fixture
@@ -318,16 +320,16 @@ async def test_runtime_edits_persist_and_audit_atomically(
     service: SettingsService,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    assert (await service.get_runtime(context=ActingContext.direct(Actor()))).welcome_forward_chance == 0.1
+    assert (await service.get_runtime(context=ActingContext.direct(AnonymousActor()))).welcome_forward_chance == 0.1
     await edit_runtime(service, {"welcome_forward_chance": 0.75}, actor_account_id=actor_account_id)
     fresh = SettingsService(
         permissions=PermissionService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory)),
         uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory),
     )
-    assert (await fresh.get_runtime(context=ActingContext.direct(Actor()))).welcome_forward_chance == 0.75
+    assert (await fresh.get_runtime(context=ActingContext.direct(AnonymousActor()))).welcome_forward_chance == 0.75
     with pytest.raises(ValidationError):
         await edit_runtime(fresh, {"welcome_forward_chance": 2}, actor_account_id=actor_account_id)
-    assert (await fresh.get_runtime(context=ActingContext.direct(Actor()))).welcome_forward_chance == 0.75
+    assert (await fresh.get_runtime(context=ActingContext.direct(AnonymousActor()))).welcome_forward_chance == 0.75
     async with async_session_factory() as session:
         changes = (await session.scalars(select(RuntimeSettingChange))).all()
         assert len(changes) == 1
@@ -345,8 +347,8 @@ async def test_runtime_defaults_are_seeded_only_once(
         uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory),
         runtime_defaults=RuntimeSettings(welcome_channel_id=987),
     )
-    assert (await first.get_runtime(context=ActingContext.direct(Actor()))).welcome_channel_id == 987
-    assert (await service.get_runtime(context=ActingContext.direct(Actor()))).welcome_channel_id == 987
+    assert (await first.get_runtime(context=ActingContext.direct(AnonymousActor()))).welcome_channel_id == 987
+    assert (await service.get_runtime(context=ActingContext.direct(AnonymousActor()))).welcome_channel_id == 987
 
 
 async def test_concurrent_runtime_patches_preserve_unrelated_values(
@@ -359,7 +361,7 @@ async def test_concurrent_runtime_patches_preserve_unrelated_values(
     async with create_task_group() as group:
         group.start_soon(change, {"welcome_forward_chance": 0.8})
         group.start_soon(change, {"notification_retention_days": 30})
-    settings = await service.get_runtime(context=ActingContext.direct(Actor()))
+    settings = await service.get_runtime(context=ActingContext.direct(AnonymousActor()))
     assert settings.welcome_forward_chance == 0.8
     assert settings.notification_retention_days == 30
 

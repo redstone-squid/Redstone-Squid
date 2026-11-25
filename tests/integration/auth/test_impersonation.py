@@ -10,7 +10,7 @@ from whenever import Instant
 
 from squid.core.accounts.domain import AccountConsent
 from squid.core.accounts.models import Account
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.auth.impersonation import ImpersonationService
 from squid.core.auth.models.sessions import ImpersonatedEdit, ImpersonationSession, ImpersonationUse
 from squid.core.edits.domain import EditOutcome, EditTarget, Revision
@@ -28,14 +28,14 @@ async def test_session_binding_revocation_and_transaction_audit(
         db.add_all((operator_account, target))
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory, verification_code_pepper="test-pepper")
     service = ImpersonationService(factory, PermissionService(uow_factory=factory))
-    operator = Actor(account_id=operator_account.id, is_bot_owner=True)
-    guild_admin = Actor(account_id=operator_account.id, guild_id=1, discord_guild_admin=True)
+    operator = UserActor(account_id=operator_account.id, is_bot_owner=True)
+    guild_admin = UserActor(account_id=operator_account.id, guild_id=1, discord_guild_admin=True)
     with pytest.raises(AuthorizationError):
         await service.start("discord:1", target.id, "check draft", context=ActingContext.direct(guild_admin))
     session = await service.start("discord:1", target.id, "check draft", context=ActingContext.direct(operator))
     for caller, binding in (
         (operator, "discord:2"),
-        (Actor(account_id=target.id, is_bot_owner=True), "discord:1"),
+        (UserActor(account_id=target.id, is_bot_owner=True), "discord:1"),
         (guild_admin, "discord:1"),
     ):
         with pytest.raises(AuthorizationError):
@@ -44,7 +44,7 @@ async def test_session_binding_revocation_and_transaction_audit(
     resolved = await service.use("discord:1", session.id, "draft", context=ActingContext.direct(operator))
     account, use_id = resolved.target, resolved.use_id
     assert account.id == target.id
-    effective = Actor(account_id=account.id, audit_use_id=use_id)
+    effective = UserActor(account_id=account.id, audit_use_id=use_id)
     edit_id = uuid4()
     with effective.audit_scope():
         async with factory() as uow:

@@ -9,7 +9,7 @@ from uuid import UUID, uuid4
 
 import pytest
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.artifacts.infrastructure import LocalArtifactStore
 from squid.core.builds.application.inference import BuildInferenceInput, BuildInferenceService, InlineImage
 from squid.core.builds.domain import BuildInput, DoorDraftDetails
@@ -107,7 +107,7 @@ class Recovery:
 
     async def resume(self, *, account_id: int = 7) -> tuple[InferenceCandidate, ...] | None:
         return await self.service.resume(
-            self.repository.id, context=ActingContext.for_actor(Actor(account_id=account_id))
+            self.repository.id, context=ActingContext.for_actor(UserActor(account_id=account_id))
         )
 
 
@@ -136,7 +136,7 @@ async def recovery(tmp_path: Path) -> Recovery:
             bundle,
             model="original-model",
             reasoning_effort="low",
-            context=ActingContext.direct(Actor(account_id=repository.owner)),
+            context=ActingContext.direct(UserActor(account_id=repository.owner)),
         )
     assert not repository.completed
     assert repository.token is None

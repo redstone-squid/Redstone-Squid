@@ -11,7 +11,7 @@ from whenever import Instant
 import squid_ui as sl
 from squid.bot.catalogue.schematics.tools import SchematicTools
 from squid.bot.utils.permissions import Grants
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, AnonymousActor, UserActor
 from squid.core.permissions.domain import PermissionNode
 from squid.core.permissions.domain.catalogue import BUILD_SCHEMATIC_DOWNLOAD_PRIVATE, BUILD_SCHEMATIC_VIEW_PRIVATE
 from squid.core.schematics.application import SchematicPublication, SchematicService, StoredSchematic
@@ -88,7 +88,7 @@ def _detail(stored: StoredSchematic | None, *, held: set[str]) -> SchematicTools
 
 @pytest.mark.parametrize("node", [BUILD_SCHEMATIC_DOWNLOAD_PRIVATE, BUILD_SCHEMATIC_VIEW_PRIVATE])
 async def test_public_schematics_are_open_to_everyone(node: PermissionNode) -> None:
-    with ActingContext.direct(Actor(account_id=None)).scope():
+    with ActingContext.direct(AnonymousActor()).scope():
         event = _Event()
 
         assert await _detail(PUBLIC, held=set())._primary(cast(Any, event), node) is PUBLIC  # pyright: ignore[reportPrivateUsage]
@@ -97,7 +97,7 @@ async def test_public_schematics_are_open_to_everyone(node: PermissionNode) -> N
 
 @pytest.mark.parametrize("stored", [PRIVATE, WITHDRAWN])
 async def test_non_public_schematics_are_refused_without_a_grant(stored: StoredSchematic) -> None:
-    with ActingContext.direct(Actor(account_id=OTHER_ID)).scope():
+    with ActingContext.direct(UserActor(account_id=OTHER_ID)).scope():
         event = _Event()
 
         result = await _detail(stored, held=set())._primary(  # pyright: ignore[reportPrivateUsage]
@@ -109,7 +109,7 @@ async def test_non_public_schematics_are_refused_without_a_grant(stored: StoredS
 
 
 async def test_the_uploader_may_use_their_own_non_public_schematic() -> None:
-    with ActingContext.direct(Actor(account_id=UPLOADER_ID)).scope():
+    with ActingContext.direct(UserActor(account_id=UPLOADER_ID)).scope():
         result = await _detail(PRIVATE, held=set())._primary(  # pyright: ignore[reportPrivateUsage]
             cast(Any, _Event()), BUILD_SCHEMATIC_DOWNLOAD_PRIVATE
         )
@@ -118,7 +118,7 @@ async def test_the_uploader_may_use_their_own_non_public_schematic() -> None:
 
 
 async def test_each_private_access_node_covers_only_its_own_actions() -> None:
-    with ActingContext.direct(Actor(account_id=OTHER_ID)).scope():
+    with ActingContext.direct(UserActor(account_id=OTHER_ID)).scope():
         detail = _detail(PRIVATE, held={BUILD_SCHEMATIC_VIEW_PRIVATE.name})
 
         viewed = await detail._primary(cast(Any, _Event()), BUILD_SCHEMATIC_VIEW_PRIVATE)  # pyright: ignore[reportPrivateUsage]
@@ -129,7 +129,7 @@ async def test_each_private_access_node_covers_only_its_own_actions() -> None:
 
 
 async def test_an_anonymous_actor_never_matches_a_legacy_row_without_an_uploader() -> None:
-    with ActingContext.direct(Actor(account_id=None)).scope():
+    with ActingContext.direct(AnonymousActor()).scope():
         legacy = replace(PRIVATE, uploaded_by_account_id=None)
 
         result = await _detail(legacy, held=set())._primary(  # pyright: ignore[reportPrivateUsage]
@@ -140,7 +140,7 @@ async def test_an_anonymous_actor_never_matches_a_legacy_row_without_an_uploader
 
 
 async def test_schematic_actions_publish_their_results_inside_a_transaction(monkeypatch: pytest.MonkeyPatch) -> None:
-    with ActingContext.direct(Actor(account_id=None)).scope():
+    with ActingContext.direct(AnonymousActor()).scope():
         detail = _detail(PUBLIC, held=set())
         monkeypatch.setattr(detail._schematics, "explain_render_skip", AsyncMock(return_value=None))
         monkeypatch.setattr(detail._schematics, "convert", AsyncMock(return_value=(b"schematic", ())))
@@ -158,7 +158,7 @@ async def test_schematic_actions_publish_their_results_inside_a_transaction(monk
 
 
 async def test_a_failed_schematic_action_discards_its_results(monkeypatch: pytest.MonkeyPatch) -> None:
-    with ActingContext.direct(Actor(account_id=None)).scope():
+    with ActingContext.direct(AnonymousActor()).scope():
         detail = _detail(PUBLIC, held=set())
         monkeypatch.setattr(detail._schematics, "explain_render_skip", AsyncMock(return_value=None))
         monkeypatch.setattr(detail._schematics, "convert", AsyncMock(return_value=(b"schematic", ())))
@@ -184,7 +184,7 @@ async def test_conversion_paths_keep_access_checks_and_separate_version_inputs(
     numeric: bool,
     public: bool,
 ) -> None:
-    with ActingContext.direct(Actor(account_id=OTHER_ID)).scope():
+    with ActingContext.direct(UserActor(account_id=OTHER_ID)).scope():
         detail = _detail(PUBLIC if public else PRIVATE, held=set())
         convert = AsyncMock(return_value=(b"schematic", ()))
         monkeypatch.setattr(detail._schematics, "convert", convert)

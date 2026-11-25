@@ -11,7 +11,7 @@ from whenever import Instant
 from squid.core.accounts.domain import AccountConsent, ClaimMethod
 from squid.core.accounts.errors import ConsentRequiredError
 from squid.core.accounts.models import Account, CreatorAlias
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.edits.application import EditExecutor
 from squid.core.edits.domain import EditCommand, EditResult, EditValues, Revision, RevisionConflictError
 from squid.core.events.models import DomainEvent
@@ -94,7 +94,7 @@ async def test_follow_labels_resolve_public_names_and_latest_titles(
         expected = {follows[0].id: "Discovered builder", follows[1].id: "Latest wording"}
     snapshot = await NotificationService(
         uow_factory=factory, permissions=PermissionService(uow_factory=factory)
-    ).editor_snapshot(context=ActingContext.direct(Actor(account_id=owner.id)))
+    ).editor_snapshot(context=ActingContext.direct(UserActor(account_id=owner.id)))
     assert dict(snapshot.labels) == expected
     executor = EditExecutor(
         factory, {SUBSCRIPTIONS_EDIT: NotificationSubscriptionsEdit(PermissionService(uow_factory=factory))}
@@ -105,7 +105,7 @@ async def test_follow_labels_resolve_public_names_and_latest_titles(
             (Revision(notification_target(owner.id), snapshot.preferences.revision),),
             EditValues.of({"create": {"kind": "creator", "subject_id": str(creator.public_creator_id)}}),
         ),
-        context=ActingContext.direct(Actor(account_id=owner.id)),
+        context=ActingContext.direct(UserActor(account_id=owner.id)),
     )
     assert not repeated.outcome.changed
 
@@ -126,7 +126,7 @@ async def test_preferences_and_follows_compete_on_one_account_revision(
     async with factory() as uow:
         account = await uow.accounts.create(consent=AccountConsent.grant_current())
         await uow.commit()
-    actor = Actor(account_id=account.id)
+    actor = UserActor(account_id=account.id)
     expected = (Revision(notification_target(account.id), 0),)
     results: list[EditResult | RevisionConflictError] = []
 
@@ -174,7 +174,7 @@ async def test_follow_creation_undo_and_redo_keep_identity_and_monotonic_revisio
     async with factory() as uow:
         account = await uow.accounts.create(consent=AccountConsent.grant_current())
         await uow.commit()
-    actor = Actor(account_id=account.id)
+    actor = UserActor(account_id=account.id)
     created = await executor.execute(
         EditCommand(
             SUBSCRIPTIONS_EDIT,
@@ -231,7 +231,7 @@ async def test_inbox_batch_conflict_is_atomic_and_arrivals_do_not_block_undo(
         account = await uow.accounts.create(consent=AccountConsent.grant_current())
         await uow.notifications.update_preferences(account.id, web_enabled=True, dm_enabled=False)
         await uow.commit()
-    actor = Actor(account_id=account.id)
+    actor = UserActor(account_id=account.id)
 
     async def arrive(kind: NotificationKind = NotificationKind.BUILD_CONFIRMED) -> InboxNotification:
         async with migrated_session_factory.begin() as session:
@@ -257,7 +257,7 @@ async def test_inbox_batch_conflict_is_atomic_and_arrivals_do_not_block_undo(
             (Revision(inbox_target(second.id), second.revision),),
             EditValues.of({"states": {str(second.id): True}}),
         ),
-        context=ActingContext.direct(Actor(account_id=account.id)),
+        context=ActingContext.direct(UserActor(account_id=account.id)),
     )
     with pytest.raises(RevisionConflictError):
         await executor.execute(
@@ -294,7 +294,7 @@ async def test_inbox_batch_conflict_is_atomic_and_arrivals_do_not_block_undo(
         EditCommand(
             INBOX_EDIT, (Revision(inbox_target(staff.id), 1),), EditValues.of({"states": {str(staff.id): True}})
         ),
-        context=ActingContext.direct(Actor(account_id=account.id, is_bot_owner=True)),
+        context=ActingContext.direct(UserActor(account_id=account.id, is_bot_owner=True)),
     )
     assert staff_saved.receipt is not None
     with pytest.raises(NotificationNotFoundError):
@@ -345,5 +345,5 @@ async def test_read_edit_requires_current_inbox_access(
     )
     with pytest.raises(ConsentRequiredError if gate == "consent" else NotificationNotFoundError):
         await executor.execute(
-            command, context=ActingContext.direct(Actor(account_id=other.id if gate == "owner" else owner.id))
+            command, context=ActingContext.direct(UserActor(account_id=other.id if gate == "owner" else owner.id))
         )

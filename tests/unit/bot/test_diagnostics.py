@@ -13,7 +13,7 @@ from whenever import Instant
 import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.diagnostics.screen import ERROR_CHROME, ErrorReportScreen, report_attachment
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.diagnostics.application import ErrorReportService
 from squid.core.diagnostics.models import ErrorReport
 from squid_ui.ext.discord import (
@@ -73,7 +73,7 @@ def make_screen(
     operations = ErrorReportRecorder(reports, report=report, matches=matches)
 
     async def reader() -> ActingContext:
-        return ActingContext.direct(Actor(discord_user_id=7))
+        return ActingContext.direct(UserActor(discord_user_id=7))
 
     return ErrorReportScreen(
         operations,

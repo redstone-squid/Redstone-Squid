@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock
 import pytest
 from pydantic import BaseModel, TypeAdapter
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, AnonymousActor
 from squid.core.builds.application import (
     BuildInferenceInput,
     BuildInferenceService,
@@ -130,7 +130,7 @@ async def test_infer_maps_structured_build_and_validates_tags() -> None:
     service = BuildInferenceService(generator, FakeTags(), FakeVersions(), "system prompt")
 
     builds = await service.infer(
-        source(), model="test-model", reasoning_effort="low", context=ActingContext.direct(Actor())
+        source(), model="test-model", reasoning_effort="low", context=ActingContext.direct(AnonymousActor())
     )
 
     assert len(builds) == 1
@@ -170,12 +170,12 @@ async def test_infer_returns_multiple_or_no_builds() -> None:
         FakeVersions(),
         "prompt",
     )
-    assert len(await service.infer(source(), model="model", context=ActingContext.direct(Actor()))) == 2
+    assert len(await service.infer(source(), model="model", context=ActingContext.direct(AnonymousActor()))) == 2
 
     empty_service = BuildInferenceService(
         FakeTextGenerator(InferenceResult(builds=[])), FakeTags(), FakeVersions(), "prompt"
     )
-    assert await empty_service.infer(source(), model="model", context=ActingContext.direct(Actor())) == []
+    assert await empty_service.infer(source(), model="model", context=ActingContext.direct(AnonymousActor())) == []
 
 
 async def test_infer_discards_context_and_bogus_source_ids() -> None:
@@ -185,7 +185,7 @@ async def test_infer_discards_context_and_bogus_source_ids() -> None:
         FakeVersions(),
         "prompt",
     )
-    assert await service.infer(source(), model="model", context=ActingContext.direct(Actor())) == []
+    assert await service.infer(source(), model="model", context=ActingContext.direct(AnonymousActor())) == []
 
 
 async def test_infer_passes_images_to_generator() -> None:
@@ -193,7 +193,7 @@ async def test_infer_passes_images_to_generator() -> None:
     generator = FakeTextGenerator(InferenceResult(builds=[]))
     service = BuildInferenceService(generator, FakeTags(), FakeVersions(), "prompt")
 
-    await service.infer(source(images=(image,)), model="model", context=ActingContext.direct(Actor()))
+    await service.infer(source(images=(image,)), model="model", context=ActingContext.direct(AnonymousActor()))
 
     assert generator.calls[0][4] == (image,)
 
@@ -208,7 +208,7 @@ async def test_missing_version_stays_unknown(version_spec: str | None) -> None:
         "prompt",
     )
 
-    builds = await service.infer(source(), model="model", context=ActingContext.direct(Actor()))
+    builds = await service.infer(source(), model="model", context=ActingContext.direct(AnonymousActor()))
 
     assert builds[0].version_spec is None
     assert builds[0].versions == []
@@ -229,7 +229,7 @@ async def test_invalid_version_preserves_candidates_for_review(
         "prompt",
     )
 
-    builds = await service.infer(source(), model="model", context=ActingContext.direct(Actor()))
+    builds = await service.infer(source(), model="model", context=ActingContext.direct(AnonymousActor()))
 
     assert len(builds) == 2
     assert builds[0].version_spec == "Java unknown"
@@ -257,7 +257,7 @@ async def test_qualified_timings_and_volume_survive_submission_prefill() -> None
         "prompt",
     )
 
-    (build,) = await service.infer(source(), model="model", context=ActingContext.direct(Actor()))
+    (build,) = await service.infer(source(), model="model", context=ActingContext.direct(AnonymousActor()))
     prefill = project_submission(build, build_submission_manifest(), {}, origin=SubmissionOrigin.DISCORD)
 
     assert prefill.answers["opening_time"] == 21
@@ -287,7 +287,7 @@ async def test_unparseable_timings_preserve_source_facts_without_model_review_co
         "prompt",
     )
 
-    (build,) = await service.infer(source(), model="model", context=ActingContext.direct(Actor()))
+    (build,) = await service.infer(source(), model="model", context=ActingContext.direct(AnonymousActor()))
 
     assert isinstance(build.details, DoorDraftDetails)
     assert build.details.normal_opening_time is None
@@ -333,7 +333,7 @@ async def test_source_links_survive_prefill_without_inventing_or_inheriting_urls
         server_id=40,
     )
 
-    (build,) = await service.infer(inputs, model="model", context=ActingContext.direct(Actor()))
+    (build,) = await service.infer(inputs, model="model", context=ActingContext.direct(AnonymousActor()))
     prefill = project_submission(build, build_submission_manifest(), {}, origin=SubmissionOrigin.DISCORD)
 
     assert [(link.url, link.media_type) for link in build.links] == [(url, "video")]
@@ -350,7 +350,7 @@ async def test_utility_does_not_acquire_a_door_orientation() -> None:
         "prompt",
     )
 
-    (build,) = await service.infer(source(), model="model", context=ActingContext.direct(Actor()))
+    (build,) = await service.infer(source(), model="model", context=ActingContext.direct(AnonymousActor()))
 
     assert isinstance(build.details, GeneralDraftDetails)
 
@@ -388,7 +388,7 @@ async def test_author_notes_reject_comparisons_inferred_from_an_outdated_post() 
         "prompt",
     )
 
-    (build,) = await service.infer(inputs, model="model", context=ActingContext.direct(Actor()))
+    (build,) = await service.infer(inputs, model="model", context=ActingContext.direct(AnonymousActor()))
     prefill = project_submission(build, build_submission_manifest(), {}, origin=SubmissionOrigin.DISCORD)
 
     assert build.dimensions == (12, 18, 3)
@@ -434,7 +434,7 @@ async def test_author_notes_require_an_excerpt_from_this_builds_selected_sources
         "prompt",
     )
 
-    (build,) = await service.infer(inputs, model="model", context=ActingContext.direct(Actor()))
+    (build,) = await service.infer(inputs, model="model", context=ActingContext.direct(AnonymousActor()))
 
     assert build.description is None
 
@@ -481,7 +481,7 @@ async def test_author_notes_recover_formatting_without_rewriting_source(
         "prompt",
     )
 
-    (build,) = await service.infer(inputs, model="model", context=ActingContext.direct(Actor()))
+    (build,) = await service.infer(inputs, model="model", context=ActingContext.direct(AnonymousActor()))
 
     assert build.description == expected
 
@@ -521,7 +521,7 @@ async def test_author_notes_preserve_explicit_changes_and_requirements_without_r
         "prompt",
     )
 
-    (build,) = await service.infer(inputs, model="model", context=ActingContext.direct(Actor()))
+    (build,) = await service.infer(inputs, model="model", context=ActingContext.direct(AnonymousActor()))
     prefill = project_submission(build, build_submission_manifest(), {}, origin=SubmissionOrigin.DISCORD)
 
     assert build.description == f"{change}\n{requirement}\n{fix}"
@@ -599,7 +599,7 @@ async def test_visible_and_true_timings_are_kept_separately_through_prefill() ->
     service = BuildInferenceService(
         FakeTextGenerator(InferenceResult(builds=[value])), FakeTags(), FakeVersions(), "system"
     )
-    [build] = await service.infer(source(), model="test", context=ActingContext.direct(Actor()))
+    [build] = await service.infer(source(), model="test", context=ActingContext.direct(AnonymousActor()))
     assert isinstance(build.details, DoorDraftDetails)
     assert (build.details.normal_opening_time, build.details.normal_closing_time) == (27, 27)
     assert (build.details.visible_opening_time, build.details.visible_closing_time) == (25, 25)
@@ -617,7 +617,7 @@ async def test_approximate_minutes_keep_both_ticks_and_the_qualification() -> No
         FakeVersions(),
         "system",
     )
-    [build] = await service.infer(source(), model="test", context=ActingContext.direct(Actor()))
+    [build] = await service.infer(source(), model="test", context=ActingContext.direct(AnonymousActor()))
     assert isinstance(build.details, DoorDraftDetails)
     assert build.details.normal_opening_time == 50400
     assert build.description is not None
@@ -639,7 +639,7 @@ async def test_measurement_qualifications_and_variant_ranges_remain_source_excer
         FakeTextGenerator(InferenceResult(builds=[value])), FakeTags(), FakeVersions(), "system"
     )
     [build] = await service.infer(
-        BuildInferenceInput((message,), (), (), 30, 40), model="test", context=ActingContext.direct(Actor())
+        BuildInferenceInput((message,), (), (), 30, 40), model="test", context=ActingContext.direct(AnonymousActor())
     )
     assert build.description == "(including floor)\nbreaks record at: n=5-14 wide"
 
@@ -678,7 +678,7 @@ async def test_expandable_source_facts_survive_inference_without_sample_dimensio
         )
     )
     service = BuildInferenceService(generator, FakeTags(), FakeVersions(), "system prompt")
-    builds = await service.infer(inputs, model="test-model", context=ActingContext.direct(Actor()))
+    builds = await service.infer(inputs, model="test-model", context=ActingContext.direct(AnonymousActor()))
     assert isinstance(builds[0].details, DoorDraftDetails)
     actual = builds[0].details.door_expansion
     assert actual is not None
@@ -722,7 +722,7 @@ async def test_malformed_provider_fields_do_not_discard_a_build_or_its_other_cre
         "system",
     )
     inputs = BuildInferenceInput((message, source().primary[1]), (), (), 30, 40)
-    builds = await service.infer(inputs, model="test", context=ActingContext.direct(Actor()))
+    builds = await service.infer(inputs, model="test", context=ActingContext.direct(AnonymousActor()))
 
     assert len(builds) == 2
     assert [credit.name for credit in builds[0].credits] == ["Builder", "Alice"]
@@ -782,7 +782,7 @@ async def test_timings_without_a_category_field_survive_retention_and_prefill(
         author_name="Builder", content=f"{label}: {duration}", message_id=10, author_id=20, channel_id=30, server_id=40
     )
 
-    [build] = await service.infer(inputs, model="test", context=ActingContext.direct(Actor()))
+    [build] = await service.infer(inputs, model="test", context=ActingContext.direct(AnonymousActor()))
     retained = (
         TypeAdapter(BuildDraftPayload)
         .validate_json(TypeAdapter(BuildDraftPayload).dump_json(BuildDraftPayload.from_draft(build)))
@@ -811,7 +811,7 @@ async def test_extender_stroke_and_timings_survive_retained_candidates_and_prefi
     service = BuildInferenceService(
         FakeTextGenerator(InferenceResult(builds=[value])), FakeTags(), FakeVersions(), "system"
     )
-    [build] = await service.infer(source(), model="test", context=ActingContext.direct(Actor()))
+    [build] = await service.infer(source(), model="test", context=ActingContext.direct(AnonymousActor()))
     retained = (
         TypeAdapter(BuildDraftPayload)
         .validate_json(TypeAdapter(BuildDraftPayload).dump_json(BuildDraftPayload.from_draft(build)))
@@ -832,7 +832,7 @@ async def test_seamless_and_reset_measurements_remain_separate_from_the_duration
     service = BuildInferenceService(
         FakeTextGenerator(InferenceResult(builds=[value])), FakeTags(), FakeVersions(), "system"
     )
-    [build] = await service.infer(source(), model="test", context=ActingContext.direct(Actor()))
+    [build] = await service.infer(source(), model="test", context=ActingContext.direct(AnonymousActor()))
     assert isinstance(build.details, DoorDraftDetails)
     assert build.details.normal_opening_time == 2
     assert build.details.visible_opening_time is None
@@ -847,7 +847,7 @@ async def test_inference_keeps_valid_links_when_the_model_invents_an_empty_or_ma
         FakeTextGenerator(InferenceResult(builds=[value])), FakeTags(), FakeVersions(), "system"
     )
     [build] = await service.infer(
-        BuildInferenceInput((message,), (), (), 30, 40), model="test", context=ActingContext.direct(Actor())
+        BuildInferenceInput((message,), (), (), 30, 40), model="test", context=ActingContext.direct(AnonymousActor())
     )
     assert [link.url for link in build.links] == [urls[-1]]
     assert build.description == "Reference: https://example.test/video.mp4"
@@ -865,7 +865,7 @@ async def test_explicit_edition_survives_without_guessing_a_release(spec: str | 
         versions,
         "system",
     )
-    [build] = await service.infer(source(), model="test", context=ActingContext.direct(Actor()))
+    [build] = await service.infer(source(), model="test", context=ActingContext.direct(AnonymousActor()))
     assert build.version_spec == expected
     assert versions.resolved_specs == [expected]
 
@@ -910,7 +910,7 @@ async def test_unassigned_timing_pair_is_quoted_without_guessing_its_direction()
         FakeTextGenerator(InferenceResult(builds=[value])), FakeTags(), FakeVersions(), "system"
     )
     [build] = await service.infer(
-        BuildInferenceInput((message,), (), (), 30, 40), model="test", context=ActingContext.direct(Actor())
+        BuildInferenceInput((message,), (), (), 30, 40), model="test", context=ActingContext.direct(AnonymousActor())
     )
     assert isinstance(build.details, ExtenderDraftDetails)
     assert build.details.extension_time == 0
@@ -927,7 +927,7 @@ async def test_timing_fallback_does_not_assign_shared_measurements_to_each_varia
         "system",
     )
     builds = await service.infer(
-        BuildInferenceInput((message,), (), (), 30, 40), model="test", context=ActingContext.direct(Actor())
+        BuildInferenceInput((message,), (), (), 30, 40), model="test", context=ActingContext.direct(AnonymousActor())
     )
     assert [build.description for build in builds] == [None, None]
 
@@ -950,7 +950,7 @@ async def test_timing_fallback_ignores_dates_and_durations_already_represented()
         "system",
     )
     [build] = await service.infer(
-        BuildInferenceInput((message,), (), (), 30, 40), model="test", context=ActingContext.direct(Actor())
+        BuildInferenceInput((message,), (), (), 30, 40), model="test", context=ActingContext.direct(AnonymousActor())
     )
     assert build.description is None
 
@@ -966,7 +966,7 @@ async def test_a_source_quote_already_covering_an_unparseable_timing_is_not_repe
         FakeTextGenerator(InferenceResult(builds=[value])), FakeTags(), FakeVersions(), "system"
     )
     [build] = await service.infer(
-        BuildInferenceInput((message,), (), (), 30, 40), model="test", context=ActingContext.direct(Actor())
+        BuildInferenceInput((message,), (), (), 30, 40), model="test", context=ActingContext.direct(AnonymousActor())
     )
     assert isinstance(build.details, DoorDraftDetails)
     assert build.details.normal_opening_time is None
@@ -1000,7 +1000,7 @@ async def test_equal_qualified_opening_and_closing_times_keep_both_direction_lab
         FakeVersions(),
         "system",
     )
-    [build] = await service.infer(source(), model="test", context=ActingContext.direct(Actor()))
+    [build] = await service.infer(source(), model="test", context=ActingContext.direct(AnonymousActor()))
     assert build.description == (
         "Opening: 0.45s; 0 gt input delay, 0 gt reset\nClosing: 0.45s; 0 gt input delay, 0 gt reset"
     )
@@ -1024,7 +1024,7 @@ async def test_equal_pair_values_are_not_both_covered_by_one_assigned_measuremen
         "system",
     )
     [build] = await service.infer(
-        BuildInferenceInput((message,), (), (), 30, 40), model="test", context=ActingContext.direct(Actor())
+        BuildInferenceInput((message,), (), (), 30, 40), model="test", context=ActingContext.direct(AnonymousActor())
     )
     assert isinstance(build.details, DoorDraftDetails)
     assert build.details.normal_opening_time == 5
@@ -1047,7 +1047,7 @@ async def test_incomplete_expansion_bounds_do_not_discard_a_message_group() -> N
         "system",
     )
     builds = await service.infer(
-        BuildInferenceInput((message,), (), (), 30, 40), model="test", context=ActingContext.direct(Actor())
+        BuildInferenceInput((message,), (), (), 30, 40), model="test", context=ActingContext.direct(AnonymousActor())
     )
     assert len(builds) == 2
     assert isinstance(builds[0].details, DoorDraftDetails)
@@ -1066,7 +1066,7 @@ async def test_inference_keeps_explicit_version_exclusions() -> None:
         "system prompt",
     )
 
-    context = ActingContext.direct(Actor())
+    context = ActingContext.direct(AnonymousActor())
     (build,) = await service.infer(source(), model="test", context=context)
 
     assert build.version_spec == "1.8+, !1.16+"
@@ -1086,7 +1086,7 @@ async def test_numeric_edge_shorthand_is_seconds_without_combining_reset(value: 
         "system prompt",
     )
 
-    (build,) = await service.infer(source(), model="test", context=ActingContext.direct(Actor()))
+    (build,) = await service.infer(source(), model="test", context=ActingContext.direct(AnonymousActor()))
 
     assert isinstance(build.details, DoorDraftDetails)
     assert build.details.normal_opening_time == expected
@@ -1102,7 +1102,7 @@ async def test_reset_only_qualification_does_not_become_a_movement_duration() ->
         "system prompt",
     )
 
-    (build,) = await service.infer(source(), model="test", context=ActingContext.direct(Actor()))
+    (build,) = await service.infer(source(), model="test", context=ActingContext.direct(AnonymousActor()))
 
     assert isinstance(build.details, DoorDraftDetails)
     assert build.details.normal_closing_time is None
@@ -1172,7 +1172,7 @@ async def test_leading_outdated_status_survives_omitted_model_notes(text: str, m
     )
 
     [build] = await service.infer(
-        BuildInferenceInput((message,), (), (), 30, 40), model="test", context=ActingContext.direct(Actor())
+        BuildInferenceInput((message,), (), (), 30, 40), model="test", context=ActingContext.direct(AnonymousActor())
     )
 
     assert build.description == marker
@@ -1190,7 +1190,7 @@ async def test_outdated_status_does_not_duplicate_the_models_title_or_quote(in_t
     )
 
     [build] = await service.infer(
-        BuildInferenceInput((message,), (), (), 30, 40), model="test", context=ActingContext.direct(Actor())
+        BuildInferenceInput((message,), (), (), 30, 40), model="test", context=ActingContext.direct(AnonymousActor())
     )
 
     assert build.description == (None if in_title else "[OUTDATED]")
@@ -1203,7 +1203,7 @@ async def test_outdated_status_is_not_assigned_to_every_variant_in_a_shared_post
     )
 
     builds = await service.infer(
-        BuildInferenceInput((message,), (), (), 30, 40), model="test", context=ActingContext.direct(Actor())
+        BuildInferenceInput((message,), (), (), 30, 40), model="test", context=ActingContext.direct(AnonymousActor())
     )
 
     assert [build.description for build in builds] == [None, None]
@@ -1217,7 +1217,9 @@ async def test_outdated_reference_and_context_do_not_mark_the_current_build_outd
     )
 
     [build] = await service.infer(
-        BuildInferenceInput((message,), (context,), (), 30, 40), model="test", context=ActingContext.direct(Actor())
+        BuildInferenceInput((message,), (context,), (), 30, 40),
+        model="test",
+        context=ActingContext.direct(AnonymousActor()),
     )
 
     assert build.description is None
@@ -1240,7 +1242,7 @@ async def test_instant_edge_labels_keep_zero_durations_and_separate_reset_qualif
     )
 
     [build] = await service.infer(
-        BuildInferenceInput((message,), (), (), 30, 40), model="test", context=ActingContext.direct(Actor())
+        BuildInferenceInput((message,), (), (), 30, 40), model="test", context=ActingContext.direct(AnonymousActor())
     )
 
     assert isinstance(build.details, DoorDraftDetails)
@@ -1259,7 +1261,7 @@ async def test_instant_prose_does_not_establish_zero_opening_time(value: str) ->
         "system",
     )
 
-    [build] = await service.infer(source(), model="test", context=ActingContext.direct(Actor()))
+    [build] = await service.infer(source(), model="test", context=ActingContext.direct(AnonymousActor()))
 
     assert isinstance(build.details, DoorDraftDetails)
     assert build.details.normal_opening_time is None

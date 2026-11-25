@@ -9,7 +9,7 @@ from hypothesis import strategies as st
 from pytest_mock import MockerFixture
 from whenever import Instant
 
-from squid.core.actors import Actor
+from squid.core.actors import UserActor
 from squid.core.permissions.domain import (
     CATALOGUE,
     Decision,
@@ -31,11 +31,12 @@ from squid.core.permissions.domain import (
     resolve_many,
     rules_from_role,
 )
+from squid.core.permissions.domain.models import RolePermissionSubject
 
 from .strategies import GUILD_ID, node_names, patterns, rule_sets, rules, selectors_for
 
-MEMBER = Actor(account_id=1, guild_id=GUILD_ID)
-OWNER = Actor(account_id=1, guild_id=GUILD_ID, is_bot_owner=True)
+MEMBER = UserActor(account_id=1, guild_id=GUILD_ID)
+OWNER = UserActor(account_id=1, guild_id=GUILD_ID, is_bot_owner=True)
 
 
 def allow(raw: str, **overrides: Any) -> Rule:
@@ -315,8 +316,8 @@ def test_p14_an_empty_rule_set_falls_through_to_the_catalogue_default(name: str)
     assert decision.trace == ()
 
 
-@pytest.mark.parametrize("subject", [MEMBER, Actor(guild_id=GUILD_ID)])
-def test_an_unauthenticated_subject_resolves_without_an_account(subject: Actor) -> None:
+@pytest.mark.parametrize("subject", [MEMBER, RolePermissionSubject(guild_id=GUILD_ID)])
+def test_a_subject_without_an_account_grant_uses_the_guild_rule(subject: UserActor | RolePermissionSubject) -> None:
     """Resolve a guild-role grant even when the subject has no account ID."""
     rule = allow("settings.**", subject_kind=SubjectKind.DISCORD_ROLE, scope_guild_id=GUILD_ID)
 

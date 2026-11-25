@@ -8,7 +8,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.accounts.models import Account
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, AnonymousActor, UserActor
 from squid.core.edits.application import EditExecutor
 from squid.core.edits.domain import (
     ConcurrentEditError,
@@ -28,12 +28,12 @@ from squid.core.settings.models import RuntimeSettingChange
 from tests.support.runtime_edits import edit_runtime
 
 
-async def owner(sessions: async_sessionmaker[AsyncSession]) -> Actor:
+async def owner(sessions: async_sessionmaker[AsyncSession]) -> UserActor:
     async with sessions.begin() as session:
         account = Account()
         session.add(account)
         await session.flush()
-        return Actor(account_id=account.id, is_bot_owner=True)
+        return UserActor(account_id=account.id, is_bot_owner=True)
 
 
 async def test_competing_settings_edits_have_one_winner_and_a_reversible_receipt(
@@ -87,7 +87,7 @@ async def test_stale_orm_write_is_a_known_conflict_at_flush_or_commit(
     await SettingsService(
         permissions=PermissionService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory)),
         uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory),
-    ).get_runtime(context=ActingContext.direct(Actor()))
+    ).get_runtime(context=ActingContext.direct(AnonymousActor()))
     async with (
         SqlAlchemyUnitOfWork(migrated_session_factory) as first,
         SqlAlchemyUnitOfWork(migrated_session_factory) as second,

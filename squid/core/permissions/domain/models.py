@@ -9,6 +9,18 @@ from squid.core.i18n import tr
 from squid_i18n import Text
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class RolePermissionSubject:
+    """Discord roles whose grants a moderator is inspecting within one guild."""
+
+    guild_id: int
+    discord_role_ids: frozenset[int] = frozenset()
+
+    @property
+    def is_bot_owner(self) -> bool:
+        return False
+
+
 class NodeScope(StrEnum):
     """Where a permission node's authority applies.
 

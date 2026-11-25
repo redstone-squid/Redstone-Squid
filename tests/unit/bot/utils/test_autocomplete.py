@@ -202,7 +202,7 @@ async def test_an_account_is_resolved_only_for_a_viewer_scoped_source() -> None:
     public = SuggestionSource(id="approved_restrictions", provider=provider)
     interaction = make_autocomplete_interaction(service_with(public))
     await suggests("approved_restrictions")(interaction, "seam")
-    assert provider.requests[0].viewer.account_id is None
+    assert provider.requests[0].viewer.linked_account_id is None
 
     scoped_provider = RecordingProvider()
     scoped = SuggestionSource(
@@ -212,4 +212,4 @@ async def test_an_account_is_resolved_only_for_a_viewer_scoped_source() -> None:
     )
     scoped_interaction = make_autocomplete_interaction(service_with(scoped), account_id=77)
     await suggests("my_drafts")(scoped_interaction, "")
-    assert scoped_provider.requests[0].viewer.account_id == 77
+    assert scoped_provider.requests[0].viewer.linked_account_id == 77

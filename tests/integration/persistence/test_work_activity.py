@@ -7,7 +7,7 @@ from uuid import uuid4
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.events.application import DomainEventService
 from squid.core.events.dispatcher import DomainEventRunner
 from squid.core.events.models import DomainEvent
@@ -30,7 +30,7 @@ async def test_worker_effect_traces_to_impersonated_request_after_acknowledgemen
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
-    context = ActingContext(Actor(account_id=12), Actor(account_id=34), session_id=uuid4())
+    context = ActingContext(UserActor(account_id=12), UserActor(account_id=34), session_id=uuid4())
     async with migrated_session_factory.begin() as session:
         await session.execute(text("INSERT INTO domain_event_consumers (name) VALUES ('audit_test')"))
 
@@ -88,8 +88,8 @@ async def test_worker_effect_traces_to_impersonated_request_after_acknowledgemen
 async def test_retried_coalesced_work_retains_both_requests_and_claims(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    first = ActingContext.direct(Actor(account_id=1))
-    second = ActingContext.direct(Actor(account_id=2))
+    first = ActingContext.direct(UserActor(account_id=1))
+    second = ActingContext.direct(UserActor(account_id=2))
     enqueue = text("SELECT upsert_discord_sync_request('build', :key, 'refresh')")
     for request in (first, second):
         with request.scope():

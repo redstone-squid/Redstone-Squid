@@ -20,7 +20,7 @@ from squid.bot.submission.build_card import render_build_card
 from squid.bot.utils.web import MediaPreviewClient
 from squid.core.accounts.application import AccountService
 from squid.core.accounts.models import CataloguePreference
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.builds.application import BuildQueryService, BuildService
 from squid.core.builds.domain import BuildStatus, Credit, CreditRole
 from squid.core.builds.models import Build, DoorBuild
@@ -103,7 +103,7 @@ def _screen(
         cast(BuildQueryService, queries),
         cast(BuildService, None),
         AsyncMock(),
-        AsyncMock(return_value=Actor(account_id=1, discord_user_id=1)),
+        AsyncMock(return_value=UserActor(account_id=1, discord_user_id=1)),
         cast(SchematicService, schematics),
         topics=LocalTopicBus(),
         initial_id=initial_id,

@@ -10,7 +10,7 @@ from unittest.mock import Mock, create_autospec
 import pytest
 from whenever import Instant
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.diagnostics.application import ErrorReportService
 from squid.core.diagnostics.domain import ErrorReportNotFoundError
 from squid.core.diagnostics.models import ErrorReport
@@ -20,7 +20,7 @@ from squid.core.permissions.domain.catalogue import DIAGNOSTICS_ERROR_CLEAR
 from squid.core.records.errors import RecordNotFoundError
 from tests.support.unit_of_work import CommittedState, FakeUnitOfWork
 
-READER = ActingContext.direct(Actor(account_id=7))
+READER = ActingContext.direct(UserActor(account_id=7))
 FROZEN = Instant.from_utc(2026, 8, 17, 12, 0, 0)
 
 

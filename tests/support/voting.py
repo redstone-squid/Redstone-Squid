@@ -8,9 +8,9 @@ from sqlalchemy import insert, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.core.actors import Actor
+from squid.core.actors import UserActor
 from squid.core.messages.models import Message
-from squid.core.permissions.application.ports import SubjectRecords
+from squid.core.permissions.application.ports import PermissionSubject, SubjectRecords
 from squid.core.permissions.models import PermissionGrant
 from squid.core.posts.models import DiscordPost
 from squid.core.voting.domain import (
@@ -275,9 +275,20 @@ class VoteUnitOfWork[RepositoryT](PublishingFakeUnitOfWork[RepositoryT]):
     def permissions(self) -> Self:
         return self
 
-    async def load_for_subject(self, subject: Actor) -> SubjectRecords:
+    async def load_for_subject(self, subject: PermissionSubject) -> SubjectRecords:
         return SubjectRecords(
-            1, subject, grants=tuple(grant for grant in self._grants if grant.subject_account_id == subject.account_id)
+            1,
+            subject,
+            grants=tuple(
+                grant
+                for grant in self._grants
+                if (
+                    isinstance(subject, UserActor)
+                    and grant.subject_account_id is not None
+                    and grant.subject_account_id == subject.account_id
+                )
+                or (grant.subject_guild_id == subject.guild_id and grant.subject_role_id in subject.discord_role_ids)
+            ),
         )
 
     async def epoch(self) -> int:

@@ -22,7 +22,7 @@ from squid.core.accounts.application.edits import (
 from squid.core.accounts.domain import AccountConsent, ProfileUpdate
 from squid.core.accounts.errors import ConsentRequiredError, LastIdentityError
 from squid.core.accounts.models import AccountIdentity, ProfileClearAudit
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, UserActor
 from squid.core.edits.application import EditExecutor
 from squid.core.edits.domain import EditCommand, EditResult, EditValues, Revision, RevisionConflictError
 from squid.core.errors import AuthorizationError
@@ -43,7 +43,7 @@ async def test_profile_and_identity_compete_on_one_revision_and_undo_checks_curr
             consent=AccountConsent.grant_current(), identities=(AccountIdentity.discord(999),)
         )
         await uow.commit()
-    actor = Actor(account_id=account.id)
+    actor = UserActor(account_id=account.id)
     expected = (Revision(account_target(account.id), account.revision),)
     outcomes: list[EditResult | RevisionConflictError] = []
 
@@ -67,7 +67,8 @@ async def test_profile_and_identity_compete_on_one_revision_and_undo_checks_curr
         assert saved.receipt.after.unpack()["display_name"] == "Builder"
     with pytest.raises(AuthorizationError):
         await executor.execute(
-            saved.receipt.undo(saved.outcome.revisions), context=ActingContext.direct(Actor(account_id=account.id + 1))
+            saved.receipt.undo(saved.outcome.revisions),
+            context=ActingContext.direct(UserActor(account_id=account.id + 1)),
         )
     undone = await executor.execute(saved.receipt.undo(saved.outcome.revisions), context=ActingContext.direct(actor))
     assert undone.receipt is not None
@@ -108,7 +109,7 @@ async def test_final_unlink_retains_profile_and_last_identity_guard(
         assert identity_id is not None
         await uow.accounts.upsert_profile(account.id, ProfileUpdate(bio="Keep", avatar_identity_id=identity_id))
         await uow.commit()
-    actor = Actor(account_id=account.id)
+    actor = UserActor(account_id=account.id)
     result = await executor.execute(
         EditCommand(
             UNLINK_EDIT,
@@ -150,7 +151,7 @@ async def test_staff_clear_is_final_revision_checked_and_permanently_attributed(
         await uow.accounts.upsert_profile(account.id, ProfileUpdate(bio="remove me", hidden=True))
         await uow.commit()
     command = EditCommand(PROFILE_CLEAR, (Revision(account_target(account.id), account.revision),), EditValues.of({}))
-    actor = Actor(account_id=staff.id)
+    actor = UserActor(account_id=staff.id)
     result = await executor.execute(command, context=ActingContext.direct(actor))
     assert result.receipt is not None
     assert result.receipt.final

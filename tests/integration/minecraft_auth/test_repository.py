@@ -14,7 +14,7 @@ from whenever import Instant
 
 from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
 from squid.core.accounts.models import Account, AccountIdentity
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, AnonymousActor, UserActor
 from squid.core.minecraft_auth.application.crypto import MinecraftSecretCodec
 from squid.core.minecraft_auth.application.services import InstallationCredentialService, PlayerAuthorizationService
 from squid.core.minecraft_auth.domain import PublicServerProfile
@@ -135,7 +135,7 @@ async def test_fabric_codes_and_token_are_hash_only_and_exchange_is_one_time(
     _, players = services(async_session_factory)
 
     challenge = await players.start_fabric_challenge(java_uuid=JAVA_UUID, pkce_s256_challenge=PKCE_CHALLENGE)
-    await players.approve(user_code=challenge.user_code, context=ActingContext.direct(Actor(account_id=account_id)))
+    await players.approve(user_code=challenge.user_code, context=ActingContext.direct(UserActor(account_id=account_id)))
     issued = await players.exchange_fabric(device_code=challenge.device_code, pkce_verifier=PKCE_VERIFIER)
 
     context = await players.authenticate_fabric_player(issued.token)
@@ -159,26 +159,28 @@ async def test_paper_rotation_atomically_fences_credential_challenge_and_grant(
 ) -> None:
     account_id = await consenting_account(async_session_factory)
     installations, players = services(async_session_factory)
-    first = await installations.register(label="Survival", context=ActingContext.direct(Actor(account_id=account_id)))
+    first = await installations.register(
+        label="Survival", context=ActingContext.direct(UserActor(account_id=account_id))
+    )
     await installations.update_profile(
         installation_id=first.installation.id,
         profile=PublicServerProfile(enabled=True, display_name="Survival", sponsor_opt_in=True),
-        context=ActingContext.direct(Actor(account_id=account_id)),
+        context=ActingContext.direct(UserActor(account_id=account_id)),
     )
-    (published,) = await installations.public_servers(context=ActingContext.direct(Actor()))
+    (published,) = await installations.public_servers(context=ActingContext.direct(AnonymousActor()))
     assert published.installation_id == first.installation.id
     authenticated = await installations.authenticate(first.token)
     challenge = await players.start_paper_challenge(installation=authenticated, java_uuid=JAVA_UUID)
-    await players.approve(user_code=challenge.user_code, context=ActingContext.direct(Actor(account_id=account_id)))
+    await players.approve(user_code=challenge.user_code, context=ActingContext.direct(UserActor(account_id=account_id)))
     grant = await players.exchange_paper(device_code=challenge.device_code, installation=authenticated)
 
     replacement = await installations.rotate(
-        installation_id=authenticated.id, context=ActingContext.direct(Actor(account_id=account_id))
+        installation_id=authenticated.id, context=ActingContext.direct(UserActor(account_id=account_id))
     )
 
     assert replacement.installation.id == authenticated.id
     assert replacement.installation.credential_version == authenticated.credential_version + 1
-    (published_after_rotation,) = await installations.public_servers(context=ActingContext.direct(Actor()))
+    (published_after_rotation,) = await installations.public_servers(context=ActingContext.direct(AnonymousActor()))
     assert published_after_rotation == published
     with pytest.raises(InvalidInstallationCredentialError):
         await installations.authenticate(first.token)
@@ -203,15 +205,15 @@ async def test_targeted_public_sponsor_lookup_isolated_from_unrelated_malformed_
             website_url="https://example.test/server",
             sponsor_opt_in=True,
         ),
-        context=ActingContext.direct(Actor(account_id=account_id)),
+        context=ActingContext.direct(UserActor(account_id=account_id)),
     )
     listed_only = await installations.register(
         label="Listed server without sponsor consent",
         profile=PublicServerProfile(enabled=True, display_name="Listed only"),
-        context=ActingContext.direct(Actor(account_id=account_id)),
+        context=ActingContext.direct(UserActor(account_id=account_id)),
     )
     malformed = await installations.register(
-        label="Malformed public server", context=ActingContext.direct(Actor(account_id=account_id))
+        label="Malformed public server", context=ActingContext.direct(UserActor(account_id=account_id))
     )
     async with async_session_factory.begin() as session:
         await session.execute(
@@ -221,11 +223,13 @@ async def test_targeted_public_sponsor_lookup_isolated_from_unrelated_malformed_
         )
 
     sponsor = await PaperSponsorResolver(installations).resolve(
-        valid.installation.id, context=ActingContext.direct(Actor(account_id=account_id))
+        valid.installation.id, context=ActingContext.direct(UserActor(account_id=account_id))
     )
 
     assert (
-        await installations.get_public_server(listed_only.installation.id, context=ActingContext.direct(Actor()))
+        await installations.get_public_server(
+            listed_only.installation.id, context=ActingContext.direct(AnonymousActor())
+        )
         is None
     )
     assert sponsor is not None

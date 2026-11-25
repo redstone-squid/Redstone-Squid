@@ -4,7 +4,7 @@ from typing import Annotated, Protocol, cast, override
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
-from squid.core.actors import Actor
+from squid.core.actors import Actor, UserActor
 from squid.core.edits.application import EditUnitOfWork
 from squid.core.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit, Revision, require_revision
 from squid.core.edits.fields import Aggregate, FieldCommand
@@ -135,7 +135,7 @@ class StarboardOperations:
     async def authorize_board(
         self, uow: StarboardEditUnitOfWork, actor: Actor, guild_id: int, nodes: set[PermissionNode]
     ) -> None:
-        if actor.guild_id != guild_id:
+        if not isinstance(actor, UserActor) or actor.guild_id != guild_id:
             raise GuildContextRequiredError
         if nodes:
             await self._permissions.require(actor, *sorted(nodes, key=lambda node: node.name), uow=uow)
@@ -161,7 +161,7 @@ class StarboardEdit(FieldCommand[StarboardEditUnitOfWork, StarboardConfig, Board
             return await uow.starboards.flush_revision(row, expected)
 
         async def authorize_root(uow: StarboardEditUnitOfWork, actor: Actor, row: StarboardConfig) -> None:
-            if actor.guild_id != row.guild_id:
+            if not isinstance(actor, UserActor) or actor.guild_id != row.guild_id:
                 raise GuildContextRequiredError
 
         FieldCommand.__init__(

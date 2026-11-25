@@ -17,12 +17,13 @@ from squid.bot.utils.permissions import PermissionNodeRequired
 from squid.core.accounts.application import AccountService
 from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, IdentityProvider
 from squid.core.accounts.models import Account
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, Actor, UserActor
 from squid.core.builds.application.inference import BuildInferenceInput
 from squid.core.builds.domain import BuildCategory, BuildInput
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.application.ports import PermissionUnitOfWork
 from squid.core.permissions.domain import CheckMode, Decision, PermissionCheck, PermissionNode, Reason
+from squid.core.permissions.domain.models import RolePermissionSubject
 from squid.core.settings.application import SettingsService
 from squid.core.settings.domain.runtime import RuntimeSettings
 from squid.core.submissions.application.inference_runs import InferenceCandidate, SubmissionInferenceRuns
@@ -55,7 +56,7 @@ class StubPermissions(PermissionService):
     @override
     async def check(
         self,
-        subject: Actor,
+        subject: Actor | RolePermissionSubject,
         *nodes: PermissionNode | str,
         uow: PermissionUnitOfWork | None = None,
         mode: CheckMode = "all",
@@ -187,7 +188,7 @@ async def _run(intake: BuildMessageIntake[Any], message: discord.Message) -> dis
     cog.bot = intake.bot
     cog.ui = intake.bot.ui.scope(cog)
     cog.intake = intake
-    with ActingContext.direct(Actor(discord_user_id=interaction.user.id)).scope():
+    with ActingContext.direct(UserActor(discord_user_id=interaction.user.id)).scope():
         await invoke_context_menu(cog, cog.recalc_context_menu, interaction, message)
     return interaction
 
@@ -303,7 +304,7 @@ async def test_production_recalculation_retains_candidates_without_submitting(mo
     monkeypatch.setattr(
         "squid.bot.submission.message_intake.assemble_bundle", AsyncCallRecorder(result="retained-input")
     )
-    monkeypatch.setattr(intake.bot.actors, "resolve", AsyncCallRecorder(result=Actor(account_id=7)))
+    monkeypatch.setattr(intake.bot.actors, "resolve", AsyncCallRecorder(result=UserActor(account_id=7)))
     context = ContextHarness(bot=intake.bot).source
     context.interaction = InteractionHarness(client=intake.bot).source
     context.interaction.id = 55

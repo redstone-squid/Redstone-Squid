@@ -345,8 +345,8 @@ class CliAuthorizationService:
     async def revoke_current_session(self, identity: CliIdentity, *, context: ActingContext) -> bool:
         """Revoke the exact session represented by a CLI caller."""
         if (
-            context.effective.account_id != identity.account_id
-            or context.effective.credential_id != f"cli-session:{identity.session_id}"
+            context.effective.linked_account_id != identity.account_id
+            or context.effective.credential_reference != f"cli-session:{identity.session_id}"
         ):
             raise InvalidCliSessionError
         async with self._uow_factory() as uow:

@@ -39,7 +39,7 @@ async def prepare_build_editor(
     async def access(current: Build) -> EditAccess:
         current_actor = await actor()
         may_edit_any = (await client.services.permissions.check(current_actor, BUILD_SUBMISSION_EDIT)).allowed
-        return current.edit_access(current_actor.account_id, may_edit_any=may_edit_any)
+        return current.edit_access(current_actor.linked_account_id, may_edit_any=may_edit_any)
 
     # The editor keeps the scope it opened with; losing full access closes it rather than narrowing it.
     scope = await access(build)

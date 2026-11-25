@@ -19,6 +19,7 @@ from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.application.ports import PermissionUnitOfWork
 from squid.core.permissions.domain import CheckMode, Decision, PermissionCheck, PermissionNode, Reason
+from squid.core.permissions.domain.models import RolePermissionSubject
 from tests.unit.api.fakes import credential_nodes
 
 # This credential can read submissions but does not carry a moderation-view permission.
@@ -71,12 +72,12 @@ class BuildQueryRecorder(BuildQueryService):
 class PermissionRecorder(PermissionService):
     def __init__(self, allowed: bool) -> None:
         self.allowed = allowed
-        self.calls: list[tuple[Actor, PermissionNode | str]] = []
+        self.calls: list[tuple[Actor | RolePermissionSubject, PermissionNode | str]] = []
 
     @override
     async def check(
         self,
-        subject: Actor,
+        subject: Actor | RolePermissionSubject,
         *nodes: PermissionNode | str,
         uow: PermissionUnitOfWork | None = None,
         mode: CheckMode = "all",

@@ -17,7 +17,7 @@ import discord
 from squid.bot.submission.draft_intake import receive_retained_file
 from squid.bot.submission.message_context import assemble_bundle
 from squid.bot.utils.accounts import get_or_create_discord_account_id
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, Actor, UserActor
 from squid.core.errors import SquidError
 from squid.core.submissions.application.drafts import INGESTION_OPTIONAL_FIELDS
 from squid.core.submissions.application.finalization import DraftPreparationSnapshot
@@ -55,7 +55,7 @@ async def ingest_message_bundle(
     run_id = message_bundle_run_id(primary)
     owner = await get_or_create_discord_account_id(services.accounts, primary[0].author)
     source = primary[0]
-    author = Actor(
+    author = UserActor(
         account_id=owner, discord_user_id=source.author.id, guild_id=source.guild.id if source.guild else None
     )
     context = ActingContext.for_actor(author)

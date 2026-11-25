@@ -9,7 +9,7 @@ from typing import Any, cast
 
 import pytest
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, AnonymousActor
 from squid.core.submissions.infrastructure.options import ApprovedSubmissionOptionCatalog
 from squid.core.submissions.infrastructure.suggestion_options import SuggestionFormOptionCatalog
 from squid.core.suggestions.application import SuggestionService
@@ -107,8 +107,8 @@ def catalogues() -> tuple[ApprovedSubmissionOptionCatalog, SuggestionFormOptionC
 @pytest.mark.parametrize("source", ["approved_patterns", "approved_restrictions", "approved_showcase_tags"])
 async def test_tag_options_match_the_catalogue_they_replace(source: str) -> None:
     existing, replacement = catalogues()
-    before = await existing.options(source, "door", locale="en", context=ActingContext.direct(Actor()))
-    after = await replacement.options(source, "door", locale="en", context=ActingContext.direct(Actor()))
+    before = await existing.options(source, "door", locale="en", context=ActingContext.direct(AnonymousActor()))
+    after = await replacement.options(source, "door", locale="en", context=ActingContext.direct(AnonymousActor()))
     assert after.options == before.options
     assert after.revision == before.revision
 
@@ -116,7 +116,7 @@ async def test_tag_options_match_the_catalogue_they_replace(source: str) -> None
 async def test_showcase_options_carry_the_value_each_tag_takes() -> None:
     _, catalogue = catalogues()
     options = await catalogue.options(
-        "approved_showcase_tags", "door", locale="en", context=ActingContext.direct(Actor())
+        "approved_showcase_tags", "door", locale="en", context=ActingContext.direct(AnonymousActor())
     )
     assert [(option.value, option.value_type) for option in options.options] == [
         ("showcase_fast", None),
@@ -127,10 +127,10 @@ async def test_showcase_options_carry_the_value_each_tag_takes() -> None:
 async def test_version_options_match_the_catalogue_they_replace() -> None:
     existing, replacement = catalogues()
     before = await existing.options(
-        "approved_source_versions", "door", locale="en", context=ActingContext.direct(Actor())
+        "approved_source_versions", "door", locale="en", context=ActingContext.direct(AnonymousActor())
     )
     after = await replacement.options(
-        "approved_source_versions", "door", locale="en", context=ActingContext.direct(Actor())
+        "approved_source_versions", "door", locale="en", context=ActingContext.direct(AnonymousActor())
     )
     assert after.options == before.options
     assert after.revision == before.revision
@@ -139,11 +139,11 @@ async def test_version_options_match_the_catalogue_they_replace() -> None:
 async def test_an_unregistered_source_is_still_rejected_as_a_value_error() -> None:
     _, replacement = catalogues()
     with pytest.raises(ValueError, match="unknown submission option source"):
-        await replacement.options("untrusted", "door", locale="en", context=ActingContext.direct(Actor()))
+        await replacement.options("untrusted", "door", locale="en", context=ActingContext.direct(AnonymousActor()))
 
 
 async def test_a_queried_source_is_not_readable_as_form_options() -> None:
     """A form needs the whole set; `builds` has no whole set to give."""
     _, replacement = catalogues()
     with pytest.raises(ValueError, match="unknown submission option source"):
-        await replacement.options("builds", "door", locale="en", context=ActingContext.direct(Actor()))
+        await replacement.options("builds", "door", locale="en", context=ActingContext.direct(AnonymousActor()))
