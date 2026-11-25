@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import discord
 
 from squid.bot.voting.sessions import configured_vote_channels, ensure_build_review
+from squid.core.actors import ActingContext
 from squid.core.builds.domain import BuildStatus
 from squid.core.events import DomainEvent, UnsupportedEventVersionError
 from squid.core.voting.domain import DeleteLogVoteTarget, VoteSessionResult
@@ -29,7 +30,7 @@ class PostSubmittedBuildHandler:
         if event.schema_version not in self._SCHEMA_VERSIONS:
             msg = f"Unsupported build.submitted schema version {event.schema_version}"
             raise UnsupportedEventVersionError(msg)
-        build = await self.bot.services.build_queries.get(event.aggregate_id)
+        build = await self.bot.services.build_queries.get(event.aggregate_id, context=ActingContext.current())
         if build is None:
             logger.warning(
                 "Cannot post a submitted build that no longer exists",
@@ -48,7 +49,7 @@ class DeleteVotedMessageHandler:
         self.bot = bot
 
     async def handle(self, event: DomainEvent) -> None:
-        snapshot = await self.bot.services.votes.get_session(event.aggregate_id)
+        snapshot = await self.bot.services.votes.get_session(event.aggregate_id, context=ActingContext.current())
         if snapshot is None or snapshot.is_open or snapshot.result is not VoteSessionResult.APPROVED:
             return
         target = snapshot.target

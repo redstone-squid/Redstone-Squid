@@ -10,7 +10,7 @@ from litestar.dto import DataclassDTO, DTOConfig
 from litestar.params import QueryParameter
 
 from squid.api.contract import ANONYMOUS, contract, transport_only
-from squid.api.dependencies import BuildQueries, Search, get_build_queries, get_search
+from squid.api.dependencies import BuildQueries, CurrentCaller, Search, get_build_queries, get_search
 from squid.api.errors import responses
 from squid.api.pagination import OffsetParam, Page, PageAnchor, PageSizeParam
 from squid.api.v1.schemas.search import (
@@ -24,6 +24,7 @@ from squid.api.v1.schemas.search import (
 )
 from squid.core.actors import ActingContext
 from squid.core.builds.application import BuildQueryService, PublicBuildSummary
+from squid.core.builds.domain import BuildStatus
 from squid.core.errors import DataIntegrityError
 from squid.core.search.application.fields import FieldDefinition
 from squid.core.search.domain import SearchHit, SearchMode, SearchRequest, SearchScope, SearchSort
@@ -85,6 +86,7 @@ async def suggest_terms(
     opt=contract(cli=transport_only()),
 )
 async def search(
+    caller: CurrentCaller,
     search_service: Search,
     build_queries: BuildQueries,
     q: Annotated[str, QueryParameter(max_length=1_000)],
@@ -108,9 +110,9 @@ async def search(
             visible_statuses=PUBLIC_SEARCH_STATUSES,
             group_by_build=group_by_build,
         ),
-        context=ActingContext.current(),
+        context=caller.context(),
     )
-    builds = await hydrate_builds(build_queries, result.hits)
+    builds = await hydrate_builds(build_queries, result.hits, context=caller.context())
     items: list[SearchResult] = []
     for hit in result.hits:
         match hit.resource_kind:
@@ -163,7 +165,9 @@ def build_hit_id(source_id: str) -> int:
         raise DataIntegrityError(msg, context={"source_id": source_id}) from error
 
 
-async def hydrate_builds(build_queries: BuildQueryService, hits: Sequence[SearchHit]) -> dict[int, PublicBuildSummary]:
+async def hydrate_builds(
+    build_queries: BuildQueryService, hits: Sequence[SearchHit], *, context: ActingContext
+) -> dict[int, PublicBuildSummary]:
     """Load current build rows for search hits and log any missing rows.
 
     Build descriptions and other facts may have changed since indexing. Render
@@ -172,12 +176,12 @@ async def hydrate_builds(build_queries: BuildQueryService, hits: Sequence[Search
     hit_ids = [build_hit_id(hit.source_id) for hit in hits if hit.resource_kind == "build"]
     if not hit_ids:
         return {}
-    builds = await build_queries.get_many(hit_ids, context=ActingContext.current())
+    builds = await build_queries.get_many(hit_ids, context=context)
     # ORM identity columns may still be None before flush.
     summaries = {
         build.id: PublicBuildSummary.from_build(build)
         for build in builds
-        if build.id is not None  # pyright: ignore[reportUnnecessaryComparison]
+        if build.submission_status is BuildStatus.APPROVED and build.id is not None  # pyright: ignore[reportUnnecessaryComparison]
     }
     missing = [identifier for identifier in hit_ids if identifier not in summaries]
     if missing:

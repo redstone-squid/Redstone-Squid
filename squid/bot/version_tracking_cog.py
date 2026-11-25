@@ -143,7 +143,9 @@ class VersionTracker[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="Vers
         if message.author == self.bot.user:
             return
         try:
-            version = await self.version_service.add(message.content.split("\n", 1)[0], context=ActingContext.current())
+            version = await self.version_service.add(
+                message.content.split("\n", 1)[0], context=ActingContext.worker("discord.version-announcement")
+            )
         except InvalidVersionError:
             return
         locale = await resolve_locale(message, self.bot.services.settings)

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
 
+from squid.core.actors import ActingContext, application_operation
 from squid.core.errors import InvalidStateError, JSONValue
 from squid.core.i18n import tr
 from squid.core.sponsors import PublicSponsor
@@ -67,13 +68,13 @@ class DraftArtifactReadiness(Protocol):
     rejected uploads must be represented by stable attention issues.
     """
 
-    async def assess(self, draft_id: UUID) -> SubmissionArtifactReadiness: ...
+    async def assess(self, draft_id: UUID, *, context: ActingContext) -> SubmissionArtifactReadiness: ...
 
 
 class SubmissionSponsorResolver(Protocol):
     """Resolve only an installation's currently authorized public sponsor projection."""
 
-    async def resolve(self, installation_id: UUID) -> PublicSponsor | None: ...
+    async def resolve(self, installation_id: UUID, *, context: ActingContext) -> PublicSponsor | None: ...
 
 
 class SubmissionPreparation:
@@ -87,7 +88,8 @@ class SubmissionPreparation:
         self._artifacts = artifacts
         self._sponsors = sponsors
 
-    async def prepare(self, validated: ValidatedDraft) -> PreparationResult:
+    @application_operation
+    async def prepare(self, validated: ValidatedDraft, *, context: ActingContext) -> PreparationResult:
         """Return a submission, a wait for processing, or issues requiring correction.
 
         Only unfinished media or schematic processing qualifies for an automatic
@@ -96,8 +98,8 @@ class SubmissionPreparation:
         """
         draft = validated.draft
         answers = validated.normalized_answers
-        sponsor, sponsor_issues = await self._resolve_sponsor(draft, answers)
-        assessment = await self._artifacts.assess(draft.snapshot.id)
+        sponsor, sponsor_issues = await self._resolve_sponsor(draft, answers, context=context)
+        assessment = await self._artifacts.assess(draft.snapshot.id, context=context)
         issues = _unique_issues(
             (
                 *_artifact_issues(draft.origin, assessment),
@@ -129,13 +131,15 @@ class SubmissionPreparation:
         self,
         draft: StoredDraft,
         answers: Mapping[str, JSONValue],
+        *,
+        context: ActingContext,
     ) -> tuple[PublicSponsor | None, tuple[SubmissionAttentionIssue, ...]]:
         requested = draft.origin is SubmissionOrigin.PAPER and answers.get("sponsor_attribution") is True
         if not requested:
             return None, ()
         if draft.source_installation_id is None or self._sponsors is None:
             return None, (_sponsor_unavailable(),)
-        sponsor = await self._sponsors.resolve(draft.source_installation_id)
+        sponsor = await self._sponsors.resolve(draft.source_installation_id, context=context)
         if sponsor is None or sponsor.installation_id != draft.source_installation_id:
             return None, (_sponsor_unavailable(),)
         return sponsor, ()

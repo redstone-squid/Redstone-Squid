@@ -6,7 +6,7 @@ from uuid import UUID
 
 from whenever import Instant
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, Actor, application_operation
 from squid.core.builds.application.edit_values import build_values, changed_build_values
 from squid.core.builds.application.editing import BuildEditPatch
 from squid.core.builds.application.ports import (
@@ -19,11 +19,15 @@ from squid.core.builds.application.tags import BuildTagResolver, apply_build_tag
 from squid.core.builds.domain import BuildInput, BuildStatus, RestrictionTypeLiteral, sort_restrictions
 from squid.core.builds.domain.edit_policy import BuildEditDecision, decide_build_edit
 from squid.core.builds.errors import BuildEditValidationError, BuildNotFoundError, BuildRevisionMismatchError
-from squid.core.builds.history import BuildEditActor, BuildEditContext, HistoryOperation
+from squid.core.builds.history import BuildEditContext, HistoryOperation
 from squid.core.builds.models import Build
 from squid.core.errors import AccountRequiredError, AuthorizationError, InvalidStateError, ValidationError
 from squid.core.permissions.application.services import PermissionService
-from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
+from squid.core.permissions.domain.catalogue import (
+    BUILD_SUBMISSION_APPROVE,
+    BUILD_SUBMISSION_EDIT,
+    BUILD_SUBMISSION_REJECT,
+)
 from squid.core.sentinel import UNSET
 from squid.core.submissions.application.build_answers import answers_from_build
 from squid.core.submissions.application.forms import build_edit_manifest
@@ -59,42 +63,48 @@ class BuildService:
         self._tags = tags
         self._permissions = permissions
 
-    async def get(self, build_id: int) -> Build | None:
+    @application_operation
+    async def get(self, build_id: int, *, context: ActingContext) -> Build | None:
         async with self._uow_factory() as uow:
             return await uow.builds.get_by_id(build_id)
 
-    async def get_by_source_submission_draft_id(self, draft_id: UUID) -> Build | None:
+    @application_operation
+    async def get_by_source_submission_draft_id(self, draft_id: UUID, *, context: ActingContext) -> Build | None:
         """Return the build previously finalized from a synchronized draft, if any."""
         async with self._uow_factory() as uow:
             return await uow.builds.get_by_source_submission_draft_id(draft_id)
 
-    async def next_attachment_review(self, after: int) -> int | None:
+    @application_operation
+    async def next_attachment_review(self, after: int, *, context: ActingContext) -> int | None:
         async with self._uow_factory() as uow:
             return await uow.builds.next_attachment_review(after)
 
-    async def list_ids_for_source_message(self, message_id: int) -> Sequence[int]:
+    @application_operation
+    async def list_ids_for_source_message(self, message_id: int, *, context: ActingContext) -> Sequence[int]:
         """Return IDs of builds linked to a Discord source message, in ascending order."""
         async with self._uow_factory() as uow:
             return await uow.builds.list_ids_for_source_message(message_id)
 
+    @application_operation
     async def save(
         self,
         build: Build,
         *,
-        actor: BuildEditActor,
         source: str,
         operation: HistoryOperation = "edit",
         correlation_kind: str | None = None,
         correlation_id: str | None = None,
+        context: ActingContext,
     ) -> Build:
         """Prepare and persist a build.
 
-        This trusted entry point does not check permissions.
+        Workers use this operation to persist a complete aggregate.
         """
-        context = BuildEditContext.from_actor(
+        actor = context.require_worker()
+        history = BuildEditContext.from_actor(
             actor, source=source, operation=operation, correlation_kind=correlation_kind, correlation_id=correlation_id
         )
-        await self._persist(build, context=context)
+        await self._persist(build, context=history)
         return build
 
     async def clean_stale_locks(self, *, context: ActingContext, older_than: Instant) -> None:
@@ -102,19 +112,24 @@ class BuildService:
         with worker_scope(context):
             await self._locks.clean_stale(older_than=older_than)
 
+    @application_operation
     async def classify_restrictions[BuildT: (Build, BuildInput)](
-        self, build: BuildT, restrictions: Sequence[str]
+        self, build: BuildT, restrictions: Sequence[str], *, context: ActingContext
     ) -> BuildT:
         """Replace a build's restrictions using repository-owned metadata."""
         definitions = await self._restrictions.fetch_all_restrictions()
         build.classify_restrictions(restrictions, {definition.name: definition.type for definition in definitions})
         return build
 
-    async def sort_restrictions(self, restrictions: Sequence[str]) -> dict[RestrictionTypeLiteral, list[str]]:
+    @application_operation
+    async def sort_restrictions(
+        self, restrictions: Sequence[str], *, context: ActingContext
+    ) -> dict[RestrictionTypeLiteral, list[str]]:
         """Group restriction names by bucket without writing them onto a build."""
         definitions = await self._restrictions.fetch_all_restrictions()
         return sort_restrictions(restrictions, {definition.name: definition.type for definition in definitions})
 
+    @application_operation
     async def prepare_for_account(
         self,
         build: Build,
@@ -123,8 +138,11 @@ class BuildService:
         source_submission_draft_id: UUID,
         display_name: str | None,
         ai_generated: bool,
+        context: ActingContext,
     ) -> Build:
         """Resolve submission metadata and derived values before the caller's transaction."""
+        if context.effective.worker_name is None and context.effective.require_account_id() != submitter_account_id:
+            raise AuthorizationError
         build.submitter_account_id = submitter_account_id
         build.source_submission_draft_id = source_submission_draft_id
         build.display_name = display_name.strip() if display_name is not None and display_name.strip() else None
@@ -133,42 +151,46 @@ class BuildService:
         await self._prepare_for_persistence(build)
         return build
 
+    @application_operation
     async def edit(
         self,
         build_id: int,
         patch: BuildEditPatch,
         *,
-        actor: BuildEditActor,
         source: str,
         operation: HistoryOperation = "edit",
         correlation_kind: str | None = None,
         correlation_id: str | None = None,
         expected_revision: int | None = None,
+        context: ActingContext,
     ) -> Build:
         """Apply a trusted caller's patch using a short, revision-checked write."""
-        context = BuildEditContext.from_actor(
+        actor = context.require_worker()
+        history = BuildEditContext.from_actor(
             actor, source=source, operation=operation, correlation_kind=correlation_kind, correlation_id=correlation_id
         )
         build = await self._prepare_edit(build_id, patch, expected_revision=expected_revision)
-        await self._persist_prepared(build, context=context)
+        await self._persist_prepared(build, context=history)
         return build
 
+    @application_operation
     async def apply_edit(
         self,
-        actor: Actor,
         build_id: int,
         patch: BuildEditPatch,
         *,
         expected_revision: int | None = None,
         source: str = "build_edit",
+        context: ActingContext,
     ) -> Build:
         """Prepare an edit, then recheck current authority and revision before writing."""
+        actor = context.effective
         if actor.account_id is None:
             raise AccountRequiredError
         build = await self._get_required(build_id)
         self._check_revision(build, expected_revision)
         changes_extra_info = patch.extra_info is not UNSET and patch.extra_info != build.extra_info
-        await self.prepare_edit(actor, build, patch)
+        await self.prepare_edit(build, patch, context=context)
         await self._persist_prepared(
             build,
             actor=actor,
@@ -191,9 +213,16 @@ class BuildService:
                 build.id, expected_revision=expected_revision, current_revision=build.revision
             )
 
+    @application_operation
     async def edit_decision(
-        self, actor: Actor, build: Build, fields: set[str], *, uow: BuildUnitOfWork | None = None
+        self,
+        build: Build,
+        fields: set[str],
+        *,
+        uow: BuildUnitOfWork | None = None,
+        context: ActingContext,
     ) -> BuildEditDecision:
+        actor = context.effective
         if self._permissions is None:
             msg = "Authorized editing requires a permission service."
             raise InvalidStateError(msg)
@@ -205,20 +234,27 @@ class BuildService:
             is_moderator=is_moderator,
         )
 
-    async def authorize_edit(self, actor: Actor, build: Build, *, uow: BuildUnitOfWork | None = None) -> None:
+    @application_operation
+    async def authorize_edit(self, build: Build, *, uow: BuildUnitOfWork | None = None, context: ActingContext) -> None:
         """Require direct authority for workflows that apply extracted build facts."""
-        if await self.edit_decision(actor, build, {"recalculation"}, uow=uow) is not BuildEditDecision.DIRECT:
+        if await self.edit_decision(build, {"recalculation"}, uow=uow, context=context) is not BuildEditDecision.DIRECT:
             raise AuthorizationError
 
-    async def prepare_edit(self, actor: Actor, build: Build, patch: BuildEditPatch) -> Build:
+    @application_operation
+    async def prepare_edit(self, build: Build, patch: BuildEditPatch, *, context: ActingContext) -> Build:
         """Apply a candidate patch. The writer checks changed fields against the locked build."""
-        if await self.edit_decision(actor, build, set()) is BuildEditDecision.DENY:
+        if await self.edit_decision(build, set(), context=context) is BuildEditDecision.DENY:
             raise AuthorizationError
         await self._apply_patch(build, patch)
         return build
 
-    async def apply_reviewed_edit(self, target: BuildEditVoteTarget, *, author_account_id: int, vote_id: int) -> bool:
+    @application_operation
+    async def apply_reviewed_edit(
+        self, target: BuildEditVoteTarget, *, author_account_id: int, vote_id: int, context: ActingContext
+    ) -> bool:
         """Apply the exact reviewed change once, if its base revision still exists."""
+        if context.require_worker() != "events.core.vote_session.closed":
+            raise AuthorizationError
         async with self._uow_factory() as uow:
             build = await uow.builds.get_for_update(target.build_id)
             if build is None or build.revision != target.revision or not build.is_creator(author_account_id):
@@ -241,31 +277,37 @@ class BuildService:
             await uow.commit()
             return True
 
+    @application_operation
     async def approve(
         self,
         build_id: int,
         *,
-        actor: BuildEditActor,
         source: str,
         operation: HistoryOperation = "moderation",
         correlation_kind: str | None = None,
         correlation_id: str | None = None,
+        context: ActingContext,
     ) -> Build:
         """Apply a vote approval under the build lease, ignoring builds already reviewed."""
-        context = BuildEditContext.from_actor(
+        actor = context.effective.worker_name or context.effective.require_account_id()
+        history = BuildEditContext.from_actor(
             actor, source=source, operation=operation, correlation_kind=correlation_kind, correlation_id=correlation_id
         )
         async with (
             self._locks.locked(build_id),
             self._uow_factory() as uow,
             uow.builds.editing(
-                actor=context.actor,
-                source=context.source,
-                operation=context.operation,
-                correlation_kind=context.correlation_kind,
-                correlation_id=context.correlation_id,
+                actor=history.actor,
+                source=history.source,
+                operation=history.operation,
+                correlation_kind=history.correlation_kind,
+                correlation_id=history.correlation_id,
             ),
         ):
+            if context.effective.worker_name != "events.core.vote_session.closed":
+                if context.effective.worker_name is not None or self._permissions is None:
+                    raise AuthorizationError
+                await self._permissions.require(context.effective, BUILD_SUBMISSION_APPROVE, uow=uow)
             build = await self._get_for_update(uow, build_id)
             if build.submission_status is not BuildStatus.PENDING:
                 return build
@@ -273,31 +315,37 @@ class BuildService:
             await uow.commit()
         return build
 
+    @application_operation
     async def reject(
         self,
         build_id: int,
         *,
-        actor: BuildEditActor,
         source: str,
         operation: HistoryOperation = "moderation",
         correlation_kind: str | None = None,
         correlation_id: str | None = None,
+        context: ActingContext,
     ) -> Build:
         """Apply a vote rejection under the build lease, ignoring builds already reviewed."""
-        context = BuildEditContext.from_actor(
+        actor = context.effective.worker_name or context.effective.require_account_id()
+        history = BuildEditContext.from_actor(
             actor, source=source, operation=operation, correlation_kind=correlation_kind, correlation_id=correlation_id
         )
         async with (
             self._locks.locked(build_id),
             self._uow_factory() as uow,
             uow.builds.editing(
-                actor=context.actor,
-                source=context.source,
-                operation=context.operation,
-                correlation_kind=context.correlation_kind,
-                correlation_id=context.correlation_id,
+                actor=history.actor,
+                source=history.source,
+                operation=history.operation,
+                correlation_kind=history.correlation_kind,
+                correlation_id=history.correlation_id,
             ),
         ):
+            if context.effective.worker_name != "events.core.vote_session.closed":
+                if context.effective.worker_name is not None or self._permissions is None:
+                    raise AuthorizationError
+                await self._permissions.require(context.effective, BUILD_SUBMISSION_REJECT, uow=uow)
             build = await self._get_for_update(uow, build_id)
             if build.submission_status is not BuildStatus.PENDING:
                 return build
@@ -306,7 +354,7 @@ class BuildService:
         return build
 
     async def _get_required(self, build_id: int) -> Build:
-        build = await self.get(build_id)
+        build = await self.get(build_id, context=ActingContext.current())
         if build is None:
             raise BuildNotFoundError(build_id)
         return build
@@ -364,7 +412,10 @@ class BuildService:
                         fields.add("ai_generated")
                     if changes_extra_info:
                         fields.add("extra_info")
-                    if await self.edit_decision(actor, current, fields, uow=uow) is not BuildEditDecision.DIRECT:
+                    if (
+                        await self.edit_decision(current, fields, uow=uow, context=ActingContext.for_actor(actor))
+                        is not BuildEditDecision.DIRECT
+                    ):
                         raise AuthorizationError
                 await uow.builds.save(build)
                 await uow.commit()
@@ -374,7 +425,7 @@ class BuildService:
         before = answers_from_build(build).answers
         patch.apply(build)
         if patch.showcase_tags is not UNSET:
-            await replace_showcase_tags(build, patch.showcase_tags, self._tags)
+            await replace_showcase_tags(build, patch.showcase_tags, self._tags, context=ActingContext.current())
         await self._prepare_for_persistence(build)
         problems = _edit_manifest().transition_issues(
             build.category.value.lower(), before, answers_from_build(build).answers, origin=SubmissionOrigin.DISCORD
@@ -387,4 +438,4 @@ class BuildService:
         # Resolve the editable tag names into tag assignments here, at the
         # last application-owned step, so the repository persists build.tags
         # verbatim and unresolvable names are recorded before anything is saved.
-        await apply_build_tags(build, self._tags)
+        await apply_build_tags(build, self._tags, context=ActingContext.current())

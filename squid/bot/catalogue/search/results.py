@@ -2,7 +2,7 @@
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any, override
+from typing import TYPE_CHECKING, Any, Protocol, override
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
@@ -35,7 +35,10 @@ if TYPE_CHECKING:
     from squid.core.search.application import SearchService
 
 
-BuildLoader = Callable[[int], Awaitable[Build | None]]
+class BuildLoader(Protocol):
+    async def __call__(self, build_id: int, *, context: ActingContext) -> Build | None: ...
+
+
 type BuildRenderer = Callable[[Build], Awaitable[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]]]
 type BuildDetailFactory = Callable[[int], sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]]
 """Build the full, interactive view of one build, given its ID, for a host that has one."""
@@ -164,7 +167,7 @@ class _SearchDetail(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqu
         if build_id is None or self._load_build is None or self._render_build is None:
             await event.notice(tr(t"build-search-build-unavailable = That build is no longer available."))
             return
-        build = await self._load_build(build_id)
+        build = await self._load_build(build_id, context=ActingContext.current())
         if build is None:
             await event.notice(tr(t"build-search-build-unavailable = That build is no longer available."))
             return
@@ -240,7 +243,7 @@ class _GroupedBuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, Redst
         build_id = self._holder_id or int(self.hit.source_id)
         if self._load_build is None or self._render_build is None:
             return sl.section(sl.heading(self.hit.title), sl.paragraph(_detail_text(self.hit)))
-        build = await self._load_build(build_id)
+        build = await self._load_build(build_id, context=ActingContext.current())
         if build is None or build.submission_status is not BuildStatus.APPROVED:
             return sl.note(tr(t"build-search-build-unavailable = That build is no longer available."))
         return await self._render_build(build)

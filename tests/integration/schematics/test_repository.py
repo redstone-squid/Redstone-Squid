@@ -18,10 +18,12 @@ from whenever import Instant
 
 import squid.core.persistence.model_registry  # noqa: F401
 from squid.core.accounts.models import Account
+from squid.core.actors import ActingContext, Actor
 from squid.core.artifacts import ArtifactMetadata
 from squid.core.artifacts.infrastructure import LocalArtifactStore
 from squid.core.builds.infrastructure.schematic_summary import SchematicServiceSummaryProvider
 from squid.core.errors import DataIntegrityError
+from squid.core.permissions.application import PermissionService
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.schematics.application import SchematicPublication, SchematicService
 from squid.core.schematics.application.preview_storage import PreviewCleanupInProgressError, SchematicPreviewStorage
@@ -35,6 +37,7 @@ from squid.core.schematics.domain.models import (
     SimulationResult,
 )
 from tests.support.build_edits import build_edit_session
+from tests.support.services import unconfigured
 from tests.unit.schematics.fakes import FakeSchematicAnalyzer, FakeVersionResolver, make_analysis
 
 pytestmark = pytest.mark.asyncio
@@ -141,9 +144,13 @@ async def test_re_analysing_a_file_replaces_its_row_rather_than_adding_one(
 ) -> None:
     """Reanalysis updates the existing attachment rather than accumulating duplicate measurements."""
     digest = await repository.put_file(b"door", source_format=SchematicFormat.LITEMATIC)
-    await repository.record_analysis(1, digest, make_analysis(block_count=10), primary=True)
+    await repository.record_analysis(
+        1, digest, make_analysis(block_count=10), context=ActingContext.worker("test"), primary=True
+    )
 
-    await repository.record_analysis(1, digest, make_analysis(block_count=59), primary=True)
+    await repository.record_analysis(
+        1, digest, make_analysis(block_count=59), context=ActingContext.worker("test"), primary=True
+    )
 
     stored = await repository.list_for_build(1)
     assert len(stored) == 1
@@ -169,7 +176,7 @@ async def test_uploader_account_attribution_reaches_the_persisted_attachment(
         digest,
         make_analysis(),
         primary=True,
-        uploaded_by_account_id=account_id,
+        context=ActingContext.direct(Actor(account_id=account_id)),
     )
 
     async with async_session_factory() as session:
@@ -184,9 +191,23 @@ async def test_promoting_a_new_primary_demotes_the_previous_one(repository: Sche
     """Demote the old primary before promoting its replacement to satisfy the partial unique index."""
     first = await repository.put_file(b"first", source_format=SchematicFormat.LITEMATIC)
     second = await repository.put_file(b"second", source_format=SchematicFormat.LITEMATIC)
-    await repository.record_analysis(1, first, make_analysis(), primary=True, original_filename="first.litematic")
+    await repository.record_analysis(
+        1,
+        first,
+        make_analysis(),
+        context=ActingContext.worker("test"),
+        primary=True,
+        original_filename="first.litematic",
+    )
 
-    await repository.record_analysis(1, second, make_analysis(), primary=True, original_filename="second.litematic")
+    await repository.record_analysis(
+        1,
+        second,
+        make_analysis(),
+        context=ActingContext.worker("test"),
+        primary=True,
+        original_filename="second.litematic",
+    )
 
     primary = await repository.get_featured(1)
     assert primary is not None
@@ -202,7 +223,9 @@ async def test_replacing_a_featured_attachment_fences_its_render_and_replaces_th
 ) -> None:
     first_digest = await repository.put_file(b"first", source_format=SchematicFormat.LITEMATIC)
     second_digest = await repository.put_file(b"second", source_format=SchematicFormat.LITEMATIC)
-    first_id = await repository.record_analysis(1, first_digest, make_analysis(), primary=True)
+    first_id = await repository.record_analysis(
+        1, first_digest, make_analysis(), context=ActingContext.worker("test"), primary=True
+    )
     manual_url = "https://media.example/user-managed-render.png"
     async with build_edit_session(async_session_factory) as session:
         await session.execute(
@@ -227,7 +250,9 @@ async def test_replacing_a_featured_attachment_fences_its_render_and_replaces_th
         )
     assert initial_links == {manual_url, first_url}
 
-    second_id = await repository.record_analysis(1, second_digest, make_analysis(), primary=True)
+    second_id = await repository.record_analysis(
+        1, second_digest, make_analysis(), context=ActingContext.worker("test"), primary=True
+    )
     async with async_session_factory() as session:
         links_after_replacement = set(
             await session.scalars(text("SELECT url FROM build_links WHERE build_id = 1 AND media_type = 'render'"))
@@ -291,8 +316,12 @@ async def test_primary_replacement_wins_a_concurrent_render_publication(
 ) -> None:
     first_digest = await repository.put_file(b"first", source_format=SchematicFormat.LITEMATIC)
     second_digest = await repository.put_file(b"second", source_format=SchematicFormat.LITEMATIC)
-    first_id = await repository.record_analysis(1, first_digest, make_analysis(), primary=True)
-    await repository.record_analysis(1, second_digest, make_analysis(), primary=False)
+    first_id = await repository.record_analysis(
+        1, first_digest, make_analysis(), context=ActingContext.worker("test"), primary=True
+    )
+    await repository.record_analysis(
+        1, second_digest, make_analysis(), context=ActingContext.worker("test"), primary=False
+    )
     await _ready_preview_object(preview_publisher, preview_artifacts, "renders/late.png")
 
     results: list[object | None] = []
@@ -314,7 +343,9 @@ async def test_primary_replacement_wins_a_concurrent_render_publication(
 
     async def replace_primary() -> None:
         await start.wait()
-        await repository.record_analysis(1, second_digest, make_analysis(), primary=True)
+        await repository.record_analysis(
+            1, second_digest, make_analysis(), context=ActingContext.worker("test"), primary=True
+        )
 
     with anyio.fail_after(5):
         async with anyio.create_task_group() as tasks:
@@ -348,7 +379,9 @@ async def test_republishing_the_same_recipe_replaces_its_prior_generated_url(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     digest = await repository.put_file(b"same-recipe", source_format=SchematicFormat.LITEMATIC)
-    schematic_id = await repository.record_analysis(1, digest, make_analysis(), primary=True)
+    schematic_id = await repository.record_analysis(
+        1, digest, make_analysis(), context=ActingContext.worker("test"), primary=True
+    )
     object_key = "renders/same-recipe.png"
     await _ready_preview_object(preview_publisher, preview_artifacts, object_key)
 
@@ -384,8 +417,12 @@ async def test_preview_cleanup_retains_an_object_referenced_by_multiple_builds(
     preview_artifacts: LocalArtifactStore,
 ) -> None:
     digest = await repository.put_file(b"shared-preview", source_format=SchematicFormat.LITEMATIC)
-    first_id = await repository.record_analysis(1, digest, make_analysis(), primary=True)
-    second_id = await repository.record_analysis(2, digest, make_analysis(), primary=True)
+    first_id = await repository.record_analysis(
+        1, digest, make_analysis(), context=ActingContext.worker("test"), primary=True
+    )
+    second_id = await repository.record_analysis(
+        2, digest, make_analysis(), context=ActingContext.worker("test"), primary=True
+    )
     shared_key = "renders/shared.png"
     orphan_key = "renders/orphan.png"
     await _ready_preview_object(preview_publisher, preview_artifacts, shared_key)
@@ -418,7 +455,9 @@ async def test_missing_cached_preview_is_marked_for_safe_regeneration(
     preview_artifacts: LocalArtifactStore,
 ) -> None:
     digest = await repository.put_file(b"missing-preview", source_format=SchematicFormat.LITEMATIC)
-    schematic_id = await repository.record_analysis(1, digest, make_analysis(), primary=True)
+    schematic_id = await repository.record_analysis(
+        1, digest, make_analysis(), context=ActingContext.worker("test"), primary=True
+    )
     object_key = "renders/missing.png"
     await _ready_preview_object(preview_publisher, preview_artifacts, object_key)
     rendered = await preview_publisher.publish_fresh_preview(
@@ -472,7 +511,9 @@ async def test_cached_preview_that_disappears_during_publication_is_retried(
     artifacts = DisappearingArtifactStore(preview_artifacts)
     publisher = SchematicPreviewStorage(artifacts, uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory))
     digest = await repository.put_file(b"vanishing-preview", source_format=SchematicFormat.LITEMATIC)
-    schematic_id = await repository.record_analysis(1, digest, make_analysis(), primary=True)
+    schematic_id = await repository.record_analysis(
+        1, digest, make_analysis(), context=ActingContext.worker("test"), primary=True
+    )
     object_key = "renders/vanishing.png"
     await _ready_preview_object(publisher, artifacts, object_key)
     url = "https://api.example/v1/schematic-renders/vanishing/content"
@@ -505,7 +546,7 @@ async def test_a_fingerprint_lookup_finds_the_same_build_resubmitted_under_anoth
     shared = make_analysis(shape="translated-shape")
     for build_id, payload in ((1, b"original"), (2, b"moved")):
         digest = await repository.put_file(payload, source_format=SchematicFormat.LITEMATIC)
-        await repository.record_analysis(build_id, digest, shared, primary=True)
+        await repository.record_analysis(build_id, digest, shared, context=ActingContext.worker("test"), primary=True)
 
     matches = await repository.find_fingerprint_matches(
         "translated-shape",
@@ -521,8 +562,8 @@ async def test_an_exact_file_lookup_finds_every_build_using_the_same_bytes(
     repository: SchematicStorageService,
 ) -> None:
     digest = await repository.put_file(b"shared", source_format=SchematicFormat.LITEMATIC)
-    await repository.record_analysis(1, digest, make_analysis(), primary=True)
-    await repository.record_analysis(2, digest, make_analysis(), primary=True)
+    await repository.record_analysis(1, digest, make_analysis(), context=ActingContext.worker("test"), primary=True)
+    await repository.record_analysis(2, digest, make_analysis(), context=ActingContext.worker("test"), primary=True)
 
     matches = await repository.find_file_matches(digest, exclude_build_id=2)
 
@@ -534,7 +575,13 @@ async def test_a_fingerprint_from_another_engine_version_never_matches(
 ) -> None:
     """Fingerprint definitions can change between engine releases, so lookups must include the version."""
     digest = await repository.put_file(b"original", source_format=SchematicFormat.LITEMATIC)
-    await repository.record_analysis(1, digest, make_analysis(shape="s", analyzer_version="engine-1"), primary=True)
+    await repository.record_analysis(
+        1,
+        digest,
+        make_analysis(shape="s", analyzer_version="engine-1"),
+        context=ActingContext.worker("test"),
+        primary=True,
+    )
 
     assert (
         await repository.find_fingerprint_matches("s", preset=FingerprintPreset.SHAPE, analyzer_version="engine-2")
@@ -549,7 +596,7 @@ async def test_metric_neighbours_shortlist_builds_of_comparable_size(
     far = make_analysis(dimensions=(80, 90, 100), block_count=100_000)
     for build_id, payload, analysis in ((1, b"close", close), (2, b"far", far)):
         digest = await repository.put_file(payload, source_format=SchematicFormat.LITEMATIC)
-        await repository.record_analysis(build_id, digest, analysis, primary=True)
+        await repository.record_analysis(build_id, digest, analysis, context=ActingContext.worker("test"), primary=True)
 
     neighbours = await repository.find_metric_neighbours(close.metrics, tolerance=0.2, exclude_build_id=99)
 
@@ -561,7 +608,7 @@ async def test_the_stored_read_model_carries_the_file_facts_from_the_file_row(
 ) -> None:
     """Read format and byte size from the file metadata, even when the analysis reports different values."""
     digest = await repository.put_file(b"sponge-bytes", source_format=SchematicFormat.SPONGE_SCHEM)
-    await repository.record_analysis(1, digest, make_analysis(), primary=True)
+    await repository.record_analysis(1, digest, make_analysis(), context=ActingContext.worker("test"), primary=True)
 
     stored = (await repository.list_for_build(1))[0]
 
@@ -591,11 +638,14 @@ async def test_publication_round_trips_and_reanalysis_does_not_reset_it(
         1,
         digest,
         make_analysis(),
+        context=ActingContext.worker("test"),
         primary=True,
         publication=publication,
     )
 
-    await repository.record_analysis(1, digest, make_analysis(block_count=59), primary=True)
+    await repository.record_analysis(
+        1, digest, make_analysis(block_count=59), context=ActingContext.worker("test"), primary=True
+    )
     stored = await repository.get_for_build(1, schematic_id)
 
     assert stored is not None
@@ -622,7 +672,9 @@ async def test_simulation_evidence_round_trips_without_changing_the_analysis(
     repository: SchematicStorageService,
 ) -> None:
     digest = await repository.put_file(b"door", source_format=SchematicFormat.LITEMATIC)
-    schematic_id = await repository.record_analysis(1, digest, make_analysis(), primary=True)
+    schematic_id = await repository.record_analysis(
+        1, digest, make_analysis(), context=ActingContext.worker("test"), primary=True
+    )
     evidence = SimulationResult(
         ticks_run=9,
         settled_tick=9,
@@ -702,6 +754,7 @@ async def test_card_measurements_and_refresh_follow_replacement_and_withdrawal(
         repository,
         preview_publisher,
         FakeVersionResolver(),
+        permissions=unconfigured(PermissionService),
         engine_installed=False,
     )
     provider = SchematicServiceSummaryProvider(schematics, public_base_url="https://api.example.com")
@@ -715,8 +768,10 @@ async def test_card_measurements_and_refresh_follow_replacement_and_withdrawal(
             return value
 
     first_digest = await repository.put_file(b"first", source_format=SchematicFormat.LITEMATIC)
-    await repository.record_analysis(1, first_digest, make_analysis(), primary=True, publication=publication)
-    first = await provider.summary_for(1)
+    await repository.record_analysis(
+        1, first_digest, make_analysis(), context=ActingContext.worker("test"), primary=True, publication=publication
+    )
+    first = await provider.summary_for(1, context=ActingContext.direct(Actor()))
     assert first is not None
     first_generation = await generation()
 
@@ -725,10 +780,11 @@ async def test_card_measurements_and_refresh_follow_replacement_and_withdrawal(
         1,
         second_digest,
         make_analysis(dimensions=(8, 9, 10)),
+        context=ActingContext.worker("test"),
         primary=True,
         publication=publication,
     )
-    second = await provider.summary_for(1)
+    second = await provider.summary_for(1, context=ActingContext.direct(Actor()))
     assert second is not None
     assert second.download_url != first.download_url
     assert (second.width, second.height, second.length) == (8, 9, 10)
@@ -739,5 +795,5 @@ async def test_card_measurements_and_refresh_follow_replacement_and_withdrawal(
         await session.execute(
             text("UPDATE build_schematics SET withdrawn_at = now() WHERE id = :id"), {"id": second_id}
         )
-    assert await provider.summary_for(1) is None
+    assert await provider.summary_for(1, context=ActingContext.direct(Actor())) is None
     assert await generation() > second_generation

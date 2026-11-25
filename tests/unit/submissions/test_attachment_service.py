@@ -93,6 +93,7 @@ class FakeJobs:
         self,
         submission: StagedMediaUploadSubmission,
         *,
+        context: ActingContext,
         authorization: MediaDraftUploadAuthorization | None = None,
     ) -> UUID:
         self.submissions.append((submission, authorization))
@@ -100,16 +101,16 @@ class FakeJobs:
             raise self.submit_error
         return UPLOAD_ID
 
-    async def get(self, upload_id: UUID) -> MediaJobSnapshot | None:
+    async def get(self, upload_id: UUID, *, context: ActingContext) -> MediaJobSnapshot | None:
         return self.snapshots.get(upload_id)
 
-    async def list_for_draft(self, draft_id: UUID) -> tuple[MediaJobSnapshot, ...]:
+    async def list_for_draft(self, draft_id: UUID, *, context: ActingContext) -> tuple[MediaJobSnapshot, ...]:
         return tuple(snapshot for snapshot in self.snapshots.values() if snapshot.upload.draft_id == draft_id)
 
-    async def attach(self, source_id: UUID, target_id: UUID, upload_id: UUID) -> bool:
+    async def attach(self, source_id: UUID, target_id: UUID, upload_id: UUID, *, context: ActingContext) -> bool:
         raise NotImplementedError
 
-    async def discard(self, draft_id: UUID, upload_id: UUID) -> bool:
+    async def discard(self, draft_id: UUID, upload_id: UUID, *, context: ActingContext) -> bool:
         self.discarded.append((draft_id, upload_id))
         return upload_id in self.snapshots and self.snapshots[upload_id].upload.draft_id == draft_id
 

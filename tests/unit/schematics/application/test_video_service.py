@@ -8,14 +8,18 @@ from unittest.mock import AsyncMock, create_autospec
 import pytest
 from whenever import Instant
 
+from squid.core.actors import ActingContext, Actor
 from squid.core.artifacts.infrastructure import LocalArtifactStore
 from squid.core.errors import AuthorizationError, NotFoundError
+from squid.core.permissions.application import PermissionService
 from squid.core.schematics.application.attachments import StoredSchematic
 from squid.core.schematics.application.jobs import SchematicJobService, SchematicJobSnapshot
 from squid.core.schematics.application.ports import SchematicResourcePackProvider
 from squid.core.schematics.application.video import VideoRenderRequest
 from squid.core.schematics.application.video_service import SchematicVideoService
 from squid.core.schematics.domain.values import VerifiedResourcePack
+from tests.support.permissions import permission_uow_factory
+from tests.unit.api.fakes import EmptyPermissionStore
 from tests.unit.schematics.fakes import FakeSchematicStore, make_analysis
 
 type Components = tuple[SchematicVideoService, FakeSchematicStore, AsyncMock, LocalArtifactStore]
@@ -42,13 +46,22 @@ def components(tmp_path: Path) -> tuple[SchematicVideoService, FakeSchematicStor
     pack = create_autospec(SchematicResourcePackProvider, instance=True)
     pack.load.return_value = VerifiedResourcePack.from_bytes(b"pack")
     artifacts = LocalArtifactStore(tmp_path)
-    service = SchematicVideoService(jobs, artifacts, store, pack, enabled=True, max_blocks=1000, max_volume=1000)
+    service = SchematicVideoService(
+        jobs,
+        artifacts,
+        store,
+        pack,
+        permissions=PermissionService(uow_factory=permission_uow_factory(EmptyPermissionStore())),
+        enabled=True,
+        max_blocks=1000,
+        max_volume=1000,
+    )
     return service, store, jobs, artifacts
 
 
 async def test_submission_pins_inputs_and_owner(components: Components) -> None:
     service, store, jobs, artifacts = components
-    result = await service.submit_video(7, 1, VideoRenderRequest(), account_id=10, can_view_private=False)
+    result = await service.submit_video(7, 1, VideoRenderRequest(), context=ActingContext.direct(Actor(account_id=10)))
     assert result.id == 41
     operation, params, keys = jobs.submit.call_args.args
     assert operation == "render_video"
@@ -61,13 +74,18 @@ async def test_submission_pins_inputs_and_owner(components: Components) -> None:
 async def test_another_account_cannot_submit_a_private_source(components: Components) -> None:
     service, _, jobs, _ = components
     with pytest.raises(AuthorizationError):
-        await service.submit_video(7, 1, VideoRenderRequest(), account_id=11, can_view_private=False)
+        await service.submit_video(
+            7,
+            1,
+            VideoRenderRequest(),
+            context=ActingContext.direct(Actor(account_id=11)),
+        )
     jobs.submit.assert_not_called()
 
 
 async def test_download_rechecks_owner_source_and_expiry(components: Components) -> None:
     service, store, jobs, artifacts = components
-    await service.submit_video(7, 1, VideoRenderRequest(), account_id=10, can_view_private=False)
+    await service.submit_video(7, 1, VideoRenderRequest(), context=ActingContext.direct(Actor(account_id=10)))
     params = jobs.submit.call_args.args[1]
     snapshot = SchematicJobSnapshot(
         id=41,
@@ -83,13 +101,15 @@ async def test_download_rechecks_owner_source_and_expiry(components: Components)
     )
     jobs.get.return_value = snapshot
     await artifacts.put("output.mp4", b"video", content_type="video/mp4")
-    assert await service.open_video_content(41, account_id=10, can_view_private=False) == b"video"
+    assert await service.open_video_content(41, context=ActingContext.direct(Actor(account_id=10))) == b"video"
     with pytest.raises(NotFoundError):
-        await service.open_video_content(41, account_id=11, can_view_private=True)
+        await service.open_video_content(41, context=ActingContext.direct(Actor(account_id=11, is_bot_owner=True)))
     store.stored[0] = replace(store.stored[0], uploaded_by_account_id=12)
     with pytest.raises(AuthorizationError):
-        await service.open_video_content(41, account_id=10, can_view_private=False)
+        await service.open_video_content(41, context=ActingContext.direct(Actor(account_id=10)))
     jobs.get.return_value = replace(snapshot, expires_at=Instant.now())
-    assert (await service.get_video(41, account_id=10, can_view_private=True)).status == "expired"
+    assert (
+        await service.get_video(41, context=ActingContext.direct(Actor(account_id=10, is_bot_owner=True)))
+    ).status == "expired"
     with pytest.raises(NotFoundError):
-        await service.open_video_content(41, account_id=10, can_view_private=True)
+        await service.open_video_content(41, context=ActingContext.direct(Actor(account_id=10, is_bot_owner=True)))

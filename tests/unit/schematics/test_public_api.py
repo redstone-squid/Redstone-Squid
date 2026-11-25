@@ -1,5 +1,6 @@
 """Call schematic route handlers directly to check attachment scoping and public response metadata."""
 
+from collections.abc import Iterator
 from dataclasses import replace
 from typing import cast, override
 
@@ -15,6 +16,7 @@ from squid.api.v1.schematics import (
     render_build_schematic,
     router,
 )
+from squid.core.actors import ActingContext, Actor
 from squid.core.builds.application import BuildQueryService
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.errors import BuildNotFoundError
@@ -60,12 +62,18 @@ def _public_publication() -> SchematicPublication:
     )
 
 
+@pytest.fixture(autouse=True)
+def public_request_context() -> Iterator[None]:
+    with ActingContext.direct(Actor()).scope():
+        yield
+
+
 class ConfirmedBuilds(BuildQueryService):
     def __init__(self) -> None:
         pass
 
     @override
-    async def get_public(self, build_id: int) -> Build:
+    async def get_public(self, build_id: int, *, context: ActingContext) -> Build:
         if build_id != 7:
             raise BuildNotFoundError(build_id)
         return DoorBuild(
@@ -95,17 +103,15 @@ class PublicSchematics(SchematicService):
 
     @override
     async def list_public_page(
-        self,
-        build_id: int,
-        *,
-        selector: PageSelector = FIRST_PAGE,
-        page_size: int = 50,
+        self, build_id: int, *, context: ActingContext, selector: PageSelector = FIRST_PAGE, page_size: int = 50
     ) -> Page[StoredSchematic]:
         items = self.items if build_id == 7 else ()
         return offset_page(items, offset=selector.offset, page_size=page_size)
 
     @override
-    async def public_download(self, build_id: int, schematic_id: int) -> PublicSchematicDownload:
+    async def public_download(
+        self, build_id: int, schematic_id: int, *, context: ActingContext
+    ) -> PublicSchematicDownload:
         assert (build_id, schematic_id) == (7, 3)
         assert self.stored.publication.license is not None
         return PublicSchematicDownload(
@@ -146,7 +152,9 @@ class RenderingSchematics(PublicSchematics):
         )
 
     @override
-    async def render_now(self, build_id: int, *, request: RenderRequest | None = None) -> RenderedSchematic:
+    async def render_now(
+        self, build_id: int, *, context: ActingContext, request: RenderRequest | None = None
+    ) -> RenderedSchematic:
         assert build_id == 7
         if self._refusal is not None:
             raise SchematicRenderRefusedError(self._refusal.value, self._refusal.description)

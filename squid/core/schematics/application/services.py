@@ -5,9 +5,16 @@ import contextlib
 import logging
 from collections.abc import Generator, Iterable, Sequence
 from dataclasses import dataclass, replace
+from typing import TYPE_CHECKING
 
+from squid.core.actors import ActingContext
 from squid.core.errors import DataIntegrityError, SquidError
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, offset_page
+from squid.core.permissions.domain.catalogue import (
+    BUILD_SCHEMATIC_DOWNLOAD_PRIVATE,
+    BUILD_SCHEMATIC_MEASURE_TIMING,
+    BUILD_SCHEMATIC_VIEW_PRIVATE,
+)
 from squid.core.schematics.application.attachments import PublicSchematicDownload, SchematicPublication, StoredSchematic
 from squid.core.schematics.application.commands import ConvertRequest, IngestRequest, RenderRequest, SimulationRequest
 from squid.core.schematics.application.duplicates import DuplicateCandidate, DuplicateTier
@@ -49,7 +56,11 @@ from squid.core.schematics.errors import (
     SchematicTooLargeError,
     SchematicWorkerCrashedError,
 )
+from squid.core.worker_context import worker_scope
 from squid_i18n import Text, md
+
+if TYPE_CHECKING:
+    from squid.core.permissions.application import PermissionService
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +95,7 @@ class SchematicService:
         previews: SchematicPreviewPublisher,
         versions: SchematicVersionResolver,
         *,
+        permissions: PermissionService,
         limits: SchematicLimits | None = None,
         engine_installed: bool = True,
         duplicate_metric_tolerance: float = 0.2,
@@ -103,6 +115,7 @@ class SchematicService:
         self._store = store
         self._versions = versions
         self._limits = limits or SchematicLimits()
+        self._permissions = permissions
         self._available = engine_installed
         self._duplicate_metric_tolerance = duplicate_metric_tolerance
         self._duplicate_near_distance = duplicate_near_distance
@@ -139,59 +152,65 @@ class SchematicService:
         """The application-owned preview orchestration boundary."""
         return self._preview_service
 
-    async def capabilities(self) -> AnalyzerCapabilities:
-        if not self._available:
-            return AnalyzerCapabilities(available=False, unavailable_reason="The schematic engine is not installed.")
-        return await self._analyzer.capabilities()
+    async def capabilities(self, *, context: ActingContext) -> AnalyzerCapabilities:
+        with context.scope():
+            if not self._available:
+                return AnalyzerCapabilities(
+                    available=False, unavailable_reason="The schematic engine is not installed."
+                )
+            return await self._analyzer.capabilities()
 
-    async def ingest(self, request: IngestRequest) -> IngestedSchematic:
+    async def ingest(self, request: IngestRequest, *, context: ActingContext) -> IngestedSchematic:
         """Check, store, and analyze one uploaded file.
 
         Store the bytes before analysis so a file that crashes the engine remains available to
         reproduce the failure. Identical uploads share stored bytes but are analyzed again. Digests
         that crashed a worker during this service's lifetime are refused before analysis.
         """
-        self._require_available()
-        source_format = self._vet(request.data, filename=request.filename)
-        sha256 = await self._store.put_file(request.data, source_format=source_format)
+        with context.scope():
+            self._require_available()
+            source_format = self._vet(request.data, filename=request.filename)
+            sha256 = await self._store.put_file(request.data, source_format=source_format)
 
-        self._refuse_poisoned(sha256)
+            self._refuse_poisoned(sha256)
 
-        with self._quarantining(sha256, operation="analyze"):
-            analysis = await self._analyzer.analyze(
-                request.data,
-                limits=self._limits,
-                with_lattice=request.with_lattice,
-                source_format=source_format,
-            )
-        metrics = analysis.metrics
-        names = {state.partition("[")[0] for state in metrics.block_counts or ()}
-        if (
-            names & {"minecraft:piston", "minecraft:sticky_piston"}
-            and metrics.allocated_dimensions.volume <= MAX_WORLD_VOLUME
-        ):
-            try:
-                with self._quarantining(sha256, operation="detect_door"):
-                    door = await self._analyzer.detect_door(request.data, source_format=source_format)
-            except SquidError as exc:
-                # Optional simulation must not reject an otherwise readable upload.
-                logger.warning("Door detection for %s failed: %s", sha256, exc)
-                door = DoorDetection(reason="Door simulation was unavailable.")
-            analysis = replace(analysis, door=door)
-        return IngestedSchematic(sha256, analysis)
+            with self._quarantining(sha256, operation="analyze"):
+                analysis = await self._analyzer.analyze(
+                    request.data,
+                    limits=self._limits,
+                    with_lattice=request.with_lattice,
+                    source_format=source_format,
+                )
+            metrics = analysis.metrics
+            names = {state.partition("[")[0] for state in metrics.block_counts or ()}
+            if (
+                names & {"minecraft:piston", "minecraft:sticky_piston"}
+                and metrics.allocated_dimensions.volume <= MAX_WORLD_VOLUME
+            ):
+                try:
+                    with self._quarantining(sha256, operation="detect_door"):
+                        door = await self._analyzer.detect_door(request.data, source_format=source_format)
+                except SquidError as exc:
+                    # Optional simulation must not reject an otherwise readable upload.
+                    logger.warning("Door detection for %s failed: %s", sha256, exc)
+                    door = DoorDetection(reason="Door simulation was unavailable.")
+                analysis = replace(analysis, door=door)
+            return IngestedSchematic(sha256, analysis)
 
     async def attach(
         self,
         build_id: int,
         request: IngestRequest,
         *,
+        context: ActingContext,
         primary: bool = True,
         publication: SchematicPublication | None = None,
     ) -> IngestedSchematic:
         """Ingest a file and record it against a build that already exists."""
-        ingested = await self.ingest(request)
-        await self.record(build_id, ingested, request, primary=primary, publication=publication)
-        return ingested
+        with context.scope():
+            ingested = await self.ingest(request, context=context)
+            await self.record(build_id, ingested, request, primary=primary, publication=publication, context=context)
+            return ingested
 
     async def record(
         self,
@@ -199,6 +218,7 @@ class SchematicService:
         ingested: IngestedSchematic,
         request: IngestRequest,
         *,
+        context: ActingContext,
         primary: bool = True,
         publication: SchematicPublication | None = None,
     ) -> int:
@@ -207,75 +227,106 @@ class SchematicService:
         Submission forms can ingest first to obtain measurements, then call this after saving the
         build. This method does not analyze the file again.
         """
-        return await self._store.record_analysis(
-            build_id,
-            ingested.sha256,
-            ingested.analysis,
-            primary=primary,
-            original_filename=request.filename,
-            uploaded_by_account_id=request.uploaded_by_account_id,
-            publication=publication,
-        )
+        with context.scope():
+            return await self._store.record_analysis(
+                build_id,
+                ingested.sha256,
+                ingested.analysis,
+                primary=primary,
+                original_filename=request.filename,
+                context=context,
+                publication=publication,
+            )
 
-    async def list_for_build(self, build_id: int) -> list[StoredSchematic]:
-        return await self._store.list_for_build(build_id)
+    async def list_for_build(self, build_id: int, *, context: ActingContext) -> list[StoredSchematic]:
+        with context.scope():
+            rows = await self._store.list_for_build(build_id)
+            actor = context.effective
+            if actor.worker_name is not None:
+                return rows
+            visible = [
+                row
+                for row in rows
+                if row.publication.is_public_downloadable
+                or (actor.account_id is not None and row.uploaded_by_account_id == actor.account_id)
+            ]
+            if (
+                len(visible) == len(rows)
+                or not (
+                    await self._permissions.check(
+                        actor, BUILD_SCHEMATIC_VIEW_PRIVATE, BUILD_SCHEMATIC_DOWNLOAD_PRIVATE, mode="any"
+                    )
+                ).allowed
+            ):
+                return visible
+            return rows
 
-    async def list_public_for_build(self, build_id: int) -> list[StoredSchematic]:
+    async def list_public_for_build(self, build_id: int, *, context: ActingContext) -> list[StoredSchematic]:
         """Return only explicitly published, non-withdrawn attachments."""
-        return [
-            schematic
-            for schematic in await self._store.list_for_build(build_id)
-            if schematic.publication.is_public_downloadable
-        ]
+        with context.scope():
+            return [
+                schematic
+                for schematic in await self._store.list_for_build(build_id)
+                if schematic.publication.is_public_downloadable
+            ]
 
     async def list_public_page(
-        self,
-        build_id: int,
-        *,
-        selector: PageSelector = FIRST_PAGE,
-        page_size: int = 50,
+        self, build_id: int, *, context: ActingContext, selector: PageSelector = FIRST_PAGE, page_size: int = 50
     ) -> Page[StoredSchematic]:
         """Return an offset page of attachments allowed by their publication policy.
 
         Load all attachments for the build, filter them, then slice the result in memory. Build-level
         access must be checked by the caller.
         """
-        return offset_page(
-            await self.list_public_for_build(build_id),
-            offset=selector.offset,
-            page_size=page_size,
-        )
+        with context.scope():
+            return offset_page(
+                await self.list_public_for_build(build_id, context=context),
+                offset=selector.offset,
+                page_size=page_size,
+            )
 
-    async def public_download(self, build_id: int, schematic_id: int) -> PublicSchematicDownload:
+    async def public_download(
+        self, build_id: int, schematic_id: int, *, context: ActingContext
+    ) -> PublicSchematicDownload:
         """Return original bytes only through an attachment's explicit publication policy."""
-        stored = await self._store.get_for_build(build_id, schematic_id)
-        if stored is None or not stored.publication.is_public_downloadable:
-            raise SchematicNotFoundError
-        content = await self._store.get_file(stored.file_sha256)
-        if content is None:
-            raise SchematicNotFoundError
-        license_ = stored.publication.license
-        if license_ is None:
-            # `SchematicPublication` rejects a public attachment without a license, so a
-            # row reaching here means persistence bypassed the domain constructor.
-            msg = "A publicly downloadable schematic carries no license."
-            raise DataIntegrityError(msg, context={"build_id": build_id, "schematic_id": schematic_id})
-        return PublicSchematicDownload(
-            content=content,
-            schematic=stored,
-            license=license_,
-            source_format=stored.analysis.metrics.source_format,
-        )
+        with context.scope():
+            stored = await self._store.get_for_build(build_id, schematic_id)
+            if stored is None or not stored.publication.is_public_downloadable:
+                raise SchematicNotFoundError
+            content = await self._store.get_file(stored.file_sha256)
+            if content is None:
+                raise SchematicNotFoundError
+            license_ = stored.publication.license
+            if license_ is None:
+                # `SchematicPublication` rejects a public attachment without a license, so a
+                # row reaching here means persistence bypassed the domain constructor.
+                msg = "A publicly downloadable schematic carries no license."
+                raise DataIntegrityError(msg, context={"build_id": build_id, "schematic_id": schematic_id})
+            return PublicSchematicDownload(
+                content=content,
+                schematic=stored,
+                license=license_,
+                source_format=stored.analysis.metrics.source_format,
+            )
 
-    async def featured_for_build(self, build_id: int) -> StoredSchematic | None:
+    async def featured_for_build(self, build_id: int, *, context: ActingContext) -> StoredSchematic | None:
         """Return this build's primary attachment, used for previews, conversion, and timing."""
-        return await self._store.get_featured(build_id)
+        with context.scope():
+            stored = await self._store.get_featured(build_id)
+            if stored is None or stored.publication.is_public_downloadable:
+                return stored
+            actor = context.effective
+            if actor.worker_name is not None or (
+                actor.account_id is not None and stored.uploaded_by_account_id == actor.account_id
+            ):
+                return stored
+            access = await self._permissions.check(
+                actor, BUILD_SCHEMATIC_VIEW_PRIVATE, BUILD_SCHEMATIC_DOWNLOAD_PRIVATE, mode="any"
+            )
+            return stored if access.allowed else None
 
     async def find_duplicates(
-        self,
-        ingested: IngestedSchematic,
-        *,
-        exclude_build_id: int | None = None,
+        self, ingested: IngestedSchematic, *, context: ActingContext, exclude_build_id: int | None = None
     ) -> list[DuplicateCandidate]:
         """Rank earlier submissions that are identical to or resemble an upload.
 
@@ -290,109 +341,111 @@ class SchematicService:
         The comparison count and remaining time budget limit that second pass. Worker errors are
         logged and skipped, so the result can be partial. exclude_build_id omits the build being edited.
         """
-        self._require_available()
-        analysis = ingested.analysis
-        found: dict[int, DuplicateCandidate] = {}
+        with context.scope():
+            self._require_available()
+            analysis = ingested.analysis
+            found: dict[int, DuplicateCandidate] = {}
 
-        # Establish byte identity and shape matches without loading the candidate files.
-        file_matches = await self._store.find_file_matches(
-            ingested.sha256,
-            exclude_build_id=exclude_build_id,
-            limit=25,
-        )
-        for stored in file_matches:
-            _retain_better(found, _duplicate_candidate(stored, tier="identical", distance=0.0))
-
-        shape_matches = await self._store.find_fingerprint_matches(
-            analysis.fingerprints.shape,
-            preset=FingerprintPreset.SHAPE,
-            analyzer_version=analysis.analyzer_version,
-            exclude_build_id=exclude_build_id,
-            limit=25,
-        )
-        for stored in shape_matches:
-            if stored.file_sha256 != ingested.sha256:
-                _retain_better(found, _duplicate_candidate(stored, tier="structural-match", distance=0.0))
-
-        if self._duplicate_max_comparisons == 0:
-            return _rank_duplicates(found.values(), self._duplicate_result_limit)
-
-        # Shortlist remaining candidates before spending the native comparison budget.
-        structural_matches = await self._store.find_fingerprint_matches(
-            analysis.fingerprints.structural,
-            preset=FingerprintPreset.STRUCTURAL,
-            analyzer_version=analysis.analyzer_version,
-            exclude_build_id=exclude_build_id,
-            limit=25,
-        )
-        metric_matches = await self._store.find_metric_neighbours(
-            analysis.metrics,
-            tolerance=self._duplicate_metric_tolerance,
-            exclude_build_id=exclude_build_id,
-            limit=25,
-        )
-        fuzzy_by_schematic = {
-            stored.id: stored
-            for stored in (*structural_matches, *metric_matches)
-            if stored.build_id not in found and stored.file_sha256 != ingested.sha256
-        }
-        fuzzy = sorted(fuzzy_by_schematic.values(), key=lambda stored: _metric_distance(analysis, stored))
-
-        left = await self._store.get_file(ingested.sha256)
-        if left is None:
-            return _rank_duplicates(found.values(), self._duplicate_result_limit)
-
-        loop = asyncio.get_running_loop()
-        deadline = loop.time() + self._duplicate_total_timeout_seconds
-        for stored in fuzzy[: self._duplicate_max_comparisons]:
-            remaining = deadline - loop.time()
-            if remaining <= 0:
-                break
-            right = await self._store.get_file(stored.file_sha256)
-            if right is None:
-                continue
-            try:
-                comparison = await self._analyzer.compare(
-                    left,
-                    right,
-                    preset=FingerprintPreset.SHAPE,
-                    timeout_seconds=remaining,
-                )
-            except SquidError:
-                logger.warning(
-                    "Could not compare schematic %s with candidate %s; returning partial duplicate results.",
-                    ingested.sha256,
-                    stored.file_sha256,
-                    exc_info=True,
-                    extra={
-                        "squid.build.id": stored.build_id,
-                        "squid.schematic.format": ingested.analysis.metrics.source_format.value,
-                        "squid.schematic.operation": "compare",
-                    },
-                )
-                continue
-
-            if comparison.identical:
-                tier: DuplicateTier = "structural-match"
-            elif comparison.footprint_distance <= self._duplicate_near_distance:
-                tier = "near"
-            else:
-                continue
-            _retain_better(
-                found,
-                _duplicate_candidate(
-                    stored,
-                    tier=tier,
-                    distance=comparison.footprint_distance,
-                    detail=comparison.summary,
-                ),
+            # Establish byte identity and shape matches without loading the candidate files.
+            file_matches = await self._store.find_file_matches(
+                ingested.sha256,
+                exclude_build_id=exclude_build_id,
+                limit=25,
             )
+            for stored in file_matches:
+                _retain_better(found, _duplicate_candidate(stored, tier="identical", distance=0.0))
 
-        return _rank_duplicates(found.values(), self._duplicate_result_limit)
+            shape_matches = await self._store.find_fingerprint_matches(
+                analysis.fingerprints.shape,
+                preset=FingerprintPreset.SHAPE,
+                analyzer_version=analysis.analyzer_version,
+                exclude_build_id=exclude_build_id,
+                limit=25,
+            )
+            for stored in shape_matches:
+                if stored.file_sha256 != ingested.sha256:
+                    _retain_better(found, _duplicate_candidate(stored, tier="structural-match", distance=0.0))
 
-    async def prepare_render(self, build_id: int) -> RenderPreparation:
+            if self._duplicate_max_comparisons == 0:
+                return _rank_duplicates(found.values(), self._duplicate_result_limit)
+
+            # Shortlist remaining candidates before spending the native comparison budget.
+            structural_matches = await self._store.find_fingerprint_matches(
+                analysis.fingerprints.structural,
+                preset=FingerprintPreset.STRUCTURAL,
+                analyzer_version=analysis.analyzer_version,
+                exclude_build_id=exclude_build_id,
+                limit=25,
+            )
+            metric_matches = await self._store.find_metric_neighbours(
+                analysis.metrics,
+                tolerance=self._duplicate_metric_tolerance,
+                exclude_build_id=exclude_build_id,
+                limit=25,
+            )
+            fuzzy_by_schematic = {
+                stored.id: stored
+                for stored in (*structural_matches, *metric_matches)
+                if stored.build_id not in found and stored.file_sha256 != ingested.sha256
+            }
+            fuzzy = sorted(fuzzy_by_schematic.values(), key=lambda stored: _metric_distance(analysis, stored))
+
+            left = await self._store.get_file(ingested.sha256)
+            if left is None:
+                return _rank_duplicates(found.values(), self._duplicate_result_limit)
+
+            loop = asyncio.get_running_loop()
+            deadline = loop.time() + self._duplicate_total_timeout_seconds
+            for stored in fuzzy[: self._duplicate_max_comparisons]:
+                remaining = deadline - loop.time()
+                if remaining <= 0:
+                    break
+                right = await self._store.get_file(stored.file_sha256)
+                if right is None:
+                    continue
+                try:
+                    comparison = await self._analyzer.compare(
+                        left,
+                        right,
+                        preset=FingerprintPreset.SHAPE,
+                        timeout_seconds=remaining,
+                    )
+                except SquidError:
+                    logger.warning(
+                        "Could not compare schematic %s with candidate %s; returning partial duplicate results.",
+                        ingested.sha256,
+                        stored.file_sha256,
+                        exc_info=True,
+                        extra={
+                            "squid.build.id": stored.build_id,
+                            "squid.schematic.format": ingested.analysis.metrics.source_format.value,
+                            "squid.schematic.operation": "compare",
+                        },
+                    )
+                    continue
+
+                if comparison.identical:
+                    tier: DuplicateTier = "structural-match"
+                elif comparison.footprint_distance <= self._duplicate_near_distance:
+                    tier = "near"
+                else:
+                    continue
+                _retain_better(
+                    found,
+                    _duplicate_candidate(
+                        stored,
+                        tier=tier,
+                        distance=comparison.footprint_distance,
+                        detail=comparison.summary,
+                    ),
+                )
+
+            return _rank_duplicates(found.values(), self._duplicate_result_limit)
+
+    async def prepare_render(self, build_id: int, *, context: ActingContext) -> RenderPreparation:
         """Prepare a fresh, cached, or skipped preview through the preview service."""
-        return await self._preview_service.prepare_render(build_id)
+        with context.scope():
+            return await self._preview_service.prepare_render(build_id, context=context)
 
     def render_recipe(
         self,
@@ -412,37 +465,57 @@ class SchematicService:
             zoom=zoom,
         )
 
-    async def render_now(self, build_id: int, *, request: RenderRequest | None = None) -> RenderedSchematic:
+    async def render_now(
+        self, build_id: int, *, context: ActingContext, request: RenderRequest | None = None
+    ) -> RenderedSchematic:
         """Return a preview for this request without publishing or storing a new render."""
-        return await self._preview_service.render_now(build_id, request=request)
+        with context.scope():
+            return await self._preview_service.render_now(build_id, request=request, context=context)
 
-    async def explain_render_skip(self, stored: StoredSchematic) -> RenderSkipReason | None:
+    async def explain_render_skip(self, stored: StoredSchematic, *, context: ActingContext) -> RenderSkipReason | None:
         """Return the current skip reason without starting the renderer, or None if eligible."""
-        return await self._preview_service.explain_render_skip(stored)
+        with context.scope():
+            return await self._preview_service.explain_render_skip(stored, context=context)
 
-    async def publish_fresh_preview(self, render: FreshRender, url: str, object_key: str) -> StoredRender | None:
+    async def publish_fresh_preview(
+        self, render: FreshRender, url: str, object_key: str, *, context: ActingContext
+    ) -> StoredRender | None:
         """Persist and publish a fresh preview if its source attachment is still featured."""
-        return await self._preview_service.publish_fresh_preview(render, url, object_key)
+        with worker_scope(context):
+            return await self._preview_service.publish_fresh_preview(render, url, object_key, context=context)
 
-    async def reserve_preview_object(self, render: FreshRender, object_key: str) -> PreviewObjectReservation:
+    async def reserve_preview_object(
+        self, render: FreshRender, object_key: str, *, context: ActingContext
+    ) -> PreviewObjectReservation:
         """Reserve durable ownership before the transport uploads generated preview bytes."""
-        return await self._preview_service.reserve_preview_object(render, object_key)
+        with worker_scope(context):
+            return await self._preview_service.reserve_preview_object(render, object_key, context=context)
 
-    async def mark_preview_object_ready(self, reservation: PreviewObjectReservation) -> None:
+    async def mark_preview_object_ready(self, reservation: PreviewObjectReservation, *, context: ActingContext) -> None:
         """Record readiness after the caller verifies the reserved upload."""
-        await self._preview_service.mark_preview_object_ready(reservation)
+        with worker_scope(context):
+            await self._preview_service.mark_preview_object_ready(reservation, context=context)
 
-    async def cleanup_preview_objects(self, *, retention_hours: int = 24, limit: int = 50) -> int:
+    async def cleanup_preview_objects(
+        self, *, context: ActingContext, retention_hours: int = 24, limit: int = 50
+    ) -> int:
         """Reclaim old generated objects only after all durable references disappear."""
-        return await self._preview_service.cleanup_preview_objects(retention_hours=retention_hours, limit=limit)
+        with worker_scope(context):
+            return await self._preview_service.cleanup_preview_objects(
+                retention_hours=retention_hours, limit=limit, context=context
+            )
 
-    async def publish_cached_preview(self, render: CachedRender) -> bool:
+    async def publish_cached_preview(self, render: CachedRender, *, context: ActingContext) -> bool:
         """Publish a cached preview if its source attachment is still featured."""
-        return await self._preview_service.publish_cached_preview(render)
+        with worker_scope(context):
+            return await self._preview_service.publish_cached_preview(render, context=context)
 
-    async def render_content(self, recipe_hash: str, *, max_bytes: int = 8 * 1024 * 1024) -> bytes:
+    async def render_content(
+        self, recipe_hash: str, *, context: ActingContext, max_bytes: int = 8 * 1024 * 1024
+    ) -> bytes:
         """Return one registered PNG preview from private object storage."""
-        return await self._preview_service.render_content(recipe_hash, max_bytes=max_bytes)
+        with context.scope():
+            return await self._preview_service.render_content(recipe_hash, max_bytes=max_bytes, context=context)
 
     @contextlib.contextmanager
     def _quarantining(
@@ -479,72 +552,77 @@ class SchematicService:
             )
 
     async def convert(
-        self, build_id: int, request: ConvertRequest, *, version_label: str | None = None
+        self, build_id: int, request: ConvertRequest, *, context: ActingContext, version_label: str | None = None
     ) -> tuple[bytes, tuple[VersionLossEntry, ...]]:
         """Re-encode the featured schematic and optionally target a Minecraft data version.
 
         A supplied data_version takes precedence over version_label. Return the converted bytes and
         the engine's report of fidelity losses.
         """
-        self._require_available()
-        stored = await self._store.get_featured(build_id)
-        if stored is None:
-            raise SchematicNotFoundError(context={"build_id": build_id}, public_context={"build_id": build_id})
+        with context.scope():
+            self._require_available()
+            stored = await self._store.get_featured(build_id)
+            if stored is None:
+                raise SchematicNotFoundError(context={"build_id": build_id}, public_context={"build_id": build_id})
 
-        data = await self._store.get_file(stored.file_sha256)
-        if data is None:
-            msg = "The stored schematic file is missing."
-            raise SchematicNotFoundError(msg, context={"sha256": stored.file_sha256})
+            actor = context.effective
+            is_uploader = actor.account_id is not None and actor.account_id == stored.uploaded_by_account_id
+            if not stored.publication.is_public_downloadable and not is_uploader and actor.worker_name is None:
+                await self._permissions.require(actor, BUILD_SCHEMATIC_DOWNLOAD_PRIVATE)
+            data = await self._store.get_file(stored.file_sha256)
+            if data is None:
+                msg = "The stored schematic file is missing."
+                raise SchematicNotFoundError(msg, context={"sha256": stored.file_sha256})
 
-        data_version = request.target_data_version
-        if data_version is None and version_label is not None:
-            data_version = await self._versions.data_version_for(version_label)
-            if data_version is None:
-                msg = "That Minecraft version has no known data version."
-                raise InvalidSchematicError(
-                    msg,
-                    context={"version": version_label},
-                    public_context={"version": version_label},
-                    end_user_action="Pick a Java version the bot knows, or give a data version directly.",
-                )
+            data_version = request.target_data_version
+            if data_version is None and version_label is not None:
+                data_version = await self._versions.data_version_for(version_label, context=context)
+                if data_version is None:
+                    msg = "That Minecraft version has no known data version."
+                    raise InvalidSchematicError(
+                        msg,
+                        context={"version": version_label},
+                        public_context={"version": version_label},
+                        end_user_action="Pick a Java version the bot knows, or give a data version directly.",
+                    )
 
-        return await self._analyzer.convert(data, target=request.target_format, data_version=data_version)
+            return await self._analyzer.convert(data, target=request.target_format, data_version=data_version)
 
-    async def detect_lattice(self, build_id: int) -> AutostackLattice | None:
+    async def detect_lattice(self, build_id: int, *, context: ActingContext) -> AutostackLattice | None:
         """Return stored lattice evidence for the featured schematic without reanalyzing it."""
-        self._require_available()
-        stored = await self._store.get_featured(build_id)
-        if stored is None:
-            raise SchematicNotFoundError(context={"build_id": build_id}, public_context={"build_id": build_id})
-        return stored.analysis.lattice
+        with context.scope():
+            self._require_available()
+            stored = await self._store.get_featured(build_id)
+            if stored is None:
+                raise SchematicNotFoundError(context={"build_id": build_id}, public_context={"build_id": build_id})
+            return stored.analysis.lattice
 
     async def measure_timing(
-        self,
-        build_id: int,
-        *,
-        input_position: Vector3 | None = None,
-        max_ticks: int = 200,
+        self, build_id: int, *, context: ActingContext, input_position: Vector3 | None = None, max_ticks: int = 200
     ) -> SimulationResult:
         """Run and persist staff-facing timing evidence without editing the build timing."""
-        self._require_available()
-        capabilities = await self._analyzer.capabilities()
-        if not capabilities.can_simulate:
-            msg = "This schematic engine does not provide the verified tick simulator."
-            raise SchematicSupportUnavailableError(msg)
-        stored = await self._store.get_featured(build_id)
-        if stored is None:
-            raise SchematicNotFoundError(context={"build_id": build_id}, public_context={"build_id": build_id})
-        self._refuse_poisoned(stored.file_sha256)
-        data = await self._store.get_file(stored.file_sha256)
-        if data is None:
-            raise SchematicNotFoundError(context={"sha256": stored.file_sha256})
-        with self._quarantining(stored.file_sha256, operation="simulate", stored=stored):
-            result = await self._analyzer.simulate(
-                data,
-                request=SimulationRequest(input_position=input_position, max_ticks=max_ticks),
-            )
-        await self._store.record_simulation(stored.id, result)
-        return result
+        with context.scope():
+            if context.effective.worker_name is None:
+                await self._permissions.require(context.effective, BUILD_SCHEMATIC_MEASURE_TIMING)
+            self._require_available()
+            capabilities = await self._analyzer.capabilities()
+            if not capabilities.can_simulate:
+                msg = "This schematic engine does not provide the verified tick simulator."
+                raise SchematicSupportUnavailableError(msg)
+            stored = await self._store.get_featured(build_id)
+            if stored is None:
+                raise SchematicNotFoundError(context={"build_id": build_id}, public_context={"build_id": build_id})
+            self._refuse_poisoned(stored.file_sha256)
+            data = await self._store.get_file(stored.file_sha256)
+            if data is None:
+                raise SchematicNotFoundError(context={"sha256": stored.file_sha256})
+            with self._quarantining(stored.file_sha256, operation="simulate", stored=stored):
+                result = await self._analyzer.simulate(
+                    data,
+                    request=SimulationRequest(input_position=input_position, max_ticks=max_ticks),
+                )
+            await self._store.record_simulation(stored.id, result)
+            return result
 
     async def aclose(self) -> None:
         """Release analyzer and resource-pack process resources at shutdown."""

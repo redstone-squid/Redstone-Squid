@@ -1,5 +1,6 @@
 """Select public schematic measurements without invoking the native engine."""
 
+from squid.core.actors import ActingContext
 from squid.core.builds.application.ports import BuildSchematicSummary
 from squid.core.schematics.application import SchematicService
 
@@ -11,11 +12,11 @@ class SchematicServiceSummaryProvider:
         self._schematics = schematics
         self._public_base_url = public_base_url.rstrip("/") if public_base_url else None
 
-    async def summary_for(self, build_id: int) -> BuildSchematicSummary | None:
+    async def summary_for(self, build_id: int, *, context: ActingContext) -> BuildSchematicSummary | None:
         """Return saved facts and an attachment-specific URL, or None when unavailable."""
         if self._public_base_url is None:
             return None
-        attachments = await self._schematics.list_public_for_build(build_id)
+        attachments = await self._schematics.list_public_for_build(build_id, context=context)
         stored = next((attachment for attachment in attachments if attachment.is_primary), None)
         if stored is None:
             return None

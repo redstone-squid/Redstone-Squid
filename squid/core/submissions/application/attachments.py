@@ -39,16 +39,17 @@ class DraftAttachmentJobs(Protocol):
         self,
         submission: StagedMediaUploadSubmission,
         *,
+        context: ActingContext,
         authorization: MediaDraftUploadAuthorization | None = None,
     ) -> UUID: ...
 
-    async def get(self, upload_id: UUID) -> MediaJobSnapshot | None: ...
+    async def get(self, upload_id: UUID, *, context: ActingContext) -> MediaJobSnapshot | None: ...
 
-    async def list_for_draft(self, draft_id: UUID) -> Sequence[MediaJobSnapshot]: ...
+    async def list_for_draft(self, draft_id: UUID, *, context: ActingContext) -> Sequence[MediaJobSnapshot]: ...
 
-    async def discard(self, draft_id: UUID, upload_id: UUID) -> bool: ...
+    async def discard(self, draft_id: UUID, upload_id: UUID, *, context: ActingContext) -> bool: ...
 
-    async def attach(self, source_id: UUID, target_id: UUID, upload_id: UUID) -> bool: ...
+    async def attach(self, source_id: UUID, target_id: UUID, upload_id: UUID, *, context: ActingContext) -> bool: ...
 
 
 class DraftAttachmentOwnership(Protocol):
@@ -161,30 +162,31 @@ class DraftAttachmentService:
                         upload_id=upload_id,
                     ),
                     authorization=authority.consume(),
+                    context=authority.context,
                 )
             except MediaUploadConflictError as error:
                 raise DraftMediaConflictError(error.upload_id) from None
             finally:
                 staged.discard()
-            return await self._owned_snapshot(authority.draft_id, registered_id)
+            return await self._owned_snapshot(authority.draft_id, registered_id, authority.context)
 
     async def list(self, draft_id: UUID, *, context: ActingContext) -> Sequence[MediaJobSnapshot]:
         """List attachment jobs after checking owner or staff access."""
         with context.scope():
             await self._drafts.get_accessible(draft_id, context=context)
-            return await self._jobs.list_for_draft(draft_id)
+            return await self._jobs.list_for_draft(draft_id, context=context)
 
     async def get(self, draft_id: UUID, upload_id: UUID, *, context: ActingContext) -> MediaJobSnapshot:
         """Return an attachment after checking draft access and association."""
         with context.scope():
             await self._drafts.get_accessible(draft_id, context=context)
-            return await self._owned_snapshot(draft_id, upload_id)
+            return await self._owned_snapshot(draft_id, upload_id, context)
 
     async def discard(self, draft_id: UUID, upload_id: UUID, *, context: ActingContext) -> None:
         """Discard an attachment after checking owner or staff access."""
         with context.scope():
             await self._drafts.get_accessible(draft_id, context=context)
-            if not await self._jobs.discard(draft_id, upload_id):
+            if not await self._jobs.discard(draft_id, upload_id, context=context):
                 raise DraftMediaNotFoundError(upload_id)
 
     async def attach(
@@ -194,12 +196,12 @@ class DraftAttachmentService:
         with context.scope():
             await self._drafts.get_accessible(source_id, context=context)
             await self._drafts.get_accessible(target_id, context=context)
-            if not await self._jobs.attach(source_id, target_id, upload_id):
+            if not await self._jobs.attach(source_id, target_id, upload_id, context=context):
                 raise DraftMediaNotFoundError(upload_id)
-            return await self._owned_snapshot(target_id, upload_id)
+            return await self._owned_snapshot(target_id, upload_id, context)
 
-    async def _owned_snapshot(self, draft_id: UUID, upload_id: UUID) -> MediaJobSnapshot:
-        for snapshot in await self._jobs.list_for_draft(draft_id):
+    async def _owned_snapshot(self, draft_id: UUID, upload_id: UUID, context: ActingContext) -> MediaJobSnapshot:
+        for snapshot in await self._jobs.list_for_draft(draft_id, context=context):
             if snapshot.upload.id == upload_id and snapshot.upload.draft_id == draft_id:
                 return snapshot
         raise DraftMediaNotFoundError(upload_id)

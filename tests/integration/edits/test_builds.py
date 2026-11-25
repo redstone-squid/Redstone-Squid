@@ -159,12 +159,12 @@ async def test_credited_creator_proposes_published_changes_and_vote_applies_the_
     await service.edit(
         build.id,
         BuildEditPatch(credits=[Credit(name="Creator", kind=CreditKind.DISCORD, subject="123")]),
-        actor="test",
         source="test",
+        context=ActingContext.worker("test"),
     )
-    await service.approve(build.id, actor="test", source="test")
+    await service.approve(build.id, source="test", context=ActingContext.worker("events.core.vote_session.closed"))
     actor = Actor(account_id=creator.id)
-    current = await service.get(build.id)
+    current = await service.get(build.id, context=ActingContext.direct(Actor()))
     assert current is not None
     assert current.is_creator(actor.account_id)
     target = build_target(build.id)
@@ -185,11 +185,11 @@ async def test_credited_creator_proposes_published_changes_and_vote_applies_the_
     assert vote_id is not None
     assert not result.outcome.changed
     assert (await executor.execute(command, context=ActingContext.direct(actor))).outcome.review_vote_id == vote_id
-    published = await service.get(build.id)
+    published = await service.get(build.id, context=ActingContext.direct(Actor()))
     assert published is not None
     assert published.description == "original"
     assert published.revision == current.revision
-    snapshot = await VoteService(uow_factory=factory).get_session(vote_id)
+    snapshot = await VoteService(uow_factory=factory).get_session(vote_id, context=ActingContext.direct(Actor()))
     assert snapshot is not None
     assert snapshot.kind is VoteKind.BUILD_EDIT
     assert isinstance(snapshot.target, BuildEditVoteTarget)
@@ -199,7 +199,7 @@ async def test_credited_creator_proposes_published_changes_and_vote_applies_the_
         mutation = await uow.votes.cast_vote(vote_id, owner.account_id, 1, option, 3)
         assert mutation is not None
         await uow.commit()
-    closed = await VoteService(uow_factory=factory).get_session(vote_id)
+    closed = await VoteService(uow_factory=factory).get_session(vote_id, context=ActingContext.direct(Actor()))
     assert closed is not None
     assert closed.result is VoteSessionResult.APPROVED
     handler = ApplyBuildVoteOutcomeHandler(VoteService(uow_factory=factory), service)
@@ -210,9 +210,10 @@ async def test_credited_creator_proposes_published_changes_and_vote_applies_the_
         aggregate_id=vote_id,
         occurred_at=Instant.now(),
     )
-    await handler.handle(event)
-    await handler.handle(event)
-    updated = await service.get(build.id)
+    with ActingContext.worker("events.core.vote_session.closed").scope():
+        await handler.handle(event)
+        await handler.handle(event)
+    updated = await service.get(build.id, context=ActingContext.direct(Actor()))
     assert updated is not None
     assert updated.dimensions == (1, 2, 3)
     assert updated.description == "reviewed"
@@ -251,13 +252,13 @@ async def test_build_receipts_restore_children_and_unresolved_tags_in_one_audit_
         context=ActingContext.direct(actor),
     )
     assert result.receipt is not None
-    current = await service.get(build.id)
+    current = await service.get(build.id, context=ActingContext.direct(Actor()))
     assert current is not None
     assert current.revision == result.outcome.revisions[0].value
     assert UnresolvedTags.read(current.extra_info).restriction_names() == ("Previously unknown restriction",)
     undone = await executor.execute(result.receipt.undo(result.outcome.revisions), context=ActingContext.direct(actor))
     assert undone.receipt is not None
-    restored = await service.get(build.id)
+    restored = await service.get(build.id, context=ActingContext.direct(Actor()))
     assert restored is not None
     assert build_values(restored) == before
     redone = await executor.execute(result.receipt.redo(undone.outcome.revisions), context=ActingContext.direct(actor))
@@ -298,7 +299,7 @@ async def test_unofficial_component_restriction_round_trips_through_build_edits(
             EditCommand(BUILD_EDIT, (target,), patch_values(BuildEditPatch(component_restrictions=names))),
             context=ActingContext.direct(actor),
         )
-        current = await service.get(build.id)
+        current = await service.get(build.id, context=ActingContext.direct(Actor()))
         assert current is not None
         assert current.component_restrictions == names
         assert not UnresolvedTags.read(current.extra_info).restrictions
@@ -341,7 +342,7 @@ async def test_competing_build_edits_and_unrelated_child_write_fence_undo(
         )
     with pytest.raises(RevisionConflictError):
         await executor.execute(saved.receipt.undo(saved.outcome.revisions), context=ActingContext.direct(actor))
-    current = await service.get(build.id)
+    current = await service.get(build.id, context=ActingContext.direct(Actor()))
     assert current is not None
     async with sessions.begin() as session:
         other = Account()
@@ -366,8 +367,8 @@ async def test_preparation_does_not_lock_the_build_and_rechecks_after_another_co
     service, executor, actor, build = await setup(sessions)
     prepare = service.prepare_edit
 
-    async def pause(actor: Actor, build: Build, patch: BuildEditPatch) -> Build:
-        result = await prepare(actor, build, patch)
+    async def pause(build: Build, patch: BuildEditPatch, *, context: ActingContext) -> Build:
+        result = await prepare(build, patch, context=context)
         entered.set()
         await resume.wait()
         return result
@@ -404,7 +405,7 @@ async def test_preparation_does_not_lock_the_build_and_rechecks_after_another_co
                 await uow.commit()
             resume.set()
     assert len(conflicted) == 1
-    current = await service.get(build.id)
+    current = await service.get(build.id, context=ActingContext.direct(Actor()))
     assert current is not None
     assert current.description == "newer"
 
@@ -425,7 +426,7 @@ async def test_review_undo_redo_preserves_history_and_rejects_stale_decisions(
     )
     result = await executor.execute(command, context=ActingContext.direct(actor))
     assert result.receipt is not None
-    current = await service.get(build.id)
+    current = await service.get(build.id, context=ActingContext.direct(Actor()))
     assert current is not None
     assert current.submission_status is BuildStatus.APPROVED
     with pytest.raises(RevisionConflictError):
@@ -436,11 +437,11 @@ async def test_review_undo_redo_preserves_history_and_rejects_stale_decisions(
             context=ActingContext.direct(actor),
         )
     undone = await executor.execute(result.receipt.undo(result.outcome.revisions), context=ActingContext.direct(actor))
-    current = await service.get(build.id)
+    current = await service.get(build.id, context=ActingContext.direct(Actor()))
     assert current is not None
     assert current.submission_status is BuildStatus.PENDING
     await executor.execute(result.receipt.redo(undone.outcome.revisions), context=ActingContext.direct(actor))
-    current = await service.get(build.id)
+    current = await service.get(build.id, context=ActingContext.direct(Actor()))
     assert current is not None
     assert current.submission_status is BuildStatus.APPROVED
     async with sessions() as session:
@@ -470,15 +471,15 @@ async def test_typed_credit_edit_undo_and_redo_preserve_identity_and_role(
         context=ActingContext.direct(actor),
     )
     assert result.receipt is not None
-    edited = await service.get(build.id)
+    edited = await service.get(build.id, context=ActingContext.direct(Actor()))
     assert edited is not None
     assert edited.credits == credits
     undone = await executor.execute(result.receipt.undo(result.outcome.revisions), context=ActingContext.direct(actor))
-    restored = await service.get(build.id)
+    restored = await service.get(build.id, context=ActingContext.direct(Actor()))
     assert restored is not None
     assert restored.credits == []
     await executor.execute(result.receipt.redo(undone.outcome.revisions), context=ActingContext.direct(actor))
-    redone = await service.get(build.id)
+    redone = await service.get(build.id, context=ActingContext.direct(Actor()))
     assert redone is not None
     assert redone.credits == credits
 
@@ -510,7 +511,9 @@ async def test_submitter_can_edit_showcase_tags_and_description_after_confirmati
         )
         await uow.tags.set_status(speed.id, TagModerationStatus.APPROVED)
         await uow.commit()
-    build = await service.approve(build.id, actor=actor.account_id, source="test")
+    build = await service.approve(
+        build.id, source="test", context=ActingContext.worker("events.core.vote_session.closed")
+    )
 
     tagged = await executor.execute(
         EditCommand(
@@ -531,13 +534,13 @@ async def test_submitter_can_edit_showcase_tags_and_description_after_confirmati
         context=ActingContext.direct(actor),
     )
     assert revalued.receipt is not None
-    current = await service.get(build.id)
+    current = await service.get(build.id, context=ActingContext.direct(Actor()))
     assert current is not None
     assert {tag.definition.stable_key: tag.value for tag in current.tags} == {"compact": None, "speed": Decimal(2)}
     reverted = await executor.execute(
         revalued.receipt.undo(revalued.outcome.revisions), context=ActingContext.direct(actor)
     )
-    current = await service.get(build.id)
+    current = await service.get(build.id, context=ActingContext.direct(Actor()))
     assert current is not None
     assert {tag.definition.stable_key: tag.value for tag in current.tags} == {"compact": None, "speed": Decimal("1.5")}
     assert reverted.receipt is not None
@@ -545,7 +548,7 @@ async def test_submitter_can_edit_showcase_tags_and_description_after_confirmati
     undone = await executor.execute(
         tagged.receipt.undo(reverted.outcome.revisions), context=ActingContext.direct(actor)
     )
-    current = await service.get(build.id)
+    current = await service.get(build.id, context=ActingContext.direct(Actor()))
     assert current is not None
     assert current.tags == []
 

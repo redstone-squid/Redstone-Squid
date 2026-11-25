@@ -18,9 +18,11 @@ async def test_version_service_commits_and_lists_versions_in_numeric_order(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     service = VersionService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
-    newer = await service.add("99.10.0", context=ActingContext.direct(Actor()))
-    older = await service.add("99.2.0", context=ActingContext.direct(Actor()))
-    bedrock = await service.add("99.3.0", edition="Bedrock", context=ActingContext.direct(Actor()))
+    newer = await service.add("99.10.0", context=ActingContext.direct(Actor(account_id=1, is_bot_owner=True)))
+    older = await service.add("99.2.0", context=ActingContext.direct(Actor(account_id=1, is_bot_owner=True)))
+    bedrock = await service.add(
+        "99.3.0", edition="Bedrock", context=ActingContext.direct(Actor(account_id=1, is_bot_owner=True))
+    )
 
     assert (await service.list_versions("Java", context=ActingContext.direct(Actor())))[-2:] == [older, newer]
     assert await service.newest("Java", context=ActingContext.direct(Actor())) == "Java 99.10.0"
@@ -34,7 +36,7 @@ async def test_version_service_commits_and_lists_versions_in_numeric_order(
     # The schema stores version components as small integers; commit must fail
     # before the service returns a value that was never persisted.
     with pytest.raises(DBAPIError):
-        await service.add("40000.0.0", context=ActingContext.direct(Actor()))
+        await service.add("40000.0.0", context=ActingContext.direct(Actor(account_id=1, is_bot_owner=True)))
     assert await service.newest("Java", context=ActingContext.direct(Actor())) == "Java 99.10.0"
 
 

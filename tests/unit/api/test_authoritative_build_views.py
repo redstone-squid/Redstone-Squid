@@ -10,7 +10,7 @@ from squid.api.security import ANONYMOUS, UNBOUNDED, Caller
 from squid.api.v1.builds import list_builds
 from squid.api.v1.me import list_my_builds
 from squid.api.v1.schemas.builds import BuildStatusFilter
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.builds.application import DEFAULT_BUILD_LIST_SORT, BuildListSort, BuildQueryService
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build, DoorBuild
@@ -50,6 +50,7 @@ class BuildQueryRecorder(BuildQueryService):
     async def list_page(
         self,
         *,
+        context: ActingContext,
         statuses: frozenset[BuildStatus],
         submitter_account_id: int | None = None,
         sort: BuildListSort = DEFAULT_BUILD_LIST_SORT,

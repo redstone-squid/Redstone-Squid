@@ -38,7 +38,7 @@ class BuildQueries(BuildQueryService):
             self.build.credits = credits or []
 
     @override
-    async def get(self, build_id: int) -> Build | None:
+    async def get(self, build_id: int, *, context: ActingContext) -> Build | None:
         assert build_id == 12
         return self.build
 
@@ -48,7 +48,7 @@ class SearchFields(SearchService):
         pass
 
     @override
-    async def fields(self) -> FieldRegistry:
+    async def fields(self, *, context: ActingContext) -> FieldRegistry:
         return DEFAULT_FIELD_REGISTRY
 
 

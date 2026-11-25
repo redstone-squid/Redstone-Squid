@@ -15,6 +15,7 @@ from whenever import Instant
 from squid.config import SchematicConfig
 from squid.core.actors import ActingContext, Actor
 from squid.core.artifacts.infrastructure import LocalArtifactStore
+from squid.core.permissions.application import PermissionService
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.schematics.application import IngestedSchematic, IngestRequest
 from squid.core.schematics.application.jobs import SchematicJobService
@@ -66,7 +67,9 @@ async def test_original_upload_reaches_build_and_preview_queue(
     artifacts = LocalArtifactStore(tmp_path / "objects")
     jobs = SchematicJobService(uow_factory=uows)
     config = SchematicConfig(job_poll_interval_seconds=0.01, job_wait_timeout_seconds=10)
-    schematics = create_schematic_service(config, artifacts, jobs, uow_factory=uows)
+    schematics = create_schematic_service(
+        config, artifacts, jobs, uow_factory=uows, permissions=PermissionService(uow_factory=uows)
+    )
     drafts = SubmissionDraftService(CheckedInFormManifestRegistry(), uow_factory=uows)
     uploads = DraftSchematicService(drafts, artifacts, uow_factory=uows, ingestor=schematics)
     source = await uploads.upload(
@@ -76,7 +79,9 @@ async def test_original_upload_reaches_build_and_preview_queue(
         data=data,
     )
     assert source.state is DraftSchematicState.PENDING
-    assert (await uploads.read_for_draft(draft.snapshot.id)).state is SchematicArtifactState.PROCESSING
+    assert (
+        await uploads.read_for_draft(draft.snapshot.id, context=ActingContext.direct(Actor(account_id=owner)))
+    ).state is SchematicArtifactState.PROCESSING
 
     # A fresh service instance processes the retained work after the uploader goes away.
     uploads = DraftSchematicService(drafts, artifacts, uow_factory=uows, ingestor=schematics)
@@ -93,7 +98,7 @@ async def test_original_upload_reaches_build_and_preview_queue(
                 tasks.start_soon(pump)
                 await uploads.process_pending(context=ActingContext.worker("test-worker"))
                 tasks.cancel_scope.cancel()
-    ready = await uploads.read_for_draft(draft.snapshot.id)
+    ready = await uploads.read_for_draft(draft.snapshot.id, context=ActingContext.direct(Actor(account_id=owner)))
     assert ready.artifact_id == source.id
     assert ready.state is SchematicArtifactState.READY
     assert await artifacts.get(source.object_key, max_bytes=len(data)) == data
@@ -140,11 +145,11 @@ async def test_original_upload_reaches_build_and_preview_queue(
     with monkeypatch.context() as patch:
         patch.setattr(PostgresFinalizationJobRepository, "complete", fail_receipt)
         with pytest.raises(RuntimeError, match="receipt write failed"):
-            await executor.execute(claim, now=now)
+            await executor.execute(claim, now=now, context=ActingContext.worker("submission-finalization"))
     async with sessions() as session:
         assert (await session.scalars(select(BuildSchematic))).all() == []
         assert (await session.scalars(select(SchematicRenderQueueItem))).all() == []
-    result = await executor.execute(claim, now=now)
+    result = await executor.execute(claim, now=now, context=ActingContext.worker("submission-finalization"))
     assert result is not None
     async with sessions() as session:
         attachment = (await session.scalars(select(BuildSchematic))).one()
@@ -157,7 +162,7 @@ async def test_original_upload_reaches_build_and_preview_queue(
         assert (attachment.published_at is not None) is public
         assert (await session.scalars(select(SchematicRenderQueueItem.build_id))).all() == [attachment.build_id]
     # Replayed claims cannot create duplicate attachments or receipts.
-    assert await executor.execute(claim, now=now) is None
+    assert await executor.execute(claim, now=now, context=ActingContext.worker("submission-finalization")) is None
 
 
 class ControlledIngestor:
@@ -167,7 +172,7 @@ class ControlledIngestor:
         self.failure = failure
         self.calls = 0
 
-    async def ingest(self, request: IngestRequest) -> IngestedSchematic:
+    async def ingest(self, request: IngestRequest, *, context: ActingContext) -> IngestedSchematic:
         self.calls += 1
         if self.failure is not None:
             raise self.failure
@@ -204,7 +209,7 @@ async def test_processing_rejects_invalid_files_but_retries_infrastructure_failu
     ingestor.failure = None
     await uploads.process_pending(context=ActingContext.worker("test-worker"))
     assert ingestor.calls == (1 if invalid else 2)
-    ready = await uploads.read_for_draft(draft.snapshot.id)
+    ready = await uploads.read_for_draft(draft.snapshot.id, context=ActingContext.direct(Actor(account_id=owner)))
     assert ready.state is (SchematicArtifactState.REJECTED if invalid else SchematicArtifactState.READY)
 
 

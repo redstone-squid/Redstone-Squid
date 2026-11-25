@@ -130,6 +130,7 @@ class FakeMedia:
         self,
         submission: StagedMediaUploadSubmission,
         *,
+        context: ActingContext,
         authorization: MediaDraftUploadAuthorization | None = None,
     ) -> UUID:
         self.events.append("submit")
@@ -151,16 +152,16 @@ class FakeMedia:
         )
         return upload_id
 
-    async def get(self, upload_id: UUID) -> MediaJobSnapshot | None:
+    async def get(self, upload_id: UUID, *, context: ActingContext) -> MediaJobSnapshot | None:
         return self.snapshots.get(upload_id)
 
-    async def list_for_draft(self, draft_id: UUID) -> tuple[MediaJobSnapshot, ...]:
+    async def list_for_draft(self, draft_id: UUID, *, context: ActingContext) -> tuple[MediaJobSnapshot, ...]:
         return tuple(item for item in self.snapshots.values() if item.upload.draft_id == draft_id)
 
-    async def attach(self, source_id: UUID, target_id: UUID, upload_id: UUID) -> bool:
+    async def attach(self, source_id: UUID, target_id: UUID, upload_id: UUID, *, context: ActingContext) -> bool:
         raise NotImplementedError
 
-    async def discard(self, draft_id: UUID, upload_id: UUID) -> bool:
+    async def discard(self, draft_id: UUID, upload_id: UUID, *, context: ActingContext) -> bool:
         self.discarded = (draft_id, upload_id)
         current = self.snapshots.get(upload_id)
         if current is None or current.upload.draft_id != draft_id:
@@ -190,7 +191,7 @@ class MediaEditRecorder(EditRunner):
         values = AttachmentValues.model_validate_json(command.values.encoded)
         for item in values.files:
             assert not item.present
-            if not await self.media.discard(draft_id, item.source_id):
+            if not await self.media.discard(draft_id, item.source_id, context=context):
                 raise DraftMediaNotFoundError(item.source_id)
         return EditResult(
             EditOutcome(

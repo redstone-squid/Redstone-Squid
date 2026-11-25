@@ -3,6 +3,7 @@
 import hashlib
 from typing import Protocol
 
+from squid.core.actors import ActingContext
 from squid.core.artifacts import ArtifactStore
 from squid.core.builds.application.ports import BuildEditingUnitOfWork
 from squid.core.errors import DataIntegrityError
@@ -113,13 +114,15 @@ class SchematicStorageService:
         *,
         primary: bool,
         original_filename: str | None = None,
-        uploaded_by_account_id: int | None = None,
+        context: ActingContext,
         publication: SchematicPublication | None = None,
     ) -> int:
         async with (
             self._uow_factory() as uow,
             uow.builds.editing(
-                actor=uploaded_by_account_id if uploaded_by_account_id is not None else "schematic_worker",
+                actor=context.effective.account_id
+                if context.effective.account_id is not None
+                else context.effective.reference,
                 operation="schematic",
                 source="schematic_attachment",
             ),
@@ -130,7 +133,7 @@ class SchematicStorageService:
                 analysis,
                 primary=primary,
                 original_filename=original_filename,
-                uploaded_by_account_id=uploaded_by_account_id,
+                uploaded_by_account_id=context.effective.account_id,
                 publication=publication,
             )
             await uow.commit()

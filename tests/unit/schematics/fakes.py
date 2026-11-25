@@ -2,6 +2,7 @@
 
 from whenever import Instant
 
+from squid.core.actors import ActingContext
 from squid.core.schematics.application.attachments import SchematicPublication, StoredSchematic
 from squid.core.schematics.application.commands import RenderRequest, SimulationRequest
 from squid.core.schematics.application.previews import PreviewObjectReservation, StoredRender
@@ -189,11 +190,11 @@ class FakeSchematicStore:
         *,
         primary: bool,
         original_filename: str | None = None,
-        uploaded_by_account_id: int | None = None,
+        context: ActingContext,
         publication: SchematicPublication | None = None,
     ) -> int:
         self.records.append((build_id, sha256, analysis, primary))
-        self.uploaded_by_account_ids.append(uploaded_by_account_id)
+        self.uploaded_by_account_ids.append(context.effective.account_id)
         if primary:
             self.stored = [
                 StoredSchematic(
@@ -205,6 +206,7 @@ class FakeSchematicStore:
                     analysis=stored.analysis,
                     publication=stored.publication,
                     simulation_evidence=stored.simulation_evidence,
+                    uploaded_by_account_id=stored.uploaded_by_account_id,
                 )
                 if stored.build_id == build_id
                 else stored
@@ -218,6 +220,7 @@ class FakeSchematicStore:
             original_filename=original_filename,
             analysis=analysis,
             publication=publication or SchematicPublication(),
+            uploaded_by_account_id=context.effective.account_id,
         )
         self.stored.append(stored)
         return stored.id
@@ -339,8 +342,8 @@ class FakeVersionResolver:
     def __init__(self, known: dict[str, int] | None = None) -> None:
         self.known = known if known is not None else {"Java 1.16.5": 2586}
 
-    async def data_version_for(self, version_label: str) -> int | None:
+    async def data_version_for(self, version_label: str, *, context: ActingContext) -> int | None:
         return self.known.get(version_label)
 
-    async def label_for_data_version(self, data_version: int) -> str | None:
+    async def label_for_data_version(self, data_version: int, *, context: ActingContext) -> str | None:
         return next((label for label, value in self.known.items() if value == data_version), None)

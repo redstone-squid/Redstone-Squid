@@ -81,7 +81,7 @@ class CommunityVotes(VoteService):
         )
 
     @override
-    async def attach_message(self, vote_session_id: int, message_id: int) -> None:
+    async def attach_message(self, vote_session_id: int, message_id: int, *, context: ActingContext) -> None:
         await self.poll_attachments(vote_session_id, message_id)
 
     @override
@@ -89,30 +89,30 @@ class CommunityVotes(VoteService):
         self.resolver = resolver
 
     @override
-    async def get_session_for_message(self, message_id: int) -> VoteSessionSnapshot | None:
+    async def get_session_for_message(self, message_id: int, *, context: ActingContext) -> VoteSessionSnapshot | None:
         return self.cards[message_id]
 
     @override
-    async def pending_reviews(self, guild_id: int) -> Sequence[int]:
+    async def pending_reviews(self, guild_id: int, *, context: ActingContext) -> Sequence[int]:
         return self.reviews[guild_id]
 
     @override
-    async def emoji_preset(self, guild_id: int, kind: VoteKind) -> EmojiPreset:
+    async def emoji_preset(self, guild_id: int, kind: VoteKind, *, context: ActingContext) -> EmojiPreset:
         return EmojiPreset(guild_id, kind, DEFAULT_VOTE_OPTIONS)
 
     @override
     async def start_delete_log_vote(
         self,
         *,
-        author_account_id: int,
         pass_threshold: int,
         fail_threshold: int,
         message_id: int,
         channel_id: int,
         server_id: int,
         options: Sequence[VoteOption] = DEFAULT_VOTE_OPTIONS,
+        context: ActingContext,
     ) -> int:
-        self.deletion_targets.append((author_account_id, server_id, channel_id, message_id))
+        self.deletion_targets.append((context.effective.require_account_id(), server_id, channel_id, message_id))
         return 42
 
 
@@ -179,7 +179,8 @@ class OwnerReports(ErrorReportService):
         reference: str,
         surface: str,
         origin: str | None = None,
-        context: Mapping[str, JSONValue] | None = None,
+        context: ActingContext,
+        details: Mapping[str, JSONValue] | None = None,
         log_tail: Sequence[str] = (),
         work_lost: bool = False,
     ) -> None:

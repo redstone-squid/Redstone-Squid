@@ -8,7 +8,6 @@ from typing import Protocol
 from uuid import UUID
 
 from squid.core.actors import ActingContext
-from squid.core.errors import AuthorizationError
 
 current_claim_reference: ContextVar[str | None] = ContextVar("current_claim_reference", default=None)
 
@@ -25,8 +24,7 @@ def worker_execution(name: str, claim_token: UUID | None = None) -> Iterator[Act
 @contextmanager
 def worker_scope(context: ActingContext) -> Iterator[None]:
     """Enter a worker-only application operation using its supplied execution identity."""
-    if context.effective.worker_name is None:
-        raise AuthorizationError
+    context.require_worker()
     with context.scope():
         yield
 

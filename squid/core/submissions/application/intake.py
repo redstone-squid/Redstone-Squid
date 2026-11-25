@@ -139,9 +139,11 @@ class SubmissionAttachmentIntake:
                 upload_id=attachment.id,
             )
         elif attachment.kind in {"image", "video"} and self._media is not None:
-            existing = await self._media.get(attachment.id)
+            existing = await self._media.get(attachment.id, context=ActingContext.current())
             if existing is not None and existing.upload.draft_id != draft.snapshot.id:
-                if not await self._media.attach(existing.upload.draft_id, draft.snapshot.id, attachment.id):
+                if not await self._media.attach(
+                    existing.upload.draft_id, draft.snapshot.id, attachment.id, context=ActingContext.current()
+                ):
                     message = "This shared file is no longer available; upload a replacement."
                     raise ConflictError(message)
                 return
@@ -158,6 +160,7 @@ class SubmissionAttachmentIntake:
                 authorization=MediaDraftUploadAuthorization(
                     owner_account_id=draft.snapshot.owner_account_id, draft_revision=draft.snapshot.revision
                 ),
+                context=ActingContext.current(),
             )
         else:
             message = "This file type cannot currently be processed; retry or explicitly discard it."
@@ -197,7 +200,7 @@ class SubmissionAttachmentIntake:
                 if any(item.id == source_id for item in await self._schematics.list(draft_id, context=context)):
                     await self._schematics.discard(draft_id, source_id, context=context)
             elif attachment.kind in {"image", "video"} and self._media is not None:
-                await self._media.discard(draft_id, source_id)
+                await self._media.discard(draft_id, source_id, context=context)
             await self._set_status(draft_id, source_id, IntakeStatus.DISCARDED)
 
     async def _set_status(self, draft_id: UUID, source_id: UUID, status: IntakeStatus) -> None:
@@ -205,9 +208,11 @@ class SubmissionAttachmentIntake:
             await uow.attachment_intake.set_status(draft_id, source_id, status)
             await uow.commit()
 
-    async def issues_for_draft(self, draft_id: UUID) -> tuple[SubmissionAttentionIssue, ...]:
+    async def issues_for_draft(self, draft_id: UUID, *, context: ActingContext) -> tuple[SubmissionAttentionIssue, ...]:
         """Read unresolved attachment requirements for submission preparation."""
         async with self._uow_factory() as uow:
+            if context.effective.worker_name is None:
+                await self._drafts.get_accessible_in(uow, draft_id, context.effective)
             return await uow.attachment_intake.issues_for_draft(draft_id)
 
 

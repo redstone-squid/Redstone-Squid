@@ -11,6 +11,7 @@ import pytest
 from squid.bot.posts.renderers import BuildCardRenderer
 from squid.bot.posts.vote_renderer import VoteSessionRenderer
 from squid.bot.utils.web import MediaPreviewClient
+from squid.core.actors import ActingContext
 from squid.core.builds.application import BuildQueryService
 from squid.core.builds.domain import BuildStatus, Credit
 from squid.core.builds.models import Build, OtherBuild
@@ -33,7 +34,7 @@ class BuildQueries(BuildQueryService):
         self.build = build
 
     @override
-    async def get(self, build_id: int) -> Build | None:
+    async def get(self, build_id: int, *, context: ActingContext) -> Build | None:
         assert build_id == 7
         return self.build
 
@@ -43,7 +44,9 @@ class Settings(SettingsService):
         self.requested: list[Setting] = []
 
     @override
-    async def get_many(self, server_ids: Iterable[int], setting: Setting) -> Mapping[int, int | None]:
+    async def get_many(
+        self, server_ids: Iterable[int], setting: Setting, *, context: ActingContext
+    ) -> Mapping[int, int | None]:
         assert list(server_ids) == [10, 20, 30]
         self.requested.append(setting)
         # One configured channel is absent from the Discord cache; another is unset.

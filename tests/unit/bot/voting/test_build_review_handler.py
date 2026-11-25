@@ -11,12 +11,18 @@ import pytest
 from whenever import Instant
 
 from squid.bot.voting.event_handlers import PostSubmittedBuildHandler
+from squid.core.actors import ActingContext
 from squid.core.builds.application import BuildQueryService
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build, OtherBuild
 from squid.core.events import DomainEvent, UnsupportedEventVersionError
 from squid.runtime import BotServices
 from tests.support.services import bot_services
+
+pytestmark = [
+    pytest.mark.parametrize("discord_worker_context", ["events.discord.build.submitted"], indirect=True),
+    pytest.mark.usefixtures("discord_worker_context"),
+]
 
 
 def _event(build_id: int = 42, *, event_type: str = "build.confirmed", schema_version: int = 1) -> DomainEvent:
@@ -37,7 +43,7 @@ class BuildQueryRecorder(BuildQueryService):
         self.requested: list[int] = []
 
     @override
-    async def get(self, build_id: int) -> Build | None:
+    async def get(self, build_id: int, *, context: ActingContext) -> Build | None:
         self.requested.append(build_id)
         return self.build
 

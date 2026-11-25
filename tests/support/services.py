@@ -134,7 +134,9 @@ def bot_services(**overrides: object) -> BotServices:
     Each double must be an instance of its field's declared type: a subclass of the service or
     an autospec of it.
     """
-    return _build(BotServices, {"schematic_summaries": None, "open_topic_bridge": None}, overrides)
+    return _build(
+        BotServices, {"schematic_summaries": None, "open_topic_bridge": None, "published_build_media": None}, overrides
+    )
 
 
 async def _unconfigured_job(*, context: ActingContext) -> NoReturn:

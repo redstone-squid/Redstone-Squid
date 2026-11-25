@@ -41,7 +41,10 @@ class DomainEventRunner:
                 await self.process(delivery, context=context)
 
     async def process(self, delivery: DomainEventDelivery, *, context: ActingContext) -> None:
-        with worker_scope(context), worker_execution(f"events.{self.consumer}", delivery.claim_token) as attempt:
+        with (
+            worker_scope(context),
+            worker_execution(f"events.{self.consumer}.{delivery.event.event_type}", delivery.claim_token) as attempt,
+        ):
             handlers = self._handlers.get(delivery.event.event_type, ())
             if not handlers and delivery.event.event_type in self._required:
                 error = RuntimeError(f"Missing {self.consumer} handler for {delivery.event.event_type}")

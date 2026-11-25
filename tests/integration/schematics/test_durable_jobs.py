@@ -71,7 +71,8 @@ async def _with_runner[ResultT](runner: SchematicJobRunner, request: Coroutine[A
 
     async def execute() -> None:
         try:
-            results.append(await request)
+            with ActingContext.worker("test-producer").scope():
+                results.append(await request)
         except Exception as error:
             failures.append(error)
         finally:
@@ -142,7 +143,7 @@ async def test_invalid_payloads_enter_a_retained_dead_state(
     async with async_session_factory() as session:
         job_id = await session.scalar(select(func.max(SchematicJob.id)))
     assert job_id is not None
-    snapshot = await jobs.get(job_id)
+    snapshot = await jobs.get(job_id, context=ActingContext.worker("test-worker"))
     assert snapshot is not None
     assert snapshot.dead_at is not None
     assert snapshot.error_kind == "invalid"
@@ -170,7 +171,7 @@ async def test_ambiguous_simulation_inputs_survive_the_durable_worker_boundary(
         job_id = await session.scalar(select(func.max(SchematicJob.id)))
     assert job_id is not None
     assert rebuilt.context["job_id"] == job_id
-    snapshot = await jobs.get(job_id)
+    snapshot = await jobs.get(job_id, context=ActingContext.worker("test-worker"))
     assert snapshot is not None
     assert snapshot.dead_at is not None
     assert snapshot.error_kind == "ambiguous_simulation_input"
@@ -203,7 +204,12 @@ async def test_stale_workers_cannot_overwrite_or_delete_a_reclaimed_jobs_result(
     await artifacts.put("input", b"schematic", content_type="application/octet-stream")
     repository = partial(SqlAlchemyUnitOfWork, async_session_factory)
     jobs = SchematicJobService(uow_factory=repository)
-    job_id = await jobs.submit("render", {"request": wire.encode_render_request(RenderRequest())}, ("input",))
+    job_id = await jobs.submit(
+        "render",
+        {"request": wire.encode_render_request(RenderRequest())},
+        ("input",),
+        context=ActingContext.worker("test-worker"),
+    )
     stale_native = FakeSchematicAnalyzer()
     stale_native.render_output = b"stale render"
     stale = SchematicJobRunner(jobs, artifacts, stale_native, SchematicConfig())
@@ -222,7 +228,7 @@ async def test_stale_workers_cannot_overwrite_or_delete_a_reclaimed_jobs_result(
                     .values(claimed_at=text("now() - interval '6 minutes'"))
                 )
             await current.process_batch(context=ActingContext.worker("test-worker"))
-            completed = await jobs.get(job_id)
+            completed = await jobs.get(job_id, context=ActingContext.worker("test-worker"))
             assert completed is not None
             assert completed.completed_at is not None
             assert completed.result_object_key is not None
@@ -230,7 +236,7 @@ async def test_stale_workers_cannot_overwrite_or_delete_a_reclaimed_jobs_result(
 
     assert completed is not None
     assert completed.result_object_key is not None
-    assert await jobs.get(job_id) == completed
+    assert await jobs.get(job_id, context=ActingContext.worker("test-worker")) == completed
     assert await artifacts.get(completed.result_object_key, max_bytes=1024) == native.render_output
 
     async with async_session_factory.begin() as session:
@@ -238,7 +244,7 @@ async def test_stale_workers_cannot_overwrite_or_delete_a_reclaimed_jobs_result(
             update(SchematicJob).where(SchematicJob.id == job_id).values(expires_at=text("now() - interval '1 hour'"))
         )
     await current.cleanup(context=ActingContext.worker("test-worker"))
-    assert await jobs.get(job_id) is None
+    assert await jobs.get(job_id, context=ActingContext.worker("test-worker")) is None
     assert await artifacts.get(completed.result_object_key, max_bytes=1024) is None
 
 
@@ -261,6 +267,8 @@ async def test_attempt_outputs_survive_failed_acknowledgements_and_cleanup_retri
             job: ClaimedSchematicJob,
             result: Mapping[str, Any],
             result_object_key: str | None,
+            *,
+            context: ActingContext,
         ) -> bool:
             if not self.interrupted:
                 self.interrupted = True
@@ -269,9 +277,9 @@ async def test_attempt_outputs_survive_failed_acknowledgements_and_cleanup_retri
                     completion_started.set()
                     await anyio.sleep_forever()
                 if interruption == "after_commit":
-                    await super().complete(job, result, result_object_key)
+                    await super().complete(job, result, result_object_key, context=context)
                 raise OSError("completion acknowledgement lost")
-            return await super().complete(job, result, result_object_key)
+            return await super().complete(job, result, result_object_key, context=context)
 
     class InterruptedDeletion(LocalArtifactStore):
         fail_key: str | None = None
@@ -286,7 +294,12 @@ async def test_attempt_outputs_survive_failed_acknowledgements_and_cleanup_retri
     artifacts = InterruptedDeletion(tmp_path / "objects")
     await artifacts.put("input", b"schematic", content_type="application/octet-stream")
     jobs = InterruptedCompletion(uow_factory=partial(SqlAlchemyUnitOfWork, sessions))
-    job_id = await jobs.submit("render", {"request": wire.encode_render_request(RenderRequest())}, ("input",))
+    job_id = await jobs.submit(
+        "render",
+        {"request": wire.encode_render_request(RenderRequest())},
+        ("input",),
+        context=ActingContext.worker("test-worker"),
+    )
     native = FakeSchematicAnalyzer()
     runner = SchematicJobRunner(jobs, artifacts, native, SchematicConfig())
     if interruption == "cancelled":
@@ -315,7 +328,7 @@ async def test_attempt_outputs_survive_failed_acknowledgements_and_cleanup_retri
                 )
             )
         await runner.process_batch(context=ActingContext.worker("test-worker"))
-    completed = await jobs.get(job_id)
+    completed = await jobs.get(job_id, context=ActingContext.worker("test-worker"))
     assert completed is not None
     assert completed.completed_at is not None
     assert completed.result_object_key is not None
@@ -323,10 +336,12 @@ async def test_attempt_outputs_survive_failed_acknowledgements_and_cleanup_retri
     assert (first_key == winning_key) is (interruption == "after_commit")
     assert await artifacts.get(winning_key, max_bytes=1024) == native.render_output
     assert jobs.first_claim is not None
-    assert not await jobs.register_result_object(jobs.first_claim, "stale-output")
+    assert not await jobs.register_result_object(
+        jobs.first_claim, "stale-output", context=ActingContext.worker("test-worker")
+    )
 
     # Old worker versions only wrote the winning key, without an attempt inventory.
-    legacy_id = await jobs.submit("render", {}, ())
+    legacy_id = await jobs.submit("render", {}, (), context=ActingContext.worker("test-worker"))
     await artifacts.put("legacy-output", b"legacy", content_type="image/png")
     async with sessions.begin() as session:
         await session.execute(
@@ -342,13 +357,13 @@ async def test_attempt_outputs_survive_failed_acknowledgements_and_cleanup_retri
     artifacts.fail_key = winning_key
     with pytest.raises(OSError, match="object storage unavailable"):
         await runner.cleanup(context=ActingContext.worker("test-worker"))
-    assert await jobs.get(job_id) is not None
-    assert await jobs.get(legacy_id) is not None
+    assert await jobs.get(job_id, context=ActingContext.worker("test-worker")) is not None
+    assert await jobs.get(legacy_id, context=ActingContext.worker("test-worker")) is not None
     if first_key != winning_key:
         assert await artifacts.get(first_key, max_bytes=1024) is None
     await runner.cleanup(context=ActingContext.worker("test-worker"))
-    assert await jobs.get(job_id) is None
-    assert await jobs.get(legacy_id) is None
+    assert await jobs.get(job_id, context=ActingContext.worker("test-worker")) is None
+    assert await jobs.get(legacy_id, context=ActingContext.worker("test-worker")) is None
     for key in {first_key, winning_key, "legacy-output"}:
         assert await artifacts.get(key, max_bytes=1024) is None
 
@@ -390,9 +405,9 @@ async def test_renewing_a_claim_rejects_a_stale_worker(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     _, _, _, jobs = durable_components
-    job_id = await jobs.submit("render_video", {}, ())
-    (first,) = await jobs.claim(limit=1)
-    assert await jobs.renew(first)
+    job_id = await jobs.submit("render_video", {}, (), context=ActingContext.worker("test-worker"))
+    (first,) = await jobs.claim(limit=1, context=ActingContext.worker("test-worker"))
+    assert await jobs.renew(first, context=ActingContext.worker("test-worker"))
     async with async_session_factory() as session:
         await session.execute(
             update(SchematicJob)
@@ -402,10 +417,10 @@ async def test_renewing_a_claim_rejects_a_stale_worker(
             )
         )
         await session.commit()
-    (replacement,) = await jobs.claim(limit=1)
+    (replacement,) = await jobs.claim(limit=1, context=ActingContext.worker("test-worker"))
     assert replacement.claim_token != first.claim_token
-    assert not await jobs.renew(first)
-    assert await jobs.renew(replacement)
+    assert not await jobs.renew(first, context=ActingContext.worker("test-worker"))
+    assert await jobs.renew(replacement, context=ActingContext.worker("test-worker"))
 
 
 async def test_video_admission_limits_each_account_independently(
@@ -413,8 +428,10 @@ async def test_video_admission_limits_each_account_independently(
 ) -> None:
     _, _, _, jobs = durable_components
     params = {"video": {"account_id": 10}}
-    await jobs.submit("render_video", params, ())
-    await jobs.submit("render_video", params, ())
+    await jobs.submit("render_video", params, (), context=ActingContext.worker("test-worker"))
+    await jobs.submit("render_video", params, (), context=ActingContext.worker("test-worker"))
     with pytest.raises(RateLimitedError):
-        await jobs.submit("render_video", params, ())
-    assert await jobs.submit("render_video", {"video": {"account_id": 11}}, ())
+        await jobs.submit("render_video", params, (), context=ActingContext.worker("test-worker"))
+    assert await jobs.submit(
+        "render_video", {"video": {"account_id": 11}}, (), context=ActingContext.worker("test-worker")
+    )

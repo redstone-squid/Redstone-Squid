@@ -168,7 +168,7 @@ class EmptyAttachmentQueue(BuildService):
         pass
 
     @override
-    async def next_attachment_review(self, after: int) -> int | None:
+    async def next_attachment_review(self, after: int, *, context: ActingContext) -> int | None:
         return None
 
 
@@ -193,7 +193,7 @@ class CatalogueQueries(BuildQueryService):
         self.pending_build = DoorBuild(id=73, submission_status=BuildStatus.PENDING)
 
     @override
-    async def get(self, build_id: int) -> Build | None:
+    async def get(self, build_id: int, *, context: ActingContext) -> Build | None:
         assert build_id == self.pending_build.id
         return self.pending_build
 
@@ -203,11 +203,11 @@ class CatalogueSearch(SearchService):
         self.requests: list[SearchRequest] = []
 
     @override
-    async def fields(self) -> FieldRegistry:
+    async def fields(self, *, context: ActingContext) -> FieldRegistry:
         return DEFAULT_FIELD_REGISTRY
 
     @override
-    async def search(self, request: SearchRequest) -> SearchPage:
+    async def search(self, request: SearchRequest, *, context: ActingContext) -> SearchPage:
         self.requests.append(request)
         if request.scope is SearchScope.RECORDS:
             hit = RecordSearchHit("7", "Smallest spiral door", None, 5, "Aurora", "smallest", "all_time")
@@ -294,7 +294,7 @@ async def test_browse_by_id_hides_an_unpublished_build_from_a_reader() -> None:
 
 class BuildLogSettings(RuntimeSettingsStub):
     @override
-    async def get_locale(self, server_id: int) -> str | None:
+    async def get_locale(self, server_id: int, *, context: ActingContext) -> str | None:
         return None
 
 

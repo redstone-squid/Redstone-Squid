@@ -4,6 +4,7 @@ from typing import Protocol
 
 from whenever import Instant
 
+from squid.core.actors import ActingContext
 from squid.core.schematics.application.attachments import SchematicPublication, StoredSchematic
 from squid.core.schematics.application.commands import RenderRequest, SimulationRequest
 from squid.core.schematics.application.previews import PreviewObjectReservation, StoredRender
@@ -100,7 +101,7 @@ class SchematicRepository(Protocol):
         *,
         primary: bool,
         original_filename: str | None = None,
-        uploaded_by_account_id: int | None = None,
+        context: ActingContext,
         publication: SchematicPublication | None = None,
     ) -> int: ...
 
@@ -216,6 +217,6 @@ class SchematicResourcePackProvider(Protocol):
 class SchematicVersionResolver(Protocol):
     """Translation between Minecraft version labels and numeric data versions."""
 
-    async def data_version_for(self, version_label: str) -> int | None: ...
+    async def data_version_for(self, version_label: str, *, context: ActingContext) -> int | None: ...
 
-    async def label_for_data_version(self, data_version: int) -> str | None: ...
+    async def label_for_data_version(self, data_version: int, *, context: ActingContext) -> str | None: ...

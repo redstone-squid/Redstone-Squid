@@ -7,7 +7,7 @@ from math import isfinite
 import anyio
 from whenever import Instant
 
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, Actor, application_operation
 from squid.core.errors import AuthorizationError
 from squid.core.permissions.domain.catalogue import VOTE_POLL_NETWORK_CREATE
 from squid.core.unit_of_work import UnitOfWorkFactory
@@ -66,7 +66,9 @@ class VoteService:
         build_owner_guild_id: int | None = None,
     ):
         self._uow_factory = uow_factory
-        self._policy = policy or RoleVoteWeightPolicy(self.get_role_weights)
+        self._policy = policy or RoleVoteWeightPolicy(
+            lambda guild, kind: self.get_role_weights(guild, kind, context=ActingContext.current())
+        )
         self._actor_resolver = actor_resolver
         self._build_owner_guild_id = build_owner_guild_id
 
@@ -104,6 +106,7 @@ class VoteService:
             return Actor(account_id=actor.account_id, discord_user_id=actor.discord_user_id, guild_id=owner_guild_id)
         return await self._actor_resolver.resolve(actor.require_account_id(), owner_guild_id, snapshot.kind)
 
+    @application_operation
     async def start_build_vote(
         self,
         *,
@@ -113,8 +116,10 @@ class VoteService:
         build_id: int,
         changes: Sequence[VoteChange],
         options: Sequence[VoteOption] = DEFAULT_VOTE_OPTIONS,
+        context: ActingContext,
     ) -> int:
         """Create a build vote and its target atomically."""
+        context.require_worker()
         async with self._uow_factory() as uow:
             options = normalize_vote_options(options, kind=VoteKind.BUILD)
             result = await uow.votes.create_build_session(
@@ -128,6 +133,7 @@ class VoteService:
             await uow.commit()
             return result
 
+    @application_operation
     async def ensure_build_submission_vote(
         self,
         *,
@@ -137,12 +143,14 @@ class VoteService:
         build_id: int,
         changes: Sequence[VoteChange],
         options: Sequence[VoteOption] = DEFAULT_VOTE_OPTIONS,
+        context: ActingContext,
     ) -> int:
         """Return the earliest review session for a build, creating one if none exists.
 
         The repository serializes creation per build so event retries and concurrent
         submission paths reuse the same session, including after it has closed.
         """
+        context.require_worker()
         async with self._uow_factory() as uow:
             options = normalize_vote_options(options, kind=VoteKind.BUILD)
             result = await uow.votes.get_or_create_build_submission_session(
@@ -156,18 +164,22 @@ class VoteService:
             await uow.commit()
             return result
 
+    @application_operation
     async def start_delete_log_vote(
         self,
         *,
-        author_account_id: int,
         pass_threshold: int,
         fail_threshold: int,
         message_id: int,
         channel_id: int,
         server_id: int,
         options: Sequence[VoteOption] = DEFAULT_VOTE_OPTIONS,
+        context: ActingContext,
     ) -> int:
         """Create a message-deletion vote and its target atomically."""
+        author_account_id = context.effective.require_account_id()
+        if context.effective.guild_id != server_id:
+            raise AuthorizationError
         async with self._uow_factory() as uow:
             options = normalize_vote_options(options, kind=VoteKind.DELETE_LOG)
             result = await uow.votes.create_delete_log_session(
@@ -238,34 +250,39 @@ class VoteService:
                 await uow.commit()
                 return result
 
-    async def get_session(self, vote_session_id: int) -> VoteSessionSnapshot | None:
+    @application_operation
+    async def get_session(self, vote_session_id: int, *, context: ActingContext) -> VoteSessionSnapshot | None:
         async with self._uow_factory() as uow:
             return await uow.votes.get_by_id(vote_session_id)
 
-    async def get_session_for_message(self, message_id: int) -> VoteSessionSnapshot | None:
+    @application_operation
+    async def get_session_for_message(self, message_id: int, *, context: ActingContext) -> VoteSessionSnapshot | None:
         """Return the session a Discord card displays, so the bot can turn a message into a session."""
         async with self._uow_factory() as uow:
             return await uow.votes.get_by_message(message_id)
 
-    async def attach_message(self, vote_session_id: int, message_id: int) -> None:
+    @application_operation
+    async def attach_message(self, vote_session_id: int, message_id: int, *, context: ActingContext) -> None:
         """Attach an observed presentation message to a session idempotently."""
         async with self._uow_factory() as uow:
             await uow.votes.attach_message(vote_session_id, message_id)
             await uow.commit()
 
-    async def list_open(self, kind: VoteKind) -> Sequence[VoteSessionSnapshot]:
+    @application_operation
+    async def list_open(self, kind: VoteKind, *, context: ActingContext) -> Sequence[VoteSessionSnapshot]:
         async with self._uow_factory() as uow:
             return await uow.votes.list_open(kind)
 
+    @application_operation
     async def cast_vote(
         self,
         vote_session_id: int,
-        actor: Actor,
         option_id: str,
         *,
         emoji: str | None = None,
         toggle: bool = True,
         count_revision: int | None = None,
+        context: ActingContext,
     ) -> CastVoteResult:
         """Validate eligibility, refresh weights, and toggle or replace the actor's ballot.
 
@@ -281,8 +298,51 @@ class VoteService:
         owner-guild lookup uses base weight 1 for the new ballot, before the option
         multiplier. Unresolved existing ballots retain their cached weights.
         """
+        return await self._apply_ballot(
+            context.effective,
+            vote_session_id,
+            option_id,
+            emoji=emoji,
+            toggle=toggle,
+            count_revision=count_revision,
+            context=context,
+        )
+
+    @application_operation
+    async def _record_observed_reaction(
+        self,
+        voter: Actor,
+        vote_session_id: int,
+        option_id: str,
+        *,
+        emoji: str,
+        count_revision: int | None,
+        context: ActingContext,
+    ) -> CastVoteResult:
+        """Reconcile a verified card reaction while retaining the recount's executor."""
+        return await self._apply_ballot(
+            voter,
+            vote_session_id,
+            option_id,
+            emoji=emoji,
+            toggle=False,
+            count_revision=count_revision,
+            context=context,
+        )
+
+    async def _apply_ballot(
+        self,
+        actor: Actor,
+        vote_session_id: int,
+        option_id: str,
+        *,
+        emoji: str | None,
+        toggle: bool,
+        count_revision: int | None,
+        context: ActingContext,
+    ) -> CastVoteResult:
         account_id = actor.require_account_id()
-        snapshot = await self.get_session(vote_session_id)
+        snapshot = await self.get_session(vote_session_id, context=context)
         if snapshot is None:
             return CastVoteResult(session=None, rejection=VoteRejection.NOT_FOUND)
         if not snapshot.is_open and not (
@@ -348,7 +408,7 @@ class VoteService:
             await uow.commit()
         if mutation is None:
             # The session closed or vanished after it was read above.
-            latest = await self.get_session(vote_session_id)
+            latest = await self.get_session(vote_session_id, context=context)
             rejection = VoteRejection.CLOSED if latest is not None else VoteRejection.NOT_FOUND
             return CastVoteResult(session=latest, rejection=rejection)
         return CastVoteResult(
@@ -358,10 +418,12 @@ class VoteService:
             just_closed=mutation.just_closed,
         )
 
-    async def clear_vote(self, vote_session_id: int, actor: Actor) -> CastVoteResult:
+    @application_operation
+    async def clear_vote(self, vote_session_id: int, *, context: ActingContext) -> CastVoteResult:
         """Remove the actor's ballot while the session is open, without toggling it back on."""
+        actor = context.effective
         account_id = actor.require_account_id()
-        snapshot = await self.get_session(vote_session_id)
+        snapshot = await self.get_session(vote_session_id, context=context)
         if snapshot is None:
             return CastVoteResult(session=None, rejection=VoteRejection.NOT_FOUND)
         if not snapshot.is_open:
@@ -372,7 +434,7 @@ class VoteService:
             mutation = await uow.votes.clear_vote(vote_session_id, account_id)
             await uow.commit()
         if mutation is None:
-            latest = await self.get_session(vote_session_id)
+            latest = await self.get_session(vote_session_id, context=context)
             rejection = VoteRejection.CLOSED if latest is not None else VoteRejection.NOT_FOUND
             return CastVoteResult(session=latest, rejection=rejection)
         return CastVoteResult(
@@ -382,9 +444,10 @@ class VoteService:
             just_closed=mutation.just_closed,
         )
 
-    async def refresh(self, vote_session_id: int) -> VoteRefreshResult:
+    @application_operation
+    async def refresh(self, vote_session_id: int, *, context: ActingContext) -> VoteRefreshResult:
         """Recalculate resolvable ballot weights and check the session's existing thresholds."""
-        snapshot = await self.get_session(vote_session_id)
+        snapshot = await self.get_session(vote_session_id, context=context)
         if snapshot is None:
             return VoteRefreshResult(None)
         return await self._refresh_snapshot(snapshot)
@@ -407,10 +470,14 @@ class VoteService:
             mutation.just_closed if mutation is not None else False,
         )
 
-    async def close(self, vote_session_id: int, actor: Actor, *, recount: FinalRecount | None = None) -> CastVoteResult:
+    @application_operation
+    async def close(
+        self, vote_session_id: int, *, recount: FinalRecount | None = None, context: ActingContext
+    ) -> CastVoteResult:
         """Refresh and close a generic poll if its author or an authorized actor requests it."""
+        actor = context.effective
         actor.require_account_id()
-        snapshot = await self.get_session(vote_session_id)
+        snapshot = await self.get_session(vote_session_id, context=context)
         if snapshot is None:
             return CastVoteResult(None, VoteRejection.NOT_FOUND)
         rejection = snapshot.can_close(actor)
@@ -442,7 +509,7 @@ class VoteService:
                     # A card removed from the post registry between attempts is still missing.
                     detached = set(counting.poll.unreadable_cards).difference(card.id for card in counting.messages)
                     unreadable = tuple(sorted(detached.union(unreadable)))
-                latest = await self.get_session(counting.id)
+                latest = await self.get_session(counting.id, context=ActingContext.current())
                 if latest is None or latest.poll is None or latest.poll.count_revision != counting.poll.count_revision:
                     return CastVoteResult(latest, VoteRejection.CLOSED)
                 weights, _ = await self._calculate_refresh(latest)
@@ -479,21 +546,24 @@ class VoteService:
                     closed.append(result.session)
             return closed
 
-    async def pending_reviews(self, guild_id: int) -> Sequence[int]:
+    @application_operation
+    async def pending_reviews(self, guild_id: int, *, context: ActingContext) -> Sequence[int]:
         async with self._uow_factory() as uow:
             return await uow.votes.pending_reviews(guild_id)
 
+    @application_operation
     async def review_poll(
         self,
         snapshot: VoteSessionSnapshot,
-        actor: Actor,
         action: str,
         *,
         reason: str,
         deadline: Instant | None = None,
         recount: FinalRecount | None = None,
+        context: ActingContext,
     ) -> CastVoteResult:
         """Apply a staff decision to the exact review revision the actor inspected."""
+        actor = context.effective
         if snapshot.poll is None or snapshot.status is not VoteStatus.REVIEW:
             return CastVoteResult(snapshot, VoteRejection.CLOSED)
         if not snapshot.can_review_poll(actor, recount_only=action == "retry"):
@@ -522,7 +592,8 @@ class VoteService:
             return CastVoteResult(snapshot, VoteRejection.CLOSED)
         return CastVoteResult(updated, just_closed=status is VoteStatus.CLOSED)
 
-    async def configuration(self, guild_id: int, kind: VoteKind) -> VoteConfiguration:
+    @application_operation
+    async def configuration(self, guild_id: int, kind: VoteKind, *, context: ActingContext) -> VoteConfiguration:
         """Read a consistent snapshot of stored configuration, without applying defaults."""
         async with self._uow_factory() as uow:
             await uow.votes.lock_configuration(guild_id)
@@ -533,10 +604,14 @@ class VoteService:
             await uow.commit()
             return result
 
-    async def emoji_preset(self, guild_id: int, kind: VoteKind) -> EmojiPreset:
-        return (await self.emoji_presets((guild_id,), kind))[guild_id]
+    @application_operation
+    async def emoji_preset(self, guild_id: int, kind: VoteKind, *, context: ActingContext) -> EmojiPreset:
+        return (await self.emoji_presets((guild_id,), kind, context=context))[guild_id]
 
-    async def emoji_presets(self, guild_ids: Sequence[int], kind: VoteKind) -> dict[int, EmojiPreset]:
+    @application_operation
+    async def emoji_presets(
+        self, guild_ids: Sequence[int], kind: VoteKind, *, context: ActingContext
+    ) -> dict[int, EmojiPreset]:
         """Read one preset snapshot for distinct guilds, applying defaults where unset."""
         guilds = tuple(sorted(set(guild_ids)))
         if not guilds:
@@ -565,18 +640,20 @@ class VoteService:
             )
         return EmojiPreset(guild_id, kind, options)
 
-    async def get_role_weights(self, guild_id: int, kind: VoteKind) -> Sequence[RoleWeight]:
+    @application_operation
+    async def get_role_weights(self, guild_id: int, kind: VoteKind, *, context: ActingContext) -> Sequence[RoleWeight]:
         async with self._uow_factory() as uow:
             return await uow.votes.get_role_weights(guild_id, kind)
 
-    async def refresh_configuration(self, guild_id: int) -> None:
+    @application_operation
+    async def refresh_configuration(self, guild_id: int, *, context: ActingContext) -> None:
         """Refresh ballots after a durable guild-configuration event, including retries."""
         for kind in VoteKind:
             await self._refresh_kind(guild_id, kind)
 
     async def _refresh_kind(self, guild_id: int, kind: VoteKind) -> None:
         """Refresh open sessions whose owner guild supplies the changed role weights."""
-        for snapshot in await self.list_open(kind):
+        for snapshot in await self.list_open(kind, context=ActingContext.current()):
             if self._owner_guild_id(snapshot) == guild_id:
                 await self._refresh_snapshot(snapshot)
 

@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
 
+from squid.core.actors import ActingContext
 from squid.core.errors import InvalidStateError
 from squid.core.media.application.jobs import MediaJobSnapshot
 from squid.core.media.domain import MediaBatchTotals, MediaKind, MediaLimits
@@ -23,7 +24,7 @@ _ACTIVE_MEDIA_STATES = {MediaJobStatus.PENDING, MediaJobStatus.CLAIMED, MediaJob
 class DraftMediaJobReader(Protocol):
     """Read server-owned normalization jobs associated with one draft."""
 
-    async def list_for_draft(self, draft_id: UUID) -> Sequence[MediaJobSnapshot]: ...
+    async def list_for_draft(self, draft_id: UUID, *, context: ActingContext) -> Sequence[MediaJobSnapshot]: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,20 +51,22 @@ class DraftSchematicReader(Protocol):
     format and resource limits. Client answers are never proof of an uploaded file.
     """
 
-    async def read_for_draft(self, draft_id: UUID) -> DraftSchematicSnapshot: ...
+    async def read_for_draft(self, draft_id: UUID, *, context: ActingContext) -> DraftSchematicSnapshot: ...
 
 
 class EmptyDraftSchematicReader:
     """Report no schematic for hosts that do not provide a schematic reader."""
 
-    async def read_for_draft(self, draft_id: UUID) -> DraftSchematicSnapshot:
+    async def read_for_draft(self, draft_id: UUID, *, context: ActingContext) -> DraftSchematicSnapshot:
         return DraftSchematicSnapshot(SchematicArtifactState.ABSENT)
 
 
 class DraftIntakeReader(Protocol):
     """Read unresolved supplied-file requirements before accepting artifact absence."""
 
-    async def issues_for_draft(self, draft_id: UUID) -> tuple[SubmissionAttentionIssue, ...]: ...
+    async def issues_for_draft(
+        self, draft_id: UUID, *, context: ActingContext
+    ) -> tuple[SubmissionAttentionIssue, ...]: ...
 
 
 class AuthoritativeDraftArtifactReadiness:
@@ -88,12 +91,14 @@ class AuthoritativeDraftArtifactReadiness:
         self._schematics = schematics
         self._media_limits = media_limits or MediaLimits()
 
-    async def assess(self, draft_id: UUID) -> SubmissionArtifactReadiness:
+    async def assess(self, draft_id: UUID, *, context: ActingContext) -> SubmissionArtifactReadiness:
         """Return verified artifact IDs and any issues that prevent finalization."""
-        jobs = await self._media.list_for_draft(draft_id)
-        schematic = await self._schematics.read_for_draft(draft_id)
+        jobs = await self._media.list_for_draft(draft_id, context=context)
+        schematic = await self._schematics.read_for_draft(draft_id, context=context)
         media_ids, issues = _assess_media(draft_id, jobs, self._media_limits)
-        intake_issues = await self._intake.issues_for_draft(draft_id) if self._intake is not None else ()
+        intake_issues = (
+            await self._intake.issues_for_draft(draft_id, context=context) if self._intake is not None else ()
+        )
         return SubmissionArtifactReadiness(
             schematic_state=schematic.state,
             schematic_id=schematic.artifact_id,

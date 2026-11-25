@@ -25,7 +25,7 @@ from squid.bot.reactions import (
 )
 from squid.bot.ui import render_payload, text_node
 from squid.bot.voting.actors import describe_rejection, resolve_actor
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.locks import KeyedLock
 from squid.core.voting.application.accounts import AccountConsentedVoterLookup
 from squid.core.voting.application.ports import VoteActorResolver
@@ -99,12 +99,12 @@ class VoteReactionHandler:
         The session is read again once the lock is held, since a recount or another
         reaction may have changed it while this one waited.
         """
-        found = await self.vote_service.get_session_for_message(message_id)
+        found = await self.vote_service.get_session_for_message(message_id, context=ActingContext.current())
         if found is None or not found.is_open:
             yield None
             return
         async with self._session_locks.hold(found.id):
-            snapshot = await self.vote_service.get_session(found.id)
+            snapshot = await self.vote_service.get_session(found.id, context=ActingContext.current())
             yield snapshot if snapshot is not None and snapshot.is_open else None
 
     @reaction_handler("add", recover=True)
@@ -194,7 +194,7 @@ class VoteReactionHandler:
 
     async def count_cards(self, session_id: int, revision: int) -> tuple[bool, tuple[int, ...]]:
         async with self._session_locks.hold(session_id):
-            return await self._recounter.count_cards(session_id, revision)
+            return await self._recounter.count_cards(session_id, revision, context=ActingContext.current())
 
     def is_recounting(self, vote_session_id: int) -> bool:
         """Return whether a recount of this session is waiting or running."""
@@ -213,7 +213,7 @@ class VoteReactionHandler:
         self._recounting[vote_session_id] = self._recounting.get(vote_session_id, 0) + 1
         try:
             async with self._session_locks.hold(vote_session_id):
-                changed = await self._recounter.recount(vote_session_id)
+                changed = await self._recounter.recount(vote_session_id, context=ActingContext.current())
         finally:
             self._recounting[vote_session_id] -= 1
             if not self._recounting[vote_session_id]:
@@ -239,7 +239,9 @@ class VoteReactionHandler:
         already_selected = current is not None and current.option_id == option.id
         if selected is already_selected:
             return CastVoteResult(snapshot), False
-        return await self.vote_service.cast_vote(snapshot.id, actor, option.id, emoji=emoji), True
+        return await self.vote_service.cast_vote(
+            snapshot.id, option.id, emoji=emoji, context=ActingContext.for_actor(actor)
+        ), True
 
     async def _restore_reactions(self, message_id: int) -> None:
         """Restore baseline reactions without changing stored ballots.
@@ -247,7 +249,7 @@ class VoteReactionHandler:
         A clear removes the voting controls from Discord, not the database's
         selections. Anonymous ballots cannot be reconstructed from reaction lists.
         """
-        snapshot = await self.vote_service.get_session_for_message(message_id)
+        snapshot = await self.vote_service.get_session_for_message(message_id, context=ActingContext.current())
         if snapshot is None or not snapshot.is_open:
             return
         location = next((item for item in snapshot.messages if item.id == message_id), None)

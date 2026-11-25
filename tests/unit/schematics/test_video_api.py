@@ -65,4 +65,4 @@ async def test_video_http_flow_keeps_results_private_and_uses_mounted_links() ->
         invalid = await client.post("/catalogue/v1/builds/7/schematics/3/videos", json={"width": 321})
         assert invalid.status_code == 422
     assert videos.submit_video.await_count == 1
-    videos.open_video_content.assert_awaited_once_with(9, account_id=42, can_view_private=False)
+    videos.open_video_content.assert_awaited_once_with(9, context=caller.context())

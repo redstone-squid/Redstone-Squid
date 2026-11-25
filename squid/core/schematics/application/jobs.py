@@ -8,9 +8,11 @@ from typing import Any, Literal, Protocol
 import anyio
 from whenever import Instant
 
+from squid.core.actors import ActingContext
 from squid.core.errors import InvalidStateError
 from squid.core.i18n import tr
 from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
+from squid.core.worker_context import worker_scope
 
 type SchematicJobOperation = Literal[
     "capabilities",
@@ -133,62 +135,75 @@ class SchematicJobService:
         operation: SchematicJobOperation,
         params: Mapping[str, Any],
         input_keys: Sequence[str],
+        *,
+        context: ActingContext,
     ) -> int:
-        async with self._uow_factory() as uow:
-            result = await uow.schematic_jobs.submit(operation, params, input_keys)
-            await uow.commit()
-            return result
+        with context.scope():
+            async with self._uow_factory() as uow:
+                result = await uow.schematic_jobs.submit(operation, params, input_keys)
+                await uow.commit()
+                return result
 
-    async def get(self, job_id: int) -> SchematicJobSnapshot | None:
-        async with self._uow_factory() as uow:
-            return await uow.schematic_jobs.get(job_id)
+    async def get(self, job_id: int, *, context: ActingContext) -> SchematicJobSnapshot | None:
+        with context.scope():
+            async with self._uow_factory() as uow:
+                return await uow.schematic_jobs.get(job_id)
 
-    async def claim(self, *, limit: int = 8) -> Sequence[ClaimedSchematicJob]:
+    async def claim(self, *, context: ActingContext, limit: int = 8) -> Sequence[ClaimedSchematicJob]:
         """Commit and return up to limit leases that workers can begin processing."""
-        async with self._uow_factory() as uow:
-            if not 1 <= limit <= 32:
-                msg = tr(t"schematics-schematic-job-claim = Schematic job claim limit must be between 1 and 32.")
-                raise InvalidStateError(msg)
-            result = await uow.schematic_jobs.claim(limit=limit)
-            await uow.commit()
-            return result
+        with worker_scope(context):
+            async with self._uow_factory() as uow:
+                if not 1 <= limit <= 32:
+                    msg = tr(t"schematics-schematic-job-claim = Schematic job claim limit must be between 1 and 32.")
+                    raise InvalidStateError(msg)
+                result = await uow.schematic_jobs.claim(limit=limit)
+                await uow.commit()
+                return result
 
-    async def renew(self, job: ClaimedSchematicJob) -> bool:
+    async def renew(self, job: ClaimedSchematicJob, *, context: ActingContext) -> bool:
         """Extend a live claim while native work is still running or waiting for a slot."""
-        async with self._uow_factory() as uow:
-            renewed = await uow.schematic_jobs.renew(job)
-            await uow.commit()
-            return renewed
+        with worker_scope(context):
+            async with self._uow_factory() as uow:
+                renewed = await uow.schematic_jobs.renew(job)
+                await uow.commit()
+                return renewed
 
-    async def register_result_object(self, job: ClaimedSchematicJob, object_key: str) -> bool:
+    async def register_result_object(
+        self, job: ClaimedSchematicJob, object_key: str, *, context: ActingContext
+    ) -> bool:
         """Record cleanup ownership before a worker uploads an output object."""
-        async with self._uow_factory() as uow:
-            result = await uow.schematic_jobs.register_result_object(job, object_key)
-            await uow.commit()
-            return result
+        with worker_scope(context):
+            async with self._uow_factory() as uow:
+                result = await uow.schematic_jobs.register_result_object(job, object_key)
+                await uow.commit()
+                return result
 
     async def complete(
         self,
         job: ClaimedSchematicJob,
         result: Mapping[str, Any],
         result_object_key: str | None,
+        *,
+        context: ActingContext,
     ) -> bool:
         """Commit the result and return whether this claim still owned the job."""
-        async with self._uow_factory() as uow:
-            applied = await uow.schematic_jobs.complete(
-                job,
-                result,
-                result_object_key,
-                retention_hours=self._retention_hours,
-            )
-            await uow.commit()
-            return applied
+        with worker_scope(context):
+            async with self._uow_factory() as uow:
+                applied = await uow.schematic_jobs.complete(
+                    job,
+                    result,
+                    result_object_key,
+                    retention_hours=self._retention_hours,
+                )
+                await uow.commit()
+                return applied
 
     async def fail(
         self,
         job: ClaimedSchematicJob,
         error: Exception,
         *,
+        context: ActingContext,
         error_kind: SchematicJobErrorKind,
         error_context: Mapping[str, Any],
         terminal: bool,
@@ -197,45 +212,49 @@ class SchematicJobService:
 
         False can mean either a retry was scheduled or the claim no longer owns the job.
         """
-        async with self._uow_factory() as uow:
-            result = await uow.schematic_jobs.fail(
-                job,
-                str(error),
-                error_kind=error_kind,
-                error_context=error_context,
-                max_attempts=self._max_attempts,
-                terminal=terminal,
-                retention_hours=self._retention_hours,
-            )
-            await uow.commit()
-            return result
+        with worker_scope(context):
+            async with self._uow_factory() as uow:
+                result = await uow.schematic_jobs.fail(
+                    job,
+                    str(error),
+                    error_kind=error_kind,
+                    error_context=error_context,
+                    max_attempts=self._max_attempts,
+                    terminal=terminal,
+                    retention_hours=self._retention_hours,
+                )
+                await uow.commit()
+                return result
 
-    async def cleanup(self, delete_object: Callable[[str], Awaitable[None]], *, limit: int = 100) -> int:
+    async def cleanup(
+        self, delete_object: Callable[[str], Awaitable[None]], *, context: ActingContext, limit: int = 100
+    ) -> int:
         """Delete expired jobs and their retained output objects, returning the number of jobs removed.
 
         Commit cleanup claims before deleting bytes. Ordinary deletion errors release the claims and
         propagate; cancellation can leave them reserved until their leases expire. Shared input
         objects are not part of job cleanup.
         """
-        if not 1 <= limit <= 500:
-            msg = tr(t"schematics-schematic-job-cleanup = Schematic job cleanup limit must be between 1 and 500.")
-            raise InvalidStateError(msg)
-        async with self._uow_factory() as uow:
-            jobs = await uow.schematic_jobs.claim_cleanup(limit=limit)
-            await uow.commit()
-        try:
-            with anyio.fail_after(240):
-                for key in dict.fromkeys(key for job in jobs for key in job.object_keys):
-                    await delete_object(key)
-        except Exception:
+        with worker_scope(context):
+            if not 1 <= limit <= 500:
+                msg = tr(t"schematics-schematic-job-cleanup = Schematic job cleanup limit must be between 1 and 500.")
+                raise InvalidStateError(msg)
             async with self._uow_factory() as uow:
-                await uow.schematic_jobs.release_cleanup(jobs)
+                jobs = await uow.schematic_jobs.claim_cleanup(limit=limit)
                 await uow.commit()
-            raise
-        async with self._uow_factory() as uow:
-            removed = await uow.schematic_jobs.complete_cleanup(jobs)
-            await uow.commit()
-            return removed
+            try:
+                with anyio.fail_after(240):
+                    for key in dict.fromkeys(key for job in jobs for key in job.object_keys):
+                        await delete_object(key)
+            except Exception:
+                async with self._uow_factory() as uow:
+                    await uow.schematic_jobs.release_cleanup(jobs)
+                    await uow.commit()
+                raise
+            async with self._uow_factory() as uow:
+                removed = await uow.schematic_jobs.complete_cleanup(jobs)
+                await uow.commit()
+                return removed
 
 
 @dataclass(frozen=True, slots=True)

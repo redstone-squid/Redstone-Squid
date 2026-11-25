@@ -51,9 +51,10 @@ async def test_tag_dto_preserves_public_fields_and_decimal_precision() -> None:
             )(get_tag.fn),
         ]
     )
-    async with httpx.AsyncClient(transport=asgi_transport(app), base_url="https://test") as client:
-        listing = await client.get("/tags")
-        detail = await client.get("/tags/7")
+    with ANONYMOUS.context().scope():
+        async with httpx.AsyncClient(transport=asgi_transport(app), base_url="https://test") as client:
+            listing = await client.get("/tags")
+            detail = await client.get("/tags/7")
 
     expected = {
         "id": 7,
@@ -100,8 +101,9 @@ async def test_search_field_dto_exposes_syntax_without_storage_or_coercion_detai
         dependencies={"search_service": Provide(lambda: service, sync_to_thread=False)},
     )(list_search_fields.fn)
     app = Litestar([handler])
-    async with httpx.AsyncClient(transport=asgi_transport(app), base_url="https://test") as client:
-        response = await client.get("/fields")
+    with ANONYMOUS.context().scope():
+        async with httpx.AsyncClient(transport=asgi_transport(app), base_url="https://test") as client:
+            response = await client.get("/fields")
 
     assert response.status_code == 200
     assert response.json() == [

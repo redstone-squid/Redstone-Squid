@@ -346,7 +346,10 @@ class _ServiceGraph:
     @cached_property
     def records(self) -> RecordService:
         return RecordService(
-            self.record_computation, uow_factory=self.uow_factory, range_analyzer=SubprocessRangeAnalyzer()
+            self.record_computation,
+            permissions=self.permissions,
+            uow_factory=self.uow_factory,
+            range_analyzer=SubprocessRangeAnalyzer(),
         )
 
     @cached_property
@@ -655,7 +658,7 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         raise RuntimeError(msg)
     return ApiServices(
         impersonation=ImpersonationService(graph.uow_factory, graph.permissions),
-        viewer_queries=ViewerQueries(db.async_session),
+        viewer_queries=ViewerQueries(db.async_session, graph.permissions),
         settings=graph.settings,
         edits=graph.edits,
         builds=graph.builds,
@@ -786,7 +789,7 @@ def create_worker_services(
         media_runner=graph.media_runner,
         media_cleanup=graph.media_cleanup,
         submission_finalization=graph.submissions.finalization_worker,
-        index_build_embedding=graph.embedding_service.handle,
+        index_build_embedding=lambda event: graph.embedding_service.handle(event, context=ActingContext.current()),
         search_embeddings=graph.search_embeddings,
         refresh_search_index=partial(refresh_search_index, graph.uow_factory),
         record_queue_health=PostgresQueueHealthMonitor(db.async_session).record,

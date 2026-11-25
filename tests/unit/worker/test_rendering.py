@@ -74,13 +74,15 @@ class PreparedPreviews(SchematicPreviewService):
         self.cleanup_calls: list[tuple[int, int]] = []
 
     @override
-    async def prepare_render(self, build_id: int) -> RenderPreparation:
+    async def prepare_render(self, build_id: int, *, context: ActingContext) -> RenderPreparation:
         if isinstance(self.prepared, Exception):
             raise self.prepared
         return self.prepared
 
     @override
-    async def publish_fresh_preview(self, render: FreshRender, url: str, object_key: str) -> StoredRender | None:
+    async def publish_fresh_preview(
+        self, render: FreshRender, url: str, object_key: str, *, context: ActingContext
+    ) -> StoredRender | None:
         self.recorded.append((render, url, object_key))
         if self.publication_failures:
             raise self.publication_failures.pop(0)
@@ -90,7 +92,9 @@ class PreparedPreviews(SchematicPreviewService):
         return StoredRender(render.schematic_id, render.recipe_hash, url, render.width, render.height, len(render.png))
 
     @override
-    async def reserve_preview_object(self, render: FreshRender, object_key: str) -> PreviewObjectReservation:
+    async def reserve_preview_object(
+        self, render: FreshRender, object_key: str, *, context: ActingContext
+    ) -> PreviewObjectReservation:
         reservation = PreviewObjectReservation(
             object_key,
             len(render.png),
@@ -101,18 +105,20 @@ class PreparedPreviews(SchematicPreviewService):
         return reservation
 
     @override
-    async def mark_preview_object_ready(self, reservation: PreviewObjectReservation) -> None:
+    async def mark_preview_object_ready(self, reservation: PreviewObjectReservation, *, context: ActingContext) -> None:
         self.ready.append(reservation)
 
     @override
-    async def publish_cached_preview(self, render: CachedRender) -> bool:
+    async def publish_cached_preview(self, render: CachedRender, *, context: ActingContext) -> bool:
         self.published_cached.append(render)
         if self.current:
             self.published_urls[:] = [render.url]
         return self.current
 
     @override
-    async def cleanup_preview_objects(self, *, retention_hours: int = 24, limit: int = 50) -> int:
+    async def cleanup_preview_objects(
+        self, *, context: ActingContext, retention_hours: int = 24, limit: int = 50
+    ) -> int:
         self.cleanup_calls.append((retention_hours, limit))
         return 1
 

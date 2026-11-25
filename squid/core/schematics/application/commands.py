@@ -16,7 +16,6 @@ class IngestRequest:
 
     data: bytes
     filename: str
-    uploaded_by_account_id: int | None = None
     with_lattice: bool = True
 
 

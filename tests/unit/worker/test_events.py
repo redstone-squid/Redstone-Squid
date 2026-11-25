@@ -143,7 +143,7 @@ async def test_apply_build_vote_outcome_names_no_chat_client() -> None:
     builds = BuildRecorder()
     handler = ApplyBuildVoteOutcomeHandler(votes, builds)
 
-    with ActingContext.worker("events.core").scope():
+    with ActingContext.worker("events.core.vote_session.closed").scope():
         await handler.handle(_event())
 
     assert builds.confirmed == [42]

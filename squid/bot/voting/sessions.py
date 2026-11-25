@@ -65,7 +65,9 @@ async def ensure_build_review(
         return None
 
     presets = await bot.services.votes.emoji_presets(
-        tuple(sorted({channel.guild.id for channel in unique_channels})), VoteKind.BUILD
+        tuple(sorted({channel.guild.id for channel in unique_channels})),
+        VoteKind.BUILD,
+        context=ActingContext.current(),
     )
     options = [option for preset in presets.values() for option in preset.options]
 
@@ -77,6 +79,7 @@ async def ensure_build_review(
         build_id=build.id,
         changes=[("submission_status", BuildStatus.PENDING, BuildStatus.APPROVED)],
         options=options,
+        context=ActingContext.current(),
     )
     await bot.refresh_posts("vote_session", str(session_id))
     return session_id
@@ -85,7 +88,7 @@ async def ensure_build_review(
 async def start_delete_log_vote(
     bot: squid.bot.app.RedstoneSquid,
     *,
-    author_account_id: int,
+    context: ActingContext,
     target_message: discord.Message,
     published_message: discord.Message,
 ) -> int:
@@ -99,16 +102,18 @@ async def start_delete_log_vote(
         msg = "Delete-log votes require a guild message."
         raise ValueError(msg)
 
-    options = (await bot.services.votes.emoji_preset(target_message.guild.id, VoteKind.DELETE_LOG)).options
-    settings = await bot.services.settings.get_runtime(context=ActingContext.current())
+    options = (
+        await bot.services.votes.emoji_preset(target_message.guild.id, VoteKind.DELETE_LOG, context=context)
+    ).options
+    settings = await bot.services.settings.get_runtime(context=context)
     session_id = await bot.services.votes.start_delete_log_vote(
-        author_account_id=author_account_id,
         pass_threshold=settings.delete_vote_pass_threshold,
         fail_threshold=settings.delete_vote_fail_threshold,
         message_id=target_message.id,
         channel_id=target_message.channel.id,
         server_id=target_message.guild.id,
         options=options,
+        context=context,
     )
     await bot.post_reconciler.adopt(published_message, "vote_session", str(session_id), "vote_card")
     await bot.refresh_posts("vote_session", str(session_id))

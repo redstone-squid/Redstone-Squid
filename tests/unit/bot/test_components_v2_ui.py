@@ -18,6 +18,7 @@ from squid.bot.submission.ui.build_edit import BuildEditScreen
 from squid.bot.submission.ui.source_preview import preview_build_source
 from squid.bot.ui import render_payload
 from squid.bot.utils.web import MediaPreviewClient
+from squid.core.actors import ActingContext
 from squid.core.builds.application import BuildService
 from squid.core.builds.application.edits import build_target
 from squid.core.builds.application.ports import BuildSchematicSummary
@@ -53,7 +54,7 @@ class SearchRecorder(SearchService):
         self.calls: list[SearchRequest] = []
 
     @override
-    async def search(self, request: SearchRequest) -> SearchPage:
+    async def search(self, request: SearchRequest, *, context: ActingContext) -> SearchPage:
         self.calls.append(request)
         raise AssertionError("the seeded first page must not be fetched again")
 
@@ -71,7 +72,7 @@ class EditRecorder(BuildService):
         )
 
     @override
-    async def get(self, build_id: int) -> Build:
+    async def get(self, build_id: int, *, context: ActingContext) -> Build:
         assert build_id == self.runner.build.id
         return self.runner.build
 
@@ -188,7 +189,7 @@ async def test_build_card_preserves_image_urls(display_build: Build, url: str) -
 
 @pytest.mark.parametrize("status", [BuildStatus.APPROVED, BuildStatus.PENDING])
 async def test_build_card_displays_retained_media_only_on_approved_builds(
-    display_build: Build, status: BuildStatus
+    display_build: Build, status: BuildStatus, discord_screen_context: ActingContext
 ) -> None:
     display_build.submission_status = status
     images = [f"https://example.com/v1/builds/7/media/{index}/content" for index in range(12)]
@@ -202,7 +203,7 @@ async def test_build_card_displays_retained_media_only_on_approved_builds(
         media.urls.assert_not_awaited()
         assert images[0] not in str(render_payload([card]).layout.to_components())
     else:
-        media.urls.assert_awaited_once_with(7)
+        media.urls.assert_awaited_once_with(7, context=discord_screen_context)
         assert [item.media.url for item in components if isinstance(item, discord.ui.Thumbnail)] == images[:1]
         gallery_urls = [
             entry.media.url for item in components if isinstance(item, discord.ui.MediaGallery) for entry in item.items
@@ -679,7 +680,7 @@ class SchematicSummaryReader:
         self.fail = fail
         self.calls: list[int] = []
 
-    async def summary_for(self, build_id: int) -> BuildSchematicSummary | None:
+    async def summary_for(self, build_id: int, *, context: ActingContext) -> BuildSchematicSummary | None:
         self.calls.append(build_id)
         if self.fail:
             raise OSError("database unavailable")
@@ -699,6 +700,7 @@ def card_schematic(*, multiple: bool = False) -> BuildSchematicSummary:
 
 
 @pytest.mark.parametrize("multiple", [False, True])
+@pytest.mark.usefixtures("discord_screen_context")
 async def test_build_card_shows_compact_attachment_specific_dimensions(display_build: Build, multiple: bool) -> None:
     display_build.submission_status = BuildStatus.APPROVED
     reader = SchematicSummaryReader(card_schematic(multiple=multiple))
@@ -727,6 +729,7 @@ async def test_build_card_shows_compact_attachment_specific_dimensions(display_b
 
 
 @pytest.mark.parametrize("status", [BuildStatus.PENDING, BuildStatus.REJECTED])
+@pytest.mark.usefixtures("discord_screen_context")
 async def test_build_card_does_not_fetch_public_download_for_unpublished_build(
     display_build: Build, status: BuildStatus
 ) -> None:
@@ -737,6 +740,7 @@ async def test_build_card_does_not_fetch_public_download_for_unpublished_build(
 
 
 @pytest.mark.parametrize("fail", [False, True])
+@pytest.mark.usefixtures("discord_screen_context")
 async def test_missing_schematic_summary_keeps_the_ordinary_card(display_build: Build, fail: bool) -> None:
     display_build.submission_status = BuildStatus.APPROVED
     reader = SchematicSummaryReader(None, fail=fail)
@@ -747,6 +751,7 @@ async def test_missing_schematic_summary_keeps_the_ordinary_card(display_build: 
     assert "database unavailable" not in content
 
 
+@pytest.mark.usefixtures("discord_screen_context")
 async def test_unsaved_build_skips_schematic_lookup(display_build: Build) -> None:
     display_build = DoorBuild(submission_status=BuildStatus.APPROVED)
     display_build.submission_status = BuildStatus.APPROVED

@@ -16,6 +16,7 @@ from whenever import Instant
 from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
 from squid.core.accounts.models import Account, AccountIdentity
 from squid.core.accounts.models import AccountIdentity as AccountIdentityValue
+from squid.core.actors import ActingContext, Actor
 from squid.core.builds.application import BuildService
 from squid.core.builds.application.locks import BuildLockService
 from squid.core.builds.application.restrictions import RestrictionService
@@ -83,7 +84,7 @@ from tests.support.submission_targets import normalized_submission, seed_account
 
 
 class NoApprovedTags:
-    async def public_definitions(self) -> tuple[TagDefinition, ...]:
+    async def public_definitions(self, *, context: ActingContext) -> tuple[TagDefinition, ...]:
         return ()
 
 
@@ -281,7 +282,7 @@ async def _execute_submission(
 ) -> FinalizedBuild | BuildSubmissionRejected:
     claim = await _claim_submission(sessions, payload)
     result = await BuildSubmissionExecutor(preparation, uow_factory=partial(SqlAlchemyUnitOfWork, sessions)).execute(
-        claim, now=Instant.now()
+        claim, now=Instant.now(), context=ActingContext.worker("submission-finalization")
     )
     assert result is not None
     return result
@@ -362,7 +363,9 @@ async def test_concurrent_source_draft_writes_publish_and_materialize_one_submis
     results: list[FinalizedBuild | BuildSubmissionRejected | None] = []
 
     async def create() -> None:
-        results.append(await executor.execute(claim, now=Instant.now()))
+        results.append(
+            await executor.execute(claim, now=Instant.now(), context=ActingContext.worker("submission-finalization"))
+        )
 
     async with anyio.create_task_group() as tasks:
         tasks.start_soon(create)
@@ -1188,7 +1191,7 @@ async def test_ingested_versions_and_restriction_categories_survive_durable_fina
     owner = await seed_account_and_version(migrated_session_factory)
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     versions = VersionService(uow_factory=factory)
-    await versions.add("Java 1.21.1")
+    await versions.add("Java 1.21.1", context=ActingContext.direct(Actor(account_id=1, is_bot_owner=True)))
     builds = BuildService(
         BuildLockService(uow_factory=factory),
         RestrictionService(uow_factory=factory),

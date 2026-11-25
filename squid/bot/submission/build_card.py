@@ -23,6 +23,7 @@ from squid.bot.ui import (
     user_markdown_paragraph,
 )
 from squid.bot.utils.web import MediaPreviewClient
+from squid.core.actors import ActingContext
 from squid.core.builds.application.ports import BuildSchematicSummary, BuildSchematicSummaryProvider
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.domain.models import AttachmentFailureInfo, SchematicDuplicateInfo
@@ -127,13 +128,13 @@ async def render_build_card(
         and schematic_summaries is not None
     ):
         try:
-            summary = await schematic_summaries.summary_for(build.id)
+            summary = await schematic_summaries.summary_for(build.id, context=ActingContext.current())
         except Exception:
             logger.warning("Could not read schematic measurements for build %s", build.id, exc_info=True)
     attached_images: list[str] = []
     attached_videos: list[str] = []
     if published_media is not None and build.submission_status is BuildStatus.APPROVED:
-        attached_images, attached_videos = await published_media.urls(build.id)
+        attached_images, attached_videos = await published_media.urls(build.id, context=ActingContext.current())
     thumbnail, media = await _get_media_urls(build, media_previews, attached_images, attached_videos)
     return build_card(build, thumbnail=thumbnail, media=media, schematic=summary)
 

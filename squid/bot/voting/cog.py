@@ -227,10 +227,10 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
                 or not actor.capabilities.intersection({VOTE_POLL_CLOSE_ANY.name, VOTE_POLL_RECOUNT.name})
             ):
                 return text_node("Poll review permission in this server is required.")
-            pending = await self.vote_service.pending_reviews(actor.guild_id)
+            pending = await self.vote_service.pending_reviews(actor.guild_id, context=ActingContext.current())
             ids = ", ".join(map(str, pending)) or "none"
             return text_node(f"Polls awaiting review: {ids}")
-        snapshot = await self.vote_service.get_session(poll_id)
+        snapshot = await self.vote_service.get_session(poll_id, context=ActingContext.current())
         if (
             not account
             or snapshot is None
@@ -265,7 +265,12 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         try:
             deadline = Instant.now().add(seconds=parse_poll_duration(duration)) if action == "reopen" else None
             result = await self.vote_service.review_poll(
-                snapshot, actor, action, reason=reason, deadline=deadline, recount=self.reactions.count_cards
+                snapshot,
+                action,
+                reason=reason,
+                deadline=deadline,
+                recount=self.reactions.count_cards,
+                context=ActingContext.for_actor(actor),
             )
         except InvalidVoteConfigurationError as error:
             return text_node(error.message)
@@ -308,7 +313,9 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         try:
             await start_delete_log_vote(
                 self.bot,
-                author_account_id=author_account_id,
+                context=ActingContext.current().with_actor(
+                    replace(ActingContext.current().effective, account_id=author_account_id)
+                ),
                 target_message=message,
                 published_message=published,
             )

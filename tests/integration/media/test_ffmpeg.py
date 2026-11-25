@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from squid.core.actors import ActingContext
 from squid.core.media.application import MediaProcessingRequest, MediaProcessingService
 from squid.core.media.domain import MediaKind, MediaProcessingAction
 from squid.core.media.errors import InvalidMediaError, MediaFailureReason
@@ -26,7 +27,10 @@ async def test_existing_destination_is_never_overwritten(tmp_path: Path) -> None
     service = MediaProcessingService(FfmpegMediaProcessor())
 
     with pytest.raises(InvalidMediaError) as raised:
-        await service.process(MediaProcessingRequest(kind=MediaKind.IMAGE, source_path=source, output_path=output))
+        await service.process(
+            MediaProcessingRequest(kind=MediaKind.IMAGE, source_path=source, output_path=output),
+            context=ActingContext.worker("test-worker"),
+        )
 
     assert raised.value.reason is MediaFailureReason.OUTPUT_EXISTS
     assert output.read_bytes() == b"keep-me"
@@ -47,7 +51,8 @@ async def test_video_preserves_original_bytes_and_audio(
             source_path=source,
             output_path=output,
             poster_path=poster,
-        )
+        ),
+        context=ActingContext.worker("test-worker"),
     )
 
     report = result.report
@@ -116,7 +121,8 @@ async def test_video_repairs_reserved_color_tags_and_preserves_valid_tags(
             source_path=source,
             output_path=tmp_path / "normalized.mp4",
             poster_path=tmp_path / "poster.jpg",
-        )
+        ),
+        context=ActingContext.worker("test-worker"),
     )
 
     probe = result.report.output_probe
@@ -203,7 +209,8 @@ async def test_video_color_repair_ignores_malformed_filler_packets(tmp_path: Pat
             source_path=source,
             output_path=tmp_path / "out.mp4",
             poster_path=tmp_path / "poster.jpg",
-        )
+        ),
+        context=ActingContext.worker("test-worker"),
     )
 
     assert (result.report.output_probe.width, result.report.output_probe.height) == (320, 180)
@@ -253,7 +260,8 @@ async def test_4k_video_fits_the_default_process_memory_limit(tmp_path: Path) ->
             source_path=source,
             output_path=tmp_path / "normalized.mp4",
             poster_path=tmp_path / "poster.jpg",
-        )
+        ),
+        context=ActingContext.worker("test-worker"),
     )
 
     probe = result.report.output_probe
@@ -275,7 +283,8 @@ async def test_variable_rate_video_preserves_closely_spaced_frame_timestamps(tmp
             source_path=source,
             output_path=tmp_path / "normalized.mp4",
             poster_path=tmp_path / "poster.jpg",
-        )
+        ),
+        context=ActingContext.worker("test-worker"),
     )
     assert FFPROBE is not None
     timestamps: list[list[Decimal]] = []
@@ -340,7 +349,8 @@ async def test_rotated_video_preserves_display_orientation(tmp_path: Path, rotat
             source_path=source,
             output_path=tmp_path / "normalized.mp4",
             poster_path=tmp_path / "poster.jpg",
-        )
+        ),
+        context=ActingContext.worker("test-worker"),
     )
 
     expected = (180, 320) if abs(rotation) == 90 else (320, 180)
@@ -463,7 +473,8 @@ async def test_webm_is_preserved_with_odd_dimensions_and_unknown_duration(tmp_pa
             source_path=source,
             output_path=tmp_path / "output",
             poster_path=tmp_path / "poster.jpg",
-        )
+        ),
+        context=ActingContext.worker("test-worker"),
     )
     assert result.output_path.read_bytes() == source.read_bytes()
     assert result.report.output.content_type == "video/webm"
@@ -493,7 +504,8 @@ async def test_raster_originals_preserve_bytes_and_animation(tmp_path: Path, ext
         capture_output=True,
     )
     result = await MediaProcessingService(FfmpegMediaProcessor()).process(
-        MediaProcessingRequest(kind=MediaKind.IMAGE, source_path=source, output_path=tmp_path / "output")
+        MediaProcessingRequest(kind=MediaKind.IMAGE, source_path=source, output_path=tmp_path / "output"),
+        context=ActingContext.worker("test-worker"),
     )
     assert result.output_path.read_bytes() == source.read_bytes()
     assert result.report.actions == ()
@@ -506,7 +518,8 @@ async def test_unsupported_images_are_rejected_without_conversion(tmp_path: Path
     output = tmp_path / "output"
     with pytest.raises(InvalidMediaError) as raised:
         await MediaProcessingService(FfmpegMediaProcessor()).process(
-            MediaProcessingRequest(kind=MediaKind.IMAGE, source_path=source, output_path=output)
+            MediaProcessingRequest(kind=MediaKind.IMAGE, source_path=source, output_path=output),
+            context=ActingContext.worker("test-worker"),
         )
     assert raised.value.reason is MediaFailureReason.FORMAT_UNSUPPORTED
     assert not output.exists()

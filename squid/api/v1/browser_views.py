@@ -16,9 +16,7 @@ from squid.core.permissions.domain.catalogue import (
     BUILD_SCHEMATIC_DOWNLOAD_PRIVATE,
     BUILD_SUBMISSION_CREATE,
     BUILD_SUBMISSION_EDIT,
-    BUILD_SUBMISSION_VIEW_PENDING,
 )
-from squid.core.permissions.domain.models import NodeScope
 from squid.core.records.application.models import PublicRecordDetail, RecordViewer
 from squid.core.tags.domain import RecordOperator, TagAuthority, TagSemanticKind, TagValueType
 from squid.core.tags.models import TagDefinition
@@ -69,22 +67,13 @@ class BrowserViews:
             return SessionSnapshot(
                 user=None, consent_pending=False, permissions=(), counts=SessionCounts(0, 0, 0, None)
             )
-        permissions = self.services.permissions
-        nodes = [
-            node
-            for node in permissions.catalogue.values()
-            if node.scope == NodeScope.GLOBAL and self.caller.credential_allows(node)
-        ]
-        allowed = (await permissions.check(self.caller.to_actor(), *nodes)).allowed_nodes
-        user, counts = await self.services.viewer_queries.session(
-            self.account_id, staff=BUILD_SUBMISSION_VIEW_PENDING.name in allowed
-        )
-        return SessionSnapshot(user, self.caller.consent_pending, tuple(sorted(allowed)), counts)
+        user, counts, permissions = await self.services.viewer_queries.session(context=self.caller.context())
+        return SessionSnapshot(user, self.caller.consent_pending, permissions, counts)
 
     async def build(self, build: Build) -> BuildDetail:
         detail = BuildDetail.from_domain(build)
         if self.account_id is not None:
-            follows, ballot = await self.services.viewer_queries.build_state(self.account_id, build)
+            follows, ballot = await self.services.viewer_queries.build_state(build, context=self.caller.context())
             permissions = await self.services.permissions.check(
                 self.caller.to_actor(), BUILD_SUBMISSION_CREATE, BUILD_SUBMISSION_EDIT, BUILD_SCHEMATIC_DOWNLOAD_PRIVATE
             )
@@ -112,7 +101,7 @@ class BrowserViews:
                 ),
             )
         if media := self.services.published_build_media:
-            images, videos = await media.urls(build.id)
+            images, videos = await media.urls(build.id, context=self.caller.context())
             detail = replace(
                 detail,
                 media=[
@@ -127,7 +116,7 @@ class BrowserViews:
         if self.account_id is None:
             return detail
         sub = await self.services.viewer_queries.subscription(
-            self.account_id, SubscriptionKind.RECORD, detail.record_id
+            SubscriptionKind.RECORD, detail.record_id, context=self.caller.context()
         )
         return replace(detail, viewer=RecordViewer(sub))
 
@@ -135,7 +124,7 @@ class BrowserViews:
         if self.account_id is None:
             return profile
         canonical = profile.canonical_public_id or profile.public_id
-        viewer = await self.services.viewer_queries.creator(self.account_id, canonical)
+        viewer = await self.services.viewer_queries.creator(canonical, context=self.caller.context())
         return replace(profile, viewer=viewer)
 
     async def tag(self, definition: TagDefinition) -> TagDetail:
@@ -143,7 +132,7 @@ class BrowserViews:
         if self.account_id is not None:
             target = RecordSubscriptionFilter(tags=(TagPredicate(definition.id),))
             sub = await self.services.viewer_queries.subscription(
-                self.account_id, SubscriptionKind.RECORD_FILTER, target
+                SubscriptionKind.RECORD_FILTER, target, context=self.caller.context()
             )
             detail.viewer = TagViewer(sub)
         return detail

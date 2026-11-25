@@ -8,6 +8,7 @@ from uuid import UUID
 
 from whenever import Instant
 
+from squid.core.actors import ActingContext
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.history import BuildEditActor, HistoryOperation
 from squid.core.builds.models import Build
@@ -96,13 +97,13 @@ class BuildLockManager(Protocol):
 class DefaultVersionResolver(Protocol):
     """Resolve the default version used when a build omits compatibility."""
 
-    async def newest(self, edition: Literal["Java", "Bedrock"]) -> str: ...
+    async def newest(self, edition: Literal["Java", "Bedrock"], *, context: ActingContext) -> str: ...
 
 
 class BuildSchematicSummaryProvider(Protocol):
     """Read the featured schematic facts needed to display a build."""
 
-    async def summary_for(self, build_id: int) -> BuildSchematicSummary | None: ...
+    async def summary_for(self, build_id: int, *, context: ActingContext) -> BuildSchematicSummary | None: ...
 
 
 class BuildUnitOfWork(PermissionUnitOfWork, Protocol):

@@ -2,7 +2,7 @@
 
 from typing import Protocol
 
-from squid.core.unit_of_work import UnitOfWork
+from squid.core.permissions.application.ports import PermissionUnitOfWork
 from squid.core.versions.domain import Edition, MinecraftVersion
 
 
@@ -20,7 +20,7 @@ class VersionRepository(Protocol):
     async def label_for_data_version(self, data_version: int) -> str | None: ...
 
 
-class VersionUnitOfWork(UnitOfWork, Protocol):
+class VersionUnitOfWork(PermissionUnitOfWork, Protocol):
     """Transaction and repositories used by VersionService."""
 
     @property

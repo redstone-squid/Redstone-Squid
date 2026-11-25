@@ -2,6 +2,7 @@ from pathlib import Path
 
 import pytest
 
+from squid.core.actors import ActingContext
 from squid.core.media.application import (
     MediaProcessingRequest,
     MediaProcessingResult,
@@ -122,7 +123,7 @@ async def test_service_validates_then_delegates_to_the_processor(tmp_path: Path)
     service = MediaProcessingService(processor)
     command = request(tmp_path)
 
-    result = await service.process(command)
+    result = await service.process(command, context=ActingContext.worker("test-worker"))
 
     assert result.report.source_bytes == len(b"video")
     assert processor.probe_calls == [command.source_path]
@@ -135,7 +136,7 @@ async def test_source_byte_budget_is_checked_before_probe(tmp_path: Path) -> Non
     command = request(tmp_path)
 
     with pytest.raises(MediaLimitExceededError) as raised:
-        await service.process(command)
+        await service.process(command, context=ActingContext.worker("test-worker"))
 
     assert raised.value.violations[0].measure is MediaLimitMeasure.SOURCE_BYTES
     assert processor.probe_calls == []
@@ -147,7 +148,7 @@ async def test_source_changes_between_probe_and_decode_are_rejected(tmp_path: Pa
     service = MediaProcessingService(processor)
 
     with pytest.raises(InvalidMediaError) as raised:
-        await service.process(request(tmp_path))
+        await service.process(request(tmp_path), context=ActingContext.worker("test-worker"))
 
     assert raised.value.reason is MediaFailureReason.SOURCE_CHANGED
     assert processor.discard_calls == []
@@ -160,7 +161,7 @@ async def test_source_changes_during_decode_are_rejected(tmp_path: Path) -> None
     service = MediaProcessingService(processor)
 
     with pytest.raises(InvalidMediaError) as raised:
-        await service.process(request(tmp_path))
+        await service.process(request(tmp_path), context=ActingContext.worker("test-worker"))
 
     assert raised.value.reason is MediaFailureReason.SOURCE_CHANGED
     assert len(processor.discard_calls) == 1
@@ -181,7 +182,7 @@ async def test_processor_output_budget_is_checked_before_result_is_returned(tmp_
     service = MediaProcessingService(processor, limits=MediaLimits(max_output_bytes=100))
 
     with pytest.raises(MediaLimitExceededError) as raised:
-        await service.process(request(tmp_path))
+        await service.process(request(tmp_path), context=ActingContext.worker("test-worker"))
 
     assert raised.value.violations[0].measure is MediaLimitMeasure.OUTPUT_BYTES
     assert len(processor.discard_calls) == 1
@@ -206,7 +207,7 @@ async def test_symlink_sources_are_rejected(tmp_path: Path) -> None:
     )
 
     with pytest.raises(InvalidMediaError) as raised:
-        await service.process(command)
+        await service.process(command, context=ActingContext.worker("test-worker"))
 
     assert raised.value.reason is MediaFailureReason.SOURCE_NOT_REGULAR
 
@@ -230,5 +231,5 @@ async def test_service_closes_the_processor_port() -> None:
 )
 async def test_original_video_does_not_require_encoder_constraints(tmp_path: Path, inspected: MediaProbe) -> None:
     processor = FakeMediaProcessor(inspected)
-    await MediaProcessingService(processor).process(request(tmp_path))
+    await MediaProcessingService(processor).process(request(tmp_path), context=ActingContext.worker("test-worker"))
     assert len(processor.normalize_calls) == 1

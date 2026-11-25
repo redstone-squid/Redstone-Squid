@@ -45,19 +45,19 @@ class SchematicPreviewWorker:
         with worker_scope(context):
             if not self._enabled:
                 return
-            for job in await self._jobs.claim():
+            for job in await self._jobs.claim(context=ActingContext.current()):
                 with worker_execution("schematic-renders", job.claim_token):
                     try:
                         await self._publish_preview(job.build_id)
                     except Exception as error:
-                        dead = await self._jobs.fail(job, error)
+                        dead = await self._jobs.fail(job, error, context=ActingContext.current())
                         if dead:
                             logger.exception(
                                 "Dead-lettered schematic preview publication",
                                 extra={"squid.build.id": job.build_id, **work_lost()},
                             )
                         continue
-                    await self._jobs.complete(job)
+                    await self._jobs.complete(job, context=ActingContext.current())
 
     async def _publish_preview(self, build_id: int) -> None:
         """Apply the preparation decision, acknowledging skips without an upload.
@@ -66,7 +66,7 @@ class SchematicPreviewWorker:
         topic errors propagate to the batch's retry policy. A stale render may be
         declined by the publication service and still complete the job normally.
         """
-        match await self._schematics.prepare_render(build_id):
+        match await self._schematics.prepare_render(build_id, context=ActingContext.current()):
             case SkippedRender(reason=reason):
                 logger.info(
                     "Skipped schematic preview publication",
@@ -74,7 +74,7 @@ class SchematicPreviewWorker:
                 )
                 return
             case CachedRender() as cached:
-                await self._schematics.publish_cached_preview(cached)
+                await self._schematics.publish_cached_preview(cached, context=ActingContext.current())
             case FreshRender() as fresh:
                 await self._upload_and_publish(fresh)
         if self._topics is not None:
@@ -93,7 +93,7 @@ class SchematicPreviewWorker:
             msg = "Schematic rendering requires a public API base URL."
             raise RuntimeError(msg)
         object_key = f"schematic-renders/{render.recipe_hash[:2]}/{render.recipe_hash}.png"
-        reservation = await self._schematics.reserve_preview_object(render, object_key)
+        reservation = await self._schematics.reserve_preview_object(render, object_key, context=ActingContext.current())
         if reservation.upload_required:
             metadata = await self._artifacts.put(object_key, render.png, content_type="image/png")
             if metadata.byte_size != reservation.byte_size or metadata.sha256 not in (None, reservation.sha256):
@@ -102,11 +102,13 @@ class SchematicPreviewWorker:
             if hashlib.sha256(render.png).hexdigest() != reservation.sha256:
                 msg = "The generated preview changed after its object was reserved."
                 raise RuntimeError(msg)
-            await self._schematics.mark_preview_object_ready(reservation)
+            await self._schematics.mark_preview_object_ready(reservation, context=ActingContext.current())
         url = f"{self._public_base_url}/v1/schematic-renders/{render.recipe_hash}/content"
-        await self._schematics.publish_fresh_preview(render, url, object_key)
+        await self._schematics.publish_fresh_preview(render, url, object_key, context=ActingContext.current())
 
     async def cleanup(self, *, context: ActingContext, retention_hours: int = 24, limit: int = 50) -> int:
         """Delete up to limit old preview objects that no stored render still references."""
         with worker_scope(context):
-            return await self._schematics.cleanup_preview_objects(retention_hours=retention_hours, limit=limit)
+            return await self._schematics.cleanup_preview_objects(
+                retention_hours=retention_hours, limit=limit, context=context
+            )

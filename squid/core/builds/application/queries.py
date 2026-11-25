@@ -15,6 +15,8 @@ from squid.core.builds.errors import BuildNotFoundError
 from squid.core.builds.models import Build, DoorBuild
 from squid.core.errors import DataIntegrityError
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
+from squid.core.permissions.application import PermissionService
+from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_VIEW_PENDING
 from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 type BuildSortField = Literal["id", "submission_time"]
@@ -211,7 +213,7 @@ class BuildQueryRepository(Protocol):
 class SemanticBuildSearch(Protocol):
     """Natural-language build lookup."""
 
-    async def find_build_id(self, query: str) -> int | None: ...
+    async def find_build_id(self, query: str, *, context: ActingContext) -> int | None: ...
 
 
 class BuildQueryService:
@@ -220,36 +222,58 @@ class BuildQueryService:
     def __init__(
         self,
         semantic_search: SemanticBuildSearch,
+        permissions: PermissionService,
         *,
         uow_factory: UnitOfWorkFactory[BuildQueryUnitOfWork],
     ):
         self._uow_factory = uow_factory
         self._semantic_search = semantic_search
+        self._permissions = permissions
 
-    async def get(self, build_id: int) -> Build | None:
-        async with self._uow_factory() as uow:
-            return await uow.builds.get_by_id(build_id)
+    async def get(self, build_id: int, *, context: ActingContext) -> Build | None:
+        rows = await self.get_many((build_id,), context=context)
+        return rows[0] if rows else None
 
-    async def get_public(self, build_id: int) -> Build:
+    async def get_public(self, build_id: int, *, context: ActingContext) -> Build:
         """Return a approved build, or raise BuildNotFoundError.
 
         Missing, pending, and denied builds produce the same error so this public
         lookup does not reveal builds awaiting review.
         """
-        async with self._uow_factory() as uow:
-            build = await uow.builds.get_by_id(build_id)
-            if build is None or build.submission_status is not BuildStatus.APPROVED:
-                raise BuildNotFoundError(build_id)
-            return build
+        with context.scope():
+            async with self._uow_factory() as uow:
+                build = await uow.builds.get_by_id(build_id)
+                if build is None or build.submission_status is not BuildStatus.APPROVED:
+                    raise BuildNotFoundError(build_id)
+                return build
 
-    async def pending(self) -> Sequence[Build]:
-        async with self._uow_factory() as uow:
-            return await uow.builds.get_pending()
+    async def pending(self, *, context: ActingContext) -> Sequence[Build]:
+        with context.scope():
+            async with self._uow_factory() as uow:
+                if context.effective.worker_name is None:
+                    await self._permissions.require(context.effective, BUILD_SUBMISSION_VIEW_PENDING)
+                return await uow.builds.get_pending()
 
-    async def get_many(self, build_ids: Sequence[int]) -> list[Build]:
+    async def get_many(self, build_ids: Sequence[int], *, context: ActingContext) -> list[Build]:
         """Load builds in the caller's requested order, omitting missing rows."""
-        async with self._uow_factory() as uow:
-            return await uow.builds.get_many(build_ids)
+        with context.scope():
+            async with self._uow_factory() as uow:
+                rows = await uow.builds.get_many(build_ids)
+            actor = context.effective
+            if actor.worker_name is not None:
+                return rows
+            visible = [
+                build
+                for build in rows
+                if build.submission_status is BuildStatus.APPROVED
+                or (actor.account_id is not None and build.submitter_account_id == actor.account_id)
+            ]
+            if (
+                len(visible) == len(rows)
+                or not (await self._permissions.check(actor, BUILD_SUBMISSION_VIEW_PENDING)).allowed
+            ):
+                return visible
+            return rows
 
     async def get_public_summaries(
         self, build_ids: Sequence[int], *, context: ActingContext
@@ -262,6 +286,7 @@ class BuildQueryService:
     async def list_page(
         self,
         *,
+        context: ActingContext,
         statuses: frozenset[BuildStatus],
         submitter_account_id: int | None = None,
         sort: BuildListSort = DEFAULT_BUILD_LIST_SORT,
@@ -270,39 +295,44 @@ class BuildQueryService:
     ) -> Page[Build]:
         """Return a page filtered by the supplied statuses and optional submitter.
 
-        The caller chooses these filters according to its visibility policy. ID
-        sorting supports ID anchors; submission-time sorting uses offsets.
+        Unpublished listings require review access unless restricted to the caller's own submissions.
         """
-        async with self._uow_factory() as uow:
-            rows = await uow.builds.list_page(
-                statuses=statuses,
-                submitter_account_id=submitter_account_id,
-                sort=sort,
-                offset=selector.offset,
-                after_id=selector.after_id,
-                before_id=selector.before_id,
-                # One row past the page proves whether another page follows.
-                limit=page_size + 1,
-            )
-            total = await uow.builds.count(
-                statuses=statuses,
-                submitter_account_id=submitter_account_id,
-            )
-            return keyset_page(
-                rows,
-                selector=selector,
-                page_size=page_size,
-                total=total,
-                keyset=sort.field == "id",
-                id_of=_persisted_build_id,
-            )
+        with context.scope():
+            actor = context.effective
+            own_submissions = actor.account_id is not None and submitter_account_id == actor.account_id
+            if statuses != {BuildStatus.APPROVED} and actor.worker_name is None and not own_submissions:
+                await self._permissions.require(actor, BUILD_SUBMISSION_VIEW_PENDING)
+            async with self._uow_factory() as uow:
+                rows = await uow.builds.list_page(
+                    statuses=statuses,
+                    submitter_account_id=submitter_account_id,
+                    sort=sort,
+                    offset=selector.offset,
+                    after_id=selector.after_id,
+                    before_id=selector.before_id,
+                    # One row past the page proves whether another page follows.
+                    limit=page_size + 1,
+                )
+                total = await uow.builds.count(
+                    statuses=statuses,
+                    submitter_account_id=submitter_account_id,
+                )
+                return keyset_page(
+                    rows,
+                    selector=selector,
+                    page_size=page_size,
+                    total=total,
+                    keyset=sort.field == "id",
+                    id_of=_persisted_build_id,
+                )
 
-    async def semantic(self, query: str) -> Build | None:
+    async def semantic(self, query: str, *, context: ActingContext) -> Build | None:
         """Return the nearest indexed build, or None if no match can be loaded."""
-        build_id = await self._semantic_search.find_build_id(query)
-        if build_id is None:
-            return None
-        return await self.get(build_id)
+        with context.scope():
+            build_id = await self._semantic_search.find_build_id(query, context=context)
+            if build_id is None:
+                return None
+            return await self.get(build_id, context=context)
 
 
 class BuildQueryUnitOfWork(UnitOfWork, Protocol):

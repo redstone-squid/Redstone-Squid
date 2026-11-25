@@ -5,10 +5,12 @@ from functools import partial
 import pytest
 
 from squid.core.actors import ActingContext, Actor
+from squid.core.errors import AuthorizationError
 from squid.core.versions.application.services import VersionService
 from squid.core.versions.domain import Edition, MinecraftVersion
 from squid.core.versions.errors import VersionCatalogUnavailableError
 from tests.support.unit_of_work import CommittedState, FakeUnitOfWork
+from tests.unit.api.fakes import EmptyPermissionStore
 
 
 class FakeVersionRepository:
@@ -31,15 +33,32 @@ class FakeVersionRepository:
 
 class FakeVersionUnitOfWork(FakeUnitOfWork[FakeVersionRepository]):
     @property
+    def permissions(self) -> EmptyPermissionStore:
+        return EmptyPermissionStore()
+
+    @property
     def versions(self) -> FakeVersionRepository:
         return self.state
+
+
+async def test_manual_version_add_checks_authority_and_named_announcement_worker_can_publish() -> None:
+    committed = CommittedState(FakeVersionRepository())
+    service = VersionService(uow_factory=partial(FakeVersionUnitOfWork, committed))
+    for context in (ActingContext.direct(Actor(account_id=55)), ActingContext.worker("unrelated")):
+        with pytest.raises(AuthorizationError):
+            await service.add("1.21.4", context=context)
+    assert await service.add(
+        "1.21.4", context=ActingContext.worker("discord.version-announcement")
+    ) == MinecraftVersion("Java", 1, 21, 4)
 
 
 async def test_version_service_honors_explicit_edition() -> None:
     committed = CommittedState(FakeVersionRepository())
     service = VersionService(uow_factory=partial(FakeVersionUnitOfWork, committed))
 
-    version = await service.add("1.21.4", edition="Bedrock", context=ActingContext.direct(Actor()))
+    version = await service.add(
+        "1.21.4", edition="Bedrock", context=ActingContext.direct(Actor(account_id=1, is_bot_owner=True))
+    )
 
     assert version == MinecraftVersion("Bedrock", 1, 21, 4)
     assert committed.value.versions == [version]

@@ -227,11 +227,11 @@ class QueuedSchematicAnalyzer:
         timeout_seconds: float,
     ) -> _JobResponse:
         input_keys = tuple(await run_all([partial(self._stage_input, payload) for payload in payloads]))
-        job_id = await self._jobs.submit(operation, params, input_keys)
+        job_id = await self._jobs.submit(operation, params, input_keys, context=ActingContext.current())
         try:
             async with asyncio.timeout(timeout_seconds):
                 while True:
-                    snapshot = await self._jobs.get(job_id)
+                    snapshot = await self._jobs.get(job_id, context=ActingContext.current())
                     if snapshot is None:
                         msg = "The schematic job result disappeared before it was collected."
                         raise InfrastructureError(msg, resource="schematic", context={"job_id": job_id})
@@ -288,14 +288,14 @@ class SchematicJobRunner:
     async def process_batch(self, *, context: ActingContext, limit: int = 8) -> None:
         """Claim jobs and let each finish recording its own outcome before reporting batch failures."""
         with worker_scope(context):
-            jobs = await self._jobs.claim(limit=limit)
+            jobs = await self._jobs.claim(limit=limit, context=context)
             # Jobs are independent. Let each record its outcome even if another job's handler
             # fails; cancelling it here would leave its claim reserved until the lease expires.
             await run_all_settled([partial(self._process, job) for job in jobs])
 
     async def cleanup(self, *, context: ActingContext) -> None:
         with worker_scope(context):
-            await self._jobs.cleanup(self._artifacts.delete)
+            await self._jobs.cleanup(self._artifacts.delete, context=context)
 
     async def _process(self, job: ClaimedSchematicJob) -> None:
         with worker_execution("schematic-jobs", job.claim_token):
@@ -311,7 +311,7 @@ class SchematicJobRunner:
     async def _renew_claim(self, job: ClaimedSchematicJob, tasks: TaskGroup) -> None:
         while True:
             await anyio.sleep(30)
-            if not await self._jobs.renew(job):
+            if not await self._jobs.renew(job, context=ActingContext.current()):
                 tasks.cancel_scope.cancel()
                 return
 
@@ -324,13 +324,13 @@ class SchematicJobRunner:
                 # Include the claim token so an old worker cannot overwrite or delete a newer
                 # worker's output after the job has been reclaimed.
                 result_object_key = f"schematic-jobs/results/{job.id}/{job.claim_token}"
-                if not await self._jobs.register_result_object(job, result_object_key):
+                if not await self._jobs.register_result_object(job, result_object_key, context=ActingContext.current()):
                     return
                 content_type = {"render": "image/png", "render_video": "video/mp4"}.get(
                     job.operation, "application/octet-stream"
                 )
                 await self._artifacts.put(result_object_key, output, content_type=content_type)
-            applied = await self._jobs.complete(job, result, result_object_key)
+            applied = await self._jobs.complete(job, result, result_object_key, context=ActingContext.current())
             if not applied and result_object_key is not None:
                 await self._artifacts.delete(result_object_key)
         except Exception as error:
@@ -341,6 +341,7 @@ class SchematicJobRunner:
                 error_kind=kind,
                 error_context=context,
                 terminal=terminal,
+                context=ActingContext.current(),
             )
             logger.warning(
                 "Schematic job #%s (%s) failed: kind=%s, terminal=%s: %s\nRenderer diagnostics: %s",

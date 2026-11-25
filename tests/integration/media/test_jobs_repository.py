@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.core.accounts.models import Account
+from squid.core.actors import ActingContext
 from squid.core.artifacts.infrastructure import LocalArtifactStore
 from squid.core.media.application.jobs import (
     MediaArtifactCleanupInProgressError,
@@ -863,4 +864,4 @@ async def cleanup_artifacts(
 ) -> MediaArtifactCleanupOutcome:
     with TemporaryDirectory() as directory:
         service = MediaProcessingJobService(CleanupArtifacts(Path(directory), delete), uow_factory=factory)
-        return await service.cleanup_artifacts(limit=limit)
+        return await service.cleanup_artifacts(limit=limit, context=ActingContext.worker("test-worker"))

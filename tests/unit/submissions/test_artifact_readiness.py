@@ -5,6 +5,7 @@ from uuid import UUID
 import pytest
 from whenever import Instant
 
+from squid.core.actors import ActingContext
 from squid.core.errors import InvalidStateError
 from squid.core.media.application.jobs import MediaJobSnapshot, MediaUploadMetadata, StoredMediaArtifact
 from squid.core.media.domain import MediaKind, MediaLimits
@@ -32,7 +33,7 @@ class FakeMediaJobs:
         self.jobs = jobs
         self.requested: list[UUID] = []
 
-    async def list_for_draft(self, draft_id: UUID) -> tuple[MediaJobSnapshot, ...]:
+    async def list_for_draft(self, draft_id: UUID, *, context: ActingContext) -> tuple[MediaJobSnapshot, ...]:
         self.requested.append(draft_id)
         return self.jobs
 
@@ -42,7 +43,7 @@ class FakeSchematics:
         self.snapshot = snapshot or DraftSchematicSnapshot(SchematicArtifactState.ABSENT)
         self.requested: list[UUID] = []
 
-    async def read_for_draft(self, draft_id: UUID) -> DraftSchematicSnapshot:
+    async def read_for_draft(self, draft_id: UUID, *, context: ActingContext) -> DraftSchematicSnapshot:
         self.requested.append(draft_id)
         return self.snapshot
 
@@ -125,7 +126,9 @@ async def test_empty_backend_state_is_absent_and_ready() -> None:
     media = FakeMediaJobs()
     schematics = FakeSchematics()
 
-    readiness = await AuthoritativeDraftArtifactReadiness(media, schematics).assess(DRAFT_ID)
+    readiness = await AuthoritativeDraftArtifactReadiness(media, schematics).assess(
+        DRAFT_ID, context=ActingContext.worker("test-worker")
+    )
 
     assert readiness.schematic_state is SchematicArtifactState.ABSENT
     assert readiness.normalized_media_upload_ids == ()
@@ -141,7 +144,7 @@ async def test_discarded_media_is_ignored() -> None:
         FakeMediaJobs((discarded,)),
         FakeSchematics(),
         media_limits=MediaLimits(max_source_bytes=1),
-    ).assess(DRAFT_ID)
+    ).assess(DRAFT_ID, context=ActingContext.worker("test-worker"))
 
     assert readiness.normalized_media_upload_ids == ()
     assert readiness.issues == ()
@@ -151,7 +154,7 @@ async def test_pending_and_claimed_media_return_one_stable_processing_issue() ->
     readiness = await AuthoritativeDraftArtifactReadiness(
         FakeMediaJobs((_job(1, status=MediaJobStatus.PENDING), _job(2, status=MediaJobStatus.CLAIMED))),
         FakeSchematics(),
-    ).assess(DRAFT_ID)
+    ).assess(DRAFT_ID, context=ActingContext.worker("test-worker"))
 
     assert readiness.issues == (SubmissionAttentionIssue("media", SubmissionAttentionReason.MEDIA_PROCESSING),)
 
@@ -160,7 +163,7 @@ async def test_dead_media_returns_a_stable_rejected_issue_without_diagnostics() 
     readiness = await AuthoritativeDraftArtifactReadiness(
         FakeMediaJobs((_job(1, status=MediaJobStatus.DEAD),)),
         FakeSchematics(),
-    ).assess(DRAFT_ID)
+    ).assess(DRAFT_ID, context=ActingContext.worker("test-worker"))
 
     assert readiness.normalized_media_upload_ids == ()
     assert readiness.issues == (SubmissionAttentionIssue("media", SubmissionAttentionReason.MEDIA_REJECTED),)
@@ -173,7 +176,7 @@ async def test_valid_completed_media_exposes_only_opaque_upload_ids(kind: MediaK
     readiness = await AuthoritativeDraftArtifactReadiness(
         FakeMediaJobs((job,)),
         FakeSchematics(),
-    ).assess(DRAFT_ID)
+    ).assess(DRAFT_ID, context=ActingContext.worker("test-worker"))
 
     assert readiness.normalized_media_upload_ids == (job.upload.id,)
     assert readiness.issues == ()
@@ -201,7 +204,7 @@ async def test_invalid_completed_image_artifacts_are_rejected(
     readiness = await AuthoritativeDraftArtifactReadiness(
         FakeMediaJobs((_job(1, artifacts=artifacts),)),
         FakeSchematics(),
-    ).assess(DRAFT_ID)
+    ).assess(DRAFT_ID, context=ActingContext.worker("test-worker"))
 
     assert readiness.normalized_media_upload_ids == ()
     assert readiness.issues == (SubmissionAttentionIssue("media", SubmissionAttentionReason.MEDIA_REJECTED),)
@@ -216,7 +219,7 @@ async def test_completed_video_requires_a_valid_thumbnail() -> None:
     readiness = await AuthoritativeDraftArtifactReadiness(
         FakeMediaJobs((_job(1, kind=MediaKind.VIDEO, artifacts=artifacts),)),
         FakeSchematics(),
-    ).assess(DRAFT_ID)
+    ).assess(DRAFT_ID, context=ActingContext.worker("test-worker"))
 
     assert readiness.normalized_media_upload_ids == ()
     assert readiness.issues == (SubmissionAttentionIssue("media", SubmissionAttentionReason.MEDIA_REJECTED),)
@@ -232,7 +235,7 @@ async def test_completed_video_accepts_a_valid_thumbnail() -> None:
     readiness = await AuthoritativeDraftArtifactReadiness(
         FakeMediaJobs((_job(1, kind=MediaKind.VIDEO, artifacts=artifacts),)),
         FakeSchematics(),
-    ).assess(DRAFT_ID)
+    ).assess(DRAFT_ID, context=ActingContext.worker("test-worker"))
 
     assert readiness.normalized_media_upload_ids == (UUID("00000000-0000-4000-8000-000000000001"),)
     assert readiness.issues == ()
@@ -254,7 +257,7 @@ async def test_media_limits_are_rechecked_over_the_whole_active_draft(limits: Me
         FakeMediaJobs((first, second)),
         FakeSchematics(),
         media_limits=limits,
-    ).assess(DRAFT_ID)
+    ).assess(DRAFT_ID, context=ActingContext.worker("test-worker"))
 
     assert readiness.normalized_media_upload_ids == (first.upload.id, second.upload.id)
     assert readiness.issues == (SubmissionAttentionIssue("media", SubmissionAttentionReason.MEDIA_REJECTED),)
@@ -264,7 +267,7 @@ async def test_wrong_draft_media_is_rejected_and_never_exposed() -> None:
     readiness = await AuthoritativeDraftArtifactReadiness(
         FakeMediaJobs((_job(1, draft_id=OTHER_DRAFT_ID),)),
         FakeSchematics(),
-    ).assess(DRAFT_ID)
+    ).assess(DRAFT_ID, context=ActingContext.worker("test-worker"))
 
     assert readiness.normalized_media_upload_ids == ()
     assert readiness.issues == (SubmissionAttentionIssue("media", SubmissionAttentionReason.MEDIA_REJECTED),)
@@ -274,7 +277,7 @@ async def test_ready_state_projects_the_stored_schematic_identity() -> None:
     readiness = await AuthoritativeDraftArtifactReadiness(
         FakeMediaJobs(),
         FakeSchematics(DraftSchematicSnapshot(SchematicArtifactState.READY, SCHEMATIC_ID)),
-    ).assess(DRAFT_ID)
+    ).assess(DRAFT_ID, context=ActingContext.worker("test-worker"))
 
     assert readiness.schematic_state is SchematicArtifactState.READY
     assert readiness.schematic_id == SCHEMATIC_ID
@@ -291,7 +294,7 @@ async def test_nonterminal_schematic_state_never_exposes_an_identifier(snapshot:
     readiness = await AuthoritativeDraftArtifactReadiness(
         FakeMediaJobs(),
         FakeSchematics(snapshot),
-    ).assess(DRAFT_ID)
+    ).assess(DRAFT_ID, context=ActingContext.worker("test-worker"))
 
     assert readiness.schematic_state is snapshot.state
     assert readiness.schematic_id is None

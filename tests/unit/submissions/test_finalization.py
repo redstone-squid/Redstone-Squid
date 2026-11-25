@@ -141,7 +141,7 @@ class FakeArtifacts:
         self.readiness = readiness
         self.assessed: list[UUID] = []
 
-    async def assess(self, draft_id: UUID) -> SubmissionArtifactReadiness:
+    async def assess(self, draft_id: UUID, *, context: ActingContext) -> SubmissionArtifactReadiness:
         self.assessed.append(draft_id)
         return self.readiness
 
@@ -151,7 +151,7 @@ class FakeSponsors:
         self.sponsor = sponsor
         self.resolved: list[UUID] = []
 
-    async def resolve(self, installation_id: UUID) -> PublicSponsor | None:
+    async def resolve(self, installation_id: UUID, *, context: ActingContext) -> PublicSponsor | None:
         self.resolved.append(installation_id)
         return self.sponsor
 
@@ -262,8 +262,12 @@ class FakeWriter:
     def __init__(self, result: BuildSubmissionResult | Exception) -> None:
         self.result = result
         self.payloads: list[NormalizedSubmission] = []
+        self.contexts: list[ActingContext] = []
 
-    async def execute(self, job: ClaimedFinalizationJob, *, now: Instant) -> BuildSubmissionResult:
+    async def execute(
+        self, job: ClaimedFinalizationJob, *, now: Instant, context: ActingContext
+    ) -> BuildSubmissionResult:
+        self.contexts.append(context)
         self.payloads.append(job.payload)
         if isinstance(self.result, Exception):
             raise self.result
@@ -690,6 +694,7 @@ async def test_worker_delegates_successful_completion_to_the_executor() -> None:
     await worker.process_batch(now=NOW, context=ActingContext.worker("test-worker"))
 
     assert executor.payloads == [payload]
+    assert executor.contexts[0].effective.worker_name == "submission-finalization"
     assert jobs.failures == []
     assert jobs.worker_attention == ()
 

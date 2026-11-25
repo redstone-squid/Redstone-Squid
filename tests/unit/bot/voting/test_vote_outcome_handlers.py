@@ -28,6 +28,11 @@ from tests.support.discord import make_layout_bot
 from tests.support.services import bot_services
 from tests.support.voting import build_snapshot
 
+pytestmark = [
+    pytest.mark.parametrize("discord_worker_context", ["events.core.vote_session.closed"], indirect=True),
+    pytest.mark.usefixtures("discord_worker_context"),
+]
+
 DELETE_TARGET = DeleteLogVoteTarget(message_id=7, channel_id=8, server_id=9)
 
 
@@ -74,12 +79,12 @@ def _bot(snapshot: VoteSessionSnapshot | None) -> Any:
 async def test_a_decided_build_vote_applies_its_outcome(result: VoteSessionResult, expected: str) -> None:
     bot = _bot(_snapshot(kind=VoteKind.BUILD, result=result, target=BuildVoteTarget(42)))
 
-    with ActingContext.worker("events.core").scope():
+    with ActingContext.worker("events.core.vote_session.closed").scope():
         await ApplyBuildVoteOutcomeHandler(bot.services.votes, bot.services.builds).handle(_event())
 
     getattr(bot.services.builds, expected).assert_awaited_once_with(
         42,
-        actor="worker:events.core",
+        context=ActingContext.current(),
         operation="moderation",
         source="vote_outcome",
         correlation_kind="domain_event",

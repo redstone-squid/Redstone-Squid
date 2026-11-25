@@ -54,7 +54,8 @@ async def test_worker_effect_traces_to_impersonated_request_after_acknowledgemen
         (effect,) = (
             await session.scalars(
                 select(WorkActivity).where(
-                    WorkActivity.relation == "domain_events", WorkActivity.effective == "worker:events.audit_test"
+                    WorkActivity.relation == "domain_events",
+                    WorkActivity.effective == "worker:events.audit_test.test.cause",
                 )
             )
         ).all()

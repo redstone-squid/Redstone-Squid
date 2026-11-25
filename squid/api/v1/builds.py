@@ -112,7 +112,7 @@ async def edit_build(
         ),
         context=caller.context(),
     )
-    build = await services.builds.get(build_id)
+    build = await services.builds.get(build_id, context=ActingContext.current())
     if build is None:
         raise BuildNotFoundError(build_id)
     headers = {"ETag": build_etag(build)}
@@ -143,7 +143,7 @@ async def get_build(
     Pending and rejected builds return 404, as do missing builds. This endpoint does
     not expose unpublished submissions, even to callers who can view them elsewhere.
     """
-    build = await build_queries.get_public(build_id)
+    build = await build_queries.get_public(build_id, context=caller.context())
     detail = await BrowserViews(services, caller).build(build)
     return Response(detail, headers={"ETag": build_etag(build)})
 
@@ -159,7 +159,7 @@ async def get_build(
 async def get_build_media(build_id: FromPath[int], upload_id: FromPath[UUID], services: Services) -> File:
     """Serve a retained media output while its build is approved."""
     media = services.published_build_media
-    outputs = await media.outputs(build_id, upload_id=upload_id) if media else []
+    outputs = await media.outputs(build_id, upload_id=upload_id, context=ActingContext.current()) if media else []
     if media is None or not outputs:
         raise BuildNotFoundError(build_id)
     artifact = outputs[0]
@@ -226,7 +226,7 @@ async def list_builds(
             ),
             context=ActingContext.current(),
         )
-        summaries = await hydrate_builds(build_queries, result.hits)
+        summaries = await hydrate_builds(build_queries, result.hits, context=caller.context())
         return Page(
             # A page can come back short of `total` when the projection outlived a build; the count
             # is the search backend's, and hydrate_builds has already logged the drift.
@@ -250,6 +250,7 @@ async def list_builds(
         sort=BuildListSort(field=cast(BuildSortField, sort_field), descending=descending),
         selector=selector,
         page_size=page_size,
+        context=caller.context(),
     )
     return Page[PublicBuildSummary].from_domain(page, PublicBuildSummary.from_build)
 

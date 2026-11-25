@@ -187,6 +187,7 @@ class FakeTagResolver:
         build_kind: str | None,
         restrictions: Sequence[str],
         patterns: Sequence[str],
+        context: ActingContext,
     ) -> TagResolution:
         del build_kind
         restriction_lookup = {
@@ -243,7 +244,7 @@ class FakeTagResolver:
             unknown_patterns=frozenset(unknown_patterns),
         )
 
-    async def showcase_definitions(self, keys: Sequence[str]) -> Sequence[TagDefinition]:
+    async def showcase_definitions(self, keys: Sequence[str], *, context: ActingContext) -> Sequence[TagDefinition]:
         return [definition for definition in SHOWCASE_TAGS.values() if definition.stable_key in keys]
 
 
@@ -303,9 +304,9 @@ async def test_edit_prepares_a_detached_patch_then_commits(existing_build: DoorB
     result = await service.edit(
         42,
         BuildEditPatch(dimensions=(10, 11, 12), extra_user_info="changed"),
-        actor="test",
         operation="edit",
         source="test",
+        context=ActingContext.worker("test"),
     )
     assert result.dimensions == (10, 11, 12)
     assert existing_build.dimensions == (None, None, None)
@@ -319,15 +320,30 @@ async def test_edit_can_carry_forward_an_unchanged_invalid_door_dimension(existi
     repository = FakeBuildRepository(existing_build)
     service = build_service(repository)
 
-    result = await service.edit(42, BuildEditPatch(door_dimensions=(-1, 4, None)), actor="test", source="test")
+    result = await service.edit(
+        42,
+        BuildEditPatch(door_dimensions=(-1, 4, None)),
+        source="test",
+        context=ActingContext.worker("test"),
+    )
     assert isinstance(result, DoorBuild)
     assert result.door_dimensions == (-1, 4, None)
 
     with pytest.raises(BuildEditValidationError) as error:
-        await service.edit(42, BuildEditPatch(door_dimensions=(-2, 3, None)), actor="test", source="test")
+        await service.edit(
+            42,
+            BuildEditPatch(door_dimensions=(-2, 3, None)),
+            source="test",
+            context=ActingContext.worker("test"),
+        )
     assert error.value.issues == {"opening_width": "below_minimum"}
 
-    fixed = await service.edit(42, BuildEditPatch(door_dimensions=(2, 3, None)), actor="test", source="test")
+    fixed = await service.edit(
+        42,
+        BuildEditPatch(door_dimensions=(2, 3, None)),
+        source="test",
+        context=ActingContext.worker("test"),
+    )
     assert isinstance(fixed, DoorBuild)
     assert fixed.door_dimensions == (2, 3, None)
     assert repository.saved == [result, fixed]
@@ -344,7 +360,7 @@ async def test_edit_can_carry_forward_an_unchanged_invalid_door_dimension(existi
 async def test_edit_rejects_new_extender_issues(patch: BuildEditPatch, issues: dict[str, str]) -> None:
     repository = FakeBuildRepository(ExtenderBuild(id=42))
     with pytest.raises(BuildEditValidationError) as error:
-        await build_service(repository).edit(42, patch, actor="test", source="test")
+        await build_service(repository).edit(42, patch, source="test", context=ActingContext.worker("test"))
     assert error.value.issues == issues
     assert repository.saved == []
 
@@ -357,9 +373,9 @@ async def test_invalid_patch_does_not_acquire_a_write_lock(existing_build: DoorB
         await build_service(repository, locks).edit(
             42,
             BuildEditPatch(dimensions=invalid_dimensions),
-            actor="test",
             operation="edit",
             source="test",
+            context=ActingContext.worker("test"),
         )
     assert locks.acquisitions == []
     assert repository.saved == []
@@ -378,7 +394,7 @@ async def test_cancellation_during_preparation_holds_no_write_lock(existing_buil
     service = build_service(BlockingRepository(existing_build), locks)
     async with anyio.create_task_group() as tasks:
         tasks.start_soon(
-            partial(service.edit, actor="test", operation="edit", source="test"),
+            partial(service.edit, context=ActingContext.worker("test"), operation="edit", source="test"),
             42,
             BuildEditPatch(),
         )
@@ -390,13 +406,13 @@ async def test_cancellation_during_preparation_holds_no_write_lock(existing_buil
 async def test_edit_reports_missing_and_busy_builds(existing_build: DoorBuild) -> None:
     with pytest.raises(BuildNotFoundError):
         await build_service(FakeBuildRepository()).edit(
-            42, BuildEditPatch(), actor="test", operation="edit", source="test"
+            42, BuildEditPatch(), operation="edit", source="test", context=ActingContext.worker("test")
         )
     locks = FakeBuildLocks()
     locks.acquire_result = False
     with pytest.raises(BuildBusyError):
         await build_service(FakeBuildRepository(existing_build), locks).edit(
-            42, BuildEditPatch(), actor="test", operation="edit", source="test"
+            42, BuildEditPatch(), operation="edit", source="test", context=ActingContext.worker("test")
         )
 
 
@@ -418,9 +434,9 @@ async def test_edit_rechecks_revision_after_preparation(
             42,
             BuildEditPatch(extra_user_info="stale"),
             expected_revision=1,
-            actor="test",
             operation="edit",
             source="test",
+            context=ActingContext.worker("test"),
         )
     assert repository.saved == []
 
@@ -433,9 +449,9 @@ async def test_edit_rejects_a_stale_expected_revision(existing_build: DoorBuild)
             42,
             BuildEditPatch(dimensions=(1, 2, 3)),
             expected_revision=2,
-            actor="test",
             operation="edit",
             source="test",
+            context=ActingContext.worker("test"),
         )
     assert error.value.public_context == {"build_id": 42, "expected_revision": 2, "current_revision": 1}
     assert locks.acquisitions == []
@@ -448,8 +464,12 @@ async def test_status_changes_and_cleanup_use_lock_manager(existing_build: DoorB
     service = build_service(repository, locks)
     cutoff = Instant.from_utc(2026, 7, 29)
 
-    await service.approve(42, actor="test", operation="edit", source="test")
-    await service.reject(42, actor="test", operation="edit", source="test")
+    await service.approve(
+        42, operation="edit", source="test", context=ActingContext.worker("events.core.vote_session.closed")
+    )
+    await service.reject(
+        42, operation="edit", source="test", context=ActingContext.worker("events.core.vote_session.closed")
+    )
     await service.clean_stale_locks(older_than=cutoff, context=ActingContext.worker("test-worker"))
 
     assert [build.id for build in repository.confirmed] == [existing_build.id]
@@ -464,7 +484,7 @@ async def test_classify_restrictions_replaces_existing_values_without_persisting
     service = build_service(repository)
     build = UtilityBuild(component_restrictions=["Old"], miscellaneous_restrictions=["Old"])
 
-    result = await service.classify_restrictions(build, ["seamless", "unknown"])
+    result = await service.classify_restrictions(build, ["seamless", "unknown"], context=ActingContext.direct(Actor()))
 
     assert result is build
     assert build.wiring_placement_restrictions == ["Seamless"]
@@ -484,6 +504,7 @@ async def test_prepare_for_account_does_not_require_a_discord_identity() -> None
         source_submission_draft_id=draft_id,
         display_name="  Workshop prototype  ",
         ai_generated=False,
+        context=ActingContext.direct(Actor(account_id=17)),
     )
 
     assert build.submitter_account_id == 17
@@ -499,7 +520,9 @@ async def test_get_by_source_submission_draft_id_returns_an_existing_build() -> 
     draft_id = UUID("11111111-1111-4111-8111-111111111111")
     existing = OtherBuild(id=41, source_submission_draft_id=draft_id)
 
-    result = await build_service(FakeBuildRepository(existing)).get_by_source_submission_draft_id(draft_id)
+    result = await build_service(FakeBuildRepository(existing)).get_by_source_submission_draft_id(
+        draft_id, context=ActingContext.direct(Actor())
+    )
 
     assert result is not None
     assert result.id == existing.id
@@ -518,7 +541,7 @@ async def test_save_commits_without_waiting_for_an_embedding() -> None:
     build = DoorBuild(id=42)
     repository.build = build.copy_for_edit()
 
-    await service.save(build, actor="test", operation="edit", source="test")
+    await service.save(build, operation="edit", source="test", context=ActingContext.worker("test"))
 
     assert build.versions == []
     assert build.embedding is None
@@ -549,11 +572,28 @@ class TestAuthorizedEditing:
 
         return Store()
 
+    @pytest.mark.parametrize("outcome", ["approve", "reject"])
+    async def test_moderation_requires_its_grant_or_closed_vote_delivery(
+        self, existing_build: DoorBuild, outcome: str
+    ) -> None:
+        repository = FakeBuildRepository(existing_build)
+        service = build_service(repository, permissions=self._permissions())
+        for context in (ActingContext.direct(self.STRANGER), ActingContext.worker("unrelated")):
+            with pytest.raises(AuthorizationError):
+                await getattr(service, outcome)(42, source="vote_outcome", context=context)
+        assert repository.confirmed == []
+        assert repository.denied == []
+        granted = build_service(repository, permissions=self._permissions(f"build.submission.{outcome}"))
+        await getattr(granted, outcome)(42, source="moderator", context=ActingContext.direct(self.STRANGER))
+        assert repository.confirmed or repository.denied
+
     async def test_the_owner_may_edit_their_pending_build(self, existing_build: DoorBuild) -> None:
         repository = FakeBuildRepository(existing_build)
         service = build_service(repository, permissions=self._permissions())
 
-        build = await service.apply_edit(self.OWNER, 42, BuildEditPatch(extra_user_info="mine"))
+        build = await service.apply_edit(
+            42, BuildEditPatch(extra_user_info="mine"), context=ActingContext.for_actor(self.OWNER)
+        )
 
         assert build.description == "mine"
         assert len(repository.saved) == 1
@@ -563,7 +603,9 @@ class TestAuthorizedEditing:
         service = build_service(repository, permissions=self._permissions())
 
         with pytest.raises(AuthorizationError):
-            await service.apply_edit(self.STRANGER, 42, BuildEditPatch(extra_user_info="theirs"))
+            await service.apply_edit(
+                42, BuildEditPatch(extra_user_info="theirs"), context=ActingContext.for_actor(self.STRANGER)
+            )
 
         assert repository.saved == []
 
@@ -571,18 +613,22 @@ class TestAuthorizedEditing:
         repository = FakeBuildRepository(existing_build)
         service = build_service(repository, permissions=self._permissions("build.submission.edit"))
 
-        build = await service.apply_edit(self.STRANGER, 42, BuildEditPatch(extra_user_info="moderated"))
+        build = await service.apply_edit(
+            42, BuildEditPatch(extra_user_info="moderated"), context=ActingContext.for_actor(self.STRANGER)
+        )
 
         assert build.description == "moderated"
 
     async def test_a_creator_can_edit_published_description(self, existing_build: DoorBuild) -> None:
         existing_build.submission_status = BuildStatus.APPROVED
         existing_build.credited_creator_account_ids = frozenset({2})
-        await apply_build_tags(existing_build, FakeTagResolver())
+        await apply_build_tags(existing_build, FakeTagResolver(), context=ActingContext.direct(Actor()))
         repository = FakeBuildRepository(existing_build)
         service = build_service(repository, permissions=self._permissions())
 
-        build = await service.apply_edit(self.STRANGER, 42, BuildEditPatch(extra_user_info="updated"))
+        build = await service.apply_edit(
+            42, BuildEditPatch(extra_user_info="updated"), context=ActingContext.for_actor(self.STRANGER)
+        )
         assert build.description == "updated"
 
     async def test_a_creator_cannot_directly_change_published_dimensions(self, existing_build: DoorBuild) -> None:
@@ -591,7 +637,9 @@ class TestAuthorizedEditing:
         service = build_service(repository, permissions=self._permissions())
 
         with pytest.raises(AuthorizationError):
-            await service.apply_edit(self.OWNER, 42, BuildEditPatch(dimensions=(1, 2, 3)))
+            await service.apply_edit(
+                42, BuildEditPatch(dimensions=(1, 2, 3)), context=ActingContext.for_actor(self.OWNER)
+            )
 
         assert repository.saved == []
 
@@ -599,14 +647,18 @@ class TestAuthorizedEditing:
         service = build_service(FakeBuildRepository(), permissions=self._permissions())
 
         with pytest.raises(BuildNotFoundError):
-            await service.apply_edit(self.OWNER, 42, BuildEditPatch(extra_user_info="mine"))
+            await service.apply_edit(
+                42, BuildEditPatch(extra_user_info="mine"), context=ActingContext.for_actor(self.OWNER)
+            )
 
     async def test_authorized_editing_requires_a_permission_service(self, existing_build: DoorBuild) -> None:
         """A missing permission service must not silently authorize edits."""
         service = build_service(FakeBuildRepository(existing_build))
 
         with pytest.raises(InvalidStateError):
-            await service.apply_edit(self.OWNER, 42, BuildEditPatch(extra_user_info="mine"))
+            await service.apply_edit(
+                42, BuildEditPatch(extra_user_info="mine"), context=ActingContext.for_actor(self.OWNER)
+            )
 
 
 async def test_permission_revoked_during_preparation_prevents_commit(
@@ -637,14 +689,16 @@ async def test_permission_revoked_during_preparation_prevents_commit(
 
     monkeypatch.setattr(service, "_prepare_for_persistence", prepare_and_change)
     with pytest.raises(AuthorizationError):
-        await service.apply_edit(Actor(account_id=2), 42, BuildEditPatch(extra_user_info="denied"))
+        await service.apply_edit(
+            42, BuildEditPatch(extra_user_info="denied"), context=ActingContext.for_actor(Actor(account_id=2))
+        )
     assert repository.saved == []
 
 
 async def test_unresolved_names_are_kept_until_an_official_tag_matches_them() -> None:
     build = DoorBuild(component_restrictions=["No Slime"], patterns=["Spiral"])
 
-    await apply_build_tags(build, FakeTagResolver())
+    await apply_build_tags(build, FakeTagResolver(), context=ActingContext.direct(Actor()))
 
     assert build.component_restrictions == []
     assert build.patterns == []
@@ -654,12 +708,12 @@ async def test_unresolved_names_are_kept_until_an_official_tag_matches_them() ->
     }
 
     # An unrelated edit keeps the names, and does not add Regular in place of the unresolved pattern.
-    await apply_build_tags(build, FakeTagResolver())
+    await apply_build_tags(build, FakeTagResolver(), context=ActingContext.direct(Actor()))
     assert build.patterns == []
     assert build.extra_info.get("unknown_patterns") == ["Spiral"]
 
     resolver = FakeTagResolver(known_restrictions={"No Slime": "component"}, known_patterns=("Spiral",))
-    await apply_build_tags(build, resolver)
+    await apply_build_tags(build, resolver, context=ActingContext.direct(Actor()))
 
     assert build.component_restrictions == ["No Slime"]
     assert build.patterns == ["Spiral"]
@@ -673,8 +727,8 @@ async def test_vote_outcome_leaves_an_existing_decision_unchanged(
     existing_build.submission_status = status
     repository = FakeBuildRepository(existing_build)
     service = build_service(repository)
-    await service.approve(42, actor="vote_worker", source="vote_outcome")
-    await service.reject(42, actor="vote_worker", source="vote_outcome")
+    await service.approve(42, source="vote_outcome", context=ActingContext.worker("events.core.vote_session.closed"))
+    await service.reject(42, source="vote_outcome", context=ActingContext.worker("events.core.vote_session.closed"))
     assert repository.confirmed == []
     assert repository.denied == []
     assert existing_build.submission_status is status
@@ -690,9 +744,9 @@ async def test_showcase_tags_are_replaced_keeping_existing_assignments(existing_
     result = await build_service(repository).edit(
         42,
         BuildEditPatch(showcase_tags=[ShowcaseTag("tileable"), ShowcaseTag("speed", "3.0")]),
-        actor="test",
         operation="edit",
         source="test",
+        context=ActingContext.worker("test"),
     )
 
     showcase = [tag for tag in result.tags if tag.definition.semantic_kind is TagSemanticKind.SHOWCASE]
@@ -711,9 +765,9 @@ async def test_showcase_tags_can_be_added_with_values_and_have_values_changed(ex
     added = await service.edit(
         42,
         BuildEditPatch(showcase_tags=[ShowcaseTag("speed", "4.5"), ShowcaseTag("label", "Fast")]),
-        actor="test",
         operation="edit",
         source="test",
+        context=ActingContext.worker("test"),
     )
 
     showcase = [tag for tag in added.tags if tag.definition.semantic_kind is TagSemanticKind.SHOWCASE]
@@ -739,7 +793,11 @@ async def test_showcase_tags_need_an_approved_key_and_a_value_that_suits_it(
 
     with pytest.raises(InvalidBuildError) as error:
         await build_service(repository).edit(
-            42, BuildEditPatch(showcase_tags=[tag]), actor="test", operation="edit", source="test"
+            42,
+            BuildEditPatch(showcase_tags=[tag]),
+            operation="edit",
+            source="test",
+            context=ActingContext.worker("test"),
         )
     assert error.value.public_context == {"showcase_tags": [rejected]}
     assert repository.saved == []

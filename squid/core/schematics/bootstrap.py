@@ -2,6 +2,7 @@
 
 from squid.config import SchematicConfig
 from squid.core.artifacts import ArtifactStore
+from squid.core.permissions.application import PermissionService
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.schematics.application import RenderRequest, SchematicJobService, SchematicService
 from squid.core.schematics.application.preview_storage import SchematicPreviewStorage
@@ -20,6 +21,7 @@ def create_schematic_service(
     jobs: SchematicJobService,
     *,
     uow_factory: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
+    permissions: PermissionService,
     render_capable: bool = False,
 ) -> SchematicService:
     """Build a schematic service that submits work to the durable queue.
@@ -44,6 +46,7 @@ def create_schematic_service(
         store,
         previews,
         VersionService(uow_factory=uow_factory),
+        permissions=permissions,
         limits=SchematicLimits(
             max_upload_bytes=config.max_upload_bytes,
             max_inflated_bytes=config.max_inflated_bytes,
@@ -61,6 +64,7 @@ def create_schematic_service(
             artifacts,
             store,
             resource_pack,
+            permissions=permissions,
             enabled=config.enabled and config.video_enabled and render_capable,
             max_blocks=config.render_max_block_count,
             max_volume=config.render_max_bounding_volume,

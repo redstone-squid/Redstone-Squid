@@ -9,7 +9,7 @@ from functools import wraps
 from typing import Any
 from uuid import UUID, uuid4
 
-from squid.core.errors import AuthenticationError, InvalidStateError
+from squid.core.errors import AuthenticationError, AuthorizationError, InvalidStateError
 
 impersonation_use: ContextVar[UUID | None] = ContextVar("impersonation_use", default=None)
 """Authorized invocation whose application transactions are being audited."""
@@ -25,7 +25,7 @@ class ActorKind(StrEnum):
 
 @dataclass(frozen=True, slots=True, kw_only=True)
 class Actor:
-    """An account or Discord user acting in an optional guild context.
+    """The principal established by an application entry point.
 
     Adapters supply these facts, never request bodies. Anonymous actors are valid
     permission inputs; operations requiring identity check it at their boundary.
@@ -148,19 +148,31 @@ class ActingContext:
         current = current_acting_context.get()
         if current is None:
             return cls.direct(actor)
-        effective = current.effective
+        return current.with_actor(actor)
+
+    def with_actor(self, actor: Actor) -> ActingContext:
+        """Attach verified guild or linked-account facts to this invocation."""
+        effective = self.effective
         same_discord = effective.discord_user_id is not None and effective.discord_user_id == actor.discord_user_id
-        if effective.reference != actor.reference and not (same_discord and effective.account_id is None):
+        if effective.reference != actor.reference and not (
+            same_discord and (effective.account_id is None or actor.account_id is None)
+        ):
             message = "Resolved identity differs from the current effective actor"
             raise InvalidStateError(message)
         resolved = replace(
             actor,
+            account_id=actor.account_id or effective.account_id,
             credential_scopes=effective.credential_scopes,
             credential_id=effective.credential_id,
             audit_use_id=effective.audit_use_id,
         )
-        operator = resolved if current.session_id is None and current.operator == effective else current.operator
-        return replace(current, operator=operator, effective=resolved)
+        operator = resolved if self.session_id is None and self.operator == effective else self.operator
+        return replace(self, operator=operator, effective=resolved)
+
+    def require_worker(self) -> str:
+        if self.effective.worker_name is None:
+            raise AuthorizationError
+        return self.effective.worker_name
 
     @classmethod
     def direct(cls, actor: Actor) -> ActingContext:

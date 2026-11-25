@@ -4,6 +4,7 @@ import stat
 from dataclasses import dataclass
 from pathlib import Path
 
+from squid.core.actors import ActingContext
 from squid.core.media.application.commands import MediaProcessingRequest
 from squid.core.media.application.models import MediaProcessingResult
 from squid.core.media.application.ports import MediaProcessor
@@ -42,7 +43,7 @@ class MediaProcessingService:
         if violations := self._limits.batch_violations(totals):
             raise MediaLimitExceededError(violations)
 
-    async def process(self, request: MediaProcessingRequest) -> MediaProcessingResult:
+    async def process(self, request: MediaProcessingRequest, *, context: ActingContext) -> MediaProcessingResult:
         """Probe and process a regular file, then check the returned report.
 
         The caller must keep the source private and unchanged for this operation.
@@ -50,32 +51,33 @@ class MediaProcessingService:
         the file. The adapter validates output contents; this service checks report
         consistency and combined output size, discarding results that fail those checks.
         """
-        source = _snapshot_source(request.source_path)
-        if source.byte_size > self._limits.max_source_bytes:
-            raise MediaLimitExceededError(
-                MediaViolation(
-                    MediaLimitMeasure.SOURCE_BYTES,
-                    source.byte_size,
-                    self._limits.max_source_bytes,
+        with context.scope():
+            source = _snapshot_source(request.source_path)
+            if source.byte_size > self._limits.max_source_bytes:
+                raise MediaLimitExceededError(
+                    MediaViolation(
+                        MediaLimitMeasure.SOURCE_BYTES,
+                        source.byte_size,
+                        self._limits.max_source_bytes,
+                    )
                 )
-            )
 
-        probe = await self._processor.probe(request.source_path)
-        _require_unchanged(request.source_path, source)
-
-        result = await self._processor.process(
-            request,
-            probe=probe,
-            source_bytes=source.byte_size,
-            limits=self._limits,
-        )
-        try:
+            probe = await self._processor.probe(request.source_path)
             _require_unchanged(request.source_path, source)
-            self._validate_result(request, result, probe=probe, source_bytes=source.byte_size)
-        except Exception:
-            await self._processor.discard(result)
-            raise
-        return result
+
+            result = await self._processor.process(
+                request,
+                probe=probe,
+                source_bytes=source.byte_size,
+                limits=self._limits,
+            )
+            try:
+                _require_unchanged(request.source_path, source)
+                self._validate_result(request, result, probe=probe, source_bytes=source.byte_size)
+            except Exception:
+                await self._processor.discard(result)
+                raise
+            return result
 
     async def aclose(self) -> None:
         """Release processor resources."""

@@ -547,14 +547,14 @@ async def test_submit_is_retry_safe_and_does_not_overwrite_conflicting_source() 
         upload_id=UPLOAD_ID,
     )
 
-    assert await jobs.submit(submission) == UPLOAD_ID
-    assert await jobs.submit(submission) == UPLOAD_ID
-    original = await jobs.get(UPLOAD_ID)
+    assert await jobs.submit(submission, context=ActingContext.worker("test-worker")) == UPLOAD_ID
+    assert await jobs.submit(submission, context=ActingContext.worker("test-worker")) == UPLOAD_ID
+    original = await jobs.get(UPLOAD_ID, context=ActingContext.worker("test-worker"))
     assert original is not None
     original_key = original.upload.source_object_key
 
     with pytest.raises(MediaUploadConflictError):
-        await jobs.submit(replace(submission, source=b"different"))
+        await jobs.submit(replace(submission, source=b"different"), context=ActingContext.worker("test-worker"))
 
     assert artifacts.objects[original_key] == b"image"
     assert all(data != b"different" for data in artifacts.objects.values())
@@ -574,10 +574,11 @@ async def test_submit_staged_streams_a_regular_file_and_rejects_empty_source(tmp
             source_path=source,
             source_content_type="image/jpeg",
             upload_id=UPLOAD_ID,
-        )
+        ),
+        context=ActingContext.worker("test-worker"),
     )
 
-    snapshot = await jobs.get(upload_id)
+    snapshot = await jobs.get(upload_id, context=ActingContext.worker("test-worker"))
     assert snapshot is not None
     assert snapshot.upload.source_byte_size == 5
     assert artifacts.objects[snapshot.upload.source_object_key] == b"image"
@@ -590,7 +591,8 @@ async def test_submit_staged_streams_a_regular_file_and_rejects_empty_source(tmp
                 kind=MediaKind.IMAGE,
                 source_path=source,
                 source_content_type="image/jpeg",
-            )
+            ),
+            context=ActingContext.worker("test-worker"),
         )
 
 
@@ -626,7 +628,8 @@ async def test_submit_staged_cancellation_settles_metadata_reader_before_returni
                         kind=MediaKind.IMAGE,
                         source_path=source,
                         source_content_type="image/jpeg",
-                    )
+                    ),
+                    context=ActingContext.worker("test-worker"),
                 )
         finally:
             settled.set()
@@ -662,7 +665,8 @@ async def test_submit_removes_staged_source_when_draft_rejects_registration(
                 source=b"image",
                 source_content_type="image/jpeg",
                 upload_id=UPLOAD_ID,
-            )
+            ),
+            context=ActingContext.worker("test-worker"),
         )
 
     assert artifacts.objects == {}
@@ -680,7 +684,8 @@ async def test_draft_capacity_is_reserved_atomically_and_discard_releases_it() -
             kind=MediaKind.IMAGE,
             source=b"first",
             source_content_type="image/png",
-        )
+        ),
+        context=ActingContext.worker("test-worker"),
     )
 
     with pytest.raises(MediaLimitExceededError) as exc_info:
@@ -690,21 +695,23 @@ async def test_draft_capacity_is_reserved_atomically_and_discard_releases_it() -
                 kind=MediaKind.IMAGE,
                 source=b"second",
                 source_content_type="image/png",
-            )
+            ),
+            context=ActingContext.worker("test-worker"),
         )
     assert exc_info.value.violations[0].measure.value == "image_count"
     assert all(data != b"second" for data in artifacts.objects.values())
 
-    assert await jobs.discard(DRAFT_ID, first_id)
+    assert await jobs.discard(DRAFT_ID, first_id, context=ActingContext.worker("test-worker"))
     second_id = await jobs.submit(
         MediaUploadSubmission(
             draft_id=DRAFT_ID,
             kind=MediaKind.IMAGE,
             source=b"second",
             source_content_type="image/png",
-        )
+        ),
+        context=ActingContext.worker("test-worker"),
     )
-    snapshots = await jobs.list_for_draft(DRAFT_ID)
+    snapshots = await jobs.list_for_draft(DRAFT_ID, context=ActingContext.worker("test-worker"))
     assert {snapshot.upload.id for snapshot in snapshots} == {first_id, second_id}
     assert next(snapshot for snapshot in snapshots if snapshot.upload.id == first_id).status is MediaJobStatus.DISCARDED
 
@@ -720,20 +727,20 @@ async def test_runner_keeps_legacy_poster_writes_during_dual_reader_rollout(tmp_
         source_content_type="video/quicktime",
         upload_id=UPLOAD_ID,
     )
-    await jobs.submit(submission)
+    await jobs.submit(submission, context=ActingContext.worker("test-worker"))
     processor = WritingProcessor(MediaKind.VIDEO)
     runner = make_runner(jobs, artifacts, processor, tmp_path)
 
     await runner.process_batch(context=ActingContext.worker("test-worker"))
 
-    before_cleanup = await jobs.get(UPLOAD_ID)
+    before_cleanup = await jobs.get(UPLOAD_ID, context=ActingContext.worker("test-worker"))
     assert before_cleanup is not None
     assert before_cleanup.upload.raw_deleted_at is None
     assert before_cleanup.upload.source_object_key in artifacts.objects
     assert repository.artifact_cleanup_calls == 0
     cleanup = MediaStorageCleanup(jobs, artifacts)
-    await cleanup.cleanup_terminal_sources()
-    snapshot = await jobs.get(UPLOAD_ID)
+    await cleanup.cleanup_terminal_sources(context=ActingContext.worker("test-worker"))
+    snapshot = await jobs.get(UPLOAD_ID, context=ActingContext.worker("test-worker"))
     assert snapshot is not None
     assert snapshot.status is MediaJobStatus.COMPLETED
     assert snapshot.upload.raw_deleted_at == NOW
@@ -755,7 +762,7 @@ async def test_runner_keeps_legacy_poster_writes_during_dual_reader_rollout(tmp_
     assert not any(tmp_path.iterdir())
     assert all(not directory.exists() for directory in processor.seen_directories)
 
-    await jobs.submit(submission)
+    await jobs.submit(submission, context=ActingContext.worker("test-worker"))
     assert snapshot.upload.source_object_key not in artifacts.objects
 
 
@@ -770,7 +777,8 @@ async def test_runner_heartbeats_while_processing_is_still_running(tmp_path: Pat
             source=b"raw-image",
             source_content_type="image/jpeg",
             upload_id=UPLOAD_ID,
-        )
+        ),
+        context=ActingContext.worker("test-worker"),
     )
     processor = BlockingProcessor(MediaKind.IMAGE)
     runner = make_runner(jobs, artifacts, processor, tmp_path, heartbeat_interval_seconds=0.01)
@@ -783,7 +791,7 @@ async def test_runner_heartbeats_while_processing_is_still_running(tmp_path: Pat
             assert repository.heartbeat_calls >= 2
             processor.resume.set()
 
-    snapshot = await jobs.get(UPLOAD_ID)
+    snapshot = await jobs.get(UPLOAD_ID, context=ActingContext.worker("test-worker"))
     assert snapshot is not None
     assert snapshot.status is MediaJobStatus.COMPLETED
 
@@ -799,7 +807,8 @@ async def test_runner_stops_before_publication_after_heartbeat_loses_the_claim(t
             source=b"raw-image",
             source_content_type="image/jpeg",
             upload_id=UPLOAD_ID,
-        )
+        ),
+        context=ActingContext.worker("test-worker"),
     )
     processor = BlockingProcessor(MediaKind.IMAGE)
     runner = make_runner(jobs, artifacts, processor, tmp_path, heartbeat_interval_seconds=0.01)
@@ -808,11 +817,11 @@ async def test_runner_stops_before_publication_after_heartbeat_loses_the_claim(t
         async with create_task_group() as tasks:
             tasks.start_soon(partial(runner.process_batch, context=ActingContext.worker("test-worker")))
             await processor.started.wait()
-            assert await jobs.discard(DRAFT_ID, UPLOAD_ID)
+            assert await jobs.discard(DRAFT_ID, UPLOAD_ID, context=ActingContext.worker("test-worker"))
             await sleep(0.02)
             processor.resume.set()
 
-    snapshot = await jobs.get(UPLOAD_ID)
+    snapshot = await jobs.get(UPLOAD_ID, context=ActingContext.worker("test-worker"))
     assert snapshot is not None
     assert snapshot.status is MediaJobStatus.DISCARDED
     assert snapshot.attempts == 0
@@ -831,7 +840,8 @@ async def test_cancelling_runner_stops_heartbeat_and_cleans_private_working_tree
             source=b"raw-image",
             source_content_type="image/jpeg",
             upload_id=UPLOAD_ID,
-        )
+        ),
+        context=ActingContext.worker("test-worker"),
     )
     processor = BlockingProcessor(MediaKind.IMAGE)
     runner = make_runner(jobs, artifacts, processor, tmp_path, heartbeat_interval_seconds=0.01)
@@ -860,13 +870,14 @@ async def test_cleanup_contention_defers_without_consuming_an_attempt(tmp_path: 
             source=b"raw-image",
             source_content_type="image/jpeg",
             upload_id=UPLOAD_ID,
-        )
+        ),
+        context=ActingContext.worker("test-worker"),
     )
     runner = make_runner(jobs, artifacts, WritingProcessor(MediaKind.IMAGE), tmp_path)
 
     await runner.process_batch(context=ActingContext.worker("test-worker"))
 
-    snapshot = await jobs.get(UPLOAD_ID)
+    snapshot = await jobs.get(UPLOAD_ID, context=ActingContext.worker("test-worker"))
     assert snapshot is not None
     assert snapshot.status is MediaJobStatus.PENDING
     assert snapshot.attempts == 0
@@ -887,16 +898,17 @@ async def test_runner_cleans_outputs_rejected_by_the_claim_fence(tmp_path: Path)
             source=b"raw-image",
             source_content_type="image/jpeg",
             upload_id=UPLOAD_ID,
-        )
+        ),
+        context=ActingContext.worker("test-worker"),
     )
     runner = make_runner(jobs, artifacts, WritingProcessor(MediaKind.IMAGE), tmp_path)
 
     await runner.process_batch(context=ActingContext.worker("test-worker"))
     cleanup = MediaStorageCleanup(jobs, artifacts)
-    await cleanup.cleanup_terminal_sources()
-    await cleanup.cleanup_terminal_artifacts()
+    await cleanup.cleanup_terminal_sources(context=ActingContext.worker("test-worker"))
+    await cleanup.cleanup_terminal_artifacts(context=ActingContext.worker("test-worker"))
 
-    snapshot = await jobs.get(UPLOAD_ID)
+    snapshot = await jobs.get(UPLOAD_ID, context=ActingContext.worker("test-worker"))
     assert snapshot is not None
     assert snapshot.status is MediaJobStatus.DISCARDED
     assert snapshot.artifacts == ()
@@ -916,24 +928,25 @@ async def test_discarded_artifact_cleanup_retries_without_losing_tombstone_metad
             source=b"raw-image",
             source_content_type="image/jpeg",
             upload_id=UPLOAD_ID,
-        )
+        ),
+        context=ActingContext.worker("test-worker"),
     )
     runner = make_runner(jobs, artifacts, WritingProcessor(MediaKind.IMAGE), tmp_path)
     await runner.process_batch(context=ActingContext.worker("test-worker"))
-    completed = await jobs.get(UPLOAD_ID)
+    completed = await jobs.get(UPLOAD_ID, context=ActingContext.worker("test-worker"))
     assert completed is not None
     object_keys = {artifact.object_key for artifact in completed.artifacts}
     failing_key = next(iter(object_keys))
     artifacts.fail_once.add(failing_key)
 
-    assert await jobs.discard(DRAFT_ID, UPLOAD_ID)
+    assert await jobs.discard(DRAFT_ID, UPLOAD_ID, context=ActingContext.worker("test-worker"))
     cleanup = MediaStorageCleanup(jobs, artifacts)
-    await cleanup.cleanup_terminal_artifacts()
+    await cleanup.cleanup_terminal_artifacts(context=ActingContext.worker("test-worker"))
     assert failing_key in artifacts.objects
     assert any(key not in artifacts.objects for key in object_keys - {failing_key})
 
-    await cleanup.cleanup_terminal_artifacts()
-    discarded = await jobs.get(UPLOAD_ID)
+    await cleanup.cleanup_terminal_artifacts(context=ActingContext.worker("test-worker"))
+    discarded = await jobs.get(UPLOAD_ID, context=ActingContext.worker("test-worker"))
     assert discarded is not None
     assert discarded.status is MediaJobStatus.DISCARDED
     assert {artifact.object_key for artifact in discarded.artifacts} == object_keys
@@ -956,16 +969,17 @@ async def test_terminal_validation_failure_cleans_raw_while_retryable_failure_ke
                 source=b"raw-image",
                 source_content_type="image/jpeg",
                 upload_id=upload_id,
-            )
+            ),
+            context=ActingContext.worker("test-worker"),
         )
         processor = WritingProcessor(MediaKind.IMAGE, failure=failure)
         runner = make_runner(jobs, artifacts, processor, tmp_path)
 
         await runner.process_batch(context=ActingContext.worker("test-worker"))
         cleanup = MediaStorageCleanup(jobs, artifacts)
-        await cleanup.cleanup_terminal_sources()
+        await cleanup.cleanup_terminal_sources(context=ActingContext.worker("test-worker"))
 
-        snapshot = await jobs.get(upload_id)
+        snapshot = await jobs.get(upload_id, context=ActingContext.worker("test-worker"))
         assert snapshot is not None
         assert snapshot.status is expected_status
         assert snapshot.attempts == 1
@@ -986,7 +1000,8 @@ async def test_processing_failure_logs_operation_reason_and_exit_code(
             source=b"private-media-payload",
             source_content_type="image/jpeg",
             upload_id=UPLOAD_ID,
-        )
+        ),
+        context=ActingContext.worker("test-worker"),
     )
     failure = MediaProcessingError(MediaFailureReason.TOOL_FAILED, operation="normalize_image", exit_code=-9)
     runner = make_runner(jobs, artifacts, WritingProcessor(MediaKind.IMAGE, failure=failure), tmp_path)
@@ -999,7 +1014,7 @@ async def test_processing_failure_logs_operation_reason_and_exit_code(
     assert "operation=normalize_image reason=tool_failed exit_code=-9" in record.getMessage()
     assert record.exc_info is not None
     assert "private-media-payload" not in caplog.text
-    snapshot = await jobs.get(UPLOAD_ID)
+    snapshot = await jobs.get(UPLOAD_ID, context=ActingContext.worker("test-worker"))
     assert snapshot is not None
     assert snapshot.status is MediaJobStatus.DEAD
 
@@ -1057,7 +1072,8 @@ async def test_runner_finishes_the_rest_of_the_batch_when_one_job_cannot_be_fail
                 source=source,
                 source_content_type="image/jpeg",
                 upload_id=upload_id,
-            )
+            ),
+            context=ActingContext.worker("test-worker"),
         )
     runner = make_runner(
         jobs, artifacts, SelectivelyFailingNormalizer(MediaKind.IMAGE, failing_source=b"broken-image"), tmp_path
@@ -1067,7 +1083,7 @@ async def test_runner_finishes_the_rest_of_the_batch_when_one_job_cannot_be_fail
     with pytest.raises(RuntimeError):
         await runner.process_batch(context=ActingContext.worker("test-worker"))
 
-    sibling = await jobs.get(sibling_id)
+    sibling = await jobs.get(sibling_id, context=ActingContext.worker("test-worker"))
     assert sibling is not None
     assert sibling.status is MediaJobStatus.COMPLETED
     assert not any(tmp_path.iterdir())

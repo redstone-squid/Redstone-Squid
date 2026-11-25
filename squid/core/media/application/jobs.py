@@ -375,19 +375,23 @@ class MediaProcessingJobService:
         self,
         submission: MediaUploadSubmission,
         *,
+        context: ActingContext,
         authorization: MediaDraftUploadAuthorization | None = None,
     ) -> UUID:
         """Stage a raw object and idempotently enqueue its immutable metadata."""
-        return await self._submit(submission, authorization=authorization)
+        with context.scope():
+            return await self._submit(submission, authorization=authorization)
 
     async def submit_staged(
         self,
         submission: StagedMediaUploadSubmission,
         *,
+        context: ActingContext,
         authorization: MediaDraftUploadAuthorization | None = None,
     ) -> UUID:
         """Stage a bounded regular file without buffering it in application memory."""
-        return await self._submit(submission, authorization=authorization)
+        with context.scope():
+            return await self._submit(submission, authorization=authorization)
 
     async def _submit(
         self,
@@ -464,155 +468,165 @@ class MediaProcessingJobService:
             if not same_key or error.existing_status in {MediaJobStatus.COMPLETED, MediaJobStatus.DEAD}:
                 await self._artifacts.delete(object_key)
             if same_key and error.existing_status in {MediaJobStatus.COMPLETED, MediaJobStatus.DEAD}:
-                await self.mark_source_deleted(TerminalMediaSource(upload_id, object_key))
+                await self.mark_source_deleted(
+                    TerminalMediaSource(upload_id, object_key), context=ActingContext.current()
+                )
             raise
         if outcome.status in {MediaJobStatus.COMPLETED, MediaJobStatus.DEAD, MediaJobStatus.DISCARDED}:
             source = TerminalMediaSource(upload_id, object_key)
             await self._artifacts.delete(object_key)
-            await self.mark_source_deleted(source)
+            await self.mark_source_deleted(source, context=ActingContext.current())
         return upload_id
 
-    async def get(self, upload_id: UUID) -> MediaJobSnapshot | None:
-        async with self._uow_factory() as uow:
-            return await uow.media_jobs.get(upload_id)
+    async def get(self, upload_id: UUID, *, context: ActingContext) -> MediaJobSnapshot | None:
+        with context.scope():
+            async with self._uow_factory() as uow:
+                return await uow.media_jobs.get(upload_id)
 
-    async def list_for_draft(self, draft_id: UUID) -> Sequence[MediaJobSnapshot]:
+    async def list_for_draft(self, draft_id: UUID, *, context: ActingContext) -> Sequence[MediaJobSnapshot]:
         """List retained upload state for one draft in creation order."""
-        async with self._uow_factory() as uow:
-            return await uow.media_jobs.list_for_draft(draft_id)
+        with context.scope():
+            async with self._uow_factory() as uow:
+                return await uow.media_jobs.list_for_draft(draft_id)
 
-    async def discard(self, draft_id: UUID, upload_id: UUID) -> bool:
+    async def discard(self, draft_id: UUID, upload_id: UUID, *, context: ActingContext) -> bool:
         """Discard a draft's upload reference, retaining the shared job if another draft needs it."""
-        async with self._uow_factory() as uow:
-            result = await uow.media_jobs.discard(draft_id, upload_id)
-            await uow.commit()
-            return result
+        with context.scope():
+            async with self._uow_factory() as uow:
+                result = await uow.media_jobs.discard(draft_id, upload_id)
+                await uow.commit()
+                return result
 
-    async def attach(self, source_id: UUID, target_id: UUID, upload_id: UUID) -> bool:
+    async def attach(self, source_id: UUID, target_id: UUID, upload_id: UUID, *, context: ActingContext) -> bool:
         """Attach an upload to another draft of the same owner, enforcing its capacity limits."""
-        async with self._uow_factory() as uow:
-            result = await uow.media_jobs.attach(source_id, target_id, upload_id, self._limits)
-            await uow.commit()
-            return result
+        with context.scope():
+            async with self._uow_factory() as uow:
+                result = await uow.media_jobs.attach(source_id, target_id, upload_id, self._limits)
+                await uow.commit()
+                return result
 
-    async def claim(self, *, limit: int = 8) -> Sequence[ClaimedMediaJob]:
+    async def claim(self, *, context: ActingContext, limit: int = 8) -> Sequence[ClaimedMediaJob]:
         """Commit claims for ready or abandoned work before returning it to workers."""
-        async with self._uow_factory() as uow:
-            if not 1 <= limit <= MAX_MEDIA_JOB_CLAIM:
-                maximum = MAX_MEDIA_JOB_CLAIM
-                raise InvalidStateError(
-                    md_tr(
-                        t"media-media-job-claim = Media job claim limit must be between 1 and {maximum}.",
+        with worker_scope(context):
+            async with self._uow_factory() as uow:
+                if not 1 <= limit <= MAX_MEDIA_JOB_CLAIM:
+                    maximum = MAX_MEDIA_JOB_CLAIM
+                    raise InvalidStateError(
+                        md_tr(
+                            t"media-media-job-claim = Media job claim limit must be between 1 and {maximum}.",
+                        )
                     )
-                )
-            result = await uow.media_jobs.claim(limit=limit)
-            await uow.commit()
-            return result
+                result = await uow.media_jobs.claim(limit=limit)
+                await uow.commit()
+                return result
 
-    async def heartbeat(self, job: ClaimedMediaJob) -> bool:
+    async def heartbeat(self, job: ClaimedMediaJob, *, context: ActingContext) -> bool:
         """Renew a current media claim and every publication lease it owns."""
-        async with self._uow_factory() as uow:
-            result = await uow.media_jobs.heartbeat(job)
-            await uow.commit()
-            return result
+        with worker_scope(context):
+            async with self._uow_factory() as uow:
+                result = await uow.media_jobs.heartbeat(job)
+                await uow.commit()
+                return result
 
-    async def defer(self, job: ClaimedMediaJob, *, until: Instant) -> bool:
+    async def defer(self, job: ClaimedMediaJob, *, context: ActingContext, until: Instant) -> bool:
         """Release a current claim without consuming a processing attempt."""
-        async with self._uow_factory() as uow:
-            result = await uow.media_jobs.defer(job, until=until)
-            await uow.commit()
-            return result
+        with worker_scope(context):
+            async with self._uow_factory() as uow:
+                result = await uow.media_jobs.defer(job, until=until)
+                await uow.commit()
+                return result
 
-    async def complete(self, job: ClaimedMediaJob, artifacts: Sequence[StoredMediaArtifact]) -> bool:
+    async def complete(
+        self, job: ClaimedMediaJob, artifacts: Sequence[StoredMediaArtifact], *, context: ActingContext
+    ) -> bool:
         """Record published artifacts, returning False if the job claim is no longer current."""
-        async with self._uow_factory() as uow:
-            result = await uow.media_jobs.complete(job, artifacts, self._limits)
-            await uow.commit()
-            return result
+        with worker_scope(context):
+            async with self._uow_factory() as uow:
+                result = await uow.media_jobs.complete(job, artifacts, self._limits)
+                await uow.commit()
+                return result
 
     async def fail(
-        self,
-        job: ClaimedMediaJob,
-        error: Exception,
-        *,
-        terminal: bool,
+        self, job: ClaimedMediaJob, error: Exception, *, context: ActingContext, terminal: bool
     ) -> MediaJobFailureOutcome:
-        async with self._uow_factory() as uow:
-            message = str(error) if isinstance(error, SquidError | MediaJobSourceError) else type(error).__name__
-            result = await uow.media_jobs.fail(
-                job,
-                message,
-                max_attempts=self._max_attempts,
-                terminal=terminal,
-            )
-            await uow.commit()
-            return result
+        with worker_scope(context):
+            async with self._uow_factory() as uow:
+                message = str(error) if isinstance(error, SquidError | MediaJobSourceError) else type(error).__name__
+                result = await uow.media_jobs.fail(
+                    job,
+                    message,
+                    max_attempts=self._max_attempts,
+                    terminal=terminal,
+                )
+                await uow.commit()
+                return result
 
-    async def terminal_sources(self, *, limit: int = 100) -> Sequence[TerminalMediaSource]:
-        async with self._uow_factory() as uow:
+    async def terminal_sources(self, *, context: ActingContext, limit: int = 100) -> Sequence[TerminalMediaSource]:
+        with worker_scope(context):
+            async with self._uow_factory() as uow:
+                if not 1 <= limit <= MAX_MEDIA_JOB_CLEANUP:
+                    maximum = MAX_MEDIA_JOB_CLEANUP
+                    raise InvalidStateError(
+                        md_tr(
+                            t"media-media-source-cleanup = Media source cleanup limit must be between 1 and {maximum}.",
+                        )
+                    )
+                return await uow.media_jobs.terminal_sources(limit=limit)
+
+    async def mark_source_deleted(self, source: TerminalMediaSource, *, context: ActingContext) -> bool:
+        with worker_scope(context):
+            async with self._uow_factory() as uow:
+                result = await uow.media_jobs.mark_source_deleted(source)
+                await uow.commit()
+                return result
+
+    async def track_artifacts(
+        self, job: ClaimedMediaJob, artifacts: Sequence[StoredMediaArtifact], *, context: ActingContext
+    ) -> bool:
+        """Register possible object keys before publishing bytes to storage."""
+        with worker_scope(context):
+            async with self._uow_factory() as uow:
+                result = await uow.media_jobs.track_artifacts(job, artifacts)
+                await uow.commit()
+                return result
+
+    async def release_artifacts(
+        self, job: ClaimedMediaJob, artifacts: Sequence[StoredMediaArtifact], *, context: ActingContext
+    ) -> None:
+        """Release only this claim's per-object publication leases."""
+        with worker_scope(context):
+            async with self._uow_factory() as uow:
+                await uow.media_jobs.release_artifacts(job, artifacts)
+                await uow.commit()
+
+    async def cleanup_artifacts(self, *, context: ActingContext, limit: int = 100) -> MediaArtifactCleanupOutcome:
+        """Claim unreferenced objects for deletion, then record each storage result."""
+        with worker_scope(context):
             if not 1 <= limit <= MAX_MEDIA_JOB_CLEANUP:
                 maximum = MAX_MEDIA_JOB_CLEANUP
                 raise InvalidStateError(
                     md_tr(
-                        t"media-media-source-cleanup = Media source cleanup limit must be between 1 and {maximum}.",
+                        t"media-media-artifact-cleanup = Media artifact cleanup limit must be between 1 and {maximum}.",
                     )
                 )
-            return await uow.media_jobs.terminal_sources(limit=limit)
-
-    async def mark_source_deleted(self, source: TerminalMediaSource) -> bool:
-        async with self._uow_factory() as uow:
-            result = await uow.media_jobs.mark_source_deleted(source)
-            await uow.commit()
-            return result
-
-    async def track_artifacts(
-        self,
-        job: ClaimedMediaJob,
-        artifacts: Sequence[StoredMediaArtifact],
-    ) -> bool:
-        """Register possible object keys before publishing bytes to storage."""
-        async with self._uow_factory() as uow:
-            result = await uow.media_jobs.track_artifacts(job, artifacts)
-            await uow.commit()
-            return result
-
-    async def release_artifacts(
-        self,
-        job: ClaimedMediaJob,
-        artifacts: Sequence[StoredMediaArtifact],
-    ) -> None:
-        """Release only this claim's per-object publication leases."""
-        async with self._uow_factory() as uow:
-            await uow.media_jobs.release_artifacts(job, artifacts)
-            await uow.commit()
-
-    async def cleanup_artifacts(self, *, limit: int = 100) -> MediaArtifactCleanupOutcome:
-        """Claim unreferenced objects for deletion, then record each storage result."""
-        if not 1 <= limit <= MAX_MEDIA_JOB_CLEANUP:
-            maximum = MAX_MEDIA_JOB_CLEANUP
-            raise InvalidStateError(
-                md_tr(
-                    t"media-media-artifact-cleanup = Media artifact cleanup limit must be between 1 and {maximum}.",
-                )
-            )
-        async with self._uow_factory() as uow:
-            claims = await uow.media_jobs.claim_artifact_cleanup(limit=limit)
-            await uow.commit()
-        resolutions: list[tuple[ArtifactCleanupClaim, str | None]] = []
-        deleted = 0
-        for claim in claims:
-            try:
-                await self._artifacts.delete(claim.object_key)
-            except Exception as error:
-                resolutions.append((claim, type(error).__name__[:4000]))
-            else:
-                deleted += 1
-                resolutions.append((claim, None))
-        if resolutions:
             async with self._uow_factory() as uow:
-                await uow.media_jobs.resolve_artifact_cleanup(resolutions)
+                claims = await uow.media_jobs.claim_artifact_cleanup(limit=limit)
                 await uow.commit()
-        return MediaArtifactCleanupOutcome(len(claims), deleted, len(claims) - deleted)
+            resolutions: list[tuple[ArtifactCleanupClaim, str | None]] = []
+            deleted = 0
+            for claim in claims:
+                try:
+                    await self._artifacts.delete(claim.object_key)
+                except Exception as error:
+                    resolutions.append((claim, type(error).__name__[:4000]))
+                else:
+                    deleted += 1
+                    resolutions.append((claim, None))
+            if resolutions:
+                async with self._uow_factory() as uow:
+                    await uow.media_jobs.resolve_artifact_cleanup(resolutions)
+                    await uow.commit()
+            return MediaArtifactCleanupOutcome(len(claims), deleted, len(claims) - deleted)
 
 
 class MediaStorageCleanup:
@@ -625,33 +639,35 @@ class MediaStorageCleanup:
     async def process_batch(self, *, context: ActingContext, limit: int = 100) -> None:
         """Retry deletion of finished jobs' source files and unreferenced normalized objects."""
         with worker_scope(context):
-            await self.cleanup_terminal_sources(limit=limit)
-            await self.cleanup_terminal_artifacts(limit=limit)
+            await self.cleanup_terminal_sources(limit=limit, context=context)
+            await self.cleanup_terminal_artifacts(limit=limit, context=context)
 
-    async def cleanup_terminal_sources(self, *, limit: int = 100) -> None:
+    async def cleanup_terminal_sources(self, *, context: ActingContext, limit: int = 100) -> None:
         """Retry idempotent deletion of raw objects committed to terminal states."""
-        for source in await self._jobs.terminal_sources(limit=limit):
-            try:
-                await self._artifacts.delete(source.object_key)
-                await self._jobs.mark_source_deleted(source)
-            except Exception:
-                logger.exception(
-                    "Media raw-object cleanup failed",
-                    extra={"squid.media.upload_id": str(source.upload_id)},
-                )
+        with worker_scope(context):
+            for source in await self._jobs.terminal_sources(limit=limit, context=context):
+                try:
+                    await self._artifacts.delete(source.object_key)
+                    await self._jobs.mark_source_deleted(source, context=context)
+                except Exception:
+                    logger.exception(
+                        "Media raw-object cleanup failed",
+                        extra={"squid.media.upload_id": str(source.upload_id)},
+                    )
 
-    async def cleanup_terminal_artifacts(self, *, limit: int = 100) -> None:
+    async def cleanup_terminal_artifacts(self, *, context: ActingContext, limit: int = 100) -> None:
         """Retry reference-fenced deletion of normalized objects and reports."""
-        outcome = await self._jobs.cleanup_artifacts(limit=limit)
-        if outcome.failed:
-            logger.warning(
-                "Media normalized-artifact cleanup completed with failures",
-                extra={
-                    "squid.media.cleanup.attempted": outcome.attempted,
-                    "squid.media.cleanup.deleted": outcome.deleted,
-                    "squid.media.cleanup.failed": outcome.failed,
-                },
-            )
+        with worker_scope(context):
+            outcome = await self._jobs.cleanup_artifacts(limit=limit, context=context)
+            if outcome.failed:
+                logger.warning(
+                    "Media normalized-artifact cleanup completed with failures",
+                    extra={
+                        "squid.media.cleanup.attempted": outcome.attempted,
+                        "squid.media.cleanup.deleted": outcome.deleted,
+                        "squid.media.cleanup.failed": outcome.failed,
+                    },
+                )
 
 
 class MediaProcessingJobRunner:
@@ -681,7 +697,7 @@ class MediaProcessingJobRunner:
     async def process_batch(self, *, context: ActingContext, limit: int = 8) -> None:
         """Claim and process a bounded batch without coupling work to storage cleanup."""
         with worker_scope(context):
-            claimed = await self._jobs.claim(limit=limit)
+            claimed = await self._jobs.claim(limit=limit, context=context)
             # Let independent jobs finish if one fails. Cancelling siblings would skip
             # their failure transitions and leave their database claims until expiry.
             # Unexpected failures are raised after every job has settled.
@@ -708,13 +724,13 @@ class MediaProcessingJobRunner:
                 artifacts = await self._process_and_store(job, source_path, temporary, claim_lost)
                 await self._require_claim(job, claim_lost)
                 try:
-                    completed = await self._jobs.complete(job, artifacts)
+                    completed = await self._jobs.complete(job, artifacts, context=ActingContext.current())
                 finally:
-                    await self._jobs.release_artifacts(job, artifacts)
+                    await self._jobs.release_artifacts(job, artifacts, context=ActingContext.current())
                 if not completed:
                     return
             except MediaArtifactCleanupInProgressError as error:
-                await self._jobs.defer(job, until=error.retry_at)
+                await self._jobs.defer(job, until=error.retry_at, context=ActingContext.current())
             except MediaJobClaimLostError:
                 return
             except Exception as error:
@@ -727,14 +743,14 @@ class MediaProcessingJobRunner:
                         error.exit_code,
                         exc_info=True,
                     )
-                await self._jobs.fail(job, error, terminal=_is_terminal(error))
+                await self._jobs.fail(job, error, terminal=_is_terminal(error), context=ActingContext.current())
 
     async def _maintain_claim(self, job: ClaimedMediaJob, claim_lost: asyncio.Event) -> None:
         """Renew the claim during processing and block publication if renewal fails."""
         while True:
             await asyncio.sleep(self._heartbeat_interval_seconds)
             try:
-                current = await self._jobs.heartbeat(job)
+                current = await self._jobs.heartbeat(job, context=ActingContext.current())
             except Exception:
                 logger.exception(
                     "Media job heartbeat failed",
@@ -747,7 +763,7 @@ class MediaProcessingJobRunner:
                 return
 
     async def _require_claim(self, job: ClaimedMediaJob, claim_lost: asyncio.Event) -> None:
-        if claim_lost.is_set() or not await self._jobs.heartbeat(job):
+        if claim_lost.is_set() or not await self._jobs.heartbeat(job, context=ActingContext.current()):
             claim_lost.set()
             raise MediaJobClaimLostError
 
@@ -790,7 +806,8 @@ class MediaProcessingJobRunner:
                 source_path=source_path,
                 output_path=output_path,
                 poster_path=poster_path,
-            )
+            ),
+            context=ActingContext.current(),
         )
         await self._require_claim(job, claim_lost)
         files = [(MediaArtifactRole.OUTPUT, result.output_path, result.report.output)]
@@ -827,7 +844,7 @@ class MediaProcessingJobRunner:
         )
         # Commit leases before writing bytes so cleanup cannot race these publications.
         artifacts = tuple(artifact for artifact, _ in prepared)
-        if not await self._jobs.track_artifacts(job, artifacts):
+        if not await self._jobs.track_artifacts(job, artifacts, context=ActingContext.current()):
             raise MediaJobClaimLostError
         try:
             for artifact, data in prepared:
@@ -838,10 +855,10 @@ class MediaProcessingJobRunner:
                 except MediaJobClaimLostError:
                     # The write may have finished after cleanup deleted the same key.
                     # Track it again so cleanup sees the newly written object.
-                    await self._jobs.track_artifacts(job, artifacts)
+                    await self._jobs.track_artifacts(job, artifacts, context=ActingContext.current())
                     raise
         except Exception:
-            await self._jobs.release_artifacts(job, artifacts)
+            await self._jobs.release_artifacts(job, artifacts, context=ActingContext.current())
             raise
         return artifacts
 

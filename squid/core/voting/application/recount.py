@@ -19,6 +19,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Protocol
 
+from squid.core.actors import ActingContext, application_operation
 from squid.core.voting.application.ports import VoteActorResolver
 from squid.core.voting.application.services import VoteService
 from squid.core.voting.domain import VoteMessage, VoteRejection, VoteSessionSnapshot, VoteStatus
@@ -110,7 +111,8 @@ class BallotRecounter:
         self._voters = voters
         self._actors = actors
 
-    async def recount(self, vote_session_id: int) -> bool:
+    @application_operation
+    async def recount(self, vote_session_id: int, *, context: ActingContext) -> bool:
         """Make the session's ballots and card reactions agree, as far as Discord allows.
 
         For each account seen reacting:
@@ -128,14 +130,15 @@ class BallotRecounter:
         Returns:
             Whether any ballot changed. Closed and unknown sessions are left alone.
         """
-        changed, _ = await self.count_cards(vote_session_id)
+        changed, _ = await self.count_cards(vote_session_id, context=context)
         return changed
 
+    @application_operation
     async def count_cards(
-        self, vote_session_id: int, count_revision: int | None = None
+        self, vote_session_id: int, count_revision: int | None = None, *, context: ActingContext
     ) -> tuple[bool, tuple[int, ...]]:
         """Return ballot changes and the IDs of cards whose reactions could not be read."""
-        snapshot = await self._votes.get_session(vote_session_id)
+        snapshot = await self._votes.get_session(vote_session_id, context=ActingContext.current())
         if snapshot is None:
             return False, ()
         if count_revision is not None and (
@@ -213,8 +216,13 @@ class BallotRecounter:
             # Discord could not confirm the voter's membership, so eligibility is unknown.
             # Keep the reactions: in an anonymous poll they are the only record of the vote.
             return _Ballot(stored, unresolved=True)
-        result = await self._votes.cast_vote(
-            snapshot.id, actor, desired.option_id, emoji=desired.emoji, toggle=False, count_revision=count_revision
+        result = await self._votes._record_observed_reaction(
+            actor,
+            snapshot.id,
+            desired.option_id,
+            emoji=desired.emoji,
+            count_revision=count_revision,
+            context=ActingContext.current(),
         )
         if result.rejection is VoteRejection.CLOSED:
             return _Ballot(stored, unresolved=True)

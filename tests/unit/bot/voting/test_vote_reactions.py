@@ -19,7 +19,7 @@ from squid.bot.voting.cog import VoteCog
 from squid.core.accounts.application import AccountService
 from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, IdentityProvider
 from squid.core.accounts.models import Account, AccountIdentity
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.application.ports import PermissionUnitOfWork
 from squid.core.permissions.domain import CheckMode, Decision, PermissionCheck, PermissionNode, Reason
@@ -202,28 +202,29 @@ class Votes(VoteService):
         self.resolver = resolver
 
     @override
-    async def get_session(self, vote_session_id: int) -> VoteSessionSnapshot | None:
+    async def get_session(self, vote_session_id: int, *, context: ActingContext) -> VoteSessionSnapshot | None:
         return self.snapshot if vote_session_id == self.snapshot.id else None
 
     @override
-    async def get_session_for_message(self, message_id: int) -> VoteSessionSnapshot | None:
+    async def get_session_for_message(self, message_id: int, *, context: ActingContext) -> VoteSessionSnapshot | None:
         return self.snapshot if any(message.id == message_id for message in self.snapshot.messages) else None
 
     @override
-    async def list_open(self, kind: VoteKind) -> Sequence[VoteSessionSnapshot]:
+    async def list_open(self, kind: VoteKind, *, context: ActingContext) -> Sequence[VoteSessionSnapshot]:
         return (self.snapshot,) if self.snapshot.kind is kind else ()
 
     @override
     async def cast_vote(
         self,
         vote_session_id: int,
-        actor: Actor,
         option_id: str,
         *,
         emoji: str | None = None,
         toggle: bool = True,
         count_revision: int | None = None,
+        context: ActingContext,
     ) -> CastVoteResult:
+        actor = context.effective
         assert vote_session_id == self.snapshot.id
         if self.failure is not None:
             raise self.failure
@@ -231,13 +232,33 @@ class Votes(VoteService):
         self.trace.append("committed" if self.rejection is None else "refused")
         return CastVoteResult(self.snapshot, self.rejection)
 
+    @override
+    async def _record_observed_reaction(
+        self,
+        voter: Actor,
+        vote_session_id: int,
+        option_id: str,
+        *,
+        emoji: str,
+        count_revision: int | None,
+        context: ActingContext,
+    ) -> CastVoteResult:
+        return await self.cast_vote(
+            vote_session_id,
+            option_id,
+            emoji=emoji,
+            toggle=False,
+            count_revision=count_revision,
+            context=ActingContext.direct(voter),
+        )
+
 
 class Settings(SettingsService):
     def __init__(self) -> None:
         pass
 
     @override
-    async def get_locale(self, server_id: int) -> str | None:
+    async def get_locale(self, server_id: int, *, context: ActingContext) -> str | None:
         return None
 
 
@@ -277,14 +298,15 @@ class ReactionHarness:
 
     @asynccontextmanager
     async def running(self) -> AsyncIterator[None]:
-        async with self.supervisor.running():
-            subscription = self.bot.reactions.subscribe(self.cog.reactions)
-            try:
-                yield
-            finally:
-                await self.bot.reactions.close()
-                subscription.detach()
-                await self.cog.cog_unload()
+        with self.event().acting_context.scope():
+            async with self.supervisor.running():
+                subscription = self.bot.reactions.subscribe(self.cog.reactions)
+                try:
+                    yield
+                finally:
+                    await self.bot.reactions.close()
+                    subscription.detach()
+                    await self.cog.cog_unload()
 
     async def fetch_message(self, channel_id: int, message_id: int) -> discord.Message | None:
         return cast(discord.Message | None, self.messages.get(message_id))

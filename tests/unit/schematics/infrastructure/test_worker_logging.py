@@ -20,6 +20,7 @@ from pytest_mock import MockerFixture
 from pythonjsonlogger.json import JsonFormatter
 
 from squid.config import LogConfig, LoggingConfig, ObservabilityConfig, SchematicConfig
+from squid.core.actors import ActingContext
 from squid.core.artifacts import ArtifactStore
 from squid.core.schematics.application.jobs import ClaimedSchematicJob, SchematicJobService
 from squid.core.schematics.domain.models import AnalyzerCapabilities
@@ -407,7 +408,7 @@ async def test_job_runner_publishes_the_job_id_to_the_worker(mocker: MockerFixtu
             self.completed = AsyncCallRecorder(result=True)
 
         @override
-        async def complete(self, *args: Any, **kwargs: Any) -> bool:
+        async def complete(self, *args: Any, context: ActingContext, **kwargs: Any) -> bool:
             return await self.completed(*args, **kwargs)
 
     runner = SchematicJobRunner(Jobs(), unconfigured(ArtifactStore), Analyzer(), SchematicConfig())

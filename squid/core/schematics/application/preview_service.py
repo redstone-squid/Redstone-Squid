@@ -9,6 +9,7 @@ from collections.abc import Generator
 
 from whenever import Instant
 
+from squid.core.actors import ActingContext
 from squid.core.errors import SquidError
 from squid.core.schematics.application.attachments import StoredSchematic
 from squid.core.schematics.application.commands import RenderRequest
@@ -36,6 +37,7 @@ from squid.core.schematics.errors import (
     SchematicSupportUnavailableError,
     SchematicWorkerCrashedError,
 )
+from squid.core.worker_context import worker_scope
 
 logger = logging.getLogger(__name__)
 
@@ -82,45 +84,46 @@ class SchematicPreviewService:
         self._render_max_bounding_volume = render_max_bounding_volume
         self._warning_emitted = False
 
-    async def prepare_render(self, build_id: int) -> RenderPreparation:
+    async def prepare_render(self, build_id: int, *, context: ActingContext) -> RenderPreparation:
         """Prepare fresh PNG bytes, reuse a stored recipe, or explain why this attempt is skipped.
 
         Skipped results let the durable queue finish without retrying. Configuration or attachment
         changes can make a later attempt eligible. Operational failures propagate for queue handling;
         fresh bytes still need upload and publication by the caller.
         """
-        if not self._render_enabled:
-            return SkippedRender(RenderSkipReason.RENDERING_DISABLED)
-        stored = await self._store.get_featured(build_id)
-        if stored is None:
-            return SkippedRender(RenderSkipReason.NO_PRIMARY_SCHEMATIC)
-        if reason := self._render_skip_reason(stored):
-            self._log_render_skip(stored, reason)
-            return SkippedRender(reason)
-        data = await self._store.get_file(stored.file_sha256)
-        if data is None:
-            self._log_render_skip(stored, RenderSkipReason.MISSING_FILE)
-            return SkippedRender(RenderSkipReason.MISSING_FILE)
+        with context.scope():
+            if not self._render_enabled:
+                return SkippedRender(RenderSkipReason.RENDERING_DISABLED)
+            stored = await self._store.get_featured(build_id)
+            if stored is None:
+                return SkippedRender(RenderSkipReason.NO_PRIMARY_SCHEMATIC)
+            if reason := self._render_skip_reason(stored):
+                self._log_render_skip(stored, reason)
+                return SkippedRender(reason)
+            data = await self._store.get_file(stored.file_sha256)
+            if data is None:
+                self._log_render_skip(stored, RenderSkipReason.MISSING_FILE)
+                return SkippedRender(RenderSkipReason.MISSING_FILE)
 
-        resource_pack = await self._render_resources()
-        recipe_hash = _render_recipe_hash(stored, self._render_request, resource_pack.sha256)
-        cached = await self._publisher.get_render(stored.id, recipe_hash)
-        if cached is not None:
-            return CachedRender(
+            resource_pack = await self._render_resources()
+            recipe_hash = _render_recipe_hash(stored, self._render_request, resource_pack.sha256)
+            cached = await self._publisher.get_render(stored.id, recipe_hash)
+            if cached is not None:
+                return CachedRender(
+                    schematic_id=stored.id,
+                    recipe_hash=recipe_hash,
+                    width=cached.width,
+                    height=cached.height,
+                    url=cached.url,
+                )
+            png = await self._render_png(stored, data, resource_pack, self._render_request)
+            return FreshRender(
                 schematic_id=stored.id,
                 recipe_hash=recipe_hash,
-                width=cached.width,
-                height=cached.height,
-                url=cached.url,
+                width=self._render_request.width,
+                height=self._render_request.height,
+                png=png,
             )
-        png = await self._render_png(stored, data, resource_pack, self._render_request)
-        return FreshRender(
-            schematic_id=stored.id,
-            recipe_hash=recipe_hash,
-            width=self._render_request.width,
-            height=self._render_request.height,
-            png=png,
-        )
 
     def render_recipe(
         self,
@@ -146,111 +149,129 @@ class SchematicPreviewService:
             zoom=base.zoom if zoom is None else zoom,
         )
 
-    async def render_now(self, build_id: int, *, request: RenderRequest | None = None) -> RenderedSchematic:
+    async def render_now(
+        self, build_id: int, *, context: ActingContext, request: RenderRequest | None = None
+    ) -> RenderedSchematic:
         """Return a cached or newly rendered PNG without publishing it.
 
         A matching stored recipe is read from object storage. New renders are not written to that cache:
         recording a preview also publishes it as the build's generated image, which is outside the
         scope of an individual render request.
         """
-        if not self._available:
-            raise SchematicSupportUnavailableError
-        if not self._render_enabled:
-            msg = "Schematic rendering is disabled on this instance."
-            raise SchematicRenderUnavailableError(
-                msg,
-                developer_action="Set render_enabled (SQUID_SCHEMATIC_RENDER_ENABLED=true) and configure a "
-                "resource pack to enable it.",
-            )
-        stored = await self._store.get_featured(build_id)
-        if stored is None:
-            raise SchematicNotFoundError(context={"build_id": build_id}, public_context={"build_id": build_id})
-        if reason := self._render_skip_reason(stored):
-            raise SchematicRenderRefusedError(reason.value, reason.description)
-
-        render_request = request or self._render_request
-        resource_pack = await self._render_resources()
-        recipe_hash = _render_recipe_hash(stored, render_request, resource_pack.sha256)
-        if await self._publisher.get_render(stored.id, recipe_hash) is not None:
-            cached = await self._publisher.get_render_content(recipe_hash, max_bytes=_MAX_RENDER_CONTENT_BYTES)
-            if cached is not None:
-                return RenderedSchematic(
-                    build_id=stored.build_id,
-                    schematic_id=stored.id,
-                    recipe_hash=recipe_hash,
-                    width=render_request.width,
-                    height=render_request.height,
-                    png=cached,
-                    from_cache=True,
+        with context.scope():
+            if not self._available:
+                raise SchematicSupportUnavailableError
+            if not self._render_enabled:
+                msg = "Schematic rendering is disabled on this instance."
+                raise SchematicRenderUnavailableError(
+                    msg,
+                    developer_action="Set render_enabled (SQUID_SCHEMATIC_RENDER_ENABLED=true) and configure a "
+                    "resource pack to enable it.",
                 )
-        data = await self._store.get_file(stored.file_sha256)
-        if data is None:
-            raise SchematicNotFoundError(context={"sha256": stored.file_sha256})
-        png = await self._render_png(stored, data, resource_pack, render_request)
-        return RenderedSchematic(
-            build_id=stored.build_id,
-            schematic_id=stored.id,
-            recipe_hash=recipe_hash,
-            width=render_request.width,
-            height=render_request.height,
-            png=png,
-            from_cache=False,
-        )
+            stored = await self._store.get_featured(build_id)
+            if stored is None:
+                raise SchematicNotFoundError(context={"build_id": build_id}, public_context={"build_id": build_id})
+            if reason := self._render_skip_reason(stored):
+                raise SchematicRenderRefusedError(reason.value, reason.description)
 
-    async def explain_render_skip(self, stored: StoredSchematic) -> RenderSkipReason | None:
+            render_request = request or self._render_request
+            resource_pack = await self._render_resources()
+            recipe_hash = _render_recipe_hash(stored, render_request, resource_pack.sha256)
+            if await self._publisher.get_render(stored.id, recipe_hash) is not None:
+                cached = await self._publisher.get_render_content(recipe_hash, max_bytes=_MAX_RENDER_CONTENT_BYTES)
+                if cached is not None:
+                    return RenderedSchematic(
+                        build_id=stored.build_id,
+                        schematic_id=stored.id,
+                        recipe_hash=recipe_hash,
+                        width=render_request.width,
+                        height=render_request.height,
+                        png=cached,
+                        from_cache=True,
+                    )
+            data = await self._store.get_file(stored.file_sha256)
+            if data is None:
+                raise SchematicNotFoundError(context={"sha256": stored.file_sha256})
+            png = await self._render_png(stored, data, resource_pack, render_request)
+            return RenderedSchematic(
+                build_id=stored.build_id,
+                schematic_id=stored.id,
+                recipe_hash=recipe_hash,
+                width=render_request.width,
+                height=render_request.height,
+                png=png,
+                from_cache=False,
+            )
+
+    async def explain_render_skip(self, stored: StoredSchematic, *, context: ActingContext) -> RenderSkipReason | None:
         """Return the current skip reason without starting the renderer or loading a resource pack.
 
         This checks configuration, stored measurements, and source bytes in object storage.
         """
-        if not self._render_enabled:
-            return RenderSkipReason.RENDERING_DISABLED
-        if reason := self._render_skip_reason(stored):
-            return reason
-        if await self._store.get_file(stored.file_sha256) is None:
-            return RenderSkipReason.MISSING_FILE
-        return None
+        with context.scope():
+            if not self._render_enabled:
+                return RenderSkipReason.RENDERING_DISABLED
+            if reason := self._render_skip_reason(stored):
+                return reason
+            if await self._store.get_file(stored.file_sha256) is None:
+                return RenderSkipReason.MISSING_FILE
+            return None
 
-    async def publish_fresh_preview(self, render: FreshRender, url: str, object_key: str) -> StoredRender | None:
+    async def publish_fresh_preview(
+        self, render: FreshRender, url: str, object_key: str, *, context: ActingContext
+    ) -> StoredRender | None:
         """Persist and publish fresh bytes only while their source remains featured."""
-        return await self._publisher.publish_fresh_preview(
-            render.schematic_id,
-            render.recipe_hash,
-            url,
-            object_key,
-            width=render.width,
-            height=render.height,
-            byte_size=len(render.png),
-        )
+        with worker_scope(context):
+            return await self._publisher.publish_fresh_preview(
+                render.schematic_id,
+                render.recipe_hash,
+                url,
+                object_key,
+                width=render.width,
+                height=render.height,
+                byte_size=len(render.png),
+            )
 
-    async def reserve_preview_object(self, render: FreshRender, object_key: str) -> PreviewObjectReservation:
+    async def reserve_preview_object(
+        self, render: FreshRender, object_key: str, *, context: ActingContext
+    ) -> PreviewObjectReservation:
         """Reserve durable ownership before the transport uploads generated preview bytes."""
-        return await self._publisher.reserve_preview_object(
-            object_key,
-            byte_size=len(render.png),
-            sha256=hashlib.sha256(render.png).hexdigest(),
-        )
+        with worker_scope(context):
+            return await self._publisher.reserve_preview_object(
+                object_key,
+                byte_size=len(render.png),
+                sha256=hashlib.sha256(render.png).hexdigest(),
+            )
 
-    async def mark_preview_object_ready(self, reservation: PreviewObjectReservation) -> None:
+    async def mark_preview_object_ready(self, reservation: PreviewObjectReservation, *, context: ActingContext) -> None:
         """Record readiness after the caller verifies the reserved upload."""
-        await self._publisher.mark_preview_object_ready(reservation)
+        with worker_scope(context):
+            await self._publisher.mark_preview_object_ready(reservation)
 
-    async def cleanup_preview_objects(self, *, retention_hours: int = 24, limit: int = 50) -> int:
+    async def cleanup_preview_objects(
+        self, *, context: ActingContext, retention_hours: int = 24, limit: int = 50
+    ) -> int:
         """Reclaim old generated objects only after all durable references disappear."""
-        return await self._publisher.cleanup_unreferenced_preview_objects(
-            older_than=Instant.now().subtract(hours=retention_hours),
-            limit=limit,
-        )
+        with worker_scope(context):
+            return await self._publisher.cleanup_unreferenced_preview_objects(
+                older_than=Instant.now().subtract(hours=retention_hours),
+                limit=limit,
+            )
 
-    async def publish_cached_preview(self, render: CachedRender) -> bool:
+    async def publish_cached_preview(self, render: CachedRender, *, context: ActingContext) -> bool:
         """Publish cached bytes only while their source remains featured and ready."""
-        return await self._publisher.publish_cached_preview(render.schematic_id, render.recipe_hash, render.url)
+        with worker_scope(context):
+            return await self._publisher.publish_cached_preview(render.schematic_id, render.recipe_hash, render.url)
 
-    async def render_content(self, recipe_hash: str, *, max_bytes: int = _MAX_RENDER_CONTENT_BYTES) -> bytes:
+    async def render_content(
+        self, recipe_hash: str, *, context: ActingContext, max_bytes: int = _MAX_RENDER_CONTENT_BYTES
+    ) -> bytes:
         """Return one registered PNG preview from private object storage."""
-        content = await self._publisher.get_render_content(recipe_hash, max_bytes=max_bytes)
-        if content is None:
-            raise SchematicNotFoundError(context={"recipe_hash": recipe_hash})
-        return content
+        with context.scope():
+            content = await self._publisher.get_render_content(recipe_hash, max_bytes=max_bytes)
+            if content is None:
+                raise SchematicNotFoundError(context={"recipe_hash": recipe_hash})
+            return content
 
     async def aclose(self) -> None:
         """Release the resource-pack provider owned by this preview service."""

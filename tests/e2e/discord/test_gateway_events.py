@@ -1,6 +1,7 @@
 """Exercise message and reaction listeners through simulated Discord gateway events."""
 
 from dataclasses import replace
+from unittest.mock import ANY
 
 import pytest
 
@@ -9,7 +10,7 @@ from squid.bot.starboard.spec import extension as starboard_extension
 from squid.bot.voting.spec import extension as vote_extension
 from squid.core.accounts.domain import AccountConsent
 from squid.core.accounts.models import Account
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext
 from squid.core.posts.domain import StarboardEntryKey
 from squid.core.starboard.application.services import StarboardVoteResult
 from squid.core.voting.domain import CastVoteResult, VoteMessage, VoteSelection, VoteVisibility
@@ -38,12 +39,12 @@ async def test_message_edit_and_delete_reach_tracking_and_starboard(monkeypatch:
         message = await builder.send(channel, "Original dimensions")
 
         await builder.edit(message, "Corrected dimensions")
-        edit.assert_awaited_once_with(message.id, "Corrected dimensions")
-        refresh.assert_awaited_once_with(message.id, force=True)
+        edit.assert_awaited_once_with(message.id, "Corrected dimensions", context=ANY)
+        refresh.assert_awaited_once_with(message.id, force=True, context=ANY)
 
         await builder.delete(message)
-        delete.assert_awaited_once_with(message.id)
-        delete_origin.assert_awaited_once_with(message.id)
+        delete.assert_awaited_once_with(message.id, context=ANY)
+        delete_origin.assert_awaited_once_with(message.id, context=ANY)
         assert not channel.history()
 
 
@@ -78,9 +79,10 @@ async def test_public_poll_reaction_casts_and_withdraws_a_ballot(monkeypatch: py
             messages=(VoteMessage(card.id, channel.id, env.guild.id),),
         )
 
-        def cast(session_id: int, actor: Actor, option_id: str, *, emoji: str) -> CastVoteResult:
+        def cast(session_id: int, option_id: str, *, emoji: str, context: ActingContext) -> CastVoteResult:
             nonlocal session
             assert session_id == session.id
+            actor = context.effective
             previous = session.selection_for(actor.require_account_id())
             selections = (
                 () if previous else (VoteSelection(actor.require_account_id(), actor.guild_id, option_id, emoji, 1),)
@@ -93,12 +95,12 @@ async def test_public_poll_reaction_casts_and_withdraws_a_ballot(monkeypatch: py
         monkeypatch.setattr(
             votes,
             "get_session_for_message",
-            AsyncCallRecorder(callback=lambda message_id: session if message_id == card.id else None),
+            AsyncCallRecorder(callback=lambda message_id, *, context: session if message_id == card.id else None),
         )
         monkeypatch.setattr(
             votes,
             "get_session",
-            AsyncCallRecorder(callback=lambda session_id: session if session_id == session.id else None),
+            AsyncCallRecorder(callback=lambda session_id, *, context: session if session_id == session.id else None),
         )
 
         await voter.react(card, "👍")
@@ -120,7 +122,9 @@ async def test_starboard_reaction_records_and_withdraws_a_vote(monkeypatch: pyte
     pending = AsyncCallRecorder()
     monkeypatch.setattr(boards, "record_vote", record)
     monkeypatch.setattr(boards, "withdraw_vote", withdraw)
-    monkeypatch.setattr(boards, "is_relevant_emoji", AsyncCallRecorder(callback=lambda guild_id, emoji: emoji == "⭐"))
+    monkeypatch.setattr(
+        boards, "is_relevant_emoji", AsyncCallRecorder(callback=lambda guild_id, emoji, *, context: emoji == "⭐")
+    )
     monkeypatch.setattr(posts, "pending_generation", pending)
     async with command_environment(starboard_extension, services=bot_services(starboards=boards, posts=posts)) as (
         bot,
@@ -138,7 +142,8 @@ async def test_starboard_reaction_records_and_withdraws_a_vote(monkeypatch: pyte
         record.assert_not_awaited()
         await voter.react(message, "⭐")
         (vote,) = record.records
-        origin, actor, emoji = vote.args
+        origin, emoji = vote.args
+        actor = vote.kwargs["context"].effective
         assert (origin.id, origin.message.guild_id, origin.message.channel_id, origin.message.author_id) == (
             message.id,
             env.guild.id,
@@ -148,10 +153,10 @@ async def test_starboard_reaction_records_and_withdraws_a_vote(monkeypatch: pyte
         assert (actor.discord_user_id, actor.guild_id, emoji) == (voter.id, env.guild.id, "⭐")
         await env.advance_time(2)
         key = str(StarboardEntryKey(4, message.id))
-        pending.assert_awaited_once_with("starboard_entry", key)
+        pending.assert_awaited_once_with("starboard_entry", key, context=ANY)
 
         await voter.unreact(message, "⭐")
-        withdraw.assert_awaited_once_with(message.id, voter.id, "⭐")
+        withdraw.assert_awaited_once_with(message.id, voter.id, "⭐", context=ANY)
         await env.advance_time(2)
         assert pending.await_count == 2
         assert pending.records[1] == pending.records[0]

@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 
 class DraftSchematicIngestor(Protocol):
-    async def ingest(self, request: IngestRequest) -> IngestedSchematic: ...
+    async def ingest(self, request: IngestRequest, *, context: ActingContext) -> IngestedSchematic: ...
 
 
 class DraftSchematicRepository(Protocol):
@@ -193,7 +193,7 @@ class DraftSchematicService:
             if self._inference is None:
                 message = "Schematic submission inference is unavailable."
                 raise InvalidStateError(message)
-            return await self._inference.suggest(draft, source.id, source.state, analysis)
+            return await self._inference.suggest(draft, source.id, source.state, analysis, context=context)
 
     async def select_primary(self, draft_id: UUID, upload_id: UUID, *, context: ActingContext) -> None:
         """Choose one retained source explicitly when several schematics are attached."""
@@ -244,7 +244,7 @@ class DraftSchematicService:
                 retry = False
                 try:
                     data = await self._source_bytes(source)
-                    result = await self._ingestor.ingest(IngestRequest(data, source.filename))
+                    result = await self._ingestor.ingest(IngestRequest(data, source.filename), context=context)
                 except (InvalidSchematicError, SchematicTooLargeError, SchematicWorkerCrashedError) as exc:
                     error = str(exc)
                     logger.warning("Rejected draft schematic %s: %s", source.id, error)
@@ -282,9 +282,11 @@ class DraftSchematicService:
             await uow.draft_schematics.finish_upload(upload_id, succeeded=succeeded)
             await uow.commit()
 
-    async def read_for_draft(self, draft_id: UUID) -> DraftSchematicSnapshot:
+    async def read_for_draft(self, draft_id: UUID, *, context: ActingContext) -> DraftSchematicSnapshot:
         """Read retained schematic state for submission preparation."""
         async with self._uow_factory() as uow:
+            if context.effective.worker_name is None:
+                await self._drafts.get_accessible_in(uow, draft_id, context.effective)
             return await uow.draft_schematics.read_for_draft(draft_id)
 
 

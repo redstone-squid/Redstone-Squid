@@ -9,7 +9,9 @@ from unittest.mock import AsyncMock
 import pytest
 from whenever import Instant
 
+from squid.core.actors import ActingContext, Actor
 from squid.core.errors import DataIntegrityError
+from squid.core.permissions.application import PermissionService
 from squid.core.schematics.application import (
     CachedRender,
     ConvertRequest,
@@ -47,6 +49,8 @@ from squid.core.schematics.errors import (
     SchematicWorkerCrashedError,
 )
 from squid_i18n import NEUTRAL, discord_text, resolve_text, source_text
+from tests.support.permissions import permission_uow_factory
+from tests.unit.api.fakes import EmptyPermissionStore
 from tests.unit.schematics.fakes import (
     FakeSchematicAnalyzer,
     FakeSchematicStore,
@@ -130,6 +134,7 @@ def service(
             store,
             store,
             FakeVersionResolver(),
+            permissions=PermissionService(uow_factory=permission_uow_factory(EmptyPermissionStore())),
             limits=limits,
             engine_installed=engine_installed,
             render_enabled=render_enabled,
@@ -172,10 +177,23 @@ async def test_record_preserves_provider_neutral_uploader_account_identity() -> 
 
     await schematics.attach(
         7,
-        IngestRequest(data=litematic_bytes(), filename="door.litematic", uploaded_by_account_id=314),
+        IngestRequest(data=litematic_bytes(), filename="door.litematic"),
+        context=ActingContext.direct(Actor(account_id=314)),
     )
 
     assert store.uploaded_by_account_ids == [314]
+
+
+async def test_private_attachment_reads_check_the_effective_actor() -> None:
+    schematics, _, _ = service()
+    owner = ActingContext.direct(Actor(account_id=314))
+    other = ActingContext.direct(Actor(account_id=315))
+    await schematics.attach(7, IngestRequest(data=litematic_bytes(), filename="door.litematic"), context=owner)
+
+    assert await schematics.featured_for_build(7, context=other) is None
+    assert await schematics.list_for_build(7, context=other) == []
+    assert await schematics.featured_for_build(7, context=owner) is not None
+    assert len(await schematics.list_for_build(7, context=owner)) == 1
 
 
 def test_publication_requires_rights_and_no_content_rewriting() -> None:
@@ -200,7 +218,9 @@ async def test_ingest_stores_bytes_and_passes_the_sniffed_format_to_the_analyzer
     schematics, analyzer, store = service()
     data = litematic_bytes()
 
-    ingested = await schematics.ingest(IngestRequest(data=data, filename="door.litematic"))
+    ingested = await schematics.ingest(
+        IngestRequest(data=data, filename="door.litematic"), context=ActingContext.worker("test-worker")
+    )
 
     assert store.files[ingested.sha256] == data
     assert analyzer.analyze_calls == [(data, SchematicFormat.LITEMATIC, True)]
@@ -218,7 +238,9 @@ async def test_piston_upload_keeps_static_analysis_when_testing_its_control(work
     analyzer.detect_door = detect
     data = litematic_bytes()
 
-    ingested = await schematics.ingest(IngestRequest(data=data, filename="door.litematic"))
+    ingested = await schematics.ingest(
+        IngestRequest(data=data, filename="door.litematic"), context=ActingContext.worker("test-worker")
+    )
 
     detect.assert_awaited_once_with(data, source_format=SchematicFormat.LITEMATIC)
     assert ingested.analysis.metrics == analysis.metrics
@@ -234,11 +256,12 @@ async def test_public_content_requires_the_build_attachment_and_complete_publica
         7,
         digest,
         make_analysis(),
+        context=ActingContext.worker("test"),
         primary=True,
         publication=original_publication(public=True),
     )
 
-    download = await schematics.public_download(7, public_id)
+    download = await schematics.public_download(7, public_id, context=ActingContext.worker("test-worker"))
 
     assert download.content == b"stored"
     # Carried on the result rather than asserted in the route: the domain already
@@ -246,23 +269,28 @@ async def test_public_content_requires_the_build_attachment_and_complete_publica
     assert download.license is SchematicLicense.CC_BY_4_0
     assert download.source_format is make_analysis().metrics.source_format
     with pytest.raises(SchematicNotFoundError):
-        await schematics.public_download(8, public_id)
+        await schematics.public_download(8, public_id, context=ActingContext.worker("test-worker"))
 
-    private_id = await store.record_analysis(7, digest, make_analysis(), primary=False)
+    private_id = await store.record_analysis(
+        7, digest, make_analysis(), context=ActingContext.worker("test"), primary=False
+    )
     with pytest.raises(SchematicNotFoundError):
-        await schematics.public_download(7, private_id)
+        await schematics.public_download(7, private_id, context=ActingContext.worker("test-worker"))
 
 
 async def test_public_listing_hides_legacy_and_withdrawn_attachments() -> None:
     schematics, _analyzer, store = service()
     digest = await store.put_file(b"stored", source_format=SchematicFormat.SPONGE_SCHEM)
     public = original_publication(public=True)
-    await store.record_analysis(7, digest, make_analysis(), primary=True, publication=public)
-    await store.record_analysis(7, digest, make_analysis(), primary=False)
+    await store.record_analysis(
+        7, digest, make_analysis(), context=ActingContext.worker("test"), primary=True, publication=public
+    )
+    await store.record_analysis(7, digest, make_analysis(), context=ActingContext.worker("test"), primary=False)
     await store.record_analysis(
         7,
         digest,
         make_analysis(),
+        context=ActingContext.worker("test"),
         primary=False,
         publication=SchematicPublication(
             visibility=public.visibility,
@@ -274,8 +302,10 @@ async def test_public_listing_hides_legacy_and_withdrawn_attachments() -> None:
         ),
     )
 
-    assert [item.id for item in await schematics.list_public_for_build(7)] == [1]
-    page = await schematics.list_public_page(7)
+    assert [
+        item.id for item in await schematics.list_public_for_build(7, context=ActingContext.worker("test-worker"))
+    ] == [1]
+    page = await schematics.list_public_page(7, context=ActingContext.worker("test-worker"))
     assert [item.id for item in page.items] == [1]
     assert page.total == 1
 
@@ -289,6 +319,7 @@ async def test_two_public_attachments_download_while_only_the_featured_one_suppl
         7,
         first_digest,
         make_analysis(),
+        context=ActingContext.worker("test"),
         primary=True,
         publication=publication,
     )
@@ -296,14 +327,21 @@ async def test_two_public_attachments_download_while_only_the_featured_one_suppl
         7,
         second_digest,
         make_analysis(),
+        context=ActingContext.worker("test"),
         primary=False,
         publication=publication,
     )
 
-    assert [item.id for item in await schematics.list_public_for_build(7)] == [featured_id, secondary_id]
-    assert (await schematics.public_download(7, featured_id)).content == b"featured"
-    assert (await schematics.public_download(7, secondary_id)).content == b"secondary"
-    preview = await schematics.prepare_render(7)
+    assert [
+        item.id for item in await schematics.list_public_for_build(7, context=ActingContext.worker("test-worker"))
+    ] == [featured_id, secondary_id]
+    assert (
+        await schematics.public_download(7, featured_id, context=ActingContext.worker("test-worker"))
+    ).content == b"featured"
+    assert (
+        await schematics.public_download(7, secondary_id, context=ActingContext.worker("test-worker"))
+    ).content == b"secondary"
+    preview = await schematics.prepare_render(7, context=ActingContext.worker("test-worker"))
     assert isinstance(preview, FreshRender)
     assert preview.schematic_id == featured_id
 
@@ -312,7 +350,10 @@ async def test_ingest_refuses_an_oversized_upload_before_reaching_the_analyzer()
     schematics, analyzer, _ = service(limits=SchematicLimits(max_upload_bytes=8))
 
     with pytest.raises(SchematicTooLargeError):
-        await schematics.ingest(IngestRequest(data=litematic_bytes(b"\x00" * 512), filename="door.litematic"))
+        await schematics.ingest(
+            IngestRequest(data=litematic_bytes(b"\x00" * 512), filename="door.litematic"),
+            context=ActingContext.worker("test-worker"),
+        )
 
     assert analyzer.analyze_calls == []
 
@@ -322,7 +363,9 @@ async def test_ingest_refuses_a_decompression_bomb_before_reaching_the_analyzer(
     schematics, analyzer, _ = service(limits=SchematicLimits(max_inflated_bytes=1024))
 
     with pytest.raises(DecompressionBudgetExceededError):
-        await schematics.ingest(IngestRequest(data=bomb, filename="door.litematic"))
+        await schematics.ingest(
+            IngestRequest(data=bomb, filename="door.litematic"), context=ActingContext.worker("test-worker")
+        )
 
     assert analyzer.analyze_calls == []
 
@@ -331,7 +374,10 @@ async def test_ingest_refuses_bytes_that_are_not_a_schematic_however_they_are_na
     schematics, analyzer, _ = service()
 
     with pytest.raises(InvalidSchematicError):
-        await schematics.ingest(IngestRequest(data=gzip.compress(b"not nbt at all"), filename="door.litematic"))
+        await schematics.ingest(
+            IngestRequest(data=gzip.compress(b"not nbt at all"), filename="door.litematic"),
+            context=ActingContext.worker("test-worker"),
+        )
 
     assert analyzer.analyze_calls == []
 
@@ -343,9 +389,9 @@ async def test_a_file_that_crashed_a_worker_is_never_analyzed_a_second_time() ->
     request = IngestRequest(data=litematic_bytes(), filename="poison.litematic")
 
     with pytest.raises(SchematicWorkerCrashedError):
-        await schematics.ingest(request)
+        await schematics.ingest(request, context=ActingContext.worker("test-worker"))
     with pytest.raises(InvalidSchematicError):
-        await schematics.ingest(request)
+        await schematics.ingest(request, context=ActingContext.worker("test-worker"))
 
     assert len(analyzer.analyze_calls) == 1
 
@@ -353,7 +399,9 @@ async def test_a_file_that_crashed_a_worker_is_never_analyzed_a_second_time() ->
 async def test_attach_records_the_analysis_against_the_build() -> None:
     schematics, _, store = service()
 
-    await schematics.attach(7, IngestRequest(data=litematic_bytes(), filename="door.litematic"))
+    await schematics.attach(
+        7, IngestRequest(data=litematic_bytes(), filename="door.litematic"), context=ActingContext.worker("test-worker")
+    )
 
     build_id, _, analysis, primary = store.records[0]
     assert (build_id, primary) == (7, True)
@@ -363,10 +411,10 @@ async def test_attach_records_the_analysis_against_the_build() -> None:
 async def test_duplicate_detection_reports_a_byte_identical_file_without_comparing() -> None:
     schematics, analyzer, _ = service()
     request = IngestRequest(data=litematic_bytes(), filename="door.litematic")
-    await schematics.attach(7, request)
+    await schematics.attach(7, request, context=ActingContext.worker("test-worker"))
 
-    duplicate = await schematics.ingest(request)
-    matches = await schematics.find_duplicates(duplicate)
+    duplicate = await schematics.ingest(request, context=ActingContext.worker("test-worker"))
+    matches = await schematics.find_duplicates(duplicate, context=ActingContext.worker("test-worker"))
 
     assert [(match.build_id, match.tier) for match in matches] == [(7, "identical")]
     assert analyzer.compare_calls == []
@@ -374,10 +422,17 @@ async def test_duplicate_detection_reports_a_byte_identical_file_without_compari
 
 async def test_duplicate_detection_uses_shape_as_the_moved_or_rotated_identity() -> None:
     schematics, analyzer, _ = service()
-    await schematics.attach(7, IngestRequest(data=litematic_bytes(), filename="original.litematic"))
+    await schematics.attach(
+        7,
+        IngestRequest(data=litematic_bytes(), filename="original.litematic"),
+        context=ActingContext.worker("test-worker"),
+    )
 
-    moved = await schematics.ingest(IngestRequest(data=litematic_bytes(b"\x00"), filename="moved.litematic"))
-    matches = await schematics.find_duplicates(moved)
+    moved = await schematics.ingest(
+        IngestRequest(data=litematic_bytes(b"\x00"), filename="moved.litematic"),
+        context=ActingContext.worker("test-worker"),
+    )
+    matches = await schematics.find_duplicates(moved, context=ActingContext.worker("test-worker"))
 
     assert [(match.build_id, match.tier) for match in matches] == [(7, "structural-match")]
     assert analyzer.compare_calls == []
@@ -392,6 +447,7 @@ async def test_duplicate_detection_compares_only_shortlisted_near_matches() -> N
         7,
         candidate_digest,
         make_analysis(shape="old-shape", block_count=43),
+        context=ActingContext.worker("test"),
         primary=True,
     )
     analyzer.comparisons[candidate_data] = SchematicComparison(
@@ -401,8 +457,10 @@ async def test_duplicate_detection_compares_only_shortlisted_near_matches() -> N
         summary='{"changed":1}',
     )
 
-    uploaded = await schematics.ingest(IngestRequest(data=litematic_bytes(), filename="new.litematic"))
-    matches = await schematics.find_duplicates(uploaded)
+    uploaded = await schematics.ingest(
+        IngestRequest(data=litematic_bytes(), filename="new.litematic"), context=ActingContext.worker("test-worker")
+    )
+    matches = await schematics.find_duplicates(uploaded, context=ActingContext.worker("test-worker"))
 
     assert [(match.build_id, match.tier, match.footprint_distance) for match in matches] == [(7, "near", 0.5)]
     assert matches[0].detail == '{"changed":1}'
@@ -416,46 +474,62 @@ async def test_duplicate_detection_discards_comparisons_beyond_the_near_threshol
     schematics, _, store = service(analyzer)
     candidate_data = b"candidate"
     candidate_digest = await store.put_file(candidate_data, source_format=SchematicFormat.LITEMATIC)
-    await store.record_analysis(7, candidate_digest, make_analysis(shape="old-shape"), primary=True)
+    await store.record_analysis(
+        7, candidate_digest, make_analysis(shape="old-shape"), context=ActingContext.worker("test"), primary=True
+    )
     analyzer.comparisons[candidate_data] = SchematicComparison(
         preset=FingerprintPreset.SHAPE,
         identical=False,
         footprint_distance=1.01,
     )
 
-    uploaded = await schematics.ingest(IngestRequest(data=litematic_bytes(), filename="new.litematic"))
+    uploaded = await schematics.ingest(
+        IngestRequest(data=litematic_bytes(), filename="new.litematic"), context=ActingContext.worker("test-worker")
+    )
 
-    assert await schematics.find_duplicates(uploaded) == []
+    assert await schematics.find_duplicates(uploaded, context=ActingContext.worker("test-worker")) == []
 
 
 async def test_record_attaches_an_analysis_produced_before_the_build_existed() -> None:
     """The submission flow analyzes first so it can prefill the form, and records after."""
     schematics, _, store = service()
     request = IngestRequest(data=litematic_bytes(), filename="door.litematic")
-    ingested = await schematics.ingest(request)
+    ingested = await schematics.ingest(request, context=ActingContext.worker("test-worker"))
 
-    await schematics.record(11, ingested, request, primary=False)
+    await schematics.record(11, ingested, request, primary=False, context=ActingContext.worker("test-worker"))
 
     assert store.records == [(11, ingested.sha256, ingested.analysis, False)]
 
 
 async def test_convert_resolves_a_version_label_to_a_data_version() -> None:
     schematics, analyzer, store = service()
-    await schematics.attach(3, IngestRequest(data=litematic_bytes(), filename="door.litematic"))
+    await schematics.attach(
+        3, IngestRequest(data=litematic_bytes(), filename="door.litematic"), context=ActingContext.worker("test-worker")
+    )
     store.files[store.records[0][1]] = litematic_bytes()
 
-    await schematics.convert(3, ConvertRequest(target_format=SchematicFormat.LITEMATIC), version_label="Java 1.16.5")
+    await schematics.convert(
+        3,
+        ConvertRequest(target_format=SchematicFormat.LITEMATIC),
+        version_label="Java 1.16.5",
+        context=ActingContext.worker("test-worker"),
+    )
 
     assert analyzer.convert_calls == [(SchematicFormat.LITEMATIC, 2586)]
 
 
 async def test_convert_refuses_a_version_it_has_no_data_version_for() -> None:
     schematics, _, _ = service()
-    await schematics.attach(3, IngestRequest(data=litematic_bytes(), filename="door.litematic"))
+    await schematics.attach(
+        3, IngestRequest(data=litematic_bytes(), filename="door.litematic"), context=ActingContext.worker("test-worker")
+    )
 
     with pytest.raises(InvalidSchematicError):
         await schematics.convert(
-            3, ConvertRequest(target_format=SchematicFormat.LITEMATIC), version_label="Java 1.7.10"
+            3,
+            ConvertRequest(target_format=SchematicFormat.LITEMATIC),
+            version_label="Java 1.7.10",
+            context=ActingContext.worker("test-worker"),
         )
 
 
@@ -463,27 +537,39 @@ async def test_convert_reports_a_build_with_no_schematic() -> None:
     schematics, _, _ = service()
 
     with pytest.raises(SchematicNotFoundError):
-        await schematics.convert(404, ConvertRequest(target_format=SchematicFormat.LITEMATIC))
+        await schematics.convert(
+            404, ConvertRequest(target_format=SchematicFormat.LITEMATIC), context=ActingContext.worker("test-worker")
+        )
 
 
 async def test_an_instance_without_the_engine_reports_unavailable_rather_than_failing_late() -> None:
     schematics, analyzer, _ = service(engine_installed=False)
 
     assert schematics.available is False
-    assert (await schematics.capabilities()).available is False
+    assert (await schematics.capabilities(context=ActingContext.worker("test-worker"))).available is False
     with pytest.raises(SchematicSupportUnavailableError):
-        await schematics.ingest(IngestRequest(data=litematic_bytes(), filename="door.litematic"))
+        await schematics.ingest(
+            IngestRequest(data=litematic_bytes(), filename="door.litematic"),
+            context=ActingContext.worker("test-worker"),
+        )
     assert analyzer.analyze_calls == []
 
 
 async def test_attaching_a_second_schematic_can_leave_the_first_primary() -> None:
     schematics, _, store = service(FakeSchematicAnalyzer(make_analysis(shape="other")))
-    await schematics.attach(5, IngestRequest(data=litematic_bytes(), filename="a.litematic"))
+    await schematics.attach(
+        5, IngestRequest(data=litematic_bytes(), filename="a.litematic"), context=ActingContext.worker("test-worker")
+    )
 
-    await schematics.attach(5, IngestRequest(data=litematic_bytes(b"\x00"), filename="b.litematic"), primary=False)
+    await schematics.attach(
+        5,
+        IngestRequest(data=litematic_bytes(b"\x00"), filename="b.litematic"),
+        primary=False,
+        context=ActingContext.worker("test-worker"),
+    )
 
     assert [record[3] for record in store.records] == [True, False]
-    primary = await schematics.featured_for_build(5)
+    primary = await schematics.featured_for_build(5, context=ActingContext.worker("test-worker"))
     assert primary is not None
     assert primary.original_filename == "a.litematic"
 
@@ -502,19 +588,25 @@ async def test_render_prepares_png_then_reuses_the_persisted_recipe() -> None:
         7,
         IngestRequest(data=litematic_bytes(), filename="door.litematic"),
         publication=original_publication(),
+        context=ActingContext.worker("test-worker"),
     )
 
-    prepared = await schematics.prepare_render(7)
+    prepared = await schematics.prepare_render(7, context=ActingContext.worker("test-worker"))
 
     assert isinstance(prepared, FreshRender)
     assert prepared.png == analyzer.render_output
     assert analyzer.render_calls[0][2] == VerifiedResourcePack.from_bytes(b"resource-pack")
     assert (
-        await schematics.publish_fresh_preview(prepared, "https://cdn.example/render.png", "renders/recipe.png")
+        await schematics.publish_fresh_preview(
+            prepared,
+            "https://cdn.example/render.png",
+            "renders/recipe.png",
+            context=ActingContext.worker("test-worker"),
+        )
         is not None
     )
 
-    cached = await schematics.prepare_render(7)
+    cached = await schematics.prepare_render(7, context=ActingContext.worker("test-worker"))
     assert isinstance(cached, CachedRender)
     assert cached.url == "https://cdn.example/render.png"
     assert len(analyzer.render_calls) == 1
@@ -523,10 +615,16 @@ async def test_render_prepares_png_then_reuses_the_persisted_recipe() -> None:
 async def test_render_names_the_reason_a_build_is_skipped() -> None:
     """The durable worker and moderator surfaces both need the reason, not just "nothing"."""
     schematics, analyzer, _ = service(render_enabled=True, resource_pack=FakeResourcePack())
-    await schematics.attach(7, IngestRequest(data=litematic_bytes(), filename="legacy.litematic"))
+    await schematics.attach(
+        7,
+        IngestRequest(data=litematic_bytes(), filename="legacy.litematic"),
+        context=ActingContext.worker("test-worker"),
+    )
 
-    assert await schematics.prepare_render(404) == SkippedRender(RenderSkipReason.NO_PRIMARY_SCHEMATIC)
-    assert isinstance(await schematics.prepare_render(7), FreshRender)
+    assert await schematics.prepare_render(404, context=ActingContext.worker("test-worker")) == SkippedRender(
+        RenderSkipReason.NO_PRIMARY_SCHEMATIC
+    )
+    assert isinstance(await schematics.prepare_render(7, context=ActingContext.worker("test-worker")), FreshRender)
     assert len(analyzer.render_calls) == 1
 
 
@@ -536,9 +634,12 @@ async def test_render_is_skipped_wholesale_when_previews_are_disabled() -> None:
         7,
         IngestRequest(data=litematic_bytes(), filename="door.litematic"),
         publication=original_publication(),
+        context=ActingContext.worker("test-worker"),
     )
 
-    assert await schematics.prepare_render(7) == SkippedRender(RenderSkipReason.RENDERING_DISABLED)
+    assert await schematics.prepare_render(7, context=ActingContext.worker("test-worker")) == SkippedRender(
+        RenderSkipReason.RENDERING_DISABLED
+    )
     assert analyzer.render_calls == []
 
 
@@ -548,10 +649,13 @@ async def test_render_is_skipped_when_the_stored_file_has_gone_missing() -> None
         7,
         IngestRequest(data=litematic_bytes(), filename="door.litematic"),
         publication=original_publication(),
+        context=ActingContext.worker("test-worker"),
     )
     store.files.clear()
 
-    assert await schematics.prepare_render(7) == SkippedRender(RenderSkipReason.MISSING_FILE)
+    assert await schematics.prepare_render(7, context=ActingContext.worker("test-worker")) == SkippedRender(
+        RenderSkipReason.MISSING_FILE
+    )
     assert analyzer.render_calls == []
 
 
@@ -559,29 +663,38 @@ async def test_permanent_render_skips_do_not_acquire_unavailable_render_resource
     pack = FakeResourcePack(failure=SchematicRenderUnavailableError("pack unavailable"))
     schematics, _, store = service(render_enabled=True, resource_pack=pack)
 
-    assert await schematics.prepare_render(404) == SkippedRender(RenderSkipReason.NO_PRIMARY_SCHEMATIC)
+    assert await schematics.prepare_render(404, context=ActingContext.worker("test-worker")) == SkippedRender(
+        RenderSkipReason.NO_PRIMARY_SCHEMATIC
+    )
 
     await schematics.attach(
         8,
         IngestRequest(data=litematic_bytes(b"\x00"), filename="missing.litematic"),
         publication=original_publication(),
+        context=ActingContext.worker("test-worker"),
     )
-    stored = await schematics.featured_for_build(8)
+    stored = await schematics.featured_for_build(8, context=ActingContext.worker("test-worker"))
     assert stored is not None
     store.files.pop(stored.file_sha256)
-    assert await schematics.prepare_render(8) == SkippedRender(RenderSkipReason.MISSING_FILE)
+    assert await schematics.prepare_render(8, context=ActingContext.worker("test-worker")) == SkippedRender(
+        RenderSkipReason.MISSING_FILE
+    )
     assert pack.load_calls == 0
 
 
 async def test_explaining_a_render_skip_costs_nothing(caplog: pytest.LogCaptureFixture) -> None:
     """A moderator asking about a build must not set a render going to get an answer."""
     schematics, analyzer, _ = service(render_enabled=True, resource_pack=FakeResourcePack())
-    await schematics.attach(7, IngestRequest(data=litematic_bytes(), filename="legacy.litematic"))
-    stored = await schematics.featured_for_build(7)
+    await schematics.attach(
+        7,
+        IngestRequest(data=litematic_bytes(), filename="legacy.litematic"),
+        context=ActingContext.worker("test-worker"),
+    )
+    stored = await schematics.featured_for_build(7, context=ActingContext.worker("test-worker"))
     assert stored is not None
 
     with caplog.at_level(logging.INFO, logger="squid.core.schematics.application.preview_service"):
-        assert await schematics.explain_render_skip(stored) is None
+        assert await schematics.explain_render_skip(stored, context=ActingContext.worker("test-worker")) is None
 
     assert analyzer.render_calls == []
     assert analyzer.capabilities_calls == 0
@@ -594,11 +707,12 @@ async def test_an_original_schematic_within_budget_has_no_skip_to_explain() -> N
         7,
         IngestRequest(data=litematic_bytes(), filename="door.litematic"),
         publication=original_publication(),
+        context=ActingContext.worker("test-worker"),
     )
-    stored = await schematics.featured_for_build(7)
+    stored = await schematics.featured_for_build(7, context=ActingContext.worker("test-worker"))
     assert stored is not None
 
-    assert await schematics.explain_render_skip(stored) is None
+    assert await schematics.explain_render_skip(stored, context=ActingContext.worker("test-worker")) is None
 
 
 async def test_explaining_a_render_skip_reports_a_missing_source_without_acquiring_resources() -> None:
@@ -608,12 +722,16 @@ async def test_explaining_a_render_skip_reports_a_missing_source_without_acquiri
         7,
         IngestRequest(data=litematic_bytes(), filename="door.litematic"),
         publication=original_publication(),
+        context=ActingContext.worker("test-worker"),
     )
-    stored = await schematics.featured_for_build(7)
+    stored = await schematics.featured_for_build(7, context=ActingContext.worker("test-worker"))
     assert stored is not None
     store.files.clear()
 
-    assert await schematics.explain_render_skip(stored) is RenderSkipReason.MISSING_FILE
+    assert (
+        await schematics.explain_render_skip(stored, context=ActingContext.worker("test-worker"))
+        is RenderSkipReason.MISSING_FILE
+    )
     assert pack.load_calls == 0
 
 
@@ -623,15 +741,17 @@ async def test_render_recipe_includes_the_schematic_content_identity() -> None:
         7,
         IngestRequest(data=litematic_bytes(), filename="first.litematic"),
         publication=original_publication(),
+        context=ActingContext.worker("test-worker"),
     )
     await schematics.attach(
         8,
         IngestRequest(data=litematic_bytes(b"\x00"), filename="second.litematic"),
         publication=original_publication(),
+        context=ActingContext.worker("test-worker"),
     )
 
-    first = await schematics.prepare_render(7)
-    second = await schematics.prepare_render(8)
+    first = await schematics.prepare_render(7, context=ActingContext.worker("test-worker"))
+    second = await schematics.prepare_render(8, context=ActingContext.worker("test-worker"))
 
     assert isinstance(first, FreshRender)
     assert isinstance(second, FreshRender)
@@ -645,6 +765,7 @@ async def test_render_recipe_is_stable_and_invalidated_by_camera_or_pack_identit
         7,
         IngestRequest(data=litematic_bytes(), filename="door.litematic"),
         publication=original_publication(),
+        context=ActingContext.worker("test-worker"),
     )
     same, _, _ = service(store=store, render_enabled=True, resource_pack=FakeResourcePack(b"pack-a"))
     camera, _, _ = service(
@@ -655,10 +776,10 @@ async def test_render_recipe_is_stable_and_invalidated_by_camera_or_pack_identit
     )
     pack, _, _ = service(store=store, render_enabled=True, resource_pack=FakeResourcePack(b"pack-b"))
 
-    baseline_render = await baseline.prepare_render(7)
-    same_render = await same.prepare_render(7)
-    camera_render = await camera.prepare_render(7)
-    pack_render = await pack.prepare_render(7)
+    baseline_render = await baseline.prepare_render(7, context=ActingContext.worker("test-worker"))
+    same_render = await same.prepare_render(7, context=ActingContext.worker("test-worker"))
+    camera_render = await camera.prepare_render(7, context=ActingContext.worker("test-worker"))
+    pack_render = await pack.prepare_render(7, context=ActingContext.worker("test-worker"))
 
     assert isinstance(baseline_render, FreshRender)
     assert isinstance(same_render, FreshRender)
@@ -691,10 +812,11 @@ async def test_render_skips_a_schematic_over_a_budget(
         7,
         IngestRequest(data=litematic_bytes(), filename="door.litematic"),
         publication=original_publication(),
+        context=ActingContext.worker("test-worker"),
     )
 
     with caplog.at_level(logging.INFO, logger="squid.core.schematics.application.preview_service"):
-        assert await schematics.prepare_render(7) == SkippedRender(reason)
+        assert await schematics.prepare_render(7, context=ActingContext.worker("test-worker")) == SkippedRender(reason)
 
     assert analyzer.render_calls == []
     assert vars(caplog.records[-1])["squid.build.id"] == 7
@@ -714,20 +836,26 @@ async def test_render_worker_crash_is_retried_by_the_durable_queue() -> None:
         7,
         IngestRequest(data=litematic_bytes(), filename="door.litematic"),
         publication=original_publication(),
+        context=ActingContext.worker("test-worker"),
     )
     analyzer.failure = SchematicWorkerCrashedError(operation="render", exit_code=-9)
 
     with pytest.raises(SchematicWorkerCrashedError):
-        await schematics.prepare_render(7)
-    assert await schematics.prepare_render(7) == SkippedRender(RenderSkipReason.POISONED_FILE)
+        await schematics.prepare_render(7, context=ActingContext.worker("test-worker"))
+    assert await schematics.prepare_render(7, context=ActingContext.worker("test-worker")) == SkippedRender(
+        RenderSkipReason.POISONED_FILE
+    )
     await store.record_analysis(
         8,
         store.records[0][1],
         analyzer.analysis,
+        context=ActingContext.worker("test"),
         primary=True,
         publication=original_publication(),
     )
-    assert await schematics.prepare_render(8) == SkippedRender(RenderSkipReason.POISONED_FILE)
+    assert await schematics.prepare_render(8, context=ActingContext.worker("test-worker")) == SkippedRender(
+        RenderSkipReason.POISONED_FILE
+    )
     assert len(analyzer.render_calls) == 1
 
 
@@ -740,10 +868,11 @@ async def test_a_renderer_that_does_not_return_a_png_is_an_operational_failure()
         7,
         IngestRequest(data=litematic_bytes(), filename="door.litematic"),
         publication=original_publication(),
+        context=ActingContext.worker("test-worker"),
     )
 
     with pytest.raises(SchematicRenderUnavailableError):
-        await schematics.prepare_render(7)
+        await schematics.prepare_render(7, context=ActingContext.worker("test-worker"))
 
 
 async def test_rendering_now_serves_the_recipe_the_queue_already_rendered() -> None:
@@ -753,13 +882,16 @@ async def test_rendering_now_serves_the_recipe_the_queue_already_rendered() -> N
         7,
         IngestRequest(data=litematic_bytes(), filename="door.litematic"),
         publication=original_publication(),
+        context=ActingContext.worker("test-worker"),
     )
-    prepared = await schematics.prepare_render(7)
+    prepared = await schematics.prepare_render(7, context=ActingContext.worker("test-worker"))
     assert isinstance(prepared, FreshRender)
-    await schematics.publish_fresh_preview(prepared, "https://cdn.example/render.png", "renders/recipe.png")
+    await schematics.publish_fresh_preview(
+        prepared, "https://cdn.example/render.png", "renders/recipe.png", context=ActingContext.worker("test-worker")
+    )
     store.render_content[prepared.recipe_hash] = b"\x89PNG\r\n\x1a\ncached"
 
-    rendered = await schematics.render_now(7)
+    rendered = await schematics.render_now(7, context=ActingContext.worker("test-worker"))
 
     assert rendered.png == b"\x89PNG\r\n\x1a\ncached"
     assert rendered.recipe_hash == prepared.recipe_hash
@@ -773,13 +905,18 @@ async def test_rendering_now_with_a_different_camera_renders_a_different_recipe(
         7,
         IngestRequest(data=litematic_bytes(), filename="door.litematic"),
         publication=original_publication(),
+        context=ActingContext.worker("test-worker"),
     )
-    prepared = await schematics.prepare_render(7)
+    prepared = await schematics.prepare_render(7, context=ActingContext.worker("test-worker"))
     assert isinstance(prepared, FreshRender)
-    await schematics.publish_fresh_preview(prepared, "https://cdn.example/render.png", "renders/recipe.png")
+    await schematics.publish_fresh_preview(
+        prepared, "https://cdn.example/render.png", "renders/recipe.png", context=ActingContext.worker("test-worker")
+    )
     store.render_content[prepared.recipe_hash] = b"\x89PNG\r\n\x1a\ncached"
 
-    rendered = await schematics.render_now(7, request=schematics.render_recipe(yaw=45.0))
+    rendered = await schematics.render_now(
+        7, request=schematics.render_recipe(yaw=45.0), context=ActingContext.worker("test-worker")
+    )
 
     assert rendered.from_cache is False
     assert rendered.png == analyzer.render_output
@@ -791,10 +928,14 @@ async def test_rendering_now_with_a_different_camera_renders_a_different_recipe(
 
 async def test_rendering_now_refuses_with_the_reason_rather_than_a_blank_image() -> None:
     schematics, analyzer, _ = service(render_enabled=True, resource_pack=FakeResourcePack(), render_max_block_count=0)
-    await schematics.attach(7, IngestRequest(data=litematic_bytes(), filename="legacy.litematic"))
+    await schematics.attach(
+        7,
+        IngestRequest(data=litematic_bytes(), filename="legacy.litematic"),
+        context=ActingContext.worker("test-worker"),
+    )
 
     with pytest.raises(SchematicRenderRefusedError) as refusal:
-        await schematics.render_now(7)
+        await schematics.render_now(7, context=ActingContext.worker("test-worker"))
 
     assert refusal.value.reason == RenderSkipReason.OVER_BLOCK_BUDGET.value
     assert refusal.value.public_context == {"reason": "over_block_budget"}
@@ -807,7 +948,7 @@ async def test_rendering_now_reports_a_build_with_no_schematic_as_missing() -> N
     schematics, _, _ = service(render_enabled=True, resource_pack=FakeResourcePack())
 
     with pytest.raises(SchematicNotFoundError):
-        await schematics.render_now(404)
+        await schematics.render_now(404, context=ActingContext.worker("test-worker"))
 
 
 async def test_rendering_now_is_unavailable_where_previews_are_disabled() -> None:
@@ -817,18 +958,21 @@ async def test_rendering_now_is_unavailable_where_previews_are_disabled() -> Non
         7,
         IngestRequest(data=litematic_bytes(), filename="door.litematic"),
         publication=original_publication(),
+        context=ActingContext.worker("test-worker"),
     )
 
     with pytest.raises(SchematicRenderUnavailableError):
-        await schematics.render_now(7)
+        await schematics.render_now(7, context=ActingContext.worker("test-worker"))
     assert analyzer.render_calls == []
 
 
 async def test_measure_timing_persists_evidence_without_editing_a_build() -> None:
     schematics, analyzer, store = service()
-    await schematics.attach(7, IngestRequest(data=litematic_bytes(), filename="door.litematic"))
+    await schematics.attach(
+        7, IngestRequest(data=litematic_bytes(), filename="door.litematic"), context=ActingContext.worker("test-worker")
+    )
 
-    result = await schematics.measure_timing(7, input_position=(12, 5, -3))
+    result = await schematics.measure_timing(7, input_position=(12, 5, -3), context=ActingContext.worker("test-worker"))
 
     assert result is analyzer.simulation_output
     assert analyzer.simulate_calls[0][1].input_position == (12, 5, -3)
@@ -846,6 +990,8 @@ async def test_detect_lattice_returns_the_persisted_highest_coverage_candidate()
         region_max=(2, 11, 6),
     )
     schematics, _, _ = service(FakeSchematicAnalyzer(make_analysis(lattice=lattice)))
-    await schematics.attach(7, IngestRequest(data=litematic_bytes(), filename="door.litematic"))
+    await schematics.attach(
+        7, IngestRequest(data=litematic_bytes(), filename="door.litematic"), context=ActingContext.worker("test-worker")
+    )
 
-    assert await schematics.detect_lattice(7) == lattice
+    assert await schematics.detect_lattice(7, context=ActingContext.worker("test-worker")) == lattice

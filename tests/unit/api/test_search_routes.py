@@ -5,8 +5,10 @@ from typing import NamedTuple, override
 
 import pytest
 
+from squid.api.security import ANONYMOUS
 from squid.api.v1.schemas.search import BuildSearchResult, MetadataSearchResult, RecordSearchResult
 from squid.api.v1.search import build_hit_id, search, suggest_terms
+from squid.core.actors import ActingContext
 from squid.core.builds.application import BuildQueryService
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build, DoorBuild
@@ -40,12 +42,12 @@ class SearchRecorder(SearchService):
         self.suggestions: list[tuple[str, int]] = []
 
     @override
-    async def search(self, request: SearchRequest) -> SearchPage:
+    async def search(self, request: SearchRequest, *, context: ActingContext) -> SearchPage:
         self.requests.append(request)
         return self.page
 
     @override
-    async def suggest(self, query: str | SearchQuery, *, limit: int = 5) -> tuple[str, ...]:
+    async def suggest(self, query: str | SearchQuery, *, limit: int = 5, context: ActingContext) -> tuple[str, ...]:
         self.suggestions.append((str(query), limit))
         return ("piston",)
 
@@ -56,7 +58,7 @@ class BuildQueryFake(BuildQueryService):
         self.requested: list[tuple[int, ...]] = []
 
     @override
-    async def get_many(self, build_ids: Sequence[int]) -> list[Build]:
+    async def get_many(self, build_ids: Sequence[int], *, context: ActingContext) -> list[Build]:
         self.requested.append(tuple(build_ids))
         return self.builds
 
@@ -106,7 +108,7 @@ async def test_search_renders_each_resource_kind_and_hydrates_builds() -> None:
     )
     graph = fakes(page, [indexed_build()])
 
-    result = await search.fn(graph.search, graph.build_queries, q="piston", search_scope=SearchScope.ALL)
+    result = await search.fn(ANONYMOUS, graph.search, graph.build_queries, q="piston", search_scope=SearchScope.ALL)
 
     assert [item.resource_kind for item in result.items] == ["build", "record", "metadata"]
     build_item, record_item, metadata_item = result.items
@@ -145,7 +147,7 @@ async def test_grouped_api_returns_record_context_and_origin() -> None:
     )
     graph = fakes(SearchPage((hit,), total=1, next=None, prev=None), [indexed_build()])
 
-    result = await search.fn(graph.search, graph.build_queries, q="door", group_by_build=True)
+    result = await search.fn(ANONYMOUS, graph.search, graph.build_queries, q="door", group_by_build=True)
 
     assert graph.search.requests[0].group_by_build
     item = result.items[0]
@@ -163,6 +165,7 @@ async def test_search_never_widens_build_visibility_past_confirmed() -> None:
     graph = fakes(empty_page())
 
     await search.fn(
+        ANONYMOUS,
         graph.search,
         graph.build_queries,
         q="status:pending",
@@ -184,6 +187,7 @@ async def test_search_drops_hits_whose_build_has_vanished() -> None:
     graph = fakes(page)
 
     result = await search.fn(
+        ANONYMOUS,
         graph.search,
         graph.build_queries,
         q="piston",
@@ -197,7 +201,8 @@ async def test_search_drops_hits_whose_build_has_vanished() -> None:
 async def test_suggest_passes_the_caller_limit_through() -> None:
     graph = fakes(empty_page())
 
-    result = await suggest_terms.fn(graph.search, q="pist", limit=3)
+    with ANONYMOUS.context().scope():
+        result = await suggest_terms.fn(graph.search, q="pist", limit=3)
 
     assert result.suggestions == ["piston"]
     assert graph.search.suggestions == [("pist", 3)]

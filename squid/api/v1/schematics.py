@@ -11,10 +11,8 @@ from squid.api.contract import ANONYMOUS, DEVICE, MINECRAFT, WEB, WEB_WRITE, con
 from squid.api.dependencies import (
     BuildQueries,
     CurrentCaller,
-    Permissions,
     Schematics,
     get_build_queries,
-    get_permissions,
     get_schematics,
 )
 from squid.api.errors import responses
@@ -22,7 +20,7 @@ from squid.api.idempotency import reserve_idempotent_before_request
 from squid.api.links import relative_url_for
 from squid.api.pagination import OffsetParam, Page, PageSizeParam, resolve_selector
 from squid.api.v1.schemas.schematics import SchematicSummary, VideoCreateRequest, VideoResponse
-from squid.core.permissions.domain.catalogue import BUILD_SCHEMATIC_VIEW_PRIVATE
+from squid.core.actors import ActingContext
 from squid.core.schematics.application.commands import MAX_RENDER_EXTENT, MIN_RENDER_EXTENT
 from squid.core.schematics.errors import SchematicSupportUnavailableError
 
@@ -49,11 +47,13 @@ async def list_build_schematics(
     offset: OffsetParam = None,
 ) -> Page[SchematicSummary]:
     """List analyzed schematics attached to a approved build."""
-    await build_queries.get_public(build_id)
+    await build_queries.get_public(build_id, context=ActingContext.current())
     # Attachment order has no identifier sequence worth anchoring to, so this listing is
     # offset-only, like the ranked build search.
     selector = resolve_selector(offset=offset, after_id=None, before_id=None, keyset_allowed=False)
-    page = await schematics.list_public_page(build_id, selector=selector, page_size=page_size)
+    page = await schematics.list_public_page(
+        build_id, selector=selector, page_size=page_size, context=ActingContext.current()
+    )
     return Page[SchematicSummary].from_domain(
         page,
         lambda schematic: SchematicSummary.from_domain(
@@ -91,8 +91,8 @@ async def get_schematic_content(
     schematics: Schematics,
 ) -> Response[bytes]:
     """Download explicitly published original bytes from a approved build."""
-    await build_queries.get_public(build_id)
-    download = await schematics.public_download(build_id, schematic_id)
+    await build_queries.get_public(build_id, context=ActingContext.current())
+    download = await schematics.public_download(build_id, schematic_id, context=ActingContext.current())
     # Generate the filename from IDs and the known format so user-supplied names
     # cannot introduce characters into the response header.
     filename = f"build-{build_id}-schematic-{schematic_id}.{download.source_format.value}"
@@ -148,10 +148,11 @@ async def render_build_schematic(
     Omitted camera parameters use deployment defaults. Reuse a stored preview
     when its recipe matches; otherwise render it during this request.
     """
-    await build_queries.get_public(build_id)
+    await build_queries.get_public(build_id, context=ActingContext.current())
     rendered = await schematics.render_now(
         build_id,
         request=schematics.render_recipe(width=width, height=height, yaw=yaw, pitch=pitch, zoom=zoom),
+        context=ActingContext.current(),
     )
     return Response(
         content=rendered.png,
@@ -186,7 +187,7 @@ async def get_schematic_render_content(
     recipe_hash: Annotated[str, PathParameter(pattern=r"^[0-9a-f]{64}$")], schematics: Schematics
 ) -> Response[bytes]:
     """Return a content-addressed PNG preview from private object storage."""
-    content = await schematics.render_content(recipe_hash)
+    content = await schematics.render_content(recipe_hash, context=ActingContext.current())
     return Response(
         content=content,
         media_type="image/png",
@@ -210,22 +211,20 @@ async def submit_schematic_video(
     build_queries: BuildQueries,
     schematics: Schematics,
     caller: CurrentCaller,
-    permissions: Permissions,
     request: Request,
 ) -> Response[VideoResponse]:
     """Queue a private MP4 of a stored schematic with timed input activations."""
-    account_id = caller.require_consented_account()
+    caller.require_consented_account()
     if schematics.videos is None:
         raise SchematicSupportUnavailableError
-    await build_queries.get_public(build_id)
+    await build_queries.get_public(build_id, context=caller.context())
     status = await schematics.videos.submit_video(
         build_id,
         schematic_id,
         data.to_request(),
-        account_id=account_id,
-        can_view_private=await caller.allows(permissions, BUILD_SCHEMATIC_VIEW_PRIVATE),
+        context=caller.context(),
     )
-    await build_queries.get_public(status.build_id)
+    await build_queries.get_public(status.build_id, context=caller.context())
     result = VideoResponse.from_status(
         status,
         status_url=relative_url_for(request, "get_schematic_video", video_id=status.id),
@@ -247,19 +246,17 @@ async def get_schematic_video(
     build_queries: BuildQueries,
     schematics: Schematics,
     caller: CurrentCaller,
-    permissions: Permissions,
     request: Request,
 ) -> Response[VideoResponse]:
     """Return only the requesting account's video status."""
-    account_id = caller.require_consented_account()
+    caller.require_consented_account()
     if schematics.videos is None:
         raise SchematicSupportUnavailableError
     status = await schematics.videos.get_video(
         video_id,
-        account_id=account_id,
-        can_view_private=await caller.allows(permissions, BUILD_SCHEMATIC_VIEW_PRIVATE),
+        context=caller.context(),
     )
-    await build_queries.get_public(status.build_id)
+    await build_queries.get_public(status.build_id, context=caller.context())
     result = VideoResponse.from_status(
         status,
         status_url=relative_url_for(request, "get_schematic_video", video_id=status.id),
@@ -286,22 +283,19 @@ async def get_schematic_video_content(
     build_queries: BuildQueries,
     schematics: Schematics,
     caller: CurrentCaller,
-    permissions: Permissions,
 ) -> Response[bytes]:
     """Download a completed private video while its source remains accessible."""
-    account_id = caller.require_consented_account()
+    caller.require_consented_account()
     if schematics.videos is None:
         raise SchematicSupportUnavailableError
     status = await schematics.videos.get_video(
         video_id,
-        account_id=account_id,
-        can_view_private=await caller.allows(permissions, BUILD_SCHEMATIC_VIEW_PRIVATE),
+        context=caller.context(),
     )
-    await build_queries.get_public(status.build_id)
+    await build_queries.get_public(status.build_id, context=caller.context())
     content = await schematics.videos.open_video_content(
         video_id,
-        account_id=account_id,
-        can_view_private=await caller.allows(permissions, BUILD_SCHEMATIC_VIEW_PRIVATE),
+        context=caller.context(),
     )
     return Response(
         content,
@@ -317,7 +311,6 @@ async def get_schematic_video_content(
 router = Router(
     dependencies={
         "build_queries": Provide(get_build_queries, sync_to_thread=False),
-        "permissions": Provide(get_permissions, sync_to_thread=False),
         "schematics": Provide(get_schematics, sync_to_thread=False),
     },
     path="/",

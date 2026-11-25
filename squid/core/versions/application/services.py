@@ -3,6 +3,8 @@
 import re
 
 from squid.core.actors import ActingContext, application_operation
+from squid.core.permissions.application import PermissionService
+from squid.core.permissions.domain.catalogue import VERSION_ENTRY_CREATE
 from squid.core.unit_of_work import UnitOfWorkFactory
 from squid.core.versions.application.ports import VersionUnitOfWork
 from squid.core.versions.domain import Edition, MinecraftVersion, parse_version_string
@@ -14,6 +16,7 @@ class VersionService:
 
     def __init__(self, *, uow_factory: UnitOfWorkFactory[VersionUnitOfWork]) -> None:
         self._uow_factory = uow_factory
+        self._permissions = PermissionService(uow_factory=uow_factory)
 
     @application_operation
     async def add(
@@ -23,6 +26,8 @@ class VersionService:
         parsed_edition, major, minor, patch = parse_version_string(version_string)
         version = MinecraftVersion(edition or parsed_edition, major, minor, patch)
         async with self._uow_factory() as uow:
+            if context.effective.worker_name != "discord.version-announcement":
+                await self._permissions.require(context.effective, VERSION_ENTRY_CREATE, uow=uow)
             stored = await uow.versions.add(version)
             await uow.commit()
             return stored

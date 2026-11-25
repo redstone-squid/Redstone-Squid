@@ -12,7 +12,7 @@ import discord
 
 from squid.bot.starboard.cog import StarboardCog
 from squid.bot.starboard.debounce import EntryDebouncer, EntryKey
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.starboard.application import StarboardService
 from squid.core.starboard.models import OriginMessage
 from squid.runtime import BackgroundTaskSupervisor
@@ -183,10 +183,12 @@ async def test_recount_reads_relevant_reactions_from_humans_with_their_roles() -
     recounts: list[tuple[int, tuple[tuple[Actor, str], ...]]] = []
     scheduled: list[tuple[EntryKey, bool]] = []
 
-    async def is_relevant_emoji(guild_id: int, emoji: str) -> bool:
+    async def is_relevant_emoji(guild_id: int, emoji: str, *, context: ActingContext) -> bool:
         return emoji == "⭐"
 
-    async def recount(origin: OriginMessage, reactions: tuple[tuple[Actor, str], ...]) -> tuple[EntryKey]:
+    async def recount(
+        origin: OriginMessage, reactions: tuple[tuple[Actor, str], ...], *, context: ActingContext
+    ) -> tuple[EntryKey]:
         recounts.append((origin.id, reactions))
         return ((7, origin.id),)
 
@@ -194,7 +196,8 @@ async def test_recount_reads_relevant_reactions_from_humans_with_their_roles() -
     cog.service = RecountService(is_relevant_emoji, recount)
     cog._debouncer = ScheduledEntries(scheduled)
 
-    assert await cog.recount(message) == ((7, 100),)
+    with ActingContext.worker("discord.recount").scope():
+        assert await cog.recount(message) == ((7, 100),)
 
     assert recounts == [
         (
