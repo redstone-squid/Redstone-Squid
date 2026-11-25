@@ -158,7 +158,9 @@ async def test_a_send_failure_preserves_the_session_for_a_later_send() -> None:
     message = Message(31, channel, Snowflake(40), channel.guild)
     publisher.send_failure = None
     publisher.message = message
-    completed = await publisher.resume(raised.value.pending, cast(Any, channel))
+    completed = await publisher.resume(
+        raised.value.pending, cast(Any, channel), context=ActingContext.direct(Actor(account_id=7))
+    )
 
     assert completed.message is message
     assert votes.create_calls == 1

@@ -15971,6 +15971,15 @@
       "squid/core/permissions/domain/catalogue.py:367"
     ]
   },
+  "permissions-scope-reason": {
+    "fingerprint": "dea9c8480770c363bd3bf49d1dcc8d7f2f879d7d42ea4f444e90dd6f4e398b82",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/core/permissions/errors.py:11"
+    ]
+  },
   "permissions-submit-build-review": {
     "fingerprint": "75155887fa358fdd97accd1ff11ee1decd80015b99b4588d9a2511520e18d5e1",
     "attributes": [],
@@ -16059,6 +16068,15 @@
     "arguments": [],
     "locations": [
       "squid/core/permissions/domain/catalogue.py:499"
+    ]
+  },
+  "poll-account-changed": {
+    "fingerprint": "d580aea7526e92a7b8532a69e98375d21e0118d756eac64e4898714fd7b88554",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/voting/cog.py:154"
     ]
   },
   "poll-choice-row-emoji": {

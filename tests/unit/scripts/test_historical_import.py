@@ -148,7 +148,15 @@ async def test_real_import_uses_the_shared_retained_run() -> None:
     assert isinstance(inputs, BuildInferenceInput)
     assert [item.message_id for item in inputs.primary] == [1]
     assert not inputs.images
-    assert call.kwargs == {"model": "x", "reasoning_effort": None, "source_files": ()}
+    resume = cast(AsyncMock, runtime.submission_inference.resume).await_args
+    assert resume is not None
+    assert call.kwargs == {
+        "model": "x",
+        "reasoning_effort": None,
+        "source_files": (),
+        "context": resume.kwargs["context"],
+    }
+    assert call.kwargs["context"].invocation_id == resume.kwargs["context"].invocation_id
 
 
 @pytest.mark.parametrize(("existing", "skipped", "failed"), [([True, True], 1, 0), ([True, False], 0, 1)])

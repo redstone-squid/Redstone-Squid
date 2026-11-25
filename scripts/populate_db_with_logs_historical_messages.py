@@ -129,7 +129,9 @@ async def process_group(bundle: MessageBundle, services: BotServices, options: I
     """Check consent and existing builds before inference; isolate failures per bundle."""
     primary = bundle.primary
     author = Actor(discord_user_id=primary[0].author.id)
-    with ActingContext(operator=Actor(worker_name="historical-import"), effective=author).scope():
+    worker = ActingContext.worker("historical-import")
+    context = ActingContext(operator=worker.operator, effective=author, invocation_id=worker.invocation_id)
+    with context.scope():
         try:
             if not options.channel_consent:
                 account = await services.accounts.get_account_by_identity(
@@ -141,11 +143,16 @@ async def process_group(bundle: MessageBundle, services: BotServices, options: I
                     or account.needs_consent_refresh
                 ):
                     return ImportSummary(groups=1, skipped_consent=1)
-            retained = await services.submission_inference.public_status(message_bundle_run_id(primary))
+            retained = await services.submission_inference.public_status(
+                message_bundle_run_id(primary), context=context
+            )
             # A saved build may be only one candidate of a retained run. Resume its other
             # candidates before consulting the legacy source-message duplicate guard.
             if retained is None:
-                existing = [bool(await services.builds.list_ids_for_source_message(message.id)) for message in primary]
+                existing = [
+                    bool(await services.builds.list_ids_for_source_message(message.id, context=worker))
+                    for message in primary
+                ]
                 if all(existing):
                     return ImportSummary(groups=1, skipped_existing=1)
                 if any(existing):
@@ -158,7 +165,7 @@ async def process_group(bundle: MessageBundle, services: BotServices, options: I
                     primary, preceding=bundle.preceding, include_images=options.include_images
                 )
                 candidates = await services.build_inference.infer(
-                    inputs, model=options.model, reasoning_effort=options.reasoning_effort
+                    inputs, model=options.model, reasoning_effort=options.reasoning_effort, context=context
                 )
                 logger.info("Dry run group %s: %r", [message.id for message in primary], candidates)
                 return ImportSummary(groups=1, processed=1, inferred_candidates=len(candidates))
@@ -171,7 +178,7 @@ async def process_group(bundle: MessageBundle, services: BotServices, options: I
                 include_images=options.include_images,
                 retry_failed=options.retry_failed,
             )
-            status = await services.submission_inference.public_status(run_id)
+            status = await services.submission_inference.public_status(run_id, context=context)
             if status is None:
                 logger.error("The imported inference run %s has no retained status", run_id)
                 return ImportSummary(groups=1, failed=1)
@@ -357,7 +364,9 @@ async def main(arguments: argparse.Namespace) -> int:
     ):
         channel_ids = arguments.channel_ids
         if not channel_ids:
-            channel_ids = (await runtime.services.settings.get_runtime()).build_log_channel_ids
+            channel_ids = (
+                await runtime.services.settings.get_runtime(context=ActingContext.worker("historical-import"))
+            ).build_log_channel_ids
         if not channel_ids:
             logger.error("No build-log channels configured; provide --channel-id")
             return 1

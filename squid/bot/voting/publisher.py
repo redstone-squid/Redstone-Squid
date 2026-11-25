@@ -69,7 +69,9 @@ class PollPublisher(Protocol):
         scope: PollScope = PollScope.GUILD,
     ) -> PollPublication: ...
 
-    async def resume(self, pending: PendingPollPublication, channel: GuildMessageable) -> PollPublication: ...
+    async def resume(
+        self, pending: PendingPollPublication, channel: GuildMessageable, *, context: ActingContext
+    ) -> PollPublication: ...
 
     async def may_create_network(self, member: discord.Member) -> bool: ...
 
@@ -130,7 +132,7 @@ class DiscordPollPublisher:
             return await self.attach(session_id, channel)
         except PollPublicationError as first_failure:
             try:
-                return await self.resume(first_failure.pending, channel)
+                return await self.resume(first_failure.pending, channel, context=context)
             except PollPublicationError as final_failure:
                 pending = final_failure.pending
                 attributes: dict[str, int | str] = {"squid.vote.session_id": pending.vote_session_id}
@@ -169,7 +171,10 @@ class DiscordPollPublisher:
             raise PollPublicationError(PendingPollPublication(vote_session_id, message)) from error
         return PollPublication(vote_session_id, message)
 
-    async def resume(self, pending: PendingPollPublication, channel: GuildMessageable) -> PollPublication:
+    @application_operation
+    async def resume(
+        self, pending: PendingPollPublication, channel: GuildMessageable, *, context: ActingContext
+    ) -> PollPublication:
         """Resume the same session and reuse a message that Discord already accepted."""
         if pending.message is None:
             return await self.attach(pending.vote_session_id, channel)

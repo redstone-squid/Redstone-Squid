@@ -4877,6 +4877,9 @@ permissions-role-not-yours = Role is not yours to manage
 # squid/core/permissions/domain/catalogue.py:367
 permissions-run-raw-database = Run raw database and error-handling diagnostics against the live bot.
 
+# squid/core/permissions/errors.py:11
+permissions-scope-reason = your credential excludes that permission
+
 # squid/core/permissions/domain/catalogue.py:162
 permissions-submit-build-review = Submit a build for review.
 
@@ -4906,6 +4909,9 @@ permissions-vote-polls = Vote in polls.
 
 # squid/core/permissions/domain/catalogue.py:499
 permissions-votes-counted-staff = Have your votes counted at the staff weight.
+
+# squid/bot/voting/cog.py:154
+poll-account-changed = Your account changed. Open the poll again.
 
 # squid/bot/voting/poll_wizard.py:406
 poll-choice-row-emoji = Emoji (optional)
