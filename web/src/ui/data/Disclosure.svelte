@@ -17,8 +17,7 @@
 <details
   class={cn(
     "group min-w-0",
-    // The bottom padding sits outside the clipped content, so growing text stays above it.
-    variant === "card" && "rounded-md border border-line bg-surface open:pb-4",
+    variant === "card" && "rounded-md border border-line bg-surface",
     className,
   )}
   data-variant={variant}
@@ -36,7 +35,7 @@
     />
     {summary}
   </summary>
-  <div class={cn("min-w-0 pt-2 pb-1", variant === "card" ? "px-4 pb-0" : "ps-6")}>
+  <div class={cn("min-w-0 pt-2 pb-1", variant === "card" ? "px-4 pb-4" : "ps-6")}>
     {@render children()}
   </div>
 </details>
@@ -68,12 +67,25 @@
       details:not([open])::details-content {
         block-size: 0;
       }
-      /* The card's padding fits a focus ring, and a margin would draw text into it. */
+      /*
+       * While a card moves, its bottom padding (pb-4) is clipped away so text vanishes at the
+       * padding's edge rather than the border. Opening holds the clip only for the animation,
+       * so a focus ring in that padding shows once the card is open.
+       */
       details[data-variant="card"]::details-content {
         overflow-clip-margin: 0;
       }
-      details[data-variant="card"] {
-        transition: padding-block-end var(--duration-normal) var(--ease-standard);
+      details[data-variant="card"]:not([open])::details-content {
+        clip-path: inset(0 0 1rem);
+      }
+      details[data-variant="card"][open]::details-content {
+        animation: clip-padding var(--duration-normal);
+      }
+      @keyframes clip-padding {
+        from,
+        to {
+          clip-path: inset(0 0 1rem);
+        }
       }
     }
   }
