@@ -1,16 +1,20 @@
 """The source revision retained by a draft editing a published build."""
 
-from pydantic import BaseModel, JsonValue
+from dataclasses import dataclass
+
+from squid.core.errors import JSONValue
 
 
-class DraftEditResult(BaseModel):
+@dataclass(frozen=True, slots=True)
+class DraftEditResult:
     build_id: int
     revision: int
     review_vote_id: int | None
 
 
-class DraftEditSource(BaseModel):
+@dataclass(frozen=True, slots=True)
+class DraftEditSource:
     build_id: int
     revision: int
-    answers: dict[str, JsonValue]
+    answers: dict[str, JSONValue]
     result: DraftEditResult | None = None

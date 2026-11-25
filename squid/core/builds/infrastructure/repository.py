@@ -21,14 +21,21 @@ from squid.core.accounts.domain import fold_creator_name
 from squid.core.accounts.models import Account, CreatorAlias
 from squid.core.builds.application.queries import (
     DEFAULT_BUILD_LIST_SORT,
-    EMPTY_BUILD_FILTERS,
-    BuildListFilters,
     BuildListSort,
     BuildRecordSummary,
     PublicBuildSummary,
     PublicBuildTag,
 )
-from squid.core.builds.domain import BuildCategory, BuildStatus, Credit, CreditAttribution, Info, UnresolvedTags
+from squid.core.builds.domain import (
+    EMPTY_BUILD_FILTERS,
+    BuildCategory,
+    BuildListFilters,
+    BuildStatus,
+    Credit,
+    CreditAttribution,
+    Info,
+    UnresolvedTags,
+)
 from squid.core.builds.domain.events import BuildEdited
 from squid.core.builds.errors import BuildRevisionMismatchError, InvalidBuildError
 from squid.core.builds.history import BuildEditActor, BuildEditContext, HistoryOperation

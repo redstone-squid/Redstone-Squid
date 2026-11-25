@@ -2,6 +2,7 @@
 
 import json
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import asdict
 from typing import cast, override
 from uuid import UUID
 
@@ -46,6 +47,7 @@ from squid.core.submissions.models.entities import (
 )
 from squid.core.submissions.models.finalization import SubmissionFinalizationJob
 
+_EDIT_SOURCE = TypeAdapter(DraftEditSource)
 _ACTIVE_STATUSES = (DraftStatus.EDITING, DraftStatus.PROCESSING, DraftStatus.NEEDS_ATTENTION)
 
 
@@ -186,7 +188,7 @@ class PostgresDraftRepository(DraftRepository):
     async def finish_edit(self, draft_id: UUID, result: DraftEditResult, now: Instant) -> None:
         model = await self._locked(self._session(), draft_id)
         assert model.edit_source is not None
-        model.edit_source = {**model.edit_source, "result": result.model_dump(mode="json")}
+        model.edit_source = {**model.edit_source, "result": asdict(result)}
         model.status = DraftStatus.SUBMITTED
         model.revision += 1
         model.updated_at = now
@@ -420,7 +422,7 @@ def _to_model(draft: StoredDraft) -> SubmissionDraft:
     snapshot = draft.snapshot
     return SubmissionDraft(
         id=snapshot.id,
-        edit_source=draft.edit_source.model_dump(mode="json") if draft.edit_source else None,
+        edit_source=_EDIT_SOURCE.dump_python(draft.edit_source, mode="json") if draft.edit_source else None,
         owner_account_id=snapshot.owner_account_id,
         schema_id=snapshot.schema_id,
         schema_revision=snapshot.schema_revision,
@@ -458,7 +460,7 @@ def _to_stored(model: SubmissionDraft) -> StoredDraft:
             status=model.status,
             answers=cast(Mapping[str, JSONValue], model.answers),
         ),
-        edit_source=DraftEditSource.model_validate(model.edit_source) if model.edit_source else None,
+        edit_source=_EDIT_SOURCE.validate_python(model.edit_source) if model.edit_source else None,
         origin=model.origin,
         created_at=model.created_at,
         updated_at=model.updated_at,

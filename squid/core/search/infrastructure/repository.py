@@ -8,8 +8,7 @@ from sqlalchemy import String, func, literal, or_, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
-from squid.core.builds.application.queries import EMPTY_BUILD_FILTERS
-from squid.core.builds.domain import BuildStatus
+from squid.core.builds.domain import EMPTY_BUILD_FILTERS, BuildStatus
 from squid.core.builds.infrastructure.listing import filter_build_listing
 from squid.core.builds.models import Build
 from squid.core.search.application import (

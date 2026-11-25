@@ -52,8 +52,7 @@ from squid.core.builds.application import (
     PublicBuildSummary,
 )
 from squid.core.builds.application.edits import BUILD_EDIT, build_target, patch_values
-from squid.core.builds.application.queries import BuildListFilters
-from squid.core.builds.domain import BuildCategory
+from squid.core.builds.domain import BuildCategory, BuildListFilters
 from squid.core.builds.errors import (
     BuildNotFoundError,
     BuildRevisionMismatchError,

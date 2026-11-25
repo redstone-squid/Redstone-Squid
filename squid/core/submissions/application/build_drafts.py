@@ -3,7 +3,6 @@
 from typing import Protocol
 from uuid import UUID
 
-from pydantic import JsonValue, TypeAdapter
 from whenever import Instant
 
 from squid.core.actors import ActingContext, application_operation
@@ -83,7 +82,7 @@ class BuildDraftEditor:
         if build.category.value.lower() != category:
             message = "Draft category must match the source build."
             raise ValidationError(message)
-        answers = TypeAdapter(dict[str, JsonValue]).validate_python(self.public_answers(build).answers)
+        answers = self.public_answers(build).answers
         return await self.drafts.create(
             owner_account_id=actor.require_account_id(),
             context=context,

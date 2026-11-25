@@ -11,7 +11,7 @@ from whenever import Instant
 from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, ClaimMethod
 from squid.core.accounts.models import AccountIdentity, CreatorAlias
 from squid.core.actors import ActingContext, AnonymousActor
-from squid.core.builds.application.queries import BuildListFilters
+from squid.core.builds.domain import BuildListFilters
 from squid.core.persistence.base import Base
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.search.application import SearchService

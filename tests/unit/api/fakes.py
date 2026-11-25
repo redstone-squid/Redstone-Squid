@@ -29,10 +29,9 @@ from squid.core.builds.application import BuildQueryService, BuildService
 from squid.core.builds.application.editing import BuildEditPatch
 from squid.core.builds.application.queries import (
     DEFAULT_BUILD_LIST_SORT,
-    EMPTY_BUILD_FILTERS,
-    BuildListFilters,
     BuildListSort,
 )
+from squid.core.builds.domain import EMPTY_BUILD_FILTERS, BuildListFilters
 from squid.core.builds.domain.models import BuildStatus
 from squid.core.builds.errors import BuildNotFoundError
 from squid.core.builds.models import Build

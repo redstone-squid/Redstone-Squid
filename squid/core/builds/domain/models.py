@@ -127,6 +127,17 @@ class BuildCategory(StrEnum):
     OTHER = "Other"
 
 
+@dataclass(frozen=True, slots=True)
+class BuildListFilters:
+    category: BuildCategory | None = None
+    version: int | None = None
+    tags: tuple[str, ...] = ()
+    creator_id: uuid.UUID | None = None
+
+
+EMPTY_BUILD_FILTERS = BuildListFilters()
+
+
 class FrozenField[T]:
     """A descriptor that makes an attribute immutable after it has been set."""
 

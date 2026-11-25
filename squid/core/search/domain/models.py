@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Literal
 
-from squid.core.builds.application.queries import EMPTY_BUILD_FILTERS, BuildListFilters
+from squid.core.builds.domain import EMPTY_BUILD_FILTERS, BuildListFilters
 from squid.core.errors import ErrorCode, ValidationError
 from squid.core.pagination import MAX_PAGE_OFFSET, PageAnchor
 from squid.core.search.domain.query import BuildQuery, RecordQuery

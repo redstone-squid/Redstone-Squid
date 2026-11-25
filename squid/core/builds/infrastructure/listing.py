@@ -5,8 +5,7 @@ from typing import Any
 from sqlalchemy import Select, select
 
 from squid.core.accounts.infrastructure.attribution import attributed_credits, public_creator_ids
-from squid.core.builds.application.queries import BuildListFilters
-from squid.core.builds.domain import BuildStatus
+from squid.core.builds.domain import BuildListFilters, BuildStatus
 from squid.core.builds.models import Build, BuildCredit, BuildVersion
 from squid.core.tags.models import TagAssignment, TagSlug
 

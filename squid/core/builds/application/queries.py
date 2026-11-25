@@ -10,7 +10,7 @@ from urllib.parse import urlsplit
 from uuid import UUID
 
 from squid.core.actors import ActingContext, WorkerActor
-from squid.core.builds.domain import BuildCategory, BuildStatus
+from squid.core.builds.domain import EMPTY_BUILD_FILTERS, BuildCategory, BuildListFilters, BuildStatus
 from squid.core.builds.domain.credits import CreditAttribution, CreditKind, CreditRole
 from squid.core.builds.errors import BuildNotFoundError
 from squid.core.builds.history import BuildPublication, PublicBuildRevision
@@ -34,14 +34,6 @@ BUILD_SORT_FIELDS: frozenset[str] = frozenset(get_args(BuildSortField.__value__)
 
 
 @dataclass(frozen=True, slots=True)
-class BuildListFilters:
-    category: BuildCategory | None = None
-    version: int | None = None
-    tags: tuple[str, ...] = ()
-    creator_id: UUID | None = None
-
-
-@dataclass(frozen=True, slots=True)
 class BuildListSort:
     """Display ordering for a build listing."""
 
@@ -49,7 +41,6 @@ class BuildListSort:
     descending: bool = True
 
 
-EMPTY_BUILD_FILTERS = BuildListFilters()
 DEFAULT_BUILD_LIST_SORT = BuildListSort()
 
 
