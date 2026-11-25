@@ -23,7 +23,8 @@ squid/core, so screens are composed from `web/src/ui` instead of one-off markup.
 - Search with `scope=all` shows cards. Records default to the table; builds default to cards
   with a table toggle. The view lives in the URL.
 - Lint enforces the system: no arbitrary Tailwind values or raw style constants outside
-  `src/ui`, and no raw interactive elements in features and layouts.
+  `src/ui`, no raw interactive elements in features and layouts, and no gap, margin or
+  padding utilities in screens.
 - Astro is for pages and layouts; ui and feature components are Svelte, so Astro slot
   wrappers only appear at page and layout boundaries.
 - A style lives in the component that owns it; a class string shared by a folder lives in
@@ -73,6 +74,8 @@ Open items:
   (header, filters, results, footer), focus after navigation and after server-driven filter
   changes, Tab through collapsed `NavBar` and `SplitLayout` popovers, Lighthouse, and the
   page's JavaScript weight (a LayerChart island has never been measured on a real page).
+  Each screen's review test also calls `expect(page).toHaveAlignedControls()`, and the screen
+  joins the reflow sweep in `tests/review/reflow.spec.ts`.
 
 Departures from §2.3: `NavBar` and `SplitLayout` collapse into native popovers rather than
 a `Sheet` or `<details>`. One copy of the markup serves both layouts through a container

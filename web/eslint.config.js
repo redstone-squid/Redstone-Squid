@@ -29,6 +29,13 @@ const viewportBreakpoint = {
   message:
     "Use a container query (@container with @md: and similar) or a fluid layout instead of a viewport breakpoint.",
 };
+// Screens get their spacing from ui components (Layout's gap, Section, Card's padding), so the
+// rhythm between and inside page parts stays the same on every screen.
+const rawSpacing = {
+  pattern: String.raw`^(?:.*:)?-?(?:gap(?:-[xy])?|space-[xy]|[mp][xytrblse]?)-(?:\d|px)`,
+  message:
+    "Screens take spacing from src/ui: use Layout's gap, Section, or a component's padding instead of gap, margin, or padding utilities.",
+};
 // The restrictions also read every string value in object literals assigned to a variable,
 // such as `const widths = { lg: "min-w-72" }`, which the default selectors skip. Only this
 // rule reads them: labels in such objects are not classes, so unknown-class checks would
@@ -275,7 +282,12 @@ export default tseslint.config(
     // Components adapt to the space they are given, not to the window: one component can sit
     // in a page, a card, or a dialog. Only page layouts may use viewport breakpoints.
     files: ["src/features/**/*.{astro,svelte}"],
-    rules: restrictClasses(arbitraryValue, viewportBreakpoint),
+    rules: restrictClasses(arbitraryValue, viewportBreakpoint, rawSpacing),
+  },
+  {
+    files: ["src/features/**/*.ts", "src/pages/**/*.astro"],
+    ignores: ["src/pages/design-system*/**", "src/pages/design-system*.astro"],
+    rules: restrictClasses(arbitraryValue, rawSpacing),
   },
   { files: ["src/ui/**/*.svelte"], rules: restrictClasses(uiArbitraryValue, viewportBreakpoint) },
   {

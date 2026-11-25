@@ -42,7 +42,8 @@ The `src/ui` primitives and patterns, the feature components built from them, an
 
 - **Svelte 5 only, one file each.** Each component has a story in the workbench using the production component.
 - **Text comes in through props.** Labels are plain strings, not message functions, so Astro can pass them to an island; island props must be serializable. Every accessible name that the component itself would otherwise supply (close, expand, sort, copy, remove) is a required prop, or comes from a `labels` object prop.
-- **`class` is accepted only on layout-neutral roots,** for margins and grid placement. Variants own every other property.
+- **`class` is accepted only on layout-neutral roots,** for grid placement and width. Variants own every other property.
+- **Spacing comes from components.** Screens (`src/features`, `src/pages`) space their parts with `Layout`'s `gap`, `Section` and component padding; lint bans gap, margin and padding utilities there, so every screen keeps the same rhythm. Page shells in `src/layouts` set their own.
 - **Ids come from `$props.id()`.** Callers never pass ids unless they need to link to them.
 - **Astro can pass children (default slot) and named slots without arguments.** It cannot pass snippets that take arguments. A component whose rendering needs a parameterized snippet (table cells, combobox items) is therefore wrapped in a Svelte feature component, and Astro pages pass only data to it.
 - **States vocabulary:** `disabled` means the user could enable it on this screen. `pending` means a mutation is in flight. `loading` means data is being fetched. Errors are text props.
@@ -856,6 +857,7 @@ The primitives each one composes are listed after the arrow.
 - **Failed submit:** render `ErrorSummary` at the top of the form, focus it, and link each item to its field. Field errors are plain text under the field.
 - **Submit buttons stay enabled.** The web shows the summary instead of greying out Submit. Deliberately different from the bot convention, because on the web a disabled button explains nothing and isn't focusable. Exception: while pending.
 - **Labels:** every field has a visible label. Optional fields are marked "(optional)" through `detail`; required fields are not marked.
+- **Rows of fields:** fields side by side either all show their labels or all hide them (a toolbar under a visible heading). A button that acts on one field, such as Search, comes from the component that lines it up with the field's box (`SearchBox`); a form's submit goes in `FormActions` under the fields. The review suite's `toHaveAlignedControls` fails when controls in a row start at different heights, and the reflow sweep runs the same check at every width in the pseudo-locale.
 
 ### Draft autosave (S2, and M4 when it moves to drafts)
 

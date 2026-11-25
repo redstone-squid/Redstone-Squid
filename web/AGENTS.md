@@ -203,11 +203,12 @@ declaration and explain surprising decisions beside the code that depends on the
 - `tests/e2e`: Playwright against the built site and the fixture API in `tests/fixtures/api.ts`.
   Follow [tag pages](tests/e2e/tag-slugs.spec.ts) for visible page content and HTTP contracts.
   Remove a route from the placeholder matrix when its page ships.
-- `tests/review`: axe, overflow, and recorded workflows of the design-system workbench. CI
+- `tests/review`: axe, overflow, alignment, and recorded workflows of the design-system workbench. CI
   also compares its screenshots with master's and reports differences without failing.
 - Use `@tests/` for imports of shared test support. Browser specs import `test` and
   `expect` from `@tests/support/test`. A test fails on any console error, and
-  `await expect(page).toPassAxe()` runs axe. Server ports and environment live in
+  `await expect(page).toPassAxe()` runs axe; `toHaveAlignedControls()` fails when controls
+  side by side start at different heights. Server ports and environment live in
   `tests/support/servers.ts`. Local runs reuse servers already on those ports, which may be
   another worktree's stale build; set `TEST_APP_PORT` and `TEST_API_PORT` to run apart.
 
@@ -239,7 +240,9 @@ from `web/` before committing web work.
 - `scripts/lint/` holds the custom rules: `squid/import-boundaries` enforces the layer table,
   `squid/no-raw-text` keeps text in the catalogs, and `squid/no-raw-elements` makes features
   and layouts use `src/ui` controls and no `<style>` blocks. `arbitrary-values.ts` limits
-  arbitrary Tailwind values to `src/ui`. Disable a rule on one line only with a reason after `--`.
+  arbitrary Tailwind values to `src/ui`; features and pages also get no gap, margin or padding
+  utilities, so they space parts with `Layout`, `Section` and component padding. Disable a
+  rule on one line only with a reason after `--`.
 - `strict-boolean-expressions` requires explicit checks such as `items.length > 0` or
   `value !== ""`, so `0` and `""` are never mistaken for missing values.
 - `eslint.config.js` enables chosen unicorn and SonarJS rules rather than their presets,
