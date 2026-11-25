@@ -2,16 +2,12 @@
 
 from collections.abc import Sequence
 from typing import override
-from uuid import UUID
 
 import discord
 import simcord
 from whenever import Instant
 
-from squid.core.accounts.application import AccountService
-from squid.core.accounts.application.edits import AccountEditorSnapshot
-from squid.core.accounts.domain import AccountConsent, IdentityProvider, PublicCreatorProfile
-from squid.core.accounts.models import Account, AccountProfile, CreatorAlias
+from squid.core.accounts.domain import AccountConsent
 from squid.core.actors import ActingContext, UserActor
 from squid.core.diagnostics.application import ErrorReportService
 from squid.core.diagnostics.models import ErrorReport
@@ -31,45 +27,14 @@ from squid.core.permissions.domain import Effect, PermissionNode
 from squid.core.permissions.models import PermissionGrant
 from squid.core.settings.application import SettingsService
 from squid.core.settings.domain.guild import GuildSettings
+from tests.support.accounts import FakeAccountRepository
 from tests.support.permissions import permission_uow_factory
 
 
-class WorkspaceAccounts(AccountService):
-    def __init__(self) -> None:
-        self.discord_accounts: dict[str, Account] = {}
-        self.lookups: list[str] = []
-        self.aliases: dict[str, CreatorAlias] = {}
-        self.profiles: dict[UUID, PublicCreatorProfile] = {}
-
-    @override
-    async def get_account_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None:
-        assert provider is IdentityProvider.DISCORD
-        self.lookups.append(subject)
-        return self.discord_accounts.get(subject)
-
-    @override
-    async def get_creator_alias(self, name: str, *, context: ActingContext) -> CreatorAlias | None:
-        return self.aliases.get(name.casefold())
-
-    @override
-    async def get_public_profile(self, public_id: UUID, *, context: ActingContext) -> PublicCreatorProfile | None:
-        return self.profiles.get(public_id)
-
-    @override
-    async def credit_owners(self, build_id: int, *, context: ActingContext) -> dict[int, UUID]:
-        del build_id
-        return {}
-
-    @override
-    async def editor_snapshot(self, account_id: int, *, context: ActingContext) -> AccountEditorSnapshot:
-        account = next(account for account in self.discord_accounts.values() if account.id == account_id)
-        return AccountEditorSnapshot(account, AccountProfile.empty(account_id))
-
-
-def staff_member(env: simcord.Env, accounts: WorkspaceAccounts) -> simcord.MemberActor:
+def staff_member(env: simcord.Env, accounts: FakeAccountRepository) -> simcord.MemberActor:
     role = env.guild.create_role("Staff", permissions=discord.Permissions(manage_guild=True))
     staff = env.guild.add_member(env.create_user("staff"), roles=[role])
-    accounts.discord_accounts[str(staff.id)] = Account(id=27, consent=AccountConsent.grant_current())
+    accounts.seed_account(staff.id, account_id=27, consent=AccountConsent.grant_current())
     return staff
 
 

@@ -1,14 +1,11 @@
 """Exercise the guild workspaces through their registered application commands."""
 
-from uuid import UUID
-
 import discord
 import pytest
 import simcord
 
 from squid.bot.diagnostics.screen import ErrorReportScreen
-from squid.core.accounts.domain import AccountConsent, PublicCreatorProfile
-from squid.core.accounts.models import Account, CreatorAlias
+from squid.core.accounts.domain import AccountConsent
 from squid.core.permissions.domain.catalogue import DIAGNOSTICS_ERROR_READ, PERM_GRANT_GUILD, SETTINGS_SERVER_VIEW
 from squid.core.settings.domain.guild import GuildSettings
 from squid.core.voting.domain.models import VoteConfiguration, VoteKind
@@ -17,11 +14,11 @@ from tests.e2e.discord.workspace_services import (
     AccessRevision,
     GuildConfiguration,
     StoredReports,
-    WorkspaceAccounts,
     WorkspaceInbox,
     staff_member,
     staff_permissions,
 )
+from tests.support.accounts import FakeAccountRepository, account_service
 from tests.support.services import bot_services
 
 
@@ -34,8 +31,10 @@ def assert_private_defer_was_completed(env: simcord.Env) -> None:
 
 
 async def test_creator_page_action_on_an_unlinked_member_explains_privately() -> None:
-    accounts = WorkspaceAccounts()
-    async with command_environment("squid.bot.accounts.cog", services=bot_services(accounts=accounts)) as (_, env):
+    accounts = FakeAccountRepository()
+    async with command_environment(
+        "squid.bot.accounts.cog", services=bot_services(accounts=account_service(accounts))
+    ) as (_, env):
         channel = env.guild.create_text_channel("public")
         visitor = env.guild.add_member(env.create_user("visitor"))
         creator = env.guild.add_member(env.create_user("builder"), nick="Red Builder")
@@ -47,12 +46,13 @@ async def test_creator_page_action_on_an_unlinked_member_explains_privately() ->
         assert any(
             "Red Builder doesn't have a creator page." in text for text in displayed_text(result.response.message)
         )
-        assert str(creator.id) in accounts.lookups
 
 
 async def test_creator_accepts_a_pasted_mention() -> None:
-    accounts = WorkspaceAccounts()
-    async with command_environment("squid.bot.accounts.cog", services=bot_services(accounts=accounts)) as (_, env):
+    accounts = FakeAccountRepository()
+    async with command_environment(
+        "squid.bot.accounts.cog", services=bot_services(accounts=account_service(accounts))
+    ) as (_, env):
         channel = env.guild.create_text_channel("public")
         visitor = env.guild.add_member(env.create_user("visitor"))
         creator = env.guild.add_member(env.create_user("builder"), nick="Red Builder")
@@ -64,15 +64,15 @@ async def test_creator_accepts_a_pasted_mention() -> None:
         assert any(
             "Red Builder doesn't have a creator page." in text for text in displayed_text(result.response.message)
         )
-        assert accounts.lookups == [str(creator.id)]
 
 
 async def test_creator_finds_a_typed_credited_name_and_posts_it_publicly() -> None:
-    accounts = WorkspaceAccounts()
-    public_id = UUID(int=5)
-    accounts.aliases["glinte"] = CreatorAlias(name="Glinte", account_id=1, public_creator_id=public_id)
-    accounts.profiles[public_id] = PublicCreatorProfile(public_id=public_id, hidden=False, display_name="Glinte")
-    async with command_environment("squid.bot.accounts.cog", services=bot_services(accounts=accounts)) as (_, env):
+    accounts = FakeAccountRepository()
+    holder = accounts.seed_account(123)
+    accounts.seed_alias("Glinte", account=holder)
+    async with command_environment(
+        "squid.bot.accounts.cog", services=bot_services(accounts=account_service(accounts))
+    ) as (_, env):
         channel = env.guild.create_text_channel("public")
         visitor = env.guild.add_member(env.create_user("visitor"))
 
@@ -104,15 +104,17 @@ async def test_unknown_screen_address_finishes_the_private_defer_with_navigation
 
 
 async def test_notifications_show_a_consented_members_personal_inbox() -> None:
-    accounts = WorkspaceAccounts()
-    services = bot_services(accounts=accounts, notifications=WorkspaceInbox(7), permissions=staff_permissions())
+    accounts = FakeAccountRepository()
+    services = bot_services(
+        accounts=account_service(accounts), notifications=WorkspaceInbox(7), permissions=staff_permissions()
+    )
     async with command_environment("squid.bot.accounts.cog", "squid.bot.notifications_cog", services=services) as (
         _,
         env,
     ):
         channel = env.guild.create_text_channel("public")
         member = env.guild.add_member(env.create_user("builder"))
-        accounts.discord_accounts[str(member.id)] = Account(id=7, consent=AccountConsent.grant_current())
+        accounts.seed_account(member.id, account_id=7, consent=AccountConsent.grant_current())
 
         result = await member.slash(channel, "notifications")
 
@@ -141,9 +143,11 @@ async def test_notifications_show_a_consented_members_personal_inbox() -> None:
 
 
 async def test_access_opens_with_the_selected_discord_role_in_the_invoking_guild() -> None:
-    accounts = WorkspaceAccounts()
+    accounts = FakeAccountRepository()
     services = bot_services(
-        accounts=accounts, permissions=staff_permissions(PERM_GRANT_GUILD), permission_admin=AccessRevision()
+        accounts=account_service(accounts),
+        permissions=staff_permissions(PERM_GRANT_GUILD),
+        permission_admin=AccessRevision(),
     )
     async with command_environment("squid.bot.permissions_cog", services=services) as (_, env):
         channel = env.guild.create_text_channel("staff")
@@ -158,8 +162,10 @@ async def test_access_opens_with_the_selected_discord_role_in_the_invoking_guild
 
 
 async def test_settings_renders_the_channel_configured_for_this_guild() -> None:
-    accounts, settings = WorkspaceAccounts(), GuildConfiguration()
-    services = bot_services(accounts=accounts, permissions=staff_permissions(SETTINGS_SERVER_VIEW), settings=settings)
+    accounts, settings = FakeAccountRepository(), GuildConfiguration()
+    services = bot_services(
+        accounts=account_service(accounts), permissions=staff_permissions(SETTINGS_SERVER_VIEW), settings=settings
+    )
     async with command_environment("squid.bot.settings.cog", services=services) as (_, env):
         channel = env.guild.create_text_channel("staff")
         builds = env.guild.create_text_channel("builds")
@@ -179,9 +185,11 @@ async def test_settings_renders_the_channel_configured_for_this_guild() -> None:
 
 @pytest.mark.parametrize("allowed", [True, False])
 async def test_errors_checks_access_before_loading_reports(allowed: bool) -> None:
-    accounts, reports = WorkspaceAccounts(), StoredReports()
+    accounts, reports = FakeAccountRepository(), StoredReports()
     nodes = (DIAGNOSTICS_ERROR_READ,) if allowed else ()
-    services = bot_services(accounts=accounts, permissions=staff_permissions(*nodes), error_reports=reports)
+    services = bot_services(
+        accounts=account_service(accounts), permissions=staff_permissions(*nodes), error_reports=reports
+    )
     async with command_environment("squid.bot.diagnostics.cog", services=services) as (bot, env):
         channel = env.guild.create_text_channel("staff")
         staff = staff_member(env, accounts)
@@ -211,9 +219,9 @@ async def test_errors_checks_access_before_loading_reports(allowed: bool) -> Non
 
 
 async def test_errors_opens_the_referenced_report_with_its_full_text_attachment() -> None:
-    accounts, reports = WorkspaceAccounts(), StoredReports()
+    accounts, reports = FakeAccountRepository(), StoredReports()
     services = bot_services(
-        accounts=accounts, permissions=staff_permissions(DIAGNOSTICS_ERROR_READ), error_reports=reports
+        accounts=account_service(accounts), permissions=staff_permissions(DIAGNOSTICS_ERROR_READ), error_reports=reports
     )
     async with command_environment("squid.bot.diagnostics.cog", services=services) as (_, env):
         channel = env.guild.create_text_channel("staff")
@@ -231,8 +239,8 @@ async def test_errors_opens_the_referenced_report_with_its_full_text_attachment(
 
 
 async def test_connection_privately_reports_the_last_disconnect_and_resume() -> None:
-    accounts = WorkspaceAccounts()
-    services = bot_services(accounts=accounts, permissions=staff_permissions(DIAGNOSTICS_ERROR_READ))
+    accounts = FakeAccountRepository()
+    services = bot_services(accounts=account_service(accounts), permissions=staff_permissions(DIAGNOSTICS_ERROR_READ))
     async with command_environment("squid.bot.diagnostics.cog", services=services) as (bot, env):
         channel = env.guild.create_text_channel("staff")
         staff = staff_member(env, accounts)

@@ -9,7 +9,6 @@ from squid.bot.events.spec import extension as events_extension
 from squid.bot.starboard.spec import extension as starboard_extension
 from squid.bot.voting.spec import extension as vote_extension
 from squid.core.accounts.domain import AccountConsent
-from squid.core.accounts.models import Account
 from squid.core.actors import ActingContext
 from squid.core.posts.domain import StarboardEntryKey
 from squid.core.starboard.application.services import StarboardVoteResult
@@ -17,7 +16,8 @@ from squid.core.voting.domain import CastVoteResult, VoteMessage, VoteSelection,
 from squid_ui.ext.discord.testing import AsyncCallRecorder
 from tests.e2e.discord.community_services import Boards, CommunityVotes, EmptyDomainEvents, ObservedMessages, VotePosts
 from tests.e2e.discord.environment import allow_idle_reaction_workers, command_environment
-from tests.e2e.discord.workspace_services import WorkspaceAccounts, staff_permissions
+from tests.e2e.discord.workspace_services import staff_permissions
+from tests.support.accounts import FakeAccountRepository, account_service
 from tests.support.services import bot_services
 from tests.support.voting import poll_snapshot
 
@@ -49,9 +49,9 @@ async def test_message_edit_and_delete_reach_tracking_and_starboard(monkeypatch:
 
 
 async def test_public_poll_reaction_casts_and_withdraws_a_ballot(monkeypatch: pytest.MonkeyPatch) -> None:
-    accounts, votes, posts = WorkspaceAccounts(), CommunityVotes(), VotePosts()
+    accounts, votes, posts = FakeAccountRepository(), CommunityVotes(), VotePosts()
     services = bot_services(
-        accounts=accounts,
+        accounts=account_service(accounts),
         permissions=staff_permissions(),
         votes=votes,
         posts=posts,
@@ -63,8 +63,8 @@ async def test_public_poll_reaction_casts_and_withdraws_a_ballot(monkeypatch: py
         channel = env.guild.create_text_channel("voting")
         author = env.guild.add_member(env.create_user("author"))
         voter = env.guild.add_member(env.create_user("voter"))
-        accounts.discord_accounts[str(author.id)] = Account(id=17, consent=AccountConsent.grant_current())
-        accounts.discord_accounts[str(voter.id)] = Account(id=18, consent=AccountConsent.grant_current())
+        accounts.seed_account(author.id, account_id=17, consent=AccountConsent.grant_current())
+        accounts.seed_account(voter.id, account_id=18, consent=AccountConsent.grant_current())
 
         await author.slash(channel, "poll", question="Ready?", visibility=VoteVisibility.VISIBLE_LIVE.value)
         (card,) = channel.history()

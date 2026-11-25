@@ -13,7 +13,6 @@ from squid.bot.catalogue.browse import BuildBrowseScreen, BuildCreatorsScreen
 from squid.bot.routes import AppRequest, AppRoutes
 from squid.bot.submission.ui.drafts import DraftEditorScreen
 from squid.core.accounts.domain import AccountConsent
-from squid.core.accounts.models import Account
 from squid.core.actors import ActingContext
 from squid.core.builds.application import BuildQueryService
 from squid.core.builds.domain import BuildStatus, Credit
@@ -24,7 +23,8 @@ from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldRe
 from squid.core.submissions.application import StoredDraft, SubmissionDraftService
 from squid.core.submissions.errors import DraftAccessDeniedError, DraftNotFoundError
 from tests.e2e.discord.environment import command_environment, displayed_text
-from tests.e2e.discord.workspace_services import WorkspaceAccounts, staff_member, staff_permissions
+from tests.e2e.discord.workspace_services import staff_member, staff_permissions
+from tests.support.accounts import FakeAccountRepository, account_service
 from tests.support.services import bot_services
 from tests.support.submission_form import Schematics
 
@@ -55,10 +55,10 @@ class SearchFields(SearchService):
 @pytest.mark.parametrize("status", [None, BuildStatus.PENDING, BuildStatus.APPROVED])
 @pytest.mark.parametrize("view_pending", [False, True])
 async def test_build_visibility_is_checked_before_opening(status: BuildStatus | None, view_pending: bool) -> None:
-    accounts = WorkspaceAccounts()
+    accounts = FakeAccountRepository()
     permissions = staff_permissions(*((BUILD_SUBMISSION_VIEW_PENDING,) if view_pending else ()))
     services = bot_services(
-        accounts=accounts,
+        accounts=account_service(accounts),
         permissions=permissions,
         build_queries=BuildQueries(status),
         search=SearchFields(),
@@ -93,8 +93,8 @@ async def test_build_visibility_is_checked_before_opening(status: BuildStatus | 
 async def test_build_creators_open_only_for_approved_credited_builds(
     status: BuildStatus, credits: list[Credit], opens: bool
 ) -> None:
-    accounts = WorkspaceAccounts()
-    services = bot_services(accounts=accounts, build_queries=BuildQueries(status, credits))
+    accounts = FakeAccountRepository()
+    services = bot_services(accounts=account_service(accounts), build_queries=BuildQueries(status, credits))
     async with command_environment(NAVIGATION, services=services) as (bot, env):
         bot.ui_router.mount("builds", BuildCreatorsScreen.open)
         channel = env.guild.create_text_channel("builds")
@@ -122,7 +122,7 @@ class UnavailableDrafts(SubmissionDraftService):
 
 async def test_declining_consent_does_not_look_up_a_draft() -> None:
     drafts = UnavailableDrafts(DraftNotFoundError(UUID(int=1)))
-    services = bot_services(accounts=WorkspaceAccounts(), submission_drafts=drafts)
+    services = bot_services(accounts=account_service(), submission_drafts=drafts)
     async with command_environment(NAVIGATION, services=services) as (bot, env):
         bot.ui_router.mount("drafts", DraftEditorScreen.open_draft)
         wait = wrapture.binding(ConsentPrompt, "wait").on_call.decorates(
@@ -150,13 +150,13 @@ async def test_declining_consent_does_not_look_up_a_draft() -> None:
 
 @pytest.mark.parametrize("error", [DraftNotFoundError(UUID(int=1)), DraftAccessDeniedError()])
 async def test_draft_access_failure_does_not_open_editor(error: Exception) -> None:
-    drafts, accounts = UnavailableDrafts(error), WorkspaceAccounts()
-    services = bot_services(accounts=accounts, submission_drafts=drafts)
+    drafts, accounts = UnavailableDrafts(error), FakeAccountRepository()
+    services = bot_services(accounts=account_service(accounts), submission_drafts=drafts)
     async with command_environment(NAVIGATION, services=services) as (bot, env):
         bot.ui_router.mount("drafts", DraftEditorScreen.open_draft)
         channel = env.guild.create_text_channel("builds")
         member = env.guild.add_member(env.create_user("builder"))
-        accounts.discord_accounts[str(member.id)] = Account(id=7, consent=AccountConsent.grant_current())
+        accounts.seed_account(member.id, account_id=7, consent=AccountConsent.grant_current())
         draft_id = UUID(int=1)
 
         result = await member.slash(channel, "open", address=f"/drafts/{draft_id}")
@@ -176,7 +176,7 @@ async def test_draft_access_failure_does_not_open_editor(error: Exception) -> No
     ],
 )
 async def test_account_address_respects_available_tabs(tab: str, expected: str) -> None:
-    services = bot_services(accounts=WorkspaceAccounts(), permissions=staff_permissions())
+    services = bot_services(accounts=account_service(), permissions=staff_permissions())
     async with command_environment(NAVIGATION, services=services) as (bot, env):
         bot.ui_router.mount("accounts", AccountWorkspace.open_account)
         channel = env.guild.create_text_channel("community")

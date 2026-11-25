@@ -10,7 +10,6 @@ import pytest
 import simcord
 
 from squid.core.accounts.domain import AccountConsent
-from squid.core.accounts.models import Account
 from squid.core.actors import ActingContext
 from squid.core.builds.application import BuildQueryService, BuildService
 from squid.core.builds.domain import BuildStatus
@@ -28,7 +27,8 @@ from squid.core.search.domain import (
 )
 from squid.core.submissions.application.inference_runs import SubmissionInferenceRuns
 from tests.e2e.discord.environment import command_environment, displayed_text
-from tests.e2e.discord.workspace_services import WorkspaceAccounts, staff_member, staff_permissions
+from tests.e2e.discord.workspace_services import staff_member, staff_permissions
+from tests.support.accounts import FakeAccountRepository, account_service
 from tests.support.services import bot_services
 from tests.support.settings import RuntimeSettingsStub
 from tests.support.submission_form import Drafts, Finalization, Forms, Intake, Schematics
@@ -46,11 +46,11 @@ class EmptyInference(SubmissionInferenceRuns):
 
 
 @asynccontextmanager
-async def submission() -> AsyncIterator[tuple[simcord.Env, simcord.MemberActor, Drafts, WorkspaceAccounts]]:
+async def submission() -> AsyncIterator[tuple[simcord.Env, simcord.MemberActor, Drafts, FakeAccountRepository]]:
     drafts = Drafts()
-    accounts = WorkspaceAccounts()
+    accounts = FakeAccountRepository()
     services = bot_services(
-        accounts=accounts,
+        accounts=account_service(accounts),
         schematics=Schematics(),
         submission_forms=Forms(),
         submission_drafts=drafts,
@@ -60,7 +60,7 @@ async def submission() -> AsyncIterator[tuple[simcord.Env, simcord.MemberActor, 
     )
     async with command_environment(EXTENSION, services=services) as (_, env):
         author = env.guild.add_member(env.create_user("author"))
-        accounts.discord_accounts[str(author.id)] = Account(id=7, consent=AccountConsent.grant_current())
+        accounts.seed_account(author.id, account_id=7, consent=AccountConsent.grant_current())
         yield env, author, drafts, accounts
 
 
@@ -69,7 +69,7 @@ async def test_submit_a_named_door_and_find_it_in_private_drafts() -> None:
         channel = env.guild.create_text_channel("submissions")
         other = env.guild.add_member(env.create_user("other"))
         # The other member has a consented account but owns no drafts.
-        accounts.discord_accounts[str(other.id)] = Account(id=9, consent=AccountConsent.grant_current())
+        accounts.seed_account(other.id, account_id=9, consent=AccountConsent.grant_current())
 
         submitted = await author.slash(channel, "build submit", name="Aurora", opening_size="2x2")
         assert submitted.response is not None
@@ -173,9 +173,11 @@ class EmptyAttachmentQueue(BuildService):
 
 
 async def test_attachment_reviewer_reaches_end_of_queue_privately() -> None:
-    accounts = WorkspaceAccounts()
+    accounts = FakeAccountRepository()
     services = bot_services(
-        accounts=accounts, permissions=staff_permissions(BUILD_SUBMISSION_EDIT), builds=EmptyAttachmentQueue()
+        accounts=account_service(accounts),
+        permissions=staff_permissions(BUILD_SUBMISSION_EDIT),
+        builds=EmptyAttachmentQueue(),
     )
     async with command_environment(EXTENSION, services=services) as (_, env):
         channel = env.guild.create_text_channel("moderation")
@@ -237,7 +239,7 @@ async def test_catalogue_search_uses_the_selected_scope(
 ) -> None:
     search = CatalogueSearch()
     services = bot_services(
-        accounts=WorkspaceAccounts(), permissions=staff_permissions(), build_queries=CatalogueQueries(), search=search
+        accounts=account_service(), permissions=staff_permissions(), build_queries=CatalogueQueries(), search=search
     )
     async with command_environment(EXTENSION, services=services) as (_, env):
         channel = env.guild.create_text_channel("catalogue")
@@ -255,7 +257,7 @@ async def test_catalogue_search_uses_the_selected_scope(
 async def test_mention_searches_builds(mention: str) -> None:
     search = CatalogueSearch()
     services = bot_services(
-        accounts=WorkspaceAccounts(),
+        accounts=account_service(),
         permissions=staff_permissions(),
         build_queries=CatalogueQueries(),
         search=search,
@@ -277,7 +279,7 @@ async def test_mention_searches_builds(mention: str) -> None:
 
 async def test_browse_by_id_hides_an_unpublished_build_from_a_reader() -> None:
     services = bot_services(
-        accounts=WorkspaceAccounts(),
+        accounts=account_service(),
         permissions=staff_permissions(),
         search=CatalogueSearch(),
         build_queries=CatalogueQueries(),
@@ -299,9 +301,11 @@ class BuildLogSettings(RuntimeSettingsStub):
 
 
 async def test_scanning_a_message_outside_the_build_log_explains_the_channel_requirement() -> None:
-    accounts = WorkspaceAccounts()
+    accounts = FakeAccountRepository()
     services = bot_services(
-        accounts=accounts, settings=BuildLogSettings(), permissions=staff_permissions(BUILD_SUBMISSION_RECALC)
+        accounts=account_service(accounts),
+        settings=BuildLogSettings(),
+        permissions=staff_permissions(BUILD_SUBMISSION_RECALC),
     )
     async with command_environment(EXTENSION, services=services) as (_, env):
         channel = env.guild.create_text_channel("general")

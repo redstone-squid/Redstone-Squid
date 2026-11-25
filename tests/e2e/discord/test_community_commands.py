@@ -11,7 +11,6 @@ from squid.bot.recount.spec import extension as recount_extension
 from squid.bot.starboard.spec import extension as starboard_extension
 from squid.bot.voting.spec import extension as vote_extension
 from squid.core.accounts.domain import AccountConsent
-from squid.core.accounts.models import Account
 from squid.core.permissions.domain.catalogue import (
     MESSAGE_ARCHIVE_CREATE,
     REDSTONER_PANEL_MANAGE,
@@ -33,19 +32,20 @@ from tests.e2e.discord.community_services import (
     VotePosts,
 )
 from tests.e2e.discord.environment import allow_idle_reaction_workers, command_environment, displayed_text
-from tests.e2e.discord.workspace_services import WorkspaceAccounts, staff_permissions
+from tests.e2e.discord.workspace_services import staff_permissions
+from tests.support.accounts import FakeAccountRepository, account_service
 from tests.support.services import bot_services
 from tests.support.voting import build_snapshot
 
 ADMIN = "squid.bot.admin_cog"
 
 
-def community_moderator(env: simcord.Env, accounts: WorkspaceAccounts) -> simcord.MemberActor:
+def community_moderator(env: simcord.Env, accounts: FakeAccountRepository) -> simcord.MemberActor:
     role = env.guild.create_role(
         "Moderators", permissions=discord.Permissions(manage_guild=True, manage_roles=True, manage_messages=True)
     )
     moderator = env.guild.add_member(env.create_user("moderator"), roles=[role])
-    accounts.discord_accounts[str(moderator.id)] = Account(id=17, consent=AccountConsent.grant_current())
+    accounts.seed_account(moderator.id, account_id=17, consent=AccountConsent.grant_current())
     return moderator
 
 
@@ -54,9 +54,11 @@ async def test_archive_then_paste_moves_the_selected_message_with_its_attachment
     monkeypatch: pytest.MonkeyPatch,
     first_send_fails: bool,
 ) -> None:
-    accounts = WorkspaceAccounts()
+    accounts = FakeAccountRepository()
     services = bot_services(
-        accounts=accounts, permissions=staff_permissions(MESSAGE_ARCHIVE_CREATE), error_reports=OwnerReports()
+        accounts=account_service(accounts),
+        permissions=staff_permissions(MESSAGE_ARCHIVE_CREATE),
+        error_reports=OwnerReports(),
     )
     async with command_environment(ADMIN, services=services) as (bot, env):
         allow_idle_reaction_workers(bot, env, monkeypatch)
@@ -106,8 +108,8 @@ async def test_archive_then_paste_moves_the_selected_message_with_its_attachment
 
 @pytest.mark.parametrize("destination", ["same-channel", "other-user", "other-guild"])
 async def test_archive_selection_only_applies_to_its_owner_and_guild(destination: str) -> None:
-    accounts = WorkspaceAccounts()
-    services = bot_services(accounts=accounts, permissions=staff_permissions(MESSAGE_ARCHIVE_CREATE))
+    accounts = FakeAccountRepository()
+    services = bot_services(accounts=account_service(accounts), permissions=staff_permissions(MESSAGE_ARCHIVE_CREATE))
     async with command_environment(ADMIN, services=services) as (_, env):
         guild = env.guild
         source = guild.create_text_channel("source")
@@ -124,7 +126,7 @@ async def test_archive_selection_only_applies_to_its_owner_and_guild(destination
                 "Staff", permissions=discord.Permissions(manage_guild=True, manage_messages=True)
             )
             other = guild.add_member(env.create_user("other moderator"), roles=[other_role])
-            accounts.discord_accounts[str(other.id)] = Account(id=18, consent=AccountConsent.grant_current())
+            accounts.seed_account(other.id, account_id=18, consent=AccountConsent.grant_current())
             result = await other.slash(guild.create_text_channel("archive"), "paste")
             expected = "Select a message"
         else:
@@ -142,8 +144,8 @@ async def test_archive_selection_only_applies_to_its_owner_and_guild(destination
 
 
 async def test_paste_rechecks_source_access_after_a_role_is_removed() -> None:
-    accounts = WorkspaceAccounts()
-    services = bot_services(accounts=accounts, permissions=staff_permissions(MESSAGE_ARCHIVE_CREATE))
+    accounts = FakeAccountRepository()
+    services = bot_services(accounts=account_service(accounts), permissions=staff_permissions(MESSAGE_ARCHIVE_CREATE))
     async with command_environment(ADMIN, services=services) as (_, env):
         guild = env.guild
         moderator_role = guild.create_role(
@@ -160,7 +162,7 @@ async def test_paste_rechecks_source_access_after_a_role_is_removed() -> None:
         destination = guild.create_text_channel("archive")
         user = env.create_user("moderator")
         moderator = guild.add_member(user, roles=[moderator_role, reader_role])
-        accounts.discord_accounts[str(user.id)] = Account(id=17, consent=AccountConsent.grant_current())
+        accounts.seed_account(user.id, account_id=17, consent=AccountConsent.grant_current())
         builder = guild.add_member(env.create_user("builder"), roles=[reader_role])
         original = await builder.send(source, "The original design")
         selected = await moderator.context_menu(source, "Archive Message", original)
@@ -186,9 +188,11 @@ async def test_paste_rechecks_source_access_after_a_role_is_removed() -> None:
 
 @pytest.mark.parametrize("entry", ["slash", "prefix"])
 async def test_runtime_settings_displays_the_current_value_and_revision(entry: str) -> None:
-    accounts = WorkspaceAccounts()
+    accounts = FakeAccountRepository()
     services = bot_services(
-        accounts=accounts, permissions=staff_permissions(SETTINGS_RUNTIME_VIEW), settings=CommunitySettings()
+        accounts=account_service(accounts),
+        permissions=staff_permissions(SETTINGS_RUNTIME_VIEW),
+        settings=CommunitySettings(),
     )
     async with command_environment(ADMIN, services=services) as (_, env):
         channel = env.guild.create_text_channel("operators")
@@ -241,7 +245,7 @@ async def test_owner_sync_copies_commands_to_current_guild() -> None:
 
 
 async def test_tags_shows_the_published_library_to_a_visitor() -> None:
-    services = bot_services(accounts=WorkspaceAccounts(), permissions=staff_permissions(), tags=PublishedTags())
+    services = bot_services(accounts=account_service(), permissions=staff_permissions(), tags=PublishedTags())
     async with command_environment(ADMIN, services=services) as (_, env):
         channel = env.guild.create_text_channel("catalogue")
         visitor = env.guild.add_member(env.create_user("visitor"))
@@ -251,9 +255,11 @@ async def test_tags_shows_the_published_library_to_a_visitor() -> None:
 
 
 async def test_redstoner_deploys_a_public_panel_from_the_home_server() -> None:
-    accounts = WorkspaceAccounts()
+    accounts = FakeAccountRepository()
     settings = CommunitySettings()
-    services = bot_services(accounts=accounts, settings=settings, permissions=staff_permissions(REDSTONER_PANEL_MANAGE))
+    services = bot_services(
+        accounts=account_service(accounts), settings=settings, permissions=staff_permissions(REDSTONER_PANEL_MANAGE)
+    )
     async with command_environment("squid.bot.give_redstoner_cog", services=services) as (bot, env):
         channel = env.guild.create_text_channel("roles")
         moderator = community_moderator(env, accounts)
@@ -273,9 +279,11 @@ async def test_redstoner_deploys_a_public_panel_from_the_home_server() -> None:
 
 
 async def test_starboard_shows_the_selected_guilds_board() -> None:
-    accounts = WorkspaceAccounts()
+    accounts = FakeAccountRepository()
     boards = Boards()
-    services = bot_services(accounts=accounts, starboards=boards, permissions=staff_permissions(STARBOARD_BOARD_VIEW))
+    services = bot_services(
+        accounts=account_service(accounts), starboards=boards, permissions=staff_permissions(STARBOARD_BOARD_VIEW)
+    )
     async with command_environment(starboard_extension, services=services) as (_, env):
         channel = env.guild.create_text_channel("staff")
         moderator = community_moderator(env, accounts)
@@ -289,10 +297,10 @@ async def test_starboard_shows_the_selected_guilds_board() -> None:
 
 
 async def test_review_lists_only_the_invoking_guilds_pending_polls() -> None:
-    accounts = WorkspaceAccounts()
+    accounts = FakeAccountRepository()
     votes = CommunityVotes()
     services = bot_services(
-        accounts=accounts,
+        accounts=account_service(accounts),
         permissions=staff_permissions(VOTE_POLL_RECOUNT),
         votes=votes,
         domain_events=EmptyDomainEvents(),
@@ -308,9 +316,9 @@ async def test_review_lists_only_the_invoking_guilds_pending_polls() -> None:
 
 
 async def test_question_only_publishes_a_poll_with_default_settings() -> None:
-    accounts, votes, messages = WorkspaceAccounts(), CommunityVotes(), ObservedMessages()
+    accounts, votes, messages = FakeAccountRepository(), CommunityVotes(), ObservedMessages()
     services = bot_services(
-        accounts=accounts,
+        accounts=account_service(accounts),
         permissions=staff_permissions(),
         votes=votes,
         domain_events=EmptyDomainEvents(),
@@ -357,9 +365,12 @@ async def test_question_only_publishes_a_poll_with_default_settings() -> None:
 async def test_poll_rejects_bad_arguments_and_unauthorized_network_previews(
     options: dict[str, str | bool], notice: str
 ) -> None:
-    accounts, votes = WorkspaceAccounts(), CommunityVotes()
+    accounts, votes = FakeAccountRepository(), CommunityVotes()
     services = bot_services(
-        accounts=accounts, permissions=staff_permissions(), votes=votes, domain_events=EmptyDomainEvents()
+        accounts=account_service(accounts),
+        permissions=staff_permissions(),
+        votes=votes,
+        domain_events=EmptyDomainEvents(),
     )
     async with command_environment(events_extension, vote_extension, services=services) as (_, env):
         channel = env.guild.create_text_channel("voting")
@@ -375,9 +386,12 @@ async def test_poll_rejects_bad_arguments_and_unauthorized_network_previews(
 
 
 async def test_poll_preview_shows_question_and_options_without_posting_a_card() -> None:
-    accounts = WorkspaceAccounts()
+    accounts = FakeAccountRepository()
     services = bot_services(
-        accounts=accounts, permissions=staff_permissions(), votes=CommunityVotes(), domain_events=EmptyDomainEvents()
+        accounts=account_service(accounts),
+        permissions=staff_permissions(),
+        votes=CommunityVotes(),
+        domain_events=EmptyDomainEvents(),
     )
     async with command_environment(events_extension, vote_extension, services=services) as (_, env):
         channel = env.guild.create_text_channel("voting")
@@ -392,12 +406,12 @@ async def test_poll_preview_shows_question_and_options_without_posting_a_card() 
 
 
 async def test_message_deletion_vote_posts_a_public_card_for_the_selected_message() -> None:
-    accounts = WorkspaceAccounts()
+    accounts = FakeAccountRepository()
     votes = CommunityVotes()
     posts = VotePosts()
     messages = ObservedMessages()
     services = bot_services(
-        accounts=accounts,
+        accounts=account_service(accounts),
         votes=votes,
         domain_events=EmptyDomainEvents(),
         posts=posts,

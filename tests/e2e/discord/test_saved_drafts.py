@@ -11,7 +11,6 @@ from whenever import Instant
 from squid.bot.submission.ui.drafts import DraftEditorScreen
 from squid.bot.submission.ui.inference import reopen_inference
 from squid.core.accounts.domain import AccountConsent
-from squid.core.accounts.models import Account
 from squid.core.actors import ActingContext, Actor, UserActor
 from squid.core.permissions.application import PermissionService, SubjectRecords
 from squid.core.permissions.application.ports import PermissionSubject
@@ -22,7 +21,7 @@ from squid.core.submissions.application.forms import CURRENT_SUBMISSION_SCHEMA, 
 from squid.core.submissions.application.inference_runs import SubmissionInferenceRuns
 from squid.core.submissions.domain import DraftSnapshot, DraftStatus, SubmissionOrigin
 from tests.e2e.discord.environment import command_environment, displayed_text
-from tests.e2e.discord.workspace_services import WorkspaceAccounts
+from tests.support.accounts import FakeAccountRepository, account_service
 from tests.support.services import bot_services
 from tests.support.submission_form import Finalization, Forms, Intake
 
@@ -80,12 +79,12 @@ def saved_draft(identifier: int, *, account_id: int = 1, status: DraftStatus = D
 
 @pytest.mark.parametrize("inbox", [True, False])
 async def test_saved_drafts_preserves_bot_owner_authority(inbox: bool) -> None:
-    accounts, drafts, runs = WorkspaceAccounts(), DraftListing(), InferenceListing()
-    services = bot_services(accounts=accounts, submission_drafts=drafts, submission_inference=runs)
+    accounts, drafts, runs = FakeAccountRepository(), DraftListing(), InferenceListing()
+    services = bot_services(accounts=account_service(accounts), submission_drafts=drafts, submission_inference=runs)
     async with command_environment(EXTENSION, services=services) as (bot, env):
         owner = env.create_user("owner")
         bot.owner_id = owner.id
-        accounts.discord_accounts[str(owner.id)] = Account(id=1, consent=AccountConsent.grant_current())
+        accounts.seed_account(owner.id, account_id=1, consent=AccountConsent.grant_current())
 
         result = await owner.slash("build drafts", inbox=inbox)
 
@@ -102,15 +101,15 @@ async def test_saved_drafts_preserves_bot_owner_authority(inbox: bool) -> None:
 async def test_saved_drafts_paginate_all_entries(inbox: bool, draft_count: int, run_count: int) -> None:
     drafts = DraftListing(tuple(saved_draft(i + 1) for i in range(draft_count)))
     runs = InferenceListing(tuple(UUID(int=i + 100) for i in range(run_count)))
-    accounts = WorkspaceAccounts()
-    services = bot_services(accounts=accounts, submission_drafts=drafts, submission_inference=runs)
+    accounts = FakeAccountRepository()
+    services = bot_services(accounts=account_service(accounts), submission_drafts=drafts, submission_inference=runs)
     expected = {
         *(DraftEditorScreen.open_draft.custom_id(draft_id=draft.snapshot.id) for draft in drafts.drafts),
         *(reopen_inference.custom_id(run_id=run_id) for run_id in runs.runs),
     }
     async with command_environment(EXTENSION, services=services) as (bot, env):
         author = env.guild.add_member(env.create_user("author"))
-        accounts.discord_accounts[str(author.id)] = Account(id=1, consent=AccountConsent.grant_current())
+        accounts.seed_account(author.id, account_id=1, consent=AccountConsent.grant_current())
         bot.owner_id = author.id
         channel = env.guild.create_text_channel("submissions")
         result = await author.slash(channel, "build drafts", inbox=inbox)
@@ -135,7 +134,7 @@ async def test_saved_drafts_paginate_all_entries(inbox: bool, draft_count: int, 
 
 @pytest.mark.parametrize("bot_owner", [True, False], ids=["bot-owner", "discord-role"])
 async def test_staff_loses_access_to_an_inbox_draft_after_authority_is_revoked(bot_owner: bool) -> None:
-    accounts = WorkspaceAccounts()
+    accounts = FakeAccountRepository()
     draft = saved_draft(1, account_id=99, status=DraftStatus.NEEDS_ATTENTION)
     uow = AsyncMock()
     uow.__aenter__.return_value = uow
@@ -144,7 +143,7 @@ async def test_staff_loses_access_to_an_inbox_draft_after_authority_is_revoked(b
     permissions = PermissionService(uow_factory=lambda: uow)
     drafts = SubmissionDraftService(CheckedInFormManifestRegistry(), permissions=permissions, uow_factory=lambda: uow)
     services = bot_services(
-        accounts=accounts,
+        accounts=account_service(accounts),
         permissions=permissions,
         submission_drafts=drafts,
         submission_inference=InferenceListing(),
@@ -157,7 +156,7 @@ async def test_staff_loses_access_to_an_inbox_draft_after_authority_is_revoked(b
         role = guild.create_role("Draft editors")
         user = env.create_user("reviewer")
         reviewer = guild.add_member(user, roles=[] if bot_owner else [role])
-        accounts.discord_accounts[str(user.id)] = Account(id=1, consent=AccountConsent.grant_current())
+        accounts.seed_account(user.id, account_id=1, consent=AccountConsent.grant_current())
         bot.owner_id = user.id if bot_owner else None
         grant = PermissionGrant(
             pattern="build.submission.edit",
