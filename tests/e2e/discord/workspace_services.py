@@ -12,7 +12,7 @@ from squid.core.accounts.application import AccountService
 from squid.core.accounts.application.edits import AccountEditorSnapshot
 from squid.core.accounts.domain import AccountConsent, IdentityProvider
 from squid.core.accounts.models import Account, AccountProfile
-from squid.core.actors import Actor
+from squid.core.actors import ActingContext, Actor
 from squid.core.diagnostics.application import ErrorReportService
 from squid.core.diagnostics.models import ErrorReport
 from squid.core.notifications import (
@@ -99,11 +99,11 @@ class GuildConfiguration(SettingsService):
         self.snapshots: dict[int, GuildSettings] = {}
 
     @override
-    async def get_locale(self, server_id: int) -> str | None:
+    async def get_locale(self, server_id: int, *, context: ActingContext) -> str | None:
         return None
 
     @override
-    async def guild_snapshot(self, guild_id: int) -> tuple[GuildSettings, int]:
+    async def guild_snapshot(self, guild_id: int, *, context: ActingContext) -> tuple[GuildSettings, int]:
         return self.snapshots[guild_id], 1
 
 
@@ -133,7 +133,9 @@ class WorkspaceInbox(NotificationService):
         return Page(items=(inbox_item,), total=1, next=None, prev=None)
 
     @override
-    async def claim_deliveries(self, *, limit: int = 20) -> Sequence[PendingNotificationDelivery]:
+    async def claim_deliveries(
+        self, *, context: ActingContext, limit: int = 20
+    ) -> Sequence[PendingNotificationDelivery]:
         return ()
 
 
@@ -153,12 +155,14 @@ class StoredReports(ErrorReportService):
         )
 
     @override
-    async def lookup(self, reference: str, *, prefix: bool = False) -> tuple[ErrorReport, int]:
+    async def lookup(self, reference: str, *, context: ActingContext, prefix: bool = False) -> tuple[ErrorReport, int]:
         assert reference == self.report.reference
         assert prefix
         return self.report, 1
 
     @override
-    async def recent(self, *, limit: int = 20, work_lost_only: bool = False) -> tuple[ErrorReport, ...]:
+    async def recent(
+        self, *, context: ActingContext, limit: int = 20, work_lost_only: bool = False
+    ) -> tuple[ErrorReport, ...]:
         self.recent_calls.append((limit, work_lost_only))
         return (self.report,)

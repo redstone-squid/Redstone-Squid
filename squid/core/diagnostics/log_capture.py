@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, override
 from uuid import uuid4
 
+from squid.core.actors import ActingContext, current_acting_context
 from squid.core.observability import correlated_log_buffer, correlation_reference
 
 if TYPE_CHECKING:
@@ -45,6 +46,7 @@ LOG_SURFACE = "log"
 class _Pending:
     """One captured failure, resolved off the record before it leaves the logging thread."""
 
+    acting: ActingContext
     error: BaseException
     correlation: str
     origin: str
@@ -119,6 +121,7 @@ class ErrorReportLogHandler(logging.Handler):
 
         buffer = correlated_log_buffer()
         return _Pending(
+            acting=current_acting_context.get() or ActingContext.worker("log-capture"),
             error=error,
             correlation=correlation,
             origin=record.name,
@@ -168,7 +171,8 @@ class ErrorReportLogHandler(logging.Handler):
                     reference=correlation_reference(pending.correlation),
                     surface=LOG_SURFACE,
                     origin=pending.origin,
-                    context=pending.context,
+                    context=pending.acting,
+                    details=pending.context,
                     log_tail=pending.log_tail,
                     work_lost=pending.work_lost,
                 )

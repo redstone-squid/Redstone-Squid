@@ -5,17 +5,22 @@ from copy import deepcopy
 from dataclasses import replace
 from functools import partial
 from typing import override
+from unittest.mock import Mock, create_autospec
 
 import pytest
 from whenever import Instant
 
+from squid.core.actors import ActingContext, Actor
 from squid.core.diagnostics.application import ErrorReportService
 from squid.core.diagnostics.domain import ErrorReportNotFoundError
 from squid.core.diagnostics.models import ErrorReport
-from squid.core.errors import ErrorCode, InvalidStateError
+from squid.core.errors import AuthorizationError, ErrorCode, InvalidStateError
+from squid.core.permissions.application.services import PermissionService
+from squid.core.permissions.domain.catalogue import DIAGNOSTICS_ERROR_CLEAR
 from squid.core.records.errors import RecordNotFoundError
 from tests.support.unit_of_work import CommittedState, FakeUnitOfWork
 
+READER = ActingContext.direct(Actor(account_id=7))
 FROZEN = Instant.from_utc(2026, 8, 17, 12, 0, 0)
 
 
@@ -92,6 +97,7 @@ def build_service(
     max_traceback_chars: int = 20000,
 ) -> ErrorReportService:
     return ErrorReportService(
+        permissions=create_autospec(PermissionService, instance=True),
         uow_factory=partial(FakeErrorReportUnitOfWork, repository),
         retention_hours=retention_hours,
         max_traceback_chars=max_traceback_chars,
@@ -119,11 +125,12 @@ async def test_record_captures_the_traceback_and_classification() -> None:
 
     await service.record(
         raised(RecordNotFoundError(record_id=7)),
+        context=READER,
         correlation_id="a" * 32,
         reference="a" * 12,
         surface="application_command",
         origin="records lookup",
-        context={"channel_id": 4},
+        details={"channel_id": 4},
         log_tail=("first", "second"),
     )
 
@@ -144,7 +151,9 @@ async def test_record_swallows_a_storage_failure(caplog: pytest.LogCaptureFixtur
     service = build_service(_state(failing=True))
 
     with caplog.at_level("ERROR"):
-        await service.record(raised(RuntimeError("boom")), correlation_id="c" * 32, reference="c" * 12, surface="http")
+        await service.record(
+            raised(RuntimeError("boom")), context=READER, correlation_id="c" * 32, reference="c" * 12, surface="http"
+        )
 
     assert "Could not store an error report" in caplog.text
 
@@ -163,7 +172,7 @@ async def test_record_truncates_a_runaway_traceback_from_the_front() -> None:
     try:
         recurse(50)
     except RuntimeError as error:
-        await service.record(error, correlation_id="d" * 32, reference="d" * 12, surface="worker")
+        await service.record(error, context=READER, correlation_id="d" * 32, reference="d" * 12, surface="worker")
 
     (report,) = repository.value.saved
     assert len(report.traceback) <= 204
@@ -174,10 +183,12 @@ async def test_record_truncates_a_runaway_traceback_from_the_front() -> None:
 async def test_lookup_resolves_either_width_of_the_reference() -> None:
     repository = _state()
     service = build_service(repository)
-    await service.record(raised(RuntimeError("boom")), correlation_id="e" * 32, reference="e" * 12, surface="http")
+    await service.record(
+        raised(RuntimeError("boom")), context=READER, correlation_id="e" * 32, reference="e" * 12, surface="http"
+    )
 
-    from_card, _ = await service.lookup("e" * 12)
-    from_header, _ = await service.lookup("e" * 32)
+    from_card, _ = await service.lookup("e" * 12, context=READER)
+    from_header, _ = await service.lookup("e" * 32, context=READER)
 
     assert from_card.id == from_header.id
 
@@ -185,9 +196,11 @@ async def test_lookup_resolves_either_width_of_the_reference() -> None:
 async def test_lookup_strips_the_backticks_the_error_card_rendered() -> None:
     repository = _state()
     service = build_service(repository)
-    await service.record(raised(RuntimeError("boom")), correlation_id="f" * 32, reference="f" * 12, surface="http")
+    await service.record(
+        raised(RuntimeError("boom")), context=READER, correlation_id="f" * 32, reference="f" * 12, surface="http"
+    )
 
-    report, _ = await service.lookup(f"  `{'f' * 12}` ")
+    report, _ = await service.lookup(f"  `{'f' * 12}` ", context=READER)
 
     assert report.reference == "f" * 12
 
@@ -198,10 +211,10 @@ async def test_lookup_reports_how_many_share_a_reference() -> None:
     service = build_service(repository)
     for correlation in ("1" * 12 + "a" * 20, "1" * 12 + "b" * 20):
         await service.record(
-            raised(RuntimeError("boom")), correlation_id=correlation, reference="1" * 12, surface="http"
+            raised(RuntimeError("boom")), context=READER, correlation_id=correlation, reference="1" * 12, surface="http"
         )
 
-    _, matches = await service.lookup("1" * 12)
+    _, matches = await service.lookup("1" * 12, context=READER)
 
     assert matches == 2
 
@@ -210,23 +223,27 @@ async def test_lookup_rejects_an_unknown_reference() -> None:
     service = build_service(_state())
 
     with pytest.raises(ErrorReportNotFoundError):
-        await service.lookup("0" * 12)
+        await service.lookup("0" * 12, context=READER)
 
 
 async def test_lookup_rejects_an_empty_reference() -> None:
     service = build_service(_state())
 
     with pytest.raises(ErrorReportNotFoundError):
-        await service.lookup("  ``  ")
+        await service.lookup("  ``  ", context=READER)
 
 
 async def test_clear_all_deletes_every_report_expired_or_not() -> None:
     repository = _state()
     service = build_service(repository)
-    await service.record(raised(RuntimeError("boom")), correlation_id="a" * 32, reference="a" * 12, surface="http")
-    await service.record(raised(RuntimeError("boom")), correlation_id="b" * 32, reference="b" * 12, surface="http")
+    await service.record(
+        raised(RuntimeError("boom")), context=READER, correlation_id="a" * 32, reference="a" * 12, surface="http"
+    )
+    await service.record(
+        raised(RuntimeError("boom")), context=READER, correlation_id="b" * 32, reference="b" * 12, surface="http"
+    )
 
-    deleted = await service.clear_all()
+    deleted = await service.clear_all(context=READER)
 
     assert deleted == 2
     assert repository.value.saved == []
@@ -244,8 +261,25 @@ async def test_record_swallows_commit_failure_without_publishing_state(caplog: p
             raise RuntimeError("commit failed")
 
     committed = _state()
-    service = ErrorReportService(uow_factory=partial(FailingCommit, committed), now=lambda: FROZEN)
+    service = ErrorReportService(
+        permissions=create_autospec(PermissionService, instance=True),
+        uow_factory=partial(FailingCommit, committed),
+        now=lambda: FROZEN,
+    )
     with caplog.at_level("ERROR"):
-        await service.record(RuntimeError("original"), correlation_id="a" * 32, reference="a" * 12, surface="http")
+        await service.record(
+            RuntimeError("original"), context=READER, correlation_id="a" * 32, reference="a" * 12, surface="http"
+        )
     assert committed.value.saved == []
     assert "commit failed" in caplog.text
+
+
+async def test_core_clear_requires_authority_before_opening_the_report_transaction() -> None:
+    permissions = create_autospec(PermissionService, instance=True)
+    permissions.require.side_effect = AuthorizationError
+    factory = Mock()
+    service = ErrorReportService(permissions=permissions, uow_factory=factory)
+    with pytest.raises(AuthorizationError):
+        await service.clear_all(context=READER)
+    permissions.require.assert_awaited_once_with(READER.effective, DIAGNOSTICS_ERROR_CLEAR)
+    factory.assert_not_called()

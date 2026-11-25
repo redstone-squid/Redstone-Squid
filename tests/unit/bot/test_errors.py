@@ -22,6 +22,7 @@ from squid.bot.errors import (
 )
 from squid.bot.utils.permissions import PermissionNodeRequired
 from squid.core.accounts.errors import MinecraftServiceUnavailableError
+from squid.core.actors import ActingContext
 from squid.core.builds.errors import BuildNotFoundError
 from squid.core.diagnostics.application import ErrorReportService
 from squid.core.errors import InternalError, JSONValue
@@ -191,7 +192,8 @@ class RecordingReports(ErrorReportService):
         reference: str,
         surface: str,
         origin: str | None = None,
-        context: Mapping[str, JSONValue] | None = None,
+        context: ActingContext,
+        details: Mapping[str, JSONValue] | None = None,
         log_tail: Sequence[str] = (),
         work_lost: bool = False,
     ) -> None:
@@ -205,7 +207,7 @@ class RecordingReports(ErrorReportService):
                 "reference": reference,
                 "surface": surface,
                 "origin": origin,
-                "context": context,
+                "context": details,
                 "log_tail": log_tail,
                 "work_lost": work_lost,
             }
@@ -412,7 +414,7 @@ async def test_layout_failure_metadata_is_saved(
 
     await record_operation_error(error, locale=None, result=None, presented=False, reports=reports)
 
-    assert reports.record.call_args.kwargs["context"]["layout"] == error.context
+    assert reports.record.call_args.kwargs["details"]["layout"] == error.context
 
 
 async def test_operation_report_identifies_the_command_without_delivery(mocker: MockerFixture) -> None:
@@ -430,5 +432,5 @@ async def test_operation_report_identifies_the_command_without_delivery(mocker: 
 
     report = reports.record.call_args.kwargs
     assert report["origin"] == "build browse"
-    assert report["context"]["channel_id"] == 456
-    assert report["context"]["guild_id"] == 123
+    assert report["details"]["channel_id"] == 456
+    assert report["details"]["guild_id"] == 123

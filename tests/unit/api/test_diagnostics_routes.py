@@ -7,6 +7,7 @@ import pytest
 from litestar.testing import TestClient
 from whenever import Instant
 
+from squid.core.actors import ActingContext
 from squid.core.diagnostics.domain import ErrorReportNotFoundError
 from squid.core.diagnostics.models import ErrorReport
 from squid.core.errors import ErrorCode
@@ -38,12 +39,12 @@ class StubErrorReports:
         self._report = report
         self._matches = matches
 
-    async def lookup(self, reference: str) -> tuple[ErrorReport, int]:
+    async def lookup(self, reference: str, *, context: ActingContext) -> tuple[ErrorReport, int]:
         if self._report is None:
             raise ErrorReportNotFoundError(context={"reference": reference})
         return self._report, self._matches
 
-    async def recent(self, *, limit: int, work_lost_only: bool = False) -> list[ErrorReport]:
+    async def recent(self, *, context: ActingContext, limit: int, work_lost_only: bool = False) -> list[ErrorReport]:
         if self._report is None or (work_lost_only and not self._report.work_lost):
             return []
         return [self._report]

@@ -626,6 +626,7 @@ class _ServiceGraph:
     @cached_property
     def error_reports(self) -> ErrorReportService:
         return ErrorReportService(
+            permissions=self.permissions,
             uow_factory=self.uow_factory,
             retention_hours=self.config.diagnostics.retention_hours,
             max_traceback_chars=self.config.diagnostics.max_traceback_chars,

@@ -7,6 +7,7 @@ import squid_ui.ext.discord as sd
 from squid.bot.diagnostics.screen import ErrorReportScreen
 from squid.bot.ui import CardField, card_node
 from squid.bot.utils.permissions import allows, enforce, hide_unless
+from squid.core.actors import ActingContext
 from squid.core.permissions.domain.catalogue import DIAGNOSTICS_ERROR_CLEAR, DIAGNOSTICS_ERROR_READ
 from squid_i18n import Text, tr
 
@@ -72,8 +73,12 @@ class Diagnostics[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         async def may_clear() -> bool:
             return await allows(request, DIAGNOSTICS_ERROR_CLEAR)
 
+        async def reader() -> ActingContext:
+            return ActingContext.for_actor(await self.bot.actors.resolve(request, refresh=True))
+
         return ErrorReportScreen(
             self.error_reports,
+            context=reader,
             reference=reference,
             can_clear=await may_clear(),
             authorize_clear=may_clear,

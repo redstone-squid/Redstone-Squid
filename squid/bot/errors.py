@@ -20,7 +20,7 @@ import squid_ui.ext.discord as sd
 from squid.bot.limits import CommandLimits
 from squid.bot.ui import error_node
 from squid.core.accounts.errors import ConsentRequiredError
-from squid.core.actors import ActingContext, Actor
+from squid.core.actors import ActingContext, Actor, current_acting_context
 from squid.core.diagnostics.application import ErrorReportService
 from squid.core.diagnostics.log_capture import captured
 from squid.core.errors import DomainError, JSONValue, RateLimitedError, ServiceUnavailableError, SquidError
@@ -274,7 +274,8 @@ async def _capture(
             reference=notice.reference,
             surface=surface,
             origin=command if isinstance(command, str) else None,
-            context=cast(Mapping[str, JSONValue], context),
+            context=current_acting_context.get() or ActingContext.worker("discord-error-capture"),
+            details=cast(Mapping[str, JSONValue], context),
             log_tail=buffer.drain(notice.error_id) if buffer is not None else (),
         )
     except Exception:

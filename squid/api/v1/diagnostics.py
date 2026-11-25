@@ -8,7 +8,7 @@ from litestar.di import NamedDependency, Provide
 from litestar.params import PathParameter, QueryParameter, SkipValidation
 
 from squid.api.contract import ANONYMOUS, cli_command, contract
-from squid.api.dependencies import ErrorReports, get_error_reports
+from squid.api.dependencies import CurrentCaller, ErrorReports, get_error_reports
 from squid.api.errors import responses
 from squid.api.idempotency import reserve_idempotent_request
 from squid.api.pagination import Page, PageSizeParam
@@ -45,6 +45,7 @@ ReferenceParam = Annotated[
     guards=[requires(DIAGNOSTICS_ERROR_READ)],
 )
 async def list_error_reports(
+    caller: CurrentCaller,
     error_reports: ErrorReports,
     page_size: PageSizeParam = 20,
     work_lost: WorkLostParam = False,
@@ -54,7 +55,7 @@ async def list_error_reports(
     Reports include failures that were caught and logged. Set work_lost to include
     only failures that permanently abandoned work, such as a dead-lettered job.
     """
-    reports = await error_reports.recent(limit=page_size, work_lost_only=work_lost)
+    reports = await error_reports.recent(context=caller.context(), limit=page_size, work_lost_only=work_lost)
     return Page[ErrorReportSummary].from_domain(
         offset_page(reports, offset=0, page_size=page_size), ErrorReportSummary.from_domain
     )
@@ -75,13 +76,15 @@ async def list_error_reports(
     status_code=200,
     guards=[requires(DIAGNOSTICS_ERROR_READ)],
 )
-async def get_error_report(reference: ReferenceParam, error_reports: ErrorReports) -> ErrorReportDetail:
+async def get_error_report(
+    reference: ReferenceParam, error_reports: ErrorReports, caller: CurrentCaller
+) -> ErrorReportDetail:
     """Find a stored failure by its short reference or full correlation ID.
 
     Short references appear in Discord error cards. Full IDs appear in logs and
     the Request-Id response header.
     """
-    report, matches = await error_reports.lookup(reference)
+    report, matches = await error_reports.lookup(reference, context=caller.context())
     return ErrorReportDetail.of(report, matches)
 
 
@@ -96,6 +99,7 @@ async def get_error_report(reference: ReferenceParam, error_reports: ErrorReport
     dependencies={"_reservation": Provide(reserve_idempotent_request)},
 )
 async def clear_error_reports(
+    caller: CurrentCaller,
     error_reports: ErrorReports,
     *,
     _reservation: NamedDependency[SkipValidation[None]],
@@ -105,7 +109,7 @@ async def clear_error_reports(
     Denied by default to everyone but the bot owner: `diagnostics.error.clear` is tagged
     destructive, which both built-in admin roles explicitly exclude.
     """
-    await error_reports.clear_all()
+    await error_reports.clear_all(context=caller.context())
     return Response(content=None, status_code=status.HTTP_204_NO_CONTENT)
 
 

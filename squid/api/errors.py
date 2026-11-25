@@ -14,6 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from squid.api.i18n import locale_for_request
 from squid.api.request_context import resolve_request_id
 from squid.api.revisions import InvalidRevisionError, RevisionRequiredError
+from squid.api.security import ANONYMOUS, Caller
 from squid.api.validation import ValidationContext
 from squid.core.builds.errors import BuildRevisionMismatchError, BuildRevisionRequiredError
 from squid.core.diagnostics.log_capture import captured
@@ -70,13 +71,15 @@ async def _capture(request: Request, error: Exception, request_id: str) -> None:
             return
         reports = runtime.services.error_reports
         buffer = correlated_log_buffer()
+        caller = request.scope.get("user")
         await reports.record(
             error,
             correlation_id=request_id,
             reference=correlation_reference(request_id),
             surface="http",
             origin=f"{request.method} {_route_template(request) or request.url.path}",
-            context={"method": request.method, "route": _route_template(request)},
+            context=caller.context() if isinstance(caller, Caller) else ANONYMOUS.context(),
+            details={"method": request.method, "route": _route_template(request)},
             log_tail=buffer.drain(request_id) if buffer is not None else (),
         )
     except Exception:

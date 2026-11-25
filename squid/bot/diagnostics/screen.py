@@ -16,6 +16,7 @@ import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.diagnostics.refresh import ErrorReportRefresh
 from squid.bot.ui import CHROME, tr
+from squid.core.actors import ActingContext
 from squid.core.diagnostics.models import ErrorReport
 from squid_i18n import md_tr
 from squid_ui.ext.discord import primitives
@@ -28,11 +29,15 @@ RECENT_LIMIT = 100
 class ErrorReportOperations(Protocol):
     """Service operations required by the live diagnostics screen."""
 
-    async def lookup(self, reference: str, *, prefix: bool = False) -> tuple[ErrorReport, int]: ...
+    async def lookup(
+        self, reference: str, *, context: ActingContext, prefix: bool = False
+    ) -> tuple[ErrorReport, int]: ...
 
-    async def recent(self, *, limit: int = 20, work_lost_only: bool = False) -> Sequence[ErrorReport]: ...
+    async def recent(
+        self, *, context: ActingContext, limit: int = 20, work_lost_only: bool = False
+    ) -> Sequence[ErrorReport]: ...
 
-    async def clear_all(self) -> int: ...
+    async def clear_all(self, *, context: ActingContext) -> int: ...
 
 
 def _traceback_footer(ctx: sl.LayoutContext) -> sl.TextLike:
@@ -63,11 +68,13 @@ class _ReportUpdates(sl.Component[ComponentsV2Target, sd.Request]):
         operations: ErrorReportOperations,
         shown: tuple[ErrorReport, ...],
         *,
+        context: Callable[[], Awaitable[ActingContext]],
         work_lost_only: bool,
         refresh: Callable[[sl.PressEvent], Awaitable[None]],
         list_actions: Callable[[], tuple[_ListAction, ...]],
     ) -> None:
         self._operations = operations
+        self._context = context
         self._shown = tuple(report.id for report in shown)
         self._work_lost_only = work_lost_only
         self._notice = _ReportUpdateNotice()
@@ -79,7 +86,9 @@ class _ReportUpdates(sl.Component[ComponentsV2Target, sd.Request]):
         return self.monitor.changes
 
     async def _check(self) -> bool:
-        reports = await self._operations.recent(limit=RECENT_LIMIT, work_lost_only=self._work_lost_only)
+        reports = await self._operations.recent(
+            context=await self._context(), limit=RECENT_LIMIT, work_lost_only=self._work_lost_only
+        )
         return tuple(report.id for report in reports) != self._shown
 
     @override
@@ -178,11 +187,13 @@ class ErrorReportScreen(sd.Screen[int]):
         self,
         operations: ErrorReportOperations,
         *,
+        context: Callable[[], Awaitable[ActingContext]],
         reference: str | None = None,
         can_clear: bool = False,
         authorize_clear: Callable[[], Awaitable[bool]] | None = None,
     ) -> None:
         self._operations = operations
+        self._context = context
         self._reference = reference
         self._can_clear = can_clear
         self._authorize_clear = authorize_clear
@@ -205,15 +216,22 @@ class ErrorReportScreen(sd.Screen[int]):
     async def on_load(self) -> None:
         """Load a requested reference or the recent-report list when the screen mounts."""
         if self._reference is not None:
-            self._detail, self._matches = await self._operations.lookup(self._reference, prefix=True)
+            self._detail, self._matches = await self._operations.lookup(
+                self._reference, context=await self._context(), prefix=True
+            )
             return
         await self._load_recent()
 
     async def _load_recent(self) -> None:
-        self._reports = tuple(await self._operations.recent(limit=RECENT_LIMIT, work_lost_only=self.work_lost_only))
+        self._reports = tuple(
+            await self._operations.recent(
+                context=await self._context(), limit=RECENT_LIMIT, work_lost_only=self.work_lost_only
+            )
+        )
         self._updates = _ReportUpdates(
             self._operations,
             self._reports,
+            context=self._context,
             work_lost_only=self.work_lost_only,
             refresh=self._refresh_reports,
             list_actions=self._list_actions,
@@ -319,7 +337,7 @@ class ErrorReportScreen(sd.Screen[int]):
                 tr(t"diagnostics-clear-forbidden = You are no longer allowed to clear error reports.")
             )
             return
-        self.cleared_count = await self._operations.clear_all()
+        self.cleared_count = await self._operations.clear_all(context=await self._context())
         self.confirming_clear = False
         self.complete(cast(sd.ActionEvent, event.source), self.cleared_count)
 

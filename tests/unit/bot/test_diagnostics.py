@@ -13,6 +13,7 @@ from whenever import Instant
 import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.diagnostics.screen import ERROR_CHROME, ErrorReportScreen, report_attachment
+from squid.core.actors import ActingContext, Actor
 from squid.core.diagnostics.application import ErrorReportService
 from squid.core.diagnostics.models import ErrorReport
 from squid_ui.ext.discord import (
@@ -70,8 +71,13 @@ def make_screen(
     can_clear: bool = False,
 ) -> ErrorReportScreen:
     operations = ErrorReportRecorder(reports, report=report, matches=matches)
+
+    async def reader() -> ActingContext:
+        return ActingContext.direct(Actor(discord_user_id=7))
+
     return ErrorReportScreen(
         operations,
+        context=reader,
         reference=report.reference if report is not None else None,
         can_clear=can_clear,
         authorize_clear=Authorizer(allowed=True) if can_clear else None,
@@ -93,19 +99,21 @@ class ErrorReportRecorder(ErrorReportService):
         self.clear_calls = 0
 
     @override
-    async def lookup(self, reference: str, *, prefix: bool = False) -> tuple[ErrorReport, int]:
+    async def lookup(self, reference: str, *, context: ActingContext, prefix: bool = False) -> tuple[ErrorReport, int]:
         assert self.report is not None
         assert reference == self.report.reference
         assert prefix
         return self.report, self.matches
 
     @override
-    async def recent(self, *, limit: int = 20, work_lost_only: bool = False) -> Sequence[ErrorReport]:
+    async def recent(
+        self, *, context: ActingContext, limit: int = 20, work_lost_only: bool = False
+    ) -> Sequence[ErrorReport]:
         self.recent_calls.append((limit, work_lost_only))
         return self.reports
 
     @override
-    async def clear_all(self) -> int:
+    async def clear_all(self, *, context: ActingContext) -> int:
         self.clear_calls += 1
         return 3
 
@@ -497,13 +505,13 @@ async def test_report_monitor_cancels_initial_check_and_remounts_with_a_new_run(
     original = screen._operations.recent
     calls = 0
 
-    async def recent(*, limit: int = 20, work_lost_only: bool = False) -> Sequence[ErrorReport]:
+    async def recent(*, context: ActingContext, limit: int = 20, work_lost_only: bool = False) -> Sequence[ErrorReport]:
         nonlocal calls
         calls += 1
         if calls > 1:
             entered.set()
             await release.wait()
-        return await original(limit=limit, work_lost_only=work_lost_only)
+        return await original(context=context, limit=limit, work_lost_only=work_lost_only)
 
     screen._operations.recent = AsyncCallRecorder(callback=recent)
     async with running_execution_host() as host:

@@ -8,11 +8,15 @@ from uuid import uuid4
 
 from whenever import Instant
 
+from squid.core.actors import ActingContext
 from squid.core.diagnostics.domain import MAX_REFERENCE_LENGTH, ErrorReportNotFoundError
 from squid.core.diagnostics.models import ErrorReport
 from squid.core.errors import InvalidStateError, JSONValue, SquidError
 from squid.core.i18n import tr
+from squid.core.permissions.application.services import PermissionService
+from squid.core.permissions.domain.catalogue import DIAGNOSTICS_ERROR_CLEAR, DIAGNOSTICS_ERROR_READ
 from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
+from squid.core.worker_context import worker_scope
 
 logger = logging.getLogger(__name__)
 
@@ -47,14 +51,14 @@ class ErrorReportService:
 
     `record` logs ordinary capture errors so an error handler can still respond
     to its caller. Cancellation and other BaseException subclasses can propagate.
-    Callers must authorize report access and redact sensitive context before
-    passing it to this service.
+    Callers redact sensitive details before storing the report.
     """
 
     def __init__(
         self,
         *,
         uow_factory: UnitOfWorkFactory[ErrorReportUnitOfWork],
+        permissions: PermissionService,
         retention_hours: int = 168,
         max_traceback_chars: int = 20000,
         now: Callable[[], Instant] = Instant.now,
@@ -63,6 +67,7 @@ class ErrorReportService:
             msg = tr(t"diagnostics-error-report-retention = Error report retention must be at least one hour.")
             raise InvalidStateError(msg)
         self._uow_factory = uow_factory
+        self._permissions = permissions
         self._retention_hours = retention_hours
         self._max_traceback_chars = max_traceback_chars
         self._now = now
@@ -75,7 +80,8 @@ class ErrorReportService:
         reference: str,
         surface: str,
         origin: str | None = None,
-        context: Mapping[str, JSONValue] | None = None,
+        context: ActingContext,
+        details: Mapping[str, JSONValue] | None = None,
         log_tail: Sequence[str] = (),
         work_lost: bool = False,
     ) -> None:
@@ -94,59 +100,66 @@ class ErrorReportService:
                 message=str(error),
                 error_code=error.code if isinstance(error, SquidError) else None,
                 traceback=self._format_traceback(error),
-                context=dict(context or {}),
+                context=dict(details or {}),
                 log_tail=list(log_tail),
                 work_lost=work_lost,
             )
-            async with self._uow_factory() as uow:
-                await uow.error_reports.save(report)
-                await uow.commit()
+            with context.scope():
+                async with self._uow_factory() as uow:
+                    await uow.error_reports.save(report)
+                    await uow.commit()
         except Exception:
             logger.exception("Could not store an error report [correlation_id=%s]", correlation_id)
 
-    async def lookup(self, reference: str, *, prefix: bool = False) -> tuple[ErrorReport, int]:
+    async def lookup(self, reference: str, *, context: ActingContext, prefix: bool = False) -> tuple[ErrorReport, int]:
         """Return the newest unexpired match and the total number of matches.
 
         With prefix=True, also accept the start of a correlation ID. Raise
         ErrorReportNotFoundError when no unexpired report matches.
         """
-        async with self._uow_factory() as uow:
-            normalized = self.normalize(reference)
-            now = self._now()
-            report = await uow.error_reports.find(normalized, now=now, prefix=prefix)
-            if report is None:
-                raise ErrorReportNotFoundError(context={"reference": normalized})
-            matches = await uow.error_reports.count_matching(normalized, now=now, prefix=prefix)
-            return report, matches
+        with context.scope():
+            await self._permissions.require(context.effective, DIAGNOSTICS_ERROR_READ)
+            async with self._uow_factory() as uow:
+                normalized = self.normalize(reference)
+                now = self._now()
+                report = await uow.error_reports.find(normalized, now=now, prefix=prefix)
+                if report is None:
+                    raise ErrorReportNotFoundError(context={"reference": normalized})
+                matches = await uow.error_reports.count_matching(normalized, now=now, prefix=prefix)
+                return report, matches
 
-    async def recent(self, *, limit: int = 20, work_lost_only: bool = False) -> Sequence[ErrorReport]:
+    async def recent(
+        self, *, context: ActingContext, limit: int = 20, work_lost_only: bool = False
+    ) -> Sequence[ErrorReport]:
         """List unexpired reports, newest first.
 
         Set work_lost_only to select reports marked as abandoned work, such as
         jobs that exhausted their retries. This separates lost work from failures
         the application recovered from. Limits below one are treated as one.
         """
-        async with self._uow_factory() as uow:
-            return await uow.error_reports.list_recent(
-                limit=max(1, limit), now=self._now(), work_lost_only=work_lost_only
-            )
+        with context.scope():
+            await self._permissions.require(context.effective, DIAGNOSTICS_ERROR_READ)
+            async with self._uow_factory() as uow:
+                return await uow.error_reports.list_recent(
+                    limit=max(1, limit), now=self._now(), work_lost_only=work_lost_only
+                )
 
-    async def purge_expired(self) -> int:
+    async def purge_expired(self, *, context: ActingContext) -> int:
         """Delete reports past their retention window."""
-        async with self._uow_factory() as uow:
-            result = await uow.error_reports.purge_expired(now=self._now())
-            await uow.commit()
-            return result
+        with worker_scope(context):
+            async with self._uow_factory() as uow:
+                result = await uow.error_reports.purge_expired(now=self._now())
+                await uow.commit()
+                return result
 
-    async def clear_all(self) -> int:
-        """Delete every report and return the number removed.
-
-        The caller must check diagnostics.error.clear permission before calling.
-        """
-        async with self._uow_factory() as uow:
-            result = await uow.error_reports.clear_all()
-            await uow.commit()
-            return result
+    async def clear_all(self, *, context: ActingContext) -> int:
+        """Delete every report and return the number removed."""
+        with context.scope():
+            await self._permissions.require(context.effective, DIAGNOSTICS_ERROR_CLEAR)
+            async with self._uow_factory() as uow:
+                result = await uow.error_reports.clear_all()
+                await uow.commit()
+                return result
 
     @staticmethod
     def normalize(reference: str) -> str:

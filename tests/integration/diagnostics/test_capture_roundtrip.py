@@ -7,10 +7,12 @@ and presentation are covered separately; reports here are recorded directly thro
 import logging
 from collections.abc import AsyncGenerator
 from functools import partial
+from unittest.mock import create_autospec
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
+from squid.core.actors import ActingContext, Actor
 from squid.core.diagnostics.application import ErrorReportService
 from squid.core.diagnostics.domain import ErrorReportNotFoundError
 from squid.core.errors import InternalError
@@ -21,9 +23,11 @@ from squid.core.observability import (
     correlation_reference,
     unbind_correlation_id,
 )
+from squid.core.permissions.application.services import PermissionService
 from squid.core.persistence.base import Base
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
+READER = ActingContext.direct(Actor(account_id=7))
 _TABLES = [Base.metadata.tables["error_reports"]]
 
 
@@ -35,7 +39,10 @@ async def service(
     async with async_engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all, tables=_TABLES)
     try:
-        yield ErrorReportService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory))
+        yield ErrorReportService(
+            permissions=create_autospec(PermissionService, instance=True),
+            uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory),
+        )
     finally:
         async with async_engine.begin() as connection:
             await connection.run_sync(Base.metadata.drop_all, tables=list(reversed(_TABLES)))
@@ -59,18 +66,19 @@ async def test_a_captured_failure_is_readable_by_the_reference_the_user_was_show
         except InternalError as error:
             await service.record(
                 error,
+                context=READER,
                 correlation_id=full,
                 reference=shown,
                 surface="application_command",
                 origin="records lookup",
-                context={"job_id": 17},
+                details={"job_id": 17},
                 log_tail=("fetching record 17",),
             )
     finally:
         unbind_correlation_id(token)
 
-    from_card, matches = await service.lookup(f"`{shown}`")
-    from_header, _ = await service.lookup(full)
+    from_card, matches = await service.lookup(f"`{shown}`", context=READER)
+    from_header, _ = await service.lookup(full, context=READER)
 
     assert from_card.id == from_header.id
     assert matches == 1
@@ -95,6 +103,7 @@ async def test_the_log_buffer_supplies_the_tail_a_report_stores(service: ErrorRe
     error = RuntimeError(msg)
     await service.record(
         error,
+        context=READER,
         correlation_id=correlation,
         reference=correlation_reference(correlation),
         surface="background_job",
@@ -102,7 +111,7 @@ async def test_the_log_buffer_supplies_the_tail_a_report_stores(service: ErrorRe
         log_tail=buffer.drain(correlation),
     )
 
-    report, _ = await service.lookup("b1b2c3d4e5f6")
+    report, _ = await service.lookup("b1b2c3d4e5f6", context=READER)
 
     assert list(report.log_tail) == ["opened the schematic", "resolved the version"]
     assert report.origin == "schematic-jobs"
@@ -112,4 +121,4 @@ async def test_an_unknown_reference_reports_not_found(
     service: ErrorReportService,
 ) -> None:
     with pytest.raises(ErrorReportNotFoundError):
-        await service.lookup("ffffffffffff")
+        await service.lookup("ffffffffffff", context=READER)

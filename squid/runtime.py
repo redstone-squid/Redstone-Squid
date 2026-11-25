@@ -21,6 +21,7 @@ from anyio.abc import TaskGroup
 from whenever import Instant
 
 from squid.core.accounts.application import AccountService
+from squid.core.actors import ActingContext
 from squid.core.artifacts import ArtifactStore
 from squid.core.auth.application import ApiKeyService
 from squid.core.auth.application.web import WebSessionService
@@ -515,7 +516,8 @@ class BackgroundTaskSupervisor:
                 reference=correlation_reference(correlation),
                 surface="background_job",
                 origin=name,
-                context={"job": name},
+                context=ActingContext.current(),
+                details={"job": name},
                 log_tail=buffer.drain(correlation) if buffer is not None else (),
             )
         except Exception:
