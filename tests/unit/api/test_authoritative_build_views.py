@@ -281,7 +281,7 @@ async def test_id_anchors_are_refused_when_the_order_is_not_by_id() -> None:
             cast(Any, None),
             graph.permissions,
             ACCOUNT,
-            sort="-submission_time",
+            sort="newest",
             after_id=9,
         )
 
@@ -297,7 +297,7 @@ async def test_a_time_sorted_listing_pages_by_offset() -> None:
         cast(Any, None),
         graph.permissions,
         ACCOUNT,
-        sort="submission_time",
+        sort="oldest",
         page_size=1,
         offset=20,
     )
@@ -306,20 +306,6 @@ async def test_a_time_sorted_listing_pages_by_offset() -> None:
     assert call.sort == BuildListSort(field="submission_time", descending=False)
     assert call.selector.offset == 20
     assert page.prev == PageAnchor(offset=19)
-
-
-@pytest.mark.asyncio
-async def test_an_unlisted_sort_field_is_refused() -> None:
-    graph = fakes(is_admin=True)
-
-    with pytest.raises(ValidationError, match="not supported"):
-        await list_builds.fn(
-            graph.build_queries,
-            cast(Any, None),
-            graph.permissions,
-            ACCOUNT,
-            sort="title",
-        )
 
 
 @pytest.mark.asyncio

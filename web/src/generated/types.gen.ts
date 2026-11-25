@@ -3735,7 +3735,7 @@ export type BuildsListData = {
         tag?: Array<string> | null;
         creator_id?: string | null;
         submitted_by?: 'me' | null;
-        sort?: string | null;
+        sort?: 'newest' | 'oldest' | 'updated' | 'fastest_open' | 'smallest_volume' | 'title' | null;
         /**
          * Maximum number of items to return.
          */

@@ -252,7 +252,7 @@ async def list_builds(
     tag: FromQuery[list[str] | None] = None,
     creator_id: FromQuery[UUID | None] = None,
     submitted_by: FromQuery[Literal["me"] | None] = None,
-    sort: Annotated[str | None, QueryParameter(max_length=80)] = None,
+    sort: FromQuery[Literal["newest", "oldest", "updated", "fastest_open", "smallest_volume", "title"] | None] = None,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
     after_id: AfterIdParam = None,
@@ -264,6 +264,15 @@ async def list_builds(
     uses offset pagination. Without q, results come from the build repository;
     unpublished statuses require build.submission.view_pending permission.
     """
+    orders = {
+        "newest": "-submission_time",
+        "oldest": "submission_time",
+        "updated": "-edited_time",
+        "fastest_open": "opening_time",
+        "smallest_volume": "volume",
+        "title": "title",
+    }
+    order = orders.get(sort, sort) if sort is not None else None
     filters = BuildListFilters(category, version, tuple(dict.fromkeys(tag or ())), creator_id)
     submitter_id = caller.require_consented_account() if submitted_by is not None else None
     effective = status or BuildStatusFilter.APPROVED
@@ -282,7 +291,15 @@ async def list_builds(
                 mode=SearchMode.LEXICAL,
                 page_size=page_size,
                 offset=selector.offset,
-                sort=SearchSort.parse(sort),
+                sort=SearchSort.parse(
+                    {
+                        "-submission_time": "-created_at",
+                        "submission_time": "created_at",
+                        "-edited_time": "-updated_at",
+                    }.get(order, order)
+                    if order is not None
+                    else None
+                ),
                 visible_statuses=frozenset({effective.value}),
             )
         )
@@ -298,7 +315,7 @@ async def list_builds(
             prev=PageAnchor.from_domain(result.prev) if result.prev is not None else None,
         )
 
-    sort_field, descending = parse_page_sort(sort, allowed=BUILD_SORT_FIELDS, default="-id")
+    sort_field, descending = parse_page_sort(order, allowed=BUILD_SORT_FIELDS, default="-id")
     selector = resolve_selector(
         offset=offset, after_id=after_id, before_id=before_id, keyset_allowed=sort_field == "id"
     )

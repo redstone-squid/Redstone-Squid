@@ -18,7 +18,7 @@ from squid.core.errors import DataIntegrityError
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
 from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
-type BuildSortField = Literal["id", "submission_time"]
+type BuildSortField = Literal["id", "submission_time", "edited_time", "opening_time", "volume", "title"]
 BUILD_SORT_FIELDS: frozenset[str] = frozenset(get_args(BuildSortField.__value__))
 """Indexed columns available for sorting build listings."""
 

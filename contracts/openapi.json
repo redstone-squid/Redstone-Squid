@@ -2129,15 +2129,19 @@
             "name": "sort",
             "in": "query",
             "schema": {
-              "oneOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
+              "type": [
+                "null",
+                "string"
               ],
-              "maxLength": 80
+              "enum": [
+                "newest",
+                "oldest",
+                "updated",
+                "fastest_open",
+                "smallest_volume",
+                "title",
+                null
+              ]
             },
             "required": false,
             "deprecated": false,

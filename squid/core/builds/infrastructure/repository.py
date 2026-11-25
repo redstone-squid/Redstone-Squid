@@ -9,7 +9,7 @@ from dataclasses import replace
 from decimal import Decimal
 from typing import Any, cast
 
-from sqlalchemy import Select, Table, delete, func, select, update
+from sqlalchemy import BigInteger, Select, String, Table, delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import raiseload, selectinload
@@ -49,6 +49,7 @@ from squid.core.events.infrastructure.repository import publish_domain_event
 from squid.core.messages.domain import MessageSnapshot
 from squid.core.messages.models import Message
 from squid.core.records.models import DoorTimingVariant, ExtenderTimingVariant
+from squid.core.search.models import SearchDocument
 from squid.core.settings.infrastructure.repository import ensure_server_settings
 from squid.core.tags.domain import TagSemanticKind, TagValueType
 from squid.core.tags.infrastructure.loading import assignment_units, definition_units
@@ -432,10 +433,23 @@ class BuildRepository:
             filters=filters,
         )
         reverse = before_id is not None
-        if sort.field == "submission_time":
-            time_order = Build.submission_time.desc() if sort.descending else Build.submission_time.asc()
-            id_order = Build.id.desc() if sort.descending else Build.id.asc()
-            statement = statement.order_by(time_order.nulls_last(), id_order)
+        if sort.field != "id":
+            if sort.field == "opening_time":
+                doors = DoorBuild.__table__.c
+                key = select(doors.normal_opening_time).where(doors.build_id == Build.id).scalar_subquery()
+            elif sort.field == "volume":
+                key = Build.width.cast(BigInteger) * Build.height * Build.depth
+            elif sort.field == "title":
+                indexed = (
+                    select(SearchDocument.title)
+                    .where(SearchDocument.resource_kind == "build", SearchDocument.source_key == Build.id.cast(String))
+                    .scalar_subquery()
+                )
+                key = func.lower(func.coalesce(Build.display_name, indexed))
+            else:
+                key = Build.submission_time if sort.field == "submission_time" else Build.edited_time
+            order = key.desc() if sort.descending else key.asc()
+            statement = statement.order_by(order.nulls_last(), Build.id.desc() if sort.descending else Build.id.asc())
         elif before_id is not None:
             # Walk away from the anchor in reversed display order; the page is flipped back below.
             statement = statement.where(Build.id > before_id if sort.descending else Build.id < before_id).order_by(
