@@ -1,6 +1,7 @@
 """Internal build history values; external adapters must authorize their readers."""
 
 from dataclasses import dataclass, field
+from datetime import datetime
 from typing import Literal
 from uuid import UUID, uuid4
 
@@ -105,3 +106,26 @@ class BuildStateSnapshot:
 class BuildHistoryDetail(BuildHistorySummary):
     before: BuildStateSnapshot | None
     after: BuildStateSnapshot | None
+
+
+@dataclass(frozen=True, slots=True)
+class HistoryActor:
+    display_name: str | None
+    creator_id: UUID
+
+
+@dataclass(frozen=True, slots=True)
+class HistoryChange:
+    field: str
+    label: str
+    before: JsonValue
+    after: JsonValue
+
+
+@dataclass(frozen=True, slots=True)
+class PublicBuildRevision:
+    revision: int
+    at: datetime
+    actor: HistoryActor | None
+    kind: HistoryOperation
+    changes: tuple[HistoryChange, ...]

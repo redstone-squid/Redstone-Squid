@@ -258,3 +258,23 @@ async def test_savepoint_rollback_keeps_only_surviving_changes(sessions: async_s
         assert isinstance(detail.after.payload["build"], dict)
         assert detail.before.payload["build"]["description"] == "first"
         assert detail.after.payload["build"]["description"] == "survived"
+
+
+async def test_public_history_starts_with_published_values(sessions: async_sessionmaker[AsyncSession]) -> None:
+    build_id = await seed(sessions)
+    async with SqlAlchemyUnitOfWork(sessions) as uow, uow.builds.editing(actor="moderator", source="test"):
+        build = await uow.builds.get_for_update(build_id)
+        assert build is not None
+        build.submission_status = BuildStatus.APPROVED
+        build.description = "Published"
+        await uow.commit()
+
+    async with SqlAlchemyUnitOfWork(sessions) as uow:
+        history = await uow.build_history.public_page(build_id, {"description": "Description"}, offset=0, page_size=1)
+        assert history.total == 1
+        (revision,) = history.items
+        (description,) = [change for change in revision.changes if change.field == "description"]
+        assert description.before is None
+        assert description.after == "Published"
+        assert description.label == "Description"
+        assert revision.actor is None

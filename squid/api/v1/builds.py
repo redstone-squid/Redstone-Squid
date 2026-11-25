@@ -56,6 +56,7 @@ from squid.core.builds.errors import (
     BuildRevisionMismatchError,
     BuildRevisionRequiredError,
 )
+from squid.core.builds.history import PublicBuildRevision
 from squid.core.builds.models import Build
 from squid.core.edits.domain import EditCommand, LatestRevision, Revision
 from squid.core.permissions.application import PermissionService
@@ -144,6 +145,28 @@ async def get_build(
     build = await build_queries.get_public(build_id)
     detail = await BrowserViews(services, caller).build(build)
     return Response(detail, headers={"ETag": build_etag(build)})
+
+
+@get(
+    "/{build_id:int}/history",
+    responses=responses(404, 422, 503),
+    security=[ANONYMOUS],
+    operation_id="builds_history_list",
+    opt=contract(cli=transport_only()),
+)
+async def get_build_history(
+    request: Request,
+    build_id: FromPath[int],
+    build_queries: BuildQueries,
+    services: Services,
+    offset: OffsetParam = None,
+    page_size: PageSizeParam = 20,
+) -> Page[PublicBuildRevision]:
+    """List published revisions newest first, with changes to public build fields."""
+    manifest = await services.submission_forms.edit_manifest(locale=locale_for_request(request))
+    labels = {field.id: field.label for category in manifest.categories for field in manifest.fields_for(category.code)}
+    history = await build_queries.public_history(build_id, labels, offset=offset or 0, page_size=page_size)
+    return Page.from_domain(history)
 
 
 @get(
@@ -311,5 +334,5 @@ router = Router(
     },
     path="/builds",
     tags=["builds"],
-    route_handlers=[edit_build, get_build, get_build_form, get_build_media, list_builds],
+    route_handlers=[edit_build, get_build, get_build_form, get_build_history, get_build_media, list_builds],
 )

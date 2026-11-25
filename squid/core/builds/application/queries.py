@@ -1,6 +1,6 @@
 """Application queries for builds, shared by the bot, the API, and the worker."""
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
@@ -12,6 +12,7 @@ from uuid import UUID
 from squid.core.builds.domain import BuildCategory, BuildStatus
 from squid.core.builds.domain.credits import CreditAttribution, CreditKind, CreditRole
 from squid.core.builds.errors import BuildNotFoundError
+from squid.core.builds.history import PublicBuildRevision
 from squid.core.builds.models import Build, DoorBuild
 from squid.core.errors import DataIntegrityError
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
@@ -256,6 +257,15 @@ class BuildQueryService:
                 raise BuildNotFoundError(build_id)
             return build
 
+    async def public_history(
+        self, build_id: int, labels: Mapping[str, str], *, offset: int, page_size: int
+    ) -> Page[PublicBuildRevision]:
+        async with self._uow_factory() as uow:
+            build = await uow.builds.get_by_id(build_id)
+            if build is None or build.submission_status is not BuildStatus.APPROVED:
+                raise BuildNotFoundError(build_id)
+            return await uow.build_history.public_page(build_id, labels, offset=offset, page_size=page_size)
+
     async def pending(self) -> Sequence[Build]:
         async with self._uow_factory() as uow:
             return await uow.builds.get_pending()
@@ -316,6 +326,15 @@ class BuildQueryService:
         return await self.get(build_id)
 
 
+class PublicHistoryReader(Protocol):
+    async def public_page(
+        self, build_id: int, labels: Mapping[str, str], *, offset: int, page_size: int
+    ) -> Page[PublicBuildRevision]: ...
+
+
 class BuildQueryUnitOfWork(UnitOfWork, Protocol):
+    @property
+    def build_history(self) -> PublicHistoryReader: ...
+
     @property
     def builds(self) -> BuildQueryRepository: ...

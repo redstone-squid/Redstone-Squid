@@ -1110,6 +1110,28 @@ export type GeneralDetails = {
 };
 
 /**
+ * HistoryActor
+ */
+export type HistoryActor = {
+    display_name: string | null;
+    creator_id: string;
+};
+
+/**
+ * HistoryChange
+ */
+export type HistoryChange = {
+    field: string;
+    label: string;
+    before: Array<unknown> | {
+        [key: string]: unknown;
+    } | string | boolean | number | number | null;
+    after: Array<unknown> | {
+        [key: string]: unknown;
+    } | string | boolean | number | number | null;
+};
+
+/**
  * IdentityDetail
  */
 export type IdentityDetail = {
@@ -1533,6 +1555,16 @@ export type PageSquidCoreBuildsApplicationQueriesPublicBuildSummary = {
 };
 
 /**
+ * Page[PublicBuildRevision]
+ */
+export type PageSquidCoreBuildsHistoryPublicBuildRevision = {
+    items: Array<PublicBuildRevision>;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+};
+
+/**
  * PaperChallengeCreateRequest
  */
 export type PaperChallengeCreateRequest = {
@@ -1700,6 +1732,17 @@ export type PublicBuildPreview = {
     url: string;
     width?: number | null;
     height?: number | null;
+};
+
+/**
+ * PublicBuildRevision
+ */
+export type PublicBuildRevision = {
+    revision: number;
+    at: string;
+    actor: HistoryActor | null;
+    kind: 'baseline' | 'create' | 'edit' | 'moderation' | 'recalculation' | 'schematic' | 'account_merge' | 'delete';
+    changes: Array<HistoryChange>;
 };
 
 /**
@@ -3545,6 +3588,54 @@ export type BuildsEditFormGetResponses = {
 };
 
 export type BuildsEditFormGetResponse = BuildsEditFormGetResponses[keyof BuildsEditFormGetResponses];
+
+export type BuildsHistoryListData = {
+    body?: never;
+    path: {
+        build_id: number;
+    };
+    query?: {
+        /**
+         * Number of items to skip. Excludes after_id and before_id.
+         */
+        offset?: number | null;
+        /**
+         * Maximum number of items to return.
+         */
+        page_size?: number;
+    };
+    url: '/v1/builds/{build_id}/history';
+};
+
+export type BuildsHistoryListErrors = {
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type BuildsHistoryListError = BuildsHistoryListErrors[keyof BuildsHistoryListErrors];
+
+export type BuildsHistoryListResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: PageSquidCoreBuildsHistoryPublicBuildRevision;
+};
+
+export type BuildsHistoryListResponse = BuildsHistoryListResponses[keyof BuildsHistoryListResponses];
 
 export type BuildMediaContentGetData = {
     body?: never;

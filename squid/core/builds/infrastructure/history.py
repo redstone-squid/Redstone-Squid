@@ -1,19 +1,25 @@
 """Capture persisted build aggregates in the same transaction as their changes."""
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from copy import deepcopy
 from typing import cast
 
+from pydantic import JsonValue
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
+from squid.core.accounts.models import Account, AccountProfile
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.history import (
     BuildEditContext,
     BuildHistoryDetail,
     BuildHistorySummary,
     BuildStateSnapshot,
+    HistoryActor,
+    HistoryChange,
     HistoryOperation,
+    PublicBuildRevision,
 )
 from squid.core.builds.history_models import BuildHistoryEntry, BuildHistorySnapshot
 from squid.core.pagination import FIRST_PAGE, MAX_PAGE_OFFSET, Page, PageSelector, keyset_page
@@ -24,6 +30,106 @@ class BuildHistoryQueries:
 
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
+
+    async def public_page(
+        self, build_id: int, labels: Mapping[str, str], *, offset: int, page_size: int
+    ) -> Page[PublicBuildRevision]:
+        before = aliased(BuildHistorySnapshot)
+        after = aliased(BuildHistorySnapshot)
+        statement = (
+            select(BuildHistoryEntry, before, after, Account.public_creator_id, AccountProfile.display_name)
+            .select_from(BuildHistoryEntry)
+            .join(after, after.id == BuildHistoryEntry.after_state_id)
+            .outerjoin(before, before.id == BuildHistoryEntry.before_state_id)
+            .outerjoin(Account, Account.id == BuildHistoryEntry.actor_account_id)
+            .outerjoin(AccountProfile, AccountProfile.account_id == Account.id)
+            .where(
+                BuildHistoryEntry.build_id == build_id,
+                after.snapshot["build"]["submission_status"].as_integer() == BuildStatus.APPROVED.value,
+            )
+        )
+        session = self._session()
+        total = await session.scalar(select(func.count()).select_from(statement.subquery()))
+        rows = await session.execute(statement.order_by(BuildHistoryEntry.id.desc()).limit(page_size).offset(offset))
+        items: list[PublicBuildRevision] = []
+        for entry, old, new, creator_id, name in rows:
+            previous = self.public_fields(old)
+            current = self.public_fields(new)
+            changes = tuple(
+                HistoryChange(key, labels.get(key, key), previous.get(key), current.get(key))
+                for key in sorted(previous.keys() | current.keys())
+                if previous.get(key) != current.get(key)
+            )
+            items.append(
+                PublicBuildRevision(
+                    new.build_revision,
+                    entry.recorded_at.to_stdlib(),
+                    HistoryActor(name, creator_id) if creator_id is not None else None,
+                    cast(HistoryOperation, entry.operation),
+                    changes,
+                )
+            )
+        return keyset_page(
+            items,
+            selector=PageSelector(offset=offset),
+            page_size=page_size,
+            total=total or 0,
+            keyset=False,
+            id_of=lambda item: item.revision,
+        )
+
+    @staticmethod
+    def public_fields(state: BuildHistorySnapshot | None) -> dict[str, JsonValue]:
+        """Project public edit fields, omitting the private side of an approval transition."""
+        if state is None:
+            return {}
+        build = state.snapshot.get("build")
+        if not isinstance(build, dict) or build.get("submission_status") != BuildStatus.APPROVED.value:
+            return {}
+        fields: dict[str, JsonValue] = {}
+        for section, names in (
+            (
+                "build",
+                {
+                    "display_name": "display_name",
+                    "description": "description",
+                    "width": "capture_width",
+                    "height": "capture_height",
+                    "depth": "capture_depth",
+                    "version_spec": "version_compatibility",
+                    "category": "category",
+                },
+            ),
+            (
+                "doors",
+                {
+                    "orientation": "door_orientation",
+                    "door_width": "opening_width",
+                    "door_height": "opening_height",
+                    "door_depth": "opening_depth",
+                    "normal_opening_time": "opening_time",
+                    "normal_closing_time": "closing_time",
+                    "visible_opening_time": "visible_opening_time",
+                    "visible_closing_time": "visible_closing_time",
+                },
+            ),
+            (
+                "extenders",
+                {
+                    "orientation": "movement_orientation",
+                    "extension_length": "extension_length",
+                    "extension_time": "extension_time",
+                    "retraction_time": "retraction_time",
+                },
+            ),
+        ):
+            values = state.snapshot.get(section)
+            if isinstance(values, dict):
+                fields.update({field: values.get(column) for column, field in names.items()})
+        credits = state.snapshot.get("credits", state.snapshot.get("creators"))
+        if isinstance(credits, list):
+            fields["credits"] = [credit.get("name") for credit in credits if isinstance(credit, dict)]
+        return fields
 
     async def list_history(
         self, build_id: int, *, selector: PageSelector = FIRST_PAGE, page_size: int = 20
