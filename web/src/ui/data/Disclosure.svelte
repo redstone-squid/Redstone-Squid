@@ -35,7 +35,7 @@
     />
     {summary}
   </summary>
-  <div class={cn("min-w-0 pt-2 pb-1", variant === "card" ? "px-4 pb-4" : "ps-6")}>
+  <div class={cn("min-w-0 pt-2", variant === "card" ? "px-4 pb-4" : "ps-6 pb-1")}>
     {@render children()}
   </div>
 </details>
