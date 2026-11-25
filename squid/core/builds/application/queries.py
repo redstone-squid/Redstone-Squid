@@ -4,6 +4,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
+from enum import StrEnum
 from typing import Literal, Protocol, get_args
 from urllib.parse import urlsplit
 
@@ -47,6 +48,8 @@ class PublicBuildPreview:
 
     kind: Literal["render", "image"]
     url: str
+    width: int | None = None
+    height: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -69,6 +72,13 @@ class PublicBuildCredit:
     attribution: CreditAttribution
 
 
+class PublicBuildStatus(StrEnum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    UNKNOWN = "unknown"
+
+
 @dataclass(frozen=True, slots=True)
 class PublicBuildSummary:
     """Build fields exposed by public catalogue queries.
@@ -81,7 +91,7 @@ class PublicBuildSummary:
     revision: int
     title: str
     display_name: str | None
-    status: str
+    status: PublicBuildStatus
     category: BuildCategory
     dimensions: PublicBuildDimensions
     creators: tuple[str, ...]
@@ -113,7 +123,9 @@ class PublicBuildSummary:
             title=build.title,
             subtitle=build.subtitle,
             display_name=build.display_name,
-            status=build.submission_status.name.casefold() if build.submission_status is not None else "unknown",
+            status=PublicBuildStatus[build.submission_status.name]
+            if build.submission_status is not None
+            else PublicBuildStatus.UNKNOWN,
             category=build.category,
             dimensions=PublicBuildDimensions(width=build.width, height=build.height, depth=build.depth),
             creators=tuple(build.creators_ign),

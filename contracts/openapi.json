@@ -19178,7 +19178,7 @@
             ]
           },
           "status": {
-            "type": "string"
+            "$ref": "#/components/schemas/PublicBuildStatus"
           },
           "category": {
             "$ref": "#/components/schemas/BuildCategory"
@@ -24786,6 +24786,26 @@
           },
           "url": {
             "type": "string"
+          },
+          "width": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "height": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -24794,6 +24814,16 @@
           "url"
         ],
         "title": "PublicBuildPreview"
+      },
+      "PublicBuildStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "approved",
+          "rejected",
+          "unknown"
+        ],
+        "title": "PublicBuildStatus"
       },
       "PublicBuildSummary": {
         "properties": {
@@ -24817,7 +24847,7 @@
             ]
           },
           "status": {
-            "type": "string"
+            "$ref": "#/components/schemas/PublicBuildStatus"
           },
           "category": {
             "$ref": "#/components/schemas/BuildCategory"

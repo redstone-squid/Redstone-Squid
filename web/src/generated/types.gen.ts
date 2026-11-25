@@ -134,7 +134,7 @@ export type BuildDetail = {
     revision: number;
     title: string;
     display_name: string | null;
-    status: string;
+    status: PublicBuildStatus;
     category: BuildCategory;
     dimensions: PublicBuildDimensions;
     creators: Array<string>;
@@ -1688,7 +1688,14 @@ export type PublicBuildDimensions = {
 export type PublicBuildPreview = {
     kind: 'render' | 'image';
     url: string;
+    width?: number | null;
+    height?: number | null;
 };
+
+/**
+ * PublicBuildStatus
+ */
+export type PublicBuildStatus = 'pending' | 'approved' | 'rejected' | 'unknown';
 
 /**
  * PublicBuildSummary
@@ -1698,7 +1705,7 @@ export type PublicBuildSummary = {
     revision: number;
     title: string;
     display_name: string | null;
-    status: string;
+    status: PublicBuildStatus;
     category: BuildCategory;
     dimensions: PublicBuildDimensions;
     creators: Array<string>;
