@@ -6,7 +6,7 @@
   import type { FieldMessages } from "@/ui/forms/field";
   import FieldFrame from "./FieldFrame.svelte";
   import CharacterCount from "./CharacterCount.svelte";
-  import { adornmentClass, boxClass, boxInputClass } from "./styles";
+  import { boxClass, boxInputClass } from "./styles";
 
   /**
    * A single-line text input. Numbers use `inputmode="numeric"` (or `decimal`) with the
@@ -60,6 +60,8 @@
     input.dispatchEvent(new Event("input", { bubbles: true }));
     input.focus();
   }
+  /** Text beside the input, such as a unit. */
+  const adornmentClass = "flex shrink-0 items-center text-fg-muted select-none";
 </script>
 
 {#snippet count()}<CharacterCount length={text.length} max={Number(maxlength)} />{/snippet}

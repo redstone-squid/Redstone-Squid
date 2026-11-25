@@ -4,7 +4,6 @@
   import { onMount } from "svelte";
   import Button from "@/ui/actions/Button.svelte";
   import { cn } from "@/ui/cn";
-  import { backdropClass } from "./styles";
   import { triggerButtonProps, type ModalProps } from "./props";
 
   /** The modal shell `Dialog` and `Sheet` share; each passes where its panel sits. */
@@ -69,7 +68,9 @@
     {/if}
   {/if}
   <Primitive.Portal>
-    <Primitive.Overlay class={backdropClass} />
+    <Primitive.Overlay
+      class="fixed inset-0 z-overlay bg-overlay motion-safe:transition-opacity motion-safe:duration-normal motion-safe:starting:opacity-0"
+    />
     <Primitive.Content
       bind:ref={panel}
       onInteractOutside={holdOpen}

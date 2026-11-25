@@ -4,7 +4,7 @@
   import type { ClassValue, HTMLAttributes } from "svelte/elements";
   import { cn } from "@/ui/cn";
   import { fieldAttributes, type FieldMessages } from "@/ui/forms/field";
-  import { fieldClass, fieldErrorClass, fieldMessageClass, labelClass, widthClass } from "./styles";
+  import { fieldErrorClass, fieldMessageClass, labelClass } from "./styles";
 
   /**
    * The label, hint and error around one control. `children` receives the control's id,
@@ -38,11 +38,12 @@
   const autoId = $props.id();
   const control = $derived(fieldAttributes(id ?? autoId, { hint, error, ...aria }));
   const hasHint = $derived(hint != null && hint !== "");
+  const widths = { full: "", md: "max-w-field-md", sm: "max-w-field-sm", xs: "max-w-field-xs" };
 </script>
 
 {#snippet caption()}{label}{#if detail !== undefined}
     <span class="ms-1 font-normal text-fg-muted">({detail})</span>{/if}{/snippet}
-<div class={cn(fieldClass, className)}>
+<div class={cn("grid min-w-0 content-start gap-1.5 text-sm", className)}>
   {#if inline}
     <label class="flex items-start gap-2.5" for={control.id}
       >{@render children(control)}<span class={labelClass}>{@render caption()}</span></label
@@ -51,7 +52,7 @@
     <label class={cn(labelClass, labelVisibility === "hidden" && "sr-only")} for={control.id}
       >{@render caption()}</label
     >
-    <div class={cn("relative min-w-0", widthClass[width])}>{@render children(control)}</div>
+    <div class={cn("relative min-w-0", widths[width])}>{@render children(control)}</div>
   {/if}
   {#if hasHint || aside}
     <div

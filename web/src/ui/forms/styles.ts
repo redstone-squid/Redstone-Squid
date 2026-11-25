@@ -2,8 +2,6 @@ import { cn } from "@/ui/cn";
 
 // Styles shared by the form controls in this folder. Only src/ui imports them.
 
-/** A label and its control. */
-export const fieldClass = cn("grid min-w-0 content-start gap-1.5 text-sm");
 export const labelClass = cn("font-semibold text-fg");
 
 const controlBorder = cn(
@@ -34,16 +32,6 @@ export const boxInputClass = cn(
   "min-w-0 flex-1 bg-transparent px-3 py-2 placeholder:text-fg-muted focus-visible:outline-none",
   "disabled:cursor-not-allowed",
 );
-/** Text beside a boxed input, such as a unit. */
-export const adornmentClass = cn("flex shrink-0 items-center text-fg-muted select-none");
-
-export const widthClass = {
-  full: "",
-  md: "max-w-field-md",
-  sm: "max-w-field-sm",
-  xs: "max-w-field-xs",
-} as const;
-
 /** A native checkbox or radio, aligned with the first line of its label. */
 export const checkboxClass = cn(
   "mt-0.5 size-4.5 shrink-0 cursor-pointer accent-accent disabled:cursor-not-allowed",

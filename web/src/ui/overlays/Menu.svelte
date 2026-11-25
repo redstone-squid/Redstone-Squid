@@ -5,7 +5,7 @@
   import Button from "@/ui/actions/Button.svelte";
   import { cn } from "@/ui/cn";
   import { triggerButtonProps, type MenuItem, type OverlayTrigger } from "./props";
-  import { floatingPanelClass, menuItemClass } from "./styles";
+  import { floatingPanelClass } from "./styles";
 
   /**
    * A button that opens a list of actions or links, such as row actions or a sort order.
@@ -34,6 +34,14 @@
     ...triggerButtonProps(trigger),
     iconEnd: trigger.iconOnly === true ? undefined : ChevronDown,
   });
+
+  /** One row, highlighted by pointer, arrow keys, or focus. */
+  const itemClass = cn(
+    "flex min-h-control-sm w-full cursor-pointer items-center gap-3 rounded-xs px-3 py-2 text-start text-fg no-underline",
+    "hover:bg-surface-muted focus-visible:bg-surface-muted data-highlighted:bg-surface-muted",
+    "current:forced-highlight current:bg-surface-muted",
+    "data-disabled:cursor-not-allowed data-disabled:text-fg-muted",
+  );
 </script>
 
 {#snippet itemContent(
@@ -73,7 +81,7 @@
               lang={item.lang}
               hreflang={item.lang}
               aria-current={item.current === true ? "true" : undefined}
-              class={cn(menuItemClass, item.danger === true && "text-danger")}
+              class={cn(itemClass, item.danger === true && "text-danger")}
               >{@render itemContent(item)}</a
             >
           </li>
@@ -83,7 +91,7 @@
               <button
                 type="submit"
                 disabled={item.disabled}
-                class={cn(menuItemClass, item.danger === true && "text-danger")}
+                class={cn(itemClass, item.danger === true && "text-danger")}
                 >{@render itemContent(item)}</button
               >
             </form>
@@ -119,12 +127,12 @@
               onCheckedChange={item.onCheckedChange}
               disabled={item.disabled}
               closeOnSelect={false}
-              class={menuItemClass}
+              class={itemClass}
             >
               {#snippet children({ checked })}{@render itemContent(item, checked)}{/snippet}
             </DropdownMenu.CheckboxItem>
           {:else}
-            {@const tone = cn(menuItemClass, item.danger === true && "text-danger")}
+            {@const tone = cn(itemClass, item.danger === true && "text-danger")}
             <DropdownMenu.Item disabled={item.disabled} onSelect={item.onSelect}>
               {#snippet child({ props })}
                 {#if item.href !== undefined}
