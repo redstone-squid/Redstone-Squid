@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Snippet } from "svelte";
+  import { onMount, type Snippet } from "svelte";
   import { cn } from "@/ui/cn";
   import Disclosure from "@/ui/data/Disclosure.svelte";
   import Skeleton from "@/ui/feedback/Skeleton.svelte";
@@ -48,6 +48,9 @@
   const serverWidth = 640;
   const heights = { sm: 160, md: 240, lg: 320 };
   let measured = $state<number>();
+  // A plot that replaces its loading skeleton fades in; a server-rendered one never does.
+  let hydrated = $state(false);
+  onMount(() => (hydrated = true));
   const hasSize = $derived(measured !== undefined && measured > 0);
 </script>
 
@@ -79,7 +82,11 @@
       role={group ? "group" : "img"}
       aria-labelledby={`${id}-title`}
       aria-describedby={`${id}-description`}
-      class="relative min-w-0 contain-inline-size"
+      class={cn(
+        "relative min-w-0 contain-inline-size",
+        hydrated &&
+          "motion-safe:transition-opacity motion-safe:duration-normal motion-safe:starting:opacity-0",
+      )}
     >
       <!-- eslint-enable svelte/no-inline-styles -->
       <!-- A hidden container measures 0; keep the server width until it has a size. -->

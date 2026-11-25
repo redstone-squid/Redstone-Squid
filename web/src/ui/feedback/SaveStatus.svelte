@@ -4,7 +4,7 @@
   import CloudOff from "@lucide/svelte/icons/cloud-off";
   import Dot from "@lucide/svelte/icons/dot";
   import TriangleAlert from "@lucide/svelte/icons/triangle-alert";
-  import { onDestroy } from "svelte";
+  import { onDestroy, onMount } from "svelte";
   import { cn } from "@/ui/cn";
   import Button from "@/ui/actions/Button.svelte";
   import Timestamp from "@/ui/content/Timestamp.svelte";
@@ -39,6 +39,11 @@
   } satisfies Record<SaveState, { icon: unknown; class: string }>;
   const look = $derived(looks[saveState]);
 
+  // Each new state fades in. The server-rendered one is already styled when the class
+  // arrives, so it never fades.
+  let hydrated = $state(false);
+  onMount(() => (hydrated = true));
+
   const THROTTLE_MS = 5000;
   let announcement = $state("");
   let lastAnnounced = -Infinity;
@@ -59,17 +64,26 @@
 </script>
 
 <div class={cn("flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1 text-sm", className)}>
-  <span class={cn("inline-flex min-w-0 items-center gap-1.5", look.class)}>
-    {#if saveState === "saving"}<Spinner />{:else if look.icon}<look.icon
-        class="size-4 shrink-0"
-        aria-hidden="true"
-      />{/if}
-    <span class={saveState === "error" || saveState === "conflict" ? "text-fg" : "text-fg-muted"}
-      >{labels[saveState]}{#if saveState === "saved" && savedAt}
-        <span class="ms-1">· <Timestamp datetime={savedAt.datetime} label={savedAt.label} /></span
-        >{/if}</span
+  {#key saveState}
+    <span
+      class={cn(
+        "inline-flex min-w-0 items-center gap-1.5",
+        look.class,
+        hydrated &&
+          "motion-safe:transition-opacity motion-safe:duration-normal motion-safe:starting:opacity-0",
+      )}
     >
-  </span>
+      {#if saveState === "saving"}<Spinner />{:else if look.icon}<look.icon
+          class="size-4 shrink-0"
+          aria-hidden="true"
+        />{/if}
+      <span class={saveState === "error" || saveState === "conflict" ? "text-fg" : "text-fg-muted"}
+        >{labels[saveState]}{#if saveState === "saved" && savedAt}
+          <span class="ms-1">· <Timestamp datetime={savedAt.datetime} label={savedAt.label} /></span
+          >{/if}</span
+      >
+    </span>
+  {/key}
   {#if saveState === "error" && onRetry}<Button size="sm" variant="quiet" onclick={onRetry}
       >{labels.retry}</Button
     >{/if}

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { Snippet } from "svelte";
+  import { onMount, type Snippet } from "svelte";
   import { cn } from "@/ui/cn";
   import Skeleton from "@/ui/feedback/Skeleton.svelte";
   import Layout from "@/ui/layout/Layout.svelte";
@@ -35,6 +35,11 @@
     class: className,
   }: Props = $props();
   const busy = $derived(status === "loading" || status === "refreshing");
+
+  // Results that replace skeletons fade in. Server-rendered results are already styled when
+  // the class arrives, so they never fade.
+  let hydrated = $state(false);
+  onMount(() => (hydrated = true));
 
   let skeletons = $state(false);
   $effect(() => {
@@ -76,6 +81,7 @@
     <div
       class={cn(
         "min-w-0 motion-safe:transition-opacity motion-safe:duration-fast",
+        hydrated && "motion-safe:starting:opacity-0",
         status === "refreshing" && "pointer-events-none opacity-60",
       )}
     >

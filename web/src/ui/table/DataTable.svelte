@@ -12,7 +12,7 @@
     tableFeatures,
     type RowData,
   } from "@tanstack/svelte-table";
-  import type { Snippet } from "svelte";
+  import { onMount, type Snippet } from "svelte";
   import { SvelteSet } from "svelte/reactivity";
   import { cn } from "@/ui/cn";
   import Skeleton from "@/ui/feedback/Skeleton.svelte";
@@ -100,6 +100,10 @@
     rowExpandingFeature,
     expandedRowModel: createExpandedRowModel(),
   });
+  // Rows that appear after hydration, opened sub-rows or results replacing skeletons, fade
+  // in. Server-rendered rows are already styled when the class arrives, so they never fade.
+  let hydrated = $state(false);
+  onMount(() => (hydrated = true));
   // Seeded from the URL; a hydrated toggle changes it without a page load.
   // svelte-ignore state_referenced_locally
   const open = new SvelteSet(expansion?.open ?? []);
@@ -276,7 +280,12 @@
               <tr
                 id={`${id}-row-${row.id}`}
                 data-depth={row.depth}
-                class={cn("group/row hover:bg-surface-muted", row.depth > 0 && "bg-canvas")}
+                class={cn(
+                  "group/row hover:bg-surface-muted",
+                  row.depth > 0 && "bg-canvas",
+                  hydrated &&
+                    "motion-safe:transition-opacity motion-safe:duration-normal motion-safe:starting:opacity-0",
+                )}
               >
                 {#each visibleColumns as column, index (column.id)}
                   {#if index === 0}
