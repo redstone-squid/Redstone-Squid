@@ -61,8 +61,11 @@ class FakeDraftRepository:
         self.actors: list[int | None] = []
         self.replays: dict[tuple[UUID, str], AppliedDraftChange] = {}
 
-    async def list_attention(self, *, after: UUID | None, limit: int, now: Instant) -> tuple[StoredDraft, ...]:
+    async def list_attention(self, *, offset: int, limit: int, now: Instant) -> tuple[StoredDraft, ...]:
         return ()
+
+    async def count_attention(self, *, now: Instant) -> int:
+        return 0
 
     async def list_active_for_account(
         self,

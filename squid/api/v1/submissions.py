@@ -15,7 +15,6 @@ from litestar import status_codes as status
 from litestar.di import NamedDependency, Provide
 from litestar.params import (
     FromPath,
-    FromQuery,
     HeaderParameter,
     JSONBody,
     PathParameter,
@@ -27,6 +26,7 @@ from squid.api.contract import ANONYMOUS, DEVICE, MINECRAFT, WEB, WEB_WRITE, cli
 from squid.api.errors import responses
 from squid.api.i18n import locale_for_request
 from squid.api.idempotency import reserve_edit_request, reserve_idempotent_request
+from squid.api.pagination import AfterIdParam, BeforeIdParam, OffsetParam, Page, PageSizeParam, resolve_selector
 from squid.api.private_responses import private_response
 from squid.api.revisions import InvalidRevisionError, expected_revision, revision_etag
 from squid.api.security import Caller, current_caller
@@ -34,11 +34,11 @@ from squid.api.v1.schemas.submissions import (
     DraftChangeRequest,
     DraftChangeResponse,
     DraftCreateRequest,
-    DraftInboxResponse,
     DraftListResponse,
     DraftManifestUpgradeRequest,
     DraftManifestUpgradeResponse,
     DraftPreparationResponse,
+    DraftSummaryResponse,
     FormManifestResponse,
     FormOptionSetResponse,
     StoredDraftResponse,
@@ -48,6 +48,8 @@ from squid.core.actors import ActingContext
 from squid.core.edits.application import EditRunner
 from squid.core.edits.domain import Revision
 from squid.core.errors import AuthenticationError, AuthorizationError, NotFoundError
+from squid.core.pagination import FIRST_PAGE, PageSelector
+from squid.core.pagination import Page as ResultPage
 from squid.core.submissions.application import (
     AppliedDraftUpgrade,
     DraftPreparationSnapshot,
@@ -99,12 +101,8 @@ class SubmissionDraftCommands(Protocol):
     async def list_active(self, *, limit: int = 10, context: ActingContext) -> tuple[StoredDraft, ...]: ...
 
     async def attention_inbox(
-        self,
-        *,
-        context: ActingContext,
-        after: FromQuery[UUID | None] = None,
-        limit: int = 20,
-    ) -> tuple[StoredDraft, ...]: ...
+        self, *, context: ActingContext, offset: int = 0, page_size: int = 20
+    ) -> ResultPage[StoredDraft]: ...
 
     async def get_accessible(self, draft_id: UUID, *, context: ActingContext) -> StoredDraft: ...
 
@@ -144,8 +142,8 @@ class SubmissionFinalizationCommands(Protocol):
     ) -> FinalizationJobSnapshot | None: ...
 
     async def attempts(
-        self, draft_id: UUID, *, context: ActingContext, before: int | None = None, limit: int = 20
-    ) -> tuple[FinalizationJobSnapshot, ...]: ...
+        self, draft_id: UUID, *, context: ActingContext, selector: PageSelector = FIRST_PAGE, page_size: int = 20
+    ) -> ResultPage[FinalizationJobSnapshot]: ...
 
 
 class SubmissionApiServices(Protocol):
@@ -317,11 +315,12 @@ _DRAFT_DELETE_LINKS = {
 async def list_correction_inbox(
     drafts: Drafts,
     context: SubmissionContext,
-    after: FromQuery[UUID | None] = None,
-    limit: Annotated[int, QueryParameter(ge=1, le=100)] = 20,
-) -> DraftInboxResponse:
-    """List drafts needing staff correction, excluding attachment processing waits."""
-    return DraftInboxResponse.from_domain(await drafts.attention_inbox(after=after, limit=limit, context=context))
+    page_size: PageSizeParam = 20,
+    offset: OffsetParam = None,
+) -> Page[DraftSummaryResponse]:
+    """List drafts needing staff correction oldest first, excluding attachment processing waits."""
+    page = await drafts.attention_inbox(offset=offset or 0, page_size=page_size, context=context)
+    return Page[DraftSummaryResponse].from_domain(page, DraftSummaryResponse.from_domain)
 
 
 @get(
@@ -645,12 +644,19 @@ async def list_draft_attempts(
     draft_id: FromPath[UUID],
     finalization: Finalization,
     context: SubmissionContext,
-    before: Annotated[int | None, QueryParameter(ge=1)] = None,
-    limit: Annotated[int, QueryParameter(ge=1, le=100)] = 20,
-) -> list[SubmissionAttemptResponse]:
-    """List retained attempts newest first; use the last attempt number as the next cursor."""
-    snapshots = await finalization.attempts(draft_id, before=before, limit=limit, context=context)
-    return [SubmissionAttemptResponse.from_domain(snapshot) for snapshot in snapshots]
+    page_size: PageSizeParam = 20,
+    offset: OffsetParam = None,
+    after_id: AfterIdParam = None,
+    before_id: BeforeIdParam = None,
+) -> Page[SubmissionAttemptResponse]:
+    """List retained attempts newest first. Attempt numbers are the page anchors."""
+    page = await finalization.attempts(
+        draft_id,
+        selector=resolve_selector(offset=offset, after_id=after_id, before_id=before_id),
+        page_size=page_size,
+        context=context,
+    )
+    return Page[SubmissionAttemptResponse].from_domain(page, SubmissionAttemptResponse.from_domain)
 
 
 @get(

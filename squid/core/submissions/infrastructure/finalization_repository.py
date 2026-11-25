@@ -4,7 +4,7 @@ from collections.abc import Callable, Sequence
 from typing import cast, override
 from uuid import UUID, uuid4
 
-from sqlalchemy import Select, and_, or_, select
+from sqlalchemy import Select, and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
@@ -12,6 +12,7 @@ from squid.core.errors import DataIntegrityError, InvalidStateError, ValidationE
 from squid.core.media.domain.jobs import MediaJobStatus
 from squid.core.media.infrastructure.references import media_for_draft
 from squid.core.media.models import MediaProcessingJobRecord, MediaUploadRecord
+from squid.core.pagination import FIRST_PAGE, PageSelector
 from squid.core.persistence.advisory_locks import AdvisoryLockNamespace, lock_uuid
 from squid.core.schematics.application import SchematicPublication
 from squid.core.schematics.domain.models import SchematicLicense, SchematicVisibility
@@ -70,7 +71,7 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
 
     @override
     async def get(self, draft_id: UUID) -> FinalizationJobSnapshot | None:
-        attempts = await self.list_attempts(draft_id, before=None, limit=1)
+        attempts = await self.list_attempts(draft_id, selector=FIRST_PAGE, limit=1)
         return attempts[0] if attempts else None
 
     @override
@@ -82,13 +83,24 @@ class PostgresFinalizationJobRepository(FinalizationJobRepository):
 
     @override
     async def list_attempts(
-        self, draft_id: UUID, *, before: int | None, limit: int
+        self, draft_id: UUID, *, selector: PageSelector, limit: int
     ) -> tuple[FinalizationJobSnapshot, ...]:
-        statement = _attempts_for_draft(draft_id).order_by(SubmissionFinalizationJob.attempt_number.desc()).limit(limit)
-        if before is not None:
-            statement = statement.where(SubmissionFinalizationJob.attempt_number < before)
-        session = self._session()
-        return tuple(_snapshot(*row) for row in await session.execute(statement))
+        """Read attempts newest first; a `before_id` page is read upward and restored to that order."""
+        number = SubmissionFinalizationJob.attempt_number
+        statement = _attempts_for_draft(draft_id).limit(limit).offset(selector.offset)
+        if selector.before_id is not None:
+            statement = statement.where(number > selector.before_id).order_by(number.asc())
+        else:
+            if selector.after_id is not None:
+                statement = statement.where(number < selector.after_id)
+            statement = statement.order_by(number.desc())
+        rows = tuple(_snapshot(*row) for row in await self._session().execute(statement))
+        return rows[::-1] if selector.before_id is not None else rows
+
+    @override
+    async def count_attempts(self, draft_id: UUID) -> int:
+        statement = select(func.count()).where(SubmissionFinalizationJob.draft_id == draft_id)
+        return await self._session().scalar(statement) or 0
 
     @override
     async def enqueue(

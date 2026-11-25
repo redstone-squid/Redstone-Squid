@@ -597,12 +597,11 @@ async def test_staff_edit_retains_owner_and_records_actual_actor(
     assert [
         draft.snapshot.id
         for draft in await transact(
-            drafts, lambda uow: uow.submission_drafts.list_attention(after=None, limit=1, now=NOW)
+            drafts, lambda uow: uow.submission_drafts.list_attention(offset=0, limit=1, now=NOW)
         )
     ] == [DRAFT_ID]
-    assert (
-        await transact(drafts, lambda uow: uow.submission_drafts.list_attention(after=DRAFT_ID, limit=1, now=NOW)) == ()
-    )
+    assert await transact(drafts, lambda uow: uow.submission_drafts.list_attention(offset=1, limit=1, now=NOW)) == ()
+    assert await transact(drafts, lambda uow: uow.submission_drafts.count_attention(now=NOW)) == 1
     changed = await transact(
         drafts,
         lambda uow: uow.submission_drafts.apply_change(
@@ -618,4 +617,4 @@ async def test_staff_edit_retains_owner_and_records_actual_actor(
     assert changed.draft.snapshot.owner_account_id == account_id
     async with async_session_factory() as session:
         assert await session.scalar(select(SubmissionDraftChange.actor_account_id)) == staff_id
-    assert await transact(drafts, lambda uow: uow.submission_drafts.list_attention(after=None, limit=1, now=NOW)) == ()
+    assert await transact(drafts, lambda uow: uow.submission_drafts.list_attention(offset=0, limit=1, now=NOW)) == ()

@@ -3857,6 +3857,27 @@
             "allowReserved": false
           },
           {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maximum": 10000,
+              "description": "Number of items to skip. Excludes after_id and before_id."
+            },
+            "description": "Number of items to skip. Excludes after_id and before_id.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
             "name": "work_lost",
             "in": "query",
             "schema": {
@@ -13136,37 +13157,41 @@
           "submissions"
         ],
         "summary": "ListCorrectionInbox",
-        "description": "List drafts needing staff correction, excluding attachment processing waits.",
+        "description": "List drafts needing staff correction oldest first, excluding attachment processing waits.",
         "operationId": "submission_correction_inbox",
         "parameters": [
           {
-            "name": "after",
+            "name": "page_size",
             "in": "query",
             "schema": {
-              "oneOf": [
-                {
-                  "type": "string",
-                  "format": "uuid"
-                },
-                {
-                  "type": "null"
-                }
-              ]
+              "type": "integer",
+              "maximum": 50.0,
+              "minimum": 1.0,
+              "description": "Maximum number of items to return.",
+              "default": 20
             },
+            "description": "Maximum number of items to return.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
             "allowReserved": false
           },
           {
-            "name": "limit",
+            "name": "offset",
             "in": "query",
             "schema": {
-              "type": "integer",
-              "maximum": 100.0,
-              "minimum": 1.0,
-              "default": 20
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maximum": 10000,
+              "description": "Number of items to skip. Excludes after_id and before_id."
             },
+            "description": "Number of items to skip. Excludes after_id and before_id.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -13184,7 +13209,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DraftInboxResponse"
+                  "$ref": "#/components/schemas/Page_squid.api.v1.schemas.submissions.DraftSummaryResponse_"
                 }
               }
             }
@@ -14727,7 +14752,7 @@
           "submissions"
         ],
         "summary": "ListDraftAttempts",
-        "description": "List retained attempts newest first; use the last attempt number as the next cursor.",
+        "description": "List retained attempts newest first. Attempt numbers are the page anchors.",
         "operationId": "submission_attempts_list",
         "parameters": [
           {
@@ -14741,7 +14766,23 @@
             "deprecated": false
           },
           {
-            "name": "before",
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "maximum": 50.0,
+              "minimum": 1.0,
+              "description": "Maximum number of items to return.",
+              "default": 20
+            },
+            "description": "Maximum number of items to return.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "offset",
             "in": "query",
             "schema": {
               "oneOf": [
@@ -14752,22 +14793,52 @@
                   "type": "null"
                 }
               ],
-              "minimum": 1
+              "maximum": 10000,
+              "description": "Number of items to skip. Excludes after_id and before_id."
             },
+            "description": "Number of items to skip. Excludes after_id and before_id.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
             "allowReserved": false
           },
           {
-            "name": "limit",
+            "name": "after_id",
             "in": "query",
             "schema": {
-              "type": "integer",
-              "maximum": 100.0,
-              "minimum": 1.0,
-              "default": 20
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "minimum": 1,
+              "description": "Return the items after this identifier in display order. Excludes offset."
             },
+            "description": "Return the items after this identifier in display order. Excludes offset.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "before_id",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "minimum": 1,
+              "description": "Return the items before this identifier in display order. Excludes offset."
+            },
+            "description": "Return the items before this identifier in display order. Excludes offset.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -14785,10 +14856,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/SubmissionAttemptResponse"
-                  },
-                  "type": "array"
+                  "$ref": "#/components/schemas/Page_squid.api.v1.schemas.submissions.SubmissionAttemptResponse_"
                 }
               }
             }
@@ -22146,22 +22214,6 @@
         ],
         "title": "DraftEditResult"
       },
-      "DraftInboxResponse": {
-        "properties": {
-          "drafts": {
-            "items": {
-              "$ref": "#/components/schemas/DraftSummaryResponse"
-            },
-            "type": "array",
-            "maxItems": 100
-          }
-        },
-        "type": "object",
-        "required": [
-          "drafts"
-        ],
-        "title": "DraftInboxResponse"
-      },
       "DraftListResponse": {
         "properties": {
           "drafts": {
@@ -24976,6 +25028,88 @@
           "total"
         ],
         "title": "Page[SchematicSummary]"
+      },
+      "Page_squid.api.v1.schemas.submissions.DraftSummaryResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DraftSummaryResponse"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "next": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prev": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "next",
+          "prev",
+          "total"
+        ],
+        "title": "Page[DraftSummaryResponse]"
+      },
+      "Page_squid.api.v1.schemas.submissions.SubmissionAttemptResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SubmissionAttemptResponse"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "next": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prev": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "next",
+          "prev",
+          "total"
+        ],
+        "title": "Page[SubmissionAttemptResponse]"
       },
       "Page_squid.api.v1.schemas.versions.VersionDetail_": {
         "properties": {

@@ -421,16 +421,6 @@ class DraftListResponse(StrictSchema):
         return cls(drafts=[DraftSummaryResponse.from_domain(draft) for draft in drafts])
 
 
-class DraftInboxResponse(StrictSchema):
-    """Bounded staff correction work; the last draft ID is the next exclusive cursor."""
-
-    drafts: list[DraftSummaryResponse] = Field(max_length=100)
-
-    @classmethod
-    def from_domain(cls, drafts: tuple[StoredDraft, ...]) -> DraftInboxResponse:
-        return cls(drafts=[DraftSummaryResponse.from_domain(draft) for draft in drafts])
-
-
 class DraftChangeResponse(StrictSchema):
     """The state produced by a draft change and whether it was a replay."""
 

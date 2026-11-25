@@ -2999,22 +2999,22 @@ credits-title = Credits
 # squid/bot/diagnostics/screen.py:396
 diagnostics-abandoned-job-note = This job was abandoned; nothing will retry it.
 
-# squid/bot/diagnostics/screen.py:49
+# squid/bot/diagnostics/screen.py:50
 diagnostics-attachment-page-hint = { $section } — page { $page } of { $pages }
 
 # squid/bot/diagnostics/screen.py:337
 diagnostics-clear-forbidden = You are no longer allowed to clear error reports.
 
-# squid/bot/diagnostics/screen.py:57
+# squid/bot/diagnostics/screen.py:58
 diagnostics-controls-not-owner = These error controls belong to someone else.
 
-# squid/bot/diagnostics/screen.py:206
+# squid/bot/diagnostics/screen.py:207
 diagnostics-delete-warning = This permanently deletes reports that have not expired yet.
 
 # squid/core/diagnostics/domain.py:23
 diagnostics-error-report-not-found = Error report not found
 
-# squid/core/diagnostics/application.py:67
+# squid/core/diagnostics/application.py:72
 diagnostics-error-report-retention = Error report retention must be at least one hour.
 
 # squid/bot/diagnostics/screen.py:248
@@ -3023,16 +3023,16 @@ diagnostics-no-recent-errors = Nothing has failed within the retention window.
 # squid/core/diagnostics/domain.py:22
 diagnostics-no-stored-error = No stored error matches that reference.
 
-# squid/bot/diagnostics/screen.py:168
+# squid/bot/diagnostics/screen.py:169
 diagnostics-path-privacy-warning = An error report names internal paths, so it is never posted in a channel.
 
-# squid/bot/diagnostics/screen.py:123
+# squid/bot/diagnostics/screen.py:124
 diagnostics-report-list-stale = The report list has changed. Refresh when you are ready.
 
 # squid/bot/diagnostics/screen.py:404
 diagnostics-shared-reference-note = { $count } reports match this reference; this is the newest.
 
-# squid/bot/diagnostics/screen.py:118
+# squid/bot/diagnostics/screen.py:119
 diagnostics-update-check-failed = Could not check for updates. You can still refresh reports.
 
 # squid/bot/diagnostics/screen.py:403
@@ -3041,16 +3041,16 @@ diagnostics-view-ambiguous = Ambiguous
 # squid/bot/diagnostics/screen.py:293
 diagnostics-view-clear-all = Clear all
 
-# squid/bot/diagnostics/screen.py:204
+# squid/bot/diagnostics/screen.py:205
 diagnostics-view-clear-every-error-report = Clear every error report?
 
-# squid/bot/diagnostics/screen.py:212
+# squid/bot/diagnostics/screen.py:213
 diagnostics-view-delete-reports = Delete reports
 
 # squid/bot/diagnostics/screen.py:266
 diagnostics-view-deleted-stored-error-reports = Deleted { $count } stored error reports.
 
-# squid/bot/diagnostics/screen.py:58
+# squid/bot/diagnostics/screen.py:59
 diagnostics-view-earlier = Earlier
 
 # squid/bot/diagnostics/screen.py:303
@@ -3062,7 +3062,7 @@ diagnostics-view-errors-cleared = Errors cleared
 # squid/bot/diagnostics/screen.py:390
 diagnostics-view-exception = Exception
 
-# squid/bot/diagnostics/screen.py:59
+# squid/bot/diagnostics/screen.py:60
 diagnostics-view-later = Later
 
 # squid/bot/diagnostics/screen.py:278
@@ -3077,10 +3077,10 @@ diagnostics-view-no-traceback-was-recorded = No traceback was recorded.
 # squid/bot/diagnostics/screen.py:247
 diagnostics-view-recent-errors = Recent errors
 
-# squid/bot/diagnostics/screen.py:151
+# squid/bot/diagnostics/screen.py:152
 diagnostics-view-refresh-reports = Refresh reports
 
-# squid/bot/diagnostics/screen.py:48
+# squid/bot/diagnostics/screen.py:49
 diagnostics-view-traceback = Traceback
 
 # squid/bot/diagnostics/screen.py:386
@@ -4507,7 +4507,7 @@ notifications-confirmed-summary = { $build } was approved.
 # squid/bot/notification_text.py:26
 notifications-creator-summary = { $build } by a creator you follow was approved.
 
-# squid/core/notifications/application.py:225
+# squid/core/notifications/application.py:224
 notifications-delivery-claim-limit = delivery claim limit must be between 1 and 100
 
 # squid/bot/notifications_view.py:150
@@ -5177,7 +5177,7 @@ record-search-query-help = Name, keywords, or filters, e.g. kind:door criterion:
 # squid/bot/catalogue/records.py:256
 records-active-version = the active version
 
-# squid/core/records/application/services.py:805, squid/core/records/application/services.py:836
+# squid/core/records/application/services.py:804, squid/core/records/application/services.py:835
 records-candidate-no-typed = Candidate { $build_id } has no typed category facts.
 
 # squid/bot/catalogue/records.py:504
@@ -5213,7 +5213,7 @@ records-exact-heading = Category without a record
 # squid/bot/catalogue/records.py:294
 records-exact-purpose = Create and compute a record category by its exact key, optionally narrowed by restrictions.
 
-# squid/core/records/application/services.py:849
+# squid/core/records/application/services.py:848
 records-fastest-records-unsupported = Fastest records are not supported for { $kind_name }.
 
 # squid/core/records/domain/models.py:137
@@ -5255,7 +5255,7 @@ records-no-titles-need-review = Every active record title uses known terms.
 # squid/core/records/application/published_points.py:75
 records-opening-width-invalid = Opening width must be a positive 32-bit integer.
 
-# squid/core/records/application/services.py:766
+# squid/core/records/application/services.py:765
 records-parameterized-record-restriction = Parameterized record restriction is missing a category value.
 
 # squid/bot/catalogue/records.py:476
@@ -5267,7 +5267,7 @@ records-recompute-definition = Recompute definition
 # squid/bot/catalogue/records.py:197, squid/bot/catalogue/records.py:402, squid/bot/catalogue/records.py:453
 records-recompute-summary = Recomputed { $definitions } definitions; { $resolved } resolved.
 
-# squid/core/records/application/services.py:586
+# squid/core/records/application/services.py:585
 records-record-category-category = Record category { $definition_id } is a { $actual } category, not { $requested }.
 
 # squid/core/records/errors.py:26
@@ -5279,7 +5279,7 @@ records-record-definition-stores = Record definition { $definition_id } stores a
 # squid/core/records/errors.py:13
 records-record-not-found-title = Record not found
 
-# squid/core/records/application/services.py:867
+# squid/core/records/application/services.py:866
 records-records-not-supported = Records are not supported for { $kind_name }.
 
 # squid/bot/catalogue/records.py:508
@@ -6102,7 +6102,7 @@ submissions-application-forms-vertical-upward = Vertical upward
 # squid/core/submissions/application/attachments.py:80
 submissions-attachment-upload-authority = The draft attachment upload authority is no longer available.
 
-# squid/core/submissions/application/finalization.py:240
+# squid/core/submissions/application/finalization.py:243
 submissions-attention-retention-positive = finalization attention retention must be positive
 
 # squid/core/submissions/domain/drafts.py:136
@@ -6144,10 +6144,10 @@ submissions-choice-value-type = choice value types must be text, numeric, boolea
 # squid/core/submissions/application/forms.py:404
 submissions-choose-explicitly-publication = Nothing is published unless you choose Anyone.
 
-# squid/core/submissions/application/finalization.py:476
+# squid/core/submissions/application/finalization.py:483
 submissions-claim-limit = finalization claim limit must be between 1 and { $maximum }
 
-# squid/core/submissions/application/finalization.py:76
+# squid/core/submissions/application/finalization.py:77
 submissions-claimed-finalization-metadata-invalid = claimed submission finalization metadata is invalid
 
 # squid/core/submissions/application/forms.py:530
@@ -6186,7 +6186,7 @@ submissions-draft-answers-exceed = The draft answers exceed the retained data li
 # squid/core/submissions/application/attachments.py:74
 submissions-draft-attachment-upload = Draft attachment upload authority is invalid.
 
-# squid/core/submissions/application/drafts.py:260
+# squid/core/submissions/application/drafts.py:263
 submissions-draft-capacity-positive = draft capacity must be positive
 
 # squid/core/submissions/domain/drafts.py:162
@@ -6198,10 +6198,10 @@ submissions-draft-change-keys = draft change keys must be 8-255 visible ASCII ch
 # squid/core/submissions/domain/drafts.py:151
 submissions-draft-changes-exceed = draft changes cannot exceed { $limit } operations
 
-# squid/core/submissions/application/drafts.py:394
+# squid/core/submissions/application/drafts.py:397
 submissions-draft-discovery-limit = draft discovery limit must be between 1 and { $maximum }
 
-# squid/core/submissions/application/drafts.py:468
+# squid/core/submissions/application/drafts.py:475
 submissions-draft-expiry-limit = draft expiry limit must be between 1 and 1000
 
 # squid/core/submissions/domain/drafts.py:312, squid/core/submissions/domain/drafts.py:320
@@ -6231,7 +6231,7 @@ submissions-draft-operation-required = draft changes require at least one operat
 # squid/core/submissions/errors.py:40
 submissions-draft-owner-required = Only the account that owns this draft can perform this action.
 
-# squid/core/submissions/application/drafts.py:300
+# squid/core/submissions/application/drafts.py:303
 submissions-draft-retention-positive = draft retention must be positive
 
 # squid/core/submissions/errors.py:36
@@ -6273,10 +6273,10 @@ submissions-field-not-string = validated field { $field_id } is not a string
 # squid/core/submissions/domain/forms.py:298
 submissions-field-purpose = field { $field_id } must apply to at least one purpose
 
-# squid/core/submissions/application/finalization.py:287
+# squid/core/submissions/application/finalization.py:290
 submissions-finalization-job-missing = processing draft has no active finalization job
 
-# squid/core/submissions/application/finalization.py:293
+# squid/core/submissions/application/finalization.py:296
 submissions-finalization-result-missing = submitted draft has no retained finalization result
 
 # squid/core/submissions/domain/finalization.py:404
@@ -6351,10 +6351,10 @@ submissions-owner-account-id = owner_account_id must be positive
 # squid/core/submissions/domain/finalization.py:374
 submissions-paper-installation-only = Only Paper submissions may retain an installation ID.
 
-# squid/core/submissions/application/drafts.py:337
+# squid/core/submissions/application/drafts.py:340
 submissions-paper-installation-origin-required = Paper drafts require server-derived installation identity.
 
-# squid/core/submissions/application/drafts.py:106
+# squid/core/submissions/application/drafts.py:107
 submissions-paper-may-retain = Only Paper drafts may retain an installation ID.
 
 # squid/core/submissions/application/forms.py:370
@@ -6393,7 +6393,7 @@ submissions-repeatable-field-use = repeatable field { $field_id } must use strin
 # squid/core/submissions/application/forms.py:323
 submissions-restrictions-tags = Restrictions and tags
 
-# squid/core/submissions/application/finalization.py:457
+# squid/core/submissions/application/finalization.py:464
 submissions-retry-retention-limits = finalization retry and retention limits must be positive
 
 # squid/core/submissions/domain/finalization.py:186
@@ -6429,7 +6429,7 @@ submissions-state-edited = drafts in { $current_status } state cannot be edited
 # squid/core/submissions/domain/finalization.py:148
 submissions-submission-dimensions-positive = submission dimensions must be positive
 
-# squid/core/submissions/application/drafts.py:221
+# squid/core/submissions/application/drafts.py:224
 submissions-submission-form-revisions = submission form revisions must be upgraded one checked-in revision at a time
 
 # squid/core/submissions/domain/finalization.py:368

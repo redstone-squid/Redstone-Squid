@@ -65,7 +65,7 @@ from squid.core.minecraft_auth.errors import InvalidChallengeError, InvalidInsta
 from squid.core.minecraft_auth.models import PaperInstallation, PlayerAuthorizationChallenge
 from squid.core.notifications import NotificationPreferences, NotificationService
 from squid.core.notifications.models import InboxNotification, NotificationSubscription
-from squid.core.pagination import FIRST_PAGE, Page, PageSelector
+from squid.core.pagination import FIRST_PAGE, Page, PageSelector, offset_page
 from squid.core.permissions.application import PermissionService, SubjectRecords
 from squid.core.permissions.application.epoch import PermissionEpochWatcher, WakeListener
 from squid.core.permissions.application.ports import PermissionSubject
@@ -657,9 +657,9 @@ class MockSubmissionDrafts(SubmissionDraftService):
 
     @override
     async def attention_inbox(
-        self, *, context: ActingContext, after: UUID | None = None, limit: int = 20
-    ) -> tuple[StoredDraft, ...]:
-        return ()
+        self, *, context: ActingContext, offset: int = 0, page_size: int = 20
+    ) -> Page[StoredDraft]:
+        return offset_page((), offset=offset, page_size=page_size)
 
     @override
     async def get_accessible(self, draft_id: UUID, *, context: ActingContext) -> StoredDraft:
@@ -688,8 +688,8 @@ class MockSubmissionFinalization(SubmissionFinalizationService):
 
     @override
     async def attempts(
-        self, draft_id: UUID, *, context: ActingContext, before: int | None = None, limit: int = 20
-    ) -> tuple[FinalizationJobSnapshot, ...]:
+        self, draft_id: UUID, *, context: ActingContext, selector: PageSelector = FIRST_PAGE, page_size: int = 20
+    ) -> Page[FinalizationJobSnapshot]:
         raise DraftNotFoundError(draft_id)
 
 

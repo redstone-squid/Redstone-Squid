@@ -37,12 +37,18 @@ class SavedDraftsScreen(sd.Screen):
         if account_id is None:
             return None
         context = ActingContext.for_actor(await request.client.actors.resolve(request))
-        drafts = (
-            await request.client.services.submission_drafts.attention_inbox(limit=10, context=context)
-            if inbox
-            else await request.client.services.submission_drafts.list_active(context=context)
-        )
-        runs = await request.client.services.submission_inference.list_active(inbox=inbox, context=context)
+        services = request.client.services
+        if inbox:
+            # The screen pages locally, so it needs the whole queue rather than the first API page.
+            drafts: list[StoredDraft] = []
+            offset: int | None = 0
+            while offset is not None:
+                page = await services.submission_drafts.attention_inbox(offset=offset, page_size=50, context=context)
+                drafts.extend(page.items)
+                offset = page.next.offset if page.next is not None else None
+        else:
+            drafts = list(await services.submission_drafts.list_active(context=context))
+        runs = await services.submission_inference.list_active(inbox=inbox, context=context)
         nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request]] = [
             primitives.Section(
                 (primitives.Text(_draft_line(draft)),),

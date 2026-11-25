@@ -34,6 +34,7 @@ from squid.api.v1.submissions import (
 from squid.core.accounts.errors import ConsentRequiredError
 from squid.core.actors import ActingContext, Actor, UserActor
 from squid.core.errors import AuthenticationError
+from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page, offset_page
 from squid.core.submissions.application import (
     AppliedDraftChange,
     AppliedDraftUpgrade,
@@ -152,13 +153,9 @@ class FakeDrafts(SubmissionDraftCommands):
 
     @override
     async def attention_inbox(
-        self,
-        *,
-        context: ActingContext,
-        after: UUID | None = None,
-        limit: int = 20,
-    ) -> tuple[StoredDraft, ...]:
-        return ()
+        self, *, context: ActingContext, offset: int = 0, page_size: int = 20
+    ) -> Page[StoredDraft]:
+        return offset_page((), offset=offset, page_size=page_size)
 
     @override
     async def list_active(self, *, limit: int = 10, context: ActingContext) -> tuple[StoredDraft, ...]:
@@ -262,11 +259,18 @@ class FakeFinalization(SubmissionFinalizationCommands):
 
     @override
     async def attempts(
-        self, draft_id: UUID, *, context: ActingContext, before: int | None = None, limit: int = 20
-    ) -> tuple[FinalizationJobSnapshot, ...]:
+        self, draft_id: UUID, *, context: ActingContext, selector: PageSelector = FIRST_PAGE, page_size: int = 20
+    ) -> Page[FinalizationJobSnapshot]:
         assert context.effective.linked_account_id == ACCOUNT_ID
         assert draft_id == self.snapshot.draft_id
-        return (self.snapshot,)[:limit] if before is None or before > self.snapshot.attempt_number else ()
+        newer = selector.after_id is None or selector.after_id > self.snapshot.attempt_number
+        return keyset_page(
+            (self.snapshot,) if newer else (),
+            selector=selector,
+            page_size=page_size,
+            total=1,
+            id_of=lambda attempt: attempt.attempt_number,
+        )
 
 
 def test_manifest_dto_is_stable_strict_and_json_safe() -> None:
@@ -426,8 +430,8 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
         submission_response = await client.get(f"/submissions/drafts/{draft_id}/status")
         history_response = await client.get(f"/submissions/drafts/{draft_id}/attempts")
         detail_response = await client.get(f"/submissions/drafts/{draft_id}/attempts/{finalization.snapshot.job_id}")
-        empty_history = await client.get(f"/submissions/drafts/{draft_id}/attempts?before=1")
-        invalid_limit = await client.get(f"/submissions/drafts/{draft_id}/attempts?limit=101")
+        empty_history = await client.get(f"/submissions/drafts/{draft_id}/attempts?after_id=1")
+        invalid_limit = await client.get(f"/submissions/drafts/{draft_id}/attempts?page_size=51")
         delete_response = await client.delete(f"/submissions/drafts/{draft_id}")
     assert manifest_response.status_code == 200
     assert manifest_response.json()["schema_id"] == "build_submission.v1"
@@ -483,9 +487,9 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
         "build_id": None,
     }
     assert submission_response.json() == submit_response.json()
-    assert history_response.json() == [submit_response.json()]
+    assert history_response.json()["items"] == [submit_response.json()]
     assert detail_response.json() == submit_response.json()
-    assert empty_history.json() == []
+    assert empty_history.json()["items"] == []
     assert invalid_limit.status_code == 422
     assert finalization.submit_calls == [(UUID(draft_id), UserActor(account_id=ACCOUNT_ID), "en")]
     assert finalization.status_calls == [(UUID(draft_id), UserActor(account_id=ACCOUNT_ID))]

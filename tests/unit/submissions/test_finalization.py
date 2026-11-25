@@ -10,6 +10,7 @@ from whenever import Instant
 
 from squid.core.actors import ActingContext, UserActor, WorkerActor
 from squid.core.errors import DataIntegrityError, JSONValue
+from squid.core.pagination import FIRST_PAGE, PageSelector
 from squid.core.permissions.application.ports import PermissionRepository
 from squid.core.sponsors import PublicSponsor
 from squid.core.submissions.application import (
@@ -70,8 +71,11 @@ class FakeDraftRepository:
     def __init__(self, draft: StoredDraft) -> None:
         self.draft = draft
 
-    async def list_attention(self, *, after: UUID | None, limit: int, now: Instant) -> tuple[StoredDraft, ...]:
+    async def list_attention(self, *, offset: int, limit: int, now: Instant) -> tuple[StoredDraft, ...]:
         return ()
+
+    async def count_attention(self, *, now: Instant) -> int:
+        return 0
 
     async def list_active_for_account(
         self,
@@ -182,12 +186,15 @@ class FakeFinalizationJobs:
         return snapshot if snapshot is not None and snapshot.job_id == attempt_id else None
 
     async def list_attempts(
-        self, draft_id: UUID, *, before: int | None, limit: int
+        self, draft_id: UUID, *, selector: PageSelector, limit: int
     ) -> tuple[FinalizationJobSnapshot, ...]:
         snapshot = await self.get(draft_id)
-        if snapshot is None or (before is not None and snapshot.attempt_number >= before):
+        if snapshot is None or selector != FIRST_PAGE:
             return ()
         return (snapshot,)[:limit]
+
+    async def count_attempts(self, draft_id: UUID) -> int:
+        return 0 if await self.get(draft_id) is None else 1
 
     async def enqueue(
         self,
@@ -599,9 +606,8 @@ async def test_status_rechecks_draft_ownership_before_returning_job() -> None:
         await service.attempt(DRAFT_ID, JOB_ID, context=ActingContext.for_actor(UserActor(account_id=7)))
         == jobs.snapshot
     )
-    assert await service.attempts(DRAFT_ID, context=ActingContext.for_actor(UserActor(account_id=7))) == (
-        jobs.snapshot,
-    )
+    page = await service.attempts(DRAFT_ID, context=ActingContext.for_actor(UserActor(account_id=7)))
+    assert page.items == (jobs.snapshot,)
 
 
 async def _payload() -> NormalizedSubmission:

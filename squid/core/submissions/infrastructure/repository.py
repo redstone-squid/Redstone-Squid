@@ -3,11 +3,11 @@
 import json
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import asdict
-from typing import cast, override
+from typing import Any, cast, override
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, JsonValue, TypeAdapter
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import Select, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
@@ -62,6 +62,15 @@ class _FieldOperationJson(BaseModel):
     value: JsonValue = None
 
 
+def _needing_attention[S: Select[Any]](statement: S, now: Instant) -> S:
+    """Keep unexpired drafts waiting on staff, excluding those waiting on attachment processing."""
+    return statement.where(
+        SubmissionDraft.status == DraftStatus.NEEDS_ATTENTION,
+        SubmissionDraft.preparation_retry_at.is_(None),
+        SubmissionDraft.expires_at > now,
+    )
+
+
 class PostgresDraftRepository(DraftRepository):
     """Serialize draft edits and retain accepted changes for replay detection.
 
@@ -73,21 +82,19 @@ class PostgresDraftRepository(DraftRepository):
         self._session = session
 
     @override
-    async def list_attention(self, *, after: UUID | None, limit: int, now: Instant) -> tuple[StoredDraft, ...]:
+    async def list_attention(self, *, offset: int, limit: int, now: Instant) -> tuple[StoredDraft, ...]:
         statement = (
-            select(SubmissionDraft)
-            .where(
-                SubmissionDraft.status == DraftStatus.NEEDS_ATTENTION,
-                SubmissionDraft.preparation_retry_at.is_(None),
-                SubmissionDraft.expires_at > now,
-            )
-            .order_by(SubmissionDraft.id)
+            _needing_attention(select(SubmissionDraft), now)
+            .order_by(SubmissionDraft.created_at, SubmissionDraft.id)
+            .offset(offset)
             .limit(limit)
         )
-        if after is not None:
-            statement = statement.where(SubmissionDraft.id > after)
-        session = self._session()
-        return tuple(_to_stored(model) for model in await session.scalars(statement))
+        return tuple(_to_stored(model) for model in await self._session().scalars(statement))
+
+    @override
+    async def count_attention(self, *, now: Instant) -> int:
+        statement = _needing_attention(select(func.count()).select_from(SubmissionDraft), now)
+        return await self._session().scalar(statement) or 0
 
     @override
     async def list_active_for_account(

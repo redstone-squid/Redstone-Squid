@@ -774,13 +774,6 @@ export type DraftEditResult = {
 };
 
 /**
- * DraftInboxResponse
- */
-export type DraftInboxResponse = {
-    drafts: Array<DraftSummaryResponse>;
-};
-
-/**
  * DraftListResponse
  */
 export type DraftListResponse = {
@@ -1584,6 +1577,26 @@ export type PageSquidApiV1SchemasDiagnosticsErrorReportSummary = {
  */
 export type PageSquidApiV1SchemasSchematicsSchematicSummary = {
     items: Array<SchematicSummary>;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+};
+
+/**
+ * Page[DraftSummaryResponse]
+ */
+export type PageSquidApiV1SchemasSubmissionsDraftSummaryResponse = {
+    items: Array<DraftSummaryResponse>;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+};
+
+/**
+ * Page[SubmissionAttemptResponse]
+ */
+export type PageSquidApiV1SchemasSubmissionsSubmissionAttemptResponse = {
+    items: Array<SubmissionAttemptResponse>;
     total: number;
     next: PageAnchor | null;
     prev: PageAnchor | null;
@@ -4372,6 +4385,10 @@ export type DiagnosticsErrorsListData = {
          * Maximum number of items to return.
          */
         page_size?: number;
+        /**
+         * Number of items to skip. Excludes after_id and before_id.
+         */
+        offset?: number | null;
         /**
          * Return only failures that permanently abandoned work, such as a dead-lettered job.
          */
@@ -7280,8 +7297,14 @@ export type SubmissionCorrectionInboxData = {
     body?: never;
     path?: never;
     query?: {
-        after?: string | null;
-        limit?: number;
+        /**
+         * Maximum number of items to return.
+         */
+        page_size?: number;
+        /**
+         * Number of items to skip. Excludes after_id and before_id.
+         */
+        offset?: number | null;
     };
     url: '/v1/submissions/inbox';
 };
@@ -7315,7 +7338,7 @@ export type SubmissionCorrectionInboxResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: DraftInboxResponse;
+    200: PageSquidApiV1SchemasSubmissionsDraftSummaryResponse;
 };
 
 export type SubmissionCorrectionInboxResponse = SubmissionCorrectionInboxResponses[keyof SubmissionCorrectionInboxResponses];
@@ -7763,8 +7786,22 @@ export type SubmissionAttemptsListData = {
         draft_id: string;
     };
     query?: {
-        before?: number | null;
-        limit?: number;
+        /**
+         * Maximum number of items to return.
+         */
+        page_size?: number;
+        /**
+         * Number of items to skip. Excludes after_id and before_id.
+         */
+        offset?: number | null;
+        /**
+         * Return the items after this identifier in display order. Excludes offset.
+         */
+        after_id?: number | null;
+        /**
+         * Return the items before this identifier in display order. Excludes offset.
+         */
+        before_id?: number | null;
     };
     url: '/v1/submissions/drafts/{draft_id}/attempts';
 };
@@ -7806,7 +7843,7 @@ export type SubmissionAttemptsListResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: Array<SubmissionAttemptResponse>;
+    200: PageSquidApiV1SchemasSubmissionsSubmissionAttemptResponse;
 };
 
 export type SubmissionAttemptsListResponse = SubmissionAttemptsListResponses[keyof SubmissionAttemptsListResponses];

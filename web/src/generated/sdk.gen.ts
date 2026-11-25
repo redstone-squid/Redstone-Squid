@@ -1417,7 +1417,7 @@ export const browserImpersonationGet = <ThrowOnError extends boolean = false>(op
 /**
  * ListCorrectionInbox
  *
- * List drafts needing staff correction, excluding attachment processing waits.
+ * List drafts needing staff correction oldest first, excluding attachment processing waits.
  */
 export const submissionCorrectionInbox = <ThrowOnError extends boolean = false>(options?: Options<SubmissionCorrectionInboxData, ThrowOnError>): RequestResult<SubmissionCorrectionInboxResponses, SubmissionCorrectionInboxErrors, ThrowOnError> => (options?.client ?? client).get<SubmissionCorrectionInboxResponses, SubmissionCorrectionInboxErrors, ThrowOnError>({
     security: [
@@ -1643,7 +1643,7 @@ export const submissionDraftManifestUpgrade = <ThrowOnError extends boolean = fa
 /**
  * ListDraftAttempts
  *
- * List retained attempts newest first; use the last attempt number as the next cursor.
+ * List retained attempts newest first. Attempt numbers are the page anchors.
  */
 export const submissionAttemptsList = <ThrowOnError extends boolean = false>(options: Options<SubmissionAttemptsListData, ThrowOnError>): RequestResult<SubmissionAttemptsListResponses, SubmissionAttemptsListErrors, ThrowOnError> => (options.client ?? client).get<SubmissionAttemptsListResponses, SubmissionAttemptsListErrors, ThrowOnError>({
     security: [
