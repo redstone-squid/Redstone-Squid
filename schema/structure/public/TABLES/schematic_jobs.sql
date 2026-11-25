@@ -41,3 +41,5 @@ CREATE INDEX schematic_jobs_expiry_idx ON public.schematic_jobs USING btree (exp
 
 CREATE INDEX schematic_jobs_ready_idx ON public.schematic_jobs USING btree (available_at) WHERE ((completed_at IS NULL) AND (dead_at IS NULL));
 
+CREATE TRIGGER schematic_jobs_work_activity AFTER INSERT OR DELETE OR UPDATE ON public.schematic_jobs FOR EACH ROW EXECUTE FUNCTION public.record_work_activity('queue', 'id');
+

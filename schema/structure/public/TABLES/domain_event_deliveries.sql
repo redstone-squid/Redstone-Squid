@@ -18,6 +18,8 @@ ALTER TABLE ONLY public.domain_event_deliveries
 
 CREATE INDEX domain_event_deliveries_ready_idx ON public.domain_event_deliveries USING btree (available_at) WHERE ((claimed_at IS NULL) AND (dead_at IS NULL));
 
+CREATE TRIGGER domain_event_deliveries_work_activity AFTER INSERT OR DELETE OR UPDATE ON public.domain_event_deliveries FOR EACH ROW EXECUTE FUNCTION public.record_work_activity('queue', 'event_id', 'consumer');
+
 ALTER TABLE ONLY public.domain_event_deliveries
     ADD CONSTRAINT domain_event_deliveries_consumer_fkey FOREIGN KEY (consumer) REFERENCES public.domain_event_consumers(name) ON DELETE CASCADE;
 

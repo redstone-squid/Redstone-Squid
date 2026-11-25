@@ -1046,6 +1046,63 @@ $$;
 
 
 --
+-- Name: record_work_activity(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.record_work_activity() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $_$
+DECLARE
+    attribution jsonb := convert_from(decode(nullif(current_setting('squid.work_attribution', true), ''), 'base64'), 'UTF8')::jsonb;
+    item jsonb;
+    keys text;
+    acquired_claim text;
+    transition text := lower(TG_OP);
+BEGIN
+    -- Only project configured key columns. Job rows can contain large private payloads.
+    SELECT string_agg(format('($1).%I AS %I', k, k), ', ')
+    INTO keys FROM unnest(TG_ARGV[1:TG_NARGS - 1]) k;
+
+    IF TG_OP = 'DELETE' THEN
+        EXECUTE format('SELECT to_jsonb(r) FROM (SELECT %s) r', keys) INTO item USING OLD;
+    ELSE
+        EXECUTE format('SELECT to_jsonb(r) FROM (SELECT %s) r', keys) INTO item USING NEW;
+        IF TG_ARGV[0] = 'preparation' THEN
+            IF OLD.preparation_retry_at IS NULL THEN
+                transition := 'insert';
+            ELSIF NEW.preparation_retry_at IS NULL THEN
+                transition := 'delete';
+            ELSIF NEW.preparation_attempt IS DISTINCT FROM OLD.preparation_attempt AND NEW.preparation_attempt IS NOT NULL THEN
+                acquired_claim := encode(sha256(uuid_send(NEW.preparation_attempt)), 'hex');
+                transition := 'claim';
+            END IF;
+        ELSIF TG_ARGV[0] = 'queue' THEN
+            IF NEW.claim_token IS NOT NULL THEN
+                IF TG_OP = 'UPDATE' AND NEW.claim_token IS NOT DISTINCT FROM OLD.claim_token THEN
+                    -- Lease renewal has the same executor and cause as its acquisition.
+                    RETURN NULL;
+                END IF;
+                acquired_claim := encode(sha256(uuid_send(NEW.claim_token)), 'hex');
+                IF TG_OP = 'UPDATE' THEN
+                    transition := 'claim';
+                END IF;
+            END IF;
+        END IF;
+    END IF;
+
+    INSERT INTO public.work_activity
+        (relation, item, transition, acquired_claim, parent_claim, invocation_id,
+         operator, effective, credential_id, impersonation_session_id, impersonation_use_id)
+    VALUES (TG_TABLE_NAME, item, transition, acquired_claim, attribution->>'parent_claim',
+            (attribution->>'invocation_id')::uuid, attribution->>'operator', attribution->>'effective',
+            attribution->>'credential_id', (attribution->>'impersonation_session_id')::uuid,
+            (attribution->>'impersonation_use_id')::uuid);
+    RETURN NULL;
+END;
+$_$;
+
+
+--
 -- Name: reject_build_history_mutation(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -1127,6 +1184,67 @@ END
 $$;
 
 
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+--
+-- Name: work_activity; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.work_activity (
+    id bigint NOT NULL,
+    occurred_at timestamp with time zone DEFAULT clock_timestamp() NOT NULL,
+    relation text NOT NULL,
+    item jsonb NOT NULL,
+    transition text NOT NULL,
+    acquired_claim text,
+    parent_claim text,
+    invocation_id uuid,
+    operator text,
+    effective text,
+    credential_id text,
+    impersonation_session_id uuid,
+    impersonation_use_id uuid
+);
+
+
+--
+-- Name: TABLE work_activity; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.work_activity IS 'Committed queue transitions and event publications with their executing invocation.';
+
+
+--
+-- Name: trace_work_activity(bigint); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.trace_work_activity(activity_id bigint) RETURNS SETOF public.work_activity
+    LANGUAGE sql STABLE
+    AS $$
+    WITH RECURSIVE ancestry(id) AS (
+        SELECT a.id FROM public.work_activity a WHERE a.id = activity_id
+        UNION
+        SELECT parent.id
+        FROM ancestry
+        JOIN public.work_activity a ON a.id = ancestry.id
+        CROSS JOIN LATERAL (
+            -- Each delivery can produce further queues or events in another process.
+            SELECT lease.id FROM public.work_activity lease
+            WHERE lease.acquired_claim = a.parent_claim AND lease.id < a.id
+            UNION ALL
+            -- A coalesced queue item may have several producers. Stop at this lifetime's insert.
+            (SELECT prev.id FROM public.work_activity prev
+             WHERE a.transition <> 'insert' AND prev.relation = a.relation AND prev.item = a.item
+               AND prev.id < a.id AND prev.transition <> 'delete'
+             ORDER BY prev.id DESC LIMIT 1)
+        ) parent
+    )
+    SELECT a.* FROM ancestry JOIN public.work_activity a USING (id) ORDER BY a.id
+    $$;
+
+
 --
 -- Name: upsert_discord_sync_request(text, text, text); Type: FUNCTION; Schema: public; Owner: -
 --
@@ -1182,10 +1300,6 @@ BEGIN
 END;
 $$;
 
-
-SET default_tablespace = '';
-
-SET default_table_access_method = heap;
 
 --
 -- Name: account_identities; Type: TABLE; Schema: public; Owner: -
@@ -5324,6 +5438,7 @@ CREATE TABLE public.submission_drafts (
     source_messages jsonb DEFAULT '[]'::jsonb NOT NULL,
     inference_run_id uuid,
     door_expansion jsonb,
+    preparation_attempt uuid,
     CONSTRAINT submission_drafts_expansion_check CHECK (((door_expansion IS NULL) OR (((category = 'door'::text) AND (jsonb_typeof(door_expansion) = 'object'::text) AND ((door_expansion -> 'schema_version'::text) = '1'::jsonb)) IS TRUE))),
     CONSTRAINT submission_drafts_expiry_after_creation CHECK ((expires_at > created_at)),
     CONSTRAINT submission_drafts_inference_origin_check CHECK (((NOT inferred) OR (origin = 'discord'::text))),
@@ -6238,6 +6353,20 @@ CREATE TABLE public.web_sessions (
 --
 
 COMMENT ON TABLE public.web_sessions IS 'A revocable opaque browser session.';
+
+
+--
+-- Name: work_activity_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.work_activity ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.work_activity_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
 
 
 --
@@ -7799,6 +7928,14 @@ ALTER TABLE ONLY public.web_sessions
 
 
 --
+-- Name: work_activity work_activity_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.work_activity
+    ADD CONSTRAINT work_activity_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: account_identities_account_provider_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -9066,6 +9203,27 @@ CREATE INDEX web_sessions_active_idx ON public.web_sessions USING btree (expires
 
 
 --
+-- Name: work_activity_claim_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX work_activity_claim_idx ON public.work_activity USING btree (acquired_claim) WHERE (acquired_claim IS NOT NULL);
+
+
+--
+-- Name: work_activity_invocation_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX work_activity_invocation_idx ON public.work_activity USING btree (invocation_id);
+
+
+--
+-- Name: work_activity_item_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX work_activity_item_idx ON public.work_activity USING btree (relation, item, id);
+
+
+--
 -- Name: account_identities account_identities_enqueue_credited_builds; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -9105,6 +9263,13 @@ CREATE CONSTRAINT TRIGGER build_edit_finalize AFTER INSERT ON public.build_edit_
 --
 
 CREATE TRIGGER build_edit_history_immutable BEFORE DELETE OR UPDATE OR TRUNCATE ON public.build_edit_history FOR EACH STATEMENT EXECUTE FUNCTION public.reject_build_history_mutation();
+
+
+--
+-- Name: build_edit_history build_edit_history_work_activity; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER build_edit_history_work_activity AFTER INSERT ON public.build_edit_history FOR EACH ROW EXECUTE FUNCTION public.record_work_activity('fact', 'id');
 
 
 --
@@ -9290,6 +9455,34 @@ CREATE CONSTRAINT TRIGGER delete_log_vote_sessions_kind_subtype_check AFTER INSE
 
 
 --
+-- Name: discord_sync_queue discord_sync_queue_work_activity; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER discord_sync_queue_work_activity AFTER INSERT OR DELETE OR UPDATE ON public.discord_sync_queue FOR EACH ROW EXECUTE FUNCTION public.record_work_activity('queue', 'id');
+
+
+--
+-- Name: domain_event_deliveries domain_event_deliveries_work_activity; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER domain_event_deliveries_work_activity AFTER INSERT OR DELETE OR UPDATE ON public.domain_event_deliveries FOR EACH ROW EXECUTE FUNCTION public.record_work_activity('queue', 'event_id', 'consumer');
+
+
+--
+-- Name: domain_events domain_events_work_activity; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER domain_events_work_activity AFTER INSERT ON public.domain_events FOR EACH ROW EXECUTE FUNCTION public.record_work_activity('fact', 'id');
+
+
+--
+-- Name: door_range_recompute_queue door_range_recompute_queue_work_activity; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER door_range_recompute_queue_work_activity AFTER INSERT OR DELETE OR UPDATE ON public.door_range_recompute_queue FOR EACH ROW EXECUTE FUNCTION public.record_work_activity('queue', 'query_id');
+
+
+--
 -- Name: door_range_snapshots door_range_snapshots_immutable; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -9329,6 +9522,13 @@ CREATE TRIGGER doors_enqueue_build_change AFTER INSERT OR DELETE OR UPDATE ON pu
 --
 
 CREATE TRIGGER doors_reject_truncate BEFORE TRUNCATE ON public.doors FOR EACH STATEMENT EXECUTE FUNCTION public.capture_build_edit_trigger();
+
+
+--
+-- Name: edit_operations edit_operations_work_activity; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER edit_operations_work_activity AFTER INSERT ON public.edit_operations FOR EACH ROW EXECUTE FUNCTION public.record_work_activity('fact', 'id');
 
 
 --
@@ -9395,6 +9595,13 @@ CREATE CONSTRAINT TRIGGER generic_vote_sessions_kind_subtype_check AFTER INSERT 
 
 
 --
+-- Name: media_normalization_jobs media_normalization_jobs_work_activity; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER media_normalization_jobs_work_activity AFTER INSERT OR DELETE OR UPDATE ON public.media_normalization_jobs FOR EACH ROW EXECUTE FUNCTION public.record_work_activity('queue', 'upload_id');
+
+
+--
 -- Name: messages messages_enqueue_build_source_preview_sync; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -9406,6 +9613,13 @@ CREATE TRIGGER messages_enqueue_build_source_preview_sync AFTER UPDATE OF conten
 --
 
 CREATE TRIGGER messages_enqueue_starboard_sync AFTER UPDATE OF deleted_at ON public.messages FOR EACH ROW WHEN ((old.deleted_at IS DISTINCT FROM new.deleted_at)) EXECUTE FUNCTION public.enqueue_starboard_sync();
+
+
+--
+-- Name: notification_deliveries notification_deliveries_work_activity; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER notification_deliveries_work_activity AFTER INSERT OR DELETE OR UPDATE ON public.notification_deliveries FOR EACH ROW EXECUTE FUNCTION public.record_work_activity('queue', 'id');
 
 
 --
@@ -9486,6 +9700,41 @@ CREATE TRIGGER record_recompute_queue_enqueue_ranges AFTER INSERT OR UPDATE OF e
 
 
 --
+-- Name: record_recompute_queue record_recompute_queue_work_activity; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER record_recompute_queue_work_activity AFTER INSERT OR DELETE OR UPDATE ON public.record_recompute_queue FOR EACH ROW EXECUTE FUNCTION public.record_work_activity('queue', 'id');
+
+
+--
+-- Name: schematic_jobs schematic_jobs_work_activity; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER schematic_jobs_work_activity AFTER INSERT OR DELETE OR UPDATE ON public.schematic_jobs FOR EACH ROW EXECUTE FUNCTION public.record_work_activity('queue', 'id');
+
+
+--
+-- Name: schematic_render_queue schematic_render_queue_work_activity; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER schematic_render_queue_work_activity AFTER INSERT OR DELETE OR UPDATE ON public.schematic_render_queue FOR EACH ROW EXECUTE FUNCTION public.record_work_activity('queue', 'build_id');
+
+
+--
+-- Name: search_embedding_queue search_embedding_queue_work_activity; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER search_embedding_queue_work_activity AFTER INSERT OR DELETE OR UPDATE ON public.search_embedding_queue FOR EACH ROW EXECUTE FUNCTION public.record_work_activity('queue', 'document_id');
+
+
+--
+-- Name: search_projection_queue search_projection_queue_work_activity; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER search_projection_queue_work_activity AFTER INSERT OR DELETE OR UPDATE ON public.search_projection_queue FOR EACH ROW EXECUTE FUNCTION public.record_work_activity('queue', 'id');
+
+
+--
 -- Name: starboard_entries starboard_entries_enqueue_discord_sync; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -9507,10 +9756,31 @@ CREATE TRIGGER submission_drafts_enqueue_status AFTER INSERT OR DELETE OR UPDATE
 
 
 --
+-- Name: submission_drafts submission_drafts_work_activity; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER submission_drafts_work_activity AFTER UPDATE OF preparation_retry_at, preparation_attempt ON public.submission_drafts FOR EACH ROW WHEN (((old.preparation_retry_at IS NOT NULL) OR (new.preparation_retry_at IS NOT NULL))) EXECUTE FUNCTION public.record_work_activity('preparation', 'id');
+
+
+--
 -- Name: submission_finalization_inputs submission_finalization_inputs_immutable; Type: TRIGGER; Schema: public; Owner: -
 --
 
 CREATE TRIGGER submission_finalization_inputs_immutable BEFORE UPDATE ON public.submission_finalization_inputs FOR EACH ROW EXECUTE FUNCTION public.reject_submission_finalization_input_update();
+
+
+--
+-- Name: submission_finalization_jobs submission_finalization_jobs_work_activity; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER submission_finalization_jobs_work_activity AFTER INSERT OR DELETE OR UPDATE ON public.submission_finalization_jobs FOR EACH ROW EXECUTE FUNCTION public.record_work_activity('queue', 'id');
+
+
+--
+-- Name: submission_inference_runs submission_inference_runs_work_activity; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER submission_inference_runs_work_activity AFTER INSERT OR DELETE OR UPDATE ON public.submission_inference_runs FOR EACH ROW EXECUTE FUNCTION public.record_work_activity('queue', 'id');
 
 
 --

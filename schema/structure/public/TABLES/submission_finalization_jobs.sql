@@ -44,6 +44,8 @@ CREATE UNIQUE INDEX submission_finalization_jobs_one_active_attempt ON public.su
 
 CREATE INDEX submission_finalization_jobs_ready_idx ON public.submission_finalization_jobs USING btree (available_at) WHERE (status = ANY (ARRAY['pending'::text, 'claimed'::text]));
 
+CREATE TRIGGER submission_finalization_jobs_work_activity AFTER INSERT OR DELETE OR UPDATE ON public.submission_finalization_jobs FOR EACH ROW EXECUTE FUNCTION public.record_work_activity('queue', 'id');
+
 ALTER TABLE ONLY public.submission_finalization_jobs
     ADD CONSTRAINT submission_finalization_jobs_draft_id_fkey FOREIGN KEY (draft_id) REFERENCES public.submission_drafts(id) ON DELETE CASCADE;
 

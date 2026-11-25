@@ -24,6 +24,8 @@ CREATE INDEX media_normalization_jobs_ready_idx ON public.media_normalization_jo
 
 CREATE INDEX media_normalization_jobs_terminal_idx ON public.media_normalization_jobs USING btree (upload_id) WHERE (status = ANY (ARRAY['completed'::text, 'dead'::text, 'discarded'::text]));
 
+CREATE TRIGGER media_normalization_jobs_work_activity AFTER INSERT OR DELETE OR UPDATE ON public.media_normalization_jobs FOR EACH ROW EXECUTE FUNCTION public.record_work_activity('queue', 'upload_id');
+
 ALTER TABLE ONLY public.media_normalization_jobs
     ADD CONSTRAINT media_normalization_jobs_upload_id_fkey FOREIGN KEY (upload_id) REFERENCES public.media_uploads(id) ON DELETE CASCADE;
 

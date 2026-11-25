@@ -16,3 +16,5 @@ ALTER TABLE ONLY public.edit_operations
 
 CREATE INDEX edit_operations_expiry_idx ON public.edit_operations USING btree (expires_at);
 
+CREATE TRIGGER edit_operations_work_activity AFTER INSERT ON public.edit_operations FOR EACH ROW EXECUTE FUNCTION public.record_work_activity('fact', 'id');
+

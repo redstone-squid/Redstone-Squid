@@ -30,6 +30,8 @@ CREATE INDEX build_edit_history_timeline_idx ON public.build_edit_history USING 
 
 CREATE TRIGGER build_edit_history_immutable BEFORE DELETE OR UPDATE OR TRUNCATE ON public.build_edit_history FOR EACH STATEMENT EXECUTE FUNCTION public.reject_build_history_mutation();
 
+CREATE TRIGGER build_edit_history_work_activity AFTER INSERT ON public.build_edit_history FOR EACH ROW EXECUTE FUNCTION public.record_work_activity('fact', 'id');
+
 ALTER TABLE ONLY public.build_edit_history
     ADD CONSTRAINT build_history_after_fkey FOREIGN KEY (build_id, after_state_id) REFERENCES public.build_history_states(build_id, id);
 

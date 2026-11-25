@@ -19,6 +19,8 @@ CREATE INDEX ix_submission_inference_runs_expires_at ON public.submission_infere
 
 CREATE INDEX ix_submission_inference_runs_owner_account_id ON public.submission_inference_runs USING btree (owner_account_id);
 
+CREATE TRIGGER submission_inference_runs_work_activity AFTER INSERT OR DELETE OR UPDATE ON public.submission_inference_runs FOR EACH ROW EXECUTE FUNCTION public.record_work_activity('queue', 'id');
+
 CREATE TRIGGER submission_runs_enqueue_status AFTER INSERT OR DELETE OR UPDATE ON public.submission_inference_runs FOR EACH ROW EXECUTE FUNCTION public.enqueue_submission_status();
 
 ALTER TABLE ONLY public.submission_inference_runs

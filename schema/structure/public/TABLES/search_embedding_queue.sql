@@ -23,6 +23,8 @@ ALTER TABLE ONLY public.search_embedding_queue
 
 CREATE INDEX search_embedding_queue_ready_idx ON public.search_embedding_queue USING btree (available_at) WHERE ((claimed_at IS NULL) AND (dead_at IS NULL));
 
+CREATE TRIGGER search_embedding_queue_work_activity AFTER INSERT OR DELETE OR UPDATE ON public.search_embedding_queue FOR EACH ROW EXECUTE FUNCTION public.record_work_activity('queue', 'document_id');
+
 ALTER TABLE ONLY public.search_embedding_queue
     ADD CONSTRAINT search_embedding_queue_document_id_fkey FOREIGN KEY (document_id) REFERENCES public.search_documents(id) ON DELETE CASCADE;
 

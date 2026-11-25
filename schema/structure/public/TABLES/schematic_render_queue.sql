@@ -22,6 +22,8 @@ ALTER TABLE ONLY public.schematic_render_queue
 
 CREATE INDEX schematic_render_queue_ready_idx ON public.schematic_render_queue USING btree (available_at) WHERE ((claimed_at IS NULL) AND (dead_at IS NULL));
 
+CREATE TRIGGER schematic_render_queue_work_activity AFTER INSERT OR DELETE OR UPDATE ON public.schematic_render_queue FOR EACH ROW EXECUTE FUNCTION public.record_work_activity('queue', 'build_id');
+
 ALTER TABLE ONLY public.schematic_render_queue
     ADD CONSTRAINT schematic_render_queue_build_id_fkey FOREIGN KEY (build_id) REFERENCES public.builds(id) ON DELETE CASCADE;
 

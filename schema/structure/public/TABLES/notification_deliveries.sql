@@ -29,6 +29,8 @@ CREATE INDEX notification_deliveries_account_idx ON public.notification_deliveri
 
 CREATE INDEX notification_deliveries_ready_idx ON public.notification_deliveries USING btree (available_at) WHERE ((claimed_at IS NULL) AND (dead_at IS NULL) AND (sent_at IS NULL));
 
+CREATE TRIGGER notification_deliveries_work_activity AFTER INSERT OR DELETE OR UPDATE ON public.notification_deliveries FOR EACH ROW EXECUTE FUNCTION public.record_work_activity('queue', 'id');
+
 ALTER TABLE ONLY public.notification_deliveries
     ADD CONSTRAINT notification_deliveries_account_id_fkey FOREIGN KEY (account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
 

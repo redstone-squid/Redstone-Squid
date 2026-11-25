@@ -15,6 +15,8 @@ COMMENT ON TABLE public.door_range_recompute_queue IS 'One independently retried
 ALTER TABLE ONLY public.door_range_recompute_queue
     ADD CONSTRAINT door_range_recompute_queue_pkey PRIMARY KEY (query_id);
 
+CREATE TRIGGER door_range_recompute_queue_work_activity AFTER INSERT OR DELETE OR UPDATE ON public.door_range_recompute_queue FOR EACH ROW EXECUTE FUNCTION public.record_work_activity('queue', 'query_id');
+
 ALTER TABLE ONLY public.door_range_recompute_queue
     ADD CONSTRAINT door_range_recompute_queue_query_id_fkey FOREIGN KEY (query_id) REFERENCES public.door_range_registrations(id) ON DELETE CASCADE;
 

@@ -34,10 +34,13 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/TRIGGER_FUNCTIONS/finish_build_edit_trigger.sql
 \ir public/FUNCTIONS/get_quantified_version_names.sql
 \ir public/FUNCTIONS/publish_domain_event.sql
+\ir public/TRIGGER_FUNCTIONS/record_work_activity.sql
 \ir public/TRIGGER_FUNCTIONS/reject_build_history_mutation.sql
 \ir public/TRIGGER_FUNCTIONS/reject_door_range_snapshot_mutation.sql
 \ir public/TRIGGER_FUNCTIONS/reject_submission_finalization_input_update.sql
 \ir public/TRIGGER_FUNCTIONS/reserve_tag_slug.sql
+\ir public/TABLES/work_activity.sql
+\ir public/FUNCTIONS/trace_work_activity.sql
 \ir public/FUNCTIONS/upsert_discord_sync_request.sql
 \ir public/FUNCTIONS/upsert_search_projection_request.sql
 \ir public/TABLES/account_identities.sql
@@ -215,3 +218,4 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/SEQUENCES/vote_sessions_id_seq.sql
 \ir public/TABLES/votes.sql
 \ir public/TABLES/web_sessions.sql
+\ir public/SEQUENCES/work_activity_id_seq.sql

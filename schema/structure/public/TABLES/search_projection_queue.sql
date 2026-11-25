@@ -29,3 +29,5 @@ ALTER TABLE ONLY public.search_projection_queue
 
 CREATE INDEX search_projection_queue_ready_idx ON public.search_projection_queue USING btree (available_at) WHERE ((claimed_at IS NULL) AND (dead_at IS NULL));
 
+CREATE TRIGGER search_projection_queue_work_activity AFTER INSERT OR DELETE OR UPDATE ON public.search_projection_queue FOR EACH ROW EXECUTE FUNCTION public.record_work_activity('queue', 'id');
+

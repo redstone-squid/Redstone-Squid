@@ -16,3 +16,5 @@ ALTER TABLE ONLY public.domain_events
 
 CREATE INDEX domain_events_aggregate_idx ON public.domain_events USING btree (aggregate_kind, aggregate_id);
 
+CREATE TRIGGER domain_events_work_activity AFTER INSERT ON public.domain_events FOR EACH ROW EXECUTE FUNCTION public.record_work_activity('fact', 'id');
+

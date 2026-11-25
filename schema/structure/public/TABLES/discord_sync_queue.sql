@@ -50,3 +50,5 @@ ALTER TABLE ONLY public.discord_sync_queue
 
 CREATE INDEX discord_sync_queue_ready_idx ON public.discord_sync_queue USING btree (available_at) WHERE ((claimed_at IS NULL) AND (dead_at IS NULL));
 
+CREATE TRIGGER discord_sync_queue_work_activity AFTER INSERT OR DELETE OR UPDATE ON public.discord_sync_queue FOR EACH ROW EXECUTE FUNCTION public.record_work_activity('queue', 'id');
+

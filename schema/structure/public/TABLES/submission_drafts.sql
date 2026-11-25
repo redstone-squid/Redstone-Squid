@@ -21,6 +21,7 @@ CREATE TABLE public.submission_drafts (
     source_messages jsonb DEFAULT '[]'::jsonb NOT NULL,
     inference_run_id uuid,
     door_expansion jsonb,
+    preparation_attempt uuid,
     CONSTRAINT submission_drafts_expansion_check CHECK (((door_expansion IS NULL) OR (((category = 'door'::text) AND (jsonb_typeof(door_expansion) = 'object'::text) AND ((door_expansion -> 'schema_version'::text) = '1'::jsonb)) IS TRUE))),
     CONSTRAINT submission_drafts_expiry_after_creation CHECK ((expires_at > created_at)),
     CONSTRAINT submission_drafts_inference_origin_check CHECK (((NOT inferred) OR (origin = 'discord'::text))),
@@ -54,6 +55,8 @@ CREATE INDEX submission_drafts_preparation_ready_idx ON public.submission_drafts
 CREATE INDEX submission_drafts_source_installation_idx ON public.submission_drafts USING btree (source_installation_id) WHERE (source_installation_id IS NOT NULL);
 
 CREATE TRIGGER submission_drafts_enqueue_status AFTER INSERT OR DELETE OR UPDATE ON public.submission_drafts FOR EACH ROW EXECUTE FUNCTION public.enqueue_submission_status();
+
+CREATE TRIGGER submission_drafts_work_activity AFTER UPDATE OF preparation_retry_at, preparation_attempt ON public.submission_drafts FOR EACH ROW WHEN (((old.preparation_retry_at IS NOT NULL) OR (new.preparation_retry_at IS NOT NULL))) EXECUTE FUNCTION public.record_work_activity('preparation', 'id');
 
 ALTER TABLE ONLY public.submission_drafts
     ADD CONSTRAINT submission_drafts_owner_account_id_fkey FOREIGN KEY (owner_account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
