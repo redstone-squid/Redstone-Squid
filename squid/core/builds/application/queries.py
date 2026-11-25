@@ -12,7 +12,7 @@ from uuid import UUID
 from squid.core.builds.domain import BuildCategory, BuildStatus
 from squid.core.builds.domain.credits import CreditAttribution, CreditKind, CreditRole
 from squid.core.builds.errors import BuildNotFoundError
-from squid.core.builds.history import PublicBuildRevision
+from squid.core.builds.history import BuildPublication, PublicBuildRevision
 from squid.core.builds.models import Build, DoorBuild
 from squid.core.errors import DataIntegrityError
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
@@ -276,6 +276,10 @@ class BuildQueryService:
                 raise BuildNotFoundError(build_id)
             return build
 
+    async def publication(self, build: Build) -> BuildPublication:
+        async with self._uow_factory() as uow:
+            return await uow.build_history.publication(build)
+
     async def public_history(
         self, build_id: int, labels: Mapping[str, str], *, offset: int, page_size: int
     ) -> Page[PublicBuildRevision]:
@@ -349,6 +353,8 @@ class BuildQueryService:
 
 
 class PublicHistoryReader(Protocol):
+    async def publication(self, build: Build) -> BuildPublication: ...
+
     async def public_page(
         self, build_id: int, labels: Mapping[str, str], *, offset: int, page_size: int
     ) -> Page[PublicBuildRevision]: ...

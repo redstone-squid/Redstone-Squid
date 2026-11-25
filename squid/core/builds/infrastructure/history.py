@@ -15,6 +15,8 @@ from squid.core.builds.history import (
     BuildEditContext,
     BuildHistoryDetail,
     BuildHistorySummary,
+    BuildLastEdit,
+    BuildPublication,
     BuildStateSnapshot,
     HistoryActor,
     HistoryChange,
@@ -22,7 +24,10 @@ from squid.core.builds.history import (
     PublicBuildRevision,
 )
 from squid.core.builds.history_models import BuildHistoryEntry, BuildHistorySnapshot
+from squid.core.builds.models import Build
 from squid.core.pagination import FIRST_PAGE, MAX_PAGE_OFFSET, Page, PageSelector, keyset_page
+from squid.core.voting.domain import VoteStatus
+from squid.core.voting.models import BuildVoteSession, VoteSession
 
 
 class BuildHistoryQueries:
@@ -30,6 +35,65 @@ class BuildHistoryQueries:
 
     def __init__(self, session: Callable[[], AsyncSession]) -> None:
         self._session = session
+
+    async def publication(self, build: Build) -> BuildPublication:
+        session = self._session()
+        subject = (
+            await session.execute(
+                select(Account.public_creator_id, AccountProfile.display_name)
+                .outerjoin(AccountProfile, AccountProfile.account_id == Account.id)
+                .where(Account.id == build.submitter_account_id)
+            )
+        ).one_or_none()
+        old = aliased(BuildHistorySnapshot)
+        published = (
+            BuildHistorySnapshot.snapshot["build"]["submission_status"].as_integer() == BuildStatus.APPROVED.value
+        )
+        previously = old.snapshot["build"]["submission_status"].as_integer()
+        # A migrated baseline observes an already approved build but cannot date its approval.
+        approval = (
+            func.max(BuildHistoryEntry.recorded_at)
+            .filter(previously.is_distinct_from(BuildStatus.APPROVED.value), BuildHistoryEntry.operation != "baseline")
+            .over()
+        )
+        row = (
+            await session.execute(
+                select(
+                    BuildHistoryEntry.recorded_at,
+                    BuildHistoryEntry.operation,
+                    approval,
+                    func.count().over(),
+                    Account.public_creator_id,
+                    AccountProfile.display_name,
+                )
+                .join(BuildHistorySnapshot, BuildHistorySnapshot.id == BuildHistoryEntry.after_state_id)
+                .outerjoin(old, old.id == BuildHistoryEntry.before_state_id)
+                .outerjoin(Account, Account.id == BuildHistoryEntry.actor_account_id)
+                .outerjoin(AccountProfile, AccountProfile.account_id == Account.id)
+                .where(BuildHistoryEntry.build_id == build.id, published)
+                .order_by(BuildHistoryEntry.id.desc())
+                .limit(1)
+            )
+        ).one_or_none()
+        vote = None
+        if build.submission_status is BuildStatus.PENDING:
+            vote = await session.scalar(
+                select(BuildVoteSession.vote_session_id)
+                .join(VoteSession, VoteSession.id == BuildVoteSession.vote_session_id)
+                .where(BuildVoteSession.build_id == build.id, VoteSession.status == VoteStatus.OPEN)
+                .order_by(BuildVoteSession.vote_session_id.desc())
+                .limit(1)
+            )
+        submitter = HistoryActor(subject[1], subject[0]) if subject else None
+        if row is None:
+            return BuildPublication(submitted_by=submitter, vote_session_id=vote)
+        at, operation, approved, count, creator, name = row
+        edit = (
+            None
+            if operation in {"baseline", "create"}
+            else BuildLastEdit(at.to_stdlib(), HistoryActor(name, creator) if creator else None)
+        )
+        return BuildPublication(approved.to_stdlib() if approved else None, submitter, edit, count, vote)
 
     async def public_page(
         self, build_id: int, labels: Mapping[str, str], *, offset: int, page_size: int

@@ -19708,6 +19708,51 @@
             },
             "type": "array"
           },
+          "approved_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "submitted_by": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/HistoryActor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_edited": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/BuildLastEdit"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "history_count": {
+            "type": "integer",
+            "default": 0
+          },
+          "vote_session_id": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "records_held": {
             "items": {
               "$ref": "#/components/schemas/BuildRecord"
@@ -19801,6 +19846,30 @@
         ],
         "title": "BuildKind",
         "description": "A kind of redstone build recognized by the rules."
+      },
+      "BuildLastEdit": {
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "by": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/HistoryActor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "at",
+          "by"
+        ],
+        "title": "BuildLastEdit"
       },
       "BuildLinks": {
         "properties": {

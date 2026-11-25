@@ -129,3 +129,18 @@ class PublicBuildRevision:
     actor: HistoryActor | None
     kind: HistoryOperation
     changes: tuple[HistoryChange, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class BuildLastEdit:
+    at: datetime
+    by: HistoryActor | None
+
+
+@dataclass(frozen=True, slots=True)
+class BuildPublication:
+    approved_at: datetime | None = None
+    submitted_by: HistoryActor | None = None
+    last_edited: BuildLastEdit | None = None
+    history_count: int = 0
+    vote_session_id: int | None = None

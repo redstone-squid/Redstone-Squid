@@ -278,3 +278,9 @@ async def test_public_history_starts_with_published_values(sessions: async_sessi
         assert description.after == "Published"
         assert description.label == "Description"
         assert revision.actor is None
+        publication = await uow.build_history.publication(build)
+        assert publication.approved_at == revision.at
+        assert publication.history_count == history.total
+        assert publication.submitted_by is not None
+        assert publication.last_edited is not None
+        assert publication.last_edited.at == revision.at

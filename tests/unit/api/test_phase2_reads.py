@@ -20,6 +20,7 @@ from squid.core.accounts.models import CreatorAlias
 from squid.core.artifacts.infrastructure import LocalArtifactStore
 from squid.core.builds.application import BuildQueryService
 from squid.core.builds.domain import BuildStatus
+from squid.core.builds.history import BuildPublication
 from squid.core.builds.models import Build, DoorBuild
 from squid.core.media.domain.jobs import MediaArtifactRole
 from squid.core.media.infrastructure.build_media import PublishedBuildMedia
@@ -125,6 +126,10 @@ class RefusingRenderFake(SchematicService):
 
 
 class ConfirmedBuildFake(BuildQueryService):
+    @override
+    async def publication(self, build: Build) -> BuildPublication:
+        return BuildPublication()
+
     def __init__(self) -> None:
         pass
 

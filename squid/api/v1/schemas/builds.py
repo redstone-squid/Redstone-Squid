@@ -16,6 +16,7 @@ from squid.core.builds.application.edit_schema import ExtenderPatch as ExtenderP
 from squid.core.builds.application.queries import PublicBuildDimensions, PublicBuildSummary
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.domain.expansion import DoorExpansion
+from squid.core.builds.history import BuildLastEdit, HistoryActor
 from squid.core.builds.models import Build, DoorBuild, ExtenderBuild
 from squid.core.records.domain.build_records import BuildRecord
 
@@ -158,6 +159,11 @@ class BuildDetail(PublicBuildSummary):
     description: str | None
     links: BuildLinks
     media: list[BuildMedia]
+    approved_at: datetime | None = None
+    submitted_by: HistoryActor | None = None
+    last_edited: BuildLastEdit | None = None
+    history_count: int = 0
+    vote_session_id: int | None = None
     records_held: tuple[BuildRecord, ...] = ()
     records_former: tuple[BuildRecord, ...] = ()
     submitted_at: datetime | None

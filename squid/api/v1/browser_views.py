@@ -85,6 +85,7 @@ class BrowserViews:
         return SessionSnapshot(user, self.caller.consent_pending, tuple(sorted(allowed)), counts)
 
     async def build(self, build: Build, request: Request) -> BuildDetail:
+        publication = await self.services.build_queries.publication(build)
         attachments = await self.services.schematics.list_public_for_build(build.id)
         primary = next((item for item in attachments if item.is_primary), None)
         summary = (
@@ -98,7 +99,13 @@ class BrowserViews:
             else None
         )
         detail = replace(
-            BuildDetail.from_domain(build), schematics=BuildSchematicOverview(count=len(attachments), primary=summary)
+            BuildDetail.from_domain(build),
+            approved_at=publication.approved_at,
+            submitted_by=publication.submitted_by,
+            last_edited=publication.last_edited,
+            history_count=publication.history_count,
+            vote_session_id=publication.vote_session_id,
+            schematics=BuildSchematicOverview(count=len(attachments), primary=summary),
         )
         if self.account_id is not None:
             follows, ballot = await self.services.viewer_queries.build_state(self.account_id, build)

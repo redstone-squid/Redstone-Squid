@@ -156,6 +156,11 @@ export type BuildDetail = {
     description: string | null;
     links: BuildLinks;
     media: Array<BuildMedia>;
+    approved_at?: string | null;
+    submitted_by?: HistoryActor | null;
+    last_edited?: BuildLastEdit | null;
+    history_count?: number;
+    vote_session_id?: number | null;
     records_held?: Array<BuildRecord>;
     records_former?: Array<BuildRecord>;
     submitted_at: string | null;
@@ -170,6 +175,14 @@ export type BuildDetail = {
  * A kind of redstone build recognized by the rules.
  */
 export type BuildKind = 'door' | 'entrance' | 'extender' | 'utility';
+
+/**
+ * BuildLastEdit
+ */
+export type BuildLastEdit = {
+    at: string;
+    by: HistoryActor | null;
+};
 
 /**
  * BuildLinks
