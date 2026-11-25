@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Annotated, cast
 from uuid import UUID
 
-from litestar import Response, Router, get, patch
+from litestar import Request, Response, Router, get, patch
 from litestar.background_tasks import BackgroundTask
 from litestar.di import NamedDependency, Provide
 from litestar.openapi.datastructures import ResponseSpec
@@ -26,6 +26,7 @@ from squid.api.dependencies import (
     get_search,
 )
 from squid.api.errors import responses
+from squid.api.i18n import locale_for_request
 from squid.api.idempotency import edit_operation_id, reserve_edit_before_request
 from squid.api.pagination import (
     AfterIdParam,
@@ -40,6 +41,7 @@ from squid.api.pagination import (
 from squid.api.security import Caller, requires
 from squid.api.v1.browser_views import BrowserViews
 from squid.api.v1.schemas.builds import BuildDetail, BuildPatch, BuildStatusFilter
+from squid.api.v1.schemas.submissions import FormManifestResponse, SavedBuildFormResponse
 from squid.api.v1.search import build_hit_id, hydrate_builds
 from squid.core.builds.application import (
     BUILD_SORT_FIELDS,
@@ -59,9 +61,11 @@ from squid.core.edits.domain import EditCommand, LatestRevision, Revision
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.domain.catalogue import (
     BUILD_SUBMISSION_CREATE,
+    BUILD_SUBMISSION_EDIT,
     BUILD_SUBMISSION_VIEW_PENDING,
 )
 from squid.core.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
+from squid.core.submissions.application.build_answers import answers_from_build
 
 UserWriter = CurrentCaller
 _BUILD_ETAG = re.compile(r'^"build-(?P<build_id>[1-9][0-9]*)-r(?P<revision>[1-9][0-9]*)"$')
@@ -140,6 +144,33 @@ async def get_build(
     build = await build_queries.get_public(build_id)
     detail = await BrowserViews(services, caller).build(build)
     return Response(detail, headers={"ETag": build_etag(build)})
+
+
+@get(
+    "/{build_id:int}/form",
+    responses=responses(401, 403, 404, 422, 503),
+    guards=[requires(BUILD_SUBMISSION_EDIT)],
+    security=[WEB],
+    response_headers={"Cache-Control": "private, no-store"},
+    operation_id="builds_edit_form_get",
+    opt=contract(cli=browser_only()),
+)
+async def get_build_form(
+    request: Request, build_id: FromPath[int], build_queries: BuildQueries, services: Services
+) -> SavedBuildFormResponse:
+    """Read an approved build in the moderator editor's form vocabulary."""
+    build = await build_queries.get_public(build_id)
+    manifest = await services.submission_forms.edit_manifest(locale=locale_for_request(request))
+    saved = answers_from_build(build)
+    return SavedBuildFormResponse.model_validate(
+        {
+            "revision": build.revision,
+            "category": build.category.value.lower(),
+            "manifest": FormManifestResponse.from_domain(manifest),
+            "answers": saved.answers,
+            "unresolved": saved.unresolved,
+        }
+    )
 
 
 @get(
@@ -280,5 +311,5 @@ router = Router(
     },
     path="/builds",
     tags=["builds"],
-    route_handlers=[edit_build, get_build, get_build_media, list_builds],
+    route_handlers=[edit_build, get_build, get_build_form, get_build_media, list_builds],
 )

@@ -19,6 +19,7 @@ from pydantic import (
     model_validator,
 )
 
+from squid.core.builds.domain.tags import UnresolvedTags
 from squid.core.errors import JSONValue
 from squid.core.errors import ValidationError as DomainValidationError
 from squid.core.submissions.application import (
@@ -236,6 +237,14 @@ class FormManifestResponse(StrictSchema):
             common_sections=[FormSectionResponse.from_domain(section) for section in manifest.common_sections],
             categories=[CategoryFormResponse.from_domain(category) for category in manifest.categories],
         )
+
+
+class SavedBuildFormResponse(StrictSchema):
+    revision: int
+    category: str
+    manifest: FormManifestResponse
+    answers: dict[str, JsonValue]
+    unresolved: UnresolvedTags
 
 
 class FormOptionSetResponse(StrictSchema):

@@ -1557,6 +1557,150 @@
         }
       }
     },
+    "/v1/builds/{build_id}/form": {
+      "get": {
+        "tags": [
+          "builds"
+        ],
+        "summary": "GetBuildForm",
+        "description": "Read an approved build in the moderator editor's form vocabulary.",
+        "operationId": "builds_edit_form_get",
+        "parameters": [
+          {
+            "name": "build_id",
+            "in": "path",
+            "schema": {
+              "type": "integer"
+            },
+            "required": true,
+            "deprecated": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "required": false,
+                "deprecated": false
+              },
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SavedBuildFormResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "WebSession": []
+          }
+        ],
+        "x-squid-cli": {
+          "classification": "browser-only"
+        }
+      }
+    },
     "/v1/builds/{build_id}/media/{upload_id}/content": {
       "get": {
         "tags": [
@@ -26588,6 +26732,61 @@
         "required": [],
         "title": "SanitizationCapabilities"
       },
+      "SavedBuildFormResponse": {
+        "properties": {
+          "revision": {
+            "type": "integer"
+          },
+          "category": {
+            "type": "string"
+          },
+          "manifest": {
+            "$ref": "#/components/schemas/FormManifestResponse"
+          },
+          "answers": {
+            "additionalProperties": {
+              "oneOf": [
+                {
+                  "items": {},
+                  "type": "array"
+                },
+                {
+                  "additionalProperties": {},
+                  "type": "object"
+                },
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object"
+          },
+          "unresolved": {
+            "$ref": "#/components/schemas/UnresolvedTags"
+          }
+        },
+        "type": "object",
+        "required": [
+          "answers",
+          "category",
+          "manifest",
+          "revision",
+          "unresolved"
+        ],
+        "title": "SavedBuildFormResponse"
+      },
       "SchematicDetection": {
         "properties": {
           "field_id": {
@@ -28211,6 +28410,41 @@
         ],
         "title": "TooShortParams",
         "type": "object"
+      },
+      "UnresolvedTags": {
+        "properties": {
+          "restrictions": {
+            "items": {
+              "prefixItems": [
+                {
+                  "type": "string",
+                  "enum": [
+                    "wiring_placement_restrictions",
+                    "animated_restrictions",
+                    "component_restrictions",
+                    "miscellaneous_restrictions"
+                  ]
+                },
+                {
+                  "type": "string"
+                }
+              ],
+              "type": "array"
+            },
+            "type": "array",
+            "default": []
+          },
+          "patterns": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [],
+        "title": "UnresolvedTags"
       },
       "UploadCapabilities": {
         "properties": {

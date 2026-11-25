@@ -2116,6 +2116,21 @@ export type SanitizationCapabilities = {
 };
 
 /**
+ * SavedBuildFormResponse
+ */
+export type SavedBuildFormResponse = {
+    revision: number;
+    category: string;
+    manifest: FormManifestResponse;
+    answers: {
+        [key: string]: Array<unknown> | {
+            [key: string]: unknown;
+        } | string | boolean | number | number | null;
+    };
+    unresolved: UnresolvedTags;
+};
+
+/**
  * SchematicDetection
  */
 export type SchematicDetection = {
@@ -2662,6 +2677,17 @@ export type TooShortParams = {
      * Min Length
      */
     min_length: number;
+};
+
+/**
+ * UnresolvedTags
+ */
+export type UnresolvedTags = {
+    restrictions?: Array<[
+        'wiring_placement_restrictions' | 'animated_restrictions' | 'component_restrictions' | 'miscellaneous_restrictions',
+        string
+    ]>;
+    patterns?: Array<string>;
 };
 
 /**
@@ -3472,6 +3498,53 @@ export type BuildsUpdateResponses = {
 };
 
 export type BuildsUpdateResponse = BuildsUpdateResponses[keyof BuildsUpdateResponses];
+
+export type BuildsEditFormGetData = {
+    body?: never;
+    path: {
+        build_id: number;
+    };
+    query?: never;
+    url: '/v1/builds/{build_id}/form';
+};
+
+export type BuildsEditFormGetErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type BuildsEditFormGetError = BuildsEditFormGetErrors[keyof BuildsEditFormGetErrors];
+
+export type BuildsEditFormGetResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: SavedBuildFormResponse;
+};
+
+export type BuildsEditFormGetResponse = BuildsEditFormGetResponses[keyof BuildsEditFormGetResponses];
 
 export type BuildMediaContentGetData = {
     body?: never;
