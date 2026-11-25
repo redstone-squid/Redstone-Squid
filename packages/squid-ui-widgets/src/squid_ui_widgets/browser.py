@@ -77,7 +77,7 @@ class Browser[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = obje
 
     Back returns to the list. Supply `on_back` to choose another destination and keep
     the session's focus. For time-sorted lists, `chronology` labels page and item steps
-    Newer and Older. `show_fetch_size` adds a form for changing the page size (1 to 25)
+    Newer and Older. `show_fetch_size` adds a form for changing the batch size (1 to 25)
     and changing size returns to the beginning.
 
     The session owns navigation and focus. The detail factory runs through an atomic

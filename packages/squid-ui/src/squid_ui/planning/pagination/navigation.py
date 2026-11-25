@@ -281,11 +281,11 @@ def fetch_size_form(fetch_size: int, *, maximum: int | None = None, chrome: Chro
         message = "fetch_size must be positive and no greater than maximum"
         raise ValueError(message)
     return FormSpec(
-        chrome.items_per_page,
+        chrome.items_per_batch,
         (
             IntField(
                 key="fetch_size",
-                label=chrome.items_per_page,
+                label=chrome.items_per_batch,
                 minimum=1,
                 maximum=maximum,
                 default=fetch_size,
@@ -411,7 +411,7 @@ def fetch_size_button(
     """Offer a portable form that changes an application's items-per-page value."""
     return sem.FormTrigger(
         f"{key}.fetch-size",
-        chrome.items_per_page,
+        chrome.items_per_batch,
         fetch_size_form(fetch_size, maximum=maximum, chrome=chrome),
         SubmitFetchSize(on_change),
         mode=ActionMode.REBASE,

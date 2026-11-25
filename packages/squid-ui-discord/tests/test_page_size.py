@@ -26,7 +26,7 @@ async def test_browser_fetch_size_form_validates_and_reloads(target: Target, val
     await root.send(delivered_to(message_harness(components_v2=target == DISCORD_V2_DPY27)))
     view = root._candidates.view
     assert view is not None
-    assert ["Previous", "Next", "Jump to a page", "Items per page"] in [
+    assert ["Previous", "Next", "Jump to a page", "Items per batch"] in [
         [item.get("label") for item in row["components"]]
         for row in iter_component_payloads(view.to_components())
         if row["type"] == discord.ComponentType.action_row.value

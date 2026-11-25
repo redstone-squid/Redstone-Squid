@@ -1328,62 +1328,62 @@ bot-submission-schematics-tick-gt-after-input = tick { $tick } ({ $duration } gt
 # squid/bot/submission/cog.py:159
 bot-submission-search-open-this-build-directly = Open this build directly.
 
-# squid/bot/catalogue/search/results.py:646
+# squid/bot/catalogue/search/results.py:645
 bot-submission-search-view-build-base-title =
     { "*" }*Build**
     { $build_title } ({ $build_id })
     { "*" }*Record criterion**
     { $criterion } · { $version_scope }
 
-# squid/bot/catalogue/search/results.py:545
+# squid/bot/catalogue/search/results.py:544
 bot-submission-search-view-creator = Creator
 
-# squid/bot/catalogue/search/results.py:680
+# squid/bot/catalogue/search/results.py:679
 bot-submission-search-view-kind =
     { "*" }*Kind**
     { $kind }
 
-# squid/bot/catalogue/search/results.py:657
+# squid/bot/catalogue/search/results.py:656
 bot-submission-search-view-metrics =
     { $fields }
     { "*" }*Metrics**
     { $metrics }
 
-# squid/bot/catalogue/search/results.py:541
+# squid/bot/catalogue/search/results.py:540
 bot-submission-search-view-pattern = Pattern
 
-# squid/bot/catalogue/search/results.py:539
+# squid/bot/catalogue/search/results.py:538
 bot-submission-search-view-restriction = Restriction
 
-# squid/bot/catalogue/search/results.py:304, squid/bot/catalogue/search/results.py:385
+# squid/bot/catalogue/search/results.py:304, squid/bot/catalogue/search/results.py:384
 bot-submission-search-view-retry = Retry
 
-# squid/bot/catalogue/search/results.py:380
+# squid/bot/catalogue/search/results.py:379
 bot-submission-search-view-search-results = Search results
 
-# squid/bot/catalogue/search/results.py:543
+# squid/bot/catalogue/search/results.py:542
 bot-submission-search-view-showcase-tag = Showcase tag
 
-# squid/bot/catalogue/search/results.py:669
+# squid/bot/catalogue/search/results.py:668
 bot-submission-search-view-status =
     { "*" }*Status**
     { $status }
 
-# squid/bot/catalogue/search/results.py:549
+# squid/bot/catalogue/search/results.py:548
 bot-submission-search-view-tag = Tag
 
-# squid/bot/catalogue/search/results.py:689
+# squid/bot/catalogue/search/results.py:688
 bot-submission-search-view-tags =
     { $fields }
     { "*" }*Tags**
     { $tags }
 
-# squid/bot/catalogue/search/results.py:697
+# squid/bot/catalogue/search/results.py:696
 bot-submission-search-view-value =
     { $description }
     { $fields }
 
-# squid/bot/catalogue/search/results.py:547
+# squid/bot/catalogue/search/results.py:546
 bot-submission-search-view-version = Version
 
 # squid/bot/catalogue/search/results.py:153
@@ -2089,16 +2089,16 @@ build-schematic-tools-show = Schematic tools
 # squid/bot/catalogue/search/results.py:168, squid/bot/catalogue/search/results.py:172, squid/bot/catalogue/search/results.py:248, squid/bot/catalogue/search/results.py:301
 build-search-build-unavailable = That build is no longer available.
 
-# squid/bot/catalogue/search/results.py:384
+# squid/bot/catalogue/search/results.py:383
 build-search-load-failed = Could not load search results.
 
-# squid/bot/catalogue/search/results.py:383
+# squid/bot/catalogue/search/results.py:382
 build-search-loading = Loading search results…
 
 # squid/bot/submission/cog.py:106
 build-search-matching-mode-help = Use keyword matching or smart meaning-based matching.
 
-# squid/bot/catalogue/search/results.py:381
+# squid/bot/catalogue/search/results.py:380
 build-search-no-results = No results match this query.
 
 # squid/bot/submission/cog.py:116
@@ -5661,7 +5661,7 @@ search-filter-not = Not: { $inner }
 # squid/bot/catalogue/search/labels.py:136
 search-filter-range = { $name } { $lower } to { $upper }
 
-# squid/bot/catalogue/search/results.py:507
+# squid/bot/catalogue/search/results.py:506
 search-grouped-build-count = { $total } builds
 
 # squid/bot/catalogue/search/results.py:258
@@ -5673,13 +5673,13 @@ search-grouped-loading-build = Loading build…
 # squid/bot/catalogue/search/results.py:199
 search-grouped-matching-records = Matching records
 
-# squid/bot/catalogue/search/results.py:632
+# squid/bot/catalogue/search/results.py:631
 search-grouped-more-records = +{ $count } more records
 
 # squid/bot/catalogue/search/results.py:201
 search-grouped-records = Records
 
-# squid/bot/catalogue/search/results.py:509
+# squid/bot/catalogue/search/results.py:508
 search-grouped-result-count = { $total } results
 
 # squid/bot/catalogue/record_display.py:41
@@ -6730,7 +6730,7 @@ ui-form-time-nonexistent = This local time does not exist in the selected timezo
 ui-form-timezone-offset-mismatch = The UTC offset does not match this local time in the selected timezone.
 
 # squid/bot/chrome.py:232
-ui-items-per-page = Items per page
+ui-items-per-batch = Items per batch
 
 # squid/bot/chrome.py:237
 ui-list-controls-not-owned = These list controls belong to someone else.
