@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { cn } from "@/ui/cn";
   import ChevronDown from "@lucide/svelte/icons/chevron-down";
   import type { FieldMessages } from "@/ui/forms/field";
   import FieldFrame from "./FieldFrame.svelte";
@@ -11,7 +12,7 @@
    * or seconds. `value` is the canonical number (the amount in the unit whose `factor` is 1),
    * or null while the text is empty or not a number. `factor` is how many canonical units one
    * of this unit holds: 2 for redstone ticks and 20 for seconds when the canonical unit is
-   * game ticks. The other units' equivalents show beside the hint, such as "= 1.25 s".
+   * game ticks. The other units' equivalents show under the hint, such as "= 1.25 s".
    *
    * The form submits the typed number as `name` and the unit id as `unitName`, so a form
    * without JavaScript reads both.
@@ -69,15 +70,21 @@
   });
 </script>
 
-{#snippet converted()}<span id={conversionId} class="text-xs text-fg-muted tabular-nums"
-    >= {conversions.join(" · ")}</span
-  >{/snippet}
+{#snippet converted()}
+  <!-- Each conversion wraps whole, so more units add lines rather than breaking one apart. -->
+  <p id={conversionId} class="flex flex-wrap gap-x-3 text-xs text-fg-muted tabular-nums">
+    <!-- The hidden comma keeps the conversions apart in the input's description. -->
+    {#each conversions as conversion, position (conversion)}{#if position > 0}<span class="sr-only"
+          >,</span
+        >{/if}<span class="whitespace-nowrap">= {conversion}</span>{/each}
+  </p>
+{/snippet}
 
 <FieldFrame
   {...frame}
   {width}
   aria-describedby={conversions.length > 0 ? conversionId : undefined}
-  aside={conversions.length > 0 ? converted : undefined}
+  readout={conversions.length > 0 ? converted : undefined}
 >
   {#snippet children(attributes)}
     <div class={boxClass} data-disabled={disabled === true ? "" : undefined}>
@@ -90,7 +97,7 @@
         autocomplete="off"
         bind:value={text}
         oninput={() => (value = parse(text))}
-        class={boxInputClass}
+        class={cn(boxInputClass, "px-3 py-2")}
       />
       <span class="relative flex shrink-0 border-s border-line-strong">
         <select

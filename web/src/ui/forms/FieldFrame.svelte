@@ -12,12 +12,14 @@
    * announces a failed submit, and focusing the field reads its error.
    *
    * `inline` puts the control before its label, for checkboxes. `aside` sits at the end of
-   * the hint row, such as a character counter.
+   * the hint row, such as a character counter. `readout` is live text derived from the value,
+   * such as unit conversions, on its own line under the hint.
    */
   type Props = FieldMessages &
     Pick<HTMLAttributes<HTMLElement>, "id" | "aria-describedby" | "aria-invalid"> & {
       inline?: boolean;
       aside?: Snippet;
+      readout?: Snippet;
       class?: ClassValue | null;
       children: Snippet<[ReturnType<typeof fieldAttributes>]>;
     };
@@ -30,6 +32,7 @@
     width = "full",
     inline,
     aside,
+    readout,
     class: className,
     children,
     id,
@@ -65,6 +68,7 @@
       {#if aside}<div class="ms-auto min-w-0">{@render aside()}</div>{/if}
     </div>
   {/if}
+  {#if readout}{@render readout()}{/if}
   {#if error != null && error !== ""}<p
       id={`${control.id}-error`}
       class={cn(fieldErrorClass, inline && "ps-7")}
