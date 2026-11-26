@@ -172,7 +172,7 @@ class _BuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
     )
     _review: BoundEdit | None = sl.state(None, opaque=True)
     _pending_review: Literal["approve", "reject"] | None = sl.state(None)
-    _show_schematics: bool = sl.state(False)
+    _show_schematics = sl.presentation(initial=False)
 
     def __init__(
         self,
@@ -208,7 +208,7 @@ class _BuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
             build_id,
             schematics=schematics,
             grants=grants,
-            show_details=lambda: self._show_schematics,
+            show_details=lambda: self._show_schematics.value,
         )
         self._render_build = render_build
         self.grants = grants
@@ -260,8 +260,8 @@ class _BuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
             nodes.append(self.schematics)
         return nodes
 
-    async def _toggle_schematics(self, _event: sl.PressEvent) -> None:
-        self._show_schematics = not self._show_schematics
+    async def _toggle_schematics(self, event: sl.PressEvent) -> None:
+        event.write(self._show_schematics, not event.read(self._show_schematics))
 
     def _detail_actions(
         self, build: Build, *, has_schematic: bool
@@ -271,7 +271,7 @@ class _BuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
             actions.append(
                 sl.action_control(
                     tr(t"build-schematic-tools-hide = Hide schematic tools")
-                    if self._show_schematics
+                    if self._show_schematics.value
                     else tr(t"build-schematic-tools-show = Schematic tools"),
                     self._toggle_schematics,
                     key="schematic-tools",
