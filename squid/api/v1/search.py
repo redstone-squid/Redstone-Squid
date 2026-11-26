@@ -4,7 +4,7 @@ import logging
 from collections.abc import Sequence
 from typing import Annotated
 
-from litestar import Response, Router, get
+from litestar import Router, get
 from litestar.di import Provide
 from litestar.params import QueryParameter
 
@@ -45,13 +45,10 @@ PUBLIC_SEARCH_STATUSES = frozenset({"approved"})
     security=[ANONYMOUS],
     opt=contract(cli=transport_only()),
 )
-async def list_search_fields(search_service: Search) -> Response[list[SearchField]]:
-    """List the fields queries can use, labelled in the negotiated language."""
+async def list_search_fields(search_service: Search) -> list[SearchField]:
+    """List the fields queries can use."""
     registry = await search_service.fields(context=ActingContext.current())
-    return Response(
-        [SearchField.from_domain(field) for field in registry.definitions],
-        headers={"Vary": "Accept-Language"},
-    )
+    return [SearchField.from_domain(field) for field in registry.definitions]
 
 
 @get(

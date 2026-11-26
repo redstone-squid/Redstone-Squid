@@ -2,7 +2,8 @@
 
 import pytest
 
-from squid.bot.catalogue.search.labels import filter_label, sort_label
+from squid.bot.catalogue.search.labels import filter_label
+from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY
 from squid.core.search.application.parser import SearchQueryParser
 from squid.core.search.domain.query import query_leaves
 from squid_i18n import Text
@@ -38,7 +39,7 @@ def test_filters_are_described_in_words(query: str, expected: list[str]) -> None
     ],
 )
 def test_sorts_are_described_in_words(sort: str, expected: str) -> None:
-    assert Text(sort_label(sort)).resolve() == expected
+    assert DEFAULT_FIELD_REGISTRY.sort_label(sort).resolve() == expected
 
 
 def test_a_creator_id_is_described_by_its_creator_name() -> None:

@@ -108,14 +108,12 @@ async def test_search_fields_describe_syntax_without_storage_or_coercion_details
             response = await client.get("/fields")
 
     assert response.status_code == 200
-    assert response.headers["vary"] == "Accept-Language"
     kind_entry, height = response.json()
     assert height == {
         "name": "height",
         "aliases": ["h"],
         "type": "number",
-        "label": "Height",
-        "description": None,
+        "label": None,
         "group": "text",
         "unit": None,
         "scopes": ["builds"],
@@ -123,10 +121,11 @@ async def test_search_fields_describe_syntax_without_storage_or_coercion_details
         "supports_sort": True,
         "metric": False,
         "choices": None,
+        "vocabulary": None,
         "examples": [],
     }
-    assert kind_entry["label"] == "Kind"
-    assert kind_entry["choices"][0] == {"value": "door", "label": "Door", "scopes": ["builds", "records"]}
-    assert kind_entry["choices"][-1] == {"value": "other", "label": "Other", "scopes": ["builds"]}
+    assert kind_entry["vocabulary"] == "search_build_kind"
+    assert kind_entry["choices"][0] == {"value": "door", "scopes": ["builds", "records"]}
+    assert kind_entry["choices"][-1] == {"value": "other", "scopes": ["builds"]}
     schema = app.openapi_schema.to_schema()["components"]["schemas"]["SearchField"]
     assert set(schema["properties"]) == set(height)

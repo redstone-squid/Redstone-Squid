@@ -1,9 +1,9 @@
-"""Readable labels for search fields, filters, and sort orders.
+"""Readable labels for search filters.
 
 The catalogue shows a query as a list of filters rather than as query syntax. For
 example, `width<=5 NOT restriction:observerless` is shown as the filters
-"Width ≤ 5" and "Not: Restriction is observerless", and the sort `-created_at`
-is shown as "Created, newest first".
+"Width ≤ 5" and "Not: Restriction is observerless". Field and sort labels come
+from the field registry.
 """
 
 from collections.abc import Mapping
@@ -12,7 +12,6 @@ from decimal import Decimal
 
 import squid_ui as sl
 from squid.bot.ui import tr, truncate_display_text
-from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY
 from squid.core.search.domain.fields import FieldDefinition, FieldType
 from squid.core.search.domain.query import (
     CREATOR_ID_STORAGE,
@@ -97,19 +96,3 @@ def _comparison_label(
         return tr(t"search-filter-equals = {name} is {shown}")
     symbol = _SYMBOLS[operator]
     return Text(t"{name} {symbol} {shown}")
-
-
-def sort_label(sort: str) -> sl.TextLike:
-    """Describe a sort value in the `field` or `-field` form, or the default order for an empty one."""
-    if not sort:
-        return tr(t"search-sort-default = Default order")
-    descending = sort.startswith("-")
-    name = sort.removeprefix("-")
-    field = DEFAULT_FIELD_REGISTRY.display_name(name)
-    if name.endswith("_at"):
-        if descending:
-            return tr(t"search-sort-newest = {field}, newest first")
-        return tr(t"search-sort-oldest = {field}, oldest first")
-    if descending:
-        return tr(t"search-sort-descending = {field}, largest first")
-    return tr(t"search-sort-ascending = {field}, smallest first")

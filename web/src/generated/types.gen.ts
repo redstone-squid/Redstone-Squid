@@ -2544,8 +2544,10 @@ export type SearchField = {
     name: string;
     aliases: Array<string>;
     type: FieldType;
-    label: string;
-    description: string | null;
+    /**
+     * The data tag's name for a tag field; null for built-in fields.
+     */
+    label: string | null;
     group: FieldGroup;
     /**
      * The unit of a number written without a suffix, such as `gt`.
@@ -2566,6 +2568,10 @@ export type SearchField = {
      */
     choices: Array<SearchFieldChoice> | null;
     /**
+     * The vocabulary group that labels `choices`.
+     */
+    vocabulary: string | null;
+    /**
      * Complete queries that use the field.
      */
     examples: Array<string>;
@@ -2576,7 +2582,6 @@ export type SearchField = {
  */
 export type SearchFieldChoice = {
     value: string;
-    label: string;
     /**
      * Catalogue tabs that accept this value.
      */

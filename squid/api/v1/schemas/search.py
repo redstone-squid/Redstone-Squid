@@ -37,20 +37,24 @@ class SearchFieldChoice(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     value: str
-    label: str
     scopes: list[SearchScope] = Field(description="Catalogue tabs that accept this value.")
 
 
 class SearchField(BaseModel):
-    """A field queries can filter or sort on, labelled in the response language."""
+    """A field queries can filter or sort on.
+
+    The response is the same in every language. Clients label built-in fields and
+    their choices from the vocabulary contract: names from `search_field`,
+    descriptions from `search_field_description`, and choices from the group in
+    `vocabulary`.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     name: str
     aliases: list[str]
     type: FieldType
-    label: str
-    description: str | None
+    label: str | None = Field(description="The data tag's name for a tag field; null for built-in fields.")
     group: FieldGroup
     unit: str | None = Field(description="The unit of a number written without a suffix, such as `gt`.")
     scopes: list[SearchScope] = Field(
@@ -60,18 +64,18 @@ class SearchField(BaseModel):
     supports_sort: bool
     metric: bool = Field(description="A holder measurement that the records table shows as a column.")
     choices: list[SearchFieldChoice] | None = Field(description="Every accepted value, or null for free-form fields.")
+    vocabulary: str | None = Field(description="The vocabulary group that labels `choices`.")
     examples: list[str] = Field(description="Complete queries that use the field.")
 
     @classmethod
     def from_domain(cls, field: FieldDefinition) -> SearchField:
-        """Resolve labels in the current localization scope."""
         choices = field.value_choices()
         return cls(
             name=field.name,
             aliases=list(field.aliases),
             type=field.value_type,
-            label=field.display_name.resolve(),
-            description=field.description.resolve() if field.description is not None else None,
+            # Tag names are user data, so they are the same in every language.
+            label=field.label.resolve() if field.label is not None else None,
             group=field.group,
             unit=field.unit,
             scopes=sorted(field.scopes),
@@ -80,10 +84,8 @@ class SearchField(BaseModel):
             metric=field.holder_scoped,
             choices=None
             if choices is None
-            else [
-                SearchFieldChoice(value=choice.value, label=choice.label.resolve(), scopes=sorted(choice.scopes))
-                for choice in choices
-            ],
+            else [SearchFieldChoice(value=choice.value, scopes=sorted(choice.scopes)) for choice in choices],
+            vocabulary=field.vocabulary,
             examples=list(field.examples),
         )
 

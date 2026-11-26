@@ -8,7 +8,7 @@ from squid.core.actors import ActingContext, AnonymousActor
 from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldDefinition, FieldRegistry, FieldType
 from squid.core.suggestions.application.queries import TagEntry
 from squid.core.suggestions.domain import SuggestionRequest
-from squid.core.suggestions.infrastructure.providers.search_fields import SearchFieldProvider
+from squid.core.suggestions.infrastructure.providers.search_fields import SearchFieldProvider, SearchSortProvider
 from squid.core.suggestions.infrastructure.providers.search_query import SearchQueryProvider
 
 
@@ -209,3 +209,15 @@ async def test_an_explicit_cursor_completes_mid_query() -> None:
     assert filters.calls == [("restriction", "sea", 10)]
     assert result.replacement is not None
     assert (result.replacement.start, result.replacement.end) == (12, 15)
+
+
+async def test_field_and_sort_suggestions_read_as_words() -> None:
+    fields = await SearchFieldProvider(StaticFields()).candidates(
+        SuggestionRequest(source="search_fields", locale="en-GB")
+    )
+    sorts = await SearchSortProvider(StaticFields()).candidates(SuggestionRequest(source="search_sorts"))
+
+    opening = next(item for item in fields if item.suggestion.value == "opening_time")
+    assert (opening.suggestion.label, opening.suggestion.description) == ("Opening time", "opening_time")
+    assert "Opening time" in opening.match_terms()
+    assert {item.suggestion.value: item.suggestion.label for item in sorts}["-created_at"] == "Submitted, newest first"

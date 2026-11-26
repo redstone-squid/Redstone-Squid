@@ -1,11 +1,11 @@
 """Definitions of the fields that search queries can filter and sort by."""
 
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from decimal import Decimal
 from enum import StrEnum
 
 from squid.core.search.domain.scope import CATALOGUE_SCOPES, SearchScope
+from squid.core.vocabulary import SEARCH_FIELDS
 from squid_i18n import Text, plain
 
 
@@ -54,7 +54,6 @@ class FieldChoice:
     """One accepted value of an enumerated field and the catalogue tabs that accept it."""
 
     value: str
-    label: Text
     scopes: frozenset[SearchScope]
 
 
@@ -96,11 +95,12 @@ class FieldDefinition:
     """The unit of unsuffixed query values, such as `gt` for game ticks."""
     # Presentation does not change what a field matches, so it stays out of equality.
     label: Text | None = field(default=None, compare=False)
-    description: Text | None = field(default=None, compare=False)
+    """The data tag's name. Built-in fields are labelled by `SEARCH_FIELDS` in the vocabulary."""
     group: FieldGroup = field(default=FieldGroup.TEXT, compare=False)
     examples: tuple[str, ...] = field(default=(), compare=False)
     """Complete queries that use the field, such as `opening_time<1s`."""
-    choice_label: Callable[[str], Text] | None = field(default=None, compare=False)
+    vocabulary: str | None = field(default=None, compare=False)
+    """The `VOCABULARY` group that labels the field's choices."""
 
     @property
     def storage(self) -> str:
@@ -109,8 +109,10 @@ class FieldDefinition:
 
     @property
     def display_name(self) -> Text:
-        """The label, or the name in sentence case when there is none."""
-        return self.label if self.label is not None else plain(self.name.replace("_", " ").capitalize())
+        """The tag or vocabulary label, or the name in sentence case when there is none."""
+        if self.label is not None:
+            return self.label
+        return SEARCH_FIELDS.get(self.name) or plain(self.name.replace("_", " ").capitalize())
 
     def value_choices(self) -> tuple[FieldChoice, ...] | None:
         """List the values of an enumerated field across scopes; None for free-form fields."""
@@ -126,14 +128,7 @@ class FieldDefinition:
             for member in allowed or ():
                 if self.applies_to(scope, member.value):
                     scopes.setdefault(member.value, set()).add(scope)
-        return tuple(
-            FieldChoice(
-                value,
-                self.choice_label(value) if self.choice_label is not None else plain(value.replace("_", " ")),
-                frozenset(allowed),
-            )
-            for value, allowed in scopes.items()
-        )
+        return tuple(FieldChoice(value, frozenset(allowed)) for value, allowed in scopes.items())
 
     def applies_to(self, scope: SearchScope, value: object = None) -> bool:
         """Check the field and any scope restriction on a particular value."""

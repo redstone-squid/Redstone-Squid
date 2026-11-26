@@ -18,7 +18,7 @@ from squid.bot.catalogue.schematics.tools import SchematicTools
 from squid.bot.catalogue.search.clauses import CatalogueQuery
 from squid.bot.catalogue.search.filters import GuidedSearch, SearchSelection
 from squid.bot.catalogue.search.help import search_help
-from squid.bot.catalogue.search.labels import filter_label, sort_label
+from squid.bot.catalogue.search.labels import filter_label
 from squid.bot.catalogue.search.results import SearchFocus, SearchScreen
 from squid.bot.edit_controller import BoundEdit, EditController
 from squid.bot.routes import AppRequest, AppRoutes, ScreenUnavailable
@@ -734,7 +734,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
     def _find_nodes(self) -> list[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]]:
         nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = []
         query = _query_summary(self._query, records=self._mode == "records", creators=self._creator_names)
-        sort = sort_label(self._sort)
+        sort = self._search_fields.sort_label(self._sort)
         nodes.append(
             sd.v2.section(
                 tr(t"browse-query-summary = {query} · {sort}"),

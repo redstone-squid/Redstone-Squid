@@ -13054,7 +13054,7 @@
           "search"
         ],
         "summary": "ListSearchFields",
-        "description": "List the fields queries can use, labelled in the negotiated language.",
+        "description": "List the fields queries can use.",
         "operationId": "search_fields_list",
         "responses": {
           "200": {
@@ -29556,9 +29556,6 @@
             "$ref": "#/components/schemas/FieldType"
           },
           "label": {
-            "type": "string"
-          },
-          "description": {
             "oneOf": [
               {
                 "type": "string"
@@ -29566,7 +29563,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "description": "The data tag's name for a tag field; null for built-in fields."
           },
           "group": {
             "$ref": "#/components/schemas/FieldGroup"
@@ -29613,6 +29611,17 @@
             ],
             "description": "Every accepted value, or null for free-form fields."
           },
+          "vocabulary": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The vocabulary group that labels `choices`."
+          },
           "examples": {
             "items": {
               "type": "string"
@@ -29625,7 +29634,6 @@
         "required": [
           "aliases",
           "choices",
-          "description",
           "examples",
           "group",
           "label",
@@ -29635,16 +29643,14 @@
           "supports_range",
           "supports_sort",
           "type",
-          "unit"
+          "unit",
+          "vocabulary"
         ],
         "title": "SearchField"
       },
       "SearchFieldChoice": {
         "properties": {
           "value": {
-            "type": "string"
-          },
-          "label": {
             "type": "string"
           },
           "scopes": {
@@ -29657,7 +29663,6 @@
         },
         "type": "object",
         "required": [
-          "label",
           "scopes",
           "value"
         ],

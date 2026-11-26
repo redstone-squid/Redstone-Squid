@@ -5577,7 +5577,7 @@ schematics-upload-litematic-schem = Upload a .litematic, .schem, .schematic, .nb
 # squid/core/schematics/application/commands.py:63
 schematics-zoom-positive = Render zoom must be positive.
 
-# squid/core/search/application/fields.py:655
+# squid/core/search/application/fields.py:479
 search-align-increments = { $field_name } must align to increments of { $step }
 
 # squid/core/search/domain/query.py:131
@@ -5585,48 +5585,6 @@ search-boolean-minimum-operands = Boolean expressions require at least two opera
 
 # squid/core/search/application/ranking.py:75
 search-branch-limit-positive = branch_limit must be positive
-
-# squid/core/search/application/fields.py:204
-search-choice-criterion =
-    { $value ->
-        [first] First
-        [fastest] Fastest
-        [smallest] Smallest
-        [fastest_smallest] Fastest smallest
-       *[smallest_fastest] Smallest fastest
-    }
-
-# squid/core/search/application/fields.py:192
-search-choice-kind =
-    { $value ->
-        [door] Door
-        [entrance] Entrance
-        [extender] Extender
-        [utility] Utility
-       *[other] Other
-    }
-
-# squid/core/search/application/fields.py:225
-search-choice-record-state =
-    { $value ->
-        [current] Current
-       *[retired] Retired
-    }
-
-# squid/core/search/application/fields.py:182
-search-choice-status =
-    { $value ->
-        [pending] Pending
-        [approved] Approved
-       *[rejected] Rejected
-    }
-
-# squid/core/search/application/fields.py:216
-search-choice-version-scope =
-    { $value ->
-        [all_time] All time
-       *[up_to_date] Up to date
-    }
 
 # squid/bot/catalogue/search/results.py:607
 search-close-match = close spelling
@@ -5661,271 +5619,37 @@ search-example-fastest-tall-doors = All-time fastest doors at least 3 blocks tal
 # squid/bot/catalogue/search/help.py:29
 search-example-long-extenders = Current smallest extenders reaching at least 4 blocks
 
-# squid/core/search/application/fields.py:165
+# squid/core/search/application/fields.py:181
 search-expects-boolean = { $field_name } expects a boolean
 
-# squid/core/search/application/fields.py:155
+# squid/core/search/application/fields.py:171
 search-expects-iso-date = { $field_name } expects an ISO-8601 date or timestamp
 
-# squid/core/search/application/fields.py:147
+# squid/core/search/application/fields.py:163
 search-expects-number = { $field_name } expects a number
 
-# squid/core/search/application/fields.py:414
-search-field-base-title = Record criterion
-
-# squid/core/search/application/fields.py:603
-search-field-closing-reset-time = Closing reset time
-
-# squid/core/search/application/fields.py:604
-search-field-closing-reset-time-description = Ticks after closing until the door accepts input again.
-
-# squid/core/search/application/fields.py:586
-search-field-closing-time = Closing time
-
-# squid/core/search/application/fields.py:587
-search-field-closing-time-description = Ticks from input until the door is closed.
-
-# squid/core/search/application/fields.py:548
-search-field-completion-at = Completed
-
-# squid/core/search/application/fields.py:549
-search-field-completion-at-description = When the creators finished the build.
-
-# squid/core/search/application/fields.py:558
-search-field-created-at = Submitted
-
-# squid/core/search/application/fields.py:559
-search-field-created-at-description = When the build was submitted.
-
-# squid/core/search/application/fields.py:365
-search-field-creator = Creator
-
-# squid/core/search/application/fields.py:366
-search-field-creator-description = A credited creator's name or public creator ID.
-
-# squid/core/search/application/fields.py:415
-search-field-criterion-description = What the record measures, such as fastest or smallest.
-
-# squid/core/search/application/fields.py:500
-search-field-depth = Depth
-
-# squid/core/search/application/fields.py:501
-search-field-depth-description = The build's depth in blocks.
-
-# squid/core/search/application/fields.py:309
-search-field-description = Description
-
-# squid/core/search/application/fields.py:310
-search-field-description-description = Words in the build's description.
-
-# squid/core/search/application/fields.py:518
-search-field-door-depth = Door depth
-
-# squid/core/search/application/fields.py:519
-search-field-door-depth-description = The depth of the doorway in blocks.
-
-# squid/core/search/application/fields.py:512
-search-field-door-height = Door height
-
-# squid/core/search/application/fields.py:513
-search-field-door-height-description = The height of the doorway in blocks.
-
-# squid/core/search/application/fields.py:506
-search-field-door-width = Door width
-
-# squid/core/search/application/fields.py:507
-search-field-door-width-description = The width of the doorway in blocks.
-
-# squid/core/search/application/fields.py:138
+# squid/core/search/application/fields.py:154
 search-field-expects-choice = { $field_name } expects one of { $choices }.
 
-# squid/core/search/application/fields.py:538
-search-field-extender-length = Extender length
-
-# squid/core/search/application/fields.py:539
-search-field-extender-length-description = How many blocks the extender reaches.
-
-# squid/core/search/application/fields.py:620
-search-field-extension-reset-time = Extension reset time
-
-# squid/core/search/application/fields.py:621
-search-field-extension-reset-time-description = Ticks after extending until the extender accepts input again.
-
-# squid/core/search/application/fields.py:610
-search-field-extension-time = Extension time
-
-# squid/core/search/application/fields.py:611
-search-field-extension-time-description = Ticks from input until the extender is extended.
-
-# squid/core/search/application/fields.py:459
-search-field-former-holder = Former holder
-
-# squid/core/search/application/fields.py:460
-search-field-former-holder-description = The ID of a build that used to hold the record.
-
-# squid/core/search/application/fields.py:494
-search-field-height = Height
-
-# squid/core/search/application/fields.py:495
-search-field-height-description = The build's height in blocks.
-
-# squid/core/search/application/fields.py:397
-search-field-kind = Kind
-
-# squid/core/search/application/fields.py:398
-search-field-kind-description = What the build is: a door, entrance, extender or utility.
-
-# squid/core/search/application/fields.py:288
-search-field-name = Name
-
-# squid/core/search/application/fields.py:289
-search-field-name-description = Words in the build's own name.
-
-# squid/core/search/application/fields.py:596
-search-field-opening-reset-time = Opening reset time
-
-# squid/core/search/application/fields.py:597
-search-field-opening-reset-time-description = Ticks after opening until the door accepts input again.
-
-# squid/core/search/application/fields.py:575
-search-field-opening-time = Opening time
-
-# squid/core/search/application/fields.py:576
-search-field-opening-time-description = Ticks from input until the door is open.
-
-# squid/core/search/application/fields.py:526
-search-field-orientation = Orientation
-
-# squid/core/search/application/fields.py:527
-search-field-orientation-description = How the door is placed, such as door, trapdoor or skydoor.
-
-# squid/core/search/application/fields.py:354
-search-field-pattern = Pattern
-
-# squid/core/search/application/fields.py:355
-search-field-pattern-description = The door's opening pattern.
-
-# squid/core/search/application/fields.py:442
-search-field-record-state = Record state
-
-# squid/core/search/application/fields.py:443
-search-field-record-state-description = Whether a record is current or retired. Retired records only appear when asked for.
-
-# squid/core/search/application/fields.py:330
-search-field-restriction = Restriction
-
-# squid/core/search/application/fields.py:331
-search-field-restriction-description = A component or design restriction the build follows.
-
-# squid/core/search/application/fields.py:627
-search-field-retraction-reset-time = Retraction reset time
-
-# squid/core/search/application/fields.py:628
-search-field-retraction-reset-time-description = Ticks after retracting until the extender accepts input again.
-
-# squid/core/search/application/fields.py:615
-search-field-retraction-time = Retraction time
-
-# squid/core/search/application/fields.py:616
-search-field-retraction-time-description = Ticks from input until the extender is retracted.
-
-# squid/core/search/application/fields.py:385
-search-field-status = Status
-
-# squid/core/search/application/fields.py:386
-search-field-status-description = The build's review status.
-
-# squid/core/search/application/fields.py:299
-search-field-subtitle = Subtitle
-
-# squid/core/search/application/fields.py:300
-search-field-subtitle-description = Words in the line shown under the title.
-
-# squid/core/search/application/fields.py:318
-search-field-tag = Tag
-
-# squid/core/search/application/fields.py:319
-search-field-tag-description = A showcase tag on the build.
-
-# squid/core/search/application/fields.py:468
-search-field-tied = Tied build
-
-# squid/core/search/application/fields.py:469
-search-field-tied-description = The ID of a build that shares the record.
-
-# squid/core/search/application/fields.py:278
-search-field-title = Title
-
-# squid/core/search/application/fields.py:279
-search-field-title-description = Words in the build or record title.
-
-# squid/core/search/application/fields.py:344
-search-field-type = Type
-
-# squid/core/search/application/fields.py:345
-search-field-type-description = The build's type, such as flush or seamless.
-
-# squid/core/search/application/fields.py:568
-search-field-updated-at = Updated
-
-# squid/core/search/application/fields.py:569
-search-field-updated-at-description = When the build was last changed.
-
-# squid/core/search/application/fields.py:375
-search-field-version = Version
-
-# squid/core/search/application/fields.py:376
-search-field-version-description = A Minecraft version the build works in.
-
-# squid/core/search/application/fields.py:428
-search-field-version-scope = Version scope
-
-# squid/core/search/application/fields.py:429
-search-field-version-scope-description = Whether the record compares builds from every version or only those that work today.
-
-# squid/core/search/application/fields.py:591
-search-field-visible-closing-time = Visible closing time
-
-# squid/core/search/application/fields.py:592
-search-field-visible-closing-time-description = Ticks from input until the door looks closed.
-
-# squid/core/search/application/fields.py:581
-search-field-visible-opening-time = Visible opening time
-
-# squid/core/search/application/fields.py:582
-search-field-visible-opening-time-description = Ticks from input until the door looks open.
-
-# squid/core/search/application/fields.py:481
-search-field-volume = Volume
-
-# squid/core/search/application/fields.py:482
-search-field-volume-description = The number of blocks in the build's bounding box.
-
-# squid/core/search/application/fields.py:488
-search-field-width = Width
-
-# squid/core/search/application/fields.py:489
-search-field-width-description = The build's width in blocks.
-
-# squid/bot/catalogue/search/labels.py:96
+# squid/bot/catalogue/search/labels.py:95
 search-filter-contains = { $name } has “{ $shown }”
 
-# squid/bot/catalogue/search/labels.py:80, squid/bot/catalogue/search/labels.py:97
+# squid/bot/catalogue/search/labels.py:79, squid/bot/catalogue/search/labels.py:96
 search-filter-equals = { $name } is { $shown }
 
-# squid/bot/catalogue/search/labels.py:74
+# squid/bot/catalogue/search/labels.py:73
 search-filter-is-not-set = { $name } is not set
 
-# squid/bot/catalogue/search/labels.py:73
+# squid/bot/catalogue/search/labels.py:72
 search-filter-is-set = { $name } is set
 
-# squid/bot/catalogue/search/labels.py:69
+# squid/bot/catalogue/search/labels.py:68
 search-filter-keywords = Keywords: { $words }
 
-# squid/bot/catalogue/search/labels.py:66
+# squid/bot/catalogue/search/labels.py:65
 search-filter-not = Not: { $inner }
 
-# squid/bot/catalogue/search/labels.py:92
+# squid/bot/catalogue/search/labels.py:91
 search-filter-range = { $name } { $lower } to { $upper }
 
 # squid/bot/catalogue/search/results.py:509
@@ -5958,7 +5682,7 @@ search-k-positive = k must be positive
 # squid/bot/catalogue/search/results.py:599
 search-match-holder = Holder
 
-# squid/core/search/domain/query.py:156
+# squid/core/search/domain/query.py:169
 search-query-incompatible-scope = This query contains filters that cannot be used in { $scope }.
 
 # squid/bot/catalogue/search/help.py:178
@@ -6072,25 +5796,25 @@ search-reference-tags = `restriction:observerless`, `pattern:"full seamless"`, `
 # squid/bot/catalogue/search/help.py:81
 search-reference-version-scope = `version_scope:` { $scopes }
 
-# squid/core/search/application/fields.py:650
+# squid/core/search/application/fields.py:474
 search-search-numbers-finite = Search numbers must be finite
 
-# squid/core/search/application/services.py:84
+# squid/core/search/application/services.py:88
 search-search-results-sorted = Search results cannot be sorted by { $field_name }.
 
-# squid/bot/catalogue/search/labels.py:115
+# squid/core/search/application/fields.py:106
 search-sort-ascending = { $field }, smallest first
 
-# squid/bot/catalogue/search/labels.py:105
+# squid/core/search/application/fields.py:95
 search-sort-default = Default order
 
-# squid/bot/catalogue/search/labels.py:114
+# squid/core/search/application/fields.py:105
 search-sort-descending = { $field }, largest first
 
-# squid/bot/catalogue/search/labels.py:111
+# squid/core/search/application/fields.py:102
 search-sort-newest = { $field }, newest first
 
-# squid/bot/catalogue/search/labels.py:112
+# squid/core/search/application/fields.py:103
 search-sort-oldest = { $field }, oldest first
 
 # squid/core/search/application/ranking.py:82
@@ -7163,6 +6887,213 @@ vocabulary-record-fact-retraction-reset = Retraction reset time
 
 # squid/core/vocabulary.py:37
 vocabulary-record-fact-volume = Volume
+
+# squid/core/vocabulary.py:63
+vocabulary-record-state-current = Current
+
+# squid/core/vocabulary.py:64
+vocabulary-record-state-retired = Retired
+
+# squid/core/vocabulary.py:58
+vocabulary-search-build-kind-other = Other
+
+# squid/core/vocabulary.py:96
+vocabulary-search-field-created-at = Submitted
+
+# squid/core/vocabulary.py:77
+vocabulary-search-field-creator = Creator
+
+# squid/core/vocabulary.py:81
+vocabulary-search-field-criterion = Record criterion
+
+# squid/core/vocabulary.py:89
+vocabulary-search-field-depth = Depth
+
+# squid/core/vocabulary.py:72
+vocabulary-search-field-description = Description
+
+# squid/core/vocabulary.py:167
+vocabulary-search-field-description-closing-reset-time = Ticks after closing until the door accepts input again.
+
+# squid/core/vocabulary.py:158
+vocabulary-search-field-description-closing-time = Ticks from input until the door is closed.
+
+# squid/core/vocabulary.py:151
+vocabulary-search-field-description-completion-at = When the creators finished the build.
+
+# squid/core/vocabulary.py:152
+vocabulary-search-field-description-created-at = When the build was submitted.
+
+# squid/core/vocabulary.py:121
+vocabulary-search-field-description-creator = A credited creator's name or public creator ID.
+
+# squid/core/vocabulary.py:125
+vocabulary-search-field-description-criterion = What the record measures, such as fastest or smallest.
+
+# squid/core/vocabulary.py:141
+vocabulary-search-field-description-depth = The build's depth in blocks.
+
+# squid/core/vocabulary.py:114
+vocabulary-search-field-description-description = Words in the build's description.
+
+# squid/core/vocabulary.py:144
+vocabulary-search-field-description-door-depth = The depth of the doorway in blocks.
+
+# squid/core/vocabulary.py:143
+vocabulary-search-field-description-door-height = The height of the doorway in blocks.
+
+# squid/core/vocabulary.py:142
+vocabulary-search-field-description-door-width = The width of the doorway in blocks.
+
+# squid/core/vocabulary.py:148
+vocabulary-search-field-description-extender-length = How many blocks the extender reaches.
+
+# squid/core/vocabulary.py:176
+vocabulary-search-field-description-extension-reset-time = Ticks after extending until the extender accepts input again.
+
+# squid/core/vocabulary.py:170
+vocabulary-search-field-description-extension-time = Ticks from input until the extender is extended.
+
+# squid/core/vocabulary.py:134
+vocabulary-search-field-description-former-holder = The ID of a build that used to hold the record.
+
+# squid/core/vocabulary.py:140
+vocabulary-search-field-description-height = The build's height in blocks.
+
+# squid/core/vocabulary.py:124
+vocabulary-search-field-description-kind = What the build is: a door, entrance, extender or utility.
+
+# squid/core/vocabulary.py:112
+vocabulary-search-field-description-name = Words in the build's own name.
+
+# squid/core/vocabulary.py:164
+vocabulary-search-field-description-opening-reset-time = Ticks after opening until the door accepts input again.
+
+# squid/core/vocabulary.py:154
+vocabulary-search-field-description-opening-time = Ticks from input until the door is open.
+
+# squid/core/vocabulary.py:145
+vocabulary-search-field-description-orientation = How the door is placed, such as door, trapdoor or skydoor.
+
+# squid/core/vocabulary.py:120
+vocabulary-search-field-description-pattern = The door's opening pattern.
+
+# squid/core/vocabulary.py:131
+vocabulary-search-field-description-record-state = Whether a record is current or retired. Retired records only appear when asked for.
+
+# squid/core/vocabulary.py:116
+vocabulary-search-field-description-restriction = A component or design restriction the build follows.
+
+# squid/core/vocabulary.py:179
+vocabulary-search-field-description-retraction-reset-time = Ticks after retracting until the extender accepts input again.
+
+# squid/core/vocabulary.py:173
+vocabulary-search-field-description-retraction-time = Ticks from input until the extender is retracted.
+
+# squid/core/vocabulary.py:123
+vocabulary-search-field-description-status = The build's review status.
+
+# squid/core/vocabulary.py:113
+vocabulary-search-field-description-subtitle = Words in the line shown under the title.
+
+# squid/core/vocabulary.py:115
+vocabulary-search-field-description-tag = A showcase tag on the build.
+
+# squid/core/vocabulary.py:137
+vocabulary-search-field-description-tied = The ID of a build that shares the record.
+
+# squid/core/vocabulary.py:111
+vocabulary-search-field-description-title = Words in the build or record title.
+
+# squid/core/vocabulary.py:119
+vocabulary-search-field-description-type = The build's type, such as flush or seamless.
+
+# squid/core/vocabulary.py:153
+vocabulary-search-field-description-updated-at = When the build was last changed.
+
+# squid/core/vocabulary.py:122
+vocabulary-search-field-description-version = A Minecraft version the build works in.
+
+# squid/core/vocabulary.py:128
+vocabulary-search-field-description-version-scope = Whether the record compares builds from every version or only those that work today.
+
+# squid/core/vocabulary.py:161
+vocabulary-search-field-description-visible-closing-time = Ticks from input until the door looks closed.
+
+# squid/core/vocabulary.py:155
+vocabulary-search-field-description-visible-opening-time = Ticks from input until the door looks open.
+
+# squid/core/vocabulary.py:138
+vocabulary-search-field-description-volume = The number of blocks in the build's bounding box.
+
+# squid/core/vocabulary.py:139
+vocabulary-search-field-description-width = The build's width in blocks.
+
+# squid/core/vocabulary.py:92
+vocabulary-search-field-door-depth = Door depth
+
+# squid/core/vocabulary.py:91
+vocabulary-search-field-door-height = Door height
+
+# squid/core/vocabulary.py:90
+vocabulary-search-field-door-width = Door width
+
+# squid/core/vocabulary.py:94
+vocabulary-search-field-extender-length = Extender length
+
+# squid/core/vocabulary.py:84
+vocabulary-search-field-former-holder = Former holder
+
+# squid/core/vocabulary.py:88
+vocabulary-search-field-height = Height
+
+# squid/core/vocabulary.py:80
+vocabulary-search-field-kind = Kind
+
+# squid/core/vocabulary.py:70
+vocabulary-search-field-name = Name
+
+# squid/core/vocabulary.py:93
+vocabulary-search-field-orientation = Orientation
+
+# squid/core/vocabulary.py:76
+vocabulary-search-field-pattern = Pattern
+
+# squid/core/vocabulary.py:83
+vocabulary-search-field-record-state = Record state
+
+# squid/core/vocabulary.py:74
+vocabulary-search-field-restriction = Restriction
+
+# squid/core/vocabulary.py:79
+vocabulary-search-field-status = Status
+
+# squid/core/vocabulary.py:71
+vocabulary-search-field-subtitle = Subtitle
+
+# squid/core/vocabulary.py:73
+vocabulary-search-field-tag = Tag
+
+# squid/core/vocabulary.py:85
+vocabulary-search-field-tied = Tied build
+
+# squid/core/vocabulary.py:69
+vocabulary-search-field-title = Title
+
+# squid/core/vocabulary.py:75
+vocabulary-search-field-type = Type
+
+# squid/core/vocabulary.py:97
+vocabulary-search-field-updated-at = Updated
+
+# squid/core/vocabulary.py:78
+vocabulary-search-field-version = Version
+
+# squid/core/vocabulary.py:82
+vocabulary-search-field-version-scope = Version scope
+
+# squid/core/vocabulary.py:87
+vocabulary-search-field-width = Width
 
 # squid/core/vocabulary.py:31
 vocabulary-version-scope-all-time = All time

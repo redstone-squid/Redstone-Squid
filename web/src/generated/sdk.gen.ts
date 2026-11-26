@@ -1388,7 +1388,7 @@ export const schematicVideoContent = <ThrowOnError extends boolean = false>(opti
 /**
  * ListSearchFields
  *
- * List the fields queries can use, labelled in the negotiated language.
+ * List the fields queries can use.
  */
 export const searchFieldsList = <ThrowOnError extends boolean = false>(options?: Options<SearchFieldsListData, ThrowOnError>): RequestResult<SearchFieldsListResponses, SearchFieldsListErrors, ThrowOnError> => (options?.client ?? client).get<SearchFieldsListResponses, SearchFieldsListErrors, ThrowOnError>({ url: '/v1/search/fields', ...options });
 

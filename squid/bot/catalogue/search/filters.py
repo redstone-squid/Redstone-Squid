@@ -14,7 +14,7 @@ import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.app import RedstoneSquid
 from squid.bot.catalogue.search.clauses import CatalogueQuery
-from squid.bot.catalogue.search.labels import filter_label, sort_label
+from squid.bot.catalogue.search.labels import filter_label
 from squid.bot.lookup import RequestAuthorizer, SuggestionSource
 from squid.bot.ui import tr
 from squid.core.actors import ActingContext
@@ -480,7 +480,7 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
             "search_sorts",
             self._sort_picked,
             key="sort-lookup",
-            label=lambda item: sort_label(item.value),
+            label=lambda item: self.parser.registry.sort_label(item.value),
             search_label=tr(t"guided-search-search-options = Search sort orders"),
             context={"scope": self.scope},
         )

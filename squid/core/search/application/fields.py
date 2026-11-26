@@ -89,6 +89,22 @@ class FieldRegistry:
         field = self._fields.get(name.casefold()) or self._stored.get(name)
         return field.display_name if field is not None else plain(name.replace("_", " ").capitalize())
 
+    def sort_label(self, sort: str) -> Text:
+        """Describe a `field` or `-field` sort, such as "Submitted, newest first"; empty is the default order."""
+        if not sort:
+            return tr(t"search-sort-default = Default order")
+        descending = sort.startswith("-")
+        name = sort.removeprefix("-")
+        field = self.display_name(name)
+        definition = self.resolve(name)
+        if definition is not None and definition.value_type is FieldType.TIMESTAMP:
+            if descending:
+                return tr(t"search-sort-newest = {field}, newest first")
+            return tr(t"search-sort-oldest = {field}, oldest first")
+        if descending:
+            return tr(t"search-sort-descending = {field}, largest first")
+        return tr(t"search-sort-ascending = {field}, smallest first")
+
     def stored(self, storage: str) -> FieldDefinition | None:
         """Find the field whose values are indexed under `storage`, queryable or not."""
         return self._stored.get(storage)
@@ -178,59 +194,7 @@ class FieldRegistry:
 _GAME_TICK_UNITS = (("gt", Decimal(1)), ("s", Decimal(20)))
 
 
-def _status_label(value: str) -> Text:
-    return tr(t"""
-        search-choice-status = {{ {value} ->
-            [pending] Pending
-            [approved] Approved
-           *[rejected] Rejected
-        }}
-    """)
-
-
-def _kind_label(value: str) -> Text:
-    return tr(t"""
-        search-choice-kind = {{ {value} ->
-            [door] Door
-            [entrance] Entrance
-            [extender] Extender
-            [utility] Utility
-           *[other] Other
-        }}
-    """)
-
-
-def _criterion_label(value: str) -> Text:
-    return tr(t"""
-        search-choice-criterion = {{ {value} ->
-            [first] First
-            [fastest] Fastest
-            [smallest] Smallest
-            [fastest_smallest] Fastest smallest
-           *[smallest_fastest] Smallest fastest
-        }}
-    """)
-
-
-def _version_scope_label(value: str) -> Text:
-    return tr(t"""
-        search-choice-version-scope = {{ {value} ->
-            [all_time] All time
-           *[up_to_date] Up to date
-        }}
-    """)
-
-
-def _record_state_label(value: str) -> Text:
-    return tr(t"""
-        search-choice-record-state = {{ {value} ->
-            [current] Current
-           *[retired] Retired
-        }}
-    """)
-
-
-def _timing(name: str, label: Text, description: Text, *, sortable: bool = False) -> FieldDefinition:
+def _timing(name: str, *, sortable: bool = False) -> FieldDefinition:
     return FieldDefinition(
         name,
         FieldType.NUMBER,
@@ -240,22 +204,18 @@ def _timing(name: str, label: Text, description: Text, *, sortable: bool = False
         supports_sort=sortable,
         unit_scales=_GAME_TICK_UNITS,
         unit="gt",
-        label=label,
-        description=description,
         group=FieldGroup.TIMING,
         examples=(f"{name}<20", f"{name}:[1s TO 2s]"),
     )
 
 
-def _dimension(name: str, label: Text, description: Text, *, scopes: frozenset[SearchScope]) -> FieldDefinition:
+def _dimension(name: str, *, scopes: frozenset[SearchScope]) -> FieldDefinition:
     return FieldDefinition(
         name,
         FieldType.NUMBER,
         supports_range=True,
         supports_sort=True,
         scopes=scopes,
-        label=label,
-        description=description,
         group=FieldGroup.SIZE,
         examples=(f"{name}:3", f"{name}<=5"),
     )
@@ -275,8 +235,6 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
             scopes=CATALOGUE_SCOPES,
             text_match=_WORDS,
             free_text=FreeTextWeight.A,
-            label=tr(t"search-field-title = Title"),
-            description=tr(t"search-field-title-description = Words in the build or record title."),
             examples=("title:piston", 'title:"flush door"'),
         ),
         FieldDefinition(
@@ -285,8 +243,6 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
             ranked=True,
             text_match=_WORDS,
             free_text=FreeTextWeight.A,
-            label=tr(t"search-field-name = Name"),
-            description=tr(t"search-field-name-description = Words in the build's own name."),
             examples=("name:cobble",),
         ),
         FieldDefinition(
@@ -296,8 +252,6 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
             scopes=CATALOGUE_SCOPES,
             text_match=_WORDS,
             free_text=FreeTextWeight.B,
-            label=tr(t"search-field-subtitle = Subtitle"),
-            description=tr(t"search-field-subtitle-description = Words in the line shown under the title."),
             examples=("subtitle:seamless",),
         ),
         FieldDefinition(
@@ -306,8 +260,6 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
             ranked=True,
             text_match=_WORDS,
             free_text=FreeTextWeight.D,
-            label=tr(t"search-field-description = Description"),
-            description=tr(t"search-field-description-description = Words in the build's description."),
             examples=("description:tileable",),
         ),
         FieldDefinition(
@@ -315,8 +267,6 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
             FieldType.TEXT,
             ranked=True,
             free_text=FreeTextWeight.B,
-            label=tr(t"search-field-tag = Tag"),
-            description=tr(t"search-field-tag-description = A showcase tag on the build."),
             group=FieldGroup.CLASSIFICATION,
             examples=("tag:tileable",),
         ),
@@ -327,10 +277,6 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
             scopes=CATALOGUE_SCOPES,
             unranked_scopes=_RECORDS,
             free_text=FreeTextWeight.B,
-            label=tr(t"search-field-restriction = Restriction"),
-            description=tr(
-                t"search-field-restriction-description = A component or design restriction the build follows."
-            ),
             group=FieldGroup.CLASSIFICATION,
             examples=("restriction:observerless", "NOT restriction:slimeless"),
         ),
@@ -341,8 +287,6 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
             scopes=CATALOGUE_SCOPES,
             unranked_scopes=_RECORDS,
             free_text=FreeTextWeight.B,
-            label=tr(t"search-field-type = Type"),
-            description=tr(t"search-field-type-description = The build's type, such as flush or seamless."),
             group=FieldGroup.CLASSIFICATION,
             examples=("type:flush",),
         ),
@@ -351,8 +295,6 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
             FieldType.TEXT,
             ranked=True,
             free_text=FreeTextWeight.B,
-            label=tr(t"search-field-pattern = Pattern"),
-            description=tr(t"search-field-pattern-description = The door's opening pattern."),
             group=FieldGroup.CLASSIFICATION,
             examples=("pattern:regular",),
         ),
@@ -362,8 +304,6 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
             ranked=True,
             scopes=CATALOGUE_SCOPES,
             free_text=FreeTextWeight.C,
-            label=tr(t"search-field-creator = Creator"),
-            description=tr(t"search-field-creator-description = A credited creator's name or public creator ID."),
             group=FieldGroup.CREDIT,
             examples=("creator:Steve",),
         ),
@@ -372,8 +312,6 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
             "version",
             FieldType.TEXT,
             free_text=FreeTextWeight.D,
-            label=tr(t"search-field-version = Version"),
-            description=tr(t"search-field-version-description = A Minecraft version the build works in."),
             group=FieldGroup.CLASSIFICATION,
             examples=("version:1.21",),
         ),
@@ -382,11 +320,9 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
             FieldType.TEXT,
             scopes=_BUILDS,
             scoped_enums=((SearchScope.BUILDS, BuildSearchStatus),),
-            label=tr(t"search-field-status = Status"),
-            description=tr(t"search-field-status-description = The build's review status."),
             group=FieldGroup.CLASSIFICATION,
             examples=("status:approved",),
-            choice_label=_status_label,
+            vocabulary="build_status",
         ),
         FieldDefinition(
             "kind",
@@ -394,13 +330,9 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
             scopes=CATALOGUE_SCOPES,
             scoped_enums=((SearchScope.BUILDS, SearchBuildKind), (SearchScope.RECORDS, SearchBuildKind)),
             value_scopes=((SearchBuildKind.OTHER, SearchScope.BUILDS),),
-            label=tr(t"search-field-kind = Kind"),
-            description=tr(
-                t"search-field-kind-description = What the build is: a door, entrance, extender or utility."
-            ),
             group=FieldGroup.CLASSIFICATION,
             examples=("kind:door",),
-            choice_label=_kind_label,
+            vocabulary="search_build_kind",
         ),
         FieldDefinition(
             "criterion",
@@ -411,13 +343,9 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
             scopes=_RECORDS,
             value_enum=RecordCriterion,
             free_text=FreeTextWeight.B,
-            label=tr(t"search-field-base-title = Record criterion"),
-            description=tr(
-                t"search-field-criterion-description = What the record measures, such as fastest or smallest."
-            ),
             group=FieldGroup.RECORD,
             examples=("criterion:fastest", "fastest 2x2 door"),
-            choice_label=_criterion_label,
+            vocabulary="record_criterion",
         ),
         FieldDefinition(
             "version_scope",
@@ -425,13 +353,9 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
             suggested_values=tuple(scope.value for scope in VersionScope),
             scopes=_RECORDS,
             value_enum=VersionScope,
-            label=tr(t"search-field-version-scope = Version scope"),
-            description=tr(
-                t"search-field-version-scope-description = Whether the record compares builds from every version or only those that work today."
-            ),
             group=FieldGroup.RECORD,
             examples=("version_scope:up_to_date",),
-            choice_label=_version_scope_label,
+            vocabulary="version_scope",
         ),
         FieldDefinition(
             "record_state",
@@ -439,13 +363,9 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
             scopes=_RECORDS,
             suggested_values=tuple(state.value for state in RecordState),
             value_enum=RecordState,
-            label=tr(t"search-field-record-state = Record state"),
-            description=tr(
-                t"search-field-record-state-description = Whether a record is current or retired. Retired records only appear when asked for."
-            ),
             group=FieldGroup.RECORD,
             examples=("record_state:retired",),
-            choice_label=_record_state_label,
+            vocabulary="record_state",
         ),
         # Holders are matched by build ID; their titles and credits only answer bare text,
         # and rank below the record's own category text.
@@ -456,8 +376,6 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
             "former_holder",
             FieldType.NUMBER,
             scopes=_RECORDS,
-            label=tr(t"search-field-former-holder = Former holder"),
-            description=tr(t"search-field-former-holder-description = The ID of a build that used to hold the record."),
             group=FieldGroup.RECORD,
             examples=("former_holder:42",),
         ),
@@ -465,8 +383,6 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
             "tied",
             FieldType.NUMBER,
             scopes=_RECORDS,
-            label=tr(t"search-field-tied = Tied build"),
-            description=tr(t"search-field-tied-description = The ID of a build that shares the record."),
             group=FieldGroup.RECORD,
             examples=("tied:42",),
         ),
@@ -478,55 +394,15 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
             supports_sort=True,
             scopes=CATALOGUE_SCOPES,
             holder_scoped=True,
-            label=tr(t"search-field-volume = Volume"),
-            description=tr(t"search-field-volume-description = The number of blocks in the build's bounding box."),
             group=FieldGroup.SIZE,
             examples=("volume<1000",),
         ),
-        _dimension(
-            "width",
-            tr(t"search-field-width = Width"),
-            tr(t"search-field-width-description = The build's width in blocks."),
-            scopes=_BUILDS,
-        ),
-        _dimension(
-            "height",
-            tr(t"search-field-height = Height"),
-            tr(t"search-field-height-description = The build's height in blocks."),
-            scopes=_BUILDS,
-        ),
-        _dimension(
-            "depth",
-            tr(t"search-field-depth = Depth"),
-            tr(t"search-field-depth-description = The build's depth in blocks."),
-            scopes=_BUILDS,
-        ),
-        _dimension(
-            "door_width",
-            tr(t"search-field-door-width = Door width"),
-            tr(t"search-field-door-width-description = The width of the doorway in blocks."),
-            scopes=CATALOGUE_SCOPES,
-        ),
-        _dimension(
-            "door_height",
-            tr(t"search-field-door-height = Door height"),
-            tr(t"search-field-door-height-description = The height of the doorway in blocks."),
-            scopes=CATALOGUE_SCOPES,
-        ),
-        _dimension(
-            "door_depth",
-            tr(t"search-field-door-depth = Door depth"),
-            tr(t"search-field-door-depth-description = The depth of the doorway in blocks."),
-            scopes=CATALOGUE_SCOPES,
-        ),
+        *(_dimension(name, scopes=_BUILDS) for name in ("width", "height", "depth")),
+        *(_dimension(name, scopes=CATALOGUE_SCOPES) for name in ("door_width", "door_height", "door_depth")),
         FieldDefinition(
             "orientation",
             FieldType.TEXT,
             scopes=CATALOGUE_SCOPES,
-            label=tr(t"search-field-orientation = Orientation"),
-            description=tr(
-                t"search-field-orientation-description = How the door is placed, such as door, trapdoor or skydoor."
-            ),
             group=FieldGroup.CLASSIFICATION,
             examples=("orientation:trapdoor",),
         ),
@@ -535,8 +411,6 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
             FieldType.NUMBER,
             supports_range=True,
             scopes=CATALOGUE_SCOPES,
-            label=tr(t"search-field-extender-length = Extender length"),
-            description=tr(t"search-field-extender-length-description = How many blocks the extender reaches."),
             group=FieldGroup.SIZE,
             examples=("extender_length>=10",),
         ),
@@ -545,8 +419,6 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
             FieldType.TIMESTAMP,
             supports_range=True,
             aliases=("completion_date",),
-            label=tr(t"search-field-completion-at = Completed"),
-            description=tr(t"search-field-completion-at-description = When the creators finished the build."),
             group=FieldGroup.DATE,
             examples=("completion_at>=2024-01-01",),
         ),
@@ -555,8 +427,6 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
             FieldType.TIMESTAMP,
             supports_range=True,
             supports_sort=True,
-            label=tr(t"search-field-created-at = Submitted"),
-            description=tr(t"search-field-created-at-description = When the build was submitted."),
             group=FieldGroup.DATE,
             examples=("created_at:[2025-01-01 TO 2025-06-30]",),
         ),
@@ -565,69 +435,23 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
             FieldType.TIMESTAMP,
             supports_range=True,
             supports_sort=True,
-            label=tr(t"search-field-updated-at = Updated"),
-            description=tr(t"search-field-updated-at-description = When the build was last changed."),
             group=FieldGroup.DATE,
             examples=("updated_at>=2025-01-01",),
         ),
-        _timing(
-            "opening_time",
-            tr(t"search-field-opening-time = Opening time"),
-            tr(t"search-field-opening-time-description = Ticks from input until the door is open."),
-            sortable=True,
-        ),
-        _timing(
-            "visible_opening_time",
-            tr(t"search-field-visible-opening-time = Visible opening time"),
-            tr(t"search-field-visible-opening-time-description = Ticks from input until the door looks open."),
-        ),
-        _timing(
-            "closing_time",
-            tr(t"search-field-closing-time = Closing time"),
-            tr(t"search-field-closing-time-description = Ticks from input until the door is closed."),
-        ),
-        _timing(
-            "visible_closing_time",
-            tr(t"search-field-visible-closing-time = Visible closing time"),
-            tr(t"search-field-visible-closing-time-description = Ticks from input until the door looks closed."),
-        ),
-        _timing(
-            "opening_reset_time",
-            tr(t"search-field-opening-reset-time = Opening reset time"),
-            tr(
-                t"search-field-opening-reset-time-description = Ticks after opening until the door accepts input again."
-            ),
-        ),
-        _timing(
-            "closing_reset_time",
-            tr(t"search-field-closing-reset-time = Closing reset time"),
-            tr(
-                t"search-field-closing-reset-time-description = Ticks after closing until the door accepts input again."
-            ),
-        ),
-        _timing(
-            "extension_time",
-            tr(t"search-field-extension-time = Extension time"),
-            tr(t"search-field-extension-time-description = Ticks from input until the extender is extended."),
-        ),
-        _timing(
-            "retraction_time",
-            tr(t"search-field-retraction-time = Retraction time"),
-            tr(t"search-field-retraction-time-description = Ticks from input until the extender is retracted."),
-        ),
-        _timing(
-            "extension_reset_time",
-            tr(t"search-field-extension-reset-time = Extension reset time"),
-            tr(
-                t"search-field-extension-reset-time-description = Ticks after extending until the extender accepts input again."
-            ),
-        ),
-        _timing(
-            "retraction_reset_time",
-            tr(t"search-field-retraction-reset-time = Retraction reset time"),
-            tr(
-                t"search-field-retraction-reset-time-description = Ticks after retracting until the extender accepts input again."
-            ),
+        *(
+            _timing(name, sortable=name == "opening_time")
+            for name in (
+                "opening_time",
+                "visible_opening_time",
+                "closing_time",
+                "visible_closing_time",
+                "opening_reset_time",
+                "closing_reset_time",
+                "extension_time",
+                "retraction_time",
+                "extension_reset_time",
+                "retraction_reset_time",
+            )
         ),
     )
 )

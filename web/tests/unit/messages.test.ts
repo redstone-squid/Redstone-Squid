@@ -184,4 +184,12 @@ describe("vocabulary compiler", () => {
     ).toThrow("must label exactly");
     expect(() => compileVocabulary({ en: { mystery: labels } }, ["en"])).toThrow("OpenAPI type");
   });
+
+  it("keys open groups by string and leaves unknown values unlabelled", () => {
+    const source = compileVocabulary({ en: { search_field: { width: "Width" } } }, ["en"]);
+    expect(source).toContain(
+      "export function searchFieldLabel(value: string, locale: Locale = getLocale()): string | undefined",
+    );
+    expect(source).not.toContain("types.gen");
+  });
 });
