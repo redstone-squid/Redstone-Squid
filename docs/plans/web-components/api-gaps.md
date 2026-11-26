@@ -78,9 +78,9 @@ Items 1–4 are implemented in the API.
 
 ## Notifications
 
-29. **Typed payloads.** `InboxNotificationDetail.payload` becomes a discriminated union per `NotificationKind`, with typed fields such as `{build: {id, title}, records: [{id, title}]}` and `href`. Without this, A6 can't render items safely.
-30. **Inbox list improvements.** The page response gains `unread_count`; add the query param `unread_only=true` and `POST /v1/users/me/notifications/inbox/read-all`. Needed by A6 and the header bell.
-31. **Readable subscriptions.** `NotificationSubscriptionDetail` gains `subject_label`, `subject_href`, and `filter_summary` (a localized string), so A7 can show readable items. Add `GET …/subscriptions?kind&subject_id` for toggle state on pages that don't carry a `viewer` block.
+29. **Typed payloads (implemented).** `InboxNotificationDetail.payload` is a union discriminated by `kind`. Build kinds carry `build: {id, title}`, record kinds carry `records: [{id, title}]`, and the item has an `href`. Builds link to `/builds/{id}` even while pending or rejected, so those links need item 8.
+30. **Inbox list improvements (implemented).** The inbox page carries `unread_count`, `unread_only=true` filters it, and `POST /v1/users/me/notifications/inbox/read-all` marks everything read as one undoable edit. Its optional `through_id` leaves items that arrived after the page loaded unread.
+31. **Readable subscriptions (implemented).** `NotificationSubscriptionDetail` carries `subject_label`, `subject_href`, and a localized `filter_summary`. `GET …/subscriptions?kind&subject_id` answers toggle state for pages without a `viewer` block.
 
 ## Submissions
 

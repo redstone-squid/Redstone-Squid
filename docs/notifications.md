@@ -55,9 +55,10 @@ Subscriptions may target:
   predicates. Omitted fields are wildcards.
 
 The REST surface is under `/v1/users/me/notifications`. It exposes notification consent/preferences, subscription
-CRUD, a cursor-paginated inbox, and read acknowledgements. Staff inbox entries are authorization-checked on every
-read and DM claim, so revoking a global-administrator grant removes access to already materialized staff alerts.
-Configured owner IDs remain staff recipients.
+CRUD, a cursor-paginated inbox, and read acknowledgements. Subscriptions carry a readable label, site link, and
+localized filter summary. Inbox items carry a payload typed by kind, which names builds by their current title. Staff
+inbox entries are authorization-checked on every read and DM claim, so revoking a global-administrator grant removes
+access to already materialized staff alerts. Configured owner IDs remain staff recipients.
 
 Inbox notifications and their source events are retained for 90 days by default. Events with outstanding consumer
 deliveries are never removed by notification retention. `SQUID_NOTIFICATION_PUBLIC_SITE_URL` controls links in DMs,
