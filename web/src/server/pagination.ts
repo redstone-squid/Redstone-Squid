@@ -1,5 +1,5 @@
 import type { PageAnchor } from "@/generated/types.gen";
-import { localizePath } from "@/locales/locale";
+import { RouteNavigation } from "@/navigation/route";
 
 /** The query parameters that address one page of a listing. The API accepts at most one. */
 export type PageAddress = { after_id?: number; before_id?: number; offset?: number };
@@ -25,14 +25,15 @@ export function readPageAddress(params: URLSearchParams): PageAddress {
 
 /** The localized link to the page an API anchor points to, keeping the URL's other parameters. */
 export function pageHref(url: URL, anchor: PageAnchor): string {
-  const target = new URL(url);
-  for (const name of PAGE_PARAMS) target.searchParams.delete(name);
+  const changes = { after_id: null, before_id: null, offset: null } as Record<
+    keyof PageAddress,
+    number | null
+  >;
   for (const name of PAGE_PARAMS) {
-    const value = anchor[name];
-    if (value != null) {
-      target.searchParams.set(name, String(value));
+    if (anchor[name] != null) {
+      changes[name] = anchor[name];
       break;
     }
   }
-  return localizePath(`${target.pathname}${target.search}`);
+  return new RouteNavigation<Required<PageAddress>>(url).update(changes);
 }
