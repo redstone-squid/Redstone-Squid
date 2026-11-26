@@ -1721,6 +1721,85 @@ export function buildImageUnavailable(locale: Locale = getLocale()): string {
   }
 }
 
+/** View in 3D */
+export function schematicViewerOpen(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "View in 3D";
+    case "zh-CN":
+      return "3D 查看";
+    case "en-XA":
+      return "[" + "Ṽîéŵ îñ 3Đ" + "····]";
+  }
+}
+
+/** Loading the 3D view */
+export function schematicViewerLoading(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Loading the 3D view";
+    case "zh-CN":
+      return "正在加载 3D 视图";
+    case "en-XA":
+      return "[" + "Ļöåđîñĝ ţĥé 3Đ ṽîéŵ" + "········]";
+  }
+}
+
+/** 3D view of { $title } */
+export function schematicViewerLabel(
+  args: { title: string | number },
+  locale: Locale = getLocale(),
+): string {
+  switch (locale) {
+    case "en":
+      return "3D view of " + formatValue(locale, args.title);
+    case "zh-CN":
+      return formatValue(locale, args.title) + " 的 3D 视图";
+    case "en-XA":
+      return "[" + "3Đ ṽîéŵ öƒ " + formatValue(locale, args.title) + "·····]";
+  }
+}
+
+/** Drag to rotate, right-drag to pan, and scroll or pinch to zoom. */
+export function schematicViewerHelp(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Drag to rotate, right-drag to pan, and scroll or pinch to zoom.";
+    case "zh-CN":
+      return "拖动旋转，右键拖动平移，滚轮或双指缩放。";
+    case "en-XA":
+      return (
+        "[" +
+        "Đŕåĝ ţö ŕöţåţé, ŕîĝĥţ-đŕåĝ ţö þåñ, åñđ šçŕöļļ öŕ þîñçĥ ţö žööɱ." +
+        "··························]"
+      );
+  }
+}
+
+/** The 3D view could not load. */
+export function schematicViewerFailed(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "The 3D view could not load.";
+    case "zh-CN":
+      return "3D 视图加载失败。";
+    case "en-XA":
+      return "[" + "Ţĥé 3Đ ṽîéŵ çöûļđ ñöţ ļöåđ." + "···········]";
+  }
+}
+
+/** Try again */
+export function schematicViewerRetry(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Try again";
+    case "zh-CN":
+      return "重试";
+    case "en-XA":
+      return "[" + "Ţŕý åĝåîñ" + "····]";
+  }
+}
+
 /** Dimensions */
 export function buildDimensions(locale: Locale = getLocale()): string {
   switch (locale) {

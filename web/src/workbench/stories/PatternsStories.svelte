@@ -10,6 +10,7 @@
   import Vote from "@lucide/svelte/icons/vote";
   import BuildCard from "@/features/catalogue/BuildCard.svelte";
   import RecordCard from "@/features/catalogue/RecordCard.svelte";
+  import SchematicViewer from "@/features/catalogue/SchematicViewer.svelte";
   import Button from "@/ui/actions/Button.svelte";
   import Avatar from "@/ui/data/Avatar.svelte";
   import Badge from "@/ui/feedback/Badge.svelte";
@@ -783,4 +784,18 @@
       <RecordCard {record} as="li" />
     {/each}
   </Layout>
+</Story>
+
+<Story
+  name="Schematic viewer"
+  heading={m.storySchematicViewer()}
+  source="features/catalogue"
+  description={m.storySchematicViewerDescription()}
+>
+  <SchematicViewer
+    title={m.storyCopperBolt55()}
+    schematicUrl="/fixtures/piston-door.schem"
+    previewUrl="/fixtures/copper-door.svg"
+    resourcePackUrl="/v1/schematic-resource-pack"
+  />
 </Story>

@@ -116,6 +116,34 @@ export function storyCatalogueCards(locale: Locale = getLocale()): string {
   }
 }
 
+/** Schematic viewer */
+export function storySchematicViewer(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Schematic viewer";
+    case "zh-CN":
+      return "原理图查看器";
+    case "en-XA":
+      return "[" + "Šçĥéɱåţîç ṽîéŵéŕ" + "·······]";
+  }
+}
+
+/** The production SchematicViewer with a small piston door. Opening it needs the API's resource pack on this origin. */
+export function storySchematicViewerDescription(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "The production SchematicViewer with a small piston door. Opening it needs the API's resource pack on this origin.";
+    case "zh-CN":
+      return "生产环境的 SchematicViewer，展示一个小型活塞门。打开它需要同源 API 提供的资源包。";
+    case "en-XA":
+      return (
+        "[" +
+        "Ţĥé þŕöđûçţîöñ ŠçĥéɱåţîçṼîéŵéŕ ŵîţĥ å šɱåļļ þîšţöñ đööŕ. Öþéñîñĝ îţ ñééđš ţĥé ÅÞÎ'š ŕéšöûŕçé þåçķ öñ ţĥîš öŕîĝîñ." +
+        "··············································]"
+      );
+  }
+}
+
 /** The site header's home link, sections, and actions. */
 export function storyNavbarDescription(locale: Locale = getLocale()): string {
   switch (locale) {

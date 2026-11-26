@@ -39,6 +39,15 @@ const budgets: EntryBudget[] = [
     ...workbenchBudget,
   })),
   {
+    // Loads only when a visitor opens a schematic in 3D. Most of it is entity models embedded
+    // in the renderer; Nucleation's WebAssembly (about 10 MB) comes on top and is not counted.
+    entries: ["node_modules/schematic-renderer/dist/schematic-renderer.es.js"],
+    label: "Schematic viewer, on demand",
+    initialKiB: 2700,
+    completeKiB: 3200,
+    renderer: false,
+  },
+  {
     entries: ["src/workbench/DraftTrial.svelte"],
     label: "Svelte draft trial",
     ...interactiveBudget,

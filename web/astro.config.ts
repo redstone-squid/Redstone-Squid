@@ -56,18 +56,25 @@ export default defineConfig({
     csp: {
       directives: [
         "default-src 'self'",
-        // Build previews and avatars are user-submitted HTTPS URLs on any host.
-        "img-src 'self' https:",
+        // Build previews and avatars are user-submitted HTTPS URLs on any host. The schematic
+        // viewer generates its textures as data and blob URLs.
+        "img-src 'self' https: data: blob:",
+        // The schematic viewer's mesh workers fetch their WebAssembly from a data URL.
+        "connect-src 'self' data:",
         // The workbench's specimen fonts are inlined into its stylesheet.
         "font-src 'self' data:",
         "object-src 'none'",
         "base-uri 'none'",
         "form-action 'self'",
         "frame-ancestors 'none'",
+        // The schematic viewer builds its mesh workers from inline code.
+        "worker-src 'self' blob:",
         // The endpoint is named in the Reporting-Endpoints header set by src/middleware.ts.
         "report-to csp",
       ],
       scriptDirective: {
+        // The schematic viewer and its workers compile Nucleation's WebAssembly.
+        resources: ["'self'", "'wasm-unsafe-eval'"],
         // Chrome ignores 'inline-speculation-rules' once a policy lists hashes, as Astro's does.
         hashes: [`sha256-${createHash("sha256").update(SPECULATION_RULES).digest("base64")}`],
       },
