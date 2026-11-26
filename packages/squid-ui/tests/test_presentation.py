@@ -49,6 +49,7 @@ class Panel(sl.Component):
                 self.tracked.bind,
                 sl.action_control("Consume", self.consume, key="consume", record=self.edits),
                 sl.action_control("Mutate", self.mutate, key="mutate"),
+                sl.action_control("Reset", self.reset, key="reset"),
                 key="actions",
             ),
             self.selected.bind(sl.choice("Alpha", key="a"), sl.choice("Beta", key="b")),
@@ -61,6 +62,10 @@ class Panel(sl.Component):
         draft = event.read(self.draft)
         draft.count += 1
         self.mutated(draft)
+
+    async def reset(self, event: ActionEvent) -> None:
+        event.write(self.flag, value=False)
+        event.write(self.tracked, value=False)
 
 
 class Pair(sl.Component):
@@ -160,6 +165,38 @@ async def test_failed_action_rolls_back_presentation_writes_and_history() -> Non
         raise ValueError("failed after changing the presentation value")
     assert not panel.edits.can_undo
     assert not runtime.presentation_cells.export()["$"]["tracked"]
+
+
+async def test_handlers_write_cells_in_their_own_placement_and_record_history() -> None:
+    pair = Pair()
+    runtime = ComponentRuntime(pair)
+    output = delivered(runtime)
+    for key in ("left.flag", "right.flag", "right.tracked"):
+        await invoke(output, key)
+    entries = len(pair.panel.edits.entries)
+
+    await invoke(delivered(runtime), "right.reset")
+
+    nodes = runtime.render().nodes
+    assert find(nodes, Toggle, key="left.flag").on.value
+    assert not find(nodes, Toggle, key="right.flag").on.value
+    assert not runtime.presentation_cells.export()["right"]["tracked"]
+    assert len(pair.panel.edits.entries) == entries + 1
+    assert (await pair.panel.edits.undo()).applied
+    assert runtime.presentation_cells.export()["right"]["tracked"] is True
+
+
+async def test_handler_writes_roll_back_with_the_handler() -> None:
+    panel = Panel()
+    runtime = ComponentRuntime(panel)
+    await invoke(delivered(runtime), "tracked")
+    output = delivered(runtime)
+    responder = RecordingResponder()
+    with pytest.raises(ValueError), transaction():
+        await output.bindings["reset"].handler(press_event(responder=responder))
+        raise ValueError("failed after resetting")
+    assert runtime.presentation_cells.export()["$"]["tracked"] is True
+    assert responder.invalidations
 
 
 async def test_replacement_at_the_same_path_binds_the_new_owner() -> None:

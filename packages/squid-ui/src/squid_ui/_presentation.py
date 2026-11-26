@@ -308,6 +308,23 @@ class PresentationReference[ValueT]:
         resolved = self.resolve(scope)
         return resolved.model(self).value
 
+    def write(self, value: ValueT, scope: PresentationScope | None = None) -> None:
+        """Store a value in this placement's cell, recording it when the declaration has a history."""
+        resolved = self.resolve(scope)
+        with resolved.activate(), transaction() as tx:
+            declaration = self.declaration
+            stack = declaration.history(self.owner)
+            if stack is not None:
+                assert declaration.record_label is not None
+                stack.record(tx, declaration.record_label)
+                resolved.histories.add(stack)
+            declaration.validate(value)
+            model = resolved.model(self)
+            if not declaration.state.cell(model).active:
+                msg = "presentation cell has expired"
+                raise LayoutInvariantError(msg)
+            model.value = value
+
     @property
     def value(self) -> ValueT:
         current = _CURRENT.get()
@@ -330,25 +347,8 @@ class ValueBinding[ValueT]:
 
     async def commit(self, event: ActionEvent[Any], value: ValueT) -> None:
         await event.acknowledge()
-        scope = self.reference.resolve()
-        with scope.activate(), transaction() as tx:
-            declaration = self.reference.declaration
-            stack = declaration.history(self.reference.owner)
-            if stack is not None:
-                assert declaration.record_label is not None
-                stack.record(tx, declaration.record_label)
-                scope.histories.add(stack)
-            self._commit(value)
+        self.reference.write(value)
         event.invalidate()
-
-    def _commit(self, value: ValueT) -> None:
-        scope = self.reference.resolve()
-        model = scope.model(self.reference)
-        self.reference.declaration.validate(value)
-        if not self.reference.declaration.state.cell(model).active:
-            msg = "presentation cell has expired"
-            raise LayoutInvariantError(msg)
-        model.value = value
 
 
 def presentation_scope() -> PresentationScope | None:

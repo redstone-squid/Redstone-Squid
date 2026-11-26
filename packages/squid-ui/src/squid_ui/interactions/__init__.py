@@ -121,6 +121,8 @@ class ActionEventView[ContextT = object](ActionResponder, Protocol):
 
     def read[ValueT](self, reference: PresentationReference[ValueT]) -> ValueT: ...
 
+    def write[ValueT](self, reference: PresentationReference[ValueT], value: ValueT) -> None: ...
+
     def reveal(self, reference: ElementRef[object]) -> None: ...
 
 
@@ -155,6 +157,19 @@ class ActionEvent[ContextT = object]:
             msg = "event.read() requires an active presentation interaction"
             raise RuntimeError(msg)
         return reference.read(scope)
+
+    def write[ValueT](self, reference: PresentationReference[ValueT], value: ValueT) -> None:
+        """Change a presentation value in the active interaction's placement and redraw.
+
+        The write joins this handler's transaction, so it rolls back with the handler, and a
+        declaration with ``record=`` adds an undo entry as its control would.
+        """
+        scope = presentation_scope()
+        if scope is None:
+            msg = "event.write() requires an active presentation interaction"
+            raise RuntimeError(msg)
+        reference.write(value, scope)
+        self.invalidate()
 
     def reveal(self, reference: ElementRef[object]) -> None:
         """Reveal content after this action commits, consuming the request after delivery.

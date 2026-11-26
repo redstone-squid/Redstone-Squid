@@ -63,6 +63,9 @@ class Reports(sd.Screen[None]):
     def read_selection(self, event: ActionEvent) -> None:
         assert_type(event.read(self.selected), tuple[str, ...])
         assert_type(event.read(self.work_lost), bool)
+        event.write(self.work_lost, value=True)
+        event.write(self.price, PriceRange(0, 5))
+        event.write(self.work_lost, "yes")  # type: ignore
         draft = event.read(self.draft)
         assert_type(draft, CustomSelection)
         draft.clear()
