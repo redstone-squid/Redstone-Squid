@@ -44,17 +44,21 @@ describe("NavBar", () => {
 });
 
 describe("FilterPanel", () => {
-  it("auto-applies after the last change with empty fields left out", async () => {
+  it("submits the native form after the last change, including repeated hidden fields", async () => {
     vi.useFakeTimers();
-    const assign = vi.fn();
-    vi.stubGlobal("location", { assign });
+    const submit = vi
+      .spyOn(HTMLFormElement.prototype, "requestSubmit")
+      .mockImplementation(() => undefined);
     render(FilterPanel, {
       action: "/builds",
       title: "Filters",
       applyLabel: "Apply",
       resetHref: "/builds",
       resetLabel: "Reset",
-      hidden: { q: "door", view: "" },
+      hidden: [
+        ["tag", "a"],
+        ["tag", "b"],
+      ],
       autoApply: true,
       children: html(
         "<select name='category'><option value=''>Any</option><option value='door'>Door</option></select>",
@@ -64,9 +68,13 @@ describe("FilterPanel", () => {
     const select = screen.getByRole("combobox");
     await fireEvent.change(select, { target: { value: "door" } });
     vi.advanceTimersByTime(599);
-    expect(assign).not.toHaveBeenCalled();
+    expect(submit).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1);
-    expect(assign).toHaveBeenCalledWith("/builds?q=door&category=door");
+    expect(submit).toHaveBeenCalledOnce();
+    expect(
+      new FormData(screen.getByRole<HTMLFormElement>("form", { name: "Filters" })).getAll("tag"),
+    ).toEqual(["a", "b"]);
+    submit.mockRestore();
   });
 });
 

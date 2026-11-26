@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import type { Component } from "svelte";
 import { describe, expect, it } from "vitest";
 import * as m from "@/locales/messages.gen";
+import { workbench } from "@/workbench/appearance";
 import DraftDialog from "@/workbench/DraftDialog.svelte";
 import Foundations from "@/workbench/Foundations.svelte";
 import { GROUPS, isGroup } from "@/workbench/groups";
@@ -59,11 +60,22 @@ describe("workbench", () => {
     ["table", TableStories],
     ["chart", ChartStories],
     ["overlays", OverlaysStories],
-    ["patterns", PatternsStories],
     ["motion", MotionStories],
   ])("renders the %s stories", (_group, Stories) => {
     const { container } = render(Stories);
     expect(container.querySelectorAll("section[id]").length).toBeGreaterThan(0);
+  });
+
+  it("renders the patterns with a localized search action", () => {
+    const forms = workbench.patternForms({
+      url: new URL("https://example.test/design-system/patterns"),
+      locals: { theme: undefined, contrast: undefined },
+    });
+    const { container } = render(PatternsStories, { forms });
+    expect(container.querySelector("search form")).toHaveAttribute(
+      "action",
+      "/design-system/patterns",
+    );
   });
 
   it("renders the foundations", () => {

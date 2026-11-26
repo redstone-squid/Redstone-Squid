@@ -32,6 +32,8 @@ export const GROUPS = {
 } as const;
 export type Group = keyof typeof GROUPS;
 
+export const groupNames = Object.keys(GROUPS) as Group[];
+
 export function isGroup(value: string | undefined): value is Group {
   return value !== undefined && Object.hasOwn(GROUPS, value);
 }

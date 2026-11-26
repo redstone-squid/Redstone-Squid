@@ -25,15 +25,9 @@ export function readPageAddress(params: URLSearchParams): PageAddress {
 
 /** The localized link to the page an API anchor points to, keeping the URL's other parameters. */
 export function pageHref(url: URL, anchor: PageAnchor): string {
-  const changes = { after_id: null, before_id: null, offset: null } as Record<
-    keyof PageAddress,
-    number | null
-  >;
-  for (const name of PAGE_PARAMS) {
-    if (anchor[name] != null) {
-      changes[name] = anchor[name];
-      break;
-    }
-  }
-  return new RouteNavigation<Required<PageAddress>>(url).update(changes);
+  type Cursor = { [K in keyof PageAnchor]-?: NonNullable<PageAnchor[K]> };
+  const cleared = { after_id: null, before_id: null, offset: null };
+  const key = PAGE_PARAMS.find((name) => anchor[name] != null);
+  const nav = new RouteNavigation<Cursor>(url);
+  return nav.update(key === undefined ? cleared : { ...cleared, [key]: anchor[key] });
 }

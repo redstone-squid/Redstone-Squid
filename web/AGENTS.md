@@ -14,8 +14,9 @@ for every command.
 | `src/layouts`    | Document shells (`CatalogueLayout`, `DocumentHead`, `PlaceholderPage`)   | `ui`, `locales`, `generated`                                  |
 | `src/features/x` | Components and browser logic for one area, such as `builds` or `records` | its own directory, `api-client`, `ui`, `locales`, `generated` |
 | `src/workbench`  | The `/design-system` playground, its stories, and fixtures               | everything except `server` and `pages`                        |
-| `src/server`     | Runtime config and the page API client. Server only                      | `api-client`, `locales`, `generated`                          |
+| `src/server`     | Runtime config and the page API client. Server only                      | `navigation`, `api-client`, `locales`, `generated`            |
 | `src/api-client` | API errors for both sides, and the islands' write client                 | `locales`, `generated`                                        |
+| `src/navigation` | Localized links, query updates, and native GET form destinations         | `locales`                                                     |
 | `src/locales`    | Locales, URL prefixes, catalogs, and the compiled message functions      | `locales`, `generated`                                        |
 | `src/ui`         | The design system. Knows nothing about the application                   | `ui` only                                                     |
 | `src/generated`  | The OpenAPI SDK. Run `bun run sdk:generate` after the contract changes   |                                                               |
@@ -75,6 +76,13 @@ an error thrown inside a component after rendering starts truncates a 200 respon
 read their page with `readPageAddress` from `src/server/pagination.ts`, turn the API's `next`
 and `prev` anchors into links with `pageHref`, and pass those to the feature, which renders
 `Pagination`; mark pages after the first `noindex`.
+
+For query-driven navigation, bind `RouteNavigation<State>` in the feature that owns the
+fields. Use `link` for a fresh destination, `update` for same-page changes (null removes a
+key), and `form` for the action, repeated hidden entries, and reset link. Destinations sharing
+a scope symbol inherit its resolved values. The workbench declares its appearance scope in
+`src/workbench/appearance.ts`; Patterns passes plain form props into its hydrated island.
+Pagination replaces its cursor fields together in `src/server/pagination.ts`.
 
 ## Adding a page
 

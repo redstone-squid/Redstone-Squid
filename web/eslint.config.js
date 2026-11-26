@@ -373,6 +373,20 @@ export default tseslint.config(
     },
   },
   {
+    files: ["src/workbench/stories/**/*.svelte"],
+    rules: {
+      "no-restricted-syntax": [
+        "error",
+        ...restrictedSyntax,
+        {
+          selector: ":matches(SvelteLiteral, Literal)[value=/^\\/design-system/]",
+          message:
+            "Build workbench destinations with its scoped navigation and pass them as props.",
+        },
+      ],
+    },
+  },
+  {
     // The workbench shows fixture content, and src/ui receives its labels through props.
     files: ["src/{pages,layouts,features}/**/*.{astro,svelte}"],
     ignores: ["src/pages/design-system*", "src/pages/design-system/**"],

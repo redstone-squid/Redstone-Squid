@@ -23,7 +23,7 @@
     placeholder?: string;
     submitLabel: string;
     clearLabel: string;
-    hidden?: Record<string, string>;
+    hidden?: [string, string][];
     suggestions?: SuggestionSource;
     compact?: boolean;
     class?: string;
@@ -36,7 +36,7 @@
     placeholder,
     submitLabel,
     clearLabel,
-    hidden = {},
+    hidden = [],
     suggestions,
     compact = false,
     class: className,
@@ -46,7 +46,7 @@
 
 <search class={cn("block min-w-0", className)}>
   <form method="get" {action} class="flex min-w-0 items-end gap-2">
-    {#each Object.entries(hidden) as [key, hiddenValue] (key)}
+    {#each hidden as [key, hiddenValue], index (index)}
       <input type="hidden" name={key} value={hiddenValue} />
     {/each}
     {#if suggestions}

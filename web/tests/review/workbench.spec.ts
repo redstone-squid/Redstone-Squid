@@ -1,6 +1,7 @@
 import type { Page } from "@playwright/test";
 import { LOCALES, localizePath } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
+import * as patterns from "@/locales/messages-patterns.gen";
 import * as data from "@/locales/messages-data.gen";
 import { GROUPS } from "@/workbench/groups";
 import { expect, test } from "@tests/support/test";
@@ -92,6 +93,26 @@ test.describe("with JavaScript disabled", () => {
     expect(
       (await page.context().cookies()).filter(({ name }) => /theme|contrast/.test(name)),
     ).toEqual([]);
+  });
+});
+
+test.describe("native workbench forms", () => {
+  test.use({ javaScriptEnabled: false });
+
+  test("preserves locale, appearance and repeated fields through filter and reset", async ({
+    page,
+  }) => {
+    await page.goto("/zh-cn/design-system/patterns?theme=dark&contrast=more&tag=a&tag=b");
+    const form = page.getByRole("form", { name: patterns.storyFilters("zh-CN"), exact: true });
+    await form.getByRole("combobox").selectOption("extender");
+    await form.getByRole("checkbox").uncheck();
+    await form.getByRole("button", { name: patterns.storyApplyFilters("zh-CN") }).click();
+    const retained = "/zh-cn/design-system/patterns?theme=dark&contrast=more&tag=a&tag=b&q=door";
+    await expect(page).toHaveURL(
+      (url) => url.pathname + url.search === `${retained}&category=extender`,
+    );
+    await form.getByRole("link", { name: patterns.storyReset("zh-CN") }).click();
+    await expect(page).toHaveURL((url) => url.pathname + url.search === retained);
   });
 });
 

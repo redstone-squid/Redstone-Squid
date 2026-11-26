@@ -1,6 +1,6 @@
 ---
 import FlaskConical from "@lucide/svelte/icons/flask-conical";
-import { localizePath } from "@/locales/locale";
+import { workbench } from "@/workbench/appearance";
 import * as m from "@/locales/messages.gen";
 import Button from "@/ui/actions/Button.svelte";
 import Notice from "@/ui/feedback/Notice.svelte";
@@ -12,10 +12,9 @@ import WorkbenchLayout from "@/workbench/WorkbenchLayout.astro";
 const params = Astro.url.searchParams;
 const selected = params.get("scenario");
 const scenario = selected === "retry" || selected === "upload-retry" ? selected : undefined;
-// The scenario is a fixture choice kept in the URL; toggling it reloads the trial.
-const toggle = new URL(Astro.url);
-if (scenario === "upload-retry") toggle.searchParams.delete("scenario");
-else toggle.searchParams.set("scenario", "upload-retry");
+const toggle = workbench.trialAt(Astro).update({
+  scenario: scenario === "upload-retry" ? null : "upload-retry",
+});
 ---
 
 <WorkbenchLayout title={m.trialTitle()}>
@@ -24,7 +23,7 @@ else toggle.searchParams.set("scenario", "upload-retry");
       slot="actions"
       size="sm"
       variant={scenario === "upload-retry" ? "primary" : "secondary"}
-      href={localizePath(`${toggle.pathname}${toggle.search}`)}
+      href={toggle}
       aria-current={scenario === "upload-retry" ? "true" : undefined}
       icon={FlaskConical}
     >

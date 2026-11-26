@@ -1,5 +1,5 @@
 ---
-import { workbenchAppearance } from "@/workbench/appearance";
+import { workbench } from "@/workbench/appearance";
 import * as m from "@/locales/messages.gen";
 import Card from "@/ui/data/Card.svelte";
 import Text from "@/ui/content/Text.svelte";
@@ -7,10 +7,10 @@ import Layout from "@/ui/layout/Layout.svelte";
 import Section from "@/ui/patterns/Section.svelte";
 import Cover from "@/workbench/Cover.astro";
 import Foundations from "@/workbench/Foundations.svelte";
-import { GROUPS } from "@/workbench/groups";
+import { GROUPS, groupNames } from "@/workbench/groups";
 import WorkbenchLayout from "@/workbench/WorkbenchLayout.astro";
 
-const preview = workbenchAppearance(Astro.url, Astro.locals);
+const preview = workbench.at(Astro);
 ---
 
 <WorkbenchLayout title={m.workbenchPageTitle()}>
@@ -18,10 +18,10 @@ const preview = workbenchAppearance(Astro.url, Astro.locals);
   <Foundations />
   <Section title={m.workbenchComponents()} description={m.workbenchComponentsDescription()}>
     <Layout as="ul" pattern="grid" min="tile">
-      {Object.entries(GROUPS).map(([slug, group]) => (
-        <Card as="li" title={group.title()} href={preview.href(`/design-system/${slug}`)}>
+      {groupNames.map((slug) => (
+        <Card as="li" title={GROUPS[slug].title()} href={preview.nav.link(workbench.group(slug))}>
           <Text size="sm" tone="muted">
-            {group.description()}
+            {GROUPS[slug].description()}
           </Text>
         </Card>
       ))}

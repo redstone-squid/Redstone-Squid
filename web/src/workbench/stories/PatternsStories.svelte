@@ -46,6 +46,10 @@
   import { buildFixtures, recordFixtures } from "@/workbench/fixtures";
   import Story from "./Story.svelte";
 
+  import type { workbench } from "@/workbench/appearance";
+
+  let { forms }: { forms: ReturnType<typeof workbench.patternForms> } = $props();
+
   const categories = [m.trialDoor(), m.storySeamlessDoor(), m.storyExtender()];
   // A frame readers can drag narrower, to watch a layout collapse at its own width. It clips
   // rather than scrolls, so the wheel keeps scrolling the page.
@@ -290,18 +294,17 @@
   <Layout pattern="stack" gap="lg">
     <Variant label={m.storyPageSearchKeepingScope()}>
       <SearchBox
-        action="/design-system/patterns"
+        {...forms.scopedSearch}
         label={m.storySearchBuildsAndRecords()}
         placeholder={m.storySearchPlaceholder()}
         submitLabel={m.navSearch()}
         clearLabel={m.navClearSearch()}
-        hidden={{ scope: "builds" }}
         value="flush"
       />
     </Variant>
     <Variant label={m.storyCompact()}>
       <SearchBox
-        action="/design-system/patterns"
+        {...forms.search}
         label={m.navSearch()}
         submitLabel={m.navSearch()}
         clearLabel={m.navClearSearch()}
@@ -310,7 +313,7 @@
     </Variant>
     <Variant label={m.storyWithSuggestions()}>
       <SearchBox
-        action="/design-system/patterns"
+        {...forms.search}
         label={m.storySearchRecords()}
         submitLabel={m.navSearch()}
         clearLabel={m.navClearSearch()}
@@ -356,13 +359,11 @@
   <Layout pattern="grid" min="card-wide">
     <Variant label={m.storyApplyButtonTwoActive()}>
       <FilterPanel
-        action="/design-system/patterns"
+        {...forms.scopedFilter}
         title={m.storyFilters()}
         activeLabel={m.storyTwoActive()}
         applyLabel={m.storyApplyFilters()}
-        resetHref="/design-system/patterns"
         resetLabel={m.storyReset()}
-        hidden={{ q: "door" }}
         children={filterFields}
       />
     </Variant>
@@ -727,10 +728,9 @@
 
 {#snippet filtersSidebar()}
   <FilterPanel
-    action="/design-system/patterns"
+    {...forms.filter}
     title={m.storyBuildFilters()}
     applyLabel={m.storyApplyFilters()}
-    resetHref="/design-system/patterns"
     resetLabel={m.storyReset()}
     children={filterFields}
   />

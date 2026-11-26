@@ -11,7 +11,7 @@
    * `activeLabel` ("2 active") is shown beside the title; `resetHref` is the unfiltered URL.
    *
    * With `autoApply`, a hydrated panel hides its Apply button and loads the filtered URL
-   * 600 ms after the last change, leaving out empty fields. Text fields fire `change` on blur
+   * 600 ms after the last change. Text fields fire `change` on blur
    * or Enter, so typing does not reload the page.
    */
   type Props = {
@@ -21,7 +21,7 @@
     applyLabel: string;
     resetHref: string;
     resetLabel: string;
-    hidden?: Record<string, string>;
+    hidden?: [string, string][];
     autoApply?: boolean;
     class?: string;
     children: Snippet;
@@ -33,7 +33,7 @@
     applyLabel,
     resetHref,
     resetLabel,
-    hidden = {},
+    hidden = [],
     autoApply = false,
     class: className,
     children,
@@ -45,13 +45,7 @@
     return () => apply.cancel();
   });
 
-  const apply = debounce((form: HTMLFormElement) => {
-    const filled = [...new FormData(form)].filter(
-      (entry): entry is [string, string] => typeof entry[1] === "string" && entry[1] !== "",
-    );
-    const search = new URLSearchParams(filled).toString();
-    location.assign(search === "" ? action : `${action}?${search}`);
-  }, 600);
+  const apply = debounce((form: HTMLFormElement) => form.requestSubmit(), 600);
 </script>
 
 <form
@@ -65,7 +59,7 @@
     <h2 id={`${id}-title`} class="text-lg font-bold">{title}</h2>
     {#if activeLabel !== undefined}<Badge>{activeLabel}</Badge>{/if}
   </div>
-  {#each Object.entries(hidden) as [key, value] (key)}
+  {#each hidden as [key, value], index (index)}
     <input type="hidden" name={key} {value} />
   {/each}
   <div class="grid min-w-0 gap-4">{@render children()}</div>

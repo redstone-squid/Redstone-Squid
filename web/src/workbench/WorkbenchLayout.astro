@@ -1,7 +1,7 @@
 ---
 import faviconUrl from "@/ui/favicon.svg?url&no-inline";
 import LanguageSelector from "@/layouts/LanguageSelector.astro";
-import { localizePath, unprefixedPath } from "@/locales/locale";
+import { unprefixedPath } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
 import "@fontsource-variable/inter";
 import interLatin from "@fontsource-variable/inter/files/inter-latin-wght-normal.woff2?url";
@@ -12,11 +12,11 @@ import "@/ui/app.css";
 import SkipLink from "@/ui/content/SkipLink.svelte";
 import NavList from "@/ui/navigation/NavList.svelte";
 import SegmentedControl from "@/ui/navigation/SegmentedControl.svelte";
-import { workbenchAppearance } from "./appearance";
-import { GROUPS } from "./groups";
+import { workbench } from "./appearance";
+import { GROUPS, groupNames } from "./groups";
 type Props = { title: string };
 const { title } = Astro.props;
-const preview = workbenchAppearance(Astro.url, Astro.locals);
+const preview = workbench.at(Astro);
 const controls = [
   {
     key: "theme",
@@ -38,28 +38,21 @@ const controls = [
     ],
   },
 ] as const;
-function choiceHref(key: string, value: string) {
-  const target = new URL(Astro.url);
-  target.searchParams.set("theme", preview.theme);
-  if (value === "") target.searchParams.delete(key);
-  else target.searchParams.set(key, value);
-  return localizePath(target.pathname + target.search);
-}
 const { locale } = Astro.locals;
 const path = unprefixedPath(Astro.url.pathname).replace(/\/$/, "");
-const link = (route: string) => ({
-  href: preview.href(route),
-  current: path === route,
+const link = (route: typeof workbench.index) => ({
+  href: preview.nav.link(route),
+  current: path === route.path,
 });
 const groups = [
   {
     items: [
-      { label: m.workbenchFoundations(), ...link("/design-system") },
-      ...Object.entries(GROUPS).map(([slug, group]) => ({
-        label: group.title(),
-        ...link(`/design-system/${slug}`),
+      { label: m.workbenchFoundations(), ...link(workbench.index) },
+      ...groupNames.map((slug) => ({
+        label: GROUPS[slug].title(),
+        ...link(workbench.group(slug)),
       })),
-      { label: m.trialTitle(), ...link("/design-system-trial") },
+      { label: m.trialTitle(), ...link(workbench.trial) },
     ],
   },
 ];
@@ -78,7 +71,10 @@ const groups = [
   <body>
     <SkipLink href="#main" label={m.workbenchSkipToContent()} />
     <header class="flex items-center justify-between gap-4 border-b border-line bg-surface px-gutter py-4">
-      <a class="flex items-center gap-3 rounded-sm font-bold no-underline" href={localizePath("/")}>
+      <a
+        class="flex items-center gap-3 rounded-sm font-bold no-underline"
+        href={preview.nav.link(workbench.home)}
+      >
         <img class="size-8 shrink-0" src={faviconUrl} width="32" height="32" alt="" />
         {m.siteName()}
       </a>
@@ -99,7 +95,7 @@ const groups = [
                 {label}
                 items={options.map(([value, text]) => ({
                   label: text,
-                  href: choiceHref(key, value),
+                  href: preview.nav.update({ [key]: value || null }),
                   current: value === current,
                 }))}
               />

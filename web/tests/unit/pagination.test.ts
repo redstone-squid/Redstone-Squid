@@ -19,9 +19,9 @@ describe("page addresses", () => {
   );
 
   it("links to an anchor, replacing the current address and keeping other parameters", () => {
-    const url = new URL("https://catalogue.test/records?sort=new&after_id=3");
+    const url = new URL("https://catalogue.test/records?tag=a&tag=b&after_id=3&offset=5");
     expect(pageHref(url, { offset: null, after_id: null, before_id: 9 })).toBe(
-      "/records?sort=new&before_id=9",
+      "/records?tag=a&tag=b&before_id=9",
     );
   });
 

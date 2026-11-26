@@ -3,22 +3,32 @@ import { localizePath } from "@/locales/locale";
 type Value = string | number | readonly string[];
 type Patch<State> = { [K in keyof State]?: State[K] | null };
 
-export type FormDestination = {
+type FormDestination = {
   action: string;
   hidden: [string, string][];
   resetHref: string;
 };
 
-type Destination = { path: string; scope?: symbol };
+/** A destination declares its own query fields. Dynamic routes build their path in the feature. */
+export class Route<State extends Record<string, Value>> {
+  constructor(
+    readonly path: string,
+    readonly scope?: symbol,
+  ) {}
+
+  at(url: URL, retained: Patch<State> = {}): RouteNavigation<State> {
+    return new RouteNavigation<State>(url, this.scope, retained);
+  }
+}
 
 function write(params: URLSearchParams, patch: Record<string, Value | null | undefined>) {
   for (const [key, value] of Object.entries(patch)) {
     if (value === undefined) continue;
-    if (Array.isArray(value)) {
+    if (value === null) params.delete(key);
+    else if (typeof value === "object") {
       params.delete(key);
       for (const item of value) params.append(key, item);
-    } else if (value === null) params.delete(key);
-    else params.set(key, String(value));
+    } else params.set(key, String(value));
   }
 }
 
@@ -31,11 +41,15 @@ export class RouteNavigation<State extends Record<string, Value>> {
   ) {}
 
   /** A fresh destination receives only the state shared with its scope. */
-  link(destination: Destination, fragment = ""): string {
+  link<Target extends Record<string, Value>>(
+    destination: Route<Target>,
+    options: { query?: Patch<NoInfer<Target>>; fragment?: string } = {},
+  ): string {
     const target = new URL(destination.path, this.url);
     if (this.scope !== undefined && this.scope === destination.scope)
       write(target.searchParams, this.retained);
-    target.hash = fragment;
+    if (options.query !== undefined) write(target.searchParams, options.query);
+    target.hash = options.fragment ?? "";
     return localizePath(target.pathname + target.search + target.hash);
   }
 
