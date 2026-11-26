@@ -125,6 +125,8 @@ class FakeMedia:
         self.staged_bytes: bytes | None = None
         self.submission: StagedMediaUploadSubmission | None = None
         self.discarded: tuple[UUID, UUID] | None = None
+        self.stored_bytes: dict[str, bytes] = {}
+        """Normalized artifact bytes by object key."""
 
     async def submit_staged(
         self,
@@ -160,6 +162,13 @@ class FakeMedia:
 
     async def attach(self, source_id: UUID, target_id: UUID, upload_id: UUID, *, context: ActingContext) -> bool:
         raise NotImplementedError
+
+    async def download(self, artifact: StoredMediaArtifact, destination: Path) -> bool:
+        content = self.stored_bytes.get(artifact.object_key)
+        if content is None:
+            return False
+        destination.write_bytes(content)
+        return True
 
     async def discard(self, draft_id: UUID, upload_id: UUID, *, context: ActingContext) -> bool:
         self.discarded = (draft_id, upload_id)

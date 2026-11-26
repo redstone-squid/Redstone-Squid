@@ -13,6 +13,7 @@ from squid.core.media.application.jobs import (
     MediaJobSnapshot,
     MediaUploadMetadata,
     StagedMediaUploadSubmission,
+    StoredMediaArtifact,
 )
 from squid.core.media.domain import MediaKind, MediaLimits
 from squid.core.media.domain.jobs import MediaJobStatus
@@ -109,6 +110,10 @@ class FakeJobs:
 
     async def attach(self, source_id: UUID, target_id: UUID, upload_id: UUID, *, context: ActingContext) -> bool:
         raise NotImplementedError
+
+    async def download(self, artifact: StoredMediaArtifact, destination: Path) -> bool:
+        destination.write_bytes(b"image")
+        return True
 
     async def discard(self, draft_id: UUID, upload_id: UUID, *, context: ActingContext) -> bool:
         self.discarded.append((draft_id, upload_id))

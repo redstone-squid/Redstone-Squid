@@ -17452,6 +17452,196 @@
         }
       }
     },
+    "/v1/submissions/drafts/{draft_id}/media/{upload_id}/artifacts/{role}": {
+      "get": {
+        "tags": [
+          "submissions"
+        ],
+        "summary": "GetDraftMediaContent",
+        "description": "Serve a processed image, video, or thumbnail of an accessible draft's upload.",
+        "operationId": "submission_media_content_get",
+        "parameters": [
+          {
+            "name": "draft_id",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "deprecated": false
+          },
+          {
+            "name": "upload_id",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "deprecated": false
+          },
+          {
+            "name": "role",
+            "in": "path",
+            "schema": {
+              "$ref": "#/components/schemas/DraftMediaArtifactRole"
+            },
+            "description": "Normalized visual outputs visible to a draft owner.",
+            "required": true,
+            "deprecated": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "File Download",
+            "headers": {
+              "content-length": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "File size in bytes",
+                "required": false,
+                "deprecated": false
+              },
+              "last-modified": {
+                "schema": {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                "description": "Last modified data-time in RFC 2822 format",
+                "required": false,
+                "deprecated": false
+              },
+              "etag": {
+                "schema": {
+                  "type": "string"
+                },
+                "description": "Entity tag",
+                "required": false,
+                "deprecated": false
+              },
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "type": "string",
+                  "contentMediaType": "application/octet-stream"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "WebSession": []
+          },
+          {
+            "DeviceSession": []
+          },
+          {
+            "MinecraftPlayer": []
+          }
+        ],
+        "x-squid-cli": {
+          "classification": "transport-only"
+        }
+      }
+    },
     "/v1/submissions/drafts/{draft_id}/media/{upload_id}/attach": {
       "post": {
         "tags": [
@@ -18275,6 +18465,205 @@
           },
           {
             "MinecraftPlayer": []
+          }
+        ],
+        "x-squid-cli": {
+          "classification": "transport-only"
+        }
+      }
+    },
+    "/v1/submissions/revisions": {
+      "get": {
+        "tags": [
+          "submissions"
+        ],
+        "summary": "ListProposals",
+        "description": "Page recalculation proposals for staff review; `status=pending&sort=oldest` is the review queue.",
+        "operationId": "submission_revision_list",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/RecalculationProposalStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "build_id",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "minimum": 1
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/RecalculationProposalSort"
+            },
+            "description": "Display order of a proposal listing. `ID` is the order for full traversal.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "maximum": 50.0,
+              "minimum": 1.0,
+              "description": "Maximum number of items to return.",
+              "default": 20
+            },
+            "description": "Maximum number of items to return.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maximum": 10000,
+              "description": "Number of items to skip. Excludes after_id and before_id."
+            },
+            "description": "Number of items to skip. Excludes after_id and before_id.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "after_id",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Return the items after this identifier in display order. Excludes offset."
+            },
+            "description": "Return the items after this identifier in display order. Excludes offset.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "before_id",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Return the items before this identifier in display order. Excludes offset."
+            },
+            "description": "Return the items before this identifier in display order. Excludes offset.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_squid.api.v1.submission_recalculations.RecalculationProposalResponse_"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "WebSession": []
+          },
+          {
+            "DeviceSession": []
           }
         ],
         "x-squid-cli": {
@@ -23300,6 +23689,9 @@
           },
           "height": {
             "type": "integer"
+          },
+          "url": {
+            "type": "string"
           }
         },
         "type": "object",
@@ -23307,6 +23699,7 @@
           "content_type",
           "height",
           "role",
+          "url",
           "width"
         ],
         "title": "DraftMediaArtifactResponse"
@@ -23443,6 +23836,28 @@
         ],
         "title": "DraftPreparationResponse"
       },
+      "DraftProgressResponse": {
+        "properties": {
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/SectionProgressResponse"
+            },
+            "type": "array"
+          },
+          "missing": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "required": [
+          "missing",
+          "sections"
+        ],
+        "title": "DraftProgressResponse"
+      },
       "DraftSchematicResponse": {
         "properties": {
           "id": {
@@ -23557,6 +23972,29 @@
               }
             ]
           },
+          "source_build_id": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "issue_count": {
+            "type": "integer"
+          },
+          "progress": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DraftProgressResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "created_at": {
             "type": "string",
             "format": "date-time"
@@ -23578,10 +24016,13 @@
           "expires_at",
           "id",
           "inferred",
+          "issue_count",
           "origin",
+          "progress",
           "revision",
           "schema_id",
           "schema_revision",
+          "source_build_id",
           "status",
           "updated_at"
         ],
@@ -24466,6 +24907,15 @@
         "title": "FieldType",
         "description": "Storage-independent field value types."
       },
+      "FieldUnit": {
+        "type": "string",
+        "enum": [
+          "blocks",
+          "game_ticks"
+        ],
+        "title": "FieldUnit",
+        "description": "Unit of a numeric answer, for clients to show beside the control."
+      },
       "FinalizationJobStatus": {
         "type": "string",
         "enum": [
@@ -24574,6 +25024,16 @@
               }
             ]
           },
+          "unit": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/FieldUnit"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "origins": {
             "items": {
               "$ref": "#/components/schemas/SubmissionOrigin"
@@ -24595,6 +25055,7 @@
           "repeatable",
           "required",
           "required_capability",
+          "unit",
           "value_kind",
           "visible_when"
         ],
@@ -26303,6 +26764,47 @@
           "total"
         ],
         "title": "Page[VersionDetail]"
+      },
+      "Page_squid.api.v1.submission_recalculations.RecalculationProposalResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RecalculationProposalResponse"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "next": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prev": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "next",
+          "prev",
+          "total"
+        ],
+        "title": "Page[RecalculationProposalResponse]"
       },
       "Page_squid.core.builds.application.queries.PublicBuildSummary_": {
         "properties": {
@@ -28231,6 +28733,26 @@
         ],
         "title": "RecalculationProposalResponse"
       },
+      "RecalculationProposalSort": {
+        "type": "string",
+        "enum": [
+          "id",
+          "oldest"
+        ],
+        "title": "RecalculationProposalSort",
+        "description": "Display order of a proposal listing. `ID` is the order for full traversal.",
+        "default": "id"
+      },
+      "RecalculationProposalStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "applied",
+          "expired"
+        ],
+        "title": "RecalculationProposalStatus",
+        "description": "Review state of a proposal; pending ones may still lack a matched build."
+      },
       "RecomputeItem": {
         "properties": {
           "id": {
@@ -30033,6 +30555,26 @@
         ],
         "title": "SearchSuggestions"
       },
+      "SectionProgressResponse": {
+        "properties": {
+          "section_id": {
+            "type": "string"
+          },
+          "required": {
+            "type": "integer"
+          },
+          "filled": {
+            "type": "integer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "filled",
+          "required",
+          "section_id"
+        ],
+        "title": "SectionProgressResponse"
+      },
       "ServerProfileSchema": {
         "properties": {
           "enabled": {
@@ -30452,6 +30994,16 @@
           "waiting_for_artifacts": {
             "type": "boolean",
             "default": false
+          },
+          "progress": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DraftProgressResponse"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",

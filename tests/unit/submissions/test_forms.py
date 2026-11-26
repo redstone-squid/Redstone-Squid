@@ -386,3 +386,30 @@ def test_choice_options_name_a_known_value_type() -> None:
     assert ChoiceOption("speed", "Speed", "numeric").value_type == "numeric"
     with pytest.raises(ValidationError):
         ChoiceOption("speed", "Speed", "decimal")
+
+
+@pytest.mark.parametrize(
+    "answers",
+    [{}, {"capture_width": 5, "schematic_visibility": "public_download"}, _valid_common_answers()],
+)
+def test_progress_counts_the_required_answers_finalization_asks_for(answers: dict[str, JSONValue]) -> None:
+    manifest = build_submission_manifest("en")
+    issues = manifest.validate_answers("door", answers, origin=SubmissionOrigin.WEB)
+
+    progress = manifest.progress("door", answers, origin=SubmissionOrigin.WEB)
+
+    assert set(progress.missing) == {field_id for field_id, reason in issues.items() if reason == "required"}
+    assert sum(section.required - section.filled for section in progress.sections) == len(progress.missing)
+    assert [section.section_id for section in progress.sections] == [
+        section.id for section in manifest.common_sections + manifest.category("door").sections
+    ]
+
+
+def test_progress_skips_optional_fields() -> None:
+    manifest = build_submission_manifest("en")
+
+    required = manifest.progress("door", {}, origin=SubmissionOrigin.WEB).missing
+    relaxed = manifest.progress("door", {}, origin=SubmissionOrigin.WEB, optional=frozenset({"credits"}))
+
+    assert "credits" in required
+    assert relaxed.missing == tuple(field_id for field_id in required if field_id != "credits")

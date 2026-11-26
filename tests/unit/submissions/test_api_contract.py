@@ -51,6 +51,7 @@ from squid.core.submissions.domain import (
     FinalizationJobStatus,
     FinalizedBuild,
     FormManifest,
+    FormProgress,
     SubmissionAttentionIssue,
     SubmissionAttentionReason,
     SubmissionOrigin,
@@ -169,6 +170,9 @@ class FakeDrafts(SubmissionDraftCommands):
         assert draft_id == self.current.snapshot.id
         assert draft_actor_id(context.effective) == ACCOUNT_ID
         return self.current
+
+    async def progress(self, draft: StoredDraft) -> FormProgress | None:
+        return None
 
     async def apply_change(
         self,
@@ -346,17 +350,17 @@ def test_draft_change_key_publishes_its_complete_wire_constraints() -> None:
 @pytest.mark.parametrize(
     ("revision", "expected_digest"),
     [
-        (2, "5e20838b31cfa0971d6a767cc88bcc182b65123e12003229e95d6a15465a3a8f"),
-        (3, "361867b40869c73d6aa77ab967346f4821f16cff959757eb2c6b5a9f835feb73"),
-        (4, "670e9cb6bd81565695136036505f85adddff170babe46faacae6e418050160fa"),
+        (2, "b78083e5771a6d225cd01a7498ee992821b4358e3900476490e54fb620e0e8dc"),
+        (3, "5b3331fab68583e775e9b38c9fcf59c8b45932c89b961c1d53277293320743b3"),
+        (4, "9ba07c3e526829aabb22929281a3794ca578361ed2cd81911f98f0fb63d7b1a3"),
     ],
 )
 def test_checked_in_manifest_wire_contract_is_immutable(revision: int, expected_digest: str) -> None:
     """Pin the full wire shape of each published manifest revision.
 
     Field IDs, value kinds, options, visibility, and validation rules must not change within a
-    revision; that needs a new revision. Rewording English labels or help text is allowed, like a
-    translation update, but update the digest deliberately when you do.
+    revision; that needs a new revision. Rewording English labels or help text, or adding presentation
+    hints such as units, is allowed like a translation update, but update the digest deliberately.
     """
     payload = FormManifestResponse.from_domain(build_submission_manifest("en", revision=revision)).model_dump(
         mode="json"
@@ -468,6 +472,9 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
                 "status": "editing",
                 "origin": "web",
                 "display_name": "Compact door",
+                "source_build_id": None,
+                "issue_count": 0,
+                "progress": None,
                 "created_at": "2026-08-11T12:00:00Z",
                 "updated_at": "2026-08-11T12:00:00Z",
                 "expires_at": "2026-08-18T12:00:00Z",

@@ -834,6 +834,7 @@ export type DraftMediaArtifactResponse = {
     content_type: string;
     width: number;
     height: number;
+    url: string;
 };
 
 /**
@@ -891,6 +892,14 @@ export type DraftPreparationResponse = {
 };
 
 /**
+ * DraftProgressResponse
+ */
+export type DraftProgressResponse = {
+    sections: Array<SectionProgressResponse>;
+    missing: Array<string>;
+};
+
+/**
  * DraftSchematicResponse
  */
 export type DraftSchematicResponse = {
@@ -930,6 +939,9 @@ export type DraftSummaryResponse = {
     status: DraftStatus;
     origin: SubmissionOrigin;
     display_name: string | null;
+    source_build_id: number | null;
+    issue_count: number;
+    progress: DraftProgressResponse | null;
     created_at: string;
     updated_at: string;
     expires_at: string;
@@ -1142,6 +1154,13 @@ export type FieldOperationRequest = {
 export type FieldType = 'text' | 'number' | 'timestamp' | 'boolean';
 
 /**
+ * FieldUnit
+ *
+ * Unit of a numeric answer, for clients to show beside the control.
+ */
+export type FieldUnit = 'blocks' | 'game_ticks';
+
+/**
  * FinalizationJobStatus
  *
  * Durable state of one source-draft finalization job.
@@ -1167,6 +1186,7 @@ export type FormFieldResponse = {
     } | string | boolean | number | number | null;
     repeatable: boolean;
     required_capability: string | null;
+    unit: FieldUnit | null;
     origins: Array<SubmissionOrigin>;
 };
 
@@ -1673,6 +1693,16 @@ export type PageSquidApiV1SchemasVersionsVersionDetail = {
 };
 
 /**
+ * Page[RecalculationProposalResponse]
+ */
+export type PageSquidApiV1SubmissionRecalculationsRecalculationProposalResponse = {
+    items: Array<RecalculationProposalResponse>;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+};
+
+/**
  * Page[PublicBuildSummary]
  */
 export type PageSquidCoreBuildsApplicationQueriesPublicBuildSummary = {
@@ -2113,6 +2143,20 @@ export type RecalculationProposalResponse = {
     expires_at: string;
     applied_revision: number | null;
 };
+
+/**
+ * RecalculationProposalSort
+ *
+ * Display order of a proposal listing. `ID` is the order for full traversal.
+ */
+export type RecalculationProposalSort = 'id' | 'oldest';
+
+/**
+ * RecalculationProposalStatus
+ *
+ * Review state of a proposal; pending ones may still lack a matched build.
+ */
+export type RecalculationProposalStatus = 'pending' | 'applied' | 'expired';
 
 /**
  * RecomputeItem
@@ -2676,6 +2720,15 @@ export type SearchSuggestions = {
 };
 
 /**
+ * SectionProgressResponse
+ */
+export type SectionProgressResponse = {
+    section_id: string;
+    required: number;
+    filled: number;
+};
+
+/**
  * ServerProfileSchema
  */
 export type ServerProfileSchema = {
@@ -2804,6 +2857,7 @@ export type StoredDraftResponse = {
     source_installation_id?: string | null;
     preparation_issues?: Array<SubmissionAttentionIssueResponse>;
     waiting_for_artifacts?: boolean;
+    progress?: DraftProgressResponse | null;
 };
 
 /**
@@ -8867,6 +8921,58 @@ export type SubmissionMediaGetResponses = {
 
 export type SubmissionMediaGetResponse = SubmissionMediaGetResponses[keyof SubmissionMediaGetResponses];
 
+export type SubmissionMediaContentGetData = {
+    body?: never;
+    path: {
+        draft_id: string;
+        upload_id: string;
+        /**
+         * Normalized visual outputs visible to a draft owner.
+         */
+        role: DraftMediaArtifactRole;
+    };
+    query?: never;
+    url: '/v1/submissions/drafts/{draft_id}/media/{upload_id}/artifacts/{role}';
+};
+
+export type SubmissionMediaContentGetErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type SubmissionMediaContentGetError = SubmissionMediaContentGetErrors[keyof SubmissionMediaContentGetErrors];
+
+export type SubmissionMediaContentGetResponses = {
+    /**
+     * File Download
+     */
+    200: Blob | File;
+};
+
+export type SubmissionMediaContentGetResponse = SubmissionMediaContentGetResponses[keyof SubmissionMediaContentGetResponses];
+
 export type SubmissionMediaAttachData = {
     body?: never;
     headers?: {
@@ -9119,6 +9225,58 @@ export type SubmissionSchematicAttachResponses = {
 };
 
 export type SubmissionSchematicAttachResponse = SubmissionSchematicAttachResponses[keyof SubmissionSchematicAttachResponses];
+
+export type SubmissionRevisionListData = {
+    body?: never;
+    path?: never;
+    query?: {
+        status?: RecalculationProposalStatus | null;
+        build_id?: number | null;
+        /**
+         * Display order of a proposal listing. `ID` is the order for full traversal.
+         */
+        sort?: RecalculationProposalSort;
+        /**
+         * Maximum number of items to return.
+         */
+        page_size?: number;
+        /**
+         * Number of items to skip. Excludes after_id and before_id.
+         */
+        offset?: number | null;
+        /**
+         * Return the items after this identifier in display order. Excludes offset.
+         */
+        after_id?: string | null;
+        /**
+         * Return the items before this identifier in display order. Excludes offset.
+         */
+        before_id?: string | null;
+    };
+    url: '/v1/submissions/revisions';
+};
+
+export type SubmissionRevisionListErrors = {
+    /**
+     * Unprocessable Entity
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type SubmissionRevisionListError = SubmissionRevisionListErrors[keyof SubmissionRevisionListErrors];
+
+export type SubmissionRevisionListResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: PageSquidApiV1SubmissionRecalculationsRecalculationProposalResponse;
+};
+
+export type SubmissionRevisionListResponse = SubmissionRevisionListResponses[keyof SubmissionRevisionListResponses];
 
 export type SubmissionRevisionHistoryData = {
     body?: never;

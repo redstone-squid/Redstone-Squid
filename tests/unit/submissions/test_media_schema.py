@@ -78,9 +78,16 @@ async def test_list_get_and_discard_keep_stable_states_without_private_artifacts
     listed = {item["id"]: item for item in list_response.json()["media"]}
     assert listed[str(UPLOAD_ID)]["status"] == "completed"
     assert listed[str(OTHER_UPLOAD_ID)]["status"] == "dead"
+    content = f"/v1/submissions/drafts/{DRAFT_ID}/media/{UPLOAD_ID}/artifacts"
     assert listed[str(UPLOAD_ID)]["artifacts"] == [
-        {"role": "output", "content_type": "video/mp4", "width": 8, "height": 6},
-        {"role": "video_thumbnail", "content_type": "image/jpeg", "width": 8, "height": 6},
+        {"role": "output", "content_type": "video/mp4", "width": 8, "height": 6, "url": f"{content}/output"},
+        {
+            "role": "video_thumbnail",
+            "content_type": "image/jpeg",
+            "width": 8,
+            "height": 6,
+            "url": f"{content}/video_thumbnail",
+        },
     ]
     serialized = list_response.text
     assert "object_key" not in serialized
@@ -120,3 +127,40 @@ async def test_openapi_advertises_streaming_binary_upload_without_a_json_wrapper
         "image/*": {"schema": {"type": "string", "format": "binary"}},
         "video/*": {"schema": {"type": "string", "format": "binary"}},
     }
+
+
+async def test_content_route_serves_completed_artifacts_only() -> None:
+    events: list[str] = []
+    media = FakeMedia(events)
+    poster = StoredMediaArtifact(
+        role=MediaArtifactRole.VIDEO_THUMBNAIL,
+        object_key="private/posters/secret",
+        content_type="image/jpeg",
+        byte_size=3,
+        sha256="c" * 64,
+        width=8,
+        height=6,
+    )
+    media.snapshots[UPLOAD_ID] = snapshot(status=MediaJobStatus.COMPLETED, artifacts=(poster,))
+    media.snapshots[OTHER_UPLOAD_ID] = snapshot(
+        upload_id=OTHER_UPLOAD_ID, status=MediaJobStatus.DISCARDED, artifacts=(poster,)
+    )
+    media.stored_bytes[poster.object_key] = b"jpg"
+    app = app_with_fakes(media, FakeDrafts(events))
+    base = f"/submissions/drafts/{DRAFT_ID}/media"
+
+    async with AsyncClient(transport=asgi_transport(app), base_url="http://test") as client:
+        served = await client.get(f"{base}/{UPLOAD_ID}/artifacts/video_thumbnail")
+        absent_role = await client.get(f"{base}/{UPLOAD_ID}/artifacts/output")
+        discarded = await client.get(f"{base}/{OTHER_UPLOAD_ID}/artifacts/video_thumbnail")
+        private_role = await client.get(f"{base}/{UPLOAD_ID}/artifacts/report")
+        media.stored_bytes.clear()
+        missing_bytes = await client.get(f"{base}/{UPLOAD_ID}/artifacts/video_thumbnail")
+
+    assert served.status_code == 200
+    assert served.content == b"jpg"
+    assert served.headers["Content-Type"] == "image/jpeg"
+    assert served.headers["Cache-Control"] == "no-store"
+    assert served.headers["X-Content-Type-Options"] == "nosniff"
+    assert [absent_role.status_code, discarded.status_code, missing_bytes.status_code] == [404, 404, 404]
+    assert private_role.status_code == 422
