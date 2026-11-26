@@ -38,6 +38,10 @@ class SearchBackend(Protocol):
         """
         ...
 
+    async def count(self, request: SearchRequest, query: SearchQuery) -> int:
+        """Count every document `query` matches in `request.scope`, without ranking limits or grouping."""
+        ...
+
     async def suggest(self, query: SearchQuery, *, limit: int) -> tuple[str, ...]: ...
 
 

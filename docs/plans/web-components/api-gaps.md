@@ -47,8 +47,8 @@ Items 12, 13, 15 and 17 share one **record holder summary**: `{build_id, title, 
 
 ## Search
 
-18. **Field reference.** Each `/v1/search/fields` entry gains a localized `label` and `description`, a `group` for laying out FieldFilters and P3, the canonical query `unit`, its `scopes`, `choices: [{value, label, scopes}] | null` for enumerated fields, `examples` (query strings P3 makes clickable) and `metric`, true for the measurements the P2 records table shows as columns. Result metrics still carry their own formatted values (see Records), so there is no display unit. The response varies with `Accept-Language`.
-19. **Search response additions.**
+18. **Field reference (implemented).** Each `/v1/search/fields` entry has a localized `label` and `description`, a `group` for laying out FieldFilters and P3, the canonical query `unit`, its `scopes`, `choices: [{value, label, scopes}] | null` for enumerated fields, `examples` (query strings P3 makes clickable) and `metric`, true for the measurements the P2 records table shows as columns. Result metrics still carry their own formatted values (see Records), so there is no display unit. The response varies with `Accept-Language`.
+19. **Search response additions (implemented except distributions).**
     - `filters` lists the parsed query's clauses, each `{kind, field, operator, value, negated, text, without}`. `without` is the normalized query with that clause removed, so a chip removes itself by navigating there, even inside an OR group, and the client never edits query text.
     - Syntax errors stay a 400 `INVALID_QUERY` with `context.position` and `context.suggestions`. The parser stops at the first error, so the query box shows one error at a time.
     - `?counts=true` adds `counts: {all, builds, records, metadata}` for the scope tabs, each null when the query cannot run in that scope. Counts include every match before grouping, while a ranked page's `total` stops at the ranked candidates. Clients request counts with the first page only.

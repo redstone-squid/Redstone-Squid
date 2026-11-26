@@ -136,6 +136,19 @@ type QueryExpression = TextExpression | FieldExpression | PresenceExpression | N
 
 
 @dataclass(frozen=True, slots=True)
+class QueryClause:
+    """One leaf of a parsed query, as `query_leaves` returns it, and how to remove it.
+
+    `without` is the normalized query left after removing the clause, so a client can
+    drop a filter from inside an OR group without editing query text.
+    """
+
+    expression: QueryExpression
+    text: str
+    without: str
+
+
+@dataclass(frozen=True, slots=True)
 class SearchQuery:
     """A parsed query and its normalized spelling; expression is None for blank input."""
 

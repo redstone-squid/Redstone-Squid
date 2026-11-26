@@ -1,6 +1,7 @@
 """Search orchestration shared by the bot and API."""
 
 import logging
+from dataclasses import replace
 from typing import Protocol
 
 from squid.core.actors import ActingContext, application_operation
@@ -11,7 +12,7 @@ from squid.core.search.application.fields import FieldRegistry
 from squid.core.search.application.parser import SearchQueryParser
 from squid.core.search.application.ports import QueryEmbedding, SearchBackend
 from squid.core.search.application.query_analysis import is_filter_only
-from squid.core.search.domain import SearchMode, SearchPage, SearchQuery, SearchRequest
+from squid.core.search.domain import QueryClause, SearchMode, SearchPage, SearchQuery, SearchRequest, SearchScope
 from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from squid.core.validation import (
     AboveMaximum,
@@ -70,9 +71,12 @@ class SearchService:
             await self.fields(context=context) if request.parsed_query is None or request.sort is not None else None
         )
         query: SearchQuery | None = request.parsed_query
+        clauses: tuple[QueryClause, ...] = ()
         if query is None:
             assert registry is not None
-            query = SearchQueryParser(registry, scope=request.scope).parse(request.query)
+            parser = SearchQueryParser(registry, scope=request.scope)
+            query = parser.parse(request.query)
+            clauses = parser.clauses(query)
         sort_field = None
         if request.sort is not None:
             assert registry is not None
@@ -110,7 +114,27 @@ class SearchService:
             prev=PageAnchor(offset=max(offset - request.page_size, 0)) if offset else None,
             warnings=result.warnings,
             offset=offset,
+            clauses=clauses,
         )
+
+    @application_operation
+    async def counts(self, request: SearchRequest, *, context: ActingContext) -> dict[SearchScope, int | None]:
+        """Count the matches of `request.query` in every scope.
+
+        Counts ignore grouping and the ranked candidate limit, so they can exceed
+        a page's total. A scope that cannot express the query counts None.
+        """
+        async with self._uow_factory() as uow:
+            registry = await uow.search_fields.registry()
+            counts: dict[SearchScope, int | None] = {}
+            for scope in SearchScope:
+                try:
+                    query = SearchQueryParser(registry, scope=scope).parse(request.query)
+                except ValidationError:
+                    counts[scope] = None
+                    continue
+                counts[scope] = await uow.search.count(replace(request, scope=scope), query)
+            return counts
 
     @application_operation
     async def suggest(self, query: str | SearchQuery, *, limit: int = 5, context: ActingContext) -> tuple[str, ...]:

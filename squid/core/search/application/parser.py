@@ -15,6 +15,7 @@ from squid.core.search.domain.query import (
     FieldExpression,
     NotExpression,
     PresenceExpression,
+    QueryClause,
     QueryExpression,
     RangeValue,
     RecordQuery,
@@ -22,6 +23,8 @@ from squid.core.search.domain.query import (
     SearchQuery,
     TextExpression,
     combine_clauses,
+    query_leaves,
+    replace_clause,
 )
 from squid.core.search.domain.scope import SearchScope
 from squid.core.validation import FieldErrorCode, SimpleIssue
@@ -150,6 +153,16 @@ class SearchQueryParser:
                 return RecordQuery(expression, normalized)
             case _:
                 return SearchQuery(expression, normalized)
+
+    def clauses(self, query: SearchQuery) -> tuple[QueryClause, ...]:
+        """List the query's leaves with their query text and the query that removing each leaves."""
+        expression = query.expression
+        if expression is None:
+            return ()
+        return tuple(
+            QueryClause(leaf, self.render(leaf), self.query(replace_clause(expression, path, None)).normalized)
+            for path, leaf in query_leaves(expression)
+        )
 
     def render(self, expression: QueryExpression) -> str:
         """Render a query so that parsing it preserves its meaning."""

@@ -13339,6 +13339,20 @@
             "deprecated": false,
             "allowEmptyValue": false,
             "allowReserved": false
+          },
+          {
+            "name": "counts",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "description": "Also count the matches in every scope, for scope tabs.",
+              "default": false
+            },
+            "description": "Also count the matches in every scope, for scope tabs.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
           }
         ],
         "responses": {
@@ -13352,7 +13366,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Page_SearchResult_"
+                  "$ref": "#/components/schemas/SearchResultPage"
                 }
               }
             }
@@ -22042,6 +22056,18 @@
         ],
         "title": "CliSessionExchangeRequest"
       },
+      "ComparisonOperator": {
+        "type": "string",
+        "enum": [
+          "eq",
+          "lt",
+          "lte",
+          "gt",
+          "gte"
+        ],
+        "title": "ComparisonOperator",
+        "description": "Allowlisted field comparison operators."
+      },
       "ConsentGrantRequest": {
         "properties": {
           "version": {
@@ -25997,57 +26023,6 @@
         "required": [],
         "title": "PageAnchor"
       },
-      "Page_SearchResult_": {
-        "properties": {
-          "items": {
-            "items": {
-              "oneOf": [
-                {
-                  "$ref": "#/components/schemas/BuildSearchResult"
-                },
-                {
-                  "$ref": "#/components/schemas/RecordSearchResult"
-                },
-                {
-                  "$ref": "#/components/schemas/MetadataSearchResult"
-                }
-              ]
-            },
-            "type": "array"
-          },
-          "total": {
-            "type": "integer"
-          },
-          "next": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/PageAnchor"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "prev": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/PageAnchor"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "type": "object",
-        "required": [
-          "items",
-          "next",
-          "prev",
-          "total"
-        ],
-        "title": "Page[SearchResult]"
-      },
       "Page_litestar.dto._backend.PublishedRecordResult_": {
         "properties": {
           "items": {
@@ -29514,6 +29489,58 @@
         ],
         "title": "SchematicSummary"
       },
+      "SearchCounts": {
+        "properties": {
+          "all": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "builds": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "records": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "metadata": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "all",
+          "builds",
+          "metadata",
+          "records"
+        ],
+        "title": "SearchCounts"
+      },
       "SearchField": {
         "properties": {
           "name": {
@@ -29636,6 +29663,142 @@
         ],
         "title": "SearchFieldChoice"
       },
+      "SearchFilter": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "text",
+              "field",
+              "presence"
+            ]
+          },
+          "field": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The canonical field name, or null for bare text."
+          },
+          "operator": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ComparisonOperator"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "value": {
+            "oneOf": [
+              {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  }
+                ]
+              },
+              {
+                "$ref": "#/components/schemas/SearchFilterRange"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The coerced value: numbers in the field's unit, timestamps as ISO 8601. Null for presence."
+          },
+          "is_set": {
+            "oneOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For presence clauses, whether the field must have a value."
+          },
+          "negated": {
+            "type": "boolean"
+          },
+          "text": {
+            "type": "string",
+            "description": "The clause in query syntax."
+          },
+          "without": {
+            "type": "string",
+            "description": "The normalized query with this clause removed."
+          }
+        },
+        "type": "object",
+        "required": [
+          "field",
+          "is_set",
+          "kind",
+          "negated",
+          "operator",
+          "text",
+          "value",
+          "without"
+        ],
+        "title": "SearchFilter"
+      },
+      "SearchFilterRange": {
+        "properties": {
+          "lower": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          },
+          "upper": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "boolean"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "lower",
+          "upper"
+        ],
+        "title": "SearchFilterRange"
+      },
       "SearchMatch": {
         "properties": {
           "resource_kind": {
@@ -29663,6 +29826,76 @@
           "source_id"
         ],
         "title": "SearchMatch"
+      },
+      "SearchResultPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/BuildSearchResult"
+                },
+                {
+                  "$ref": "#/components/schemas/RecordSearchResult"
+                },
+                {
+                  "$ref": "#/components/schemas/MetadataSearchResult"
+                }
+              ]
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "next": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prev": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "filters": {
+            "items": {
+              "$ref": "#/components/schemas/SearchFilter"
+            },
+            "type": "array"
+          },
+          "counts": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SearchCounts"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Present when requested with `counts=true`. Counts ignore grouping and ranking limits."
+          }
+        },
+        "type": "object",
+        "required": [
+          "counts",
+          "filters",
+          "items",
+          "next",
+          "prev",
+          "total"
+        ],
+        "title": "SearchResultPage"
       },
       "SearchScope": {
         "type": "string",

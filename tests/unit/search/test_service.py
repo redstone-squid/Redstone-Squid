@@ -49,6 +49,10 @@ class FakeSearchBackend:
         hit = BuildSearchHit("1", "Door", "approved", score=0.5)
         return SearchSlice((hit,), self.total, warnings=("degraded",))
 
+    async def count(self, request: SearchRequest, query: SearchQuery) -> int:
+        assert self.active_scopes == 1
+        return len(request.scope.value)
+
     async def suggest(self, query: SearchQuery, *, limit: int) -> tuple[str, ...]:
         return self.suggestions[:limit]
 
@@ -238,3 +242,26 @@ async def test_missing_or_failed_embedding_still_runs_the_result_query(raises: b
     assert page.hits
     assert backend.embeddings == [None]
     assert backend.active_scopes == 0
+
+
+async def test_service_lists_the_parsed_clauses_with_each_page() -> None:
+    service = SearchService(uow_factory=partial(SearchUnitOfWork, FakeSearchBackend()))
+
+    page = await service.search(
+        SearchRequest("door width<=3", scope=SearchScope.BUILDS), context=ActingContext.direct(AnonymousActor())
+    )
+
+    assert [(clause.text, clause.without) for clause in page.clauses] == [("door", "width<=3"), ("width<=3", "door")]
+
+
+async def test_service_counts_each_scope_and_skips_scopes_that_cannot_run_the_query() -> None:
+    service = SearchService(uow_factory=partial(SearchUnitOfWork, FakeSearchBackend()))
+
+    counts = await service.counts(SearchRequest("criterion:fastest"), context=ActingContext.direct(AnonymousActor()))
+
+    assert counts == {
+        SearchScope.RECORDS: len("records"),
+        SearchScope.BUILDS: None,
+        SearchScope.METADATA: len("metadata"),
+        SearchScope.ALL: len("all"),
+    }

@@ -411,3 +411,24 @@ async def test_public_title_suggestions_share_search_visibility(
         SearchRequest(query="piston", scope=SearchScope.BUILDS, visible_statuses=frozenset({"pending"})),
     )
     assert [hit.title for hit in staff.hits] == ["Piston pending"]
+
+
+@pytest.mark.parametrize(
+    ("scope", "expected"),
+    [(SearchScope.BUILDS, 3), (SearchScope.RECORDS, 5), (SearchScope.METADATA, 1), (SearchScope.ALL, 9)],
+)
+async def test_count_includes_every_visible_match_in_the_scope(
+    search_tables: None,
+    async_session_factory: async_sessionmaker[AsyncSession],
+    scope: SearchScope,
+    expected: int,
+) -> None:
+    await seed_grouped_records(async_session_factory)
+    backend = partial(SqlAlchemyUnitOfWork, async_session_factory)
+    request = SearchRequest("door", scope=scope)
+
+    count = await transact(
+        backend, lambda uow: uow.search.count(request, SearchQueryParser(scope=scope).parse(request.query))
+    )
+
+    assert count == expected

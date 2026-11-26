@@ -11,15 +11,18 @@ from litestar.params import QueryParameter
 from squid.api.contract import ANONYMOUS, contract, transport_only
 from squid.api.dependencies import BuildQueries, CurrentCaller, Search, get_build_queries, get_search
 from squid.api.errors import responses
-from squid.api.pagination import OffsetParam, Page, PageAnchor, PageSizeParam
+from squid.api.pagination import OffsetParam, PageAnchor, PageSizeParam
 from squid.api.v1.schemas.search import (
     BuildSearchResult,
     MetadataSearchEntry,
     MetadataSearchResult,
     RecordSearchEntry,
     RecordSearchResult,
+    SearchCounts,
     SearchField,
+    SearchFilter,
     SearchResult,
+    SearchResultPage,
     SearchSuggestions,
 )
 from squid.core.actors import ActingContext
@@ -88,21 +91,22 @@ async def search(
     group_by_build: Annotated[
         bool, QueryParameter(description="Combine matching records and builds before pagination.")
     ] = False,
-) -> Page[SearchResult]:
+    counts: Annotated[
+        bool, QueryParameter(description="Also count the matches in every scope, for scope tabs.")
+    ] = False,
+) -> SearchResultPage:
     """Match builds, computed records, and tag entries in one ranked page."""
-    result = await search_service.search(
-        SearchRequest(
-            query=q,
-            scope=search_scope,
-            mode=SearchMode.LEXICAL,
-            page_size=page_size,
-            offset=offset or 0,
-            sort=SearchSort.parse(sort),
-            visible_statuses=PUBLIC_SEARCH_STATUSES,
-            group_by_build=group_by_build,
-        ),
-        context=caller.context(),
+    request = SearchRequest(
+        query=q,
+        scope=search_scope,
+        mode=SearchMode.LEXICAL,
+        page_size=page_size,
+        offset=offset or 0,
+        sort=SearchSort.parse(sort),
+        visible_statuses=PUBLIC_SEARCH_STATUSES,
+        group_by_build=group_by_build,
     )
+    result = await search_service.search(request, context=caller.context())
     builds = await hydrate_builds(build_queries, result.hits, context=caller.context())
     items: list[SearchResult] = []
     for hit in result.hits:
@@ -133,11 +137,14 @@ async def search(
                         evidence=list(hit.evidence.matches),
                     )
                 )
-    return Page(
+    scope_counts = await search_service.counts(request, context=caller.context()) if counts else None
+    return SearchResultPage(
         items=items,
         total=result.total,
         next=PageAnchor.from_domain(result.next) if result.next is not None else None,
         prev=PageAnchor.from_domain(result.prev) if result.prev is not None else None,
+        filters=[SearchFilter.from_domain(clause) for clause in result.clauses],
+        counts=SearchCounts.from_domain(scope_counts) if scope_counts is not None else None,
     )
 
 

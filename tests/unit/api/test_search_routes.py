@@ -7,7 +7,7 @@ from uuid import UUID
 import pytest
 
 from squid.api.security import ANONYMOUS
-from squid.api.v1.schemas.search import BuildSearchResult, MetadataSearchResult, RecordSearchResult
+from squid.api.v1.schemas.search import BuildSearchResult, MetadataSearchResult, RecordSearchResult, SearchCounts
 from squid.api.v1.search import build_hit_id, search, suggest_terms
 from squid.core.actors import ActingContext
 from squid.core.builds.application import BuildQueryService
@@ -15,7 +15,7 @@ from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build, DoorBuild
 from squid.core.errors import DataIntegrityError
 from squid.core.pagination import PageAnchor
-from squid.core.search.application import SearchService
+from squid.core.search.application import SearchQueryParser, SearchService
 from squid.core.search.domain import (
     BuildSearchHit,
     FieldMatch,
@@ -47,6 +47,11 @@ class SearchRecorder(SearchService):
     async def search(self, request: SearchRequest, *, context: ActingContext) -> SearchPage:
         self.requests.append(request)
         return self.page
+
+    @override
+    async def counts(self, request: SearchRequest, *, context: ActingContext) -> dict[SearchScope, int | None]:
+        self.requests.append(request)
+        return {SearchScope.ALL: 7, SearchScope.BUILDS: 4, SearchScope.RECORDS: None, SearchScope.METADATA: 3}
 
     @override
     async def suggest(self, query: str | SearchQuery, *, limit: int = 5, context: ActingContext) -> tuple[str, ...]:
@@ -216,3 +221,54 @@ def test_an_unparsable_projection_key_is_a_server_fault_not_a_bad_request() -> N
         build_hit_id("b1")
 
     assert raised.value.context == {"source_id": "b1"}
+
+
+async def test_search_lists_filters_and_counts_scopes_only_on_request() -> None:
+    parser = SearchQueryParser(scope=SearchScope.BUILDS)
+    clauses = parser.clauses(parser.parse('width:[2 TO 4] NOT restriction:"no slime" door_width IS SET piston'))
+    graph = fakes(SearchPage(hits=(), total=0, next=None, prev=None, clauses=clauses))
+
+    uncounted = await search.fn(ANONYMOUS, graph.search, graph.build_queries, q="ignored")
+    counted = await search.fn(ANONYMOUS, graph.search, graph.build_queries, q="ignored", counts=True)
+
+    assert uncounted.counts is None
+    assert counted.counts == SearchCounts(all=7, builds=4, records=None, metadata=3)
+    assert [item.model_dump(exclude={"without"}) for item in uncounted.filters] == [
+        {
+            "kind": "field",
+            "field": "width",
+            "operator": "eq",
+            "value": {"lower": 2, "upper": 4},
+            "is_set": None,
+            "negated": False,
+            "text": "width:[2 TO 4]",
+        },
+        {
+            "kind": "field",
+            "field": "restriction",
+            "operator": "eq",
+            "value": "no slime",
+            "is_set": None,
+            "negated": True,
+            "text": 'NOT restriction:"no slime"',
+        },
+        {
+            "kind": "presence",
+            "field": "door_width",
+            "operator": None,
+            "value": None,
+            "is_set": True,
+            "negated": False,
+            "text": "door_width IS SET",
+        },
+        {
+            "kind": "text",
+            "field": None,
+            "operator": None,
+            "value": "piston",
+            "is_set": None,
+            "negated": False,
+            "text": "piston",
+        },
+    ]
+    assert uncounted.filters[0].without == 'NOT restriction:"no slime" AND door_width IS SET AND piston'

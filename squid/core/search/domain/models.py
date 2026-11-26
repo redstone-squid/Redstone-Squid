@@ -7,7 +7,7 @@ from typing import Literal
 from squid.core.errors import ErrorCode, ValidationError
 from squid.core.pagination import MAX_PAGE_OFFSET, PageAnchor
 from squid.core.search.domain.evidence import SearchEvidence
-from squid.core.search.domain.query import BuildQuery, RecordQuery
+from squid.core.search.domain.query import BuildQuery, QueryClause, RecordQuery
 from squid.core.search.domain.scope import SearchScope as SearchScope
 from squid.core.validation import (
     AboveMaximum,
@@ -212,3 +212,5 @@ class SearchPage:
     prev: PageAnchor | None
     warnings: tuple[str, ...] = ()
     offset: int | None = None
+    clauses: tuple[QueryClause, ...] = ()
+    """The clauses of `SearchRequest.query`; empty when the request supplied a parsed query."""

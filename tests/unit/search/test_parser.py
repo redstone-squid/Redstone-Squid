@@ -257,3 +257,23 @@ def test_presence_keywords_keep_working_as_ordinary_search_terms() -> None:
 def test_invalid_presence_checks_follow_field_scope_and_syntax(text: str, message: str) -> None:
     with pytest.raises(QuerySyntaxError, match=message):
         SearchQueryParser(scope=SearchScope.RECORDS).parse(text)
+
+
+def test_clauses_remove_themselves_without_breaking_their_group() -> None:
+    parser = SearchQueryParser(scope=SearchScope.BUILDS)
+
+    clauses = parser.clauses(parser.parse("width<=5 (restriction:observerless OR slime) NOT door"))
+
+    assert [(clause.text, clause.without) for clause in clauses] == [
+        ("width<=5", "(restriction:observerless OR slime) AND NOT door"),
+        ("restriction:observerless", "width<=5 AND slime AND NOT door"),
+        ("slime", "width<=5 AND restriction:observerless AND NOT door"),
+        ("NOT door", "width<=5 AND (restriction:observerless OR slime)"),
+    ]
+    assert isinstance(clauses[3].expression, NotExpression)
+
+
+def test_clauses_of_a_blank_query_are_empty() -> None:
+    parser = SearchQueryParser()
+
+    assert parser.clauses(parser.parse("  ")) == ()

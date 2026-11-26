@@ -78,6 +78,12 @@ class PostgresSearchBackend(SearchBackend):
             order, warnings = await self._ranked(session, request, query, predicate, expansion, query_embedding)
         return await ResultPager(session, request, query, expansion).page(predicate, order, warnings=warnings)
 
+    @override
+    async def count(self, request: SearchRequest, query: SearchQuery) -> int:
+        session = self._session()
+        predicate = self.compile_predicate(request, query, await self._expansion(session, query))
+        return await session.scalar(select(func.count(SearchDocument.id)).where(predicate)) or 0
+
     def compile_predicate(
         self, request: SearchRequest, query: SearchQuery, expansion: TermExpansion | None = None
     ) -> ColumnElement[bool]:

@@ -484,6 +484,13 @@ export type CliSessionExchangeRequest = {
 };
 
 /**
+ * ComparisonOperator
+ *
+ * Allowlisted field comparison operators.
+ */
+export type ComparisonOperator = 'eq' | 'lt' | 'lte' | 'gt' | 'gte';
+
+/**
  * ConsentGrantRequest
  */
 export type ConsentGrantRequest = {
@@ -1602,16 +1609,6 @@ export type PageAnchor = {
 };
 
 /**
- * Page[SearchResult]
- */
-export type PageSearchResult = {
-    items: Array<BuildSearchResult | RecordSearchResult | MetadataSearchResult>;
-    total: number;
-    next: PageAnchor | null;
-    prev: PageAnchor | null;
-};
-
-/**
  * Page[PublishedRecordResult]
  */
 export type PageLitestarDtoBackendPublishedRecordResult = {
@@ -2531,6 +2528,16 @@ export type SchematicSummary = {
 };
 
 /**
+ * SearchCounts
+ */
+export type SearchCounts = {
+    all: number | null;
+    builds: number | null;
+    records: number | null;
+    metadata: number | null;
+};
+
+/**
  * SearchField
  */
 export type SearchField = {
@@ -2577,12 +2584,64 @@ export type SearchFieldChoice = {
 };
 
 /**
+ * SearchFilter
+ */
+export type SearchFilter = {
+    kind: 'text' | 'field' | 'presence';
+    /**
+     * The canonical field name, or null for bare text.
+     */
+    field: string | null;
+    operator: ComparisonOperator | null;
+    /**
+     * The coerced value: numbers in the field's unit, timestamps as ISO 8601. Null for presence.
+     */
+    value: string | number | number | boolean | SearchFilterRange | null;
+    /**
+     * For presence clauses, whether the field must have a value.
+     */
+    is_set: boolean | null;
+    negated: boolean;
+    /**
+     * The clause in query syntax.
+     */
+    text: string;
+    /**
+     * The normalized query with this clause removed.
+     */
+    without: string;
+};
+
+/**
+ * SearchFilterRange
+ */
+export type SearchFilterRange = {
+    lower: string | number | number | boolean;
+    upper: string | number | number | boolean;
+};
+
+/**
  * SearchMatch
  */
 export type SearchMatch = {
     resource_kind: 'build' | 'record' | 'metadata';
     source_id: string;
     branches?: Array<string>;
+};
+
+/**
+ * SearchResultPage
+ */
+export type SearchResultPage = {
+    items: Array<BuildSearchResult | RecordSearchResult | MetadataSearchResult>;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+    filters: Array<SearchFilter>;
+    /**
+     * Present when requested with `counts=true`. Counts ignore grouping and ranking limits.
+     */
+    counts: SearchCounts | null;
 };
 
 /**
@@ -7534,6 +7593,10 @@ export type SearchExecuteData = {
          * Combine matching records and builds before pagination.
          */
         group_by_build?: boolean;
+        /**
+         * Also count the matches in every scope, for scope tabs.
+         */
+        counts?: boolean;
     };
     url: '/v1/search';
 };
@@ -7563,7 +7626,7 @@ export type SearchExecuteResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: PageSearchResult;
+    200: SearchResultPage;
 };
 
 export type SearchExecuteResponse = SearchExecuteResponses[keyof SearchExecuteResponses];
