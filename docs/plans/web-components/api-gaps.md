@@ -81,6 +81,7 @@ Items 1–4 are implemented in the API.
 29. **Typed payloads (implemented).** `InboxNotificationDetail.payload` is a union discriminated by `kind`. Build kinds carry `build: {id, title}`, record kinds carry `records: [{id, title}]`, and the item has an `href`. Builds link to `/builds/{id}` even while pending or rejected, so those links need item 8.
 30. **Inbox list improvements (implemented).** The inbox page carries `unread_count`, `unread_only=true` filters it, and `POST /v1/users/me/notifications/inbox/read-all` marks everything read as one undoable edit. Its optional `through_id` leaves items that arrived after the page loaded unread.
 31. **Readable subscriptions (implemented).** `NotificationSubscriptionDetail` carries `subject_label`, `subject_href`, and a localized `filter_summary`. `GET …/subscriptions?kind&subject_id` answers toggle state for pages without a `viewer` block.
+    - *Open:* creator follows link to `/creators/{name}`, using the alphabetically first alias, because P13 routes by name. Follows store the public creator ID, so these links break when an alias is renamed or released. Decide with item 24 whether claimed creators get an ID route (with names redirecting to it); `subject_href` should then use the ID.
 
 ## Submissions
 
