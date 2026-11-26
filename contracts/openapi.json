@@ -19939,23 +19939,26 @@
         }
       }
     },
-    "/v1/tags/by-slug/{slug}": {
+    "/v1/tags/lookup": {
       "get": {
         "tags": [
           "tags"
         ],
-        "summary": "GetTagBySlug",
+        "summary": "LookUpTag",
         "description": "Resolve a current or former slug to its published tag.",
-        "operationId": "tags_get_by_slug",
+        "operationId": "tags_lookup",
         "parameters": [
           {
             "name": "slug",
-            "in": "path",
+            "in": "query",
             "schema": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "required": true,
-            "deprecated": false
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
           }
         ],
         "responses": {

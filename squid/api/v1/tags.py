@@ -1,9 +1,11 @@
 """Public tag-definition read routes."""
 
+from typing import Annotated
+
 from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO, SQLAlchemyDTOConfig
 from litestar import Router, get
 from litestar.di import Provide
-from litestar.params import FromPath
+from litestar.params import FromPath, QueryParameter
 
 from squid.api.contract import ANONYMOUS, WEB, contract, transport_only
 from squid.api.dependencies import CurrentCaller, Services, Tags, get_tags
@@ -81,14 +83,16 @@ async def get_tag(tag_id: FromPath[int], tags: Tags, caller: CurrentCaller, serv
 
 
 @get(
-    "/by-slug/{slug:str}",
+    "/lookup",
     responses=responses(404, 422, 503),
-    operation_id="tags_get_by_slug",
+    operation_id="tags_lookup",
     response_headers={"Cache-Control": "private, no-store"},
     security=[ANONYMOUS, WEB],
     opt=contract(cli=transport_only()),
 )
-async def get_tag_by_slug(slug: FromPath[str], tags: Tags, caller: CurrentCaller, services: Services) -> TagDetail:
+async def look_up_tag(
+    slug: Annotated[str, QueryParameter(min_length=1)], tags: Tags, caller: CurrentCaller, services: Services
+) -> TagDetail:
     """Resolve a current or former slug to its published tag."""
     definition = await tags.public_definition(slug, context=ActingContext.current())
     if definition is None:
@@ -100,5 +104,5 @@ router = Router(
     dependencies={"tags": Provide(get_tags, sync_to_thread=False)},
     path="/tags",
     tags=["tags"],
-    route_handlers=[list_tags, get_tag, get_tag_by_slug],
+    route_handlers=[list_tags, get_tag, look_up_tag],
 )

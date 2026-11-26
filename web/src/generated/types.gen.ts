@@ -9690,16 +9690,16 @@ export type TagsGetResponses = {
 
 export type TagsGetResponse = TagsGetResponses[keyof TagsGetResponses];
 
-export type TagsGetBySlugData = {
+export type TagsLookupData = {
     body?: never;
-    path: {
+    path?: never;
+    query: {
         slug: string;
     };
-    query?: never;
-    url: '/v1/tags/by-slug/{slug}';
+    url: '/v1/tags/lookup';
 };
 
-export type TagsGetBySlugErrors = {
+export type TagsLookupErrors = {
     /**
      * Not Found
      */
@@ -9718,16 +9718,16 @@ export type TagsGetBySlugErrors = {
     503: ProblemDetail;
 };
 
-export type TagsGetBySlugError = TagsGetBySlugErrors[keyof TagsGetBySlugErrors];
+export type TagsLookupError = TagsLookupErrors[keyof TagsLookupErrors];
 
-export type TagsGetBySlugResponses = {
+export type TagsLookupResponses = {
     /**
      * Request fulfilled, document follows
      */
     200: TagDetail;
 };
 
-export type TagsGetBySlugResponse = TagsGetBySlugResponses[keyof TagsGetBySlugResponses];
+export type TagsLookupResponse = TagsLookupResponses[keyof TagsLookupResponses];
 
 export type CreatorAliasGetData = {
     body?: never;

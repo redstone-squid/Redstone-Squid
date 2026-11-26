@@ -501,6 +501,12 @@ class TestTypedNotFound:
         assert problem["resource"] == "tag"
         assert problem["context"] == {"tag_id": 404}
 
+    def test_a_missing_tag_slug_names_the_slug(self, client: TestClient) -> None:
+        response = client.get("/v1/tags/lookup", params={"slug": "zero-tick"})
+
+        assert response.status_code == 404
+        assert response.json()["code"] == "TAG_NOT_FOUND"
+
     def test_a_missing_vote_session_names_its_identifier(self, client: TestClient) -> None:
         response = client.get("/v1/vote-sessions/1234")
 

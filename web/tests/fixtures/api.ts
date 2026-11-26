@@ -298,8 +298,8 @@ async function routeRequest(request: Request): Promise<Response> {
     return new Response(null, { status: 204 });
   }
 
-  if (url.pathname.startsWith("/v1/tags/by-slug/")) {
-    if (["zero-tick", "old-name"].includes(url.pathname.split("/").at(-1) ?? "")) {
+  if (url.pathname === "/v1/tags/lookup") {
+    if (["zero-tick", "old-name"].includes(url.searchParams.get("slug") ?? "")) {
       return json({ name: "Zero tick", slug: "zero-tick" });
     }
     return problem(request, 404, "not_found");
