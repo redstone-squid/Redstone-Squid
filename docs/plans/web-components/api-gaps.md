@@ -47,14 +47,14 @@ Items 12, 13, 15 and 17 share one **record holder summary**: `{build_id, title, 
 
 ## Search
 
-18. **New fields on `SearchField`:** `label` (localized), `description`, `group`, `unit` and `display_unit`, `scopes: SearchScope[]`, `value_choices: [{value, label}] | null`, `examples: string[]`, `metric: bool` (whether it is a record metric column). Needed by P3 reference, FieldFilters, and the column headers in the P2 records table.
-19. **Additions to the search response:**
-    - `counts: {all, builds, records, metadata}` for the scope tab counts (P2).
-    - `parsed: {text: string[], clauses: [{field, operator, value, span: [start, end]}], errors: [{span, code, message}]}`. Needed for chips, removable filters and inline query errors on P2.
-    - `metric_columns: string[]` listing the metrics present on this page (P2 records table).
-    - `sort_options: [{value, label}]` per scope.
-    - Phase 2: `distributions` (`?distributions=width,opening_time,category`) returning `{field: {buckets: [{value, count}] | histogram: [{from, to, count}]}}`, for chart 6 and filter counts.
-20. **Search sort (implemented).** `sort` is a sortable field of the scope, `-` prefixed for descending (item 58). Item 19's `sort_options` lets the UI offer them by name.
+18. **Field reference.** Each `/v1/search/fields` entry gains a localized `label` and `description`, a `group` for laying out FieldFilters and P3, the canonical query `unit`, its `scopes`, `choices: [{value, label, scopes}] | null` for enumerated fields, `examples` (query strings P3 makes clickable) and `metric`, true for the measurements the P2 records table shows as columns. Result metrics still carry their own formatted values (see Records), so there is no display unit. The response varies with `Accept-Language`.
+19. **Search response additions.**
+    - `filters` lists the parsed query's clauses, each `{kind, field, operator, value, negated, text, without}`. `without` is the normalized query with that clause removed, so a chip removes itself by navigating there, even inside an OR group, and the client never edits query text.
+    - Syntax errors stay a 400 `INVALID_QUERY` with `context.position` and `context.suggestions`. The parser stops at the first error, so the query box shows one error at a time.
+    - `?counts=true` adds `counts: {all, builds, records, metadata}` for the scope tabs, each null when the query cannot run in that scope. Counts include every match before grouping, while a ranked page's `total` stops at the ranked candidates. Clients request counts with the first page only.
+    - Records-table columns come from item 18's `metric` fields rather than the page, so they stay put while paging.
+    - Phase 2: `?distributions=width,opening_time,category` returns `{field: {kind: "buckets", buckets: [{value, count}]} | {kind: "histogram", bins: [{from, to, count}]}}` for chart 6 and filter counts.
+20. **Search sort (implemented).** `sort` is a sortable field of the scope, `-` prefixed for descending (item 58). P2 offers the item 18 fields with `supports_sort`, named by their label and direction.
 
 ## Tags
 
