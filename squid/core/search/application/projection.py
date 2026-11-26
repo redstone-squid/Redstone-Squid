@@ -6,6 +6,7 @@ resource is deleted or no longer eligible. The application function commits docu
 and queue acknowledgements together so a rollback leaves the work available.
 """
 
+import time
 from typing import Protocol
 
 from squid.core.actors import ActingContext
@@ -20,14 +21,28 @@ class SearchProjectionRepository(Protocol):
 
 
 async def refresh_search_index(
-    uow_factory: UnitOfWorkFactory[SearchProjectionUnitOfWork], *, context: ActingContext, limit: int = 50
+    uow_factory: UnitOfWorkFactory[SearchProjectionUnitOfWork],
+    *,
+    context: ActingContext,
+    limit: int = 50,
+    budget_seconds: float = 10,
 ) -> tuple[int, int]:
-    """Commit up to limit document refreshes and queue updates; return (succeeded, failed)."""
+    """Refresh queued documents until the queue runs dry or the budget ends; return (succeeded, failed).
+
+    Each batch of up to limit commits on its own. A backlog keeps draining at full speed
+    instead of one batch per poll, while the budget bounds how long one run holds the job.
+    """
+    deadline = time.monotonic() + budget_seconds
+    succeeded = failed = 0
     with worker_scope(context):
-        async with uow_factory() as uow:
-            result = await uow.search_projection.process_batch(limit=limit, context=context)
-            await uow.commit()
-            return result
+        while True:
+            async with uow_factory() as uow:
+                batch_succeeded, batch_failed = await uow.search_projection.process_batch(limit=limit, context=context)
+                await uow.commit()
+            succeeded += batch_succeeded
+            failed += batch_failed
+            if batch_succeeded + batch_failed < limit or time.monotonic() >= deadline:
+                return succeeded, failed
 
 
 class SearchProjectionUnitOfWork(UnitOfWork, Protocol):
