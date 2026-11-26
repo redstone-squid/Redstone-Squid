@@ -4027,6 +4027,45 @@ export type AccountMergeCompleteResponses = {
 
 export type AccountMergeCompleteResponse = AccountMergeCompleteResponses[keyof AccountMergeCompleteResponses];
 
+export type AccountPublicGetData = {
+    body?: never;
+    path: {
+        account_id: string;
+    };
+    query?: never;
+    url: '/v1/accounts/{account_id}';
+};
+
+export type AccountPublicGetErrors = {
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type AccountPublicGetError = AccountPublicGetErrors[keyof AccountPublicGetErrors];
+
+export type AccountPublicGetResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: PublicAccountDetail;
+};
+
+export type AccountPublicGetResponse = AccountPublicGetResponses[keyof AccountPublicGetResponses];
+
 export type AccountMinecraftRefreshData = {
     body?: never;
     headers?: {
@@ -4035,12 +4074,21 @@ export type AccountMinecraftRefreshData = {
          */
         'Idempotency-Key'?: string | null;
     };
-    path?: never;
+    path: {
+        /**
+         * A public account ID, or `me` for the caller's own account.
+         */
+        account_id: string;
+    };
     query?: never;
-    url: '/v1/accounts/me/minecraft/refresh';
+    url: '/v1/accounts/{account_id}/minecraft/refresh';
 };
 
 export type AccountMinecraftRefreshErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
     /**
      * Unauthorized
      */
@@ -4082,102 +4130,6 @@ export type AccountMinecraftRefreshResponses = {
 
 export type AccountMinecraftRefreshResponse = AccountMinecraftRefreshResponses[keyof AccountMinecraftRefreshResponses];
 
-export type AccountPublicGetData = {
-    body?: never;
-    path: {
-        account_id: string;
-    };
-    query?: never;
-    url: '/v1/accounts/{account_id}';
-};
-
-export type AccountPublicGetErrors = {
-    /**
-     * Not Found
-     */
-    404: ProblemDetail;
-    /**
-     * Unprocessable Content
-     */
-    422: ValidationProblemDetail;
-    /**
-     * Too Many Requests
-     */
-    429: ProblemDetail;
-    /**
-     * Service Unavailable
-     */
-    503: ProblemDetail;
-};
-
-export type AccountPublicGetError = AccountPublicGetErrors[keyof AccountPublicGetErrors];
-
-export type AccountPublicGetResponses = {
-    /**
-     * Request fulfilled, document follows
-     */
-    200: PublicAccountDetail;
-};
-
-export type AccountPublicGetResponse = AccountPublicGetResponses[keyof AccountPublicGetResponses];
-
-export type AccountMinecraftRefreshForData = {
-    body?: never;
-    headers?: {
-        /**
-         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
-         */
-        'Idempotency-Key'?: string | null;
-    };
-    path: {
-        account_id: string;
-    };
-    query?: never;
-    url: '/v1/accounts/{account_id}/minecraft/refresh';
-};
-
-export type AccountMinecraftRefreshForErrors = {
-    /**
-     * Unauthorized
-     */
-    401: ProblemDetail;
-    /**
-     * Forbidden
-     */
-    403: ProblemDetail;
-    /**
-     * Not Found
-     */
-    404: ProblemDetail;
-    /**
-     * Conflict
-     */
-    409: ProblemDetail;
-    /**
-     * Unprocessable Entity
-     */
-    422: ValidationProblemDetail;
-    /**
-     * Too Many Requests
-     */
-    429: ProblemDetail;
-    /**
-     * Service Unavailable
-     */
-    503: ProblemDetail;
-};
-
-export type AccountMinecraftRefreshForError = AccountMinecraftRefreshForErrors[keyof AccountMinecraftRefreshForErrors];
-
-export type AccountMinecraftRefreshForResponses = {
-    /**
-     * Request fulfilled, document follows
-     */
-    200: MinecraftIdentityRefresh;
-};
-
-export type AccountMinecraftRefreshForResponse = AccountMinecraftRefreshForResponses[keyof AccountMinecraftRefreshForResponses];
-
 export type AccountProfileClearData = {
     body?: never;
     headers?: {
@@ -4188,6 +4140,9 @@ export type AccountProfileClearData = {
         'If-Match'?: string | null;
     };
     path: {
+        /**
+         * A public account ID, or `me` for the caller's own account.
+         */
         account_id: string;
     };
     query?: never;
@@ -4195,6 +4150,10 @@ export type AccountProfileClearData = {
 };
 
 export type AccountProfileClearErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
     /**
      * Unauthorized
      */
@@ -4240,16 +4199,23 @@ export type AccountProfileClearResponses = {
 
 export type AccountProfileClearResponse = AccountProfileClearResponses[keyof AccountProfileClearResponses];
 
-export type AccountProfileReviewData = {
+export type AccountProfileGetData = {
     body?: never;
     path: {
+        /**
+         * A public account ID, or `me` for the caller's own account.
+         */
         account_id: string;
     };
     query?: never;
     url: '/v1/accounts/{account_id}/profile';
 };
 
-export type AccountProfileReviewErrors = {
+export type AccountProfileGetErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
     /**
      * Unauthorized
      */
@@ -4276,16 +4242,16 @@ export type AccountProfileReviewErrors = {
     503: ProblemDetail;
 };
 
-export type AccountProfileReviewError = AccountProfileReviewErrors[keyof AccountProfileReviewErrors];
+export type AccountProfileGetError = AccountProfileGetErrors[keyof AccountProfileGetErrors];
 
-export type AccountProfileReviewResponses = {
+export type AccountProfileGetResponses = {
     /**
      * Request fulfilled, document follows
      */
     200: ProfileDetail;
 };
 
-export type AccountProfileReviewResponse = AccountProfileReviewResponses[keyof AccountProfileReviewResponses];
+export type AccountProfileGetResponse = AccountProfileGetResponses[keyof AccountProfileGetResponses];
 
 export type BrowserProvidersListData = {
     body?: never;

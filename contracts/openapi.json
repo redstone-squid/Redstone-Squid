@@ -2019,15 +2019,137 @@
         }
       }
     },
-    "/v1/accounts/me/minecraft/refresh": {
+    "/v1/accounts/{account_id}": {
+      "get": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "GetPublicAccount",
+        "description": "Return an account's public profile, following account-merge redirects.\n\nThe account service applies profile and identity visibility before this route\nserializes the result. Your own ID returns the same public view; `/accounts/me` is the private one.",
+        "operationId": "account_public_get",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "deprecated": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicAccountDetail"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {},
+          {
+            "WebSession": []
+          }
+        ],
+        "x-squid-private-response": true,
+        "x-squid-cli": {
+          "classification": "transport-only"
+        }
+      }
+    },
+    "/v1/accounts/{account_id}/minecraft/refresh": {
       "post": {
         "tags": [
           "accounts"
         ],
         "summary": "RefreshMinecraftIdentity",
-        "description": "Re-read the caller's linked Minecraft name and reconcile the creator credit.\n\nRate limited and idempotency-gated because it reaches Mojang on every call.",
+        "description": "Re-read an account's linked Minecraft name and reconcile its creator credit.\n\nAnother account's name needs `account.identity.refresh_any`. Rate limited and\nidempotency-gated because it reaches Mojang on every call.",
         "operationId": "account_minecraft_refresh",
         "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "pattern": "^(me|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+              "description": "A public account ID, or `me` for the caller's own account."
+            },
+            "description": "A public account ID, or `me` for the caller's own account.",
+            "required": true,
+            "deprecated": false
+          },
           {
             "name": "Idempotency-Key",
             "in": "header",
@@ -2063,6 +2185,21 @@
                 "schema": {
                   "$ref": "#/components/schemas/MinecraftIdentityRefresh"
                 }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
               }
             }
           },
@@ -2185,308 +2322,24 @@
         }
       }
     },
-    "/v1/accounts/{account_id}": {
-      "get": {
-        "tags": [
-          "accounts"
-        ],
-        "summary": "GetPublicAccount",
-        "description": "Return an account's public profile, following account-merge redirects.\n\nThe account service applies profile and identity visibility before this route\nserializes the result. Your own ID returns the same public view; `/accounts/me` is the private one.",
-        "operationId": "account_public_get",
-        "parameters": [
-          {
-            "name": "account_id",
-            "in": "path",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "required": true,
-            "deprecated": false
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Request fulfilled, document follows",
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PublicAccountDetail"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Too Many Requests",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          }
-        },
-        "deprecated": false,
-        "security": [
-          {},
-          {
-            "WebSession": []
-          }
-        ],
-        "x-squid-private-response": true,
-        "x-squid-cli": {
-          "classification": "transport-only"
-        }
-      }
-    },
-    "/v1/accounts/{account_id}/minecraft/refresh": {
-      "post": {
-        "tags": [
-          "accounts"
-        ],
-        "summary": "RefreshMinecraftIdentityFor",
-        "description": "Re-read another account's linked Minecraft name, for staff resolving a stale credit.",
-        "operationId": "account_minecraft_refresh_for",
-        "parameters": [
-          {
-            "name": "account_id",
-            "in": "path",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "required": true,
-            "deprecated": false
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "schema": {
-              "oneOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "maxLength": 255,
-              "minLength": 1,
-              "pattern": "^[\\x21-\\x7e]+$",
-              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
-            },
-            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
-            "required": false,
-            "deprecated": false
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Request fulfilled, document follows",
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MinecraftIdentityRefresh"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Too Many Requests",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Entity",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          }
-        },
-        "deprecated": false,
-        "security": [
-          {
-            "WebSession": [],
-            "CsrfToken": []
-          }
-        ],
-        "x-squid-private-response": true,
-        "x-squid-cli": {
-          "classification": "browser-only"
-        }
-      }
-    },
     "/v1/accounts/{account_id}/profile": {
       "get": {
         "tags": [
           "accounts"
         ],
-        "summary": "ReviewProfile",
-        "description": "Read a profile and its revision for staff moderation.",
-        "operationId": "account_profile_review",
+        "summary": "GetProfile",
+        "description": "Read a profile and its revision, hidden fields included.\n\nAnother account's profile needs `account.profile.moderate`.",
+        "operationId": "account_profile_get",
         "parameters": [
           {
             "name": "account_id",
             "in": "path",
             "schema": {
               "type": "string",
-              "format": "uuid"
+              "pattern": "^(me|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+              "description": "A public account ID, or `me` for the caller's own account."
             },
+            "description": "A public account ID, or `me` for the caller's own account.",
             "required": true,
             "deprecated": false
           }
@@ -2504,6 +2357,21 @@
                 "schema": {
                   "$ref": "#/components/schemas/ProfileDetail"
                 }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
               }
             }
           },
@@ -2622,8 +2490,10 @@
             "in": "path",
             "schema": {
               "type": "string",
-              "format": "uuid"
+              "pattern": "^(me|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+              "description": "A public account ID, or `me` for the caller's own account."
             },
+            "description": "A public account ID, or `me` for the caller's own account.",
             "required": true,
             "deprecated": false
           },
@@ -2678,6 +2548,21 @@
                 "schema": {
                   "$ref": "#/components/schemas/ProfileDetail"
                 }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
               }
             }
           },

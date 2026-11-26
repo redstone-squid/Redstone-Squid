@@ -15,7 +15,6 @@ from squid.api.v1.accounts import (
     get_me,
     grant_consent,
     refresh_minecraft_identity,
-    refresh_minecraft_identity_for,
     resolve_account,
 )
 from squid.core.accounts.domain import (
@@ -156,7 +155,7 @@ async def test_refresh_reports_a_rename_and_its_new_credit() -> None:
         retained_alias_names=("OldName",),
     )
     accounts = _accounts(refresh=refresh)
-    response = await refresh_minecraft_identity.fn(accounts, _caller(), _reservation=None)
+    response = await refresh_minecraft_identity.fn(_caller(), 1, accounts, _reservation=None)
     assert accounts.refreshes == [(1, None)]
     assert response.renamed is True
     assert response.previous_ign == "OldName"
@@ -179,7 +178,7 @@ async def test_refresh_reports_a_contested_name_without_claiming_it() -> None:
         ),
     )
     accounts = _accounts(refresh=refresh)
-    response = await refresh_minecraft_identity.fn(accounts, _caller(), _reservation=None)
+    response = await refresh_minecraft_identity.fn(_caller(), 1, accounts, _reservation=None)
     assert response.claimed_creator_name is None
     assert response.contested_creator_name == "Contested"
     assert response.pending_claim_id == 3
@@ -194,7 +193,7 @@ async def test_refresh_reports_an_unchanged_name() -> None:
         claimed_alias=CreatorAlias(id=5, name="Steve", account_id=1),
     )
     accounts = _accounts(refresh=refresh)
-    response = await refresh_minecraft_identity.fn(accounts, _caller(), _reservation=None)
+    response = await refresh_minecraft_identity.fn(_caller(), 1, accounts, _reservation=None)
     assert response.renamed is False
     assert response.previous_ign == "Steve"
 
@@ -202,14 +201,20 @@ async def test_refresh_reports_an_unchanged_name() -> None:
 async def test_staff_refresh_targets_the_named_account() -> None:
     refresh = IdentityRefresh(account_id=42, java_uuid=JAVA_UUID, current_name="Steve", previous_name="Steve")
     accounts = _accounts(refresh=refresh)
-    response = await refresh_minecraft_identity_for.fn(_caller(), 42, accounts, _reservation=None)
+    response = await refresh_minecraft_identity.fn(_caller(), 42, accounts, _reservation=None)
     assert accounts.refreshes == [(42, None)]
     assert response.ign == "Steve"
 
 
-async def test_staff_routes_resolve_the_public_account_id() -> None:
+async def test_account_paths_resolve_me_and_public_ids() -> None:
     accounts = _accounts()
-    assert await resolve_account(CREATOR_ID, accounts, _caller()) == 1
+    assert await resolve_account("me", accounts, _caller()) == 1
+    assert await resolve_account(str(CREATOR_ID), accounts, _caller()) == 1
     with pytest.raises(AccountNotFoundError) as raised:
-        await resolve_account(JAVA_UUID, accounts, _caller())
+        await resolve_account(str(JAVA_UUID), accounts, _caller())
     assert raised.value.public_context == {"account_id": str(JAVA_UUID)}
+
+
+async def test_me_needs_an_account() -> None:
+    with pytest.raises(AuthenticationError):
+        await resolve_account("me", _accounts(), Caller(kind="service", subject="service", nodes=UNBOUNDED))

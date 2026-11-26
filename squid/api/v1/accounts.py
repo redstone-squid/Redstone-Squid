@@ -8,7 +8,7 @@ from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTOConfig
 from litestar import Response, Router, delete, get, patch, post, put
 from litestar.di import NamedDependency, Provide
 from litestar.dto import DataclassDTO, DTOConfig
-from litestar.params import FromPath, HeaderParameter, JSONBody, SkipValidation
+from litestar.params import FromPath, HeaderParameter, JSONBody, PathParameter, SkipValidation
 from litestar.typing import FieldDefinition
 
 from squid.api.contract import (
@@ -53,7 +53,6 @@ from squid.core.edits.domain import EditCommand, EditValues, Revision
 from squid.core.errors import AuthenticationError
 from squid.core.permissions.domain.catalogue import (
     ACCOUNT_IDENTITY_REFRESH,
-    ACCOUNT_IDENTITY_REFRESH_ANY,
     ACCOUNT_PROFILE_MODERATE,
     ACCOUNT_SELF_MANAGE,
     ACCOUNT_SELF_READ,
@@ -121,14 +120,26 @@ class PublicAccountDTO(DataclassDTO[PublicCreatorProfile]):
         return False
 
 
-async def resolve_account(account_id: FromPath[UUID], accounts: Accounts, caller: CurrentCaller) -> int:
-    """Resolve the public account ID in the path, following merge redirects."""
-    return await accounts.resolve_public_id(account_id, context=caller.context())
+AccountPath = Annotated[
+    str,
+    PathParameter(
+        pattern=r"^(me|[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$",
+        description="A public account ID, or `me` for the caller's own account.",
+    ),
+]
+
+
+async def resolve_account(account_id: AccountPath, accounts: Accounts, caller: CurrentCaller) -> int:
+    """Resolve `me` or a public account ID in the path, following merge redirects."""
+    if account_id == "me":
+        if caller.account_id is None:
+            raise AuthenticationError
+        return caller.account_id
+    return await accounts.resolve_public_id(UUID(account_id), context=caller.context())
 
 
 TargetAccount = NamedDependency[SkipValidation[int]]
 UserCaller = NamedDependency[SkipValidation[Caller]]
-RefreshCaller = NamedDependency[SkipValidation[Caller]]
 ManageCaller = NamedDependency[SkipValidation[Caller]]
 
 
@@ -423,30 +434,6 @@ async def complete_merge(
     return await accounts.complete_merge(data.code, context=caller.context())
 
 
-@post(
-    "/me/minecraft/refresh",
-    responses=responses(401, 403, 404, 409, 503),
-    operation_id="account_minecraft_refresh",
-    security=[ANONYMOUS],
-    opt=contract(cli=cli_command("account.refresh", interaction="direct")),
-    status_code=200,
-    guards=[requires(ACCOUNT_IDENTITY_REFRESH)],
-    dependencies={"_reservation": Provide(reserve_idempotent_request)},
-)
-async def refresh_minecraft_identity(
-    accounts: Accounts, caller: RefreshCaller, *, _reservation: NamedDependency[SkipValidation[None]]
-) -> MinecraftIdentityRefresh:
-    """Re-read the caller's linked Minecraft name and reconcile the creator credit.
-
-    Rate limited and idempotency-gated because it reaches Mojang on every call.
-    """
-    if caller.account_id is None:
-        raise AuthenticationError
-    return MinecraftIdentityRefresh.from_domain(
-        await accounts.refresh_java_identity(caller.account_id, context=caller.context())
-    )
-
-
 @get(
     "/{account_id:uuid}",
     responses=responses(404, 422, 503),
@@ -470,39 +457,46 @@ async def get_public_account(
 
 
 @post(
-    "/{account_id:uuid}/minecraft/refresh",
-    responses=responses(401, 403, 404, 409, 503),
-    operation_id="account_minecraft_refresh_for",
-    security=[WEB_WRITE],
-    opt=contract(cli=browser_only()),
+    "/{account_id:str}/minecraft/refresh",
+    responses=responses(400, 401, 403, 404, 409, 503),
+    operation_id="account_minecraft_refresh",
+    security=[ANONYMOUS],
+    opt=contract(cli=cli_command("account.refresh", interaction="direct")),
     status_code=200,
-    guards=[requires(ACCOUNT_IDENTITY_REFRESH_ANY)],
+    guards=[requires(ACCOUNT_IDENTITY_REFRESH)],
     dependencies={"_reservation": Provide(reserve_idempotent_request)},
 )
-async def refresh_minecraft_identity_for(
+async def refresh_minecraft_identity(
     caller: NamedDependency[SkipValidation[Caller]],
     target: TargetAccount,
     accounts: Accounts,
     *,
     _reservation: NamedDependency[SkipValidation[None]],
 ) -> MinecraftIdentityRefresh:
-    """Re-read another account's linked Minecraft name, for staff resolving a stale credit."""
+    """Re-read an account's linked Minecraft name and reconcile its creator credit.
+
+    Another account's name needs `account.identity.refresh_any`. Rate limited and
+    idempotency-gated because it reaches Mojang on every call.
+    """
     return MinecraftIdentityRefresh.from_domain(await accounts.refresh_java_identity(target, context=caller.context()))
 
 
 @get(
-    "/{account_id:uuid}/profile",
-    responses=responses(401, 403, 404, 503),
-    operation_id="account_profile_review",
+    "/{account_id:str}/profile",
+    responses=responses(400, 401, 403, 404, 503),
+    operation_id="account_profile_get",
     security=[WEB],
     opt=contract(cli=browser_only()),
     status_code=200,
-    guards=[requires(ACCOUNT_PROFILE_MODERATE)],
+    guards=[requires(ACCOUNT_SELF_READ)],
 )
-async def review_profile(
+async def get_profile(
     target: TargetAccount, accounts: Accounts, caller: NamedDependency[SkipValidation[Caller]]
 ) -> Response[ProfileDetail]:
-    """Read a profile and its revision for staff moderation."""
+    """Read a profile and its revision, hidden fields included.
+
+    Another account's profile needs `account.profile.moderate`.
+    """
     response_headers: dict[str, str] = {}
     snapshot = await accounts.editor_snapshot(target, context=caller.context())
     response_headers["ETag"] = revision_etag(Revision(account_target(target), snapshot.account.revision))
@@ -514,8 +508,8 @@ async def review_profile(
 
 
 @delete(
-    "/{account_id:uuid}/profile",
-    responses=responses(401, 403, 404, 412, 422, 428, 503),
+    "/{account_id:str}/profile",
+    responses=responses(400, 401, 403, 404, 412, 422, 428, 503),
     operation_id="account_profile_clear",
     security=[WEB_WRITE],
     opt=contract(cli=browser_only()),
@@ -576,10 +570,9 @@ router = Router(
         create_merge_code,
         preview_merge,
         complete_merge,
-        refresh_minecraft_identity,
         get_public_account,
-        refresh_minecraft_identity_for,
-        review_profile,
+        refresh_minecraft_identity,
+        get_profile,
         clear_profile,
     ],
 )
