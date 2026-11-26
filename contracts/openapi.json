@@ -8855,8 +8855,51 @@
           "notifications"
         ],
         "summary": "ListSubscriptions",
-        "description": "List enabled subscriptions owned by the caller.",
+        "description": "List enabled subscriptions owned by the caller.\n\nFilter by kind and subject to learn whether the caller follows one creator or record.",
         "operationId": "notification_subscriptions_list",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/SubscriptionKind"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only list follows of this kind."
+            },
+            "description": "Only list follows of this kind.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "subject_id",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only list follows of this creator or record."
+            },
+            "description": "Only list follows of this creator or record.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          }
+        ],
         "responses": {
           "200": {
             "description": "Request fulfilled, document follows",
@@ -8927,6 +8970,21 @@
               "application/problem+json": {
                 "schema": {
                   "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
                 }
               }
             },
@@ -9459,6 +9517,20 @@
             "deprecated": false,
             "allowEmptyValue": false,
             "allowReserved": false
+          },
+          {
+            "name": "unread_only",
+            "in": "query",
+            "schema": {
+              "type": "boolean",
+              "description": "Only list unread items.",
+              "default": false
+            },
+            "description": "Only list unread items.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
           }
         ],
         "responses": {
@@ -9472,7 +9544,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Page_litestar.dto._backend.InboxNotificationDetail_"
+                  "$ref": "#/components/schemas/InboxPage"
                 }
               }
             }
@@ -9572,6 +9644,207 @@
         "security": [
           {
             "WebSession": []
+          }
+        ],
+        "x-squid-cli": {
+          "classification": "browser-only"
+        }
+      }
+    },
+    "/v1/users/me/notifications/inbox/read-all": {
+      "post": {
+        "tags": [
+          "notifications"
+        ],
+        "summary": "MarkAllRead",
+        "description": "Mark every visible unread inbox item read, as one undoable edit.",
+        "operationId": "notification_inbox_mark_all_read",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maxLength": 255,
+              "minLength": 1,
+              "pattern": "^[\\x21-\\x7e]+$",
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+            "required": false,
+            "deprecated": false
+          },
+          {
+            "name": "through_id",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "minimum": 1,
+              "description": "Leave newer items unread, such as those that arrived after the page loaded."
+            },
+            "description": "Leave newer items unread, such as those that arrived after the page loaded.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Request fulfilled, nothing follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "null"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "WebSession": [],
+            "CsrfToken": []
           }
         ],
         "x-squid-cli": {
@@ -20995,6 +21268,26 @@
         ],
         "title": "BuildMedia"
       },
+      "BuildOutcomeNotification": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "build_confirmed",
+              "build_denied"
+            ]
+          },
+          "build": {
+            "$ref": "#/components/schemas/NotifiedBuildDetail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "build",
+          "kind"
+        ],
+        "title": "BuildOutcomeNotification"
+      },
       "BuildPatch": {
         "properties": {
           "display_name": {
@@ -22056,6 +22349,31 @@
           "name"
         ],
         "title": "CreatorAliasDetail"
+      },
+      "CreatorBuildNotification": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "creator_build_confirmed"
+          },
+          "build": {
+            "$ref": "#/components/schemas/NotifiedBuildDetail"
+          },
+          "creator_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "required": [
+          "build",
+          "creator_ids",
+          "kind"
+        ],
+        "title": "CreatorBuildNotification"
       },
       "CreatorProfileDetail": {
         "properties": {
@@ -24862,6 +25180,13 @@
           "id": {
             "type": "integer"
           },
+          "revision": {
+            "type": "integer"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
           "read_at": {
             "oneOf": [
               {
@@ -24873,30 +25198,91 @@
               }
             ]
           },
-          "kind": {
-            "$ref": "#/components/schemas/NotificationKind"
+          "href": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "payload": {
-            "additionalProperties": {},
-            "type": "object"
-          },
-          "revision": {
-            "type": "integer",
-            "default": 1
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/BuildOutcomeNotification"
+              },
+              {
+                "$ref": "#/components/schemas/CreatorBuildNotification"
+              },
+              {
+                "$ref": "#/components/schemas/StaffSubmissionNotification"
+              },
+              {
+                "$ref": "#/components/schemas/RecordGainedNotification"
+              },
+              {
+                "$ref": "#/components/schemas/RecordRetiredNotification"
+              }
+            ]
           }
         },
         "type": "object",
         "required": [
           "created_at",
+          "href",
           "id",
-          "kind",
-          "payload"
+          "payload",
+          "read_at",
+          "revision"
         ],
         "title": "InboxNotificationDetail"
+      },
+      "InboxPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/InboxNotificationDetail"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "next": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prev": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "unread_count": {
+            "type": "integer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "next",
+          "prev",
+          "total",
+          "unread_count"
+        ],
+        "title": "InboxPage"
       },
       "InstallationCreateRequest": {
         "properties": {
@@ -25571,19 +25957,6 @@
         ],
         "title": "MinecraftIdentityRefresh"
       },
-      "NotificationKind": {
-        "type": "string",
-        "enum": [
-          "build_confirmed",
-          "build_denied",
-          "creator_build_confirmed",
-          "record_gained",
-          "record_retired",
-          "staff_build_submitted"
-        ],
-        "title": "NotificationKind",
-        "description": "Inbox and delivery message categories."
-      },
       "NotificationPreferenceUpdate": {
         "properties": {
           "web_enabled": {
@@ -25689,16 +26062,89 @@
                 "type": "null"
               }
             ]
+          },
+          "subject_label": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "subject_href": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "filter_summary": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
         "required": [
           "filter",
+          "filter_summary",
           "id",
           "kind",
-          "subject_id"
+          "subject_href",
+          "subject_id",
+          "subject_label"
         ],
         "title": "NotificationSubscriptionDetail"
+      },
+      "NotifiedBuildDetail": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "title": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "NotifiedBuildDetail"
+      },
+      "NotifiedRecordDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "title"
+        ],
+        "title": "NotifiedRecordDetail"
       },
       "ObservedBlock": {
         "properties": {
@@ -25834,47 +26280,6 @@
           "total"
         ],
         "title": "Page[SearchResult]"
-      },
-      "Page_litestar.dto._backend.InboxNotificationDetail_": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/InboxNotificationDetail"
-            },
-            "type": "array"
-          },
-          "total": {
-            "type": "integer"
-          },
-          "next": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/PageAnchor"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "prev": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/PageAnchor"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "type": "object",
-        "required": [
-          "items",
-          "next",
-          "prev",
-          "total"
-        ],
-        "title": "Page[InboxNotificationDetail]"
       },
       "Page_litestar.dto._backend.PublishedRecordResult_": {
         "properties": {
@@ -28203,6 +28608,31 @@
         "required": [],
         "title": "RecordFilterInput"
       },
+      "RecordGainedNotification": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "record_gained"
+          },
+          "build": {
+            "$ref": "#/components/schemas/NotifiedBuildDetail"
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/NotifiedRecordDetail"
+            },
+            "type": "array",
+            "minItems": 1
+          }
+        },
+        "type": "object",
+        "required": [
+          "build",
+          "kind",
+          "records"
+        ],
+        "title": "RecordGainedNotification"
+      },
       "RecordInspection": {
         "properties": {
           "record_id": {
@@ -28300,6 +28730,27 @@
         "type": "object",
         "required": [],
         "title": "RecordResolution"
+      },
+      "RecordRetiredNotification": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "record_retired"
+          },
+          "records": {
+            "items": {
+              "$ref": "#/components/schemas/NotifiedRecordDetail"
+            },
+            "type": "array",
+            "minItems": 1
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "records"
+        ],
+        "title": "RecordRetiredNotification"
       },
       "RecordSearchEntry": {
         "properties": {
@@ -29655,6 +30106,23 @@
         ],
         "title": "SourceKind",
         "description": "How a source produces candidates."
+      },
+      "StaffSubmissionNotification": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "staff_build_submitted"
+          },
+          "build": {
+            "$ref": "#/components/schemas/NotifiedBuildDetail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "build",
+          "kind"
+        ],
+        "title": "StaffSubmissionNotification"
       },
       "StartImpersonation": {
         "properties": {

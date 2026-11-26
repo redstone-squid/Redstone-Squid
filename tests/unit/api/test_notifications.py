@@ -12,6 +12,8 @@ from squid.api.security import UNBOUNDED, Caller
 from squid.api.v1.notifications import (
     create_subscription,
     list_inbox,
+    list_subscriptions,
+    mark_all_read,
     mark_read,
     mark_unread,
     update_preferences,
@@ -27,7 +29,14 @@ from squid.core.notifications import (
     SubscriptionKind,
     TagPredicate,
 )
-from squid.core.notifications.models import InboxNotification, NotificationSubscription
+from squid.core.notifications.application import (
+    FollowedSubject,
+    Inbox,
+    InboxEntry,
+    NotificationEditorSnapshot,
+)
+from squid.core.notifications.domain import NotificationKind, NotificationMessage, NotifiedBuild, NotifiedRecord
+from squid.core.notifications.models import NotificationSubscription
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector
 from squid.runtime import ApiServices
 from tests.support.notification_edits import NotificationEditRecorder
@@ -39,10 +48,12 @@ class NotificationRecorder(NotificationService):
     def __init__(self) -> None:
         self.preferences_result = NotificationPreferences(account_id=7, consent_pending=False)
         self.subscription_result: NotificationSubscription | None = None
-        self.inbox_result: Page[InboxNotification] = Page(items=(), total=0, next=None, prev=None)
+        self.inbox_result = Inbox(Page(items=(), total=0, next=None, prev=None), unread_count=0)
+        self.follows: tuple[FollowedSubject, ...] = ()
+        self.unread: tuple[int, ...] = ()
         self.preference_updates: list[tuple[int, bool, bool]] = []
         self.subscription_calls: list[tuple[int, SubscriptionKind, UUID | None, RecordSubscriptionFilter | None]] = []
-        self.inbox_reads: list[tuple[ActingContext, PageSelector, int]] = []
+        self.inbox_reads: list[tuple[ActingContext, PageSelector, int, bool]] = []
         self.read_changes: list[tuple[int, int, bool, InboxVisibility]] = []
 
     @override
@@ -72,9 +83,33 @@ class NotificationRecorder(NotificationService):
         context: ActingContext,
         selector: PageSelector = FIRST_PAGE,
         page_size: int = 20,
-    ) -> Page[InboxNotification]:
-        self.inbox_reads.append((context, selector, page_size))
+        unread_only: bool = False,
+    ) -> Inbox:
+        self.inbox_reads.append((context, selector, page_size, unread_only))
         return self.inbox_result
+
+    @override
+    async def unread_ids(self, *, context: ActingContext, through_id: int | None = None) -> tuple[int, ...]:
+        return tuple(item for item in self.unread if through_id is None or item <= through_id)
+
+    @override
+    async def editor_snapshot(self, *, context: ActingContext) -> NotificationEditorSnapshot:
+        return NotificationEditorSnapshot(self.preferences_result, self.follows)
+
+    @override
+    async def subscription_snapshot(
+        self,
+        *,
+        context: ActingContext,
+        kind: SubscriptionKind,
+        subject_id: UUID | None,
+        record_filter: RecordSubscriptionFilter | None,
+    ) -> tuple[FollowedSubject | None, int]:
+        if self.subscription_result is None:
+            return None, 0
+        return FollowedSubject(
+            self.subscription_result, filter_summary=None if record_filter is None else record_filter.summary({})
+        ), 1
 
     async def mark_read(
         self, account_id: int, notification_id: int, *, visibility: InboxVisibility = DEFAULT_INBOX_VISIBILITY
@@ -137,7 +172,10 @@ async def test_record_filter_subscription_preserves_presence_and_exact_predicate
             _reservation=None,
         )
     ).content
-    assert response.filter == record_filter.as_dict()
+    expected = record_filter.as_dict()
+    expected["criteria"] = expected.pop("base_titles")
+    assert response.filter == expected
+    assert response.filter_summary == "Tagged Tag #4 · Tag #7: slim"
     assert notifications.subscription_calls == [(7, SubscriptionKind.RECORD_FILTER, None, record_filter)]
 
 
@@ -149,7 +187,7 @@ def test_empty_record_filter_is_rejected_at_the_api_boundary() -> None:
 async def test_inbox_uses_the_authenticated_account() -> None:
     notifications = NotificationRecorder()
     await list_inbox.fn(notifications, ACCOUNT)
-    assert notifications.inbox_reads == [(ACCOUNT.context(), PageSelector(), 20)]
+    assert notifications.inbox_reads == [(ACCOUNT.context(), PageSelector(), 20, False)]
 
 
 async def test_read_and_unread_routes_share_the_resolved_visibility() -> None:
@@ -168,3 +206,84 @@ async def test_notification_writes_accept_latest_state() -> None:
     services = cast(ApiServices, SimpleNamespace(edits=recorder))
     await mark_read.fn(3, services, ACCOUNT, uuid4(), _reservation=None)
     assert recorder.commands[0].expected[0].value is None
+
+
+async def test_inbox_items_carry_typed_payloads_links_and_the_unread_count() -> None:
+    notifications = NotificationRecorder()
+    created = Instant.parse_iso("2026-11-01T12:00:00Z")
+    record = NotifiedRecord(UUID("11111111-1111-4111-8111-111111111111"), "Fastest 2x2")
+    entries = (
+        InboxEntry(
+            5,
+            2,
+            created,
+            None,
+            NotificationMessage(NotificationKind.RECORD_GAINED, NotifiedBuild(9, "2x2 Piston Door"), (record,)),
+        ),
+        InboxEntry(4, 1, created, created, NotificationMessage(NotificationKind.RECORD_RETIRED, records=(record,))),
+    )
+    notifications.inbox_result = Inbox(Page(items=entries, total=2, next=None, prev=None), unread_count=7)
+
+    page = await list_inbox.fn(notifications, ACCOUNT, unread_only=True)
+
+    assert notifications.inbox_reads[0][3] is True
+    assert page.unread_count == 7
+    gained, retired = (item.model_dump(mode="json") for item in page.items)
+    assert gained["href"] == "/builds/9"
+    assert gained["payload"] == {
+        "kind": "record_gained",
+        "build": {"id": 9, "title": "2x2 Piston Door"},
+        "records": [{"id": str(record.id), "title": "Fastest 2x2"}],
+    }
+    assert retired["href"] == f"/records/{record.id}"
+    assert retired["payload"]["kind"] == "record_retired"
+
+
+async def test_read_all_marks_unread_items_up_to_the_anchor_at_their_latest_revision() -> None:
+    notifications = NotificationRecorder()
+    notifications.unread = (3, 5, 8)
+    recorder = NotificationEditRecorder(notifications)
+    services = cast(ApiServices, SimpleNamespace(edits=recorder))
+
+    response = await mark_all_read.fn(notifications, services, ACCOUNT, uuid4(), through_id=5, _reservation=None)
+
+    assert response.status_code == 204
+    (command,) = recorder.commands
+    assert [(version.target.key, version.value) for version in command.expected] == [("3", None), ("5", None)]
+    assert [(item, read) for _, item, read, _ in notifications.read_changes] == [(3, True), (5, True)]
+
+
+async def test_read_all_with_nothing_unread_makes_no_edit() -> None:
+    recorder = NotificationEditRecorder(NotificationRecorder())
+    services = cast(ApiServices, SimpleNamespace(edits=recorder))
+    await mark_all_read.fn(recorder.service, services, ACCOUNT, uuid4(), _reservation=None)
+    assert recorder.commands == []
+
+
+async def test_subscriptions_filter_by_subject_and_name_their_subjects() -> None:
+    notifications = NotificationRecorder()
+    creator, record = uuid4(), uuid4()
+    notifications.follows = (
+        FollowedSubject(
+            NotificationSubscription(
+                id=1, account_id=7, kind=SubscriptionKind.CREATOR, subject_id=creator, created_at=Instant.now()
+            ),
+            "Some Builder",
+        ),
+        FollowedSubject(
+            NotificationSubscription(
+                id=2, account_id=7, kind=SubscriptionKind.RECORD, subject_id=record, created_at=Instant.now()
+            ),
+            "Fastest 2x2",
+        ),
+    )
+
+    response = await list_subscriptions.fn(notifications, ACCOUNT, kind=SubscriptionKind.CREATOR, subject_id=creator)
+
+    (item,) = response.content
+    assert (item.id, item.subject_label, item.subject_href, item.filter_summary) == (
+        1,
+        "Some Builder",
+        "/creators/Some%20Builder",
+        None,
+    )

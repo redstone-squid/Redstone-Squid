@@ -1,6 +1,6 @@
 """Common scope behavior for service test doubles."""
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from contextlib import nullcontext
 from copy import deepcopy
 from dataclasses import dataclass, field, fields, is_dataclass
@@ -8,6 +8,7 @@ from types import TracebackType
 from typing import Self, override
 
 from squid.core.builds.history import BuildEditActor, HistoryOperation
+from squid.core.builds.models import Build
 from squid.core.unit_of_work import EventFact, UnitOfWork, UnitOfWorkFactory
 
 
@@ -39,6 +40,9 @@ class FakeBuildEditing:
         correlation_id: str | None = None,
     ) -> nullcontext[None]:
         return nullcontext()
+
+    async def get_many(self, build_ids: Sequence[int]) -> Sequence[Build]:
+        return ()
 
 
 class FakeUnitOfWork[StateT]:

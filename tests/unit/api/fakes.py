@@ -64,7 +64,8 @@ from squid.core.minecraft_auth.domain.models import (
 from squid.core.minecraft_auth.errors import InvalidChallengeError, InvalidInstallationCredentialError
 from squid.core.minecraft_auth.models import PaperInstallation, PlayerAuthorizationChallenge
 from squid.core.notifications import NotificationPreferences, NotificationService
-from squid.core.notifications.models import InboxNotification, NotificationSubscription
+from squid.core.notifications.application import Inbox
+from squid.core.notifications.models import NotificationSubscription
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, offset_page
 from squid.core.permissions.application import PermissionService, SubjectRecords
 from squid.core.permissions.application.epoch import PermissionEpochWatcher, WakeListener
@@ -624,8 +625,9 @@ class MockNotifications(NotificationService):
         context: ActingContext,
         selector: PageSelector = FIRST_PAGE,
         page_size: int = 20,
-    ) -> Page[InboxNotification]:
-        return cast(Page[InboxNotification], _EMPTY_PAGE)
+        unread_only: bool = False,
+    ) -> Inbox:
+        return Inbox(Page(items=(), total=0, next=None, prev=None), unread_count=0)
 
 
 class EmptyPermissionStore:

@@ -1,6 +1,6 @@
 """The notification preference and subscription workspace."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import cast, override
 from uuid import UUID
 
@@ -19,9 +19,9 @@ from squid.core.notifications import (
     RecordSubscriptionFilter,
     SubscriptionKind,
 )
-from squid.core.notifications.application import NotificationEditorSnapshot
-from squid.core.notifications.domain import NotificationKind
-from squid.core.notifications.models import InboxNotification, NotificationSubscription
+from squid.core.notifications.application import FollowedSubject, Inbox, InboxEntry, NotificationEditorSnapshot
+from squid.core.notifications.domain import NotificationKind, NotificationMessage, NotifiedBuild, NotifiedRecord
+from squid.core.notifications.models import NotificationSubscription
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector
 from squid.core.suggestions.domain import Suggestion
 from squid.core.tags.domain import TagValueType
@@ -50,7 +50,8 @@ class NotificationRecorder(NotificationService):
     @override
     async def editor_snapshot(self, *, context: ActingContext) -> NotificationEditorSnapshot:
         return NotificationEditorSnapshot(
-            await self.preferences(context=context), await self.subscriptions(context=context)
+            await self.preferences(context=context),
+            tuple(FollowedSubject(row) for row in await self.subscriptions(context=context)),
         )
 
     @override
@@ -93,17 +94,18 @@ class NotificationRecorder(NotificationService):
         context: ActingContext,
         selector: PageSelector = FIRST_PAGE,
         page_size: int = 20,
-    ) -> Page[InboxNotification]:
+        unread_only: bool = False,
+    ) -> Inbox:
         self.inbox_reads.append(context.effective)
-        item = InboxNotification(
-            id=3,
-            kind=NotificationKind.BUILD_CONFIRMED,
-            payload={"build_id": 9},
-            created_at=Instant.now(),
-            read_at=Instant.now() if self.read_changes and self.read_changes[-1][2] else None,
+        read = bool(self.read_changes and self.read_changes[-1][2])
+        item = InboxEntry(
+            3,
+            1 + len(self.read_changes),
+            Instant.now(),
+            Instant.now() if read else None,
+            NotificationMessage(NotificationKind.BUILD_CONFIRMED, NotifiedBuild(9)),
         )
-        item.revision = 1 + len(self.read_changes)
-        return Page(items=(item,), total=1, next=None, prev=None)
+        return Inbox(Page(items=(item,), total=1, next=None, prev=None), unread_count=0 if read else 1)
 
     async def mark_read(
         self,
@@ -293,13 +295,19 @@ async def test_selection_actions_need_something_to_select() -> None:
 async def test_follows_after_the_first_page_can_be_selected_and_named() -> None:
     screen = make_screen().screen
     await screen.on_load()
-    screen.settings.subscriptions = tuple(
-        NotificationSubscription(
-            id=index, account_id=7, kind=SubscriptionKind.CREATOR, subject_id=UUID(int=index), created_at=Instant.now()
+    screen.settings.follows = tuple(
+        FollowedSubject(
+            NotificationSubscription(
+                id=index,
+                account_id=7,
+                kind=SubscriptionKind.CREATOR,
+                subject_id=UUID(int=index),
+                created_at=Instant.now(),
+            ),
+            "Last builder" if index == 31 else None,
         )
         for index in range(1, 32)
     )
-    screen.settings.labels = {31: "Last builder"}
     async with stage(screen.subscriptions, owner=object()) as ui:
         await ui.select("unfollow-0", ["1"])
         await ui.press("__cursor_next.$/follows")
@@ -312,7 +320,7 @@ async def test_follows_after_the_first_page_can_be_selected_and_named() -> None:
         assert screen.subscriptions.selected_ids == ("1", "31")
         await ui.select("unfollow-0", [])
         assert screen.subscriptions.selected_ids == ("31",)
-        screen.settings.subscriptions = screen.settings.subscriptions[:10]
+        screen.settings.follows = screen.settings.follows[:10]
         screen.subscriptions.reconcile_selection()
         await ui.root.refresh()
         assert screen.subscriptions.selected_ids == ()
@@ -361,11 +369,12 @@ async def test_inbox_selection_shows_build_context_and_routed_action() -> None:
 async def test_inbox_hides_action_for_notification_without_a_build() -> None:
     screen = make_screen().screen
     await screen.on_load()
-    screen.inbox._inbox[0].payload = {}
+    retired = NotificationMessage(NotificationKind.RECORD_RETIRED, records=(NotifiedRecord(UUID(int=1), "Fastest"),))
+    screen.inbox._inbox = (replace(screen.inbox._inbox[0], message=retired),)
     await choose(screen.inbox, "inbox", "3")
 
     assert "Open build" not in labels(render_tree(screen.inbox))
-    assert "A build was approved." in labels(render_tree(screen.inbox))
+    assert "A record you follow no longer has any eligible builds." in labels(render_tree(screen.inbox))
 
 
 async def test_following_does_not_render_empty_subtext_markers() -> None:

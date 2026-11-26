@@ -455,6 +455,53 @@ async def test_inbox_count_and_both_keyset_directions_share_visibility(
     )
 
 
+async def test_unread_filter_and_unread_ids_skip_read_and_newer_items(
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async with async_session_factory.begin() as session:
+        account = Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now())
+        session.add(account)
+        await session.flush()
+        session.add(NotificationProfile(account_id=account.id, web_enabled=True, dm_enabled=False))
+        event = DomainEvent(event_type="build.confirmed", aggregate_kind="build", aggregate_id=42)
+        session.add(event)
+        await session.flush()
+        rows = [
+            InboxNotification(
+                account_id=account.id,
+                event_id=event.id,
+                source_key=f"event:{event.id}:account:{index}",
+                kind=NotificationKind.BUILD_CONFIRMED,
+                payload={"build_id": index},
+                web_visible=True,
+                read_at=Instant.now() if index == 2 else None,
+            )
+            for index in range(1, 5)
+        ]
+        session.add_all(rows)
+        await session.flush()
+        ids = [row.id for row in rows]
+
+    ordinary = InboxVisibility()
+    unread = await transact(
+        repository,
+        lambda uow: uow.notifications.list_inbox(
+            account.id, offset=0, after_id=None, before_id=None, limit=10, visibility=ordinary, unread_only=True
+        ),
+    )
+    assert [item.payload["build_id"] for item in unread] == [4, 3, 1]
+    assert (
+        await transact(
+            repository, lambda uow: uow.notifications.count_inbox(account.id, visibility=ordinary, unread_only=True)
+        )
+        == 3
+    )
+    assert await transact(
+        repository, lambda uow: uow.notifications.unread_ids(account.id, visibility=ordinary, through_id=ids[2])
+    ) == [ids[0], ids[2]]
+
+
 async def test_durable_staff_audience_is_not_implicit_for_owner_or_custom_role_readers(
     repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],

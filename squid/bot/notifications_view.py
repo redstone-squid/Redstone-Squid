@@ -1,6 +1,6 @@
 """Manage notification channels, follows, and the newest visible inbox items."""
 
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import Awaitable, Callable
 from functools import partial
 from typing import TYPE_CHECKING, Any, cast, override
 from uuid import UUID
@@ -12,7 +12,7 @@ from squid.bot.app import RedstoneSquid
 from squid.bot.catalogue.browse import BuildBrowseScreen
 from squid.bot.edit_controller import EditController
 from squid.bot.lookup import pick
-from squid.bot.notification_text import notification_build_id, notification_details, notification_summary
+from squid.bot.notification_text import notification_details, notification_summary
 from squid.bot.ui import tr
 from squid.core.actors import ActingContext, Actor
 from squid.core.edits.application import EditRunner
@@ -23,6 +23,7 @@ from squid.core.notifications import (
     SubscriptionKind,
     TagPredicate,
 )
+from squid.core.notifications.application import FollowedSubject, InboxEntry
 from squid.core.notifications.edits import (
     INBOX_EDIT,
     PREFERENCES_EDIT,
@@ -30,7 +31,6 @@ from squid.core.notifications.edits import (
     inbox_target,
     notification_target,
 )
-from squid.core.notifications.models import InboxNotification, NotificationSubscription
 from squid.core.records.domain import BuildKind, RecordCriterion, VersionScope
 from squid.core.suggestions.domain import Suggestion
 from squid.core.tags.domain import TagValueType
@@ -93,7 +93,7 @@ class NotificationPanel(sl.Component[ComponentsV2Target, sd.Request[Any, Redston
 
     @override
     def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
-        following = len(self.settings.subscriptions)
+        following = len(self.settings.follows)
         unread = self.inbox.unread_count
         return (
             sl.note(md_tr(t"notifications-summary = {unread} unread · {following} follows")),
@@ -106,8 +106,7 @@ class NotificationSettings(sl.Reactive):
     """The preferences and subscriptions snapshot sharing one persisted revision."""
 
     preferences: NotificationPreferences | None = sl.state(None)
-    subscriptions: tuple[NotificationSubscription, ...] = sl.state(())
-    labels: Mapping[int, str] = sl.state(factory=dict)
+    follows: tuple[FollowedSubject, ...] = sl.state(())
 
     def __init__(
         self, notifications: NotificationService, account_id: int, actor: Callable[[], Awaitable[Actor]]
@@ -119,8 +118,7 @@ class NotificationSettings(sl.Reactive):
     async def refresh(self) -> None:
         snapshot = await self._notifications.editor_snapshot(context=ActingContext.for_actor(await self._actor()))
         self.preferences = snapshot.preferences
-        self.subscriptions = snapshot.subscriptions
-        self.labels = dict(snapshot.labels)
+        self.follows = snapshot.follows
 
     async def save(self, edits: EditController, kind: str, values: EditValues, label: sl.TextLike) -> None:
         revision = 0 if self.preferences is None else self.preferences.revision
@@ -212,19 +210,24 @@ class NotificationSubscriptions(sl.Component[ComponentsV2Target, sd.Request[Any,
         self.selected_ids = tuple(
             selected
             for selected in self.selected_ids
-            if any(str(item.id) == selected for item in self._settings.subscriptions)
+            if any(str(follow.subscription.id) == selected for follow in self._settings.follows)
         )
 
     @override
     def render(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
-        subscriptions = self._settings.subscriptions
+        follows = self._settings.follows
         windows: list[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]] = []
-        for start in range(0, len(subscriptions), MAX_LISTED):
-            shown = subscriptions[start : start + MAX_LISTED]
-            visible = tuple(str(row.id) for row in shown)
+        for start in range(0, len(follows), MAX_LISTED):
+            shown = follows[start : start + MAX_LISTED]
+            visible = tuple(str(follow.subscription.id) for follow in shown)
             windows.append(
                 sl.choices(
-                    *(sl.choice(self.describe(row), key=str(row.id), description=self.detail(row)) for row in shown),
+                    *(
+                        sl.choice(
+                            self.describe(follow), key=str(follow.subscription.id), description=self.detail(follow)
+                        )
+                        for follow in shown
+                    ),
                     key=f"unfollow-{start}",
                     selection=tuple(key for key in self.selected_ids if key in visible),
                     on_change=partial(self._selection_changed, visible),
@@ -250,7 +253,7 @@ class NotificationSubscriptions(sl.Component[ComponentsV2Target, sd.Request[Any,
                 key="follow-filter",
                 on_submit=partial(self._follow_filter, tag=self.filter_tag),
             ),
-            bool(subscriptions)
+            bool(follows)
             and sl.action_control(
                 tr(t"bot-notifications-view-unfollow-selected = Unfollow selected"),
                 self._unfollow,
@@ -268,7 +271,7 @@ class NotificationSubscriptions(sl.Component[ComponentsV2Target, sd.Request[Any,
                         t"notifications-following-help = Follow creators or records to hear about new builds and records."
                     )
                 ),
-                not self._settings.subscriptions
+                not self._settings.follows
                 and sl.note(tr(t"notifications-following-empty = Nothing followed yet. Add your first follow below.")),
             ),
             *selection,
@@ -460,20 +463,21 @@ class NotificationSubscriptions(sl.Component[ComponentsV2Target, sd.Request[Any,
             ),
         )
 
-    def describe(self, subscription: NotificationSubscription) -> sl.TextLike:
-        return self._settings.labels.get(subscription.id) or _kind_label(subscription.kind)
+    @staticmethod
+    def describe(follow: FollowedSubject) -> sl.TextLike:
+        return follow.label or _kind_label(follow.subscription.kind)
 
-    def detail(self, subscription: NotificationSubscription) -> sl.TextLike:
-        if subscription.record_filter is not None:
-            return _filter_text(subscription.record_filter)
-        return _kind_label(subscription.kind)
+    @staticmethod
+    def detail(follow: FollowedSubject) -> sl.TextLike:
+        return follow.filter_summary or _kind_label(follow.subscription.kind)
 
 
 class NotificationInbox(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]):
     """Own visible inbox items, selection, and read-state changes."""
 
     selected_inbox_ids: tuple[str, ...] = sl.state(())
-    _inbox: tuple[InboxNotification, ...] = sl.state(())
+    _inbox: tuple[InboxEntry, ...] = sl.state(())
+    unread_count: int = sl.state(0)
 
     def __init__(
         self,
@@ -485,19 +489,12 @@ class NotificationInbox(sl.Component[ComponentsV2Target, sd.Request[Any, Redston
         self._actor = actor
         self.edits = edits
 
-    @property
-    def unread_count(self) -> int:
-        return sum(item.read_at is None for item in self._inbox)
-
     async def refresh(self) -> None:
-        self._inbox = tuple(
-            (
-                await self._notifications.inbox(
-                    context=ActingContext.for_actor(await self._actor()),
-                    page_size=MAX_LISTED,
-                )
-            ).items
+        inbox = await self._notifications.inbox(
+            context=ActingContext.for_actor(await self._actor()), page_size=MAX_LISTED
         )
+        self._inbox = inbox.page.items
+        self.unread_count = inbox.unread_count
         self.selected_inbox_ids = tuple(
             selected for selected in self.selected_inbox_ids if any(str(item.id) == selected for item in self._inbox)
         )
@@ -579,8 +576,8 @@ class NotificationInbox(sl.Component[ComponentsV2Target, sd.Request[Any, Redston
         )
 
     @staticmethod
-    def _inbox_label(notification: InboxNotification) -> sl.TextLike:
-        return notification_summary(notification.kind, notification.payload)
+    def _inbox_label(notification: InboxEntry) -> sl.TextLike:
+        return notification_summary(notification.message)
 
     def _selected_details(self) -> tuple[sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]], ...]:
         if len(self.selected_inbox_ids) != 1:
@@ -588,30 +585,16 @@ class NotificationInbox(sl.Component[ComponentsV2Target, sd.Request[Any, Redston
         notification = next((item for item in self._inbox if str(item.id) == self.selected_inbox_ids[0]), None)
         if notification is None:
             return ()
-        details = primitives.Text(notification_details(notification.kind, notification.payload))
-        build_id = notification_build_id(notification.payload)
-        if build_id is None:
+        details = primitives.Text(notification_details(notification.message))
+        build = notification.message.build
+        if build is None:
             return (details,)
         return (
             primitives.Section(
                 (details,),
                 primitives.RoutedButton(
                     tr(t"notifications-open-build = Open build"),
-                    BuildBrowseScreen.open_detail.custom_id(build_id=build_id),
+                    BuildBrowseScreen.open_detail.custom_id(build_id=build.id),
                 ),
             ),
         )
-
-
-def _filter_text(record_filter: RecordSubscriptionFilter) -> str:
-    """Format a structured subscription filter as readable predicate values."""
-    parts = [
-        ", ".join(sorted(values))
-        for values in (record_filter.build_kinds, record_filter.criteria, record_filter.version_scopes)
-        if values
-    ]
-    parts.extend(
-        f"tag {predicate.tag_id}" if predicate.value is None else f"tag {predicate.tag_id}={predicate.value}"
-        for predicate in record_filter.tags
-    )
-    return " · ".join(parts)

@@ -205,6 +205,14 @@ export type BuildMedia = {
 };
 
 /**
+ * BuildOutcomeNotification
+ */
+export type BuildOutcomeNotification = {
+    kind: 'build_confirmed' | 'build_denied';
+    build: NotifiedBuildDetail;
+};
+
+/**
  * BuildPatch
  */
 export type BuildPatch = {
@@ -485,6 +493,15 @@ export type CreatorAliasDetail = {
     name: string;
     claimed: boolean;
     creator_id: string | null;
+};
+
+/**
+ * CreatorBuildNotification
+ */
+export type CreatorBuildNotification = {
+    kind: 'creator_build_confirmed';
+    build: NotifiedBuildDetail;
+    creator_ids: Array<string>;
 };
 
 /**
@@ -1253,13 +1270,22 @@ export type ImpersonationDetails = {
  */
 export type InboxNotificationDetail = {
     id: number;
-    read_at?: string | null;
-    kind: NotificationKind;
-    payload: {
-        [key: string]: unknown;
-    };
-    revision?: number;
+    revision: number;
     created_at: string;
+    read_at: string | null;
+    href: string | null;
+    payload: BuildOutcomeNotification | CreatorBuildNotification | StaffSubmissionNotification | RecordGainedNotification | RecordRetiredNotification;
+};
+
+/**
+ * InboxPage
+ */
+export type InboxPage = {
+    items: Array<InboxNotificationDetail>;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+    unread_count: number;
 };
 
 /**
@@ -1471,13 +1497,6 @@ export type MinecraftIdentityRefresh = {
 };
 
 /**
- * NotificationKind
- *
- * Inbox and delivery message categories.
- */
-export type NotificationKind = 'build_confirmed' | 'build_denied' | 'creator_build_confirmed' | 'record_gained' | 'record_retired' | 'staff_build_submitted';
-
-/**
  * NotificationPreferenceUpdate
  */
 export type NotificationPreferenceUpdate = {
@@ -1515,6 +1534,25 @@ export type NotificationSubscriptionDetail = {
     filter: {
         [key: string]: unknown;
     } | null;
+    subject_label: string | null;
+    subject_href: string | null;
+    filter_summary: string | null;
+};
+
+/**
+ * NotifiedBuildDetail
+ */
+export type NotifiedBuildDetail = {
+    id: number;
+    title: string | null;
+};
+
+/**
+ * NotifiedRecordDetail
+ */
+export type NotifiedRecordDetail = {
+    id: string;
+    title: string;
 };
 
 /**
@@ -1550,16 +1588,6 @@ export type PageAnchor = {
  */
 export type PageSearchResult = {
     items: Array<BuildSearchResult | RecordSearchResult | MetadataSearchResult>;
-    total: number;
-    next: PageAnchor | null;
-    prev: PageAnchor | null;
-};
-
-/**
- * Page[InboxNotificationDetail]
- */
-export type PageLitestarDtoBackendInboxNotificationDetail = {
-    items: Array<InboxNotificationDetail>;
     total: number;
     next: PageAnchor | null;
     prev: PageAnchor | null;
@@ -2136,6 +2164,15 @@ export type RecordFilterInput = {
 };
 
 /**
+ * RecordGainedNotification
+ */
+export type RecordGainedNotification = {
+    kind: 'record_gained';
+    build: NotifiedBuildDetail;
+    records: Array<NotifiedRecordDetail>;
+};
+
+/**
  * RecordInspection
  */
 export type RecordInspection = {
@@ -2163,6 +2200,14 @@ export type RecordResolution = {
     holder_ids?: Array<number>;
     tied_ids?: Array<number>;
     gaps?: Array<CandidateGap>;
+};
+
+/**
+ * RecordRetiredNotification
+ */
+export type RecordRetiredNotification = {
+    kind: 'record_retired';
+    records: Array<NotifiedRecordDetail>;
 };
 
 /**
@@ -2580,6 +2625,14 @@ export type SmallestRegionAnalysis = {
  * How a source produces candidates.
  */
 export type SourceKind = 'enumerable' | 'queried';
+
+/**
+ * StaffSubmissionNotification
+ */
+export type StaffSubmissionNotification = {
+    kind: 'staff_build_submitted';
+    build: NotifiedBuildDetail;
+};
 
 /**
  * StartImpersonation
@@ -5994,7 +6047,16 @@ export type NotificationPreferencesUpdateResponse = NotificationPreferencesUpdat
 export type NotificationSubscriptionsListData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * Only list follows of this kind.
+         */
+        kind?: SubscriptionKind | null;
+        /**
+         * Only list follows of this creator or record.
+         */
+        subject_id?: string | null;
+    };
     url: '/v1/users/me/notifications/subscriptions';
 };
 
@@ -6007,6 +6069,10 @@ export type NotificationSubscriptionsListErrors = {
      * Forbidden
      */
     403: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ValidationProblemDetail;
     /**
      * Too Many Requests
      */
@@ -6174,6 +6240,10 @@ export type NotificationInboxListData = {
          * Return the items before this identifier in display order. Excludes offset.
          */
         before_id?: number | null;
+        /**
+         * Only list unread items.
+         */
+        unread_only?: boolean;
     };
     url: '/v1/users/me/notifications/inbox';
 };
@@ -6211,10 +6281,74 @@ export type NotificationInboxListResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: PageLitestarDtoBackendInboxNotificationDetail;
+    200: InboxPage;
 };
 
 export type NotificationInboxListResponse = NotificationInboxListResponses[keyof NotificationInboxListResponses];
+
+export type NotificationInboxMarkAllReadData = {
+    body?: never;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: {
+        /**
+         * Leave newer items unread, such as those that arrived after the page loaded.
+         */
+        through_id?: number | null;
+    };
+    url: '/v1/users/me/notifications/inbox/read-all';
+};
+
+export type NotificationInboxMarkAllReadErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type NotificationInboxMarkAllReadError = NotificationInboxMarkAllReadErrors[keyof NotificationInboxMarkAllReadErrors];
+
+export type NotificationInboxMarkAllReadResponses = {
+    /**
+     * Request fulfilled, nothing follows
+     */
+    204: null;
+};
+
+export type NotificationInboxMarkAllReadResponse = NotificationInboxMarkAllReadResponses[keyof NotificationInboxMarkAllReadResponses];
 
 export type NotificationInboxMarkReadData = {
     body?: never;

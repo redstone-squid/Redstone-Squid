@@ -6,12 +6,19 @@ import discord
 import pytest
 
 from squid.bot import notifications_cog as notification_module
-from squid.bot.notification_text import notification_build_id, notification_details
+from squid.bot.notification_text import notification_details
 from squid.bot.notifications_cog import NotificationCog, render_delivery
 from squid.core.errors import DataIntegrityError
 from squid.core.i18n import localization_for
 from squid.core.notifications import PendingNotificationDelivery, RecordSubscriptionFilter, TagPredicate
-from squid.core.notifications.domain import NotificationKind, SubscriptionKind, SubscriptionTarget
+from squid.core.notifications.domain import (
+    NotificationKind,
+    NotificationMessage,
+    NotifiedBuild,
+    NotifiedRecord,
+    SubscriptionKind,
+    SubscriptionTarget,
+)
 from squid_i18n import discord_text, resolve_text
 from squid_ui.content.text import Localization
 
@@ -83,7 +90,13 @@ def test_delivery_renderer_uses_configured_public_site_link() -> None:
         claim_token=UUID("22222222-2222-2222-2222-222222222222"),
         attempts=1,
         kind=NotificationKind.RECORD_GAINED,
-        payload={"build_id": 42, "records": [{"title": "Fastest"}, {"title": "Smallest"}]},
+        payload={
+            "build_id": 42,
+            "records": [
+                {"title_id": "33333333-3333-4333-8333-333333333333", "title": "Fastest"},
+                {"title_id": "44444444-4444-4444-8444-444444444444", "title": "Smallest"},
+            ],
+        },
     )
 
     assert render_delivery(delivery, "https://example.test") == (
@@ -144,14 +157,49 @@ def test_notification_management_is_one_slash_workspace() -> None:
 
 
 @pytest.mark.parametrize("build_id", [None, True, 0, -1, "42"])
-def test_notification_ignores_invalid_build_ids(build_id: object) -> None:
-    assert notification_build_id({"build_id": build_id}) is None
+def test_build_messages_reject_invalid_build_ids(build_id: object) -> None:
+    with pytest.raises(DataIntegrityError):
+        NotificationMessage.from_payload(NotificationKind.BUILD_CONFIRMED, {"build_id": build_id})
+
+
+def test_record_messages_require_their_records() -> None:
+    with pytest.raises(DataIntegrityError):
+        NotificationMessage.from_payload(NotificationKind.RECORD_GAINED, {"build_id": 42})
+
+
+def test_messages_parse_stored_payloads_and_link_to_their_subject() -> None:
+    record_id = UUID("33333333-3333-4333-8333-333333333333")
+    entry = {"title_id": str(record_id), "title": "Fastest door", "base_title": "fastest"}
+    gained = NotificationMessage.from_payload(
+        NotificationKind.RECORD_GAINED, {"build_id": 42, "records": [entry]}, {42: "2x2 Piston Door"}
+    )
+    retired = NotificationMessage.from_payload(NotificationKind.RECORD_RETIRED, {"records": [entry, entry]})
+
+    assert gained.build == NotifiedBuild(42, "2x2 Piston Door")
+    assert gained.records == (NotifiedRecord(record_id, "Fastest door"),)
+    assert gained.href == "/builds/42"
+    assert retired.build is None
+    assert retired.href is None
+
+
+def test_filter_summary_names_values_and_tags() -> None:
+    record_filter = RecordSubscriptionFilter(
+        build_kinds=frozenset({"extender", "door"}),
+        criteria=frozenset({"fastest_smallest"}),
+        version_scopes=frozenset({"up_to_date"}),
+        tags=(TagPredicate(4), TagPredicate(7, "exact", 3)),
+    )
+
+    assert record_filter.summary({4: "Slim"}).resolve() == (
+        "Doors, Extenders · Fastest smallest · Up to date · Tagged Slim · Tag #7: 3"
+    )
 
 
 def test_record_details_bound_large_groups_and_escape_markdown() -> None:
-    payload = {"build_id": 42, "records": [{"title": "**Fastest** " + "x" * 300}] * 20}
+    record = NotifiedRecord(UUID(int=1), "**Fastest** " + "x" * 300)
+    message = NotificationMessage(NotificationKind.RECORD_GAINED, NotifiedBuild(42), (record,) * 20)
     rendered = discord_text(
-        resolve_text(notification_details(NotificationKind.RECORD_GAINED, payload), localization_for("en")),
+        resolve_text(notification_details(message), localization_for("en")),
         escape=discord.utils.escape_markdown,
     )
 
@@ -160,9 +208,3 @@ def test_record_details_bound_large_groups_and_escape_markdown() -> None:
     assert "…and 15 more records." in rendered
     assert "\\*\\*Fastest\\*\\*" in rendered
     assert len(rendered) < 1000
-
-
-def test_record_notification_without_details_does_not_invent_a_count() -> None:
-    assert notification_details(NotificationKind.RECORD_GAINED, {"build_id": 42}).resolve() == (
-        "Build #42 gained records."
-    )

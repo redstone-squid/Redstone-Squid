@@ -3,12 +3,10 @@
 from typing import Annotated
 from uuid import UUID
 
-from advanced_alchemy.extensions.litestar import SQLAlchemyDTO
-from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTOConfig
 from litestar import Response, Router, delete, get, patch, post
 from litestar import status_codes as status
 from litestar.di import NamedDependency, Provide
-from litestar.params import FromPath, HeaderParameter, JSONBody, SkipValidation
+from litestar.params import FromPath, HeaderParameter, JSONBody, QueryParameter, SkipValidation
 
 from squid.api.contract import WEB, WEB_WRITE, browser_only, contract
 from squid.api.dependencies import Notifications, Services, get_notifications
@@ -18,39 +16,30 @@ from squid.api.pagination import (
     AfterIdParam,
     BeforeIdParam,
     OffsetParam,
-    Page,
     PageSizeParam,
     resolve_selector,
 )
 from squid.api.revisions import expected_revision, revision_etag
 from squid.api.security import Caller, requires
 from squid.api.v1.schemas.notifications import (
+    InboxPage,
     NotificationPreferencesDetail,
     NotificationPreferenceUpdate,
     NotificationSubscriptionCreate,
     NotificationSubscriptionDetail,
 )
-from squid.core.edits.domain import EditCommand, EditValues, Revision
+from squid.core.edits.domain import EditCommand, EditValues, LatestRevision, Revision
 from squid.core.errors import AuthenticationError
+from squid.core.notifications import SubscriptionKind
 from squid.core.notifications.edits import (
     INBOX_EDIT,
     PREFERENCES_EDIT,
     SUBSCRIPTIONS_EDIT,
-    SubscriptionsValues,
     inbox_target,
     notification_target,
 )
 from squid.core.notifications.errors import NotificationSubscriptionNotFoundError
-from squid.core.notifications.models import InboxNotification
 from squid.core.permissions.domain.catalogue import ACCOUNT_SELF_READ
-
-
-class InboxNotificationDTO(SQLAlchemyDTO[InboxNotification]):
-    """Publish inbox content without recipient, source-event, or delivery bookkeeping."""
-
-    __schema_name__ = "InboxNotificationDetail"
-    config = SQLAlchemyDTOConfig(include={"id", "revision", "kind", "payload", "created_at", "read_at"})
-
 
 UserCaller = NamedDependency[SkipValidation[Caller]]
 
@@ -124,18 +113,31 @@ async def update_preferences(
     guards=[requires(ACCOUNT_SELF_READ)],
 )
 async def list_subscriptions(
-    notifications: Notifications, caller: UserCaller
+    notifications: Notifications,
+    caller: UserCaller,
+    kind: Annotated[SubscriptionKind | None, QueryParameter(description="Only list follows of this kind.")] = None,
+    subject_id: Annotated[
+        UUID | None, QueryParameter(description="Only list follows of this creator or record.")
+    ] = None,
 ) -> Response[list[NotificationSubscriptionDetail]]:
-    """List enabled subscriptions owned by the caller."""
-    response_headers: dict[str, str] = {}
+    """List enabled subscriptions owned by the caller.
+
+    Filter by kind and subject to learn whether the caller follows one creator or record.
+    """
     _account_id(caller)
     snapshot = await notifications.editor_snapshot(context=caller.context())
-    response_headers["ETag"] = revision_etag(
-        Revision(notification_target(snapshot.preferences.account_id), snapshot.preferences.revision)
-    )
     return Response(
-        content=[NotificationSubscriptionDetail.from_domain(item) for item in snapshot.subscriptions],
-        headers=response_headers,
+        content=[
+            NotificationSubscriptionDetail.from_domain(follow)
+            for follow in snapshot.follows
+            if (kind is None or follow.subscription.kind is kind)
+            and (subject_id is None or follow.subscription.subject_id == subject_id)
+        ],
+        headers={
+            "ETag": revision_etag(
+                Revision(notification_target(snapshot.preferences.account_id), snapshot.preferences.revision)
+            )
+        },
         status_code=200,
     )
 
@@ -164,11 +166,10 @@ async def create_subscription(
     _reservation: NamedDependency[SkipValidation[None]],
 ) -> Response[NotificationSubscriptionDetail]:
     """Follow a creator, record, or filter against the notification settings revision."""
-    response_headers: dict[str, str] = {}
     account_id = _account_id(caller)
     values = data.model_dump(mode="json")
     values["record_filter"] = values.pop("filter")
-    result = await services.edits.execute(
+    await services.edits.execute(
         EditCommand(
             SUBSCRIPTIONS_EDIT,
             (expected_revision(notification_target(account_id), if_match),),
@@ -177,31 +178,18 @@ async def create_subscription(
         ),
         context=caller.context(),
     )
-    if result.receipt is not None:
-        subscription = SubscriptionsValues.model_validate(result.receipt.after.unpack()).subscriptions[0]
-        response_headers["ETag"] = revision_etag(result.outcome.revisions[0])
-        return Response(
-            content=NotificationSubscriptionDetail(
-                id=subscription.id,
-                kind=subscription.kind,
-                subject_id=subscription.subject_id,
-                filter=None if subscription.record_filter is None else dict(subscription.record_filter),
-            ),
-            headers=response_headers,
-            status_code=status.HTTP_201_CREATED,
-        )
-    row, revision = await notifications.subscription_snapshot(
+    # A replayed request also lands here, so read the follow back rather than trusting the receipt.
+    follow, revision = await notifications.subscription_snapshot(
         context=caller.context(),
         kind=data.kind,
         subject_id=data.subject_id,
         record_filter=None if data.filter is None else data.filter.to_domain(),
     )
-    if row is None:
+    if follow is None:
         raise NotificationSubscriptionNotFoundError
-    response_headers["ETag"] = revision_etag(Revision(notification_target(account_id), revision))
     return Response(
-        content=NotificationSubscriptionDetail.from_domain(row),
-        headers=response_headers,
+        content=NotificationSubscriptionDetail.from_domain(follow),
+        headers={"ETag": revision_etag(Revision(notification_target(account_id), revision))},
         status_code=status.HTTP_201_CREATED,
     )
 
@@ -249,7 +237,6 @@ async def delete_subscription(
     "/inbox",
     responses=responses(400, 401, 403, 422, 503),
     operation_id="notification_inbox_list",
-    return_dto=InboxNotificationDTO,
     security=[WEB],
     opt=contract(cli=browser_only()),
     status_code=200,
@@ -262,12 +249,56 @@ async def list_inbox(
     offset: OffsetParam = None,
     after_id: AfterIdParam = None,
     before_id: BeforeIdParam = None,
-) -> Page[InboxNotification]:
+    unread_only: Annotated[bool, QueryParameter(description="Only list unread items.")] = False,
+) -> InboxPage:
     """List the caller's web-visible inbox, hiding staff items after access revocation."""
     _account_id(caller)
     selector = resolve_selector(offset=offset, after_id=after_id, before_id=before_id)
-    page = await notifications.inbox(context=caller.context(), selector=selector, page_size=page_size)
-    return Page[InboxNotification].from_domain(page)
+    inbox = await notifications.inbox(
+        context=caller.context(), selector=selector, page_size=page_size, unread_only=unread_only
+    )
+    return InboxPage.from_domain(inbox)
+
+
+@post(
+    "/inbox/read-all",
+    status_code=status.HTTP_204_NO_CONTENT,
+    responses=responses(400, 401, 403, 404, 409, 503),
+    operation_id="notification_inbox_mark_all_read",
+    security=[WEB_WRITE],
+    opt=contract(cli=browser_only()),
+    guards=[requires(ACCOUNT_SELF_READ)],
+    dependencies={
+        "_reservation": Provide(reserve_edit_request),
+        "operation_id": Provide(edit_operation_id, sync_to_thread=False),
+    },
+)
+async def mark_all_read(
+    notifications: Notifications,
+    services: Services,
+    caller: UserCaller,
+    operation_id: NamedDependency[SkipValidation[UUID]],
+    through_id: Annotated[
+        int | None,
+        QueryParameter(ge=1, description="Leave newer items unread, such as those that arrived after the page loaded."),
+    ] = None,
+    *,
+    _reservation: NamedDependency[SkipValidation[None]],
+) -> Response[None]:
+    """Mark every visible unread inbox item read, as one undoable edit."""
+    _account_id(caller)
+    unread = await notifications.unread_ids(context=caller.context(), through_id=through_id)
+    if unread:
+        await services.edits.execute(
+            EditCommand(
+                INBOX_EDIT,
+                tuple(LatestRevision(inbox_target(notification_id)) for notification_id in unread),
+                EditValues.of({"states": {str(notification_id): True for notification_id in unread}}),
+                operation_id,
+            ),
+            context=caller.context(),
+        )
+    return Response(content=None, status_code=status.HTTP_204_NO_CONTENT)
 
 
 @post(
@@ -369,6 +400,7 @@ router = Router(
         create_subscription,
         delete_subscription,
         list_inbox,
+        mark_all_read,
         mark_read,
         mark_unread,
     ],

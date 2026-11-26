@@ -1,7 +1,7 @@
 """PostgreSQL notification persistence and domain-event materialization."""
 
 from collections import defaultdict
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, replace
 from decimal import Decimal
 from typing import Any
@@ -41,7 +41,7 @@ from squid.core.records.models import (
     Record,
     RecordDefinition,
 )
-from squid.core.tags.models import TagAssignment
+from squid.core.tags.models import TagAssignment, TagDefinition
 
 
 def _durable_staff_notification_role_ids():
@@ -284,8 +284,10 @@ class PostgresNotificationRepository:
         ).all()
         return tuple(row for row in rows)
 
-    async def subscription_labels(self, account_id: int) -> Sequence[tuple[int, str]]:
-        """Resolve enabled follows using public aliases and the latest record title."""
+    async def subscription_labels(self, subscription_ids: Sequence[int]) -> Mapping[int, str]:
+        """Name creator follows by a public alias and record follows by the latest record title."""
+        if not subscription_ids:
+            return {}
         latest = (
             select(RecordDefinition.record_id, RecordDefinition.title)
             .distinct(RecordDefinition.record_id)
@@ -311,13 +313,17 @@ class PostgresNotificationRepository:
                 (NotificationSubscription.kind == SubscriptionKind.CREATOR)
                 & (aliases.c.public_creator_id == NotificationSubscription.subject_id),
             )
-            .where(
-                NotificationSubscription.account_id == account_id,
-                NotificationSubscription.enabled.is_(True),
-                label.is_not(None),
-            )
+            .where(NotificationSubscription.id.in_(subscription_ids), label.is_not(None))
         )
-        return tuple((row[0], row[1]) for row in rows)
+        return {subscription_id: name for subscription_id, name in rows}
+
+    async def tag_names(self, tag_ids: set[int]) -> Mapping[int, str]:
+        if not tag_ids:
+            return {}
+        rows = await self._session().execute(
+            select(TagDefinition.id, TagDefinition.display_name).where(TagDefinition.id.in_(tag_ids))
+        )
+        return {tag_id: name for tag_id, name in rows}
 
     async def list_inbox(
         self,
@@ -328,10 +334,13 @@ class PostgresNotificationRepository:
         before_id: int | None,
         limit: int,
         visibility: InboxVisibility,
+        unread_only: bool = False,
     ) -> Sequence[InboxNotification]:
         """List one newest-first inbox page; a `before_id` page carries its overfetch at the front."""
         session = self._session()
-        statement = _inbox_filter(select(InboxNotification), account_id=account_id, visibility=visibility)
+        statement = _inbox_filter(
+            select(InboxNotification), account_id=account_id, visibility=visibility, unread_only=unread_only
+        )
         reverse = before_id is not None
         if before_id is not None:
             # Walk away from the anchor in reversed display order; the page is flipped back below.
@@ -346,15 +355,26 @@ class PostgresNotificationRepository:
         ordered = reversed(rows) if reverse else rows
         return tuple(row for row in ordered)
 
-    async def count_inbox(self, account_id: int, *, visibility: InboxVisibility) -> int:
+    async def count_inbox(self, account_id: int, *, visibility: InboxVisibility, unread_only: bool = False) -> int:
         """Count web-visible inbox items, mirroring the visibility rules of `list_inbox`."""
         session = self._session()
         statement = _inbox_filter(
             select(func.count()).select_from(InboxNotification),
             account_id=account_id,
             visibility=visibility,
+            unread_only=unread_only,
         )
         return await session.scalar(statement) or 0
+
+    async def unread_ids(
+        self, account_id: int, *, visibility: InboxVisibility, through_id: int | None
+    ) -> Sequence[int]:
+        statement = _inbox_filter(
+            select(InboxNotification.id), account_id=account_id, visibility=visibility, unread_only=True
+        )
+        if through_id is not None:
+            statement = statement.where(InboxNotification.id <= through_id)
+        return (await self._session().scalars(statement.order_by(InboxNotification.id))).all()
 
     # Create notifications from events and expire retained notifications.
 
@@ -1046,9 +1066,12 @@ def inbox_predicates(account_id: int, visibility: InboxVisibility) -> tuple[Colu
     return (*predicates, InboxNotification.kind != NotificationKind.STAFF_BUILD_SUBMITTED)
 
 
-def _inbox_filter[S: Select[Any]](statement: S, *, account_id: int, visibility: InboxVisibility) -> S:
+def _inbox_filter[S: Select[Any]](
+    statement: S, *, account_id: int, visibility: InboxVisibility, unread_only: bool = False
+) -> S:
     """Apply the visibility rules shared by inbox reads and state transitions."""
-    return statement.where(*inbox_predicates(account_id, visibility))
+    statement = statement.where(*inbox_predicates(account_id, visibility))
+    return statement.where(InboxNotification.read_at.is_(None)) if unread_only else statement
 
 
 def _filter_matches(

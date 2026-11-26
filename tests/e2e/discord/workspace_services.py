@@ -17,9 +17,8 @@ from squid.core.notifications import (
     NotificationService,
     PendingNotificationDelivery,
 )
-from squid.core.notifications.application import NotificationEditorSnapshot
-from squid.core.notifications.domain import NotificationKind
-from squid.core.notifications.models import InboxNotification
+from squid.core.notifications.application import Inbox, InboxEntry, NotificationEditorSnapshot
+from squid.core.notifications.domain import NotificationKind, NotificationMessage, NotifiedBuild
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, offset_page
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.application.administration import PermissionAdministrationService
@@ -98,13 +97,14 @@ class WorkspaceInbox(NotificationService):
         context: ActingContext,
         selector: PageSelector = FIRST_PAGE,
         page_size: int = 20,
-    ) -> Page[InboxNotification]:
+        unread_only: bool = False,
+    ) -> Inbox:
         account_id = context.effective.require_account_id()
         assert account_id == self.account_id
-        inbox_item = InboxNotification(
-            id=3, kind=NotificationKind.BUILD_CONFIRMED, payload={"build_id": 9}, created_at=Instant.now()
+        inbox_item = InboxEntry(
+            3, 1, Instant.now(), None, NotificationMessage(NotificationKind.BUILD_CONFIRMED, NotifiedBuild(9))
         )
-        return Page(items=(inbox_item,), total=1, next=None, prev=None)
+        return Inbox(Page(items=(inbox_item,), total=1, next=None, prev=None), unread_count=1)
 
     @override
     async def claim_deliveries(

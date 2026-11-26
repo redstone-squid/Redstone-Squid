@@ -39,7 +39,7 @@ from squid.core.accounts.errors import AccountNotFoundError
 from squid.core.accounts.models import Account, AccountIdentity, AccountProfile, AliasClaim, CreatorAlias
 from squid.core.actors import ActingContext, Actor, UserActor
 from squid.core.notifications import NotificationPreferences, NotificationService
-from squid.core.notifications.application import NotificationEditorSnapshot
+from squid.core.notifications.application import Inbox, NotificationEditorSnapshot
 from squid.core.pagination import Page
 from squid.core.permissions.domain import PermissionNode
 from squid.core.permissions.domain.catalogue import ACCOUNT_IDENTITY_REFRESH, ACCOUNT_IDENTITY_REFRESH_ANY
@@ -1014,7 +1014,7 @@ async def test_embedded_overview_opens_consent_under_the_workspace_screen(mocker
     notifications.editor_snapshot.return_value = NotificationEditorSnapshot(
         NotificationPreferences(ACCOUNT_ID, consent_pending=False), ()
     )
-    notifications.inbox.return_value = Page(items=(), total=0, next=None, prev=None)
+    notifications.inbox.return_value = Inbox(Page(items=(), total=0, next=None, prev=None), unread_count=0)
     workspace = _workspace(
         accounts=accounts,
         notifications=notifications,

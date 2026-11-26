@@ -1,23 +1,18 @@
 """Shared notification summaries and details for DMs and the inbox."""
 
-from collections.abc import Mapping
-
 from squid.core.i18n import tr
-from squid.core.notifications.domain import NotificationKind
+from squid.core.notifications.domain import NotificationKind, NotificationMessage
 from squid_i18n import Text, md_tr
 
 
-def notification_build_id(payload: Mapping[str, object]) -> int | None:
-    value = payload.get("build_id")
-    return value if type(value) is int and value > 0 else None
-
-
-def notification_summary(kind: NotificationKind, payload: Mapping[str, object]) -> Text:
-    build_id = notification_build_id(payload)
-    build = (
-        tr(t"notifications-build-number = Build #{build_id!s}") if build_id else tr(t"notifications-build = A build")
-    )
-    match kind:
+def notification_summary(message: NotificationMessage) -> Text:
+    if message.build is None:
+        build = tr(t"notifications-build = A build")
+    else:
+        build_id = message.build.id
+        build = tr(t"notifications-build-number = Build #{build_id!s}")
+    count = len(message.records)
+    match message.kind:
         case NotificationKind.BUILD_CONFIRMED:
             return tr(t"notifications-confirmed-summary = {build} was approved.")
         case NotificationKind.BUILD_DENIED:
@@ -27,10 +22,6 @@ def notification_summary(kind: NotificationKind, payload: Mapping[str, object]) 
         case NotificationKind.STAFF_BUILD_SUBMITTED:
             return tr(t"notifications-review-summary = {build} is awaiting staff review.")
         case NotificationKind.RECORD_GAINED:
-            records = payload.get("records")
-            if not isinstance(records, list) or not records:
-                return tr(t"notifications-record-summary-unknown = {build} gained records.")
-            count = len(records)
             return tr(t"""
                 notifications-record-summary = {{ $count ->
                     [one] {build} gained {count} record.
@@ -38,29 +29,21 @@ def notification_summary(kind: NotificationKind, payload: Mapping[str, object]) 
                 }}
             """)
         case NotificationKind.RECORD_RETIRED:
-            records = payload.get("records")
-            count = len(records) if isinstance(records, list) else 0
             return tr(t"""
                 notifications-retired-summary = {{ $count ->
                     [one] A record you follow no longer has any eligible builds.
                    *[other] {count} records you follow no longer have any eligible builds.
                 }}
             """)
-    return tr(t"notifications-update-summary = {build} has an update.")
 
 
-def notification_details(kind: NotificationKind, payload: Mapping[str, object]) -> Text:
+def notification_details(message: NotificationMessage) -> Text:
     """Show record names without letting large record groups overwhelm a message."""
-    summary = notification_summary(kind, payload)
-    records = payload.get("records")
-    if kind not in {NotificationKind.RECORD_GAINED, NotificationKind.RECORD_RETIRED} or not isinstance(records, list):
-        return summary
-    lines: list[Text] = [summary]
-    for record in records[:5]:
-        if isinstance(record, dict) and isinstance(title := record.get("title"), str) and title.strip():
-            title = " ".join(title.split())
+    lines: list[Text] = [notification_summary(message)]
+    for record in message.records[:5]:
+        if title := " ".join(record.title.split()):
             title = title if len(title) <= 120 else title[:119] + "…"
             lines.append(md_tr(t"notifications-record-detail = • {title}"))
-    if (remaining := len(records) - 5) > 0:
+    if (remaining := len(message.records) - 5) > 0:
         lines.append(tr(t"notifications-more-records = …and {remaining} more records."))
     return Text.join("\n", lines)

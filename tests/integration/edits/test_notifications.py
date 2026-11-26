@@ -12,6 +12,8 @@ from squid.core.accounts.domain import AccountConsent, ClaimMethod
 from squid.core.accounts.errors import ConsentRequiredError
 from squid.core.accounts.models import Account, CreatorAlias
 from squid.core.actors import ActingContext, UserActor
+from squid.core.builds.domain import BuildStatus
+from squid.core.builds.models import DoorBuild
 from squid.core.edits.application import EditExecutor
 from squid.core.edits.domain import EditCommand, EditResult, EditValues, Revision, RevisionConflictError
 from squid.core.events.models import DomainEvent
@@ -34,7 +36,7 @@ from squid.core.notifications.edits import (
     notification_target,
 )
 from squid.core.notifications.errors import NotificationNotFoundError
-from squid.core.notifications.models import InboxNotification, NotificationSubscription
+from squid.core.notifications.models import InboxNotification, NotificationProfile, NotificationSubscription
 from squid.core.permissions.application.services import PermissionService
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.records.domain import BuildKind, RecordCriterion, VersionScope
@@ -95,7 +97,7 @@ async def test_follow_labels_resolve_public_names_and_latest_titles(
     snapshot = await NotificationService(
         uow_factory=factory, permissions=PermissionService(uow_factory=factory)
     ).editor_snapshot(context=ActingContext.direct(UserActor(account_id=owner.id)))
-    assert dict(snapshot.labels) == expected
+    assert {follow.subscription.id: follow.label for follow in snapshot.follows if follow.label} == expected
     executor = EditExecutor(
         factory, {SUBSCRIPTIONS_EDIT: NotificationSubscriptionsEdit(PermissionService(uow_factory=factory))}
     )
@@ -207,7 +209,7 @@ async def test_follow_creation_undo_and_redo_keep_identity_and_monotonic_revisio
         assert len((await session.scalars(select(NotificationSubscription))).all()) == 1
 
     await executor.execute(redone.receipt.undo(redone.outcome.revisions), context=ActingContext.direct(actor))
-    row, revision = await NotificationService(
+    follow, revision = await NotificationService(
         uow_factory=factory, permissions=PermissionService(uow_factory=factory)
     ).subscription_snapshot(
         context=ActingContext.direct(actor),
@@ -215,10 +217,51 @@ async def test_follow_creation_undo_and_redo_keep_identity_and_monotonic_revisio
         subject_id=None,
         record_filter=RecordSubscriptionFilter(build_kinds=frozenset({"door"})),
     )
-    assert row is not None
-    assert row.id == subscription.id
-    assert not row.enabled
+    assert follow is not None
+    assert follow.subscription.id == subscription.id
+    assert not follow.subscription.enabled
+    assert follow.filter_summary is not None
+    assert follow.filter_summary.resolve() == "Doors"
     assert revision == 4
+
+
+async def test_inbox_names_builds_by_their_current_title(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory, verification_code_pepper="test-pepper")
+    async with factory() as uow:
+        account = await uow.accounts.create(consent=AccountConsent.grant_current())
+        await uow.commit()
+    door = DoorBuild(
+        submitter_account_id=account.id, submission_status=BuildStatus.APPROVED, door_width=3, door_height=4
+    )
+    async with factory() as uow, uow.builds.editing(actor=account.id, source="test"):
+        await uow.builds.save(door)
+        await uow.commit()
+    async with migrated_session_factory.begin() as session:
+        session.add(NotificationProfile(account_id=account.id, web_enabled=True, dm_enabled=False))
+        event = DomainEvent(event_type="build.confirmed", aggregate_kind="build", aggregate_id=door.id)
+        session.add(event)
+        await session.flush()
+        session.add(
+            InboxNotification(
+                account_id=account.id,
+                event_id=event.id,
+                source_key=NotificationSource(event.id, NotificationKind.BUILD_CONFIRMED).key_for(account.id),
+                kind=NotificationKind.BUILD_CONFIRMED,
+                payload={"build_id": door.id},
+                web_visible=True,
+            )
+        )
+
+    inbox = await NotificationService(uow_factory=factory, permissions=PermissionService(uow_factory=factory)).inbox(
+        context=ActingContext.direct(UserActor(account_id=account.id))
+    )
+
+    (entry,) = inbox.page.items
+    assert entry.message.build is not None
+    assert entry.message.build.title == door.one_line_title
+    assert inbox.unread_count == 1
 
 
 async def test_inbox_batch_conflict_is_atomic_and_arrivals_do_not_block_undo(

@@ -10,7 +10,7 @@ import squid_ui.ext.discord as sd
 from squid.bot.accounts.workspace import AccountWorkspace
 from squid.bot.catalogue.browse import BuildBrowseScreen
 from squid.bot.i18n import to_locale_str
-from squid.bot.notification_text import notification_build_id, notification_details
+from squid.bot.notification_text import notification_details
 from squid.core.actors import ActingContext
 from squid.core.i18n import DEFAULT_LOCALE, localization_for, tr
 from squid.core.notifications import PendingNotificationDelivery
@@ -18,7 +18,7 @@ from squid.core.notifications.domain import NotificationKind
 from squid.core.worker_context import worker_execution
 from squid.runtime import JobHandle
 from squid_i18n import discord_text, md_tr, resolve_text
-from squid_ui.content.text import Text, localization_scope
+from squid_ui.content.text import localization_scope
 
 logger = logging.getLogger(__name__)
 
@@ -75,10 +75,10 @@ class NotificationCog(sd.Cog["squid.bot.app.RedstoneSquid"]):
                 try:
                     with anyio.fail_after(DELIVERY_TIMEOUT_SECONDS):
                         user = self.bot.get_user(delivery.discord_id) or await self.bot.fetch_user(delivery.discord_id)
-                        build_id = notification_build_id(delivery.payload)
+                        build = delivery.message.build
                         content = render_delivery(delivery, self.bot.notification_site_url)
                         nonce = str(delivery.nonce.int & ((1 << 63) - 1))
-                        if build_id is None:
+                        if build is None:
                             await user.send(content, allowed_mentions=discord.AllowedMentions.none(), nonce=nonce)
                         else:
                             view = discord.ui.LayoutView(timeout=None)
@@ -87,7 +87,7 @@ class NotificationCog(sd.Cog["squid.bot.app.RedstoneSquid"]):
                                 discord.ui.ActionRow(
                                     discord.ui.Button(
                                         label=tr(t"notifications-open-build = Open build").resolve(),
-                                        custom_id=BuildBrowseScreen.open_detail.custom_id(build_id=build_id),
+                                        custom_id=BuildBrowseScreen.open_detail.custom_id(build_id=build.id),
                                     )
                                 )
                             )
@@ -113,11 +113,6 @@ class NotificationCog(sd.Cog["squid.bot.app.RedstoneSquid"]):
                     await self.bot.services.notifications.complete_delivery(delivery, context=attempt)
 
 
-def delivery_message(delivery: PendingNotificationDelivery) -> Text:
-    """Build the same contextual message shown in the notification inbox."""
-    return notification_details(delivery.kind, delivery.payload)
-
-
 def render_delivery(
     delivery: PendingNotificationDelivery,
     site_url: str | None,
@@ -129,14 +124,15 @@ def render_delivery(
     Staff-review notifications retain their Discord instructions and do not receive
     a site link, even when `site_url` is configured.
     """
+    message = delivery.message
     rendered = discord_text(
-        resolve_text(delivery_message(delivery), localization_for(locale)), escape=discord.utils.escape_markdown
+        resolve_text(notification_details(message), localization_for(locale)), escape=discord.utils.escape_markdown
     )
-    build_id = notification_build_id(delivery.payload)
-    if build_id is not None:
-        if site_url and delivery.kind is not NotificationKind.STAFF_BUILD_SUBMITTED:
-            rendered += f"\n{site_url.rstrip('/')}/builds/{build_id}"
+    if message.build is not None:
+        if site_url and message.kind is not NotificationKind.STAFF_BUILD_SUBMITTED:
+            rendered += f"\n{site_url.rstrip('/')}{message.href}"
         else:
+            build_id = message.build.id
             with localization_scope(localization_for(locale)):
                 rendered += (
                     "\n"

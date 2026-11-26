@@ -18,13 +18,14 @@ from enum import StrEnum
 from typing import cast, override
 from uuid import UUID
 
-from pydantic import JsonValue
+from pydantic import BaseModel, ConfigDict, Field, JsonValue, PositiveInt
+from pydantic import ValidationError as SchemaValidationError
 from whenever import Instant
 
 from squid.core.errors import DataIntegrityError, ValidationError
 from squid.core.i18n import tr
 from squid.core.validation import BelowMinimum, BelowMinimumParams, FieldErrorCode, SimpleIssue
-from squid_i18n import md_tr
+from squid_i18n import Text, md_tr
 
 _BUILD_KINDS = frozenset({"door", "entrance", "extender", "utility"})
 _RECORD_CRITERIA = frozenset({"first", "fastest", "smallest", "fastest_smallest", "smallest_fastest"})
@@ -101,6 +102,82 @@ class NotificationSource:
             msg = "A notification source key does not match its kind, event, payload, and recipient."
             raise DataIntegrityError(msg, context={"source_key": source_key})
         return source
+
+
+@dataclass(frozen=True, slots=True)
+class NotifiedBuild:
+    """A build a notification is about. The title is None when it was not looked up or no longer exists."""
+
+    id: int
+    title: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class NotifiedRecord:
+    """A record named by a notification, with its title when the notification was created."""
+
+    id: UUID
+    title: str
+
+
+class _StoredRecord(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    title_id: UUID
+    title: str
+
+
+class _StoredPayload(BaseModel):
+    model_config = ConfigDict(extra="ignore", strict=False)
+    build_id: PositiveInt | None = Field(default=None, strict=True)
+    records: list[_StoredRecord] = Field(default_factory=list)
+    creator_ids: list[UUID] = Field(default_factory=list)
+
+
+@dataclass(frozen=True, slots=True)
+class NotificationMessage:
+    """What one stored notification says, parsed from its persisted payload.
+
+    Every kind except `RECORD_RETIRED` names a build. Record kinds list at least one
+    record. `creator_ids` lists the followed creators of a `CREATOR_BUILD_CONFIRMED` build.
+    """
+
+    kind: NotificationKind
+    build: NotifiedBuild | None = None
+    records: tuple[NotifiedRecord, ...] = ()
+    creator_ids: tuple[UUID, ...] = ()
+
+    @classmethod
+    def from_payload(
+        cls, kind: NotificationKind, payload: Mapping[str, object], build_titles: Mapping[int, str] | None = None
+    ) -> NotificationMessage:
+        """Parse a stored payload, raising DataIntegrityError when it lacks what its kind requires."""
+        try:
+            stored = _StoredPayload.model_validate(payload)
+        except SchemaValidationError as error:
+            msg = "A stored notification payload is malformed."
+            raise DataIntegrityError(msg, context={"kind": kind.value}) from error
+        names_build = kind is not NotificationKind.RECORD_RETIRED
+        lists_records = kind in {NotificationKind.RECORD_GAINED, NotificationKind.RECORD_RETIRED}
+        if names_build != (stored.build_id is not None) or lists_records != bool(stored.records):
+            msg = "A stored notification payload does not match its kind."
+            raise DataIntegrityError(msg, context={"kind": kind.value})
+        return cls(
+            kind,
+            build=None
+            if stored.build_id is None
+            else NotifiedBuild(stored.build_id, (build_titles or {}).get(stored.build_id)),
+            records=tuple(NotifiedRecord(record.title_id, record.title) for record in stored.records),
+            creator_ids=tuple(stored.creator_ids),
+        )
+
+    @property
+    def href(self) -> str | None:
+        """The site path this message leads to: its build, or its only record."""
+        if self.build is not None:
+            return f"/builds/{self.build.id}"
+        if len(self.records) == 1:
+            return f"/records/{self.records[0].id}"
+        return None
 
 
 @dataclass(frozen=True, slots=True)
@@ -188,6 +265,14 @@ class TagPredicate:
             and self.value == other.value
         )
 
+    def summary(self, tag_name: str | None) -> Text:
+        """Describe the predicate, naming the tag by ID when its name is unknown."""
+        tag_id, value = self.tag_id, self.value
+        name = tag_name or tr(t"notifications-filter-unknown-tag = Tag #{tag_id!s}")
+        if self.operator == "present":
+            return tr(t"notifications-filter-tagged = Tagged {name}")
+        return tr(t"notifications-filter-tag-value = {name}: {value!s}")
+
     def as_dict(self) -> dict[str, JsonValue]:
         """Return the tag ID, operator, and optional value for persistence."""
         result: dict[str, JsonValue] = {"tag_id": self.tag_id, "operator": self.operator}
@@ -225,6 +310,20 @@ class RecordSubscriptionFilter:
                 )
             )
         object.__setattr__(self, "tags", tuple(sorted(self.tags, key=lambda tag: tag.tag_id)))
+
+    def summary(self, tag_names: Mapping[int, str]) -> Text:
+        """Describe the filter for readers, such as "Doors, Extenders · Fastest · Tagged Slim"."""
+        groups = [
+            Text.join(", ", [label(value) for value in sorted(values)])
+            for values, label in (
+                (self.build_kinds, _build_kind_label),
+                (self.criteria, _criterion_label),
+                (self.version_scopes, _version_scope_label),
+            )
+            if values
+        ]
+        groups.extend(predicate.summary(tag_names.get(predicate.tag_id)) for predicate in self.tags)
+        return Text.join(" · ", groups)
 
     def as_dict(self) -> dict[str, JsonValue]:
         """Serialize the filter into a stable JSON shape."""
@@ -327,6 +426,42 @@ class PendingNotificationDelivery:
     attempts: int
     kind: NotificationKind
     payload: dict[str, object]
+
+    @property
+    def message(self) -> NotificationMessage:
+        return NotificationMessage.from_payload(self.kind, self.payload)
+
+
+def _build_kind_label(kind: str) -> Text:
+    return tr(t"""
+        notifications-filter-build-kind = {{ {kind} ->
+            [door] Doors
+            [entrance] Entrances
+            [extender] Extenders
+           *[utility] Utilities
+        }}
+    """)
+
+
+def _criterion_label(criterion: str) -> Text:
+    return tr(t"""
+        notifications-filter-criterion = {{ {criterion} ->
+            [first] First
+            [fastest] Fastest
+            [smallest] Smallest
+            [fastest_smallest] Fastest smallest
+           *[smallest_fastest] Smallest fastest
+        }}
+    """)
+
+
+def _version_scope_label(scope: str) -> Text:
+    return tr(t"""
+        notifications-filter-version-scope = {{ {scope} ->
+            [all_time] All time
+           *[up_to_date] Up to date
+        }}
+    """)
 
 
 def _string_set(value: object, name: str) -> frozenset[str]:
