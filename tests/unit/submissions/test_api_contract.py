@@ -463,7 +463,6 @@ async def test_submission_routes_map_forms_and_owned_draft_operations() -> None:
         "drafts": [
             {
                 "id": draft_id,
-                "owner_account_id": ACCOUNT_ID,
                 "inferred": False,
                 "schema_id": "build_submission.v1",
                 "schema_revision": 2,
