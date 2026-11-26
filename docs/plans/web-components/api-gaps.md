@@ -32,21 +32,18 @@ Items 1–4 are implemented in the API.
 
 ## Records
 
-11. **Filters on `GET /v1/records`:** `build_kind`, `criterion`, `version_scope`, `status`, `tag`, `q`. Sorts `recently_changed`, `title` and `criterion` beside today's `id`. Needed by P7.
-12. **New fields on `PublishedRecordResult`:**
-    - `holders: [{build_id, title, creators: [{name, creator_id}], preview}]`, summaries rather than bare ids.
-    - `metrics: {name: {value, unit, display}}`, the same shape as search.
-    - `category_key` (base key), `holder_since: datetime`.
-    - Needed by P7 table rows, P1 and RecordCard without N+1 requests.
-13. **`GET /v1/records/{id}/history`** pages holder periods newest first, each `{holders: [build summary], from: datetime, to: datetime | null, metrics}`. `records/application/history.py` already reconstructs this. Needed by P8 Timeline and chart 2.
-14. **`PublicRecordDetail.siblings`:** `[{record_id, criterion, version_scope, status}]` for the same category. Needed by the P8 switcher.
+Items 12, 13, 15 and 17 share one **record holder summary**: `{build_id, title, creators: [{name, creator_id | null}], preview}`. It extends search's `RecordSearchHolder` rather than adding another holder type. **Metrics** everywhere use `{name: {value, unit, display}}`; search's flat `metrics` map changes to match, so the server owns units and formatting.
+
+11. **P7 is a search records query.** The records scope of `/v1/search` already filters by tag, criterion and version and returns holders and metrics. Missing filters or sorts go under Search, as item 9 decided for builds. `GET /v1/records` stays a plain list, with at most `build_kind` and `status` filters.
+12. **Holders on record lists.** The `/v1/records` list response gains `holders` (holder summaries), `metrics`, `category_key` and `holder_since`. Add them to the list's response type, not to the core `PublishedRecordResult`. `holder_since` is the `held_from` of the open history period, not `computed_at`, which changes on every recompute. Needed by P1 and RecordCard without N+1 requests.
+13. **Richer detail history.** `PublicRecordDetail.history` already returns stored periods with `build_ids`. Each entry gains holder summaries, because former holders are not always among the detail's builds, and `metrics`. Metrics are the holders' current values, so past measurements are not recoverable and chart 2 must not imply they are. History is short enough not to need paging. Needed by P8 Timeline and chart 2.
+14. **`PublicRecordDetail.siblings`:** `[{record_id, title, subtitle, criterion, version_scope, status}]` for the same category. Needed by the P8 switcher.
 15. **Range discovery and labels:**
     - `GET /v1/records/ranges/door?orientation&height&depth` lists registered range queries with labels.
-    - `DoorRangeQuery` responses gain `labels: {types: [{id, name, slug}], restrictions: [...], version: string | null}`.
-    - Without this, P9 has to look tags up by id.
-    - Range publication results gain `segments` ready for the chart: `[{from, to, period, residue, value, holder_builds: [summary]}]`.
-16. **`GET /v1/records/door/options`** returns `{orientations, types: [tag], restrictions: [tag], versions}` for P9 and P10, or document that the form option sources serve this.
-17. **`records_lookup_door` should return holder build summaries and a `comparison` block** (`beats_current: bool`, `delta` per metric). P10's result needs it.
+    - `RangePublication` and `DoorRangeResult` gain `labels: {types: [{id, name, slug}], restrictions: [...], version: string | null}`. `DoorRangeQuery` is also a request body, so it stays unchanged. Without labels, P9 looks tags up by id.
+    - Awarded regions gain holder summaries. The chart turns periodic regions into segments itself; if expansion is non-trivial, core provides it, not the API layer.
+16. **Door options come from the form option sources.** `GET /v1/submissions/form/options/{source}` is anonymous: `approved_patterns` for types, `approved_restrictions` and `approved_source_versions`; orientations come from the form manifest. P9 and P10 use these, so no new endpoint is needed.
+17. **`records_lookup_door` returns holder summaries and a nullable `comparison`** (`beats_current: bool`, `delta` per metric) against the published record for the same category. `comparison` is null when no record is published for that category. P10's result needs it.
 
 ## Search
 
