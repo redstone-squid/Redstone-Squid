@@ -27,12 +27,12 @@ Items 1–4 are implemented in the API.
 6. **Build detail (implemented).** P5 receives current and former records, a typed gallery, public schematic count and primary download, submission and approval metadata, and the public history count. Missing historical approval dates are null. An unpublished primary schematic contributes neither metadata nor a download link.
 7. **Public history (implemented).** `GET /v1/builds/{id}/history` pages published revisions newest first. Changes cover public dimensions, names, description, version specification, timings, orientation, and creator names. The first published revision has no public predecessor.
 8. **Owner and staff access to unpublished detail (deferred).** P5, A5, and M2 need a visibility decision in the service layer. The detail route still serves approved builds.
-9. **Catalogue filters and sorts (implemented).** `GET /v1/builds` accepts category, version ID, repeated tag IDs or slugs (all must match), creator ID, and `submitted_by=me`. Search accepts the same filters and moderation status. Sorts are `newest`, `oldest`, `updated`, `fastest_open`, `smallest_volume`, and `title`, and every sort accepts ID anchors (item 55).
+9. **Catalogue filters and sorts (implemented).** `GET /v1/builds` takes `category`, `version_id`, repeated `tag` IDs or slugs, `creator_id`, `status` and `submitted_by=me`, which lists the caller's builds in every status unless `status` narrows it. Sorts are `id`, `newest`, `oldest`, `updated`, `fastest_open`, `smallest_volume` and `title`. Text search is `/v1/search`, where the same filters are query clauses (`tag:`, `creator:`, `version:`).
 10. **Edit through drafts (implemented).** A web draft with `source_build_id` starts with the approved build's public editable answers and pins its build revision. Finalization applies authorized changes or returns a review vote ID. A stale revision returns 412 with field differences and preserves the draft. Moderators can read the full edit form at `GET /v1/builds/{id}/form`.
 
 ## Records
 
-11. **Filters on `GET /v1/records`:** `build_kind`, `criterion`, `version_scope`, `status`, `tag`, `q`. `sort` as an enum `recently_changed | title | criterion`, replacing the raw `-result_id` order, with ID anchors on every sort. Needed by P7.
+11. **Filters on `GET /v1/records`:** `build_kind`, `criterion`, `version_scope`, `status`, `tag`, `q`. Sorts `recently_changed`, `title` and `criterion` beside today's `id`. Needed by P7.
 12. **New fields on `PublishedRecordResult`:**
     - `holders: [{build_id, title, creators: [{name, creator_id}], preview}]`, summaries rather than bare ids.
     - `metrics: {name: {value, unit, display}}`, the same shape as search.
@@ -57,7 +57,7 @@ Items 1–4 are implemented in the API.
     - `metric_columns: string[]` listing the metrics present on this page (P2 records table).
     - `sort_options: [{value, label}]` per scope.
     - Phase 2: `distributions` (`?distributions=width,opening_time,category`) returning `{field: {buckets: [{value, count}] | histogram: [{from, to, count}]}}`, for chart 6 and filter counts.
-20. **Typed sort.** Document `sort` per scope (field name, `-` prefix for descending) and validate it, returning a ProblemDetail code the UI can map.
+20. **Search sort (implemented).** `sort` is a sortable field of the scope, `-` prefixed for descending (item 58). Item 19's `sort_options` lets the UI offer them by name.
 
 ## Tags
 
@@ -140,8 +140,15 @@ Items 1–4 are implemented in the API.
     - **Numbered pages** use `offset` up to 10,000. The website turns `?page=N` into `offset=(N-1)*page_size`. A row inserted or deleted mid-browse can repeat or skip one item, which is acceptable for browsing.
     - **Anchored pages** use `after_id` or `before_id` with any sort that has a fixed order. The server seeks on the anchor's `(sort value, id)`. With a sort other than `id`, an anchor that is missing or outside the filtered list returns 400 `PAGE_ANCHOR_NOT_FOUND`, and the client starts again from the first page. Ranked search has no seekable order and stays offset-only.
     - **Complete traversal** uses `sort=id` with `after_id`. IDs never change and the anchor needs no lookup, so each surviving item is seen once even if the anchor was deleted. This is the transparent cursor.
-    - Lists take `page_size` (1–50) and named sorts (`newest`, `fastest_open`). Items in this document name only their filters and sorts; paging is always this system.
+    - Lists take `page_size` (1–50). Items in this document name only their filters and sorts (item 58); paging is always this system.
     - Numbered pages are enough for browsing. Queues, inboxes and logs, where rows arrive or leave while someone works through them, also need anchors so a reader keeps their place: the review queue, tag proposals, alias claims, correction proposals, the notification inbox, diagnostics and the permission audit log. Completions are not lists: `suggest` keeps `limit`, and its `cursor` is the caret position.
-    - Anchors carry the list's own ID type: integers, or UUIDs for the correction inbox and diagnostics. `records` still takes the raw `-result_id` sort until item 11.
+    - Anchors carry the list's own ID type: integers, or UUIDs for the correction inbox and diagnostics. On `records` the anchor is the result ID.
     - **Planned: `changed_since=<sequence>`** for sync clients. Each resource kind keeps a change sequence; a client lists everything once, then asks for rows changed after the sequence it last saw, tombstones included. Keyset paging on a sort value that can change can still miss a row that moves across the page boundary, and only this feed guarantees that nothing is lost.
     - ETags on lists serve `If-None-Match` caching only. Detecting a changed collection between pages is `changed_since`'s job.
+58. **Filters and sorts (builds, records and search implemented).** Every list follows these rules; items above name only their own filters and sorts.
+    - **Sorts are named** (`newest`, `fastest_open`), declared as a `StrEnum` in core beside the list's query, and each maps to one `KeysetOrder`, so every sort takes ID anchors. `id` is on every list: newest IDs first, the order for complete traversal. Direction is part of the name; offer `largest_volume` rather than a `-` prefix.
+    - **Search alone sorts by field**, because its sortable fields come from the field catalogue: `field` or `-field`.
+    - **Filters** are one frozen `XListFilters` dataclass per list in core, as `BuildListFilters` is. Parameters use the field name for enums and `<thing>_id` for IDs. Repeating a parameter means all must match; OR, when needed, gets its own parameter. `me` is the only sentinel.
+    - **`q` means text search** and belongs to `/v1/search`, where filters are query clauses. Repository lists have no `q` until one needs prefix matching for a picker.
+    - **Errors.** An unknown value carries a field issue on `/query/<param>`. Enum parameters fail in request decoding with 422; search checks its sort against the catalogue and answers 400 `INVALID_QUERY` with the `allowed` sorts.
+    - A personalized list, such as `submitted_by=me` or an unpublished status, answers `Cache-Control: no-store`.
