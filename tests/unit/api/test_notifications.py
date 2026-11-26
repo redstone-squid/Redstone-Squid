@@ -284,6 +284,6 @@ async def test_subscriptions_filter_by_subject_and_name_their_subjects() -> None
     assert (item.id, item.subject_label, item.subject_href, item.filter_summary) == (
         1,
         "Some Builder",
-        "/creators/Some%20Builder",
+        f"/accounts/{creator}",
         None,
     )

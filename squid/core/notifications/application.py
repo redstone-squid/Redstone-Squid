@@ -3,7 +3,6 @@
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Protocol
-from urllib.parse import quote
 from uuid import UUID
 
 from whenever import Instant
@@ -49,7 +48,7 @@ class FollowedSubject:
         """The site path of the followed creator or record."""
         match self.subscription.kind:
             case SubscriptionKind.CREATOR if self.label is not None:
-                return f"/creators/{quote(self.label, safe='')}"
+                return f"/accounts/{self.subscription.subject_id}"
             case SubscriptionKind.RECORD:
                 return f"/records/{self.subscription.subject_id}"
             case _:

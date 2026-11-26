@@ -4,6 +4,7 @@ import { expect, test } from "@tests/support/test";
 const routes = [
   "/",
   "/about",
+  "/accounts/00000000-0000-4000-8000-000000000007",
   "/admin/settings",
   "/builds",
   "/builds/1",
