@@ -102,6 +102,11 @@ lives in that folder's `styles.ts`, which only `src/ui` imports. Scoped `<style>
 selector-heavy styles inside `src/ui`; features and layouts stay utility-only. See
 `src/ui/README.md`.
 
+Pages cross-fade on navigation (`@view-transition` in `app.css`), and the header holds still
+through its `view-transition-name`. When a card links to a page that shows the same element
+large, such as a build's image, give both the same name so it morphs into place. A name must
+be unique on the page, so a listing names each card after its item.
+
 ## Content security policy
 
 `security.csp` in `astro.config.ts` allows only the scripts and `<style>` elements Astro

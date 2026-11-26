@@ -127,6 +127,19 @@
   @view-transition {
     navigation: auto;
   }
+
+  /*
+   * The header is not sticky, so after scrolling it would slide in from above the viewport.
+   * Pinning its group to the new position keeps it still and only cross-fades what changed.
+   */
+  ::view-transition-group(site-header) {
+    animation: none;
+  }
+}
+
+/* Names the element that persists across pages, so it is not faded with the rest. */
+@utility view-transition-header {
+  view-transition-name: site-header;
 }
 
 /* A field with the readonly attribute. `:read-only` also matches every select, which has none. */
