@@ -5,7 +5,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:433"
+      "squid/bot/access_view.py:434"
     ]
   },
   "access-apply-role": {
@@ -14,7 +14,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:229"
+      "squid/bot/access_view.py:230"
     ]
   },
   "access-audit-empty": {
@@ -23,7 +23,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1149"
+      "squid/bot/access_view.py:1151"
     ]
   },
   "access-bulk-assign": {
@@ -32,7 +32,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:681"
+      "squid/bot/access_view.py:683"
     ]
   },
   "access-cancel": {
@@ -41,7 +41,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1009"
+      "squid/bot/access_view.py:1011"
     ]
   },
   "access-change-forbidden": {
@@ -59,7 +59,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:425"
+      "squid/bot/access_view.py:426"
     ]
   },
   "access-choose-permission": {
@@ -68,7 +68,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:636"
+      "squid/bot/access_view.py:638"
     ]
   },
   "access-choose-role": {
@@ -77,8 +77,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:642",
-      "squid/bot/access_view.py:734"
+      "squid/bot/access_view.py:644",
+      "squid/bot/access_view.py:736"
     ]
   },
   "access-custom-pattern": {
@@ -87,9 +87,9 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1435",
-      "squid/bot/access_view.py:646",
-      "squid/bot/access_view.py:832"
+      "squid/bot/access_view.py:1437",
+      "squid/bot/access_view.py:648",
+      "squid/bot/access_view.py:834"
     ]
   },
   "access-custom-pattern-help": {
@@ -98,7 +98,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1439"
+      "squid/bot/access_view.py:1441"
     ]
   },
   "access-effective-source": {
@@ -118,7 +118,7 @@
       }
     ],
     "locations": [
-      "squid/bot/access_view.py:406"
+      "squid/bot/access_view.py:407"
     ]
   },
   "access-find": {
@@ -128,8 +128,8 @@
     "arguments": [],
     "locations": [
       "squid/bot/access_view.py:205",
-      "squid/bot/access_view.py:273",
-      "squid/bot/access_view.py:710"
+      "squid/bot/access_view.py:274",
+      "squid/bot/access_view.py:712"
     ]
   },
   "access-history": {
@@ -156,7 +156,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1048"
+      "squid/bot/access_view.py:1050"
     ]
   },
   "access-permission-list": {
@@ -180,7 +180,7 @@
       }
     ],
     "locations": [
-      "squid/bot/access_view.py:1020"
+      "squid/bot/access_view.py:1022"
     ]
   },
   "access-recipients": {
@@ -189,7 +189,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:220"
+      "squid/bot/access_view.py:221"
     ]
   },
   "access-role-delete-warning": {
@@ -198,7 +198,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1006"
+      "squid/bot/access_view.py:1008"
     ]
   },
   "access-role-list-empty": {
@@ -207,7 +207,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:753"
+      "squid/bot/access_view.py:755"
     ]
   },
   "access-role-unavailable": {
@@ -216,9 +216,9 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:451",
-      "squid/bot/access_view.py:727",
-      "squid/bot/access_view.py:972"
+      "squid/bot/access_view.py:453",
+      "squid/bot/access_view.py:729",
+      "squid/bot/access_view.py:974"
     ]
   },
   "access-subject": {
@@ -247,7 +247,7 @@
       }
     ],
     "locations": [
-      "squid/bot/access_view.py:417"
+      "squid/bot/access_view.py:418"
     ]
   },
   "access-target-picker": {
@@ -256,7 +256,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:427"
+      "squid/bot/access_view.py:428"
     ]
   },
   "access-ui-action-or-bot-role": {
@@ -265,7 +265,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:508"
+      "squid/bot/access_view.py:510"
     ]
   },
   "access-ui-allow-action": {
@@ -274,7 +274,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:494"
+      "squid/bot/access_view.py:496"
     ]
   },
   "access-ui-always-deny-action": {
@@ -283,7 +283,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:496"
+      "squid/bot/access_view.py:498"
     ]
   },
   "access-ui-assign-or-remove-this-role": {
@@ -292,7 +292,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:785"
+      "squid/bot/access_view.py:787"
     ]
   },
   "access-ui-assign-role": {
@@ -301,7 +301,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:498"
+      "squid/bot/access_view.py:500"
     ]
   },
   "access-ui-back": {
@@ -310,8 +310,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:293",
-      "squid/bot/access_view.py:534"
+      "squid/bot/access_view.py:294",
+      "squid/bot/access_view.py:536"
     ]
   },
   "access-ui-back-to-bot-roles": {
@@ -320,7 +320,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:265"
+      "squid/bot/access_view.py:266"
     ]
   },
   "access-ui-bot-wide-rules-can-have-different-outcomes-in-each-server": {
@@ -329,7 +329,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:524"
+      "squid/bot/access_view.py:526"
     ]
   },
   "access-ui-change": {
@@ -338,7 +338,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:505"
+      "squid/bot/access_view.py:507"
     ]
   },
   "access-ui-deny-action": {
@@ -347,7 +347,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:495"
+      "squid/bot/access_view.py:497"
     ]
   },
   "access-ui-edit-role-settings": {
@@ -356,7 +356,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:790"
+      "squid/bot/access_view.py:792"
     ]
   },
   "access-ui-for": {
@@ -365,7 +365,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:506"
+      "squid/bot/access_view.py:508"
     ]
   },
   "access-ui-none-given": {
@@ -374,7 +374,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:516"
+      "squid/bot/access_view.py:518"
     ]
   },
   "access-ui-reason": {
@@ -383,7 +383,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:515"
+      "squid/bot/access_view.py:517"
     ]
   },
   "access-ui-remove-role": {
@@ -392,7 +392,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:499"
+      "squid/bot/access_view.py:501"
     ]
   },
   "access-ui-remove-rule": {
@@ -401,7 +401,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:497"
+      "squid/bot/access_view.py:499"
     ]
   },
   "access-ui-removing-a-rule-leaves-any-access-from-other-rules-in-place": {
@@ -410,7 +410,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:520"
+      "squid/bot/access_view.py:522"
     ]
   },
   "access-ui-review-access-change": {
@@ -419,7 +419,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:503"
+      "squid/bot/access_view.py:505"
     ]
   },
   "access-ui-select-the-member-or-discord-role-whose-access-you-want-to-manage": {
@@ -437,7 +437,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:331"
+      "squid/bot/access_view.py:332"
     ]
   },
   "access-ui-the-server-or-discord-role-is-no-longer-available": {
@@ -446,7 +446,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:573"
+      "squid/bot/access_view.py:575"
     ]
   },
   "access-ui-this-change-applies-in-the-selected-server": {
@@ -455,7 +455,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:528"
+      "squid/bot/access_view.py:530"
     ]
   },
   "access-ui-this-member-has-left-the-server": {
@@ -464,8 +464,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:339",
-      "squid/bot/access_view.py:584"
+      "squid/bot/access_view.py:340",
+      "squid/bot/access_view.py:586"
     ]
   },
   "access-ui-this-role-has-been-deleted": {
@@ -474,7 +474,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:255"
+      "squid/bot/access_view.py:256"
     ]
   },
   "access-ui-this-server-is-unavailable": {
@@ -483,7 +483,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:327"
+      "squid/bot/access_view.py:328"
     ]
   },
   "access-ui-view-granted-actions": {
@@ -492,7 +492,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:780"
+      "squid/bot/access_view.py:782"
     ]
   },
   "access-ui-where": {
@@ -501,7 +501,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:513"
+      "squid/bot/access_view.py:515"
     ]
   },
   "access-view-allow": {
@@ -510,7 +510,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1386"
+      "squid/bot/access_view.py:1388"
     ]
   },
   "access-view-assign": {
@@ -519,7 +519,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1404"
+      "squid/bot/access_view.py:1406"
     ]
   },
   "access-view-change-direct-permission-rule": {
@@ -528,7 +528,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1381"
+      "squid/bot/access_view.py:1383"
     ]
   },
   "access-view-change-direct-rule": {
@@ -537,7 +537,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:663"
+      "squid/bot/access_view.py:665"
     ]
   },
   "access-view-change-internal-role-assignment": {
@@ -546,7 +546,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1399"
+      "squid/bot/access_view.py:1401"
     ]
   },
   "access-view-change-role-assignment": {
@@ -555,7 +555,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:688"
+      "squid/bot/access_view.py:690"
     ]
   },
   "access-view-composed-roles": {
@@ -564,7 +564,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1363"
+      "squid/bot/access_view.py:1365"
     ]
   },
   "access-view-create-internal-role": {
@@ -573,8 +573,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1413",
-      "squid/bot/access_view.py:760"
+      "squid/bot/access_view.py:1415",
+      "squid/bot/access_view.py:762"
     ]
   },
   "access-view-created-internal-role": {
@@ -589,7 +589,7 @@
       }
     ],
     "locations": [
-      "squid/bot/access_view.py:1241"
+      "squid/bot/access_view.py:1243"
     ]
   },
   "access-view-default": {
@@ -598,7 +598,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1043"
+      "squid/bot/access_view.py:1045"
     ]
   },
   "access-view-delete-and-its-assignments": {
@@ -613,7 +613,7 @@
       }
     ],
     "locations": [
-      "squid/bot/access_view.py:544"
+      "squid/bot/access_view.py:546"
     ]
   },
   "access-view-delete-internal-role": {
@@ -622,7 +622,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:542"
+      "squid/bot/access_view.py:544"
     ]
   },
   "access-view-delete-role": {
@@ -631,9 +631,9 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1008",
-      "squid/bot/access_view.py:1376",
-      "squid/bot/access_view.py:824"
+      "squid/bot/access_view.py:1010",
+      "squid/bot/access_view.py:1378",
+      "squid/bot/access_view.py:826"
     ]
   },
   "access-view-deleted-internal-role": {
@@ -648,7 +648,7 @@
       }
     ],
     "locations": [
-      "squid/bot/access_view.py:1267"
+      "squid/bot/access_view.py:1269"
     ]
   },
   "access-view-deny": {
@@ -657,7 +657,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1387"
+      "squid/bot/access_view.py:1389"
     ]
   },
   "access-view-description": {
@@ -666,7 +666,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1044"
+      "squid/bot/access_view.py:1046"
     ]
   },
   "access-view-display-name": {
@@ -675,7 +675,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1421"
+      "squid/bot/access_view.py:1423"
     ]
   },
   "access-view-effect": {
@@ -684,7 +684,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1333"
+      "squid/bot/access_view.py:1335"
     ]
   },
   "access-view-everywhere": {
@@ -693,7 +693,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1312"
+      "squid/bot/access_view.py:1314"
     ]
   },
   "access-view-exclude-pattern": {
@@ -702,7 +702,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1371"
+      "squid/bot/access_view.py:1373"
     ]
   },
   "access-view-excludes": {
@@ -711,7 +711,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1361"
+      "squid/bot/access_view.py:1363"
     ]
   },
   "access-view-forbid": {
@@ -720,7 +720,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1389"
+      "squid/bot/access_view.py:1391"
     ]
   },
   "access-view-include-pattern": {
@@ -729,7 +729,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1370"
+      "squid/bot/access_view.py:1372"
     ]
   },
   "access-view-include-role": {
@@ -738,7 +738,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1373"
+      "squid/bot/access_view.py:1375"
     ]
   },
   "access-view-includes": {
@@ -747,7 +747,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1360"
+      "squid/bot/access_view.py:1362"
     ]
   },
   "access-view-internal-role": {
@@ -756,7 +756,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1342"
+      "squid/bot/access_view.py:1344"
     ]
   },
   "access-view-internal-role-slug": {
@@ -765,7 +765,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1408"
+      "squid/bot/access_view.py:1410"
     ]
   },
   "access-view-internal-role-updated": {
@@ -774,9 +774,9 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:937",
-      "squid/bot/access_view.py:946",
-      "squid/bot/access_view.py:959"
+      "squid/bot/access_view.py:939",
+      "squid/bot/access_view.py:948",
+      "squid/bot/access_view.py:961"
     ]
   },
   "access-view-internal-roles": {
@@ -786,7 +786,7 @@
     "arguments": [],
     "locations": [
       "squid/bot/access_view.py:165",
-      "squid/bot/access_view.py:752"
+      "squid/bot/access_view.py:754"
     ]
   },
   "access-view-management-rank": {
@@ -795,8 +795,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1423",
-      "squid/bot/access_view.py:807"
+      "squid/bot/access_view.py:1425",
+      "squid/bot/access_view.py:809"
     ]
   },
   "access-view-operation": {
@@ -805,9 +805,9 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1384",
-      "squid/bot/access_view.py:1402",
-      "squid/bot/access_view.py:1445"
+      "squid/bot/access_view.py:1386",
+      "squid/bot/access_view.py:1404",
+      "squid/bot/access_view.py:1447"
     ]
   },
   "access-view-pattern": {
@@ -816,7 +816,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1334"
+      "squid/bot/access_view.py:1336"
     ]
   },
   "access-view-permission-audit": {
@@ -825,7 +825,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1148"
+      "squid/bot/access_view.py:1150"
     ]
   },
   "access-view-permission-pattern": {
@@ -834,8 +834,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1394",
-      "squid/bot/access_view.py:1438"
+      "squid/bot/access_view.py:1396",
+      "squid/bot/access_view.py:1440"
     ]
   },
   "access-view-rank-help": {
@@ -844,7 +844,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1424"
+      "squid/bot/access_view.py:1426"
     ]
   },
   "access-view-reason": {
@@ -853,9 +853,9 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1339",
-      "squid/bot/access_view.py:1395",
-      "squid/bot/access_view.py:1409"
+      "squid/bot/access_view.py:1341",
+      "squid/bot/access_view.py:1397",
+      "squid/bot/access_view.py:1411"
     ]
   },
   "access-view-remove-included-role": {
@@ -864,7 +864,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1374"
+      "squid/bot/access_view.py:1376"
     ]
   },
   "access-view-remove-pattern": {
@@ -873,7 +873,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1372"
+      "squid/bot/access_view.py:1374"
     ]
   },
   "access-view-revoke": {
@@ -882,7 +882,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1391"
+      "squid/bot/access_view.py:1393"
     ]
   },
   "access-view-rules-and-assignments": {
@@ -891,7 +891,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:616"
+      "squid/bot/access_view.py:618"
     ]
   },
   "access-view-scope": {
@@ -900,10 +900,10 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1042",
-      "squid/bot/access_view.py:1308",
-      "squid/bot/access_view.py:1336",
-      "squid/bot/access_view.py:1344"
+      "squid/bot/access_view.py:1044",
+      "squid/bot/access_view.py:1310",
+      "squid/bot/access_view.py:1338",
+      "squid/bot/access_view.py:1346"
     ]
   },
   "access-view-set-rank": {
@@ -912,8 +912,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1375",
-      "squid/bot/access_view.py:801"
+      "squid/bot/access_view.py:1377",
+      "squid/bot/access_view.py:803"
     ]
   },
   "access-view-slug-help": {
@@ -922,7 +922,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1417"
+      "squid/bot/access_view.py:1419"
     ]
   },
   "access-view-slug-override": {
@@ -931,7 +931,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1416"
+      "squid/bot/access_view.py:1418"
     ]
   },
   "access-view-this-server": {
@@ -940,8 +940,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1311",
-      "squid/bot/access_view.py:432"
+      "squid/bot/access_view.py:1313",
+      "squid/bot/access_view.py:433"
     ]
   },
   "access-view-unassign": {
@@ -950,7 +950,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:1405"
+      "squid/bot/access_view.py:1407"
     ]
   },
   "access-who": {
@@ -959,7 +959,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/access_view.py:419"
+      "squid/bot/access_view.py:420"
     ]
   },
   "account-claim-awaiting-review": {
@@ -1081,7 +1081,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:377"
+      "squid/bot/accounts/overview.py:378"
     ]
   },
   "account-hidden-page-credit-note": {
@@ -1090,7 +1090,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:386"
+      "squid/bot/accounts/overview.py:387"
     ]
   },
   "account-history-profile": {
@@ -1099,8 +1099,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:273",
-      "squid/bot/accounts/overview.py:285"
+      "squid/bot/accounts/overview.py:274",
+      "squid/bot/accounts/overview.py:286"
     ]
   },
   "account-history-profile-draft": {
@@ -1118,7 +1118,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:257"
+      "squid/bot/accounts/overview.py:258"
     ]
   },
   "account-history-visibility": {
@@ -1127,7 +1127,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:237"
+      "squid/bot/accounts/overview.py:238"
     ]
   },
   "account-identity-unlinked": {
@@ -1142,7 +1142,7 @@
       }
     ],
     "locations": [
-      "squid/bot/accounts/overview.py:263"
+      "squid/bot/accounts/overview.py:264"
     ]
   },
   "account-link-heading": {
@@ -1175,7 +1175,7 @@
       }
     ],
     "locations": [
-      "squid/bot/accounts/overview.py:372"
+      "squid/bot/accounts/overview.py:373"
     ]
   },
   "account-merge-code-warning": {
@@ -1357,7 +1357,7 @@
       }
     ],
     "locations": [
-      "squid/bot/accounts/overview.py:347"
+      "squid/bot/accounts/overview.py:348"
     ]
   },
   "account-view-bio": {
@@ -1384,7 +1384,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:188"
+      "squid/bot/accounts/overview.py:187"
     ]
   },
   "account-view-creator-profile": {
@@ -1402,7 +1402,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:346"
+      "squid/bot/accounts/overview.py:347"
     ]
   },
   "account-view-display-name": {
@@ -1420,7 +1420,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:182"
+      "squid/bot/accounts/overview.py:181"
     ]
   },
   "account-view-edit-profile": {
@@ -1447,7 +1447,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:354"
+      "squid/bot/accounts/overview.py:355"
     ]
   },
   "account-view-hidden-2": {
@@ -1465,7 +1465,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:207"
+      "squid/bot/accounts/overview.py:208"
     ]
   },
   "account-view-https-url": {
@@ -1492,7 +1492,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:333"
+      "squid/bot/accounts/overview.py:334"
     ]
   },
   "account-view-links": {
@@ -1526,7 +1526,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:334"
+      "squid/bot/accounts/overview.py:335"
     ]
   },
   "account-view-profile": {
@@ -1580,7 +1580,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:370"
+      "squid/bot/accounts/overview.py:371"
     ]
   },
   "account-view-save-profile": {
@@ -1625,7 +1625,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:206"
+      "squid/bot/accounts/overview.py:207"
     ]
   },
   "account-view-shown-publicly": {
@@ -1634,7 +1634,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:352"
+      "squid/bot/accounts/overview.py:353"
     ]
   },
   "account-view-unknown": {
@@ -1643,7 +1643,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:362"
+      "squid/bot/accounts/overview.py:363"
     ]
   },
   "account-view-unlink": {
@@ -1652,7 +1652,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/overview.py:211"
+      "squid/bot/accounts/overview.py:212"
     ]
   },
   "account-view-value": {
@@ -1672,7 +1672,7 @@
       }
     ],
     "locations": [
-      "squid/bot/accounts/overview.py:381"
+      "squid/bot/accounts/overview.py:382"
     ]
   },
   "account-view-verified": {
@@ -1692,7 +1692,7 @@
       }
     ],
     "locations": [
-      "squid/bot/accounts/overview.py:364"
+      "squid/bot/accounts/overview.py:365"
     ]
   },
   "account-view-your-account": {
@@ -2983,7 +2983,7 @@
       }
     ],
     "locations": [
-      "squid/bot/accounts/claims.py:212"
+      "squid/bot/accounts/claims.py:211"
     ]
   },
   "bot-consent-build": {
@@ -3054,7 +3054,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:164"
+      "squid/bot/notifications_view.py:165"
     ]
   },
   "bot-notifications-view-exact-tag-value": {
@@ -3127,7 +3127,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:544"
+      "squid/bot/notifications_view.py:545"
     ]
   },
   "bot-notifications-view-mark-selected-unread": {
@@ -3136,7 +3136,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:550"
+      "squid/bot/notifications_view.py:551"
     ]
   },
   "bot-notifications-view-read": {
@@ -3432,7 +3432,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/settings/screen.py:352"
+      "squid/bot/settings/screen.py:351"
     ]
   },
   "bot-settings-view-build-edit-reviews": {
@@ -3483,7 +3483,7 @@
       }
     ],
     "locations": [
-      "squid/bot/settings/screen.py:330"
+      "squid/bot/settings/screen.py:329"
     ]
   },
   "bot-settings-view-changed-the-bot-language": {
@@ -3492,7 +3492,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/settings/screen.py:339"
+      "squid/bot/settings/screen.py:338"
     ]
   },
   "bot-settings-view-choose-a-role": {
@@ -3588,7 +3588,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/settings/screen.py:298"
+      "squid/bot/settings/screen.py:296"
     ]
   },
   "bot-settings-view-is-not-a-vote-choice": {
@@ -3628,7 +3628,7 @@
       }
     ],
     "locations": [
-      "squid/bot/settings/screen.py:359"
+      "squid/bot/settings/screen.py:358"
     ]
   },
   "bot-settings-view-not-set": {
@@ -3637,7 +3637,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/settings/screen.py:357"
+      "squid/bot/settings/screen.py:356"
     ]
   },
   "bot-settings-view-one-choice-emoji-per-line": {
@@ -3748,7 +3748,7 @@
       }
     ],
     "locations": [
-      "squid/bot/settings/screen.py:399"
+      "squid/bot/settings/screen.py:398"
     ]
   },
   "bot-starboard-render-no-text-content": {
@@ -4475,7 +4475,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/search/results.py:646"
+      "squid/bot/catalogue/search/results.py:700"
     ]
   },
   "bot-submission-search-view-creator": {
@@ -4484,7 +4484,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/results.py:545"
+      "squid/bot/catalogue/search/results.py:547"
     ]
   },
   "bot-submission-search-view-kind": {
@@ -4499,7 +4499,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/search/results.py:680"
+      "squid/bot/catalogue/search/results.py:734"
     ]
   },
   "bot-submission-search-view-metrics": {
@@ -4519,7 +4519,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/search/results.py:657"
+      "squid/bot/catalogue/search/results.py:711"
     ]
   },
   "bot-submission-search-view-pattern": {
@@ -4528,7 +4528,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/results.py:541"
+      "squid/bot/catalogue/search/results.py:543"
     ]
   },
   "bot-submission-search-view-restriction": {
@@ -4537,7 +4537,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/results.py:539"
+      "squid/bot/catalogue/search/results.py:541"
     ]
   },
   "bot-submission-search-view-retry": {
@@ -4546,8 +4546,8 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/results.py:304",
-      "squid/bot/catalogue/search/results.py:385"
+      "squid/bot/catalogue/search/results.py:306",
+      "squid/bot/catalogue/search/results.py:387"
     ]
   },
   "bot-submission-search-view-search-results": {
@@ -4556,7 +4556,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/results.py:380"
+      "squid/bot/catalogue/search/results.py:382"
     ]
   },
   "bot-submission-search-view-showcase-tag": {
@@ -4565,7 +4565,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/results.py:543"
+      "squid/bot/catalogue/search/results.py:545"
     ]
   },
   "bot-submission-search-view-status": {
@@ -4580,7 +4580,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/search/results.py:669"
+      "squid/bot/catalogue/search/results.py:723"
     ]
   },
   "bot-submission-search-view-tag": {
@@ -4589,7 +4589,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/results.py:549"
+      "squid/bot/catalogue/search/results.py:551"
     ]
   },
   "bot-submission-search-view-tags": {
@@ -4609,7 +4609,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/search/results.py:689"
+      "squid/bot/catalogue/search/results.py:743"
     ]
   },
   "bot-submission-search-view-value": {
@@ -4629,7 +4629,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/search/results.py:697"
+      "squid/bot/catalogue/search/results.py:751"
     ]
   },
   "bot-submission-search-view-version": {
@@ -4638,7 +4638,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/results.py:547"
+      "squid/bot/catalogue/search/results.py:549"
     ]
   },
   "bot-submission-search-view-view-build": {
@@ -4647,7 +4647,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/results.py:153"
+      "squid/bot/catalogue/search/results.py:155"
     ]
   },
   "bot-submission-submit-author-has-not-consented": {
@@ -6896,10 +6896,10 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/results.py:168",
-      "squid/bot/catalogue/search/results.py:172",
-      "squid/bot/catalogue/search/results.py:248",
-      "squid/bot/catalogue/search/results.py:301"
+      "squid/bot/catalogue/search/results.py:170",
+      "squid/bot/catalogue/search/results.py:174",
+      "squid/bot/catalogue/search/results.py:250",
+      "squid/bot/catalogue/search/results.py:303"
     ]
   },
   "build-search-load-failed": {
@@ -6908,7 +6908,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/results.py:384"
+      "squid/bot/catalogue/search/results.py:386"
     ]
   },
   "build-search-loading": {
@@ -6917,7 +6917,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/results.py:383"
+      "squid/bot/catalogue/search/results.py:385"
     ]
   },
   "build-search-matching-mode-help": {
@@ -6935,7 +6935,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/results.py:381"
+      "squid/bot/catalogue/search/results.py:383"
     ]
   },
   "build-search-query-help": {
@@ -7226,7 +7226,7 @@
       }
     ],
     "locations": [
-      "squid/bot/accounts/claims.py:189"
+      "squid/bot/accounts/claims.py:188"
     ]
   },
   "claims-reapproval-warning": {
@@ -7235,7 +7235,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/claims.py:229"
+      "squid/bot/accounts/claims.py:228"
     ]
   },
   "claims-resolve-forbidden": {
@@ -7244,7 +7244,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/claims.py:151"
+      "squid/bot/accounts/claims.py:150"
     ]
   },
   "claims-review-empty": {
@@ -7262,7 +7262,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/claims.py:126"
+      "squid/bot/accounts/claims.py:125"
     ]
   },
   "claims-view-approve": {
@@ -7271,7 +7271,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/claims.py:109"
+      "squid/bot/accounts/claims.py:108"
     ]
   },
   "claims-view-claim": {
@@ -7291,8 +7291,8 @@
       }
     ],
     "locations": [
-      "squid/bot/accounts/claims.py:208",
-      "squid/bot/accounts/claims.py:224"
+      "squid/bot/accounts/claims.py:207",
+      "squid/bot/accounts/claims.py:223"
     ]
   },
   "claims-view-credited-to": {
@@ -7312,7 +7312,7 @@
       }
     ],
     "locations": [
-      "squid/bot/accounts/claims.py:187"
+      "squid/bot/accounts/claims.py:186"
     ]
   },
   "claims-view-opened": {
@@ -7332,7 +7332,7 @@
       }
     ],
     "locations": [
-      "squid/bot/accounts/claims.py:211"
+      "squid/bot/accounts/claims.py:210"
     ]
   },
   "claims-view-page-of-in-total": {
@@ -7366,7 +7366,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/claims.py:119"
+      "squid/bot/accounts/claims.py:118"
     ]
   },
   "claims-view-take-the-name": {
@@ -7375,7 +7375,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/claims.py:107"
+      "squid/bot/accounts/claims.py:106"
     ]
   },
   "cli-auth-account-approve-cli": {
@@ -9789,7 +9789,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/diagnostics/screen.py:397"
+      "squid/bot/diagnostics/screen.py:398"
     ]
   },
   "diagnostics-attachment-page-hint": {
@@ -9823,7 +9823,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/diagnostics/screen.py:338"
+      "squid/bot/diagnostics/screen.py:339"
     ]
   },
   "diagnostics-controls-not-owner": {
@@ -9910,7 +9910,7 @@
       }
     ],
     "locations": [
-      "squid/bot/diagnostics/screen.py:405"
+      "squid/bot/diagnostics/screen.py:406"
     ]
   },
   "diagnostics-update-check-failed": {
@@ -9928,7 +9928,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/diagnostics/screen.py:404"
+      "squid/bot/diagnostics/screen.py:405"
     ]
   },
   "diagnostics-view-clear-all": {
@@ -9937,7 +9937,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/diagnostics/screen.py:294"
+      "squid/bot/diagnostics/screen.py:295"
     ]
   },
   "diagnostics-view-clear-every-error-report": {
@@ -9994,7 +9994,7 @@
       }
     ],
     "locations": [
-      "squid/bot/diagnostics/screen.py:304"
+      "squid/bot/diagnostics/screen.py:305"
     ]
   },
   "diagnostics-view-errors-cleared": {
@@ -10012,7 +10012,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/diagnostics/screen.py:391"
+      "squid/bot/diagnostics/screen.py:392"
     ]
   },
   "diagnostics-view-later": {
@@ -10039,7 +10039,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/diagnostics/screen.py:314"
+      "squid/bot/diagnostics/screen.py:315"
     ]
   },
   "diagnostics-view-no-traceback-was-recorded": {
@@ -10048,7 +10048,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/diagnostics/screen.py:300"
+      "squid/bot/diagnostics/screen.py:301"
     ]
   },
   "diagnostics-view-recent-errors": {
@@ -10084,7 +10084,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/diagnostics/screen.py:387"
+      "squid/bot/diagnostics/screen.py:388"
     ]
   },
   "diagnostics-view-where": {
@@ -10093,7 +10093,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/diagnostics/screen.py:390"
+      "squid/bot/diagnostics/screen.py:391"
     ]
   },
   "diagnostics-view-work-lost": {
@@ -10102,7 +10102,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/diagnostics/screen.py:396"
+      "squid/bot/diagnostics/screen.py:397"
     ]
   },
   "diagnostics-view-work-lost-only": {
@@ -12943,7 +12943,7 @@
       }
     ],
     "locations": [
-      "squid/bot/submission/ui/inference.py:189"
+      "squid/bot/submission/ui/inference.py:190"
     ]
   },
   "inference-candidate-uncategorized": {
@@ -12958,7 +12958,7 @@
       }
     ],
     "locations": [
-      "squid/bot/submission/ui/inference.py:187"
+      "squid/bot/submission/ui/inference.py:188"
     ]
   },
   "inference-candidates-empty": {
@@ -12994,7 +12994,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/inference.py:107"
+      "squid/bot/submission/ui/inference.py:108"
     ]
   },
   "inference-candidates-open-draft": {
@@ -13003,7 +13003,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/inference.py:133"
+      "squid/bot/submission/ui/inference.py:134"
     ]
   },
   "inference-candidates-recovered": {
@@ -13012,7 +13012,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/inference.py:151"
+      "squid/bot/submission/ui/inference.py:152"
     ]
   },
   "inference-candidates-retry": {
@@ -13030,7 +13030,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/ui/inference.py:129"
+      "squid/bot/submission/ui/inference.py:130"
     ]
   },
   "ingestion-consent-accept-action": {
@@ -14630,7 +14630,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:186"
+      "squid/bot/notifications_view.py:188"
     ]
   },
   "notification-history-read": {
@@ -14639,7 +14639,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:577"
+      "squid/bot/notifications_view.py:578"
     ]
   },
   "notification-history-unfollow": {
@@ -14789,7 +14789,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/notifications_view.py:192"
+      "squid/bot/notifications_view.py:194"
     ]
   },
   "notifications-domain-invalid-tag-predicate": {
@@ -14958,7 +14958,7 @@
     "arguments": [],
     "locations": [
       "squid/bot/notifications_cog.py:89",
-      "squid/bot/notifications_view.py:598"
+      "squid/bot/notifications_view.py:599"
     ]
   },
   "notifications-open-in-discord": {
@@ -18326,7 +18326,7 @@
       }
     ],
     "locations": [
-      "squid/core/search/application/fields.py:272"
+      "squid/core/search/application/fields.py:337"
     ]
   },
   "search-boolean-minimum-operands": {
@@ -18335,7 +18335,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/search/domain/query.py:128"
+      "squid/core/search/domain/query.py:131"
     ]
   },
   "search-branch-limit-positive": {
@@ -18344,7 +18344,16 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/search/application/ranking.py:71"
+      "squid/core/search/application/ranking.py:75"
+    ]
+  },
+  "search-close-match": {
+    "fingerprint": "3e3a6fd7844c4ced60126695a70212c4046555f90386e1a5b7062d1b24e82532",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/catalogue/search/results.py:607"
     ]
   },
   "search-duplicate-search-field": {
@@ -18359,7 +18368,7 @@
       }
     ],
     "locations": [
-      "squid/core/search/application/fields.py:49"
+      "squid/core/search/application/fields.py:61"
     ]
   },
   "search-embeddings-configured-embedding": {
@@ -18455,7 +18464,7 @@
       }
     ],
     "locations": [
-      "squid/core/search/application/fields.py:133"
+      "squid/core/search/application/fields.py:160"
     ]
   },
   "search-expects-iso-date": {
@@ -18470,7 +18479,7 @@
       }
     ],
     "locations": [
-      "squid/core/search/application/fields.py:123"
+      "squid/core/search/application/fields.py:150"
     ]
   },
   "search-expects-number": {
@@ -18485,7 +18494,7 @@
       }
     ],
     "locations": [
-      "squid/core/search/application/fields.py:115"
+      "squid/core/search/application/fields.py:142"
     ]
   },
   "search-field-base-title": {
@@ -18494,7 +18503,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/labels.py:64"
+      "squid/bot/catalogue/search/labels.py:68"
     ]
   },
   "search-field-completion-at": {
@@ -18503,7 +18512,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/labels.py:76"
+      "squid/bot/catalogue/search/labels.py:86"
     ]
   },
   "search-field-created-at": {
@@ -18512,7 +18521,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/labels.py:78"
+      "squid/bot/catalogue/search/labels.py:88"
     ]
   },
   "search-field-creator": {
@@ -18521,7 +18530,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/labels.py:56"
+      "squid/bot/catalogue/search/labels.py:60"
     ]
   },
   "search-field-depth": {
@@ -18530,7 +18539,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/labels.py:72"
+      "squid/bot/catalogue/search/labels.py:82"
     ]
   },
   "search-field-description": {
@@ -18559,7 +18568,16 @@
       }
     ],
     "locations": [
-      "squid/core/search/application/fields.py:106"
+      "squid/core/search/application/fields.py:133"
+    ]
+  },
+  "search-field-former-holder": {
+    "fingerprint": "5152ff96b25a1349c19295cc996584368e9213171952ce09af6d70e63854f1b9",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/catalogue/search/labels.py:74"
     ]
   },
   "search-field-height": {
@@ -18568,7 +18586,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/labels.py:70"
+      "squid/bot/catalogue/search/labels.py:80"
     ]
   },
   "search-field-kind": {
@@ -18577,7 +18595,16 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/labels.py:62"
+      "squid/bot/catalogue/search/labels.py:66"
+    ]
+  },
+  "search-field-name": {
+    "fingerprint": "3186c5654c0d727bd91226378eeb502467e754ac5d400eebae8a6c742006eec3",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/catalogue/search/labels.py:48"
     ]
   },
   "search-field-pattern": {
@@ -18586,7 +18613,16 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/labels.py:54"
+      "squid/bot/catalogue/search/labels.py:58"
+    ]
+  },
+  "search-field-record-state": {
+    "fingerprint": "d11dae0dec3a221f4752c2e6cb1bce16e4a9fd25e97bf5bf267474d84f449a50",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/catalogue/search/labels.py:72"
     ]
   },
   "search-field-restriction": {
@@ -18595,7 +18631,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/labels.py:50"
+      "squid/bot/catalogue/search/labels.py:54"
     ]
   },
   "search-field-status": {
@@ -18604,7 +18640,16 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/labels.py:60"
+      "squid/bot/catalogue/search/labels.py:64"
+    ]
+  },
+  "search-field-subtitle": {
+    "fingerprint": "2986d919f3cfd3a65e0e46ff87598d330e833b99855fe6f928d1a46adb764e17",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/catalogue/search/labels.py:50"
     ]
   },
   "search-field-tag": {
@@ -18613,7 +18658,16 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/labels.py:48"
+      "squid/bot/catalogue/search/labels.py:52"
+    ]
+  },
+  "search-field-tied": {
+    "fingerprint": "82a777abba553895443f899f54494ca0871184bddf1df0817403877815a14f58",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/catalogue/search/labels.py:76"
     ]
   },
   "search-field-title": {
@@ -18631,7 +18685,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/labels.py:52"
+      "squid/bot/catalogue/search/labels.py:56"
     ]
   },
   "search-field-updated-at": {
@@ -18640,7 +18694,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/labels.py:80"
+      "squid/bot/catalogue/search/labels.py:90"
     ]
   },
   "search-field-version": {
@@ -18649,7 +18703,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/labels.py:58"
+      "squid/bot/catalogue/search/labels.py:62"
     ]
   },
   "search-field-version-scope": {
@@ -18658,7 +18712,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/labels.py:66"
+      "squid/bot/catalogue/search/labels.py:70"
     ]
   },
   "search-field-volume": {
@@ -18667,7 +18721,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/labels.py:74"
+      "squid/bot/catalogue/search/labels.py:84"
     ]
   },
   "search-field-width": {
@@ -18676,7 +18730,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/labels.py:68"
+      "squid/bot/catalogue/search/labels.py:78"
     ]
   },
   "search-filter-contains": {
@@ -18696,7 +18750,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/search/labels.py:140"
+      "squid/bot/catalogue/search/labels.py:150"
     ]
   },
   "search-filter-equals": {
@@ -18716,8 +18770,8 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/search/labels.py:124",
-      "squid/bot/catalogue/search/labels.py:141"
+      "squid/bot/catalogue/search/labels.py:134",
+      "squid/bot/catalogue/search/labels.py:151"
     ]
   },
   "search-filter-is-not-set": {
@@ -18732,7 +18786,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/search/labels.py:118"
+      "squid/bot/catalogue/search/labels.py:128"
     ]
   },
   "search-filter-is-set": {
@@ -18747,7 +18801,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/search/labels.py:117"
+      "squid/bot/catalogue/search/labels.py:127"
     ]
   },
   "search-filter-keywords": {
@@ -18762,7 +18816,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/search/labels.py:113"
+      "squid/bot/catalogue/search/labels.py:123"
     ]
   },
   "search-filter-not": {
@@ -18777,7 +18831,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/search/labels.py:110"
+      "squid/bot/catalogue/search/labels.py:120"
     ]
   },
   "search-filter-range": {
@@ -18802,7 +18856,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/search/labels.py:136"
+      "squid/bot/catalogue/search/labels.py:146"
     ]
   },
   "search-grouped-build-count": {
@@ -18817,7 +18871,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/search/results.py:507"
+      "squid/bot/catalogue/search/results.py:509"
     ]
   },
   "search-grouped-build-details": {
@@ -18826,7 +18880,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/results.py:258"
+      "squid/bot/catalogue/search/results.py:260"
     ]
   },
   "search-grouped-loading-build": {
@@ -18835,7 +18889,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/results.py:309"
+      "squid/bot/catalogue/search/results.py:311"
     ]
   },
   "search-grouped-matching-records": {
@@ -18844,7 +18898,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/results.py:199"
+      "squid/bot/catalogue/search/results.py:201"
     ]
   },
   "search-grouped-more-records": {
@@ -18859,7 +18913,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/search/results.py:632"
+      "squid/bot/catalogue/search/results.py:685"
     ]
   },
   "search-grouped-records": {
@@ -18868,7 +18922,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/results.py:201"
+      "squid/bot/catalogue/search/results.py:203"
     ]
   },
   "search-grouped-result-count": {
@@ -18883,7 +18937,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/search/results.py:509"
+      "squid/bot/catalogue/search/results.py:511"
     ]
   },
   "search-grouped-tied-holders": {
@@ -18901,7 +18955,16 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/search/application/ranking.py:69"
+      "squid/core/search/application/ranking.py:73"
+    ]
+  },
+  "search-match-holder": {
+    "fingerprint": "399a2ceee5cfa21d71056e1204c9c1baadc255f75c16342adfb41fd33936d76f",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/bot/catalogue/search/results.py:599"
     ]
   },
   "search-query-incompatible-scope": {
@@ -18916,7 +18979,7 @@
       }
     ],
     "locations": [
-      "squid/core/search/domain/query.py:153"
+      "squid/core/search/domain/query.py:156"
     ]
   },
   "search-reference-and": {
@@ -19296,7 +19359,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/search/application/fields.py:267"
+      "squid/core/search/application/fields.py:332"
     ]
   },
   "search-search-results-sorted": {
@@ -19326,7 +19389,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/search/labels.py:159"
+      "squid/bot/catalogue/search/labels.py:169"
     ]
   },
   "search-sort-default": {
@@ -19335,7 +19398,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/catalogue/search/labels.py:149"
+      "squid/bot/catalogue/search/labels.py:159"
     ]
   },
   "search-sort-descending": {
@@ -19350,7 +19413,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/search/labels.py:158"
+      "squid/bot/catalogue/search/labels.py:168"
     ]
   },
   "search-sort-newest": {
@@ -19365,7 +19428,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/search/labels.py:155"
+      "squid/bot/catalogue/search/labels.py:165"
     ]
   },
   "search-sort-oldest": {
@@ -19380,7 +19443,7 @@
       }
     ],
     "locations": [
-      "squid/bot/catalogue/search/labels.py:156"
+      "squid/bot/catalogue/search/labels.py:166"
     ]
   },
   "search-weight-negative": {
@@ -19395,7 +19458,7 @@
       }
     ],
     "locations": [
-      "squid/core/search/application/ranking.py:78"
+      "squid/core/search/application/ranking.py:82"
     ]
   },
   "settings-channel-invalid": {
@@ -19404,7 +19467,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/settings/screen.py:313"
+      "squid/bot/settings/screen.py:312"
     ]
   },
   "settings-custom-emoji-unavailable": {
@@ -19437,7 +19500,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/settings/screen.py:350"
+      "squid/bot/settings/screen.py:349"
     ]
   },
   "settings-review-weighting-explained": {
