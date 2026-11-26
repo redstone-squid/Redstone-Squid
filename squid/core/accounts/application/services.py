@@ -274,10 +274,12 @@ class AccountService:
                 return result
 
     @application_operation
-    async def get_creator_alias(self, name: str, *, context: ActingContext) -> CreatorAlias | None:
-        """Return a creator credit by name without loading its linked account."""
+    async def get_creator_alias(self, alias: int | str, *, context: ActingContext) -> CreatorAlias | None:
+        """Return a creator credit by ID or by name without loading its linked account."""
         async with self._uow_factory() as uow:
-            return await uow.accounts.get_alias_by_name(name)
+            if isinstance(alias, int):
+                return await uow.accounts.get_alias(alias)
+            return await uow.accounts.get_alias_by_name(alias)
 
     @application_operation
     async def resolve_public_id(self, public_id: UUID, *, context: ActingContext) -> int:

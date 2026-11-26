@@ -82,8 +82,8 @@ class AccountFake(AccountService):
         pass
 
     @override
-    async def get_creator_alias(self, name: str, *, context: ActingContext) -> CreatorAlias | None:
-        if name.casefold() != "builder":
+    async def get_creator_alias(self, alias: int | str, *, context: ActingContext) -> CreatorAlias | None:
+        if alias != 7 and (not isinstance(alias, str) or alias.casefold() != "builder"):
             return None
         return CreatorAlias(id=7, name="Builder", account_id=42, public_creator_id=CREATOR_PUBLIC_ID)
 
@@ -314,10 +314,13 @@ def test_creator_alias_never_exposes_linked_account(
     _override(app, accounts=AccountFake())
 
     with TestClient(app) as client:
-        response = client.get("/v1/creator-aliases/builder")
+        response = client.get("/v1/creator-aliases/lookup", params={"name": "builder"})
+        by_id = client.get("/v1/creator-aliases/7")
 
     assert response.status_code == 200
+    assert by_id.json() == response.json()
     assert response.json() == {
+        "id": 7,
         "name": "Builder",
         "claimed": True,
         "creator_id": "22222222-2222-2222-2222-222222222222",

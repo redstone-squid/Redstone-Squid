@@ -148,7 +148,7 @@ class MockAccountManager(AccountService):
         """Answer from nothing; no repository is attached."""
 
     @override
-    async def get_creator_alias(self, name: str, *, context: ActingContext) -> CreatorAlias | None:
+    async def get_creator_alias(self, alias: int | str, *, context: ActingContext) -> CreatorAlias | None:
         return None
 
     @override

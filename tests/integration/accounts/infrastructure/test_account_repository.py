@@ -106,6 +106,20 @@ async def test_normalized_name_collapses_case_variants(
     assert alias.name == "  Foo  "
 
 
+async def test_an_alias_is_found_by_id(
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    alias_id = await _add_alias(async_session_factory, "Foo")
+
+    alias = await transact(repository, lambda uow: uow.accounts.get_alias(alias_id))
+    missing = await transact(repository, lambda uow: uow.accounts.get_alias(alias_id + 1))
+
+    assert alias is not None
+    assert alias.name == "Foo"
+    assert missing is None
+
+
 async def test_provider_subject_is_globally_unique(repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]) -> None:
     await _create_discord_account(repository, 1)
 

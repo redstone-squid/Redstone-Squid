@@ -6,7 +6,7 @@ import secrets
 import uuid
 from collections.abc import Callable, Sequence
 
-from sqlalchemy import case, delete, func, literal, or_, select, text, update
+from sqlalchemy import ColumnElement, case, delete, func, literal, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
@@ -462,14 +462,20 @@ class AccountRepository:
 
     # Creator credit and staff review of alias claims.
 
+    async def get_alias(self, alias_id: int) -> CreatorAlias | None:
+        """Find an alias by its ID, with the public ID of the account holding it."""
+        return await self._hydrated_alias(CreatorAlias.id == alias_id)
+
     async def get_alias_by_name(self, name: str) -> CreatorAlias | None:
         """Find an alias using the same Unicode normalization and casefold as stored names."""
-        session = self._session()
+        return await self._hydrated_alias(CreatorAlias.normalized_name == fold_creator_name(name))
+
+    async def _hydrated_alias(self, condition: ColumnElement[bool]) -> CreatorAlias | None:
         row = (
-            await session.execute(
+            await self._session().execute(
                 select(CreatorAlias, Account.public_creator_id)
                 .outerjoin(Account, Account.id == CreatorAlias.account_id)
-                .where(CreatorAlias.normalized_name == fold_creator_name(name))
+                .where(condition)
             )
         ).one_or_none()
         return None if row is None else _hydrate_creator(row[0], row[1])

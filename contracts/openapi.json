@@ -20054,7 +20054,7 @@
         }
       }
     },
-    "/v1/creator-aliases/{name}": {
+    "/v1/creator-aliases/{alias_id}": {
       "get": {
         "tags": [
           "creators"
@@ -20064,15 +20064,122 @@
         "operationId": "creator_alias_get",
         "parameters": [
           {
-            "name": "name",
+            "name": "alias_id",
             "in": "path",
+            "schema": {
+              "type": "integer"
+            },
+            "required": true,
+            "deprecated": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreatorAliasDetail"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {}
+        ],
+        "x-squid-cli": {
+          "classification": "transport-only"
+        }
+      }
+    },
+    "/v1/creator-aliases/lookup": {
+      "get": {
+        "tags": [
+          "creators"
+        ],
+        "summary": "LookUpCreatorAlias",
+        "description": "Find a creator credit by name, ignoring case and Unicode spelling differences.",
+        "operationId": "creator_alias_lookup",
+        "parameters": [
+          {
+            "name": "name",
+            "in": "query",
             "schema": {
               "type": "string",
               "maxLength": 64,
               "minLength": 1
             },
             "required": true,
-            "deprecated": false
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
           }
         ],
         "responses": {
@@ -22599,6 +22706,9 @@
       },
       "CreatorAliasDetail": {
         "properties": {
+          "id": {
+            "type": "integer"
+          },
           "name": {
             "type": "string"
           },
@@ -22621,6 +22731,7 @@
         "required": [
           "claimed",
           "creator_id",
+          "id",
           "name"
         ],
         "title": "CreatorAliasDetail"

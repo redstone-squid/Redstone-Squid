@@ -255,7 +255,7 @@ class StaleConsentNoticeError(ConflictError):
 
 
 class CreatorAliasNotFoundError(NotFoundError):
-    """No creator alias exists with the requested normalized name."""
+    """No creator alias exists with the requested ID or normalized name."""
 
     default_message = tr(
         t"accounts-errors-no-build-credits-a-creator-by-that = No build credits a creator by that name."
@@ -267,9 +267,10 @@ class CreatorAliasNotFoundError(NotFoundError):
         t"accounts-creator-name-check = Check the spelling against the creator list on a build you worked on."
     )
 
-    def __init__(self, name: str) -> None:
-        super().__init__(context={"name": name}, public_context={"name": name})
-        self.name = name
+    def __init__(self, alias: int | str) -> None:
+        context: dict[str, JSONValue] = {"alias_id": alias} if isinstance(alias, int) else {"name": alias}
+        super().__init__(context=context, public_context=context)
+        self.alias = alias
 
 
 class AliasAlreadyClaimedError(ConflictError):

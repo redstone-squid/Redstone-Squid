@@ -310,6 +310,10 @@ class FakeAccountRepository:
         assert self.merge_result is not None
         return self.merge_result
 
+    async def get_alias(self, alias_id: int) -> CreatorAlias | None:
+        alias = next((alias for alias in self.aliases.values() if alias.id == alias_id), None)
+        return None if alias is None else await self.get_alias_by_name(alias.name)
+
     async def get_alias_by_name(self, name: str) -> CreatorAlias | None:
         alias = next(
             (alias for alias in self.aliases.values() if fold_creator_name(alias.name) == fold_creator_name(name)),

@@ -521,6 +521,7 @@ export type ControlKind = 'text' | 'number' | 'choice' | 'multi_choice' | 'durat
  * CreatorAliasDetail
  */
 export type CreatorAliasDetail = {
+    id: number;
     name: string;
     claimed: boolean;
     creator_id: string | null;
@@ -9731,10 +9732,10 @@ export type TagsGetBySlugResponse = TagsGetBySlugResponses[keyof TagsGetBySlugRe
 export type CreatorAliasGetData = {
     body?: never;
     path: {
-        name: string;
+        alias_id: number;
     };
     query?: never;
-    url: '/v1/creator-aliases/{name}';
+    url: '/v1/creator-aliases/{alias_id}';
 };
 
 export type CreatorAliasGetErrors = {
@@ -9766,6 +9767,45 @@ export type CreatorAliasGetResponses = {
 };
 
 export type CreatorAliasGetResponse = CreatorAliasGetResponses[keyof CreatorAliasGetResponses];
+
+export type CreatorAliasLookupData = {
+    body?: never;
+    path?: never;
+    query: {
+        name: string;
+    };
+    url: '/v1/creator-aliases/lookup';
+};
+
+export type CreatorAliasLookupErrors = {
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type CreatorAliasLookupError = CreatorAliasLookupErrors[keyof CreatorAliasLookupErrors];
+
+export type CreatorAliasLookupResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: CreatorAliasDetail;
+};
+
+export type CreatorAliasLookupResponse = CreatorAliasLookupResponses[keyof CreatorAliasLookupResponses];
 
 export type MinecraftVersionsListData = {
     body?: never;

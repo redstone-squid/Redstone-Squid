@@ -12,10 +12,12 @@ class CreatorAliasDetail(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
+    id: int
     name: str
     claimed: bool
     creator_id: UUID | None
 
     @classmethod
     def from_domain(cls, alias: CreatorAlias) -> CreatorAliasDetail:
-        return cls(name=alias.name, claimed=alias.is_claimed, creator_id=alias.public_creator_id)
+        assert alias.id is not None
+        return cls(id=alias.id, name=alias.name, claimed=alias.is_claimed, creator_id=alias.public_creator_id)
