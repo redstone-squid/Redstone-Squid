@@ -10,8 +10,8 @@ from enum import StrEnum
 from squid.core.errors import InvalidStateError, ValidationError
 from squid.core.i18n import tr
 from squid.core.records.domain.models import BuildKind, RecordCriterion, VersionScope
-from squid.core.search.domain.fields import FieldDefinition, FieldType
-from squid.core.search.domain.query import ScalarValue
+from squid.core.search.domain.fields import FieldDefinition, FieldType, FreeTextWeight, TextMatch
+from squid.core.search.domain.query import CREATOR_ID_STORAGE, ScalarValue
 from squid.core.search.domain.scope import CATALOGUE_SCOPES, SearchScope
 from squid_i18n import md_tr
 
@@ -20,6 +20,13 @@ class BuildSearchStatus(StrEnum):
     PENDING = "pending"
     APPROVED = "approved"
     REJECTED = "rejected"
+
+
+class RecordState(StrEnum):
+    """Whether a record has competitors. Retired records only appear when a query asks for them."""
+
+    CURRENT = "current"
+    RETIRED = "retired"
 
 
 class SearchBuildKind(StrEnum):
@@ -40,8 +47,13 @@ class FieldRegistry:
     """
 
     def __init__(self, fields: Iterable[FieldDefinition]) -> None:
+        self._all = tuple(fields)
         self._fields: dict[str, FieldDefinition] = {}
-        for field in fields:
+        self._stored: dict[str, FieldDefinition] = {}
+        for field in self._all:
+            self._stored.setdefault(field.storage, field)
+            if not field.queryable:
+                continue
             for name in (field.name, *field.aliases):
                 key = name.casefold()
                 if key in self._fields:
@@ -72,13 +84,28 @@ class FieldRegistry:
                 )
         return field
 
+    def stored(self, storage: str) -> FieldDefinition | None:
+        """Find the field whose values are indexed under `storage`, queryable or not."""
+        return self._stored.get(storage)
+
     def for_scope(self, scope: SearchScope) -> FieldRegistry:
         """Return the field names and value definitions accepted in this search."""
         if scope not in CATALOGUE_SCOPES:
             return self
         return FieldRegistry(
-            resolved for field in self.definitions if (resolved := self.resolve(field.name, scope=scope)) is not None
+            (
+                *(
+                    resolved
+                    for field in self.definitions
+                    if (resolved := self.resolve(field.name, scope=scope)) is not None
+                ),
+                *(field for field in self._all if not field.queryable),
+            )
         )
+
+    def extended(self, fields: Iterable[FieldDefinition]) -> FieldRegistry:
+        """Return a registry with these fields added, keeping the indexed-only ones."""
+        return FieldRegistry((*self._all, *fields))
 
     def suggestions(self, name: str, *, limit: int = 3) -> tuple[str, ...]:
         """Suggest canonical public names for a misspelled field."""
@@ -146,28 +173,51 @@ class FieldRegistry:
 _GAME_TICK_UNITS = (("gt", Decimal(1)), ("s", Decimal(20)))
 
 
+_WORDS = TextMatch.WORDS
+_RECORDS = frozenset({SearchScope.RECORDS})
+
 DEFAULT_FIELD_REGISTRY = FieldRegistry(
     (
-        FieldDefinition("title", FieldType.TEXT, ranked=True, supports_sort=True, scopes=CATALOGUE_SCOPES),
-        FieldDefinition("description", FieldType.TEXT, ranked=True),
-        FieldDefinition("tag", FieldType.TEXT, ranked=True),
+        FieldDefinition(
+            "title",
+            FieldType.TEXT,
+            ranked=True,
+            supports_sort=True,
+            scopes=CATALOGUE_SCOPES,
+            text_match=_WORDS,
+            free_text=FreeTextWeight.A,
+        ),
+        FieldDefinition("name", FieldType.TEXT, ranked=True, text_match=_WORDS, free_text=FreeTextWeight.A),
+        FieldDefinition(
+            "subtitle",
+            FieldType.TEXT,
+            ranked=True,
+            scopes=CATALOGUE_SCOPES,
+            text_match=_WORDS,
+            free_text=FreeTextWeight.B,
+        ),
+        FieldDefinition("description", FieldType.TEXT, ranked=True, text_match=_WORDS, free_text=FreeTextWeight.D),
+        FieldDefinition("tag", FieldType.TEXT, ranked=True, free_text=FreeTextWeight.B),
         FieldDefinition(
             "restriction",
             FieldType.TEXT,
             ranked=True,
             scopes=CATALOGUE_SCOPES,
-            unranked_scopes=frozenset({SearchScope.RECORDS}),
+            unranked_scopes=_RECORDS,
+            free_text=FreeTextWeight.B,
         ),
         FieldDefinition(
             "type",
             FieldType.TEXT,
             ranked=True,
             scopes=CATALOGUE_SCOPES,
-            unranked_scopes=frozenset({SearchScope.RECORDS}),
+            unranked_scopes=_RECORDS,
+            free_text=FreeTextWeight.B,
         ),
-        FieldDefinition("pattern", FieldType.TEXT, ranked=True),
-        FieldDefinition("creator", FieldType.TEXT, ranked=True, scopes=CATALOGUE_SCOPES),
-        FieldDefinition("version", FieldType.TEXT),
+        FieldDefinition("pattern", FieldType.TEXT, ranked=True, free_text=FreeTextWeight.B),
+        FieldDefinition("creator", FieldType.TEXT, ranked=True, scopes=CATALOGUE_SCOPES, free_text=FreeTextWeight.C),
+        FieldDefinition(CREATOR_ID_STORAGE, FieldType.TEXT, queryable=False),
+        FieldDefinition("version", FieldType.TEXT, free_text=FreeTextWeight.D),
         FieldDefinition(
             "status",
             FieldType.TEXT,
@@ -187,17 +237,32 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
             aliases=("base_title",),
             storage_name="base_title",
             suggested_values=tuple(title.value for title in RecordCriterion),
-            scopes=frozenset({SearchScope.RECORDS}),
+            scopes=_RECORDS,
             value_enum=RecordCriterion,
+            free_text=FreeTextWeight.B,
         ),
         FieldDefinition(
             "version_scope",
             FieldType.TEXT,
             suggested_values=tuple(scope.value for scope in VersionScope),
-            scopes=frozenset({SearchScope.RECORDS}),
+            scopes=_RECORDS,
             value_enum=VersionScope,
         ),
-        FieldDefinition("record_state", FieldType.TEXT, scopes=frozenset({SearchScope.RECORDS})),
+        FieldDefinition(
+            "record_state",
+            FieldType.TEXT,
+            scopes=_RECORDS,
+            suggested_values=tuple(state.value for state in RecordState),
+            value_enum=RecordState,
+        ),
+        # Holders are matched by build ID; their titles and credits only answer bare text,
+        # and rank below the record's own category text.
+        FieldDefinition("holder", FieldType.TEXT, queryable=False),
+        FieldDefinition("holder_title", FieldType.TEXT, queryable=False, free_text=FreeTextWeight.D),
+        FieldDefinition("holder_creator", FieldType.TEXT, queryable=False, free_text=FreeTextWeight.D),
+        FieldDefinition("former_holder", FieldType.NUMBER, scopes=_RECORDS),
+        FieldDefinition("tied", FieldType.NUMBER, scopes=_RECORDS),
+        FieldDefinition("category_tag_id", FieldType.NUMBER, queryable=False),
         FieldDefinition(
             "volume",
             FieldType.NUMBER,

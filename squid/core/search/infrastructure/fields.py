@@ -37,7 +37,7 @@ class PostgresFieldRegistryProvider:
         )
         units = {unit.key: unit for unit in (await session.scalars(select(UnitDefinition))).all()}
         dynamic = tuple(_field_definition(definition, units) for definition in definitions)
-        return FieldRegistry((*DEFAULT_FIELD_REGISTRY.definitions, *dynamic))
+        return DEFAULT_FIELD_REGISTRY.extended(dynamic)
 
 
 def _field_definition(

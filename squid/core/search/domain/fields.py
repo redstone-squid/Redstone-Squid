@@ -16,6 +16,24 @@ class FieldType(StrEnum):
     BOOLEAN = "boolean"
 
 
+class TextMatch(StrEnum):
+    """How a clause on a text field compares its value."""
+
+    WORDS = "words"
+    """Terms anywhere in a value, a quoted phrase in order, and close spellings of long words."""
+    KEYWORD = "keyword"
+    """The whole value after normalization, as in `restriction:"No Entities"`."""
+
+
+class FreeTextWeight(StrEnum):
+    """How strongly a bare-text match on a field ranks, from A (strongest) to D."""
+
+    A = "A"
+    B = "B"
+    C = "C"
+    D = "D"
+
+
 @dataclass(frozen=True, slots=True)
 class FieldDefinition:
     """A queryable field exposed by the search API."""
@@ -45,6 +63,16 @@ class FieldDefinition:
     value_enum: type[StrEnum] | None = None
     scoped_enums: tuple[tuple[SearchScope, type[StrEnum]], ...] = ()
     value_scopes: tuple[tuple[str, SearchScope], ...] = ()
+    text_match: TextMatch = TextMatch.KEYWORD
+    free_text: FreeTextWeight | None = None
+    """Bare query text also searches this field's values, ranked by this weight; None leaves it out."""
+    queryable: bool = True
+    """False for values that are indexed for bare text but have no field syntax, such as a holder's title."""
+
+    @property
+    def storage(self) -> str:
+        """The key the field's values are indexed under."""
+        return self.storage_name or self.name
 
     def applies_to(self, scope: SearchScope, value: object = None) -> bool:
         """Check the field and any scope restriction on a particular value."""

@@ -84,7 +84,7 @@ def test_parser_reports_unknown_field_location_and_suggestion() -> None:
         SearchQueryParser().parse("titel:door")
 
     assert captured.value.position == 0
-    assert captured.value.suggestions == ("title",)
+    assert captured.value.suggestions[0] == "title"
 
 
 @pytest.mark.parametrize(
