@@ -98,7 +98,8 @@ async def test_controlled_item_selection_delegates_without_publishing_a_new_sele
     node = sl.items(
         sl.item(sl.item_label("First"), sl.paragraph("Body"), key="a"),
         key="catalog",
-        opened=sl.controlled(None, changed),
+        opened=None,
+        on_change=changed,
     )
     result = plan(node, target=target, session=session)
     await result.bindings["catalog.focus"].handler(
@@ -130,7 +131,7 @@ def test_opened_item_heading_and_back_repeat_on_every_detail_page(target: Target
             key="entry",
         ),
         key="catalog",
-        opened=sl.uncontrolled("entry"),
+        opened="entry",
     )
     identity = OccurrenceId(("root", "catalog"))
     result = plan(node, target=target, composition=CompositionOptions(automatic=True, partitions={identity: (1, 2)}))

@@ -146,7 +146,7 @@ class TestParity:
         assert sl.aside("a", tone=sl.Tone.WARNING) == sl.semantic.Aside(
             (sl.semantic.Paragraph(sl.plain("a")),), sl.Tone.WARNING
         )
-        assert sl.details(sl.summary("S"), "a", key="k", open=sl.uncontrolled(initial=True)) == sl.semantic.Details(
+        assert sl.details(sl.summary("S"), "a", key="k", open=True) == sl.semantic.Details(
             "k",
             sl.semantic.Summary(sl.plain("S")),
             (sl.semantic.Paragraph(sl.plain("a")),),
@@ -223,7 +223,7 @@ class TestParity:
         )
         assert sl.nav_option("Home", key="home") == sl.semantic.NavOption("home", sl.plain("Home"))
         assert sl.navigation(
-            sl.nav_option("Home", key="home"), key="n", current=sl.controlled("home", _noop)
+            sl.nav_option("Home", key="home"), key="n", current="home", on_change=_noop
         ) == sl.semantic.Navigation(
             "n", (sl.semantic.NavOption("home", sl.plain("Home")),), sl.semantic.Controlled("home", _noop)
         )

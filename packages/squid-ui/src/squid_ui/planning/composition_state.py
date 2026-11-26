@@ -189,8 +189,10 @@ class RetainedComposition[BodyT: scene.Body = Any, RenderTargetT = Any, AdapterT
                 and isinstance(authored.value, NativeValue)
                 and (pagination := NativeTraits.of(authored.value).pagination) is not None
             ):
-                owner = pagination.page
-                content = authored.value.semantics.with_pagination(authored.value, replace(pagination, page=FIRST_PAGE))
+                owner = pagination.owner
+                content = authored.value.semantics.with_pagination(
+                    authored.value, replace(pagination, page=0, on_change=None)
+                )
             if authored is not None and isinstance(authored.value, Grid):
                 content = authored.value
             cursor_fingerprint = self._cursor_fingerprints.get(identity)

@@ -12,6 +12,7 @@ from squid_ui.ext.discord.navigation_controls import default_nav
 from squid_ui.ext.discord.planning.discord import components_v2_target
 from squid_ui.ext.discord.target_types import DiscordAdapter
 from squid_ui.interactions.handlers import FrontendHandler, HandlerSet
+from squid_ui.interactions.ownership import Controlled
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.cache import PlanCache
@@ -49,10 +50,10 @@ def test_cross_owner_hint_rebuilds_callbacks() -> None:
 
     cache = PlanCache()
     old = plan(
-        replace(content(), page=sl.controlled(0, first)), target=V2, cache=cache, nav=default_nav, composition=OPTIONS
+        replace(content(), page=Controlled(0, first)), target=V2, cache=cache, nav=default_nav, composition=OPTIONS
     )
     new = plan(
-        replace(content(), page=sl.controlled(0, second)), target=V2, cache=cache, nav=default_nav, composition=OPTIONS
+        replace(content(), page=Controlled(0, second)), target=V2, cache=cache, nav=default_nav, composition=OPTIONS
     )
     assert new.metrics.partition_hint
     assert new.metrics.target_evaluations > 0

@@ -306,7 +306,7 @@ class ErrorReportScreen(sd.Screen[int]):
             # Opens at the end because the failing frame is the last one.
             sd.v2.code(
                 traceback_text,
-                overflow=primitives.Paginate(key="traceback", page=primitives.LAST_PAGE, footer=_traceback_footer),
+                overflow=primitives.Paginate(key="traceback", page=-1, footer=_traceback_footer),
             ),
         ]
         if report.log_tail:

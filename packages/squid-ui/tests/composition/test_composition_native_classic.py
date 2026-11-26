@@ -122,7 +122,7 @@ def test_native_content_pages_reuse_the_current_controlled_owner() -> None:
     session = PresentationState()
 
     def node(index: int) -> native.Content:
-        return native.Content("First\nSecond", overflow=Paginate(key="body", per=1, page=sl.controlled(index, turn)))
+        return native.Content("First\nSecond", overflow=Paginate(key="body", per=1, page=index, on_change=turn))
 
     first = plan(node(0), target=TARGET, session=session)
     session.apply_updates(first.session_updates)

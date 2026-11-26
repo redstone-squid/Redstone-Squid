@@ -50,7 +50,8 @@ def document(
                 sl.paragraph("Second", key="second"),
                 key="r",
                 title="Region",
-                page=sl.controlled(page, page_changed),
+                page=page,
+                on_change=page_changed,
             ),
         )
     )

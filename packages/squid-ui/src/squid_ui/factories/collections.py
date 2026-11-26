@@ -5,10 +5,10 @@ from dataclasses import dataclass
 from string.templatelib import Template
 
 from squid_i18n import Text, emoji_text, strong
+from squid_ui._presentation import ValueBinding
 from squid_ui.authoring.grids import GridCell
 from squid_ui.authoring.rosters import RosterPlacement
 from squid_ui.authoring.semantic import (
-    UNOPENED,
     ChoiceEvent,
     Column,
     Columns,
@@ -20,7 +20,6 @@ from squid_ui.authoring.semantic import (
     Item,
     ItemDisplay,
     ItemLabel,
-    ItemOwnership,
     Items,
     LayoutNode,
     List,
@@ -28,6 +27,7 @@ from squid_ui.authoring.semantic import (
     Media,
     MediaDisplay,
     MediaItem,
+    OpenEvent,
     Roster,
     Stack,
     Table,
@@ -42,7 +42,9 @@ from squid_ui.factories.containers import stack
 from squid_ui.factories.content import media_item, progress
 from squid_ui.factories.controls import choice, choices, routed_choices
 from squid_ui.interactions import SelectionEvent
-from squid_ui.overflow import FIRST_PAGE, PageOwnership
+from squid_ui.interactions.ownership import layout_owner
+from squid_ui.overflow import PageEvent, RoutedPage, page_owner
+from squid_ui.pages import InitialPage
 from squid_ui.target_types import RenderTarget
 
 
@@ -63,12 +65,22 @@ def item_label(content: TextValue) -> ItemLabel:
 def items[RenderTargetT = RenderTarget, ContextT = object](
     *entries: Conditional[Item[RenderTargetT, ContextT]],
     key: str,
-    opened: ItemOwnership[ContextT] = UNOPENED,
+    opened: str | ValueBinding[str | None] | None = None,
+    on_change: Callable[[OpenEvent[str | None, ContextT]], Awaitable[None]] | None = None,
     display: ItemDisplay = ItemDisplay.AUTO,
     flexibility: Flexibility = Flexibility.NORMAL,
 ) -> Items[RenderTargetT, ContextT]:
-    """A set of entries the reader browses; ``key`` carries the opened entry."""
-    return Items(key, _collect(entries, (Item,), "sl.items()"), opened, display, flexibility)
+    """A set of entries the reader browses; ``key`` carries the opened entry.
+
+    Without ``on_change`` or a binding, the runtime remembers which entry the reader opened.
+    """
+    return Items(
+        key,
+        _collect(entries, (Item,), "sl.items()"),
+        layout_owner("sl.items()", opened, on_change),
+        display,
+        flexibility,
+    )
 
 
 def field(
@@ -103,17 +115,21 @@ def bullets(
     ordered: bool = False,
     page_size: int | None = None,
     group_size: int | None = None,
-    page: PageOwnership = FIRST_PAGE,
+    page: int | InitialPage | RoutedPage = 0,
+    on_change: Callable[[PageEvent], Awaitable[None]] | None = None,
     split_footer: Callable[[int, int], TextLike] | None = None,
 ) -> List:
-    """A bulleted or numbered list; bare text becomes an entry. ``key`` carries its page."""
+    """A bulleted or numbered list; bare text becomes an entry. ``key`` carries its page.
+
+    ``page`` is where it opens; with ``on_change`` the application keeps the page.
+    """
     collected = _collect(entries, (ListItem, str, Text, Template), "sl.bullets()")
     return List(
         tuple(entry if isinstance(entry, ListItem) else bullet(entry) for entry in collected),
         key,
         ordered,
         page_size,
-        page,
+        page_owner(page, on_change),
         group_size=group_size,
         split_footer=split_footer,
     )

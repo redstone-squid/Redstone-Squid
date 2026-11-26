@@ -262,7 +262,7 @@ def test_shared_pagination_sends_controlled_page_turns_to_the_current_render(mon
     async def second(event: PageEvent) -> None: ...
 
     def document(on_change):
-        return Code("x" * 9000, overflow=Paginate(key="traceback", page=Controlled(1, on_change)))
+        return Code("x" * 9000, overflow=Paginate(key="traceback", page=1, on_change=on_change))
 
     plan(document(first), target=DISCORD_V2_DPY27, nav=default_nav, cache=cache)
     cached = plan(document(second), target=DISCORD_V2_DPY27, nav=default_nav, cache=cache)

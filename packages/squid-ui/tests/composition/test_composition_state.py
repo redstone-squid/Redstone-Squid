@@ -15,7 +15,7 @@ from squid_ui.ext.discord.navigation_controls import default_nav, page_select_na
 from squid_ui.ext.discord.planning.discord import components_v2_target
 from squid_ui.ext.discord.target_types import DiscordAdapter
 from squid_ui.ext.slack.target_types import SlackAdapter
-from squid_ui.interactions.ownership import Controlled
+from squid_ui.interactions.ownership import Controlled, Uncontrolled
 from squid_ui.pages import PagePosition
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
@@ -96,7 +96,7 @@ async def test_controlled_negative_page_dispatches_without_cursor_writes() -> No
         selected.append(event.page)
 
     session = PresentationState()
-    node = replace(content(), page=sl.controlled(-1, change))
+    node = replace(content(), page=Controlled(-1, change))
     result = plan(node, target=V2, session=session, nav=default_nav, composition=OPTIONS)
     assert result.scene.pagers[0].page == 1
     session.apply_updates(result.session_updates)
@@ -128,7 +128,7 @@ def test_controlled_cursor_movement_retains_allocation(monkeypatch: pytest.Monke
         pytest.fail("planning must not call the owner")
 
     session = PresentationState()
-    node = replace(content(), page=sl.controlled(0, change))
+    node = replace(content(), page=Controlled(0, change))
     first = plan(node, target=V2, session=session, nav=default_nav, composition=OPTIONS)
     session.apply_updates(first.session_updates)
 
@@ -137,7 +137,7 @@ def test_controlled_cursor_movement_retains_allocation(monkeypatch: pytest.Monke
 
     monkeypatch.setattr("squid_ui.planning.composition_planner.search_composition", fail)
     second = plan(
-        replace(node, page=sl.controlled(1, change)), target=V2, session=session, nav=default_nav, composition=OPTIONS
+        replace(node, page=Controlled(1, change)), target=V2, session=session, nav=default_nav, composition=OPTIONS
     )
     assert second.allocation is first.allocation
     assert second.scene.pagers[0].page == 1
@@ -219,11 +219,11 @@ def test_changed_callback_rebuilds_bindings_in_a_retained_owner() -> None:
         pass
 
     session = PresentationState()
-    original = replace(content(), page=sl.controlled(0, first))
+    original = replace(content(), page=Controlled(0, first))
     old = plan(original, target=V2, session=session, nav=default_nav, composition=OPTIONS)
     session.apply_updates(old.session_updates)
     changed = plan(
-        replace(original, page=sl.controlled(0, second)),
+        replace(original, page=Controlled(0, second)),
         target=V2,
         session=session,
         nav=default_nav,
@@ -297,7 +297,7 @@ def test_controlled_region_inside_alternatives_reuses_allocation_with_current_ow
         pytest.fail("planning invoked the owner")
 
     def document(page: int) -> sl.Renderable:
-        source = replace(content(), page=sl.controlled(page, changed))
+        source = replace(content(), page=Controlled(page, changed))
         return sl.alternatives(
             sl.alternative(source, key="full", fidelity=sl.equivalent()), content=source, key="choice"
         )
@@ -319,10 +319,10 @@ def test_alternate_list_cannot_change_its_page_owner() -> None:
         pytest.fail("planning invoked the owner")
 
     source = sl.semantic.List(
-        tuple(sl.semantic.ListItem(key, key) for key in "ab"), key="items", page_size=1, page=sl.controlled(1, changed)
+        tuple(sl.semantic.ListItem(key, key) for key in "ab"), key="items", page_size=1, page=Controlled(1, changed)
     )
     node = sl.alternatives(
-        sl.alternative(replace(source, page=sl.uncontrolled(0)), key="wrong-owner", fidelity=sl.equivalent()),
+        sl.alternative(replace(source, page=Uncontrolled(0)), key="wrong-owner", fidelity=sl.equivalent()),
         content=source,
         key="choice",
     )

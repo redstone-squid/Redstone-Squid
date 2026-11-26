@@ -446,7 +446,7 @@ async def test_html_list_page_ownership_drives_navigation_without_cursor_writes(
         seen.append(event.page)
 
     result = sl.planning.plan(
-        sl.bullets("a", "b", "c", key="list", ordered=True, page_size=2, page=sl.controlled(1, changed)),
+        sl.bullets("a", "b", "c", key="list", ordered=True, page_size=2, page=1, on_change=changed),
         target=squid_ui.ext.html.target(),
     )
     entries = [item for item in _elements(result) if item.tag is html_scene.HtmlTag.LI]

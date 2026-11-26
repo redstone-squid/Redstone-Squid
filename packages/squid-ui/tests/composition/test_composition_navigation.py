@@ -17,6 +17,7 @@ from squid_ui.ext.discord.target_types import DiscordAdapter
 from squid_ui.ext.html import scene as html_scene
 from squid_ui.ext.slack.target_types import SlackAdapter
 from squid_ui.interactions import ActionResponder, Actor, PressEvent, SelectionEvent
+from squid_ui.interactions.ownership import Controlled
 from squid_ui.planning import CompositionOptions, OccurrenceId, plan
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.target import Target
@@ -49,7 +50,8 @@ async def test_destination_callbacks_preserve_controlled_ownership(
         sl.nav_option("Second", key="b"),
         sl.nav_option("Unavailable", key="c", available=False),
         key="destinations",
-        current=sl.controlled("a", changed),
+        current="a",
+        on_change=changed,
         display=display,
     )
     result = plan(node, target=target, session=session)
@@ -130,8 +132,8 @@ def test_alternatives_cannot_change_destination_ownership_without_permission() -
     async def first(event: sl.NavigateEvent) -> None: ...
     async def second(event: sl.NavigateEvent) -> None: ...
 
-    source = sl.navigation(sl.nav_option("First", key="a"), key="destinations", current=sl.controlled("a", first))
-    changed = replace(source, current=sl.controlled("a", second))
+    source = sl.navigation(sl.nav_option("First", key="a"), key="destinations", current="a", on_change=first)
+    changed = replace(source, current=Controlled("a", second))
     node = sl.alternatives(sl.alternative(changed, key="changed", fidelity=sl.equivalent()), content=source, key="alt")
     with pytest.raises(LayoutInvariantError, match="interaction change"):
         plan(node, target=TARGETS[0], composition=CompositionOptions(automatic=True))

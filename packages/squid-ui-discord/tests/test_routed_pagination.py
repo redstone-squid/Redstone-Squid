@@ -15,7 +15,7 @@ from squid_ui.ext.discord.navigation_controls import default_nav, page_jump_nav,
 from squid_ui.ext.discord.primitives import Lines, Paginate
 from squid_ui.ext.discord.routing import Router
 from squid_ui.ext.discord.testing import interaction_harness, query
-from squid_ui.interactions.ownership import Controlled, Uncontrolled
+from squid_ui.interactions.ownership import Uncontrolled
 from squid_ui.overflow import RoutedPage
 from squid_ui.pages import PagePosition
 from squid_ui.planning import PlanCache, PlanningSnapshot, Target, plan
@@ -224,7 +224,8 @@ async def test_semantic_region_uses_its_controlled_owner(target: Target) -> None
         *(sl.aside(sl.paragraph(str(index) * 20)) for index in range(4)),
         key="region",
         title="Region",
-        page=Controlled(99, change),
+        page=99,
+        on_change=change,
     )
     result = plan(
         document,
@@ -248,7 +249,7 @@ async def test_semantic_list_preserves_global_numbering_and_controlled_turns() -
         seen.append(event.page)
 
     result = plan(
-        sl.bullets("a", "b", "c", key="list", ordered=True, page_size=2, page=Controlled(1, change)),
+        sl.bullets("a", "b", "c", key="list", ordered=True, page_size=2, page=1, on_change=change),
         target=DISCORD_V2_DPY27,
         nav=default_nav,
     )

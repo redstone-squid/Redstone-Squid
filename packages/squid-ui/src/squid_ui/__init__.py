@@ -139,7 +139,6 @@ from squid_ui.factories import (
     columns,
     context,
     control_group,
-    controlled,
     details,
     download,
     entities,
@@ -179,7 +178,6 @@ from squid_ui.factories import (
     themed,
     timestamp,
     toggle,
-    uncontrolled,
     zoned_timestamp,
 )
 from squid_ui.factories.presentation import ChoicesHandle, ToggleHandle, ValueHandle, presentation
@@ -316,7 +314,6 @@ __all__ = [
     "computed",
     "context",
     "control_group",
-    "controlled",
     "corresponds",
     "details",
     "document",
@@ -408,6 +405,5 @@ __all__ = [
     "tr",
     "truncate",
     "unbreakable",
-    "uncontrolled",
     "zoned_timestamp",
 ]

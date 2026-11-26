@@ -42,7 +42,8 @@ class JumpPages(sl.Component[DiscordTarget]):
             overflow=Paginate(
                 key="entries",
                 per=1,
-                page=sl.controlled(self.page, self.turn) if self.controlled else sl.uncontrolled(0),
+                page=self.page if self.controlled else 0,
+                on_change=self.turn if self.controlled else None,
             ),
         )
 
@@ -232,7 +233,7 @@ async def test_cached_jump_form_calls_the_current_page_owner() -> None:
         result = plan(
             Lines(
                 tuple(str(index) for index in range(100)),
-                overflow=Paginate(key="entries", per=1, page=sl.controlled(0, handler)),
+                overflow=Paginate(key="entries", per=1, page=0, on_change=handler),
             ),
             target=DISCORD_V2_DPY27,
             nav=page_jump_nav,

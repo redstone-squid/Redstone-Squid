@@ -1,22 +1,22 @@
 """Group semantic children and define disclosure and pagination boundaries."""
 
-from collections.abc import Callable, Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from typing import TYPE_CHECKING
 
 from squid_i18n import Text
+from squid_ui._presentation import ValueBinding
 from squid_ui.authoring.document import DocumentLike, as_document
 from squid_ui.authoring.semantic import (
-    CLOSED,
     Article,
     Aside,
     Block,
     Cluster,
     Contextual,
     Details,
-    DisclosureOwnership,
     Group,
     Heading,
     LayoutNode,
+    OpenEvent,
     Region,
     Section,
     Stack,
@@ -26,7 +26,9 @@ from squid_ui.authoring.semantic import (
 )
 from squid_ui.boundary import Boundary
 from squid_ui.factories._inputs import ChildLike, TextValue, _children
-from squid_ui.overflow import FIRST_PAGE, PageOwnership
+from squid_ui.interactions.ownership import layout_owner
+from squid_ui.overflow import PageEvent, RoutedPage, page_owner
+from squid_ui.pages import InitialPage
 from squid_ui.palette import INHERIT, Accent, Palette, Role
 from squid_ui.target_types import RenderTarget
 
@@ -107,10 +109,14 @@ def details[RenderTargetT = RenderTarget, ContextT = object](
     summary: Summary,
     *children: ChildLike[RenderTargetT, ContextT],
     key: str,
-    open: DisclosureOwnership[ContextT] = CLOSED,
+    open: bool | ValueBinding[bool] = False,
+    on_change: Callable[[OpenEvent[bool, ContextT]], Awaitable[None]] | None = None,
 ) -> Details[RenderTargetT, ContextT]:
-    """Content the reader expands; ``key`` carries its disclosure state."""
-    return Details(key, summary, _children(children, "sl.details()"), open)
+    """Content the reader expands; ``key`` carries its disclosure state.
+
+    Without ``on_change`` or a binding, the runtime remembers whether the reader opened it.
+    """
+    return Details(key, summary, _children(children, "sl.details()"), layout_owner("sl.details()", open, on_change))
 
 
 def summary(content: TextValue) -> Summary:
@@ -125,12 +131,24 @@ def region[RenderTargetT = RenderTarget, ContextT = object](
     title: TextValue,
     header: Sequence[LayoutNode[RenderTargetT, ContextT]] = (),
     footer: Sequence[LayoutNode[RenderTargetT, ContextT]] = (),
-    page: PageOwnership = FIRST_PAGE,
+    page: int | InitialPage | RoutedPage = 0,
+    on_change: Callable[[PageEvent], Awaitable[None]] | None = None,
     page_size: int | None = None,
 ) -> Region[RenderTargetT, ContextT]:
-    """Allocate space jointly; page_size caps content units, including unbreakable rows."""
+    """Allocate space jointly; page_size caps content units, including unbreakable rows.
+
+    ``page`` is where it opens; with ``on_change`` the application keeps the page.
+    """
     title = Text(title)
-    return Region(_children(children, "sl.region()"), key, title, tuple(header), tuple(footer), page, page_size)
+    return Region(
+        _children(children, "sl.region()"),
+        key,
+        title,
+        tuple(header),
+        tuple(footer),
+        page_owner(page, on_change),
+        page_size,
+    )
 
 
 def context[R, C](

@@ -89,7 +89,7 @@ def test_controlled_native_pages_reuse_through_budget_and_break_wrappers() -> No
     session = PresentationState()
 
     def node(index: int) -> native.Budget:
-        text = native.Text("First\nSecond", overflow=Paginate(key="body", per=1, page=sl.controlled(index, turn)))
+        text = native.Text("First\nSecond", overflow=Paginate(key="body", per=1, page=index, on_change=turn))
         return native.Budget((native.Break((text,)),), minimum=0, preferred=100)
 
     first = plan(node(0), target=TARGET, session=session)

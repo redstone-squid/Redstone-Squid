@@ -19,7 +19,7 @@ from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.modal import LabelSpec, ModalSpec, TextInputSpec, build_modal
 from squid_ui.ext.discord.navigation_controls import default_nav, page_select_nav
 from squid_ui.ext.discord.planning import components_v2_target
-from squid_ui.ext.discord.primitives import LAST_PAGE, Button, Code, Heading, Lines, Paginate, Row
+from squid_ui.ext.discord.primitives import Button, Code, Heading, Lines, Paginate, Row
 from squid_ui.ext.discord.target_types import ComponentsV2Target, DiscordAdapter
 from squid_ui.ext.discord.testing import assert_within_limits, commit_render, interaction_harness, query
 from squid_ui.pages import PagePosition, resolve_page_position
@@ -127,7 +127,7 @@ class ControlledLog(Component[ComponentsV2Target]):
     @override
     def render(self):
         entries = tuple(f"entry {index}" for index in range(30))
-        return [Lines(entries, overflow=Paginate(key="log", per=10, page=sl.controlled(self.page, self._turn)))]
+        return [Lines(entries, overflow=Paginate(key="log", per=10, page=self.page, on_change=self._turn))]
 
 
 class TestControlledPagination:
@@ -168,14 +168,14 @@ class TestControlledPagination:
 
     def test_last_page_opens_an_uncontrolled_pager_at_the_end(self):
         entries = tuple(f"entry {index}" for index in range(30))
-        result = plan(Lines(entries, overflow=Paginate(key="log", per=10, page=LAST_PAGE)), target=DISCORD_V2_DPY27)
+        result = plan(Lines(entries, overflow=Paginate(key="log", per=10, page=-1)), target=DISCORD_V2_DPY27)
         assert result.scene.pagers[0].page == 2
 
     def test_a_controlled_pager_needs_a_key(self):
         async def ignore(event: sl.PageEvent) -> None: ...
 
         with pytest.raises(ValueError, match="needs a key"):
-            Paginate(page=sl.controlled(0, ignore))
+            Paginate(page=0, on_change=ignore)
 
 
 class TestMountPagination:

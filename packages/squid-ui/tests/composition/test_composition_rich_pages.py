@@ -110,7 +110,7 @@ def test_controlled_rich_pages_reuse_allocation_with_the_current_owner_value() -
     content = sl.strong("First\nSecond\nThird")
 
     def node(page: int) -> native.Text:
-        return native.Text(content, overflow=Paginate(key="rich", per=1, page=sl.controlled(page, ignore_turn)))
+        return native.Text(content, overflow=Paginate(key="rich", per=1, page=page, on_change=ignore_turn))
 
     first = plan(node(0), target=TARGETS[0], session=session)
     session.apply_updates(first.session_updates)

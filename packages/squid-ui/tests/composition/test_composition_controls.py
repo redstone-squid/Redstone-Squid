@@ -131,9 +131,13 @@ def test_region_page_ownership_is_not_invoked_or_rewritten(routed: bool) -> None
     async def changed(event: sl.PageEvent[object]) -> None:
         pytest.fail("planning must not invoke page change handlers")
 
-    owner = sl.RoutedPage(8, route) if routed else sl.controlled(8, changed)
-    region = sl.region(sl.paragraph("All content"), key="region", title="Region", page=owner)
+    if routed:
+        owner = sl.RoutedPage(8, route)
+        region = sl.region(sl.paragraph("All content"), key="region", title="Region", page=owner)
+    else:
+        region = sl.region(sl.paragraph("All content"), key="region", title="Region", page=8, on_change=changed)
     result = compose(region, V2CompositionRules[RenderTarget, object]())
     assert isinstance(result, BuiltComposition)
-    assert region.page is owner
+    assert isinstance(region.page, sl.RoutedPage | sl.semantic.Controlled)
+    assert region.page.value == 8
     assert result.evaluation.text == ("All content",)

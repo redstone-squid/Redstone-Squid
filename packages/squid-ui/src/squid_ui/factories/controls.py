@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, overload
 from squid_i18n import Text
 from squid_ui._presentation import ValueBinding
 from squid_ui.authoring.semantic import (
-    FIRST_OPTION,
     ActionControl,
     ActionControls,
     Choice,
@@ -24,57 +23,29 @@ from squid_ui.authoring.semantic import (
     Flexibility,
     FormTrigger,
     Link,
+    NavigateEvent,
     Navigation,
     NavigationDisplay,
     NavOption,
-    NavOwnership,
     RoutedActionControl,
     RoutedChoices,
     ScaleEvent,
     Toggle,
     ToggleEvent,
     Tone,
-    Uncontrolled,
-    ValueOwnership,
 )
 from squid_ui.content.assets import FileInput, file
 from squid_ui.content.entity import ConversationType, EntityRef, EntityType
 from squid_ui.interactions import ActionMode, BusySpec, PressHandler
 from squid_ui.interactions.forms import FormLike, SubmitHandler, bind_form
 from squid_ui.interactions.guards import Guard
+from squid_ui.interactions.ownership import layout_owner, value_owner
 from squid_ui.palette import Role
 
 if TYPE_CHECKING:
     from squid_ui.runtime.histories import History
 
 from squid_ui.factories._inputs import Conditional, TextValue, _collect
-
-
-def controlled[ValueT, EventT](
-    value: ValueT,
-    on_change: Callable[[EventT], Awaitable[None]],
-) -> Controlled[ValueT, EventT]:
-    """Own this node's value yourself: it wins every render and ``on_change`` gets the writes."""
-    return Controlled(value, on_change)
-
-
-def uncontrolled[ValueT](initial: ValueT) -> Uncontrolled[ValueT]:
-    """Store this node's value in PresentationState, using initial when its key is absent."""
-    return Uncontrolled(initial)
-
-
-def _value_owner[ValueT, EventT](
-    factory: str, value: ValueT | ValueBinding[ValueT], on_change: Callable[[EventT], Awaitable[None]] | None
-) -> ValueOwnership[ValueT, EventT]:
-    if isinstance(value, ValueBinding):
-        if on_change is not None:
-            message = f"{factory} got a binding, which already receives changes; drop on_change"
-            raise TypeError(message)
-        return value
-    if on_change is None:
-        message = f"{factory} needs on_change or a presentation binding, or nothing could read its value"
-        raise TypeError(message)
-    return Controlled(value, on_change)
 
 
 def form[ContextT](
@@ -173,7 +144,7 @@ def toggle[ContextT = object](
     label = Text(label)
     on_label = None if on_label is None else Text(on_label)
     off_label = None if off_label is None else Text(off_label)
-    return Toggle(key, label, _value_owner("sl.toggle()", on, on_change), on_label, off_label, tone, available)
+    return Toggle(key, label, value_owner("sl.toggle()", on, on_change), on_label, off_label, tone, available)
 
 
 def download(
@@ -310,7 +281,7 @@ def choices[ContextT = object](
     return Choices(
         key,
         _collect(entries, (Choice,), "sl.choices()"),
-        _value_owner("sl.choices()", selection, on_change),
+        value_owner("sl.choices()", selection, on_change),
         minimum,
         maximum,
         flexibility,
@@ -373,7 +344,7 @@ def entities[ContextT = object](
         key,
         entity_type,
         _collect(entries, (EntityChoice,), "sl.entities()"),
-        _value_owner("sl.entities()", selection, on_change),
+        value_owner("sl.entities()", selection, on_change),
         minimum,
         maximum,
         conversation_types,
@@ -421,7 +392,7 @@ def rating[ContextT = object](
     entries = tuple(
         choice(named[point] if point in named else _stars(point, maximum), key=str(point)) for point in points
     )
-    owner = _value_owner("sl.rating()", value, on_change)
+    owner = value_owner("sl.rating()", value, on_change)
     rate = _RatingSelection(_RatingCommit(owner) if isinstance(owner, ValueBinding) else owner.on_change)
     chosen = owner.value
     return Choices(key, entries, Controlled(() if chosen is None else (str(chosen),), rate), minimum=1, maximum=1)
@@ -469,15 +440,19 @@ def nav_option(label: TextValue, *, key: str, available: bool = True) -> NavOpti
 def navigation[ContextT = object](
     *entries: Conditional[NavOption],
     key: str,
-    current: NavOwnership[ContextT] = FIRST_OPTION,
+    current: str | ValueBinding[str | None] | None = None,
+    on_change: Callable[[NavigateEvent[ContextT]], Awaitable[None]] | None = None,
     display: NavigationDisplay = NavigationDisplay.AUTO,
     flexibility: Flexibility = Flexibility.STABLE,
 ) -> Navigation[ContextT]:
-    """Movement between the views of one message."""
+    """Movement between the views of one message, opening on ``current`` or the first option.
+
+    Without ``on_change`` or a binding, the runtime remembers where the reader went.
+    """
     return Navigation(
         key,
         _collect(entries, (NavOption,), "sl.navigation()"),
-        current,
+        layout_owner("sl.navigation()", current, on_change),
         display,
         flexibility,
     )

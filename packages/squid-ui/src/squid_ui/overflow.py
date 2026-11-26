@@ -4,13 +4,14 @@ Nodes declare how text may shorten or continue when a target's limits bind.
 Pagination and semantic lists share PageOwnership, PageEvent, and RoutedPage.
 """
 
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Literal
 
 from squid_ui.content.text import TextLike
 from squid_ui.interactions import ActionEvent
 from squid_ui.interactions.ownership import Controlled, Uncontrolled
+from squid_ui.pages import InitialPage
 
 if TYPE_CHECKING:
     from squid_ui.layout import LayoutContext
@@ -61,8 +62,18 @@ with persistent navigation routes instead of an `on_change` callback.
 """
 
 FIRST_PAGE: PageOwnership = Uncontrolled(0)
-LAST_PAGE: PageOwnership = Uncontrolled(-1)
-"""Open on the final page, for content read from the bottom such as a traceback or log."""
+
+
+def page_owner[ContextT](
+    page: int | InitialPage | RoutedPage, on_change: Callable[[PageEvent[ContextT]], Awaitable[None]] | None
+) -> PageOwnership[ContextT]:
+    """Who keeps a pager's page: the runtime from ``page``, or the application with ``on_change``."""
+    if isinstance(page, Uncontrolled | RoutedPage):
+        if on_change is not None:
+            message = "InitialPage and RoutedPage already say who keeps the page; drop on_change"
+            raise TypeError(message)
+        return page
+    return Uncontrolled(page) if on_change is None else Controlled(page, on_change)
 
 
 def resolve_page(page: int, extent: int) -> int:
@@ -94,11 +105,11 @@ class Paginate:
     `boundary` chooses preferred split points; oversized segments are split to fit.
     Supply a stable `key` when planning so this paginator has independent state.
 
-    `page` says who keeps the visible page. By default the runtime remembers it and opens
-    on the first page; `LAST_PAGE` opens on the final page instead, useful for a traceback
-    or activity log. `Controlled(page, on_change)` lets the application keep the page, for
-    example to return to the first page when a filter changes. A controlled pager needs an
-    explicit `key`, and its page is clamped to the pages the content has.
+    `page` is where the pager opens, and the runtime remembers page turns. `-1` opens on the
+    final page, useful for a traceback or activity log. With `on_change` the application keeps
+    the page instead, for example to return to the first page when a filter changes. An
+    application-owned pager needs an explicit `key`, and its page is clamped to the pages the
+    content has.
 
     `RoutedPage(value, route, seek_route)` supplies the same page through persistent routes.
 
@@ -113,14 +124,15 @@ class Paginate:
 
     key: str | None = None
     boundary: str = "\n"
-    page: PageOwnership = FIRST_PAGE
+    page: int | InitialPage | RoutedPage = 0
+    on_change: Callable[[PageEvent], Awaitable[None]] | None = None
     per: int | None = None
     footer: Callable[[LayoutContext], TextLike] | None = None
     min_fill: int = 0
     widows: int = 1
 
     def __post_init__(self) -> None:
-        if isinstance(self.page, Controlled | RoutedPage) and not self.key:
+        if isinstance(self.owner, Controlled | RoutedPage) and not self.key:
             message = "an application-owned Paginate needs a key"
             raise ValueError(message)
         if self.per is not None and self.per < 1:
@@ -132,6 +144,10 @@ class Paginate:
         if self.widows < 1:
             message = "Paginate(widows=...) must be at least 1"
             raise ValueError(message)
+
+    @property
+    def owner(self) -> PageOwnership:
+        return page_owner(self.page, self.on_change)
 
 
 def _validate_ladder(steps: tuple[str, ...], *, of: str = "ladder") -> None:

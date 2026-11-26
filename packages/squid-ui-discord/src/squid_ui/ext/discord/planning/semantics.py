@@ -10,7 +10,6 @@ from squid_ui.ext.discord.planning.native_offers import native_offers
 from squid_ui.ext.discord.planning.navigation import navigation_candidate
 from squid_ui.ext.discord.planning.policy import DiscordOfferScope
 from squid_ui.ext.discord.primitives import nodes as p
-from squid_ui.interactions.ownership import Controlled
 from squid_ui.native import AllocationComparison, NativeBudget, NativeTraits, NativeValue
 from squid_ui.overflow import Alt, Alts, Paginate
 from squid_ui.planning.offers.policy import Offers, OfferScope
@@ -175,12 +174,11 @@ class DiscordSemantics:
                 a, b = left.overflow, right.overflow
                 if isinstance(a, Paginate) and isinstance(b, Paginate):
 
-                    def page(owner):
-                        return replace(owner, value=0) if isinstance(owner, Controlled) else owner
+                    def page(pager: Paginate) -> Paginate:
+                        # An application-owned page is a render-time value, not structure.
+                        return replace(pager, page=0) if pager.on_change is not None else pager
 
-                    return replace(left, overflow=replace(a, page=page(a.page))) == replace(
-                        right, overflow=replace(b, page=page(b.page))
-                    )
+                    return replace(left, overflow=page(a)) == replace(right, overflow=page(b))
                 return left == right
             case p.RawItem() | p.Extension() | p.Variants(), _:
                 return False

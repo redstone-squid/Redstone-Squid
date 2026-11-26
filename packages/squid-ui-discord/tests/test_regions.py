@@ -280,9 +280,7 @@ def test_controlled_and_routed_regions_keep_application_ownership() -> None:
         raise AssertionError("planning must not call application handlers")
 
     session = PresentationState()
-    controlled = sl.region(
-        *region("body", 7).children, key="controlled", title="Controlled", page=sl.controlled(2, changed)
-    )
+    controlled = sl.region(*region("body", 7).children, key="controlled", title="Controlled", page=2, on_change=changed)
     result = plan(controlled, target=target(6), nav=default_nav, session=session)
     session.apply_updates(result.session_updates)
     assert result.report.regions[0].page == 2
@@ -350,8 +348,8 @@ def test_existing_local_pager_is_measured_across_all_pages(controlled: bool) -> 
     async def changed(_event: PageEvent) -> None:
         raise AssertionError("measurement is read-only")
 
-    owner = sl.controlled(0, changed) if controlled else sl.uncontrolled(0)
-    lines = primitives.Lines(("short", "longer text"), overflow=primitives.Paginate(key="local", per=1, page=owner))
+    pager = primitives.Paginate(key="local", per=1, on_change=changed if controlled else None)
+    lines = primitives.Lines(("short", "longer text"), overflow=pager)
     document = sl.region(lines, sl.paragraph("persistent"), key="outer", title="Outer")
     first = plan(document, target=target(10), nav=default_nav)
     assert [(pager.key, pager.pages) for pager in first.scene.pagers] == [("local", 2)]

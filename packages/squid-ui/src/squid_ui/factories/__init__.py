@@ -82,7 +82,6 @@ from squid_ui.factories.controls import (
     choice,
     choices,
     control_group,
-    controlled,
     download,
     entities,
     entity_choice,
@@ -94,7 +93,6 @@ from squid_ui.factories.controls import (
     routed_action_control,
     routed_choices,
     toggle,
-    uncontrolled,
 )
 
 __all__ = [
@@ -116,7 +114,6 @@ __all__ = [
     "columns",
     "context",
     "control_group",
-    "controlled",
     "details",
     "download",
     "entities",
@@ -156,6 +153,5 @@ __all__ = [
     "themed",
     "timestamp",
     "toggle",
-    "uncontrolled",
     "zoned_timestamp",
 ]

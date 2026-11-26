@@ -144,7 +144,7 @@ def _lines_offers[RenderTargetT, ContextT](
                 pagination_chrome(occurrence, scope.context, scope.policy.disabled_controls, pagination.footer),
                 min_fill=pagination.min_fill,
                 widows=pagination.widows,
-                owner=pagination.page,
+                owner=pagination.owner,
                 cursor_key=cursor_key,
                 required_ends=tuple(required),
             )
@@ -392,7 +392,7 @@ def _primitive_text_offers[RenderTargetT, ContextT](
                     pagination_chrome(occurrence, scope.context, scope.policy.disabled_controls, overflow.footer),
                     min_fill=overflow.min_fill,
                     widows=overflow.widows,
-                    owner=overflow.page,
+                    owner=overflow.owner,
                     cursor_key=cursor_key,
                     required_ends=tuple(ends),
                     weights=weights,

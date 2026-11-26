@@ -52,8 +52,6 @@ from squid_ui.ext.discord.primitives.nodes import (
     card_text,
 )
 from squid_ui.overflow import (
-    FIRST_PAGE,
-    LAST_PAGE,
     Alt,
     Alts,
     Condense,
@@ -68,8 +66,6 @@ from squid_ui.overflow import (
 from squid_ui.styles import ActionStyle, Color
 
 __all__ = [
-    "FIRST_PAGE",
-    "LAST_PAGE",
     "ActionStyle",
     "Alt",
     "Alts",

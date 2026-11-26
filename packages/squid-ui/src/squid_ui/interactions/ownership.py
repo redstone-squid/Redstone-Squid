@@ -44,6 +44,30 @@ type Ownership[ValueT, EventT] = Controlled[ValueT, EventT] | Uncontrolled[Value
 """Explicitly choose author-owned values or state stored in the presentation session."""
 
 
+def value_owner[ValueT, EventT](
+    factory: str, value: ValueT | ValueBinding[ValueT], on_change: Callable[[EventT], Awaitable[None]] | None
+) -> Controlled[ValueT, EventT] | ValueBinding[ValueT]:
+    """Pair a factory's value with its writer: a binding writes itself, a plain value needs on_change."""
+    if isinstance(value, ValueBinding):
+        if on_change is not None:
+            message = f"{factory} got a binding, which already receives changes; drop on_change"
+            raise TypeError(message)
+        return value
+    if on_change is None:
+        message = f"{factory} needs on_change or a presentation binding, or nothing could read its value"
+        raise TypeError(message)
+    return Controlled(value, on_change)
+
+
+def layout_owner[ValueT, EventT](
+    factory: str, value: ValueT | ValueBinding[ValueT], on_change: Callable[[EventT], Awaitable[None]] | None
+) -> Ownership[ValueT, EventT]:
+    """Like value_owner, except a plain value alone starts runtime-owned layout state."""
+    if on_change is None and not isinstance(value, ValueBinding):
+        return Uncontrolled(value)
+    return value_owner(factory, value, on_change)
+
+
 def bind_ownership[OwnerT: Controlled[Any, Any] | Uncontrolled[Any] | ValueBinding[Any]](
     ownership: OwnerT, binder: _HandlerBinder
 ) -> OwnerT:
@@ -64,4 +88,6 @@ __all__ = [
     "Ownership",
     "Uncontrolled",
     "bind_ownership",
+    "layout_owner",
+    "value_owner",
 ]

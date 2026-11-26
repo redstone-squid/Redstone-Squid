@@ -71,9 +71,7 @@ async def test_controlled_disclosure_delegates_without_mutating_session(target: 
         changed.append(event.opened)
 
     session = PresentationState()
-    node = sl.details(
-        sl.summary("More"), sl.paragraph("Body"), key="details", open=sl.controlled(value=False, on_change=on_change)
-    )
+    node = sl.details(sl.summary("More"), sl.paragraph("Body"), key="details", open=False, on_change=on_change)
     result = plan(node, target=target, session=session)
     await result.bindings["details.toggle"].handler(
         PressEvent(Actor("reader"), Mock(spec=ActionResponder), context=None)
@@ -90,7 +88,7 @@ def test_repeated_disclosure_toggle_stays_available_on_continuation_pages(target
             sl.paragraph("first body", key="a"),
             sl.paragraph("second body", key="b"),
             key="details",
-            open=sl.uncontrolled(initial=True),
+            open=True,
         ),
         key="r",
         title="R",

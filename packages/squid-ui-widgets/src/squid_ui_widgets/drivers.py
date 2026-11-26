@@ -33,13 +33,13 @@ from squid_ui.factories import (
     action_control,
     choice,
     choices,
-    controlled,
     form,
     routed_action_control,
     routed_choices,
 )
 from squid_ui.interactions import ActionEventView, SubmitEvent
 from squid_ui.interactions.forms import Form, FormLike, FormSpec
+from squid_ui.interactions.ownership import Controlled
 from squid_ui.overflow import PageEvent, RoutedPage
 from squid_ui.palette import Role
 from squid_ui.runtime.definition import Component
@@ -368,7 +368,7 @@ class _ComponentControls[StateT, RenderTargetT: RenderTarget, ContextT = object]
                 tuple(ListItem(str(index), line) for index, line in enumerate(lines)),
                 key,
                 page_size=per,
-                page=controlled(page, turn),
+                page=Controlled(page, turn),
                 markers=False,
             ),
         )
