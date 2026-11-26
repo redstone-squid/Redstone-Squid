@@ -87,6 +87,32 @@ def test_component_tree_state_and_page_cursors_round_trip_as_canonical_json() ->
     assert encoded == MessageRootStateCodec.dumps(MessageRootStateCodec.loads(encoded))
 
 
+def test_node_values_of_every_kind_survive_a_restart() -> None:
+    message_root = MessageRoot(DurableRoot(), access=Everyone(), timeout=None)
+    commit_render(message_root)
+    values = {"toggle": True, "details": False, "tabs": "b", "items": None, "people": ("1", "2")}
+    for key, value in values.items():
+        message_root.presentation.set_node_value(key, value)
+
+    encoded = MessageRootStateCodec.dumps(_registry().capture(message_root, "counter"))
+    restored = _registry().restore(MessageRootStateCodec.loads(encoded), access=Everyone(), timeout=None)
+
+    assert restored.presentation.node_values == values
+
+
+def test_snapshots_from_separate_selection_and_disclosure_stores_restore_fresh() -> None:
+    message_root = MessageRoot(DurableRoot(), access=Everyone(), timeout=None)
+    commit_render(message_root)
+    raw = json.loads(MessageRootStateCodec.dumps(_registry().capture(message_root, "counter")))
+    del raw["presentation"]["node_values"]
+    raw["presentation"]["selections"] = {"tabs": {"selected": ["b"]}}
+    raw["presentation"]["disclosures"] = {"details": {"open": True}}
+
+    restored = _registry().restore(MessageRootStateCodec.loads(json.dumps(raw)), access=Everyone(), timeout=None)
+
+    assert not restored.presentation.node_values
+
+
 def test_old_strategy_memory_is_ignored_when_restoring_a_snapshot() -> None:
     message_root = MessageRoot(DurableRoot(), access=Everyone(), timeout=None)
     commit_render(message_root)

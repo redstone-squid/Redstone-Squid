@@ -202,7 +202,7 @@ def test_semantic_picker_uses_enumerated_fallback_without_capability() -> None:
 def test_fallback_entity_picker_drops_unenumerated_managed_selection() -> None:
     target = without_capabilities(squid_ui.ext.discord.DISCORD_V2_DPY27, "actions.entity")
     session = PresentationState()
-    session.select(
+    session.set_node_value(
         "users",
         (sl.entity.EntityRef(sl.entity.EntityKind.USER, 999).encode(),),
     )

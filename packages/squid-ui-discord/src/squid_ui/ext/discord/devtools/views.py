@@ -194,7 +194,7 @@ class MessageRootInspector(sl.Component):
         children.append(
             sl.section(
                 sl.heading("Presentation"),
-                sl.note("cursors, selections, disclosures"),
+                sl.note("cursors, node values, declared cells"),
                 sl.code(dump(presentation_state(message_root.presentation))),
             )
         )

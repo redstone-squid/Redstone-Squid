@@ -43,7 +43,7 @@ from squid_ui.ext.discord.sessions import SessionKey
 from squid_ui.ext.discord.target import DISCORD_V2_DPY27
 from squid_ui.ext.discord.targets import DEFAULT_TARGETS, TargetRegistry
 from squid_ui.pages import PagePosition
-from squid_ui.presentation_state import CursorState, DisclosureState, PresentationState, SelectionState
+from squid_ui.presentation_state import CursorState, NodeValue, PresentationState
 from squid_ui.runtime.definition import AnyComponent
 from squid_ui.runtime.expansion import render_component_tree
 
@@ -111,11 +111,10 @@ class ComponentState:
 
 @dataclass(frozen=True, slots=True)
 class PresentationSnapshot:
-    """Saved pagination, selection, and disclosure state for a message root."""
+    """Saved pagination, runtime-owned node values, and declared cells for a message root."""
 
     cursors: Mapping[str, CursorState]
-    selections: Mapping[str, SelectionState]
-    disclosures: Mapping[str, DisclosureState]
+    node_values: Mapping[str, NodeValue]
     declared: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
 
 
@@ -371,8 +370,9 @@ def _presentation_to_dict(state: PresentationSnapshot) -> dict[str, object]:
             }
             for key, cursor in state.cursors.items()
         },
-        "selections": {key: {"selected": list(selection.selected)} for key, selection in state.selections.items()},
-        "disclosures": {key: {"open": disclosure.open} for key, disclosure in state.disclosures.items()},
+        "node_values": {
+            key: list(value) if isinstance(value, tuple) else value for key, value in state.node_values.items()
+        },
     }
 
 
@@ -386,8 +386,9 @@ def _presentation_from_wire(wire: WirePresentation) -> PresentationSnapshot:
             )
             for key, item in wire.cursors.items()
         },
-        selections={key: SelectionState(tuple(item.selected)) for key, item in wire.selections.items()},
-        disclosures={key: DisclosureState(item.open) for key, item in wire.disclosures.items()},
+        node_values={
+            key: tuple(value) if isinstance(value, list) else value for key, value in wire.node_values.items()
+        },
         declared=wire.declared,
     )
 
@@ -492,8 +493,7 @@ class ComponentRegistry:
             tuple(components),
             PresentationSnapshot(
                 dict(message_root.presentation.cursors),
-                dict(message_root.presentation.selections),
-                dict(message_root.presentation.disclosures),
+                dict(message_root.presentation.node_values),
                 {
                     path: {
                         name: value
@@ -563,8 +563,7 @@ class ComponentRegistry:
         _restore_component(root, root_snapshot)
         message_root.presentation = PresentationState(
             cursors=dict(state.presentation.cursors),
-            selections=dict(state.presentation.selections),
-            disclosures=dict(state.presentation.disclosures),
+            node_values=dict(state.presentation.node_values),
         )
         message_root.runtime.presentation_cells.restore(
             {

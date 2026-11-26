@@ -50,7 +50,7 @@ async def test_native_entity_picker_keeps_controlled_defaults_and_dispatch(targe
     )
     result = plan(node, target=target, session=session)
     assert result.allocation is not None
-    assert not changes and not session.selections
+    assert not changes and not session.node_values
     assert set(result.bindings) == {"people"}
     match result.scene.body:
         case discord_scene.ComponentsV2(children=children):
@@ -74,7 +74,7 @@ async def test_native_entity_picker_keeps_controlled_defaults_and_dispatch(targe
     )
     assert len(changes) == 1
     assert (changes[0].selected, changes[0].added, changes[0].removed) == ((GRACE,), (GRACE,), (ADA,))
-    assert not session.selections
+    assert not session.node_values
 
 
 @pytest.mark.parametrize("target", TARGETS, ids=lambda target: target.id)
@@ -82,7 +82,7 @@ async def test_uncontrolled_entity_changes_rebuild_delivered_output(target: Targ
     session = PresentationState()
     node = sl.region(sl.entities(key="people", entity_type=EntityType.USER), key="r", title="R")
     first = plan(node, target=target, session=session)
-    assert not session.selections
+    assert not session.node_values
     session.apply_updates(first.session_updates)
     responder = Mock(spec=ActionResponder)
     responder.acknowledge = AsyncMock()
@@ -91,7 +91,7 @@ async def test_uncontrolled_entity_changes_rebuild_delivered_output(target: Targ
     )
     responder.acknowledge.assert_awaited_once()
     responder.invalidate.assert_called_once()
-    assert session.selection("people").selected == (ADA.encode(),)
+    assert session.node_values["people"] == (ADA.encode(),)
     second = plan(node, target=target, session=session)
     assert second.allocation is not first.allocation
     assert second.scene != first.scene

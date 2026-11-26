@@ -2112,7 +2112,7 @@ class TestDeliveryAtomicity:
         await message_root.dispatch(toggle, interaction_harness())
 
         # A second toggle would close a section the reader never saw open.
-        assert message_root.presentation.disclosure("debug").open
+        assert message_root.presentation.node_values["debug"] is True
         assert not message_root.pending
 
     async def test_a_two_press_confirmation_cannot_complete_on_a_refused_arm(self, monkeypatch):

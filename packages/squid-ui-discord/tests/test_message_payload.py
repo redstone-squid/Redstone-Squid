@@ -442,7 +442,7 @@ class TestDurableMode:
                 component_key="panel",
                 component_version=1,
                 components=(),
-                presentation=squid_ui.ext.discord.durability.PresentationSnapshot({}, {}, {}),
+                presentation=squid_ui.ext.discord.durability.PresentationSnapshot({}, {}),
                 target_fingerprint=squid_ui.ext.discord.DISCORD_V2_DPY27.fingerprint,
             ),
             address=address,

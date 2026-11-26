@@ -138,9 +138,9 @@ def test_uncontrolled_toggle_changes_invalidate_retained_output(target: Target[A
     session = PresentationState()
     node = sl.region(sl.action_controls(sl.toggle("Flag", key="flag"), key="actions"), key="r", title="R")
     first = plan(node, target=target, session=session, nav=default_nav)
-    assert not session.toggles
+    assert not session.node_values
     session.apply_updates(first.session_updates)
-    session.set_toggle("flag", on=True)
+    session.set_node_value("flag", value=True)
     second = plan(node, target=target, session=session, nav=default_nav)
     assert second.allocation is not first.allocation
     assert first.scene != second.scene

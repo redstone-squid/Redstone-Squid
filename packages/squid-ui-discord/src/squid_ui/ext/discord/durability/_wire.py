@@ -28,21 +28,13 @@ class WireCursor(WireModel):
     fingerprint: str
 
 
-class WireSelection(WireModel):
-    selected: list[str]
-
-
-class WireDisclosure(WireModel):
-    open: bool
-
-
 class WirePresentation(WireModel):
     # Old snapshots carried planner strategies that no longer affect recovery.
     model_config = ConfigDict(extra="ignore", strict=True)
 
     cursors: dict[str, WireCursor]
-    selections: dict[str, WireSelection]
-    disclosures: dict[str, WireDisclosure]
+    # Older snapshots kept selections and disclosures apart; they restore with fresh layout state.
+    node_values: dict[str, bool | str | list[str] | None] = Field(default_factory=dict)
     declared_protocol: Literal[1] = 1
     declared: dict[str, dict[str, Any]] = Field(default_factory=dict)
 

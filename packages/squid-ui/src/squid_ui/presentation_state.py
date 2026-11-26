@@ -36,19 +36,8 @@ class RevealRequest:
     sequence: int
 
 
-@dataclass(frozen=True, slots=True)
-class SelectionState:
-    selected: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
-class DisclosureState:
-    open: bool = False
-
-
-@dataclass(frozen=True, slots=True)
-class ToggleState:
-    on: bool = False
+type NodeValue = bool | str | tuple[str, ...] | None
+"""A reader's change to a runtime-owned node: open, chosen key, or selected keys."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,9 +80,9 @@ class PresentationState:
     pending_position_sequence: dict[str, int] = field(default_factory=dict, kw_only=True, repr=False)
     region_layout: RegionLayoutState | None = field(default=None, kw_only=True)
     cursors: dict[str, CursorState] = field(default_factory=dict)
-    selections: dict[str, SelectionState] = field(default_factory=dict)
-    disclosures: dict[str, DisclosureState] = field(default_factory=dict)
-    toggles: dict[str, ToggleState] = field(default_factory=dict)
+    node_values: dict[str, NodeValue] = field(default_factory=dict)
+    """Values readers gave runtime-owned nodes, by node key. Read them with
+    ``.get(key, initial)``: a stored None is an explicit choice, unlike a missing key."""
     _revision: int = field(default=0, init=False, repr=False, compare=False, metadata={"stable_identity": False})
 
     def __post_init__(self) -> None:
@@ -152,36 +141,9 @@ class PresentationState:
             if self.cursors.pop(key, None) is not None or pending is not None:
                 self._touch()
 
-    def selection(self, key: str, *, initial: tuple[str, ...] = ()) -> SelectionState:
-        """The stored selection, or ``initial`` when this key was never written.
-
-        The miss has to stay distinguishable from an explicit empty selection: a reader who
-        backed out of an item chose ``()``, and re-seeding them into it would trap them.
-        """
-        return self.selections.get(key, SelectionState(initial))
-
-    def select(self, key: str, selected: tuple[str, ...]) -> None:
-        value = SelectionState(selected)
-        if self.selections.get(key) != value:
-            self.selections[key] = value
-            self._touch()
-
-    def disclosure(self, key: str, *, initial: bool = False) -> DisclosureState:
-        return self.disclosures.get(key, DisclosureState(initial))
-
-    def disclose(self, key: str, open_: bool) -> None:
-        value = DisclosureState(open_)
-        if self.disclosures.get(key) != value:
-            self.disclosures[key] = value
-            self._touch()
-
-    def toggle(self, key: str, *, initial: bool = False) -> ToggleState:
-        return self.toggles.get(key, ToggleState(initial))
-
-    def set_toggle(self, key: str, *, on: bool) -> None:
-        value = ToggleState(on)
-        if self.toggles.get(key) != value:
-            self.toggles[key] = value
+    def set_node_value(self, key: str, value: NodeValue) -> None:
+        if key not in self.node_values or self.node_values[key] != value:
+            self.node_values[key] = value
             self._touch()
 
     def apply_updates(self, updates: Sequence[SessionUpdate]) -> None:
@@ -210,10 +172,6 @@ class PresentationState:
                         changed = True
                     if self.cursors.get(key) != cursor:
                         self.cursors[key] = cursor
-                        changed = True
-                case ToggleUpdate(key=key, state=toggle):
-                    if self.toggles.get(key) != toggle:
-                        self.toggles[key] = toggle
                         changed = True
                 case ActivePagers(keys=keys):
                     for stale in tuple(self.pending_positions):
@@ -245,12 +203,6 @@ class CursorUpdate:
 
 
 @dataclass(frozen=True, slots=True)
-class ToggleUpdate:
-    key: str
-    state: ToggleState
-
-
-@dataclass(frozen=True, slots=True)
 class ActivePagers:
     """The keys still backed by a pager; every other cursor is forgotten."""
 
@@ -267,9 +219,7 @@ class RetainedCompositionUpdate:
     state: RetainedComposition | None
 
 
-type SessionUpdate = (
-    RevealsConsumed | RetainedCompositionUpdate | CursorUpdate | ToggleUpdate | ActivePagers | RegionLayoutUpdate
-)
+type SessionUpdate = RevealsConsumed | RetainedCompositionUpdate | CursorUpdate | ActivePagers | RegionLayoutUpdate
 """One presentation write that planning decided on but did not perform.
 
 Planning only reads the session, and returns what it would have written. A frontend

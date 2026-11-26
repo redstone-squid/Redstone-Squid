@@ -55,7 +55,7 @@ async def test_destination_callbacks_preserve_controlled_ownership(
     result = plan(node, target=target, session=session)
     assert result.allocation is not None
     assert "Unavailable" not in scene.Codec.dumps(result.scene)
-    assert not received and not session.selections
+    assert not received and not session.node_values
     if display == NavigationDisplay.INDIVIDUAL:
         await result.bindings["destinations.b"].handler(
             PressEvent(Actor("reader"), Mock(spec=ActionResponder), context=None)
@@ -70,7 +70,7 @@ async def test_destination_callbacks_preserve_controlled_ownership(
         binding = next(iter(result.bindings.values()))
         await binding.handler(SelectionEvent(Actor("reader"), Mock(spec=ActionResponder), values=("b",), context=None))
     assert received == ["b"]
-    assert not session.selections
+    assert not session.node_values
 
 
 @pytest.mark.parametrize("target", TARGETS, ids=lambda target: target.id)
@@ -79,7 +79,7 @@ def test_navigation_selection_changes_invalidate_retained_allocations(target: Ta
     node = sl.navigation(sl.nav_option("First", key="a"), sl.nav_option("Second", key="b"), key="destinations")
     first = plan(node, target=target, session=session)
     session.apply_updates(first.session_updates)
-    session.select("destinations", ("b",))
+    session.set_node_value("destinations", "b")
     second = plan(node, target=target, session=session)
     assert second.allocation is not first.allocation
     assert second.scene != first.scene
@@ -107,7 +107,7 @@ def test_destination_pages_are_independent_of_content_pages(target: Target[Any, 
             assert ("first body" if body_page == 0 else "second body") in wire
             for index in range(4):
                 assert (f"Destination {index}" in wire) == (index // 2 == nav_page)
-    assert not session.selections
+    assert not session.node_values
 
 
 @pytest.mark.parametrize("target", [*TARGETS[:2], *TARGETS[3:]], ids=lambda target: target.id)

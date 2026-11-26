@@ -40,7 +40,7 @@ from squid_ui.pages import PagePosition
 from squid_ui.planning import PlanCache, PlanningSnapshot, ResourceCost
 from squid_ui.planning.joint_search import JointInfeasibleError, JointUnsupportedError
 from squid_ui.planning.result import PlanResult
-from squid_ui.presentation_state import PresentationState, SelectionState
+from squid_ui.presentation_state import PresentationState
 from squid_ui.target_types import Renderable
 
 
@@ -357,8 +357,8 @@ def test_stale_remembered_selections_are_dropped_by_html_planning() -> None:
     # These uncontrolled selections are remembered in presentation state. Removed destinations
     # must not remain selected in the scene; navigation falls back to an available destination.
     session = PresentationState()
-    session.selections["entries"] = SelectionState(("gone",))
-    session.selections["nav"] = SelectionState(("gone",))
+    session.node_values["entries"] = "gone"
+    session.node_values["nav"] = "gone"
     document = sl.group(
         sl.items(sl.item(sl.item_label("One"), sl.paragraph("first"), key="one"), key="entries"),
         sl.navigation(sl.nav_option("Home", key="home"), sl.nav_option("Away", key="away"), key="nav"),

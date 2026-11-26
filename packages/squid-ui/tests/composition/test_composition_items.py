@@ -61,7 +61,7 @@ async def test_opening_and_closing_an_item_restores_its_overview_page(target: Ta
     overview = plan(
         node, target=target, composition=options, session=session, positions={"catalog.items": PagePosition(page=1)}
     )
-    assert not session.selections and not session.cursors
+    assert not session.node_values and not session.cursors
     assert "catalog.focus" in overview.bindings
     assert "__cursor_previous.catalog.items" in overview.bindings
     assert "action-a" not in overview.bindings and "action-b" not in overview.bindings
@@ -104,7 +104,7 @@ async def test_controlled_item_selection_delegates_without_publishing_a_new_sele
     await result.bindings["catalog.focus"].handler(
         SelectionEvent(Actor("reader"), Mock(spec=ActionResponder), values=("a",), context=None)
     )
-    assert changes == ["a"] and not session.selections
+    assert changes == ["a"] and not session.node_values
 
 
 @pytest.mark.parametrize("target", TARGETS, ids=lambda target: target.id)
@@ -114,7 +114,7 @@ async def test_initial_opened_display_does_not_override_a_later_back_action(targ
         sl.item(sl.item_label("First"), sl.paragraph("Body"), key="a"), key="catalog", display=ItemDisplay.OPENED
     )
     first = plan(node, target=target, session=session)
-    assert "catalog.back" in first.bindings and not session.selections
+    assert "catalog.back" in first.bindings and not session.node_values
     await first.bindings["catalog.back"].handler(PressEvent(Actor("reader"), Mock(spec=ActionResponder), context=None))
     second = plan(node, target=target, session=session)
     assert "catalog.focus" in second.bindings
@@ -145,7 +145,7 @@ def test_opened_item_heading_and_back_repeat_on_every_detail_page(target: Target
 @pytest.mark.parametrize("target", TARGETS, ids=lambda target: target.id)
 def test_removed_open_item_returns_to_the_remaining_overview(target: Target[Any, Any, Any, Any]) -> None:
     session = PresentationState()
-    session.select("catalog", ("removed",))
+    session.set_node_value("catalog", "removed")
     result = plan(catalogue(), target=target, session=session)
     assert "catalog.focus" in result.bindings
     assert "catalog.back" not in result.bindings
@@ -163,15 +163,15 @@ def test_switching_items_retains_hidden_nested_page_positions(target: Target[Any
         ),
         key="catalog",
     )
-    session.select("catalog", ("a",))
+    session.set_node_value("catalog", "a")
     first = plan(node, target=target, session=session, positions={"a-pages": PagePosition(page=1)})
     session.apply_updates(first.session_updates)
     remembered = session.cursor("a-pages")
-    session.select("catalog", ("b",))
+    session.set_node_value("catalog", "b")
     second = plan(node, target=target, session=session)
     session.apply_updates(second.session_updates)
     assert session.cursor("a-pages") == remembered
     assert all(pager.key != "a-pages" for pager in second.scene.pagers)
-    session.select("catalog", ("a",))
+    session.set_node_value("catalog", "a")
     restored = plan(node, target=target, session=session)
     assert next(pager for pager in restored.scene.pagers if pager.key == "a-pages").page == 1

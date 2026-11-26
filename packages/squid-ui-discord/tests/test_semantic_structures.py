@@ -58,7 +58,7 @@ def test_items_switch_from_overview_to_focused_content_through_session_state() -
         ),
     )
     overview = plan(document, target=DISCORD_V2_DPY27, session=session)
-    session.select("catalog", ("two",))
+    session.set_node_value("catalog", "two")
     focused = plan(document, target=DISCORD_V2_DPY27, session=session)
 
     assert any(
@@ -76,7 +76,7 @@ def test_details_disclosure_is_presentation_state() -> None:
     document = Details("debug", sl.semantic.Summary("Debug details"), (Paragraph("hidden body"),))
 
     closed = plan(document, target=DISCORD_V2_DPY27, session=session)
-    session.disclose("debug", open_=True)
+    session.set_node_value("debug", value=True)
     opened = plan(document, target=DISCORD_V2_DPY27, session=session)
 
     assert not any(
@@ -92,9 +92,9 @@ def test_details_disclosure_is_presentation_state() -> None:
 def test_an_unset_selection_is_distinguishable_from_an_empty_one() -> None:
     session = PresentationState()
 
-    assert session.selection("catalog", initial=("two",)).selected == ("two",)
-    session.select("catalog", ())
-    assert session.selection("catalog", initial=("two",)).selected == ()
+    assert session.node_values.get("catalog", "two") == "two"
+    session.set_node_value("catalog", None)
+    assert session.node_values.get("catalog", "two") is None
 
 
 def test_navigation_groups_six_destinations() -> None:

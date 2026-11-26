@@ -24,7 +24,8 @@ def disclosure_state[RenderTargetT, ContextT](
         case Controlled(value=value) | ValueBinding(value=value):
             return value
         case Uncontrolled(initial=initial):
-            return session.disclosure(node.key, initial=initial).open
+            stored = session.node_values.get(node.key, initial)
+            return stored if isinstance(stored, bool) else initial
 
 
 def toggle_state[ContextT](node: Toggle[ContextT], session: PresentationState) -> bool:
@@ -33,7 +34,8 @@ def toggle_state[ContextT](node: Toggle[ContextT], session: PresentationState) -
         case Controlled(value=value) | ValueBinding(value=value):
             return value
         case Uncontrolled(initial=initial):
-            return session.toggle(node.key, initial=initial).on
+            stored = session.node_values.get(node.key, initial)
+            return stored if isinstance(stored, bool) else initial
 
 
 def item_state[RenderTargetT, ContextT](
@@ -49,10 +51,8 @@ def item_state[RenderTargetT, ContextT](
         case Controlled(value=value) | ValueBinding(value=value):
             return (value if value in keys else None), True
         case Uncontrolled(initial=initial):
-            seed = () if initial is None else (initial,)
-            remembered = session.selection(node.key, initial=seed).selected
-            opened = remembered[0] if remembered and remembered[0] in keys else None
-            return opened, node.key in session.selections or initial is not None
+            opened = session.node_values.get(node.key, initial)
+            return (opened if opened in keys else None), node.key in session.node_values or initial is not None
 
 
 def opened_item[RenderTargetT, ContextT](
@@ -76,10 +76,8 @@ def navigation_current[ContextT](node: Navigation[ContextT], session: Presentati
         case Controlled(value=value) | ValueBinding(value=value):
             current = value
         case Uncontrolled(initial=initial):
-            keys = {destination.key for destination in available}
-            seed = () if initial is None else (initial,)
-            remembered = session.selection(node.key, initial=seed).selected
-            current = remembered[0] if remembered and remembered[0] in keys else None
+            remembered = session.node_values.get(node.key, initial)
+            current = remembered if remembered in {destination.key for destination in available} else None
     if current is None and available:
         current = available[0].key
     return current

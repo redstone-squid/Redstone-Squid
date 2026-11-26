@@ -6,22 +6,16 @@ from squid_ui.presentation_state import (
     CursorState,
     CursorUpdate,
     PresentationState,
-    ToggleState,
-    ToggleUpdate,
 )
 
 
 def test_delivered_updates_advance_one_revision_and_replay_is_unchanged() -> None:
     state = PresentationState()
-    updates = (
-        CursorUpdate("pages", CursorState(PagePosition(page=2), extent=4, fingerprint="content")),
-        ToggleUpdate("expanded", ToggleState(on=True)),
-    )
+    updates = (CursorUpdate("pages", CursorState(PagePosition(page=2), extent=4, fingerprint="content")),)
 
     state.apply_updates(updates)
 
     assert state.cursor("pages").position.page == 2
-    assert state.toggle("expanded").on
     assert state.revision == 1
 
     state.apply_updates(updates)

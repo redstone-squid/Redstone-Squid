@@ -104,7 +104,7 @@ async def test_a_managed_items_seed_opens_an_entry_and_back_gets_out_of_it() -> 
 
 async def test_a_controlled_items_never_reads_the_session() -> None:
     session = PresentationState()
-    session.select("catalog", ("two",))
+    session.set_node_value("catalog", "two")
 
     _, record = _recorder()
 
@@ -124,7 +124,7 @@ async def test_a_controlled_items_reports_both_opening_and_backing_out() -> None
     await _fire(detail, "catalog.back", _select(()))
 
     assert [event.opened for event in seen] == ["two", None]
-    assert not session.selections
+    assert not session.node_values
 
 
 # --- Details ---------------------------------------------------------------------------
@@ -152,7 +152,7 @@ async def test_a_managed_details_seed_applies_once_and_then_the_session_owns_it(
 
 async def test_a_controlled_details_reports_the_requested_state_and_ignores_the_session() -> None:
     session = PresentationState()
-    session.disclose("debug", open_=True)
+    session.set_node_value("debug", value=True)
     seen, record = _recorder()
     document = Details(
         "debug",
@@ -202,7 +202,7 @@ async def test_a_controlled_choices_still_reports_what_changed() -> None:
 
     assert isinstance(seen[0], ChoiceEvent)
     assert (seen[0].selected, seen[0].added, seen[0].removed) == (("3",), ("3",), ("1",))
-    assert not session.selections
+    assert not session.node_values
 
 
 async def test_a_managed_navigation_remembers_the_destination_and_defaults_to_the_first() -> None:
@@ -218,7 +218,7 @@ async def test_a_managed_navigation_remembers_the_destination_and_defaults_to_th
 
 async def test_a_managed_navigation_forgets_a_destination_that_went_away() -> None:
     session = PresentationState()
-    session.select("tabs", ("4",))
+    session.set_node_value("tabs", "4")
     document = Navigation("tabs", tuple(NavOption(str(index), f"Tab {index}") for index in range(6, 12)))
 
     assert _chosen(plan(document, target=DISCORD_V2_DPY27, session=session)) == ("6",)

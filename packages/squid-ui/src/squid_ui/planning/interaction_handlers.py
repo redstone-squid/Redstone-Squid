@@ -39,6 +39,7 @@ from squid_ui.interactions import (
 from squid_ui.interactions.forms import FormSpec, SubmitHandler
 from squid_ui.interactions.handlers import _HandlerBinder, _HandlerComposition
 from squid_ui.interactions.ownership import bind_ownership
+from squid_ui.planning.structure import disclosure_state, toggle_state
 from squid_ui.presentation_state import PresentationState
 
 if TYPE_CHECKING:
@@ -108,7 +109,7 @@ class ChoiceCommit[ContextT = object](_HandlerComposition):
                 await self.ownership.commit(event, selected)
             case Uncontrolled():
                 await event.acknowledge()
-                self.session.select(self.key, selected)
+                self.session.set_node_value(self.key, selected)
                 event.invalidate()
 
 
@@ -171,7 +172,7 @@ class EntityCommit[ContextT = object](_HandlerComposition):
                 await self.ownership.commit(event, selected)
             case Uncontrolled():
                 await event.acknowledge()
-                self.session.select(self.key, tuple(value.encode() for value in selected))
+                self.session.set_node_value(self.key, tuple(value.encode() for value in selected))
                 event.invalidate()
 
 
@@ -231,7 +232,7 @@ class ItemCommit[ContextT = object](_HandlerComposition):
                 await self.ownership.commit(event, opened)
             case Uncontrolled():
                 await event.acknowledge()
-                self.session.select(self.key, () if opened is None else (opened,))
+                self.session.set_node_value(self.key, opened)
                 event.invalidate()
 
 
@@ -290,7 +291,7 @@ class NavigationCommit[ContextT = object](_HandlerComposition):
                 await self.ownership.commit(event, destination)
             case Uncontrolled():
                 await event.acknowledge()
-                self.session.select(self.key, (destination,))
+                self.session.set_node_value(self.key, destination)
                 event.invalidate()
 
 
@@ -353,10 +354,9 @@ class ToggleDetails[ContextT = object](_HandlerComposition):
                 )
             case ValueBinding():
                 await self.node.open.commit(event, not self.node.open.reference.read())
-            case Uncontrolled(initial=seed):
+            case Uncontrolled():
                 await event.acknowledge()
-                current = self.session.disclosure(self.node.key, initial=seed).open
-                self.session.disclose(self.node.key, not current)
+                self.session.set_node_value(self.node.key, not disclosure_state(self.node, self.session))
                 event.invalidate()
 
 
@@ -391,10 +391,9 @@ class FlipToggle[ContextT = object](_HandlerComposition):
                 )
             case ValueBinding():
                 await self.node.on.commit(event, not self.node.on.reference.read())
-            case Uncontrolled(initial=initial):
+            case Uncontrolled():
                 await event.acknowledge()
-                current = self.session.toggle(self.node.key, initial=initial).on
-                self.session.set_toggle(self.node.key, on=not current)
+                self.session.set_node_value(self.node.key, not toggle_state(self.node, self.session))
                 event.invalidate()
 
 

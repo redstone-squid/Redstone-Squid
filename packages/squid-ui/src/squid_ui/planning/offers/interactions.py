@@ -445,16 +445,14 @@ def _entities_offers[RenderTargetT, ContextT](
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     context = scope.context
-    previous = (
-        value.selection.value
-        if isinstance(value.selection, Controlled | ValueBinding)
-        else tuple(
-            EntityRef.decode(key)
-            for key in context.presentation.selection(
-                value.key, initial=tuple(ref.encode() for ref in value.selection.initial)
-            ).selected
-        )
-    )
+    if isinstance(value.selection, Controlled | ValueBinding):
+        previous = value.selection.value
+    else:
+        stored = context.presentation.node_values.get(value.key)
+        if isinstance(stored, tuple):
+            previous = tuple(EntityRef.decode(key) for key in stored)
+        else:
+            previous = value.selection.initial
     key = control_key(occurrence, consume=context.work.consume)
     commit = EntityCommit(value.selection, value.key, previous, context.presentation)
     options = tuple(
@@ -523,13 +521,13 @@ def _choices_offers[RenderTargetT, ContextT](
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     context = scope.context
-    previous = (
-        value.selected
-        if isinstance(value, sem.RoutedChoices)
-        else value.selection.value
-        if isinstance(value.selection, Controlled | ValueBinding)
-        else context.presentation.selection(value.key, initial=value.selection.initial).selected
-    )
+    if isinstance(value, sem.RoutedChoices):
+        previous = value.selected
+    elif isinstance(value.selection, Controlled | ValueBinding):
+        previous = value.selection.value
+    else:
+        stored = context.presentation.node_values.get(value.key)
+        previous = stored if isinstance(stored, tuple) else value.selection.initial
     options = tuple(
         controls.Option(
             "".join(tree.plain(node) for node in resolve_text(choice.label, context.localization).nodes),

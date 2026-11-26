@@ -47,7 +47,7 @@ async def test_disclosure_only_binds_visible_controls_and_rebuilds_on_open(targe
     assert closed.allocation is not None
     assert set(closed.bindings) == {"details.toggle"}
     assert "Hidden action" not in scene.Codec.dumps(closed.scene)
-    assert not session.disclosures
+    assert not session.node_values
     session.apply_updates(closed.session_updates)
     responder = Mock(spec=ActionResponder)
     await closed.bindings["details.toggle"].handler(PressEvent(Actor("reader"), responder, context=None))
@@ -79,7 +79,7 @@ async def test_controlled_disclosure_delegates_without_mutating_session(target: 
         PressEvent(Actor("reader"), Mock(spec=ActionResponder), context=None)
     )
     assert changed == [True]
-    assert not session.disclosures
+    assert not session.node_values
 
 
 @pytest.mark.parametrize("target", TARGETS, ids=lambda target: target.id)
@@ -116,17 +116,17 @@ def test_hidden_pager_retains_its_last_delivered_cursor_without_staging_new_posi
     closed = plan(node, target=target, session=session)
     session.apply_updates(closed.session_updates)
     assert not session.cursors and not closed.scene.pagers
-    session.disclose("details", open_=True)
+    session.set_node_value("details", value=True)
     first = plan(node, target=target, session=session, positions={"items": PagePosition(page=1)})
     assert not session.cursors
     session.apply_updates(first.session_updates)
     remembered = session.cursor("items")
-    session.disclose("details", open_=False)
+    session.set_node_value("details", value=False)
     closed_again = plan(node, target=target, session=session)
     assert not closed_again.scene.pagers
     session.apply_updates(closed_again.session_updates)
     assert session.cursor("items") == remembered
-    session.disclose("details", open_=True)
+    session.set_node_value("details", value=True)
     reopened = plan(node, target=target, session=session)
     assert reopened.scene.pagers[0].page == 1
     assert "second body" in scene.Codec.dumps(reopened.scene)

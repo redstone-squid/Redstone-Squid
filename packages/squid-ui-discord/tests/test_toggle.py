@@ -83,7 +83,7 @@ async def test_managed_toggle_flips_session_state_and_invalidates() -> None:
 
     await initial.bindings["notices"].handler(_event(responder))
 
-    assert session.toggle("notices").on
+    assert session.node_values["notices"] is True
     assert responder.acknowledged
     assert responder.invalidated
     assert _button(sl.planning.plan(node, target=DISCORD_V2_DPY27, session=session)).label == "Notifications: On"
@@ -91,7 +91,7 @@ async def test_managed_toggle_flips_session_state_and_invalidates() -> None:
 
 async def test_controlled_toggle_reports_flipped_value_without_writing_session() -> None:
     session = PresentationState()
-    session.set_toggle("notices", on=True)
+    session.set_node_value("notices", value=True)
     seen: list[sl.ToggleEvent]
     seen, record = _recorder()
     node = sl.toggle("Notifications", key="notices", on=sl.controlled(value=False, on_change=record))
@@ -101,7 +101,7 @@ async def test_controlled_toggle_reports_flipped_value_without_writing_session()
 
     assert _button(result).label == "Notifications: Off"
     assert [event.value for event in seen] == [True]
-    assert session.toggle("notices").on
+    assert session.node_values["notices"] is True
 
 
 def test_toggle_lowering_uses_one_toned_button_and_custom_labels() -> None:

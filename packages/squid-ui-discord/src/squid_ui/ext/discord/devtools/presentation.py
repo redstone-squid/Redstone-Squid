@@ -316,8 +316,7 @@ def dump_lines(lines: list[str]) -> str:
 def presentation_state(session: sl.runtime.PresentationState) -> dict[str, object]:
     return {
         "cursors": dict(session.cursors),
-        "selections": dict(session.selections),
-        "disclosures": dict(session.disclosures),
+        "node_values": dict(session.node_values),
         "declared": session.declared.inspect(),
     }
 
