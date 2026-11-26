@@ -18,6 +18,7 @@ from datetime import datetime
 from enum import IntEnum, StrEnum
 from typing import TYPE_CHECKING, Any, ClassVar, Literal, overload
 
+from squid_ui._presentation import ValueBinding
 from squid_ui.authoring.grids import GridCell, validate_grid
 from squid_ui.authoring.rosters import RosterPlacement
 from squid_ui.boundary import Boundary
@@ -108,21 +109,21 @@ class TimeStyle(StrEnum):
 # --- Who owns a node's value -----------------------------------------------------------
 
 
-type ChoiceOwnership[ContextT = object] = Ownership[tuple[str, ...], ChoiceEvent[ContextT]]
-type EntityOwnership[ContextT = object] = Ownership[tuple[EntityRef, ...], EntityEvent[ContextT]]
+# Value controls exist to be read, so the application or a presentation cell owns them.
+type ValueOwnership[ValueT, EventT] = Controlled[ValueT, EventT] | ValueBinding[ValueT]
+type ChoiceOwnership[ContextT = object] = ValueOwnership[tuple[str, ...], ChoiceEvent[ContextT]]
+type EntityOwnership[ContextT = object] = ValueOwnership[tuple[EntityRef, ...], EntityEvent[ContextT]]
+type ToggleOwnership[ContextT = object] = ValueOwnership[bool, ToggleEvent[ContextT]]
+type ScaleOwnership[ContextT = object] = ValueOwnership[int | None, ScaleEvent[ContextT]]
+
+# Layout state can also stay with the runtime when nobody needs to read it.
 type ItemOwnership[ContextT = object] = Ownership[str | None, OpenEvent[str | None, ContextT]]
 type DisclosureOwnership[ContextT = object] = Ownership[bool, OpenEvent[bool, ContextT]]
-type ToggleOwnership[ContextT = object] = Ownership[bool, ToggleEvent[ContextT]]
-type ScaleOwnership[ContextT = object] = Ownership[int | None, ScaleEvent[ContextT]]
 type NavOwnership[ContextT = object] = Ownership[str | None, NavigateEvent[ContextT]]
 
-# The engine-managed default of each stateful node, named for the state it seeds.
-UNSELECTED: ChoiceOwnership = Uncontrolled(())
-NO_ENTITIES: EntityOwnership = Uncontrolled(())
+# The engine-managed default of each layout node, named for the state it seeds.
 UNOPENED: ItemOwnership = Uncontrolled(None)
 CLOSED: DisclosureOwnership = Uncontrolled(initial=False)
-OFF: ToggleOwnership = Uncontrolled(initial=False)
-UNRATED: ScaleOwnership = Uncontrolled(None)
 FIRST_OPTION: NavOwnership = Uncontrolled(None)
 
 
@@ -529,7 +530,7 @@ class Toggle[ContextT = object](Adaptable[RenderTarget, ContextT]):
 
     key: str
     label: TextLike
-    on: ToggleOwnership[ContextT] = OFF
+    on: ToggleOwnership[ContextT]
     on_label: TextLike | None = None
     off_label: TextLike | None = None
     tone: Tone | Role = Tone.NEUTRAL
@@ -787,7 +788,7 @@ class Choices[ContextT = object](Adaptable[RenderTarget, ContextT]):
 
     key: str
     choices: tuple[Choice, ...]
-    selection: ChoiceOwnership[ContextT] = UNSELECTED
+    selection: ChoiceOwnership[ContextT]
     minimum: int = 1
     maximum: int = 1
     flexibility: Flexibility = Flexibility.NORMAL
@@ -801,8 +802,8 @@ class Entities[ContextT = object](Adaptable[RenderTarget, ContextT]):
 
     key: str
     entity_type: EntityType
-    choices: tuple[EntityChoice, ...] = ()
-    selection: EntityOwnership[ContextT] = NO_ENTITIES
+    choices: tuple[EntityChoice, ...]
+    selection: EntityOwnership[ContextT]
     minimum: int = 1
     maximum: int = 1
     conversation_types: tuple[ConversationType, ...] = ()
@@ -1236,11 +1237,7 @@ def paged[RenderTargetT = RenderTarget, ContextT = object](
 __all__ = [
     "CLOSED",
     "FIRST_OPTION",
-    "NO_ENTITIES",
-    "OFF",
     "UNOPENED",
-    "UNRATED",
-    "UNSELECTED",
     "ActionControl",
     "ActionControls",
     "Adaptable",
@@ -1334,6 +1331,7 @@ __all__ = [
     "Truncated",
     "Unbreakable",
     "Uncontrolled",
+    "ValueOwnership",
     "ZonedTimestamp",
     "best_effort",
     "budget",

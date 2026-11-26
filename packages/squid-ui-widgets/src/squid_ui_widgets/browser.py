@@ -26,7 +26,6 @@ from squid_ui.factories import (
     bullets,
     choice,
     choices,
-    controlled,
     heading,
     note,
     stack,
@@ -258,7 +257,7 @@ class Browser[ItemT, RenderTargetT: RenderTarget = RenderTarget, ContextT = obje
             picker = choices(
                 *(choice(self.label(item), key=self.identity(item)) for item in items),
                 key=f"{self.key}.open",
-                selection=controlled((), partial(self._selected, self.session.revision)),
+                on_change=partial(self._selected, self.session.revision),
                 minimum=1,
                 maximum=1,
             )

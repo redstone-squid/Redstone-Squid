@@ -79,7 +79,7 @@ class RecalculationProposalScreen(sd.Screen[None, Any, "RedstoneSquid"]):
                             for target in self.targets[:25]
                         ),
                         key="target",
-                        selection=sl.controlled((), self._match),
+                        on_change=self._match,
                     )
                 )
             else:

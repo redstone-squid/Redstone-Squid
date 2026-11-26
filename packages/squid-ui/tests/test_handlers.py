@@ -91,9 +91,8 @@ def test_bindings_routes_and_form_callbacks_preserve_shared_identity() -> None:
 
 def test_shared_commit_and_ownership_are_selected_once() -> None:
     ownership: ChoiceOwnership = Controlled((), registration())
-    session = PresentationState()
-    first = ChoiceCommit(ownership, "one", (), session)
-    second = ChoiceCommit(ownership, "two", (), session)
+    first = ChoiceCommit(ownership, ())
+    second = ChoiceCommit(ownership, ())
     actions, _ = bind_handlers(
         {
             "one": ActionBinding("one", ChooseChoice(first, "a")),
@@ -109,7 +108,6 @@ def test_shared_commit_and_ownership_are_selected_once() -> None:
     assert isinstance(three, SelectChoices)
     assert one.commit is two.commit
     assert one.commit.ownership is three.commit.ownership
-    assert one.commit.session is three.commit.session is session
 
 
 @pytest.mark.parametrize("details", (False, True))
@@ -121,8 +119,8 @@ def test_shared_semantic_nodes_remain_shared(details: bool) -> None:
         second = ToggleDetails(node, open=True, session=session)
     else:
         node = Toggle("toggle", "Toggle", Controlled(value=False, on_change=registration()))
-        first = FlipToggle(node, on=False, session=session)
-        second = FlipToggle(node, on=True, session=session)
+        first = FlipToggle(node, on=False)
+        second = FlipToggle(node, on=True)
     actions, _ = bind_handlers({"one": ActionBinding("one", first), "two": ActionBinding("two", second)}, {}, "html")
     one, two = actions["one"].handler, actions["two"].handler
     assert isinstance(one, FlipToggle | ToggleDetails)
@@ -133,8 +131,8 @@ def test_shared_semantic_nodes_remain_shared(details: bool) -> None:
 
 def generated_adapters(callback: HandlerSet) -> tuple[Callable[[Any], Awaitable[None]], ...]:
     session = PresentationState()
-    choices = ChoiceCommit(Controlled((), callback), "choices", (), session)
-    entities = EntityCommit(Controlled((), callback), "entities", (), session)
+    choices = ChoiceCommit(Controlled((), callback), ())
+    entities = EntityCommit(Controlled((), callback), ())
     items = ItemCommit(Controlled(None, callback), "items", session)
     navigation = NavigationCommit(Controlled("a", callback), "nav", session)
     return (
@@ -151,7 +149,7 @@ def generated_adapters(callback: HandlerSet) -> tuple[Callable[[Any], Awaitable[
             open=False,
             session=session,
         ),
-        FlipToggle(Toggle("toggle", "Toggle", Controlled(value=False, on_change=callback)), on=False, session=session),
+        FlipToggle(Toggle("toggle", "Toggle", Controlled(value=False, on_change=callback)), on=False),
         ForwardSelection(callback, "a"),
     )
 

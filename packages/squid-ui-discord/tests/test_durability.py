@@ -90,7 +90,7 @@ def test_component_tree_state_and_page_cursors_round_trip_as_canonical_json() ->
 def test_node_values_of_every_kind_survive_a_restart() -> None:
     message_root = MessageRoot(DurableRoot(), access=Everyone(), timeout=None)
     commit_render(message_root)
-    values = {"toggle": True, "details": False, "tabs": "b", "items": None, "people": ("1", "2")}
+    values = {"details": True, "collapsed": False, "tabs": "b", "items": None}
     for key, value in values.items():
         message_root.presentation.set_node_value(key, value)
 

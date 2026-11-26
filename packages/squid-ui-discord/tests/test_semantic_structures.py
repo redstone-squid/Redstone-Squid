@@ -27,6 +27,7 @@ from squid_ui.authoring.semantic import (
 from squid_ui.content.text import Markup
 from squid_ui.ext.discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, render_static
 from squid_ui.ext.discord import scene as discord_scene
+from squid_ui.interactions.ownership import Controlled
 from squid_ui.pages import PagePosition
 from squid_ui.planning import plan
 from squid_ui.planning.joint_search import JointInfeasibleError
@@ -34,9 +35,16 @@ from squid_ui.planning.target import Target
 from squid_ui.runtime import PresentationState
 
 
+async def _ignore(_event: object) -> None: ...
+
+
 def test_single_choices_use_a_picker_at_both_sizes() -> None:
-    small = Choices("size", tuple(Choice(str(index), str(index)) for index in range(3)))
-    large = Choices("size", tuple(Choice(str(index), str(index)) for index in range(6)))
+    small = Choices(
+        "size", tuple(Choice(str(index), str(index)) for index in range(3)), selection=Controlled((), _ignore)
+    )
+    large = Choices(
+        "size", tuple(Choice(str(index), str(index)) for index in range(6)), selection=Controlled((), _ignore)
+    )
 
     assert isinstance(
         plan(small, target=DISCORD_V2_DPY27).scene.expect_body(discord_scene.ComponentsV2).children[0],
@@ -107,7 +115,9 @@ def test_navigation_groups_six_destinations() -> None:
 
 
 def test_large_semantic_pickers_keep_keyed_pages_within_native_limits() -> None:
-    choices = Choices("size", tuple(Choice(str(index), f"Choice {index}") for index in range(36)))
+    choices = Choices(
+        "size", tuple(Choice(str(index), f"Choice {index}") for index in range(36)), selection=Controlled((), _ignore)
+    )
     items = Items(
         "catalog",
         tuple(
@@ -197,7 +207,9 @@ def test_keyed_item_page_stays_with_its_anchor_when_entries_are_inserted() -> No
 
 
 def test_choices_minimum_zero_allows_deselecting_all() -> None:
-    document = Choices("size", tuple(Choice(str(index), str(index)) for index in range(6)), minimum=0)
+    document = Choices(
+        "size", tuple(Choice(str(index), str(index)) for index in range(6)), Controlled((), _ignore), minimum=0
+    )
 
     select = next(
         node
@@ -208,7 +220,9 @@ def test_choices_minimum_zero_allows_deselecting_all() -> None:
 
 
 def test_cross_page_multi_choice_requires_an_explicit_grouping_model() -> None:
-    document = Choices("many", tuple(Choice(str(index), str(index)) for index in range(36)), maximum=2)
+    document = Choices(
+        "many", tuple(Choice(str(index), str(index)) for index in range(36)), Controlled((), _ignore), maximum=2
+    )
 
     with pytest.raises(JointInfeasibleError):
         plan(document, target=DISCORD_V2_DPY27)

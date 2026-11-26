@@ -44,6 +44,9 @@ from squid_ui.presentation_state import PresentationState
 from squid_ui.target_types import Renderable
 
 
+async def _ignore(_event: object) -> None: ...
+
+
 async def _pressed(_event: ActionEvent) -> None:
     return None
 
@@ -155,6 +158,7 @@ def test_html_planner_preserves_semantic_structures_and_metadata() -> None:
                 *(sl.choice(f"Choice {index}", key=str(index)) for index in range(30)),
                 key="choice",
                 maximum=3,
+                on_change=_ignore,
             ),
             sl.routed_choices(
                 sl.choice("One", key="one"),

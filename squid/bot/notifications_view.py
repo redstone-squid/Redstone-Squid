@@ -157,13 +157,15 @@ class NotificationPreferencesControls(sl.Component[ComponentsV2Target, sd.Reques
                 sl.toggle(
                     tr(t"bot-notifications-view-web-inbox = Web inbox"),
                     key="web",
-                    on=sl.controlled(self.web_enabled, self._toggle_web),
+                    on=self.web_enabled,
+                    on_change=self._toggle_web,
                     tone=sl.Tone.SUCCESS if self.web_enabled else sl.Tone.NEUTRAL,
                 ),
                 sl.toggle(
                     tr(t"bot-notifications-view-discord-dms = Discord DMs"),
                     key="dm",
-                    on=sl.controlled(self.dm_enabled, self._toggle_dm),
+                    on=self.dm_enabled,
+                    on_change=self._toggle_dm,
                     tone=sl.Tone.SUCCESS if self.dm_enabled else sl.Tone.NEUTRAL,
                 ),
                 key="delivery",
@@ -224,10 +226,8 @@ class NotificationSubscriptions(sl.Component[ComponentsV2Target, sd.Request[Any,
                 sl.choices(
                     *(sl.choice(self.describe(row), key=str(row.id), description=self.detail(row)) for row in shown),
                     key=f"unfollow-{start}",
-                    selection=sl.controlled(
-                        tuple(key for key in self.selected_ids if key in visible),
-                        partial(self._selection_changed, visible),
-                    ),
+                    selection=tuple(key for key in self.selected_ids if key in visible),
+                    on_change=partial(self._selection_changed, visible),
                     minimum=0,
                     maximum=len(shown),
                 ).unbreakable()
@@ -534,7 +534,8 @@ class NotificationInbox(sl.Component[ComponentsV2Target, sd.Request[Any, Redston
                     for notification in self._inbox
                 ),
                 key="inbox",
-                selection=sl.controlled(self.selected_inbox_ids, self._inbox_selection_changed),
+                selection=self.selected_inbox_ids,
+                on_change=self._inbox_selection_changed,
                 minimum=0,
                 maximum=len(self._inbox),
             ),

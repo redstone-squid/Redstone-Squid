@@ -1,15 +1,17 @@
 """Choose whether the application or the UI runtime keeps a control's value.
 
-Stateful controls such as choices, toggles and pagers take an `Ownership` value. With
-`Uncontrolled`, the runtime stores the value in `PresentationState` under the control's key.
-With `Controlled`, the application passes the value on every render and receives requested
-changes as events. This module sits below both `semantic` and `primitives`, so semantic nodes
+Stateful nodes take an `Ownership` value. With `Controlled`, the application passes the value
+on every render and receives requested changes as events. A `ValueBinding` stores it in a
+presentation cell the component reads. Only layout state such as open details or the current
+page can be `Uncontrolled`, stored in `PresentationState` under the node's key; value controls
+such as choices and toggles exist to be read, so they always have an owner. This module sits below both `semantic` and `primitives`, so semantic nodes
 and primitive overflow policies such as `Paginate` share one definition. Page-specific values
 live beside `Paginate` in `squid_ui.overflow`.
 """
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, replace
+from typing import Any
 
 from squid_ui._presentation import ValueBinding
 from squid_ui.interactions.handlers import _HandlerBinder
@@ -42,12 +44,12 @@ type Ownership[ValueT, EventT] = Controlled[ValueT, EventT] | Uncontrolled[Value
 """Explicitly choose author-owned values or state stored in the presentation session."""
 
 
-def bind_ownership[ValueT, EventT](
-    ownership: Ownership[ValueT, EventT], binder: _HandlerBinder
-) -> Ownership[ValueT, EventT]:
+def bind_ownership[OwnerT: Controlled[Any, Any] | Uncontrolled[Any] | ValueBinding[Any]](
+    ownership: OwnerT, binder: _HandlerBinder
+) -> OwnerT:
     """Resolve a controlled callback for the frontend that is binding the plan."""
 
-    def bind() -> Ownership[ValueT, EventT]:
+    def bind() -> OwnerT:
         if isinstance(ownership, Controlled):
             callback = binder.callback(ownership.on_change)
             if callback is not ownership.on_change:

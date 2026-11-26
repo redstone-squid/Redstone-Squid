@@ -36,8 +36,8 @@ class RevealRequest:
     sequence: int
 
 
-type NodeValue = bool | str | tuple[str, ...] | None
-"""A reader's change to a runtime-owned node: open, chosen key, or selected keys."""
+type NodeValue = bool | str | None
+"""A reader's change to a runtime-owned layout node: open, or the chosen key."""
 
 
 @dataclass(frozen=True, slots=True)

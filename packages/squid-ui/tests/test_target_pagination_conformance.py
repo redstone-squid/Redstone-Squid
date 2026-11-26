@@ -22,6 +22,10 @@ from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.target import Target
 from squid_ui.presentation_state import PresentationState
 
+
+async def _ignore(_event: object) -> None: ...
+
+
 DISCORD = AdapterProfile(DiscordAdapter, "conformance.discord", "1")
 SLACK = AdapterProfile(SlackAdapter, "conformance.slack", "1")
 TARGETS: list[Target[Any, Any, Any, Any]] = [
@@ -133,19 +137,6 @@ def test_section_heading_repeats_when_its_body_fragments(target: Target[Any, Any
         assert "Details" in wire and value in wire
 
 
-@pytest.mark.parametrize("target", [TARGETS[0], TARGETS[1], TARGETS[2]], ids=lambda target: target.id)
-def test_uncontrolled_toggle_changes_invalidate_retained_output(target: Target[Any, Any, Any, Any]) -> None:
-    session = PresentationState()
-    node = sl.region(sl.action_controls(sl.toggle("Flag", key="flag"), key="actions"), key="r", title="R")
-    first = plan(node, target=target, session=session, nav=default_nav)
-    assert not session.node_values
-    session.apply_updates(first.session_updates)
-    session.set_node_value("flag", value=True)
-    second = plan(node, target=target, session=session, nav=default_nav)
-    assert second.allocation is not first.allocation
-    assert first.scene != second.scene
-
-
 def test_modal_regions_explain_the_form_surface_constraint() -> None:
     with pytest.raises(sl.LayoutInvariantError, match="one top-level"):
         plan(sl.region(sl.paragraph("body"), key="r", title="R"), target=squid_ui.ext.slack.modal_target(adapter=SLACK))
@@ -162,11 +153,23 @@ def test_legacy_fallback_in_a_region_retains_the_primary_without_loss() -> None:
     assert not any(event.code == "composition.effect" for event in result.report.events)
 
 
+@pytest.mark.parametrize("target", [TARGETS[0], TARGETS[1], TARGETS[2]], ids=lambda target: target.id)
+def test_node_value_changes_invalidate_retained_output(target: Target[Any, Any, Any, Any]) -> None:
+    session = PresentationState()
+    node = sl.region(sl.details(sl.summary("More"), "Hidden body", key="more"), key="r", title="R")
+    first = plan(node, target=target, session=session, nav=default_nav)
+    session.apply_updates(first.session_updates)
+    session.set_node_value("more", value=True)
+    second = plan(node, target=target, session=session, nav=default_nav)
+    assert second.allocation is not first.allocation
+    assert first.scene != second.scene
+
+
 @pytest.mark.parametrize("target", TARGETS, ids=lambda target: target.id)
 def test_images_and_choices_remain_bound_to_their_visible_page(target: Target[Any, Any, Any, Any]) -> None:
     node = sl.region(
         sl.figure("https://example.invalid/image.png", caption="Image caption"),
-        sl.choices(sl.choice("First", key="first"), sl.choice("Second", key="second"), key="choose"),
+        sl.choices(sl.choice("First", key="first"), sl.choice("Second", key="second"), key="choose", on_change=_ignore),
         key="r",
         title="R",
     )

@@ -205,7 +205,7 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
                 sl.choices(
                     *(sl.choice(label, key=value) for value, label in values),
                     key=f"{field.name}.value-choice",
-                    selection=sl.controlled((), partial(self._choose_menu_value, field)),
+                    on_change=partial(self._choose_menu_value, field),
                 ),
                 sl.action_controls(presence, change, key="filter-step"),
             )

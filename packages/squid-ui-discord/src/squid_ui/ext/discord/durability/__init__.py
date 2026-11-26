@@ -370,9 +370,7 @@ def _presentation_to_dict(state: PresentationSnapshot) -> dict[str, object]:
             }
             for key, cursor in state.cursors.items()
         },
-        "node_values": {
-            key: list(value) if isinstance(value, tuple) else value for key, value in state.node_values.items()
-        },
+        "node_values": dict(state.node_values),
     }
 
 
@@ -386,9 +384,7 @@ def _presentation_from_wire(wire: WirePresentation) -> PresentationSnapshot:
             )
             for key, item in wire.cursors.items()
         },
-        node_values={
-            key: tuple(value) if isinstance(value, list) else value for key, value in wire.node_values.items()
-        },
+        node_values=dict(wire.node_values),
         declared=wire.declared,
     )
 

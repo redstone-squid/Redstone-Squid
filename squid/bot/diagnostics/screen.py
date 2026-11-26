@@ -284,7 +284,8 @@ class ErrorReportScreen(sd.Screen[int]):
         filter_toggle = sl.toggle(
             tr(t"diagnostics-view-work-lost-only = Work lost only"),
             key="filter",
-            on=sl.controlled(self.work_lost_only, self._toggle_filter),
+            on=self.work_lost_only,
+            on_change=self._toggle_filter,
         )
         if not self._can_clear:
             return (filter_toggle,)

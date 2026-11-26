@@ -10,9 +10,11 @@ from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.interactions import ActionMode, Actor, PressEvent, Visibility
 from squid_ui.interactions.forms import FormLike, SubmitHandler
 from squid_ui.planning.result import PlanResult
-from squid_ui.runtime import PresentationState
 from squid_ui.runtime.expansion import render_component_tree
 from squid_ui.styles import ActionStyle
+
+
+async def _ignore(_event: object) -> None: ...
 
 
 class _Responder:
@@ -73,35 +75,16 @@ def _recorder[EventT]() -> tuple[list[EventT], Callable[[EventT], Awaitable[None
     return seen, record
 
 
-async def test_managed_toggle_flips_session_state_and_invalidates() -> None:
-    session = PresentationState()
-    responder = _Responder()
-    node = sl.toggle("Notifications", key="notices")
-
-    initial = sl.planning.plan(node, target=DISCORD_V2_DPY27, session=session)
-    assert _button(initial).label == "Notifications: Off"
-
-    await initial.bindings["notices"].handler(_event(responder))
-
-    assert session.node_values["notices"] is True
-    assert responder.acknowledged
-    assert responder.invalidated
-    assert _button(sl.planning.plan(node, target=DISCORD_V2_DPY27, session=session)).label == "Notifications: On"
-
-
-async def test_controlled_toggle_reports_flipped_value_without_writing_session() -> None:
-    session = PresentationState()
-    session.set_node_value("notices", value=True)
+async def test_toggle_reports_the_flipped_value_and_keeps_showing_its_owner() -> None:
     seen: list[sl.ToggleEvent]
     seen, record = _recorder()
-    node = sl.toggle("Notifications", key="notices", on=sl.controlled(value=False, on_change=record))
+    node = sl.toggle("Notifications", key="notices", on=False, on_change=record)
 
-    result = sl.planning.plan(node, target=DISCORD_V2_DPY27, session=session)
+    result = sl.planning.plan(node, target=DISCORD_V2_DPY27)
     await result.bindings["notices"].handler(_event())
 
     assert _button(result).label == "Notifications: Off"
     assert [event.value for event in seen] == [True]
-    assert session.node_values["notices"] is True
 
 
 def test_toggle_lowering_uses_one_toned_button_and_custom_labels() -> None:
@@ -109,7 +92,8 @@ def test_toggle_lowering_uses_one_toned_button_and_custom_labels() -> None:
         sl.toggle(
             "Web",
             key="web",
-            on=sl.uncontrolled(initial=True),
+            on=True,
+            on_change=_ignore,
             on_label="Enabled",
             off_label="Disabled",
             tone=sl.Tone.DANGER,
@@ -128,7 +112,7 @@ def test_toggle_key_is_prefixed_through_embed() -> None:
     class Child(sl.Component[ComponentsV2Target]):
         @override
         def render(self):
-            return sl.toggle("Web", key="web")
+            return sl.toggle("Web", key="web", on_change=_ignore)
 
     class Parent(sl.Component[ComponentsV2Target]):
         def __init__(self) -> None:

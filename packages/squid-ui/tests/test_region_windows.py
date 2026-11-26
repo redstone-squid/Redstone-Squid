@@ -11,9 +11,15 @@ from squid_ui.planning import plan
 from squid_ui.runtime import ComponentRuntime, PresentationState
 
 
+async def _ignore(_event: object) -> None: ...
+
+
 def test_region_can_page_atomic_control_windows() -> None:
     document = sl.region(
-        *(sl.unbreakable(sl.choices(sl.choice(f"Choice {i}", key=str(i)), key=f"window-{i}")) for i in range(3)),
+        *(
+            sl.unbreakable(sl.choices(sl.choice(f"Choice {i}", key=str(i)), key=f"window-{i}", on_change=_ignore))
+            for i in range(3)
+        ),
         key="windows",
         title="",
         page_size=1,

@@ -91,7 +91,7 @@ class CreatorPage(sd.Screen[None, Any, RedstoneSquid]):
                             for index, alias in enumerate(profile.aliases[:MAX_LISTED])
                         ),
                         key="credited-as",
-                        selection=sl.controlled((), self._open_name),
+                        on_change=self._open_name,
                     ),
                 )
             )

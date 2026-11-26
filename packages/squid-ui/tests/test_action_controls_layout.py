@@ -23,6 +23,11 @@ from squid_ui.runtime.expansion import render_component_tree
 from squid_ui.testing import keys
 
 V2 = components_v2_target(AdapterProfile(DiscordAdapter, "tests.actions", ">=1"))
+
+
+async def _ignore(_event: object) -> None: ...
+
+
 CLASSIC = classic_target(AdapterProfile(DiscordAdapter, "tests.actions", ">=1"))
 SLACK = squid_ui.ext.slack.message_target(adapter=AdapterProfile(SlackAdapter, "tests.actions", ">=1"))
 FORM = forms.FormSpec("Edit page", (forms.TextField("Name", "name"),))
@@ -37,7 +42,7 @@ async def _submitted(_event: SubmitEvent) -> None: ...
 def _mixed(**options: Any) -> sl.LayoutNode:
     return sl.action_controls(
         sl.action_control("Save", _pressed, key="save"),
-        sl.toggle("Alerts", key="alerts"),
+        sl.toggle("Alerts", key="alerts", on_change=_ignore),
         sl.form("Edit", FORM, key="edit", on_submit=_submitted),
         sl.link("Docs", "https://example.invalid/docs", key="docs"),
         key="actions",
@@ -81,7 +86,7 @@ def test_a_control_group_starts_its_own_row() -> None:
                 sl.action_control("Redo", _pressed, key="redo"),
                 key="history",
             ),
-            sl.toggle("Alerts", key="alerts"),
+            sl.toggle("Alerts", key="alerts", on_change=_ignore),
             key="actions",
         )
     )
@@ -93,7 +98,7 @@ def test_more_than_five_buttons_wrap_onto_a_second_row() -> None:
     rows = _v2_rows(
         sl.action_controls(
             *(sl.action_control(f"A{index}", _pressed, key=f"a{index}") for index in range(4)),
-            sl.toggle("Alerts", key="alerts"),
+            sl.toggle("Alerts", key="alerts", on_change=_ignore),
             sl.form("Edit", FORM, key="edit", on_submit=_submitted),
             key="actions",
         )
@@ -133,7 +138,7 @@ def test_slack_shows_one_button_per_control_and_no_form_fields() -> None:
     assert [button.label.content for button in buttons] == ["Save", "Alerts: Off", "Edit", "Docs"]
 
 
-@pytest.mark.parametrize("entry", [sl.toggle("Alerts", key="alerts"), sl.control_group(key="empty")])
+@pytest.mark.parametrize("entry", [sl.toggle("Alerts", key="alerts", on_change=_ignore), sl.control_group(key="empty")])
 def test_the_factory_accepts_toggles_and_control_groups(entry: Any) -> None:
     assert sl.action_controls(entry, key="actions").items == (entry,)
 
@@ -142,7 +147,7 @@ class _Preferences(sl.Component):
     @override
     def render(self) -> sl.LayoutNode:
         return sl.action_controls(
-            sl.toggle("Alerts", key="alerts"),
+            sl.toggle("Alerts", key="alerts", on_change=_ignore),
             sl.form("Edit", FORM, key="edit", on_submit=_submitted),
             key="actions",
         )

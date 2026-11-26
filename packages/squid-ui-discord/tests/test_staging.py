@@ -30,7 +30,7 @@ class Editor(sd.Screen[None, object]):
                 sl.choice("Observer", key="observer"),
                 sl.choice("Comparator", key="comparator"),
                 sl.choice("Repeater", key="repeater"),
-                selection=sl.controlled((), self.filter),
+                on_change=self.filter,
                 key="editor.filter",
             ),
             sl.form("Rename", form, key="editor.rename", on_submit=self.rename),

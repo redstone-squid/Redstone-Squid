@@ -331,7 +331,8 @@ class _ComponentControls[StateT, RenderTargetT: RenderTarget, ContextT = object]
         return choices(
             *visible,
             key=key,
-            selection=controlled(selected, choose),
+            selection=selected,
+            on_change=choose,
             minimum=minimum,
             maximum=maximum,
         )

@@ -42,6 +42,9 @@ from squid_ui.planning.result import PlanResult
 from squid_ui.selectors import query, select
 
 
+async def _ignore(_event: object) -> None: ...
+
+
 def _planned(nodes: Sequence[Renderable[ComponentsV2Target]], **options) -> PlanResult[discord_scene.ComponentsV2]:
     """Ladders are planner decisions, so structural behaviour is observed through plan()."""
     return plan(nodes, target=DISCORD_V2_DPY27, **options)
@@ -87,6 +90,7 @@ def test_invalid_option_rules_out_every_page_split(label, key, description, limi
         *(sl.choice(str(i), key=str(i)) for i in range(24)),
         sl.choice(label, key=key, description=description),
         key="picker",
+        on_change=_ignore,
     )
     identity = OccurrenceId(("root", "picker"))
     options = CompositionOptions(automatic=True, partitions={identity: (24, 25)} if fixed else {})
@@ -114,7 +118,7 @@ def test_native_section_wrappers_prove_component_overflow() -> None:
 
 
 def test_select_option_count_guides_page_splits() -> None:
-    picker = sl.choices(*(sl.choice(str(i), key=str(i)) for i in range(26)), key="picker")
+    picker = sl.choices(*(sl.choice(str(i), key=str(i)) for i in range(26)), key="picker", on_change=_ignore)
     result = _planned([picker])
     allocation = result.allocation
     assert isinstance(allocation, AllocationSnapshot)

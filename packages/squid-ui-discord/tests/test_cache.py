@@ -16,16 +16,15 @@ from squid_ui.authoring.presentations import corresponds, losses, omit, ref
 from squid_ui.authoring.semantic import (
     ActionControl,
     ActionControls,
-    Choice,
-    Choices,
     Heading,
     List,
     ListItem,
+    Navigation,
+    NavOption,
     Paragraph,
     Section,
     Stack,
     Status,
-    Uncontrolled,
 )
 from squid_ui.content.text import Localization, Markup
 from squid_ui.ext.discord import DISCORD_V1_DPY27, DISCORD_V2_DPY27, render_message
@@ -38,7 +37,7 @@ from squid_ui.interactions.forms import FormSpec, TextField
 from squid_ui.interactions.ownership import Controlled
 from squid_ui.overflow import PageEvent
 from squid_ui.planning import PlanCache, PlanningSnapshot, plan
-from squid_ui.planning.interaction_handlers import SelectChoices
+from squid_ui.planning.interaction_handlers import SelectDestination
 from squid_ui.planning.pagination.navigation import TurnPage
 from squid_ui.planning.result import PlanReuse
 from squid_ui.runtime import PresentationState
@@ -175,7 +174,7 @@ def test_partition_hint_rebinds_the_current_form_handler(monkeypatch) -> None:
 
 def test_structural_program_rebinds_managed_controls_to_the_current_session(monkeypatch) -> None:
     cache = PlanCache()
-    document = Choices("pick", (Choice("a", "A"), Choice("b", "B")), Uncontrolled(()))
+    document = Navigation("pick", tuple(NavOption(key, key.upper()) for key in "abcdef"))
     first_session = PresentationState()
     current_session = PresentationState()
     plan(document, target=DISCORD_V2_DPY27, session=first_session, cache=cache)
@@ -183,7 +182,7 @@ def test_structural_program_rebinds_managed_controls_to_the_current_session(monk
     hit = plan(document, target=DISCORD_V2_DPY27, session=current_session, cache=cache)
 
     handler = hit.bindings["pick"].handler
-    assert isinstance(handler, SelectChoices)
+    assert isinstance(handler, SelectDestination)
     assert handler.commit.session is current_session
 
 

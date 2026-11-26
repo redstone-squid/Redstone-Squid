@@ -279,12 +279,10 @@ class ServerSettings(sl.Component[ComponentsV2Target, sd.Request]):
                     sl.entities(
                         key=f"channel-{setting}",
                         entity_type=sl.entity.EntityType.CONVERSATION,
-                        selection=sl.controlled(
-                            ()
-                            if selected is None
-                            else (sl.entity.EntityRef(sl.entity.EntityKind.CONVERSATION, selected),),
-                            change,
-                        ),
+                        selection=()
+                        if selected is None
+                        else (sl.entity.EntityRef(sl.entity.EntityKind.CONVERSATION, selected),),
+                        on_change=change,
                         minimum=0,
                         maximum=1,
                         conversation_types=CONVERSATION_TYPES,
@@ -301,7 +299,8 @@ class ServerSettings(sl.Component[ComponentsV2Target, sd.Request]):
                         for tag in (FOLLOW_DISCORD, *sorted(SUPPORTED_LOCALES))
                     ),
                     key="locale",
-                    selection=sl.controlled((self.locale_override or FOLLOW_DISCORD,), self._locale_changed),
+                    selection=(self.locale_override or FOLLOW_DISCORD,),
+                    on_change=self._locale_changed,
                 )
             )
         return children
@@ -403,7 +402,8 @@ class VotingSettings(sl.Component[ComponentsV2Target, sd.Request]):
             sl.choices(
                 *(sl.choice(label, key=kind.value) for kind, label in KIND_LABELS.items()),
                 key="vote-kind",
-                selection=sl.controlled((self.kind.value,), self._kind_changed),
+                selection=(self.kind.value,),
+                on_change=self._kind_changed,
             ),
         ]
         if self._editable:
@@ -411,7 +411,7 @@ class VotingSettings(sl.Component[ComponentsV2Target, sd.Request]):
                 sl.entities(
                     key="role-weight",
                     entity_type=sl.entity.EntityType.ROLE,
-                    selection=sl.controlled((), self._role_changed),
+                    on_change=self._role_changed,
                     minimum=1,
                     maximum=1,
                     placeholder=tr(t"bot-settings-view-choose-a-role = Choose a role"),

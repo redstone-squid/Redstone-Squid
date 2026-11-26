@@ -34,7 +34,7 @@ class WirePresentation(WireModel):
 
     cursors: dict[str, WireCursor]
     # Older snapshots kept selections and disclosures apart; they restore with fresh layout state.
-    node_values: dict[str, bool | str | list[str] | None] = Field(default_factory=dict)
+    node_values: dict[str, bool | str | None] = Field(default_factory=dict)
     declared_protocol: Literal[1] = 1
     declared: dict[str, dict[str, Any]] = Field(default_factory=dict)
 

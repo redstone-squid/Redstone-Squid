@@ -15,10 +15,12 @@ from squid_ui.ext.discord.limits import Axis
 from squid_ui.ext.discord.primitives import EntitySelect
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 from squid_ui.ext.discord.testing import commit_render, interaction_harness, query, without_capabilities
-from squid_ui.interactions import Actor, EntitySelectionEvent, Visibility
+from squid_ui.interactions import Visibility
 from squid_ui.planning.joint_search import JointUnsupportedError
-from squid_ui.runtime import PresentationState
 from squid_ui.selectors import select as select_node
+
+
+async def _ignore(_event: object) -> None: ...
 
 
 async def _select(_event: sl.EntitySelectionEvent) -> None: ...
@@ -92,32 +94,11 @@ def test_entity_select_costs_an_action_row_and_control() -> None:
 
 def test_native_semantic_picker_lowers_to_entity_scene() -> None:
     plan = sl.planning.plan(
-        sl.entities(key="users", entity_type=sl.entity.EntityType.USER), target=squid_ui.ext.discord.DISCORD_V2_DPY27
+        sl.entities(key="users", entity_type=sl.entity.EntityType.USER, on_change=_ignore),
+        target=squid_ui.ext.discord.DISCORD_V2_DPY27,
     )
 
     assert isinstance(plan.scene.expect_body(discord_scene.ComponentsV2).children[0], discord_scene.EntitySelect)
-
-
-async def test_managed_native_entity_selection_survives_a_second_render() -> None:
-    session = PresentationState()
-    node = sl.entities(
-        key="moderator",
-        entity_type=sl.entity.EntityType.USER,
-        selection=sl.uncontrolled(()),
-    )
-    first = sl.planning.plan(node, target=squid_ui.ext.discord.DISCORD_V2_DPY27, session=session)
-    handler = first.bindings["moderator"].handler
-    await handler(
-        EntitySelectionEvent(
-            Actor("7"), _Responder(), values=(sl.entity.EntityRef(sl.entity.EntityKind.USER, 123456),), context=None
-        )
-    )
-
-    second = sl.planning.plan(node, target=squid_ui.ext.discord.DISCORD_V2_DPY27, session=session)
-
-    picker = second.scene.expect_body(discord_scene.ComponentsV2).children[0]
-    assert isinstance(picker, discord_scene.EntitySelect)
-    assert picker.default_values == (sl.entity.EntityRef(sl.entity.EntityKind.USER, 123456),)
 
 
 @pytest.mark.parametrize("channel_type", [discord.ChannelType.text, discord.ChannelType.public_thread])
@@ -192,6 +173,7 @@ def test_semantic_picker_uses_enumerated_fallback_without_capability() -> None:
             sl.entity_choice(sl.entity.EntityRef(sl.entity.EntityKind.USER, 1), "Ada"),
             key="users",
             entity_type=sl.entity.EntityType.USER,
+            on_change=_ignore,
         ),
         target=target,
     )
@@ -199,21 +181,17 @@ def test_semantic_picker_uses_enumerated_fallback_without_capability() -> None:
     assert isinstance(plan.scene.expect_body(discord_scene.ComponentsV2).children[0], discord_scene.Select)
 
 
-def test_fallback_entity_picker_drops_unenumerated_managed_selection() -> None:
+def test_fallback_entity_picker_drops_an_unenumerated_selection() -> None:
     target = without_capabilities(squid_ui.ext.discord.DISCORD_V2_DPY27, "actions.entity")
-    session = PresentationState()
-    session.set_node_value(
-        "users",
-        (sl.entity.EntityRef(sl.entity.EntityKind.USER, 999).encode(),),
-    )
     node = sl.entities(
         sl.entity_choice(sl.entity.EntityRef(sl.entity.EntityKind.USER, 1), "Ada"),
         key="users",
         entity_type=sl.entity.EntityType.USER,
-        selection=sl.uncontrolled(()),
+        selection=(sl.entity.EntityRef(sl.entity.EntityKind.USER, 999),),
+        on_change=_ignore,
     )
 
-    plan = sl.planning.plan(node, target=target, session=session)
+    plan = sl.planning.plan(node, target=target)
 
     picker = plan.scene.expect_body(discord_scene.ComponentsV2).children[0]
     assert isinstance(picker, discord_scene.Select)
@@ -224,7 +202,9 @@ def test_semantic_picker_refuses_without_native_capability_or_fallback() -> None
     target = without_capabilities(squid_ui.ext.discord.DISCORD_V2_DPY27, "actions.entity")
 
     with pytest.raises(JointUnsupportedError):
-        sl.planning.plan(sl.entities(key="users", entity_type=sl.entity.EntityType.USER), target=target)
+        sl.planning.plan(
+            sl.entities(key="users", entity_type=sl.entity.EntityType.USER, on_change=_ignore), target=target
+        )
 
 
 def test_entity_scene_round_trips_mixed_mentionable_defaults() -> None:

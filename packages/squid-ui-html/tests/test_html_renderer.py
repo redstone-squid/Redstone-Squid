@@ -17,6 +17,9 @@ from squid_ui.interactions import ActionEvent, SubmitEvent
 from squid_ui.interactions.forms import FormSpec, TextField
 
 
+async def _ignore(_event: object) -> None: ...
+
+
 async def _pressed(event: ActionEvent) -> None:
     del event
 
@@ -42,7 +45,9 @@ def test_renderer_draws_native_controls_and_host_dispatch_metadata() -> None:
             sl.routed_action_control("Open", "build:1:open", key="open"),
             key="actions",
         ),
-        sl.choices(*(sl.choice(str(index), key=str(index)) for index in range(30)), key="choice", maximum=3),
+        sl.choices(
+            *(sl.choice(str(index), key=str(index)) for index in range(30)), key="choice", maximum=3, on_change=_ignore
+        ),
         sl.form("Submit", form, key="edit", on_submit=_submitted),
     )
     result = sl.planning.plan(document, target=squid_ui.ext.html.target(), localization=sl.text.Localization("en-GB"))

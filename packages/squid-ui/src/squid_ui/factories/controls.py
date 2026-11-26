@@ -2,21 +2,16 @@
 
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, overload
 
 from squid_i18n import Text
 from squid_ui._presentation import ValueBinding
 from squid_ui.authoring.semantic import (
     FIRST_OPTION,
-    NO_ENTITIES,
-    OFF,
-    UNRATED,
-    UNSELECTED,
     ActionControl,
     ActionControls,
     Choice,
     ChoiceEvent,
-    ChoiceOwnership,
     Choices,
     ControlDisplay,
     ControlGroup,
@@ -25,7 +20,7 @@ from squid_ui.authoring.semantic import (
     Emphasis,
     Entities,
     EntityChoice,
-    EntityOwnership,
+    EntityEvent,
     Flexibility,
     FormTrigger,
     Link,
@@ -36,11 +31,11 @@ from squid_ui.authoring.semantic import (
     RoutedActionControl,
     RoutedChoices,
     ScaleEvent,
-    ScaleOwnership,
     Toggle,
-    ToggleOwnership,
+    ToggleEvent,
     Tone,
     Uncontrolled,
+    ValueOwnership,
 )
 from squid_ui.content.assets import FileInput, file
 from squid_ui.content.entity import ConversationType, EntityRef, EntityType
@@ -66,6 +61,20 @@ def controlled[ValueT, EventT](
 def uncontrolled[ValueT](initial: ValueT) -> Uncontrolled[ValueT]:
     """Store this node's value in PresentationState, using initial when its key is absent."""
     return Uncontrolled(initial)
+
+
+def _value_owner[ValueT, EventT](
+    factory: str, value: ValueT | ValueBinding[ValueT], on_change: Callable[[EventT], Awaitable[None]] | None
+) -> ValueOwnership[ValueT, EventT]:
+    if isinstance(value, ValueBinding):
+        if on_change is not None:
+            message = f"{factory} got a binding, which already receives changes; drop on_change"
+            raise TypeError(message)
+        return value
+    if on_change is None:
+        message = f"{factory} needs on_change or a presentation binding, or nothing could read its value"
+        raise TypeError(message)
+    return Controlled(value, on_change)
 
 
 def form[ContextT](
@@ -126,21 +135,45 @@ def action_control[ContextT = object](
     return ActionControl(key, label, on_trigger, tone, emphasis, available, allow_grouping, mode, guard, busy, record)
 
 
+@overload
 def toggle[ContextT = object](
     label: TextValue,
     *,
     key: str,
-    on: ToggleOwnership[ContextT] = OFF,
+    on: ValueBinding[bool],
+    on_label: TextValue | None = None,
+    off_label: TextValue | None = None,
+    tone: Tone | Role = Tone.NEUTRAL,
+    available: bool = True,
+) -> Toggle[ContextT]: ...
+@overload
+def toggle[ContextT = object](
+    label: TextValue,
+    *,
+    key: str,
+    on: bool = False,
+    on_change: Callable[[ToggleEvent[ContextT]], Awaitable[None]],
+    on_label: TextValue | None = None,
+    off_label: TextValue | None = None,
+    tone: Tone | Role = Tone.NEUTRAL,
+    available: bool = True,
+) -> Toggle[ContextT]: ...
+def toggle[ContextT = object](
+    label: TextValue,
+    *,
+    key: str,
+    on: bool | ValueBinding[bool] = False,
+    on_change: Callable[[ToggleEvent[ContextT]], Awaitable[None]] | None = None,
     on_label: TextValue | None = None,
     off_label: TextValue | None = None,
     tone: Tone | Role = Tone.NEUTRAL,
     available: bool = True,
 ) -> Toggle[ContextT]:
-    """A boolean control; ``on`` declares whether the author or session owns its state."""
+    """A boolean control. ``on`` wins every render; ``on_change`` receives the flips."""
     label = Text(label)
     on_label = None if on_label is None else Text(on_label)
     off_label = None if off_label is None else Text(off_label)
-    return Toggle(key, label, on, on_label, off_label, tone, available)
+    return Toggle(key, label, _value_owner("sl.toggle()", on, on_change), on_label, off_label, tone, available)
 
 
 def download(
@@ -242,19 +275,42 @@ def choice(label: TextValue, *, key: str, description: TextValue | None = None, 
     return Choice(key, label, description, available)
 
 
+@overload
 def choices[ContextT = object](
     *entries: Conditional[Choice],
     key: str,
-    selection: ChoiceOwnership[ContextT] = UNSELECTED,
+    selection: ValueBinding[tuple[str, ...]],
+    minimum: int = 1,
+    maximum: int = 1,
+    flexibility: Flexibility = Flexibility.NORMAL,
+) -> Choices[ContextT]: ...
+@overload
+def choices[ContextT = object](
+    *entries: Conditional[Choice],
+    key: str,
+    selection: tuple[str, ...] = (),
+    on_change: Callable[[ChoiceEvent[ContextT]], Awaitable[None]],
+    minimum: int = 1,
+    maximum: int = 1,
+    flexibility: Flexibility = Flexibility.NORMAL,
+) -> Choices[ContextT]: ...
+def choices[ContextT = object](
+    *entries: Conditional[Choice],
+    key: str,
+    selection: tuple[str, ...] | ValueBinding[tuple[str, ...]] = (),
+    on_change: Callable[[ChoiceEvent[ContextT]], Awaitable[None]] | None = None,
     minimum: int = 1,
     maximum: int = 1,
     flexibility: Flexibility = Flexibility.NORMAL,
 ) -> Choices[ContextT]:
-    """A control that selects among options; ``key`` namespaces its custom id."""
+    """A control that selects among options; ``key`` namespaces its custom id.
+
+    With ``on_change`` alone the selection stays empty, so each pick acts as a command.
+    """
     return Choices(
         key,
         _collect(entries, (Choice,), "sl.choices()"),
-        selection,
+        _value_owner("sl.choices()", selection, on_change),
         minimum,
         maximum,
         flexibility,
@@ -274,11 +330,37 @@ def entity_choice(
     return EntityChoice(ref, label, description, available)
 
 
+@overload
 def entities[ContextT = object](
     *entries: Conditional[EntityChoice],
     key: str,
     entity_type: EntityType,
-    selection: EntityOwnership[ContextT] = NO_ENTITIES,
+    selection: ValueBinding[tuple[EntityRef, ...]],
+    minimum: int = 1,
+    maximum: int = 1,
+    conversation_types: tuple[ConversationType, ...] = (),
+    placeholder: TextValue | None = None,
+    flexibility: Flexibility = Flexibility.NORMAL,
+) -> Entities[ContextT]: ...
+@overload
+def entities[ContextT = object](
+    *entries: Conditional[EntityChoice],
+    key: str,
+    entity_type: EntityType,
+    selection: tuple[EntityRef, ...] = (),
+    on_change: Callable[[EntityEvent[ContextT]], Awaitable[None]],
+    minimum: int = 1,
+    maximum: int = 1,
+    conversation_types: tuple[ConversationType, ...] = (),
+    placeholder: TextValue | None = None,
+    flexibility: Flexibility = Flexibility.NORMAL,
+) -> Entities[ContextT]: ...
+def entities[ContextT = object](
+    *entries: Conditional[EntityChoice],
+    key: str,
+    entity_type: EntityType,
+    selection: tuple[EntityRef, ...] | ValueBinding[tuple[EntityRef, ...]] = (),
+    on_change: Callable[[EntityEvent[ContextT]], Awaitable[None]] | None = None,
     minimum: int = 1,
     maximum: int = 1,
     conversation_types: tuple[ConversationType, ...] = (),
@@ -291,7 +373,7 @@ def entities[ContextT = object](
         key,
         entity_type,
         _collect(entries, (EntityChoice,), "sl.entities()"),
-        selection,
+        _value_owner("sl.entities()", selection, on_change),
         minimum,
         maximum,
         conversation_types,
@@ -300,18 +382,36 @@ def entities[ContextT = object](
     )
 
 
+@overload
 def rating[ContextT = object](
     *,
     key: str,
     maximum: int = 5,
-    value: ScaleOwnership[ContextT] = UNRATED,
+    value: ValueBinding[int | None],
+    labels: Mapping[int, TextValue] | None = None,
+) -> Choices[ContextT]: ...
+@overload
+def rating[ContextT = object](
+    *,
+    key: str,
+    maximum: int = 5,
+    value: int | None = None,
+    on_change: Callable[[ScaleEvent[ContextT]], Awaitable[None]],
+    labels: Mapping[int, TextValue] | None = None,
+) -> Choices[ContextT]: ...
+def rating[ContextT = object](
+    *,
+    key: str,
+    maximum: int = 5,
+    value: int | ValueBinding[int | None] | None = None,
+    on_change: Callable[[ScaleEvent[ContextT]], Awaitable[None]] | None = None,
     labels: Mapping[int, TextValue] | None = None,
 ) -> Choices[ContextT]:
     """Build a single-select ordinal scale from 1 through maximum.
 
     Default labels use cumulative stars through five points and numbers above five.
-    Controlled changes are converted from choice keys into integer ScaleEvent values;
-    the target planner chooses the actual control representation.
+    Changes arrive as integer ScaleEvent values; the target planner chooses the actual
+    control representation.
     """
     if maximum < 2:
         message = "sl.rating() needs a maximum of at least 2"
@@ -321,16 +421,10 @@ def rating[ContextT = object](
     entries = tuple(
         choice(named[point] if point in named else _stars(point, maximum), key=str(point)) for point in points
     )
-    if isinstance(value, Uncontrolled):
-        selection: ChoiceOwnership[ContextT] = Uncontrolled(() if value.initial is None else (str(value.initial),))
-    else:
-        chosen = value.value
-        on_change = _RatingCommit(value) if isinstance(value, ValueBinding) else value.on_change
-
-        rate = _RatingSelection(on_change)
-
-        selection = Controlled((), rate) if chosen is None else Controlled((str(chosen),), rate)
-    return Choices(key, entries, selection, minimum=1, maximum=1)
+    owner = _value_owner("sl.rating()", value, on_change)
+    rate = _RatingSelection(_RatingCommit(owner) if isinstance(owner, ValueBinding) else owner.on_change)
+    chosen = owner.value
+    return Choices(key, entries, Controlled(() if chosen is None else (str(chosen),), rate), minimum=1, maximum=1)
 
 
 def _stars(point: int, maximum: int) -> str:

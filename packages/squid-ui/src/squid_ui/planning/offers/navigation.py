@@ -191,9 +191,7 @@ def navigation_candidate[R, C](
             navigation=True,
         )
         if isinstance(node, sem.Choices):
-            binding = ActionBinding(
-                node.key, SelectChoices(ChoiceCommit(node.selection, node.key, selected, context.presentation))
-            )
+            binding = ActionBinding(node.key, SelectChoices(ChoiceCommit(node.selection, selected)))
     else:
         message = f"navigation {type(node).__name__}"
         raise UnsupportedSemanticError(message)

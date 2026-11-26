@@ -2,7 +2,7 @@
 
 from dataclasses import replace
 from typing import Any
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import Mock
 
 import pytest
 
@@ -21,6 +21,10 @@ from squid_ui.planning import CompositionOptions, JointInfeasibleError, JointUns
 from squid_ui.planning.adapter import AdapterProfile
 from squid_ui.planning.target import Target
 from squid_ui.presentation_state import PresentationState
+
+
+async def _ignore(_event: object) -> None: ...
+
 
 DISCORD = AdapterProfile(DiscordAdapter, "entities.discord", "1")
 SLACK = AdapterProfile(SlackAdapter, "entities.slack", "1")
@@ -44,7 +48,7 @@ async def test_native_entity_picker_keeps_controlled_defaults_and_dispatch(targe
 
     session = PresentationState()
     node = sl.region(
-        sl.entities(key="people", entity_type=EntityType.USER, selection=sl.controlled((ADA,), changed)),
+        sl.entities(key="people", entity_type=EntityType.USER, selection=(ADA,), on_change=changed),
         key="r",
         title="R",
     )
@@ -77,26 +81,6 @@ async def test_native_entity_picker_keeps_controlled_defaults_and_dispatch(targe
     assert not session.node_values
 
 
-@pytest.mark.parametrize("target", TARGETS, ids=lambda target: target.id)
-async def test_uncontrolled_entity_changes_rebuild_delivered_output(target: Target[Any, Any, Any, Any]) -> None:
-    session = PresentationState()
-    node = sl.region(sl.entities(key="people", entity_type=EntityType.USER), key="r", title="R")
-    first = plan(node, target=target, session=session)
-    assert not session.node_values
-    session.apply_updates(first.session_updates)
-    responder = Mock(spec=ActionResponder)
-    responder.acknowledge = AsyncMock()
-    await first.bindings["people"].handler(
-        EntitySelectionEvent(Actor("reader"), responder, values=(ADA,), context=None)
-    )
-    responder.acknowledge.assert_awaited_once()
-    responder.invalidate.assert_called_once()
-    assert session.node_values["people"] == (ADA.encode(),)
-    second = plan(node, target=target, session=session)
-    assert second.allocation is not first.allocation
-    assert second.scene != first.scene
-
-
 @pytest.mark.parametrize("target", TARGETS[3:], ids=lambda target: target.id)
 async def test_slack_role_fallback_dispatches_typed_entities(target: Target[Any, Any, Any, Any]) -> None:
     role = EntityRef(EntityKind.ROLE, "reviewer")
@@ -110,7 +94,7 @@ async def test_slack_role_fallback_dispatches_typed_entities(target: Target[Any,
             sl.entity_choice(role, "Reviewer"),
             key="roles",
             entity_type=EntityType.ROLE,
-            selection=sl.controlled((), changed),
+            on_change=changed,
         ),
         key="r",
         title="R",
@@ -129,7 +113,7 @@ async def test_slack_role_fallback_dispatches_typed_entities(target: Target[Any,
 
 @pytest.mark.parametrize("target", TARGETS[3:], ids=lambda target: target.id)
 def test_slack_missing_native_family_has_a_specific_diagnostic(target: Target[Any, Any, Any, Any]) -> None:
-    node = sl.region(sl.entities(key="roles", entity_type=EntityType.ROLE), key="r", title="R")
+    node = sl.region(sl.entities(key="roles", entity_type=EntityType.ROLE, on_change=_ignore), key="r", title="R")
     with pytest.raises(JointUnsupportedError) as caught:
         plan(node, target=target)
     assert "Slack role discovery" in str(caught.value.diagnostics.violations)
@@ -137,7 +121,9 @@ def test_slack_missing_native_family_has_a_specific_diagnostic(target: Target[An
 
 @pytest.mark.parametrize("target", [*TARGETS[:2], *TARGETS[3:]], ids=lambda target: target.id)
 def test_native_entity_cardinality_obeys_reduced_limits(target: Target[Any, Any, Any, Any]) -> None:
-    node = sl.region(sl.entities(key="people", entity_type=EntityType.USER, maximum=2), key="r", title="R")
+    node = sl.region(
+        sl.entities(key="people", entity_type=EntityType.USER, maximum=2, on_change=_ignore), key="r", title="R"
+    )
     limited = replace(
         target, limits=replace(target.limits, components=replace(target.limits.components, select_options=1))
     )
@@ -149,7 +135,9 @@ def test_native_entity_cardinality_obeys_reduced_limits(target: Target[Any, Any,
 def test_slack_conversation_filters_survive_shared_composition(target: Target[Any, Any, Any, Any]) -> None:
     filters = (ConversationType.WORKSPACE_PUBLIC, ConversationType.DIRECT)
     node = sl.region(
-        sl.entities(key="rooms", entity_type=EntityType.CONVERSATION, conversation_types=filters), key="r", title="R"
+        sl.entities(key="rooms", entity_type=EntityType.CONVERSATION, conversation_types=filters, on_change=_ignore),
+        key="r",
+        title="R",
     )
     result = plan(node, target=target)
     assert isinstance(result.scene.body.blocks[0], slack_scene.SlackActions)
@@ -162,7 +150,10 @@ def test_slack_conversation_filters_survive_shared_composition(target: Target[An
 @pytest.mark.parametrize("target", TARGETS, ids=lambda target: target.id)
 def test_hidden_entity_picker_has_no_binding(target: Target[Any, Any, Any, Any]) -> None:
     node = sl.region(
-        sl.paragraph("body", key="text"), sl.entities(key="people", entity_type=EntityType.USER), key="r", title="R"
+        sl.paragraph("body", key="text"),
+        sl.entities(key="people", entity_type=EntityType.USER, on_change=_ignore),
+        key="r",
+        title="R",
     )
     region = OccurrenceId(("root", "r"))
     result = plan(node, target=target, composition=CompositionOptions(automatic=True, partitions={region: (1, 2)}))

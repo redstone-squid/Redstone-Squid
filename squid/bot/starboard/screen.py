@@ -177,7 +177,7 @@ class StarboardScreen(sd.Screen):
                             for key, value in snapshot.settings
                         ),
                         key="setting",
-                        selection=sl.controlled((), partial(self._choose_setting, snapshot)),
+                        on_change=partial(self._choose_setting, snapshot),
                     ),
                 )
             )

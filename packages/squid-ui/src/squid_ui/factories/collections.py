@@ -40,7 +40,7 @@ from squid_ui.content.text import TextLike
 from squid_ui.factories._inputs import ChildLike, Conditional, TextValue, _children, _collect
 from squid_ui.factories.containers import stack
 from squid_ui.factories.content import media_item, progress
-from squid_ui.factories.controls import choice, choices, controlled, routed_choices
+from squid_ui.factories.controls import choice, choices, routed_choices
 from squid_ui.interactions import SelectionEvent
 from squid_ui.overflow import FIRST_PAGE, PageOwnership
 from squid_ui.target_types import RenderTarget
@@ -245,7 +245,8 @@ def tally[ContextT = object](
         control: LayoutNode[RenderTarget, ContextT] = choices(
             *entries,
             key=key,
-            selection=controlled(tuple(option.key for option in options if option.mine), vote),
+            selection=tuple(option.key for option in options if option.mine),
+            on_change=vote,
         )
     elif route_id is not None:
         control = routed_choices(*entries, route_id=route_id, key=key)

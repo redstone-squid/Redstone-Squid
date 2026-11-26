@@ -33,6 +33,9 @@ from squid_ui.palette import Palette
 from squid_ui.planning.adapter import AdapterProfile
 
 
+async def _ignore(_event: object) -> None: ...
+
+
 async def _pressed(_event: ActionEvent) -> None:
     pass
 
@@ -88,7 +91,7 @@ _MINIMAL: dict[type, Callable[[], semantic.AnyLayoutNode]] = {
     semantic.Code: lambda: sl.code("x = 1", language="python"),
     semantic.Figure: lambda: sl.figure("https://example.invalid/i.png", caption="caption"),
     semantic.Media: lambda: sl.media("https://example.invalid/i.png", key="media"),
-    semantic.Toggle: lambda: sl.toggle("Notify", key="toggle"),
+    semantic.Toggle: lambda: sl.toggle("Notify", key="toggle", on_change=_ignore),
     semantic.Download: lambda: sl.download(_ASSET, label="Report", key="download"),
     semantic.Status: lambda: sl.status("operational"),
     semantic.ProgressBar: lambda: sl.progress(0.5, label="Progress"),
@@ -108,11 +111,12 @@ _MINIMAL: dict[type, Callable[[], semantic.AnyLayoutNode]] = {
         sl.action_control("Go", _pressed, key="go"),
         key="actions",
     ),
-    semantic.Choices: lambda: sl.choices(sl.choice("Yes", key="yes"), key="choices"),
+    semantic.Choices: lambda: sl.choices(sl.choice("Yes", key="yes"), key="choices", on_change=_ignore),
     semantic.Entities: lambda: sl.entities(
         sl.entity_choice(EntityRef(EntityKind.USER, 1), "Ada"),
         key="entities",
         entity_type=EntityType.USER,
+        on_change=_ignore,
     ),
     semantic.RoutedChoices: lambda: sl.routed_choices(sl.choice("Yes", key="yes"), key="routed", route_id="r:choices"),
     semantic.Navigation: lambda: sl.navigation(

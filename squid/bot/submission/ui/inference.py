@@ -84,10 +84,10 @@ class InferenceCandidatesScreen(sd.Screen[None, Any, "RedstoneSquid"]):
                         for index, item in enumerate(shown, start + 1)
                     ),
                     key=f"candidate-{start}",
-                    selection=sl.controlled(
-                        (selected,) if selected is not None and any(str(item.id) == selected for item in shown) else (),
-                        self._select,
-                    ),
+                    selection=(selected,)
+                    if selected is not None and any(str(item.id) == selected for item in shown)
+                    else (),
+                    on_change=self._select,
                 ).unbreakable()
             )
         nodes.append(sl.region(*windows, key="candidates", title=""))
@@ -99,7 +99,8 @@ class InferenceCandidatesScreen(sd.Screen[None, Any, "RedstoneSquid"]):
                     sl.choices(
                         *(sl.choice(item.value, key=item.value) for item in BuildCategory),
                         key="category",
-                        selection=sl.controlled((self.category,) if self.category else (), self._category),
+                        selection=(self.category,) if self.category else (),
+                        on_change=self._category,
                     )
                 )
             details.append(

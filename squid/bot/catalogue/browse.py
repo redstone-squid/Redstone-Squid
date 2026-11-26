@@ -1110,7 +1110,7 @@ def credit_choices(
             for position, credit in enumerate(credits[:MAX_CREDITS_LISTED])
         ),
         key="creators",
-        selection=sl.controlled((), partial(_open_credit, credits, owners)),
+        on_change=partial(_open_credit, credits, owners),
     )
 
 

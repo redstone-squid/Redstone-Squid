@@ -39,7 +39,7 @@ from squid_ui.interactions import (
 from squid_ui.interactions.forms import FormSpec, SubmitHandler
 from squid_ui.interactions.handlers import _HandlerBinder, _HandlerComposition
 from squid_ui.interactions.ownership import bind_ownership
-from squid_ui.planning.structure import disclosure_state, toggle_state
+from squid_ui.planning.structure import disclosure_state
 from squid_ui.presentation_state import PresentationState
 
 if TYPE_CHECKING:
@@ -80,9 +80,7 @@ class PresentForm[ContextT = object](_HandlerComposition):
 @dataclass(frozen=True, slots=True)
 class ChoiceCommit[ContextT = object](_HandlerComposition):
     ownership: ChoiceOwnership[ContextT]
-    key: str
     previous: tuple[str, ...]
-    session: PresentationState
 
     @override
     def _bind_handlers(self, binder: _HandlerBinder) -> Self:
@@ -107,10 +105,6 @@ class ChoiceCommit[ContextT = object](_HandlerComposition):
                 )
             case ValueBinding():
                 await self.ownership.commit(event, selected)
-            case Uncontrolled():
-                await event.acknowledge()
-                self.session.set_node_value(self.key, selected)
-                event.invalidate()
 
 
 @dataclass(frozen=True, slots=True)
@@ -143,9 +137,7 @@ class SelectChoices[ContextT = object](_HandlerComposition):
 @dataclass(frozen=True, slots=True)
 class EntityCommit[ContextT = object](_HandlerComposition):
     ownership: EntityOwnership[ContextT]
-    key: str
     previous: tuple[EntityRef, ...]
-    session: PresentationState
 
     @override
     def _bind_handlers(self, binder: _HandlerBinder) -> Self:
@@ -170,10 +162,6 @@ class EntityCommit[ContextT = object](_HandlerComposition):
                 )
             case ValueBinding():
                 await self.ownership.commit(event, selected)
-            case Uncontrolled():
-                await event.acknowledge()
-                self.session.set_node_value(self.key, tuple(value.encode() for value in selected))
-                event.invalidate()
 
 
 @dataclass(frozen=True, slots=True)
@@ -364,7 +352,6 @@ class ToggleDetails[ContextT = object](_HandlerComposition):
 class FlipToggle[ContextT = object](_HandlerComposition):
     node: Toggle[ContextT]
     on: bool
-    session: PresentationState
 
     @override
     def _bind_handlers(self, binder: _HandlerBinder) -> Self:
@@ -391,10 +378,6 @@ class FlipToggle[ContextT = object](_HandlerComposition):
                 )
             case ValueBinding():
                 await self.node.on.commit(event, not self.node.on.reference.read())
-            case Uncontrolled():
-                await event.acknowledge()
-                self.session.set_node_value(self.node.key, not toggle_state(self.node, self.session))
-                event.invalidate()
 
 
 @dataclass(frozen=True, slots=True)

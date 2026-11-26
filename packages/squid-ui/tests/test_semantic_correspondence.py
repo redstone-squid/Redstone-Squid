@@ -20,6 +20,9 @@ from squid_ui.planning.semantic_correspondence import check_alternative
 from squid_ui.planning.semantic_index import TableCell, semantic_graph
 
 
+async def _ignore(_event: object) -> None: ...
+
+
 def test_reordered_choices_share_meaning_without_a_baseline() -> None:
     width = sl.paragraph("Width: 3", key="width")
     edition = sl.paragraph("Edition: Java", key="edition")
@@ -152,12 +155,12 @@ def test_layout_constraints_survive_semantic_indexing() -> None:
 
 
 def test_toggle_ownership_and_availability_are_behavior() -> None:
-    content = sl.toggle("Enabled", key="enabled")
+    content = sl.toggle("Enabled", key="enabled", on_change=_ignore)
     choice = alternative(replace(content, available=False), key="disabled", fidelity=equivalent())
     group = alternatives(choice, content=content, key="setting")
     with pytest.raises(LayoutInvariantError, match="undeclared interaction"):
         check_alternative(group, choice)
-    changed = replace(choice, node=replace(content, on=sl.uncontrolled(initial=True)))
+    changed = replace(choice, node=replace(content, on=sl.semantic.Controlled(value=True, on_change=_ignore)))
     with pytest.raises(LayoutInvariantError, match="undeclared interaction"):
         check_alternative(group, changed)
 

@@ -4,14 +4,12 @@ from dataclasses import replace
 from itertools import pairwise
 
 from squid_i18n import tree
-from squid_ui._presentation import ValueBinding
 from squid_ui.authoring import semantic as sem
 from squid_ui.authoring.grids import coordinate
 from squid_ui.authoring.presentations import (
     SemanticRef,
 )
 from squid_ui.capabilities import Capability
-from squid_ui.content.entity import EntityRef
 from squid_ui.content.text import resolve_text
 from squid_ui.interactions import ActionBinding, ActionMode
 from squid_ui.interactions.forms import FormBinding
@@ -57,7 +55,7 @@ from squid_ui.planning.realizations import (
     TextSequenceRealization,
 )
 from squid_ui.planning.semantic_index import ItemBranch
-from squid_ui.planning.structure import disclosure_state, navigation_current, opened_item, toggle_state
+from squid_ui.planning.structure import disclosure_state, navigation_current, opened_item
 from squid_ui.styles import ActionStyle
 
 
@@ -445,16 +443,9 @@ def _entities_offers[RenderTargetT, ContextT](
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     context = scope.context
-    if isinstance(value.selection, Controlled | ValueBinding):
-        previous = value.selection.value
-    else:
-        stored = context.presentation.node_values.get(value.key)
-        if isinstance(stored, tuple):
-            previous = tuple(EntityRef.decode(key) for key in stored)
-        else:
-            previous = value.selection.initial
+    previous = value.selection.value
     key = control_key(occurrence, consume=context.work.consume)
-    commit = EntityCommit(value.selection, value.key, previous, context.presentation)
+    commit = EntityCommit(value.selection, previous)
     options = tuple(
         controls.Option(
             "".join(tree.plain(node) for node in resolve_text(choice.label, context.localization).nodes),
@@ -502,14 +493,7 @@ def _entities_offers[RenderTargetT, ContextT](
         interaction=True,
         binding=ActionBinding(
             key,
-            SelectChoices(
-                ChoiceCommit(
-                    Controlled(selected, SelectEntityFallback(commit, by_key)),
-                    value.key,
-                    selected,
-                    context.presentation,
-                )
-            ),
+            SelectChoices(ChoiceCommit(Controlled(selected, SelectEntityFallback(commit, by_key)), selected)),
             ActionMode.EXCLUSIVE,
         ),
     )
@@ -521,13 +505,7 @@ def _choices_offers[RenderTargetT, ContextT](
 ) -> Offers[RenderTargetT, ContextT]:
     occurrence = scope.occurrence
     context = scope.context
-    if isinstance(value, sem.RoutedChoices):
-        previous = value.selected
-    elif isinstance(value.selection, Controlled | ValueBinding):
-        previous = value.selection.value
-    else:
-        stored = context.presentation.node_values.get(value.key)
-        previous = stored if isinstance(stored, tuple) else value.selection.initial
+    previous = value.selected if isinstance(value, sem.RoutedChoices) else value.selection.value
     options = tuple(
         controls.Option(
             "".join(tree.plain(node) for node in resolve_text(choice.label, context.localization).nodes),
@@ -557,7 +535,7 @@ def _choices_offers[RenderTargetT, ContextT](
         payload = SelectRealization(controls.Select(options, key, min_values=value.minimum, max_values=value.maximum))
         binding = ActionBinding(
             key,
-            SelectChoices(ChoiceCommit(value.selection, value.key, previous, context.presentation)),
+            SelectChoices(ChoiceCommit(value.selection, previous)),
             ActionMode.EXCLUSIVE,
         )
     offer = RealizationOffer[RenderTargetT, ContextT, Realization](
@@ -600,7 +578,7 @@ def _action_control_offers[RenderTargetT, ContextT](
     form: FormBinding[ContextT] | None = None
     match value:
         case sem.Toggle():
-            on = toggle_state(value, context.presentation)
+            on = value.on.value
             state_label = value.on_label if on else value.off_label
             if state_label is None:
                 state_label = context.chrome.on if on else context.chrome.off
@@ -611,7 +589,7 @@ def _action_control_offers[RenderTargetT, ContextT](
                 style=controls.button_style(value.tone, sem.Emphasis.NORMAL),
                 disabled=not value.available,
             )
-            binding = ActionBinding(key, FlipToggle(value, on, context.presentation), ActionMode.EXCLUSIVE, label=label)
+            binding = ActionBinding(key, FlipToggle(value, on), ActionMode.EXCLUSIVE, label=label)
         case sem.ActionControl():
             payload = ControlRealization(
                 label,

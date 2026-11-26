@@ -33,6 +33,9 @@ from squid_ui.ext.slack.adapter import SlackAdapterCapability
 from squid_ui.interactions import ActionEvent, SubmitEvent, forms
 
 
+async def _ignore(_event: object) -> None: ...
+
+
 async def _pressed(_event: ActionEvent) -> None: ...
 
 
@@ -138,12 +141,14 @@ def test_native_entity_selectors_draw_to_sdk_models() -> None:
     user = sl.entities(
         key="reviewer",
         entity_type=EntityType.USER,
-        selection=sl.controlled((EntityRef(EntityKind.USER, "U123"),), _entities_changed),
+        selection=(EntityRef(EntityKind.USER, "U123"),),
+        on_change=_entities_changed,
     )
     conversation = sl.entities(
         key="conversation",
         entity_type=EntityType.CONVERSATION,
         conversation_types=(ConversationType.WORKSPACE_PUBLIC, ConversationType.WORKSPACE_PRIVATE),
+        on_change=_ignore,
     )
     result = sl.planning.plan(sl.stack(user, conversation), target=ss.SLACK_HOME_SDK343)
 

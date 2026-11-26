@@ -16,7 +16,6 @@ from squid_ui.factories import (
     action_controls,
     choice,
     choices,
-    controlled,
     form,
     heading,
     note,
@@ -244,7 +243,7 @@ class SearchPicker[ItemT](Component):
             choices(
                 *entries,
                 key=f"{self.key}.results",
-                selection=controlled((), partial(self._selected, self.session.revision)),
+                on_change=partial(self._selected, self.session.revision),
                 minimum=1,
                 maximum=min(len(entries), max(1, self.maximum - len(self.picked))),
             )

@@ -180,15 +180,6 @@ def _chosen(result) -> tuple[str, ...]:
     return tuple(option.value for option in select.options if option.default)
 
 
-async def test_a_managed_choices_remembers_a_selection_with_no_author_state() -> None:
-    session = PresentationState()
-    document = Choices("size", tuple(Choice(str(index), f"Choice {index}") for index in range(6)))
-
-    await _fire(plan(document, target=DISCORD_V2_DPY27, session=session), "size", _select(("3",)))
-
-    assert _chosen(plan(document, target=DISCORD_V2_DPY27, session=session)) == ("3",)
-
-
 async def test_a_controlled_choices_still_reports_what_changed() -> None:
     session = PresentationState()
     seen, record = _recorder()

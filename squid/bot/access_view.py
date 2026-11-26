@@ -216,7 +216,8 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
                         key="recipients",
                         entity_type=sl.entity.EntityType.MENTIONABLE,
                         maximum=25,
-                        selection=sl.controlled(self._recipients, self._select_recipients),
+                        selection=self._recipients,
+                        on_change=self._select_recipients,
                         placeholder=tr(t"access-recipients = Select members and Discord roles"),
                     ),
                 )
@@ -421,7 +422,7 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
             sl.entities(
                 key="access-target",
                 entity_type=sl.entity.EntityType.MENTIONABLE,
-                selection=sl.controlled((), self._change_subject),
+                on_change=self._change_subject,
                 placeholder=tr(t"access-change-subject = Change member or Discord role")
                 if self._target_chosen
                 else tr(t"access-target-picker = Choose a member or Discord role"),
@@ -432,7 +433,8 @@ class AccessScreen(sd.Screen[None, Any, RedstoneSquid]):
                         sl.choice(tr(t"access-view-this-server = This server"), key="guild"),
                         sl.choice(tr(t"access-all-servers = All servers"), key="global"),
                         key="access-scope",
-                        selection=sl.controlled((self._scope_key,), self._change_scope),
+                        selection=(self._scope_key,),
+                        on_change=self._change_scope,
                     ),
                 )
                 if self._target_chosen and self._page == "edit" and PERM_GRANT_GLOBAL in self.grants

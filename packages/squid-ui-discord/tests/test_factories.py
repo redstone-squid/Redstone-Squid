@@ -11,6 +11,9 @@ from squid_ui.ext.discord import scene as discord_scene
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 
+async def _ignore(_event: object) -> None: ...
+
+
 async def _noop(_event) -> None: ...
 
 
@@ -212,9 +215,7 @@ class TestParity:
             (sl.semantic.ActionControl("vote", sl.plain("Vote"), _noop),), "a"
         )
         assert sl.choice("Yes", key="y", description="d") == sl.semantic.Choice("y", sl.plain("Yes"), sl.plain("d"))
-        assert sl.choices(
-            sl.choice("Yes", key="y"), key="c", selection=sl.controlled(("y",), _noop)
-        ) == sl.semantic.Choices(
+        assert sl.choices(sl.choice("Yes", key="y"), key="c", selection=("y",), on_change=_noop) == sl.semantic.Choices(
             "c", (sl.semantic.Choice("y", sl.plain("Yes")),), sl.semantic.Controlled(("y",), _noop)
         )
         assert sl.routed_choices(sl.choice("Yes", key="y"), key="c", route_id="r:choices") == sl.semantic.RoutedChoices(
@@ -242,27 +243,23 @@ class TestParityWithCards:
 
 class TestRating:
     def test_points_are_stars_while_the_control_is_a_button_row(self) -> None:
-        node = sl.rating(key="stars")
+        node = sl.rating(key="stars", on_change=_ignore)
 
         assert [choice.key for choice in node.choices] == ["1", "2", "3", "4", "5"]
         assert [sl.text.source_text(choice.label) for choice in node.choices] == ["★", "★★", "★★★", "★★★★", "★★★★★"]
         assert (node.minimum, node.maximum) == (1, 1)
 
     def test_a_wider_scale_numbers_its_points(self) -> None:
-        node = sl.rating(key="score", maximum=10)
+        node = sl.rating(key="score", maximum=10, on_change=_ignore)
 
         assert [sl.text.source_text(choice.label) for choice in node.choices] == [str(point) for point in range(1, 11)]
 
     def test_named_points_replace_their_stars(self) -> None:
-        node = sl.rating(key="stars", labels={1: "Poor", 5: t"Excellent"})
+        node = sl.rating(key="stars", labels={1: "Poor", 5: t"Excellent"}, on_change=_ignore)
 
         assert node.choices[0].label == sl.plain("Poor")
         assert node.choices[1].label == sl.plain("★★")
         assert node.choices[4].label == sl.plain(t"Excellent")
-
-    def test_a_managed_value_seeds_the_selection_as_its_option_key(self) -> None:
-        assert sl.rating(key="stars").selection == sl.semantic.Uncontrolled(())
-        assert sl.rating(key="stars", value=sl.uncontrolled(3)).selection == sl.semantic.Uncontrolled(("3",))
 
     async def test_a_controlled_value_round_trips_through_a_typed_event(self) -> None:
         seen: list[int] = []
@@ -270,7 +267,7 @@ class TestRating:
         async def rate(event: sl.ScaleEvent) -> None:
             seen.append(event.value)
 
-        node = sl.rating(key="stars", value=sl.controlled(2, rate))
+        node = sl.rating(key="stars", value=2, on_change=rate)
         assert isinstance(node.selection, sl.semantic.Controlled)
         assert node.selection.value == ("2",)
 
@@ -285,7 +282,7 @@ class TestRating:
             nonlocal rated
             rated = True
 
-        node = sl.rating(key="stars", value=sl.controlled(None, rate))
+        node = sl.rating(key="stars", value=None, on_change=rate)
         assert isinstance(node.selection, sl.semantic.Controlled)
         assert node.selection.value == ()
 
@@ -296,7 +293,7 @@ class TestRating:
 
     def test_a_scale_needs_at_least_two_points(self) -> None:
         with pytest.raises(ValueError, match="at least 2"):
-            sl.rating(key="stars", maximum=1)
+            sl.rating(key="stars", maximum=1, on_change=_ignore)
 
 
 def test_literal_whitespace_and_mentions_survive_discord_planning() -> None:

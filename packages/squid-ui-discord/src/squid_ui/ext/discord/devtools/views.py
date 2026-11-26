@@ -130,7 +130,7 @@ class MessageRootInspector(sl.Component):
                         for snapshot in snapshots[:_SELECT_LIMIT]
                     ),
                     key="open",
-                    selection=sl.controlled((), self._open),
+                    on_change=self._open,
                 )
             )
         nodes.append(self._controls(back=False))
@@ -402,7 +402,7 @@ class OperationalInspector(sl.Component):
                         for message_root in snapshot.message_roots[:25]
                     ),
                     key="message root",
-                    selection=sl.controlled((), self._open_root),
+                    on_change=self._open_root,
                 )
             )
         if notice is not None:
@@ -465,7 +465,7 @@ class OperationalInspector(sl.Component):
                         for session in snapshot.sessions[:25]
                     ),
                     key="session",
-                    selection=sl.controlled((), self._open_session),
+                    on_change=self._open_session,
                 )
             )
         if notice is not None:
@@ -570,7 +570,8 @@ class OperationalInspector(sl.Component):
                                 for record in records[:25]
                             ),
                             key="purge-records",
-                            selection=sl.controlled(self.selected_records, self._select_records),
+                            selection=self.selected_records,
+                            on_change=self._select_records,
                             minimum=0,
                             maximum=min(25, len(records)),
                         )
@@ -671,7 +672,8 @@ class OperationalInspector(sl.Component):
             sl.choice("Profiler", key="profile"),
             sl.choice("Persistence", key="persistence"),
             key="section",
-            selection=sl.controlled((self.section,), self._select_section),
+            selection=(self.section,),
+            on_change=self._select_section,
         )
 
     def _controls(self, *, back: bool = False) -> sl.semantic.ActionControls:

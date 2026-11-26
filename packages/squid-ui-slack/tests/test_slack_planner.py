@@ -21,6 +21,10 @@ from squid_ui.planning.request import PlanRequest
 from squid_ui.planning.result import PlanReuse, PlanSeverity
 from squid_ui.runtime import PresentationState
 
+
+async def _ignore(_event: object) -> None: ...
+
+
 ADAPTER = AdapterProfile(SlackAdapter, "tests.slack", ">=3.43,<4")
 MESSAGE = squid_ui.ext.slack.message_target(adapter=ADAPTER)
 MODAL = squid_ui.ext.slack.modal_target(adapter=ADAPTER)
@@ -85,12 +89,14 @@ def test_message_and_home_use_native_slack_entity_selectors() -> None:
     user = sl.entities(
         key="reviewer",
         entity_type=EntityType.USER,
-        selection=sl.controlled((EntityRef(EntityKind.USER, "U123"),), _entities_changed),
+        selection=(EntityRef(EntityKind.USER, "U123"),),
+        on_change=_entities_changed,
     )
     conversation = sl.entities(
         key="conversation",
         entity_type=EntityType.CONVERSATION,
         conversation_types=(ConversationType.WORKSPACE_PUBLIC, ConversationType.WORKSPACE_PRIVATE),
+        on_change=_ignore,
     )
 
     for target in (cast(Any, MESSAGE), cast(Any, HOME)):
@@ -116,13 +122,14 @@ def test_message_and_home_use_native_slack_entity_selectors() -> None:
 
 def test_unsupported_native_entity_family_requires_an_enumerated_fallback() -> None:
     with pytest.raises(JointUnsupportedError):
-        sl.planning.plan(sl.entities(key="role", entity_type=EntityType.ROLE), target=MESSAGE)
+        sl.planning.plan(sl.entities(key="role", entity_type=EntityType.ROLE, on_change=_ignore), target=MESSAGE)
 
     result = sl.planning.plan(
         sl.entities(
             sl.entity_choice(EntityRef(EntityKind.ROLE, "R123"), "Reviewer"),
             key="role",
             entity_type=EntityType.ROLE,
+            on_change=_ignore,
         ),
         target=MESSAGE,
     )

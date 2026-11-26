@@ -170,9 +170,8 @@ class AccountOverview(sl.Component[ComponentsV2Target, sd.Request]):
                             if linked.id is not None  # pyright: ignore[reportUnnecessaryComparison]
                         ),
                         key="identity",
-                        selection=sl.controlled(
-                            (str(self.selected_id),) if self.selected_id is not None else (), self._selection_changed
-                        ),
+                        selection=(str(self.selected_id),) if self.selected_id is not None else (),
+                        on_change=self._selection_changed,
                     ),
                 )
             )
@@ -187,7 +186,8 @@ class AccountOverview(sl.Component[ComponentsV2Target, sd.Request]):
                 sl.toggle(
                     tr(t"account-view-creator-page = Profile"),
                     key="page_visibility",
-                    on=sl.controlled(not self.page_hidden, self._toggle_page),
+                    on=not self.page_hidden,
+                    on_change=self._toggle_page,
                     on_label=tr(t"account-view-shown = Public"),
                     off_label=tr(t"account-view-hidden-2 = Hidden"),
                 ),
@@ -202,7 +202,8 @@ class AccountOverview(sl.Component[ComponentsV2Target, sd.Request]):
                 and sl.toggle(
                     tr(t"account-view-selected-identity = Account"),
                     key="identity_visibility",
-                    on=sl.controlled(identity.is_public, self._toggle_identity),
+                    on=identity.is_public,
+                    on_change=self._toggle_identity,
                     on_label=tr(t"account-view-shown-on-page = Shown"),
                     off_label=tr(t"account-view-hidden-from-page = Hidden"),
                 ),

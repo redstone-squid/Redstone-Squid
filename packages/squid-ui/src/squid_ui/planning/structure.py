@@ -1,7 +1,7 @@
 """Resolve authored palette and control state for semantic occurrences."""
 
 from squid_ui._presentation import ValueBinding
-from squid_ui.authoring.semantic import Controlled, Details, ItemDisplay, Items, Navigation, Toggle, Uncontrolled
+from squid_ui.authoring.semantic import Controlled, Details, ItemDisplay, Items, Navigation, Uncontrolled
 from squid_ui.palette import Accent, AccentDefault, AccentRole, Palette, Role, Tone
 from squid_ui.presentation_state import PresentationState
 from squid_ui.styles import Color
@@ -21,16 +21,6 @@ def disclosure_state[RenderTargetT, ContextT](
 ) -> bool:
     """Whether a disclosure is open: the author's word when controlled, session memory otherwise."""
     match node.open:
-        case Controlled(value=value) | ValueBinding(value=value):
-            return value
-        case Uncontrolled(initial=initial):
-            stored = session.node_values.get(node.key, initial)
-            return stored if isinstance(stored, bool) else initial
-
-
-def toggle_state[ContextT](node: Toggle[ContextT], session: PresentationState) -> bool:
-    """Whether a toggle is on: the author's word when controlled, session memory otherwise."""
-    match node.on:
         case Controlled(value=value) | ValueBinding(value=value):
             return value
         case Uncontrolled(initial=initial):
@@ -88,5 +78,4 @@ __all__ = [
     "item_state",
     "navigation_current",
     "resolve_accent",
-    "toggle_state",
 ]

@@ -16,6 +16,9 @@ from squid_ui.selectors import Match, QueryError, QueryRoot, index_tree, query, 
 from squid_ui.testing import render_index
 
 
+async def _ignore(_event: object) -> None: ...
+
+
 async def pressed(event: ui.PressEvent) -> None: ...
 
 
@@ -188,7 +191,7 @@ def test_testing_snapshot_helper_preserves_component_scope() -> None:
 
 def test_authored_alternatives_and_choice_values_are_queryable() -> None:
     alternate = s.FallbackContent(toolbar("full"), (toolbar("compact"),))
-    choices = s.Choices("pick", (s.Choice("ada", "Ada"),))
+    choices = s.Choices("pick", (s.Choice("ada", "Ada"),), selection=s.Controlled((), _ignore))
     tree = index_tree(ui.stack(alternate, choices))
     assert [match.key for match in query(tree, select(s.ActionControl)).all()] == ["full", "compact"]
     assert query(tree, select(s.Choices).children(select(s.Choice).label("Ada"))).one().key == "ada"

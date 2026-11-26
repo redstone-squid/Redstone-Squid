@@ -94,9 +94,8 @@ class ClaimReviewComponent(sl.Component[ComponentsV2Target, sd.Request]):
                     for claim in self._claims
                 ),
                 key="claim",
-                selection=sl.controlled(
-                    (str(self.selected_id),) if self.selected_id is not None else (), self._select_claim
-                ),
+                selection=(str(self.selected_id),) if self.selected_id is not None else (),
+                on_change=self._select_claim,
                 minimum=1,
                 maximum=1,
             )

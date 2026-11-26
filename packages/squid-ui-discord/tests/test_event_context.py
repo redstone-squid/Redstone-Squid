@@ -26,7 +26,7 @@ class ContextScreen(sd.Screen):
             sl.action_controls(sl.action_control("Press", self.press, key="press"), key="actions"),
             sl.choices(
                 *(sl.choice(str(i), key=str(i)) for i in range(6)),
-                selection=sl.controlled((), self.choose),
+                on_change=self.choose,
                 key="choose",
             ),
             sl.form(
@@ -180,9 +180,7 @@ async def test_cached_generated_handlers_select_current_native_callbacks() -> No
         seen.append("second")
 
     def document(callback: HandlerSet[sl.ChoiceEvent]) -> sl.LayoutNode:
-        return sl.choices(
-            sl.choice("A", key="a"), sl.choice("B", key="b"), selection=sl.controlled((), callback), key="choices"
-        )
+        return sl.choices(sl.choice("A", key="a"), sl.choice("B", key="b"), on_change=callback, key="choices")
 
     first_branch, second_branch = sd.on_choice(first), sd.on_choice(second)
     old = plan(document(sl.handlers(first_branch)), target=sd.DISCORD_V2_DPY27, cache=cache)

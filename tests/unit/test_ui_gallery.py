@@ -9,7 +9,15 @@ import squid_ui.ext.discord as sd
 from tests.support.ui_gallery import GalleryRecorder
 
 
+async def _ignore(_event: object) -> None: ...
+
+
 class _Sample(sd.Screen):
+    alerts: bool = sl.state(False)
+
+    async def _toggle(self, event: sl.ToggleEvent) -> None:
+        self.alerts = event.value
+
     @override
     def render(self) -> sl.LayoutNode:
         async def noop(event: sl.PressEvent) -> None:
@@ -22,7 +30,7 @@ class _Sample(sd.Screen):
                 sl.action_control("Cancel", noop, key="cancel"),
                 key="actions",
             ),
-            sl.toggle("Alerts", key="alerts"),
+            sl.toggle("Alerts", key="alerts", on=self.alerts, on_change=self._toggle),
         )
 
 
