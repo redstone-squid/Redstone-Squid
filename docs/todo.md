@@ -18,8 +18,8 @@
   - `SMALLEST FASTEST`
 - [ ] Add calculators and typed categories for entrances and utilities.
 - [ ] Add piston-extender create/update submission persistence; record computation and read/search mapping are supported.
-  - Then settle the door and extender timing representations (deferred Phase 5 of
-    `docs/plans/completed/schema-audit.md`): keep the `*_timing_variants` tables and write them, or drop them.
+  - Then settle the door and extender timing representations (the deferred last phase of the
+    schema audit): keep the `*_timing_variants` tables and write them, or drop them.
 - [x] Implement the fixed-size Door Rules title formatter.
   - Includes trapdoor rewrites, animated restrictions, named layouts, canonical aliases, and conflict diagnostics.
 - [ ] Add algebraic and minimal expandable-size title forms after expandable-volume records are modeled.
@@ -28,13 +28,13 @@
 
 ## Search
 
-- [ ] Connect a semantic candidate provider to the cross-resource search backend.
-- [ ] Process `search_embedding_queue` items and store embeddings for projected search documents.
+- [x] Connect a semantic candidate provider to the search backend, and process `search_embedding_queue` to embed
+  projected documents.
+  - See `docs/plans/completed/search-index-redesign.md`.
 - [ ] Consider dynamic `tag:<name>` search fields so new projected filters do not require a field-registry code change.
 - [ ] Add live PostgreSQL integration coverage for exact, full-text, close-spelling, and RRF behavior.
   - Pagination and sorting by indexed field values are covered by `tests/integration/search/test_repository_pagination.py`.
 - [x] Add autocomplete for field names, tag values, and canonical record base keys.
-  - See `docs/plans/autocomplete.md` for the source registry the three surfaces share.
 - [ ] Replace raw showcase qualifiers with parameterized tags.
   - Store metric kind, value, unit, display order, and evidence.
   - Consider Pareto-frontier calculation for builds with multiple showcase metrics.
@@ -83,8 +83,8 @@
       `get_creator_profile`, so a public creator identity is unreachable from Discord.
   - Treating "who holds this creator credit" as staff-only information was a mistake: the profile is public data,
     and `accounts.public_creator_id` exists to be shown.
-  - Blocks the useful half of `docs/plans/completed/pr-183-review/01-consent-verification-ux.md` §5 — naming the creator who
-    holds a contested alias only helps if the reader has somewhere to look the name up.
+  - Blocks naming the creator who holds a contested alias in the consent-verification UX: it only helps if the
+    reader has somewhere to look the name up.
 
 ## Submissions
 
