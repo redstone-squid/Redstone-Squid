@@ -17,11 +17,15 @@ export type EntryBudget = {
 };
 export type BudgetResult = EntryBudget & { initialBytes: number; completeBytes: number };
 
-/** Follow manifest edges, including lazy code for the complete-workflow budget. */
+/**
+ * Follow manifest edges, including lazy code for the complete-workflow budget. Lazy imports of
+ * `boundaries`, modules another budget measures, are left to that budget.
+ */
 export function dependencyFiles(
   manifest: BundleManifest,
   entries: string[],
   includeDynamic: boolean,
+  boundaries: ReadonlySet<string> = new Set(),
 ): Set<string> {
   const visited = new Set<string>();
   const files = new Set<string>();
@@ -32,7 +36,9 @@ export function dependencyFiles(
     if (!chunk) throw new Error(`Missing bundle manifest entry: ${key}`);
     if (chunk.file.endsWith(".js")) files.add(chunk.file);
     for (const imported of chunk.imports ?? []) visit(imported);
-    if (includeDynamic) for (const imported of chunk.dynamicImports ?? []) visit(imported);
+    if (!includeDynamic) return;
+    for (const imported of chunk.dynamicImports ?? [])
+      if (!boundaries.has(imported)) visit(imported);
   }
   entries.forEach(visit);
   return files;
@@ -78,11 +84,9 @@ export function evaluateBudgets(
     // Astro loads its Svelte renderer independently of each island's imports.
     const entries = budget.renderer === false ? budget.entries : [...budget.entries, renderer];
     const initial = dependencyFiles(manifest, entries, false);
-    const complete = dependencyFiles(
-      manifest,
-      [...entries, ...(budget.deferredEntries ?? [])],
-      true,
-    );
+    const own = [...entries, ...(budget.deferredEntries ?? [])];
+    const others = new Set([...declared].filter((key) => !own.includes(key)));
+    const complete = dependencyFiles(manifest, own, true, others);
     for (const file of complete) covered.add(file);
     return { ...budget, initialBytes: bytes(initial), completeBytes: bytes(complete) };
   });

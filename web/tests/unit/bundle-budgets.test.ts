@@ -50,6 +50,19 @@ describe("workflow bundle budgets", () => {
       { ...deferred, initialBytes: 60, completeBytes: 100 },
     ]);
   });
+  it("measures lazy code with its own budget, not every workflow that can load it", () => {
+    const viewer = {
+      entries: ["lazy"],
+      label: "On demand",
+      initialKiB: 1,
+      completeKiB: 1,
+      renderer: false,
+    };
+    expect(evaluateBudgets(manifest, sizes, [budgets[0], viewer], "renderer")).toEqual([
+      { ...budgets[0], initialBytes: 60, completeBytes: 60 },
+      { ...viewer, initialBytes: 80, completeBytes: 80 },
+    ]);
+  });
   it("rejects stale manifests, missing imports, and unaccounted emitted chunks", () => {
     expect(() => dependencyFiles(manifest, ["missing"], true)).toThrow(
       "Missing bundle manifest entry",
