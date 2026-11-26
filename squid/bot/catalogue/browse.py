@@ -15,7 +15,7 @@ from squid.bot.catalogue.record_browser import CATALOGUE_PAGE_SIZE, record_brows
 from squid.bot.catalogue.records import RecordsScreen
 from squid.bot.catalogue.rows import build_row
 from squid.bot.catalogue.schematics.tools import SchematicTools
-from squid.bot.catalogue.search.clauses import CatalogueQuery, query_leaves
+from squid.bot.catalogue.search.clauses import CatalogueQuery
 from squid.bot.catalogue.search.filters import GuidedSearch, SearchSelection
 from squid.bot.catalogue.search.help import search_help
 from squid.bot.catalogue.search.labels import filter_label, sort_label
@@ -59,6 +59,7 @@ from squid.core.search.domain.query import (
     FieldExpression,
     NotExpression,
     QueryExpression,
+    query_leaves,
 )
 from squid.core.vocabulary import RECORD_CRITERIA, VERSION_SCOPES
 from squid_i18n import Text, inline_code

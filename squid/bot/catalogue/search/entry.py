@@ -4,14 +4,13 @@ from enum import StrEnum
 
 from squid.bot.catalogue.browse import BuildBrowseScreen
 from squid.bot.catalogue.record_browser import CATALOGUE_PAGE_SIZE
-from squid.bot.catalogue.search.clauses import query_leaves
 from squid.bot.catalogue.search.results import SearchScreen
 from squid.bot.routes import AppRequest
 from squid.bot.submission.build_card import render_build_card
 from squid.core.actors import ActingContext
 from squid.core.search.application.parser import SearchQueryParser
 from squid.core.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
-from squid.core.search.domain.query import FieldExpression, NotExpression, PresenceExpression
+from squid.core.search.domain.query import FieldExpression, NotExpression, PresenceExpression, query_leaves
 
 
 class SearchTarget(StrEnum):

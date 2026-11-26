@@ -183,6 +183,53 @@ def expression_applies_to(expression: QueryExpression, scope: SearchScope) -> bo
             return expression.applies_to(scope)
 
 
+def combine_clauses(operator: BooleanOperator, *clauses: QueryExpression) -> QueryExpression | None:
+    """Join clauses, flattening adjacent groups that use the same operator."""
+    operands = tuple(
+        operand
+        for clause in clauses
+        for operand in (
+            clause.operands if isinstance(clause, BooleanExpression) and clause.operator is operator else (clause,)
+        )
+    )
+    return BooleanExpression(operator, operands) if len(operands) > 1 else next(iter(operands), None)
+
+
+def query_leaves(
+    expression: QueryExpression, path: tuple[int, ...] = ()
+) -> tuple[tuple[tuple[int, ...], QueryExpression], ...]:
+    """Keep each clause's address so edits preserve its surrounding Boolean operators."""
+    if isinstance(expression, BooleanExpression):
+        return tuple(
+            leaf for index, item in enumerate(expression.operands) for leaf in query_leaves(item, (*path, index))
+        )
+    if isinstance(expression, NotExpression):
+        if isinstance(expression.operand, FieldExpression | PresenceExpression | TextExpression):
+            return ((path, expression),)
+        return query_leaves(expression.operand, (*path, 0))
+    return ((path, expression),)
+
+
+def replace_clause(
+    expression: QueryExpression,
+    path: tuple[int, ...],
+    replacement: QueryExpression | None,
+) -> QueryExpression | None:
+    """Replace or remove a leaf, collapsing empty and single-child groups."""
+    if not path:
+        return replacement
+    if isinstance(expression, NotExpression):
+        child = replace_clause(expression.operand, path[1:], replacement)
+        return NotExpression(child) if child is not None else None
+    assert isinstance(expression, BooleanExpression)
+    children: list[QueryExpression] = []
+    for index, item in enumerate(expression.operands):
+        child = replace_clause(item, path[1:], replacement) if index == path[0] else item
+        if child is not None:
+            children.append(child)
+    return combine_clauses(expression.operator, *children)
+
+
 def has_holder_clauses(query: SearchQuery) -> bool:
     """Tell whether record matches need to be correlated to one holder."""
 

@@ -21,6 +21,7 @@ from squid.core.search.domain.query import (
     ScalarValue,
     SearchQuery,
     TextExpression,
+    combine_clauses,
 )
 from squid.core.search.domain.scope import SearchScope
 from squid.core.validation import FieldErrorCode, SimpleIssue
@@ -272,7 +273,9 @@ class SearchQueryParser:
         operands = [expression]
         while self._accept(_TokenKind.OR):
             operands.append(self._parse_and(nesting=nesting))
-        return _combine(BooleanOperator.OR, operands)
+        combined = combine_clauses(BooleanOperator.OR, *operands)
+        assert combined is not None
+        return combined
 
     def _parse_and(self, *, nesting: int) -> QueryExpression:
         operands = [self._parse_unary(nesting=nesting)]
@@ -281,7 +284,9 @@ class SearchQueryParser:
                 operands.append(self._parse_unary(nesting=nesting))
             else:
                 break
-        return _combine(BooleanOperator.AND, operands)
+        combined = combine_clauses(BooleanOperator.AND, *operands)
+        assert combined is not None
+        return combined
 
     def _parse_unary(self, *, nesting: int) -> QueryExpression:
         if self._accept(_TokenKind.NOT):
@@ -402,18 +407,6 @@ class SearchQueryParser:
     @staticmethod
     def _starts_expression(kind: _TokenKind) -> bool:
         return kind in {_TokenKind.WORD, _TokenKind.PHRASE, _TokenKind.LEFT_PAREN, _TokenKind.NOT}
-
-
-def _combine(operator: BooleanOperator, operands: list[QueryExpression]) -> QueryExpression:
-    if len(operands) == 1:
-        return operands[0]
-    flattened: list[QueryExpression] = []
-    for operand in operands:
-        if isinstance(operand, BooleanExpression) and operand.operator is operator:
-            flattened.extend(operand.operands)
-        else:
-            flattened.append(operand)
-    return BooleanExpression(operator, tuple(flattened))
 
 
 def _render_expression(expression: QueryExpression) -> str:

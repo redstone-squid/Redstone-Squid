@@ -2,9 +2,9 @@
 
 import pytest
 
-from squid.bot.catalogue.search.clauses import query_leaves
 from squid.bot.catalogue.search.labels import filter_label, sort_label
 from squid.core.search.application.parser import SearchQueryParser
+from squid.core.search.domain.query import query_leaves
 from squid_i18n import Text
 
 

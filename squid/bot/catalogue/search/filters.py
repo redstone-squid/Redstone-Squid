@@ -13,7 +13,7 @@ import squid_ui as sl
 import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.app import RedstoneSquid
-from squid.bot.catalogue.search.clauses import CatalogueQuery, combine_clauses, query_leaves, replace_clause
+from squid.bot.catalogue.search.clauses import CatalogueQuery
 from squid.bot.catalogue.search.labels import field_label, filter_label, sort_label
 from squid.bot.lookup import RequestAuthorizer, SuggestionSource
 from squid.bot.ui import tr
@@ -31,6 +31,9 @@ from squid.core.search.domain.query import (
     QueryExpression,
     RangeValue,
     TextExpression,
+    combine_clauses,
+    query_leaves,
+    replace_clause,
 )
 from squid.core.search.domain.scope import SearchScope
 from squid.core.suggestions.domain import Suggestion, SuggestionRequest
