@@ -5,7 +5,7 @@ import { doorEvidence } from "./door-record";
 import type {
   BuildDetail,
   PublicBuildSummary,
-  PageSearchResult as SearchPage,
+  SearchResultPage as SearchPage,
   BuildsListResponse,
   RecordsListResponse,
   BuildSchematicsListResponse,
@@ -409,6 +409,8 @@ async function routeRequest(request: Request): Promise<Response> {
       total: 1,
       next: null,
       prev: null,
+      filters: [],
+      counts: null,
     };
     return json(page);
   }
