@@ -23,7 +23,6 @@ from squid.core.builds.domain.tags import UnresolvedTags
 from squid.core.errors import JSONValue
 from squid.core.errors import ValidationError as DomainValidationError
 from squid.core.submissions.application import (
-    AppliedDraftUpgrade,
     DraftPreparationSnapshot,
     FinalizationJobSnapshot,
     FormOptionSet,
@@ -42,9 +41,11 @@ from squid.core.submissions.domain import (
     FieldConstraints,
     FieldOperation,
     FieldOperationKind,
+    FieldUnit,
     FinalizationJobStatus,
     FormField,
     FormManifest,
+    FormProgress,
     FormSection,
     SubmissionAttentionReason,
     SubmissionOrigin,
@@ -161,6 +162,7 @@ class FormFieldResponse(StrictSchema):
     default: JsonValue
     repeatable: bool
     required_capability: str | None
+    unit: FieldUnit | None
     origins: list[SubmissionOrigin]
 
     @classmethod
@@ -181,6 +183,7 @@ class FormFieldResponse(StrictSchema):
             default=_json_value(form_field.default),
             repeatable=form_field.repeatable,
             required_capability=form_field.required_capability,
+            unit=form_field.unit,
             origins=sorted(form_field.origins, key=lambda origin: origin.value),
         )
 
@@ -329,6 +332,32 @@ class DraftChangeRequest(StrictSchema):
         )
 
 
+class SectionProgressResponse(StrictSchema):
+    section_id: StableIdentifier
+    required: int
+    filled: int
+
+
+class DraftProgressResponse(StrictSchema):
+    """Required answers per section, counted the way finalization checks them."""
+
+    sections: list[SectionProgressResponse]
+    missing: list[StableIdentifier]
+    """Visible required fields without an answer, in form order."""
+
+    @classmethod
+    def from_domain(cls, progress: FormProgress | None) -> DraftProgressResponse | None:
+        if progress is None:
+            return None
+        return cls(
+            sections=[
+                SectionProgressResponse(section_id=item.section_id, required=item.required, filled=item.filled)
+                for item in progress.sections
+            ],
+            missing=list(progress.missing),
+        )
+
+
 class StoredDraftResponse(StrictSchema):
     """The compacted current state of one caller-owned draft."""
 
@@ -348,9 +377,11 @@ class StoredDraftResponse(StrictSchema):
     source_installation_id: UUID | None = None
     preparation_issues: list[SubmissionAttentionIssueResponse] = Field(default_factory=list)
     waiting_for_artifacts: bool = False
+    progress: DraftProgressResponse | None = None
+    """Null when this server no longer serves the draft's form revision."""
 
     @classmethod
-    def from_domain(cls, draft: StoredDraft) -> StoredDraftResponse:
+    def from_domain(cls, draft: StoredDraft, progress: FormProgress | None) -> StoredDraftResponse:
         return cls(
             id=draft.snapshot.id,
             source_build_id=draft.edit_source.build_id if draft.edit_source else None,
@@ -371,6 +402,7 @@ class StoredDraftResponse(StrictSchema):
                 for issue in draft.preparation_issues
             ],
             waiting_for_artifacts=draft.preparation_retry_at is not None,
+            progress=DraftProgressResponse.from_domain(progress),
         )
 
 
@@ -386,12 +418,16 @@ class DraftSummaryResponse(StrictSchema):
     status: DraftStatus
     origin: SubmissionOrigin
     display_name: str | None
+    source_build_id: int | None
+    issue_count: int
+    """Preparation issues from the last finalization request."""
+    progress: DraftProgressResponse | None
     created_at: datetime
     updated_at: datetime
     expires_at: datetime
 
     @classmethod
-    def from_domain(cls, draft: StoredDraft) -> DraftSummaryResponse:
+    def from_domain(cls, draft: StoredDraft, progress: FormProgress | None) -> DraftSummaryResponse:
         display_name = draft.snapshot.answers.get("display_name")
         return cls(
             id=draft.snapshot.id,
@@ -403,6 +439,9 @@ class DraftSummaryResponse(StrictSchema):
             status=draft.snapshot.status,
             origin=draft.origin,
             display_name=display_name if isinstance(display_name, str) else None,
+            source_build_id=draft.edit_source.build_id if draft.edit_source else None,
+            issue_count=len(draft.preparation_issues),
+            progress=DraftProgressResponse.from_domain(progress),
             created_at=draft.created_at.to_stdlib(),
             updated_at=draft.updated_at.to_stdlib(),
             expires_at=draft.expires_at.to_stdlib(),
@@ -413,10 +452,6 @@ class DraftListResponse(StrictSchema):
     """Bounded active drafts owned by one authenticated account."""
 
     drafts: list[DraftSummaryResponse] = Field(max_length=10)
-
-    @classmethod
-    def from_domain(cls, drafts: tuple[StoredDraft, ...]) -> DraftListResponse:
-        return cls(drafts=[DraftSummaryResponse.from_domain(draft) for draft in drafts])
 
 
 class DraftChangeResponse(StrictSchema):
@@ -438,10 +473,6 @@ class DraftManifestUpgradeResponse(StrictSchema):
 
     draft: StoredDraftResponse
     replayed: bool
-
-    @classmethod
-    def from_domain(cls, result: AppliedDraftUpgrade) -> DraftManifestUpgradeResponse:
-        return cls(draft=StoredDraftResponse.from_domain(result.draft), replayed=result.replayed)
 
 
 class SubmissionAttentionIssueResponse(StrictSchema):

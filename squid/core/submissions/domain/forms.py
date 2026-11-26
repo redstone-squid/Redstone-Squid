@@ -97,6 +97,13 @@ class ValueKind(StrEnum):
     """Showcase tags as `{"key": ..., "value": ...}` objects; see `read_showcase_tags`."""
 
 
+class FieldUnit(StrEnum):
+    """Unit of a numeric answer, for clients to show beside the control."""
+
+    BLOCKS = "blocks"
+    GAME_TICKS = "game_ticks"
+
+
 class VisibilityOperator(StrEnum):
     """Comparisons supported by conditional field visibility."""
 
@@ -254,6 +261,7 @@ class FormField:
     default: JSONValue = None
     repeatable: bool = False
     required_capability: str | None = None
+    unit: FieldUnit | None = None
     origins: frozenset[SubmissionOrigin] = field(default_factory=lambda: frozenset(SubmissionOrigin))
     purposes: frozenset[FormPurpose] = field(default_factory=lambda: frozenset(FormPurpose))
     """The tasks that show this field; see `FormPurpose`."""
@@ -417,6 +425,24 @@ class CategoryForm:
 
 
 @dataclass(frozen=True, slots=True)
+class SectionProgress:
+    """How many of a section's visible required fields have answers."""
+
+    section_id: str
+    required: int
+    filled: int
+
+
+@dataclass(frozen=True, slots=True)
+class FormProgress:
+    """Required answers present and missing, before a draft is finalized."""
+
+    sections: tuple[SectionProgress, ...]
+    missing: tuple[str, ...]
+    """Visible required field IDs without an answer, in renderer order."""
+
+
+@dataclass(frozen=True, slots=True)
 class FormManifest:
     """One form definition, identified by schema_id and revision.
 
@@ -534,6 +560,33 @@ class FormManifest:
         for issue in issues:
             errors.setdefault(issue.field, issue.params.reason if isinstance(issue, RuleIssue) else issue.code.value)
         return errors
+
+    def progress(
+        self,
+        category: str,
+        answers: Mapping[str, JSONValue],
+        *,
+        origin: SubmissionOrigin,
+        optional: frozenset[str] = frozenset(),
+    ) -> FormProgress:
+        """Count required answers per section the way finalization checks them.
+
+        Defaults count as answers, and fields hidden by visibility rules or the origin don't
+        count. Fields in `optional` are treated as not required.
+        """
+        normalized = self.apply_defaults(category, answers, origin=origin)
+        sections: list[SectionProgress] = []
+        missing: list[str] = []
+        for section in self.common_sections + self.category(category).sections:
+            required = [
+                item.id
+                for item in section.fields
+                if item.required and item.id not in optional and item.is_visible(normalized, origin)
+            ]
+            unanswered = [field_id for field_id in required if normalized.get(field_id) is None]
+            missing.extend(unanswered)
+            sections.append(SectionProgress(section.id, len(required), len(required) - len(unanswered)))
+        return FormProgress(tuple(sections), tuple(missing))
 
     def answer_issues(
         self,

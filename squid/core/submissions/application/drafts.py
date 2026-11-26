@@ -23,6 +23,7 @@ from squid.core.submissions.domain import (
     DraftSnapshot,
     DraftStatus,
     FormManifest,
+    FormProgress,
     SubmissionOrigin,
 )
 from squid.core.submissions.domain.build_edit import DraftEditSource
@@ -106,6 +107,11 @@ class StoredDraft:
         if self.origin is not SubmissionOrigin.PAPER and self.source_installation_id is not None:
             msg = tr(t"submissions-paper-may-retain = Only Paper drafts may retain an installation ID.")
             raise ValidationError(msg)
+
+    @property
+    def ingested(self) -> bool:
+        """Whether the bot inferred this draft from Discord messages; see `INGESTION_OPTIONAL_FIELDS`."""
+        return self.origin is SubmissionOrigin.DISCORD and self.inferred and self.inference_run_id is not None
 
 
 @dataclass(frozen=True, slots=True)
@@ -627,9 +633,7 @@ class SubmissionDraftService:
         manifest = await self._pinned_manifest(current, locale)
         # Ingestion origin is set by the server, not by the form's origin or
         # AI checkbox. Normal Discord submissions retain the pinned requirements.
-        ingested = (
-            current.origin is SubmissionOrigin.DISCORD and current.inferred and current.inference_run_id is not None
-        )
+        ingested = current.ingested
         answers = dict(current.snapshot.answers)
         if ingested:
             answers = {
@@ -656,6 +660,18 @@ class SubmissionDraftService:
             origin=current.origin,
         )
         return ValidatedDraft(current, normalized)
+
+    async def progress(self, draft: StoredDraft) -> FormProgress | None:
+        """Count the draft's required answers, or return None if its form revision is retired."""
+        manifest = await self._manifests.get(draft.snapshot.schema_id, draft.snapshot.schema_revision, locale=None)
+        if manifest is None:
+            return None
+        return manifest.progress(
+            draft.snapshot.category,
+            draft.snapshot.answers,
+            origin=draft.origin,
+            optional=INGESTION_OPTIONAL_FIELDS if draft.ingested else frozenset(),
+        )
 
     async def _pinned_manifest(self, draft: StoredDraft, locale: str | None) -> FormManifest:
         manifest = await self._manifests.get(

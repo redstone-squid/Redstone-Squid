@@ -69,7 +69,7 @@ from squid.core.submissions.application import (
 )
 from squid.core.submissions.application.edits import change_command, draft_target
 from squid.core.submissions.application.finalization import DraftEditor
-from squid.core.submissions.domain import FormManifest, SubmissionOrigin
+from squid.core.submissions.domain import FormManifest, FormProgress, SubmissionOrigin
 from squid.core.submissions.domain.build_edit import DraftEditResult
 
 
@@ -114,6 +114,8 @@ class SubmissionDraftCommands(Protocol):
     ) -> ResultPage[StoredDraft, UUID]: ...
 
     async def get_accessible(self, draft_id: UUID, *, context: ActingContext) -> StoredDraft: ...
+
+    async def progress(self, draft: StoredDraft) -> FormProgress | None: ...
 
     async def upgrade_manifest(
         self,
@@ -338,7 +340,10 @@ async def list_correction_inbox(
         page_size=page_size,
         context=context,
     )
-    return Page[DraftSummaryResponse].from_domain(page, DraftSummaryResponse.from_domain)
+    progress = {draft.snapshot.id: await drafts.progress(draft) for draft in page.items}
+    return Page[DraftSummaryResponse].from_domain(
+        page, lambda draft: DraftSummaryResponse.from_domain(draft, progress[draft.snapshot.id])
+    )
 
 
 @get(
@@ -358,7 +363,10 @@ async def list_correction_inbox(
 @private_response
 async def list_drafts(drafts: Drafts, context: SubmissionContext) -> DraftListResponse:
     """Return at most ten compact active drafts owned by the signed-in account."""
-    return DraftListResponse.from_domain(await drafts.list_active(context=context))
+    active = await drafts.list_active(context=context)
+    return DraftListResponse(
+        drafts=[DraftSummaryResponse.from_domain(draft, await drafts.progress(draft)) for draft in active]
+    )
 
 
 @get(
@@ -461,7 +469,7 @@ async def create_draft(
             locale_for_request(request),
             context=caller.context(),
         )
-        return StoredDraftResponse.from_domain(draft)
+        return StoredDraftResponse.from_domain(draft, await drafts.progress(draft))
     draft = await drafts.create(
         owner_account_id=caller.require_consented_account(),
         context=caller.context(),
@@ -471,7 +479,7 @@ async def create_draft(
         locale=locale_for_request(request),
         source_installation_id=caller.installation_id,
     )
-    return StoredDraftResponse.from_domain(draft)
+    return StoredDraftResponse.from_domain(draft, await drafts.progress(draft))
 
 
 @get(
@@ -496,7 +504,8 @@ async def get_draft(
     response_headers: dict[str, str] = {}
     draft = await drafts.get_accessible(draft_id, context=context)
     response_headers["ETag"] = revision_etag(Revision(draft_target(draft_id), draft.snapshot.revision))
-    return Response(content=StoredDraftResponse.from_domain(draft), headers=response_headers, status_code=200)
+    content = StoredDraftResponse.from_domain(draft, await drafts.progress(draft))
+    return Response(content=content, headers=response_headers, status_code=200)
 
 
 @post(
@@ -536,7 +545,9 @@ async def change_draft(
     draft = await drafts.get_accessible(draft_id, context=context)
     response_headers["ETag"] = revision_etag(Revision(draft_target(draft_id), draft.snapshot.revision))
     return Response(
-        content=DraftChangeResponse(draft=StoredDraftResponse.from_domain(draft), replayed=result.replayed),
+        content=DraftChangeResponse(
+            draft=StoredDraftResponse.from_domain(draft, await drafts.progress(draft)), replayed=result.replayed
+        ),
         headers=response_headers,
         status_code=200,
     )
@@ -575,7 +586,8 @@ async def upgrade_draft_manifest(
         target_revision=data.target_revision,
         locale=locale_for_request(request),
     )
-    return DraftManifestUpgradeResponse.from_domain(result)
+    draft = StoredDraftResponse.from_domain(result.draft, await drafts.progress(result.draft))
+    return DraftManifestUpgradeResponse(draft=draft, replayed=result.replayed)
 
 
 @post(

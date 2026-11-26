@@ -25,6 +25,7 @@ from squid.core.submissions.domain import (
     EditRules,
     FieldConstraints,
     FieldRule,
+    FieldUnit,
     FormField,
     FormManifest,
     FormPurpose,
@@ -762,6 +763,7 @@ def _integer_field(
         label=localize(label),
         control=ControlKind.NUMBER,
         value_kind=ValueKind.INTEGER,
+        unit=FieldUnit.BLOCKS,
         required=required,
         edit_rules=EditRules(required=False) if required else None,
         constraints=FieldConstraints(minimum=1, maximum=maximum),
@@ -775,6 +777,7 @@ def _duration_field(field_id: str, label: Text, localize: Callable[[Text], str])
         help_text=localize(tr(t"submissions-enter-game-ticks = Include a unit: 30gt, 15rt, or 1.5s.")),
         control=ControlKind.DURATION,
         value_kind=ValueKind.GAME_TICKS,
+        unit=FieldUnit.GAME_TICKS,
         constraints=FieldConstraints(minimum=0),
     )
 
