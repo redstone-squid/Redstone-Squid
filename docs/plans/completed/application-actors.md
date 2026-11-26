@@ -14,8 +14,8 @@ Derive the caller from the context. Keep a resource owner, recipient or voter be
 
 Register each periodic job under a stable name. Queue deliveries establish a separate worker invocation for each attempt. Persisted activity links a delivery to the enqueue, its causes and committed effects. Retries and coalesced work retain their earlier activity. Historical rows written before attribution was deployed can have an unknown origin.
 
-Apply the database migration before deploying the attributed producers and consumers. Operators can inspect the resulting request and delivery chain using the SQL example in [operator commands](../operator-commands.md#trace-a-worker-change).
+Apply the database migration before deploying the attributed producers and consumers. Operators can inspect the resulting request and delivery chain using the SQL example in [operator commands](../../operator-commands.md#trace-a-worker-change).
 
 ## Adding an operation
 
-Start at the service bundles in `squid/runtime.py` and `squid/core/submissions/bootstrap.py`. Add the context parameter to the service, its port, adapters and test doubles. Cover the caller's allowed and denied paths, including credentials or worker execution where relevant. The architecture tests enumerate the bundled service methods and exercise worker-only operations. Credential verification, subject lookup, immutable registries and external I/O have separate contracts documented in the inventory test.
+Start at the service bundles in `../../../squid/runtime.py` and `squid/core/submissions/bootstrap.py`. Add the context parameter to the service, its port, adapters and test doubles. Cover the caller's allowed and denied paths, including credentials or worker execution where relevant. The architecture tests enumerate the bundled service methods and exercise worker-only operations. Credential verification, subject lookup, immutable registries and external I/O have separate contracts documented in the inventory test.

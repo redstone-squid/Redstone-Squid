@@ -32,7 +32,7 @@ what was present at the survey revision; it is not a description of the current 
 | Search and records | Keyword input, removable filter rows, named values, and sort selection build queries while preserving advanced expressions. Maintenance tools select definitions, versions, and restrictions by name. Evidence diagnostics carry their definition and kind into recomputation. |
 | Submission and specialist tools | Credits use rows and a native Discord user picker while retaining identity evidence. Catalogue fields support name search without losing offscreen selections. Vote emojis and video activations use rows; ambiguous video inputs can be selected for retry. Conversion versions and runtime-setting names have discovery; numeric world-format versions are in Conversion maintenance. |
 
-| Account and operator polish | Creator and credited-name searches retain profile/name context; unlisted credit claims remain possible. Link codes explain their source. Recount has a message-context action. Poll choices support editable rows alongside bulk entry. Runtime inspection includes JSON types, bounds, and default examples; sync flags are documented in [Operator commands](../operator-commands.md). |
+| Account and operator polish | Creator and credited-name searches retain profile/name context; unlisted credit claims remain possible. Link codes explain their source. Recount has a message-context action. Poll choices support editable rows alongside bulk entry. Runtime inspection includes JSON types, bounds, and default examples; sync flags are documented in [Operator commands](../../operator-commands.md). |
 
 Each ordinary workflow has one editor. Query expressions live inside Search &
 filters; custom wildcard patterns use a dedicated permission form. Credits have
@@ -59,8 +59,8 @@ polish work. Each row describes current behavior before proposing a change.
 
 ### Notifications
 
-Sources: [notifications_view.py](../../squid/bot/notifications_view.py),
-`NotificationSubscriptions`, and [notifications.py](../../squid/bot/notifications_cog.py).
+Sources: [notifications_view.py](../../../squid/bot/notifications_view.py),
+`NotificationSubscriptions`, and [notifications.py](../../../squid/bot/notifications_cog.py).
 
 | Input or action | Current discovery | Recommendation | Priority |
 | --- | --- | --- | --- |
@@ -76,8 +76,8 @@ separate history/navigation limitation.
 
 ### Tags and restrictions
 
-Sources: [admin.py](../../squid/bot/admin_cog.py), `tags_workspace`, and
-[tags_view.py](../../squid/bot/tags_view.py).
+Sources: [admin.py](../../../squid/bot/admin_cog.py), `tags_workspace`, and
+[tags_view.py](../../../squid/bot/tags_view.py).
 
 | Input or action | Current discovery | Recommendation | Priority |
 | --- | --- | --- | --- |
@@ -91,7 +91,7 @@ are examples of the contextual action pattern the contribution tools lack.
 
 ### Starboards
 
-Source: [starboard/screen.py](../../squid/bot/starboard/screen.py).
+Source: [starboard/screen.py](../../../squid/bot/starboard/screen.py).
 
 | Input or action | Current discovery | Recommendation | Priority |
 | --- | --- | --- | --- |
@@ -107,8 +107,8 @@ the editing tabs do not inherit that selection. Channel validation in
 
 ### Permissions and internal roles
 
-Sources: [permissions.py](../../squid/bot/permissions_cog.py) and
-[access_view.py](../../squid/bot/access_view.py).
+Sources: [permissions.py](../../../squid/bot/permissions_cog.py) and
+[access_view.py](../../../squid/bot/access_view.py).
 
 | Input or action | Current discovery | Recommendation | Priority |
 | --- | --- | --- | --- |
@@ -124,10 +124,10 @@ scope, delegation, rank, and revision checks in the application services.
 
 ### Build and record discovery
 
-Sources: [commands.py](../../squid/bot/submission/cog.py),
-[build_browse.py](../../squid/bot/catalogue/browse.py),
-[search_help.py](../../squid/bot/catalogue/search/help.py), and
-[search_view.py](../../squid/bot/catalogue/search/results.py).
+Sources: [commands.py](../../../squid/bot/submission/cog.py),
+[build_browse.py](../../../squid/bot/catalogue/browse.py),
+[search_help.py](../../../squid/bot/catalogue/search/help.py), and
+[search_view.py](../../../squid/bot/catalogue/search/results.py).
 
 | Input or action | Current discovery | Recommendation | Priority |
 | --- | --- | --- | --- |
@@ -146,7 +146,7 @@ the actual field catalogue rather than duplicate the hand-authored reference.
 
 ### Record maintenance
 
-Source: [records.py](../../squid/bot/catalogue/records.py), reached through
+Source: [records.py](../../../squid/bot/catalogue/records.py), reached through
 Record tools for authorized guild users.
 
 | Input or action | Current discovery | Recommendation | Priority |
@@ -162,12 +162,12 @@ use one universal “record ID” picker for all three.
 
 ### Submission, saved-build editing, and schematics
 
-Sources: [cog.py](../../squid/bot/submission/cog.py),
-[form.py](../../squid/bot/submission/form.py),
-[sections.py](../../squid/bot/submission/ui/sections.py),
-[forms.py](../../squid/core/submissions/application/forms.py),
-[credit_text.py](../../squid/core/submissions/application/credit_text.py), and
-[schematic_tools.py](../../squid/bot/catalogue/schematics/tools.py).
+Sources: [cog.py](../../../squid/bot/submission/cog.py),
+[form.py](../../../squid/bot/submission/form.py),
+[sections.py](../../../squid/bot/submission/ui/sections.py),
+[forms.py](../../../squid/core/submissions/application/forms.py),
+[credit_text.py](../../../squid/core/submissions/application/credit_text.py), and
+[schematic_tools.py](../../../squid/bot/catalogue/schematics/tools.py).
 
 | Input or action | Current discovery | Recommendation | Priority |
 | --- | --- | --- | --- |
@@ -204,11 +204,11 @@ account, a Discord identity, and a name-only credit are not interchangeable.
 | `/runtime-settings` | Setting key, JSON value, optional revision; no suggestions. No arguments dumps settings/revision. JSON can include channel-ID arrays. | Operator priority 3: typed settings browser/editor, or at least setting-name completion, type hints, examples, and descriptions. |
 | Hidden owner sync and development UI | Sync accepts guild objects and terse `~`, `*`, `^` flags. Layout demos are development-only; debug links/error triggers have no discovery need. | Document operator syntax locally; exclude from the ordinary-user redesign. |
 
-Account/settings sources: [account_workspace.py](../../squid/bot/accounts/workspace.py),
-[account_view.py](../../squid/bot/accounts/overview.py),
-[profile_editor.py](../../squid/bot/accounts/profile_editor.py),
-[settings_view.py](../../squid/bot/settings/screen.py). Remaining entries are rooted
-in the production extension list in [app.py](../../squid/bot/app.py).
+Account/settings sources: [account_workspace.py](../../../squid/bot/accounts/workspace.py),
+[account_view.py](../../../squid/bot/accounts/overview.py),
+[profile_editor.py](../../../squid/bot/accounts/profile_editor.py),
+[settings_view.py](../../../squid/bot/settings/screen.py). Remaining entries are rooted
+in the production extension list in [app.py](../../../squid/bot/app.py).
 
 ## Interaction design
 
@@ -266,21 +266,21 @@ previews without overfilling the modal.
 Most controls already exist. The main additions belong in feature workflows
 and in a small adapter between domain lookups and shared widgets.
 
-- [form_planning.py](../../packages/squid-ui-discord/src/squid_ui/ext/discord/form_planning.py)
+- [form_planning.py](../../../packages/squid-ui-discord/src/squid_ui/ext/discord/form_planning.py)
   already renders choice, boolean, and native entity fields.
-  [EntityField](../../packages/squid-ui-discord/src/squid_ui/ext/discord/form_fields.py)
+  [EntityField](../../../packages/squid-ui-discord/src/squid_ui/ext/discord/form_fields.py)
   handles users, roles, channels, and mentionables. It currently lacks a
   channel-type filter property; use the message selector pattern from settings
   for restricted destinations, or extend that field deliberately.
-- [SearchPicker](../../packages/squid-ui-widgets/src/squid_ui_widgets/search_picker.py)
+- [SearchPicker](../../../packages/squid-ui-widgets/src/squid_ui_widgets/search_picker.py)
   already supports search-then-select, retained picks, removal, and windowed
-  results. No production `squid/bot` call site currently uses it. It needs a
+  results. No production `../../../squid/bot` call site currently uses it. It needs a
   domain source and host-owned save/cancel behavior, not another widget rewrite.
 - `Browser`, `MultiChoice`, and `CollectionEditor` already cover contextual
   detail, paged choices, and structured collections. The profile link editor
   demonstrates a collection editor; submission sections demonstrate retaining
   selections across pages.
-- [The suggestion registry](../../squid/core/suggestions/infrastructure/catalogue.py)
+- [The suggestion registry](../../../squid/core/suggestions/infrastructure/catalogue.py)
   already provides `creator_profiles`, `record_titles`, `showcase_tag_ids`,
   `restriction_ids`, `permission_roles`, `permission_nodes`,
   `permission_patterns`, `starboard_names`, `version_ids`, `title_definitions`,
