@@ -1,9 +1,9 @@
 # Contextual content, pagination, and layout facts
 
-The first production implementation covers bounded, materialized content, scoped
-layout facts, contextual generation, and delivery-driven visibility. It also separates
-source item counts and declared groups from rendered page counts. Continuous flow
-across lazy source batches remains a separate implementation step.
+Implemented for bounded, materialized content: scoped layout facts, contextual
+generation, and delivery-driven visibility. Source item counts and declared groups
+are separate from rendered page counts. Flow across lazy source batches was dropped;
+see the last section.
 
 The rule is to certify the interface being delivered and state what is known for
 that capture. Conditional rendering does not make every total unknowable: a fully
@@ -167,50 +167,18 @@ and visibility after successful delivery. Discarded or failed candidates do not 
 them. Page-only changes can update visibility without changing the logical tree.
 Live queries follow committed generated content; `.capture()` retains earlier membership.
 
-## Remaining source-flow work
+## Lazy flow across batches: dropped
 
-The materialized allocator is the closed finite case, not a universal lazy-flow engine.
-The current Browser still owns fetched batches. It does not automatically fill one
-rendered page across several batches or preserve an intra-item continuation across
-fetches. `ContentAddress` describes captured fragment anchors; it is not yet the
-runtime's navigation/persistence protocol.
+A forward-only `SourceFlow` let one page cross fetch batches and split an item at
+paragraph boundaries. The general version would have needed continuation addresses
+inside items, source revisions, Previous through visited checkpoints, and reflow
+anchoring. No screen needed it, so the widget, `SourcePage`, `SourceStability`,
+`Batch.revision`, and `ContentAddress` were removed.
 
-`SourceFlow` supports forward reading with authored paragraph boundaries. Its
-`fetch_size` limits source items per batch and `max_paragraphs_per_page` caps
-paragraphs on screen. The target planner measures each legal prefix with its
-controls, footer, and surrounding content. Next resumes after the delivered
-prefix. A page can cross batches or end partway through an item.
-Opening mid-collection omits the page number until the source establishes the
-beginning. First requests the origin, restoring Page 1 there. Subsequent Next
-actions count from that page. A failed delivery can retry the same action.
-Once content fits, `fill_timeout` bounds the wait for extra batches across the
-page. Next resumes at the first undelivered fragment.
-
-The general source-flow implementation needs:
-
-- Source and intra-item continuation addresses, separate from ordinals. Each source
-  declares verified or assumed stability. Verified sources validate the revision
-  before combining batches. Assumed-stable sources may continue across fetches.
-- Next that consumes content or reaches a declared end; no zero-progress content pages.
-- Previous through valid visited checkpoints or an explicit predecessor capability.
-- On an assumed-stable source, track the session ordinal for the current layout. Starting at the
-  beginning and delivering three Next actions displays “Page 4”. Failed deliveries
-  leave that number unchanged. An exact total still requires a closed enumeration
-  or equivalent proof.
-
-If a saved item disappears, resume at the closest position the source can resolve.
-If it cannot resolve one, retain the delivered view and offer Refresh. When a
-[presentation control](../presentation-state/README.md) causes reflow, keep the
-current fragment visible if possible. If the fragment becomes hidden, keep its
-containing item in view when visible. Resolve this per placement. If the build
-moves from Page 4 to Page 6, show Page 6. If the new layout cannot establish
-the page number, omit it and keep the available navigation controls.
-
-Acceptance must cover variable-size lazy items, pages crossing fetch batches, one item
-spanning pages, oversized indivisible content, forward-only sources, direct seeks with
-unknown ordinals, stale checkpoints after reflow, and failed navigation retaining the
-previous delivered state. Estimates, bounds, and demand diagnostics need their own typed
-contracts; they must not be smuggled into exact facts.
+Bot content is ours, so it can always be paginated into fixed pages: one batch is one
+page. A page that does not fit continues in further messages, then splits or shortens.
+Predictable pages are better UX than a flow whose page breaks the reader cannot
+anticipate. Redesign from scratch if a screen ever reads content we cannot paginate.
 
 ## Validation
 

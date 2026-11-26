@@ -2,7 +2,7 @@
 
 Implemented through placement-owned reactive cells. The public API is described
 in the `sl.presentation` API; the
-[typing examples](../../../packages/squid-ui/tests/typing_presentation.py) check
+[typing examples](../../../../packages/squid-ui/tests/typing_presentation.py) check
 the actual implementation rather than a separate stub API.
 
 ## Ownership and binding
@@ -76,8 +76,8 @@ adapter.
 
 ## Boundaries and validation
 
-Pagination is unchanged. Layout introspection and deferred page values require a
-separate design. Other built-in presentation declaration factories are deferred.
+Pagination is unchanged; [layout introspection](../layout-introspection/README.md)
+covers page facts. Other built-in presentation declaration factories are deferred.
 Stored selections are not silently rewritten when render-time options change;
 consumers should ignore unavailable values, and collection migrations need an
 explicit selection-reset policy.
