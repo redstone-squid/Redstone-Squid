@@ -4782,8 +4782,9 @@ export type BuildsListData = {
         status?: BuildStatusFilter | null;
         category?: BuildCategory | null;
         version_id?: number | null;
-        tag?: Array<string> | null;
-        creator_id?: string | null;
+        tag_id?: Array<number> | null;
+        tag_slug?: Array<string> | null;
+        account_id?: string | null;
         submitted_by?: 'me' | null;
         /**
          * A named display order for build listings.

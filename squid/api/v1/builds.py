@@ -235,8 +235,9 @@ async def list_builds(
     status: FromQuery[BuildStatusFilter | None] = None,
     category: FromQuery[BuildCategory | None] = None,
     version_id: Annotated[int | None, QueryParameter(ge=1)] = None,
-    tag: FromQuery[list[str] | None] = None,
-    creator_id: FromQuery[UUID | None] = None,
+    tag_id: FromQuery[list[int] | None] = None,
+    tag_slug: FromQuery[list[str] | None] = None,
+    account_id: FromQuery[UUID | None] = None,
     submitted_by: FromQuery[Literal["me"] | None] = None,
     sort: FromQuery[BuildListSort] = BuildListSort.ID,
     page_size: PageSizeParam = 20,
@@ -246,7 +247,8 @@ async def list_builds(
 ) -> Response[Page[PublicBuildSummary]]:
     """List builds in a named order, approved ones unless another status is selected.
 
-    Every tag must match. With submitted_by=me the caller sees their own builds in every status;
+    Every tag_id and tag_slug must match. account_id selects builds crediting that account as a
+    creator or designer. With submitted_by=me the caller sees their own builds in every status;
     other unpublished listings require build.submission.view_pending permission. Text search
     lives at /v1/search.
     """
@@ -260,7 +262,13 @@ async def list_builds(
     page = await build_queries.list_page(
         statuses=statuses,
         submitter_account_id=submitter_id,
-        filters=BuildListFilters(category, version_id, tuple(dict.fromkeys(tag or ())), creator_id),
+        filters=BuildListFilters(
+            category,
+            version_id,
+            tag_ids=tuple(dict.fromkeys(tag_id or ())),
+            tag_slugs=tuple(dict.fromkeys(tag_slug or ())),
+            creator_id=account_id,
+        ),
         sort=sort,
         selector=resolve_selector(offset=offset, after_id=after_id, before_id=before_id),
         page_size=page_size,

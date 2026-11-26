@@ -496,7 +496,8 @@ export const buildMediaContentGet = <ThrowOnError extends boolean = false>(optio
  *
  * List builds in a named order, approved ones unless another status is selected.
  *
- * Every tag must match. With submitted_by=me the caller sees their own builds in every status;
+ * Every tag_id and tag_slug must match. account_id selects builds crediting that account as a
+ * creator or designer. With submitted_by=me the caller sees their own builds in every status;
  * other unpublished listings require build.submission.view_pending permission. Text search
  * lives at /v1/search.
  */

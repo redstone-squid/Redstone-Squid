@@ -131,8 +131,11 @@ class BuildCategory(StrEnum):
 class BuildListFilters:
     category: BuildCategory | None = None
     version: int | None = None
-    tags: tuple[str, ...] = ()
+    tag_ids: tuple[int, ...] = ()
+    tag_slugs: tuple[str, ...] = ()
+    """Current or former slugs."""
     creator_id: uuid.UUID | None = None
+    """The public account ID of a credited creator or designer."""
 
 
 EMPTY_BUILD_FILTERS = BuildListFilters()

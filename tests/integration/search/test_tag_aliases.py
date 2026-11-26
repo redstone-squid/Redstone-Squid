@@ -13,7 +13,7 @@ from whenever import Instant
 
 from squid.core.accounts.models import Account
 from squid.core.actors import ActingContext, AnonymousActor
-from squid.core.builds.domain import BuildStatus
+from squid.core.builds.domain import BuildListFilters, BuildStatus
 from squid.core.builds.models import OtherBuild
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.records.domain import BuildKind, RecordCriterion, VersionScope
@@ -31,7 +31,7 @@ from squid.core.search.domain.text import normalize_text
 from squid.core.search.infrastructure.projection import SearchProjectionWorker
 from squid.core.search.models import SearchDocument, SearchProjectionQueueItem, SearchValue
 from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
-from squid.core.tags.models import TagAlias, TagAssignment, TagDefinition
+from squid.core.tags.models import TagAlias, TagAssignment, TagDefinition, TagSlug
 from tests.support.build_edits import build_edit_session
 
 
@@ -346,3 +346,21 @@ async def test_record_category_filters_match_without_holders_and_refresh_aliases
     await _refresh(migrated_session_factory)
     assert await matches('restriction:"detector free"') == {door}
     assert await matches("restriction:observerless") == set()
+
+
+async def test_catalogue_listing_filters_by_tag_id_and_slug(
+    migrated_session_factory: async_sessionmaker[AsyncSession], catalogue: tuple[int, int, int]
+) -> None:
+    target_id, _, tag_id = catalogue
+    async with migrated_session_factory() as session:
+        slug = await session.scalar(select(TagSlug.slug).where(TagSlug.tag_id == tag_id))
+    assert slug is not None
+
+    async def listed(filters: BuildListFilters) -> list[int]:
+        async with SqlAlchemyUnitOfWork(migrated_session_factory) as uow:
+            builds = await uow.builds.list_page(statuses=frozenset({BuildStatus.APPROVED}), filters=filters, limit=10)
+        return [build.id for build in builds]
+
+    assert await listed(BuildListFilters(tag_ids=(tag_id,))) == [target_id]
+    assert await listed(BuildListFilters(tag_slugs=(slug,))) == [target_id]
+    assert await listed(BuildListFilters(tag_ids=(tag_id,), tag_slugs=("missing",))) == []

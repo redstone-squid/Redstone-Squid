@@ -46,11 +46,11 @@ def filter_build_listing[S: Select[Any]](
             )
             .exists()
         )
-    for tag in filters.tags:
-        tag_ids = select(TagSlug.tag_id).where(TagSlug.slug == tag)
-        predicate = TagAssignment.tag_id.in_(tag_ids)
-        if tag.isascii() and tag.isdigit() and len(tag) <= 19 and int(tag) < 2**63:
-            predicate = predicate | (TagAssignment.tag_id == int(tag))
+    predicates = [TagAssignment.tag_id == tag_id for tag_id in filters.tag_ids]
+    predicates += [
+        TagAssignment.tag_id.in_(select(TagSlug.tag_id).where(TagSlug.slug == slug)) for slug in filters.tag_slugs
+    ]
+    for predicate in predicates:
         statement = statement.where(
             select(TagAssignment.tag_id).where(TagAssignment.build_id == Build.id, predicate).exists()
         )
