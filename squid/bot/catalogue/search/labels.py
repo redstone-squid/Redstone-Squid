@@ -12,6 +12,7 @@ from decimal import Decimal
 
 import squid_ui as sl
 from squid.bot.ui import tr, truncate_display_text
+from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY
 from squid.core.search.domain.fields import FieldDefinition, FieldType
 from squid.core.search.domain.query import (
     CREATOR_ID_STORAGE,
@@ -35,61 +36,6 @@ _SYMBOLS = {
     ComparisonOperator.GREATER_THAN: ">",
     ComparisonOperator.GREATER_THAN_OR_EQUAL: "≥",
 }
-
-
-def field_label(name: str) -> sl.TextLike:
-    """Return the display name of a search field, such as "Record criterion" for `criterion`."""
-    match name:
-        case "title":
-            return tr(t"search-field-title = Title")
-        case "description":
-            return tr(t"search-field-description = Description")
-        case "name":
-            return tr(t"search-field-name = Name")
-        case "subtitle":
-            return tr(t"search-field-subtitle = Subtitle")
-        case "tag":
-            return tr(t"search-field-tag = Tag")
-        case "restriction":
-            return tr(t"search-field-restriction = Restriction")
-        case "type":
-            return tr(t"search-field-type = Type")
-        case "pattern":
-            return tr(t"search-field-pattern = Pattern")
-        case "creator":
-            return tr(t"search-field-creator = Creator")
-        case "version":
-            return tr(t"search-field-version = Version")
-        case "status":
-            return tr(t"search-field-status = Status")
-        case "kind":
-            return tr(t"search-field-kind = Kind")
-        case "criterion":
-            return tr(t"search-field-base-title = Record criterion")
-        case "version_scope":
-            return tr(t"search-field-version-scope = Version scope")
-        case "record_state":
-            return tr(t"search-field-record-state = Record state")
-        case "former_holder":
-            return tr(t"search-field-former-holder = Former holder")
-        case "tied":
-            return tr(t"search-field-tied = Tied build")
-        case "width":
-            return tr(t"search-field-width = Width")
-        case "height":
-            return tr(t"search-field-height = Height")
-        case "depth":
-            return tr(t"search-field-depth = Depth")
-        case "volume":
-            return tr(t"search-field-volume = Volume")
-        case "completion_at":
-            return tr(t"search-field-completion-at = Completed")
-        case "created_at":
-            return tr(t"search-field-created-at = Submitted")
-        case "updated_at":
-            return tr(t"search-field-updated-at = Updated")
-        case _:
-            return name.replace("_", " ").capitalize()
 
 
 def value_label(value: ScalarValue | date | datetime) -> str:
@@ -122,14 +68,14 @@ def filter_label(clause: QueryExpression, creators: Mapping[str, str] | None = N
         words = truncate_display_text(clause.value, _VALUE_LIMIT)
         return tr(t"search-filter-keywords = Keywords: {words}")
     if isinstance(clause, PresenceExpression):
-        name = field_label(clause.field.name)
+        name = clause.field.display_name
         if clause.is_set:
             return tr(t"search-filter-is-set = {name} is set")
         return tr(t"search-filter-is-not-set = {name} is not set")
     if isinstance(clause, FieldExpression):
         storage, value = clause.stored()
         if storage == CREATOR_ID_STORAGE and creators and (creator := creators.get(str(value))) is not None:
-            name = field_label(clause.field.name)
+            name = clause.field.display_name
             shown = truncate_display_text(creator, _VALUE_LIMIT)
             return tr(t"search-filter-equals = {name} is {shown}")
         return _comparison_label(clause.field, clause.operator, clause.value)
@@ -139,7 +85,7 @@ def filter_label(clause: QueryExpression, creators: Mapping[str, str] | None = N
 def _comparison_label(
     field: FieldDefinition, operator: ComparisonOperator, value: ScalarValue | RangeValue
 ) -> sl.TextLike:
-    name = field_label(field.name)
+    name = field.display_name
     if isinstance(value, RangeValue):
         lower = value_label(value.lower)
         upper = value_label(value.upper)
@@ -159,7 +105,7 @@ def sort_label(sort: str) -> sl.TextLike:
         return tr(t"search-sort-default = Default order")
     descending = sort.startswith("-")
     name = sort.removeprefix("-")
-    field = field_label(name)
+    field = DEFAULT_FIELD_REGISTRY.display_name(name)
     if name.endswith("_at"):
         if descending:
             return tr(t"search-sort-newest = {field}, newest first")

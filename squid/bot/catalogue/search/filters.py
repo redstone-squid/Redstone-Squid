@@ -14,7 +14,7 @@ import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.app import RedstoneSquid
 from squid.bot.catalogue.search.clauses import CatalogueQuery
-from squid.bot.catalogue.search.labels import field_label, filter_label, sort_label
+from squid.bot.catalogue.search.labels import filter_label, sort_label
 from squid.bot.lookup import RequestAuthorizer, SuggestionSource
 from squid.bot.ui import tr
 from squid.core.actors import ActingContext
@@ -178,7 +178,7 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
                 sl.heading(tr(t"guided-search-add-filter = Add filter")),
                 *((self.filter_picker,) if self.filter_picker is not None else ()),
             )
-        name = field_label(field.name)
+        name = field.display_name
         step = len(self.pending_clauses) + 1
         total = step + len(self.pending_fields)
         heading = sl.heading(
@@ -282,7 +282,7 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         negated: bool = False,
     ) -> sl.forms.FormSpec[sd.Request[Any, RedstoneSquid]]:
         """Build the form that adds or edits a filter on `field`, prefilled from `existing`."""
-        label = field_label(field.name)
+        label = field.display_name
         raw = existing.value if existing is not None else None
         value = raw.lower if isinstance(raw, RangeValue) else raw
         default = str(value).lower() if isinstance(value, bool) else str(value) if value is not None else ""
@@ -347,7 +347,7 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         self, field: FieldDefinition, *, is_set: bool = True
     ) -> sl.forms.FormSpec[sd.Request[Any, RedstoneSquid]]:
         return sl.forms.FormSpec[sd.Request[Any, Any]](
-            field_label(field.name),
+            field.display_name,
             (
                 sl.forms.ChoiceField(
                     key="presence",
@@ -465,7 +465,7 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
             "search_fields",
             self._fields_picked,
             key="filter-lookup",
-            label=lambda item: field_label(item.value),
+            label=lambda item: self.parser.registry.display_name(item.value),
             search_label=tr(t"guided-search-search-filter = Search fields"),
             context={"scope": self.scope},
             maximum=_PICKER_PAGE_SIZE,
@@ -499,7 +499,7 @@ class GuidedSearch(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
                 if values:
                     await self._add_choice(field, values[0].value, action)
 
-            name = field_label(field.name)
+            name = field.display_name
             picker = await self._picker(
                 event,
                 VALUE_SOURCES[field.name],

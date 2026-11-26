@@ -1,7 +1,14 @@
 """Public search domain API."""
 
 from squid.core.search.domain.evidence import FieldMatch, FieldValue, SearchEvidence, SearchText
-from squid.core.search.domain.fields import FieldDefinition, FieldType, FreeTextWeight, TextMatch
+from squid.core.search.domain.fields import (
+    FieldChoice,
+    FieldDefinition,
+    FieldGroup,
+    FieldType,
+    FreeTextWeight,
+    TextMatch,
+)
 from squid.core.search.domain.models import (
     BuildSearchHit,
     MetadataSearchHit,
@@ -39,8 +46,10 @@ __all__ = [
     "BuildQuery",
     "BuildSearchHit",
     "ComparisonOperator",
+    "FieldChoice",
     "FieldDefinition",
     "FieldExpression",
+    "FieldGroup",
     "FieldMatch",
     "FieldType",
     "FieldValue",

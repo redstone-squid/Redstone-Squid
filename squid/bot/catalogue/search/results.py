@@ -10,12 +10,12 @@ import squid_ui_widgets as sp
 from squid.bot.app import RedstoneSquid
 from squid.bot.catalogue.record_display import record_row, record_standings
 from squid.bot.catalogue.rows import build_row
-from squid.bot.catalogue.search.labels import field_label
 from squid.bot.ui import tr, truncate_display_text
 from squid.core.actors import ActingContext
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build
 from squid.core.records.domain.models import RecordCriterion, VersionScope
+from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY
 from squid.core.search.domain import (
     BuildSearchHit,
     FieldMatch,
@@ -601,7 +601,7 @@ def _match_note(hit: SearchHit) -> Text | None:
     elif not any(match.field in _HEADING_FIELDS for match in shown) and (
         other := next((match for match in shown if match.field not in _HEADING_FIELDS), None)
     ):
-        label = field_label(other.field)
+        label = DEFAULT_FIELD_REGISTRY.display_name(other.field)
         note = Text(t"↳ {label}: {_excerpt(other)}")
     if evidence.close:
         close = tr(t"search-close-match = close spelling")

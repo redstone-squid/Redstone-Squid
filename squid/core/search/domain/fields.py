@@ -1,10 +1,12 @@
 """Definitions of the fields that search queries can filter and sort by."""
 
-from dataclasses import dataclass
+from collections.abc import Callable
+from dataclasses import dataclass, field
 from decimal import Decimal
 from enum import StrEnum
 
 from squid.core.search.domain.scope import CATALOGUE_SCOPES, SearchScope
+from squid_i18n import Text, plain
 
 
 class FieldType(StrEnum):
@@ -32,6 +34,28 @@ class FreeTextWeight(StrEnum):
     B = "B"
     C = "C"
     D = "D"
+
+
+class FieldGroup(StrEnum):
+    """The topic a field is listed under in field references and filter panels."""
+
+    TEXT = "text"
+    CLASSIFICATION = "classification"
+    CREDIT = "credit"
+    SIZE = "size"
+    TIMING = "timing"
+    DATE = "date"
+    RECORD = "record"
+    TAG = "tag"
+
+
+@dataclass(frozen=True, slots=True)
+class FieldChoice:
+    """One accepted value of an enumerated field and the catalogue tabs that accept it."""
+
+    value: str
+    label: Text
+    scopes: frozenset[SearchScope]
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,11 +92,48 @@ class FieldDefinition:
     """Bare query text also searches this field's values, ranked by this weight; None leaves it out."""
     queryable: bool = True
     """False for values that are indexed for bare text but have no field syntax, such as a holder's title."""
+    unit: str | None = None
+    """The unit of unsuffixed query values, such as `gt` for game ticks."""
+    # Presentation does not change what a field matches, so it stays out of equality.
+    label: Text | None = field(default=None, compare=False)
+    description: Text | None = field(default=None, compare=False)
+    group: FieldGroup = field(default=FieldGroup.TEXT, compare=False)
+    examples: tuple[str, ...] = field(default=(), compare=False)
+    """Complete queries that use the field, such as `opening_time<1s`."""
+    choice_label: Callable[[str], Text] | None = field(default=None, compare=False)
 
     @property
     def storage(self) -> str:
         """The key the field's values are indexed under."""
         return self.storage_name or self.name
+
+    @property
+    def display_name(self) -> Text:
+        """The label, or the name in sentence case when there is none."""
+        return self.label if self.label is not None else plain(self.name.replace("_", " ").capitalize())
+
+    def value_choices(self) -> tuple[FieldChoice, ...] | None:
+        """List the values of an enumerated field across scopes; None for free-form fields."""
+        enums = (
+            *((self.value_enum,) if self.value_enum is not None else ()),
+            *(value_enum for _, value_enum in self.scoped_enums),
+        )
+        if not enums:
+            return None
+        scopes: dict[str, set[SearchScope]] = {}
+        for scope in sorted(self.scopes):
+            allowed = self.value_enum if self.value_enum is not None else dict(self.scoped_enums).get(scope)
+            for member in allowed or ():
+                if self.applies_to(scope, member.value):
+                    scopes.setdefault(member.value, set()).add(scope)
+        return tuple(
+            FieldChoice(
+                value,
+                self.choice_label(value) if self.choice_label is not None else plain(value.replace("_", " ")),
+                frozenset(allowed),
+            )
+            for value, allowed in scopes.items()
+        )
 
     def applies_to(self, scope: SearchScope, value: object = None) -> bool:
         """Check the field and any scope restriction on a particular value."""

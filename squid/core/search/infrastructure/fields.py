@@ -12,7 +12,9 @@ from squid.core.search.application.fields import (
     FieldRegistry,
     FieldType,
 )
+from squid.core.search.domain.fields import FieldGroup
 from squid.core.tags.models import TagDefinition, UnitDefinition
+from squid_i18n import plain
 
 
 class PostgresFieldRegistryProvider:
@@ -61,12 +63,17 @@ def _field_definition(
             scale = unit.scale_to_base / canonical.scale_to_base
             aliases.extend((alias, scale) for alias in {unit.key, unit.symbol, *unit.aliases})
         unit_scales = tuple(aliases)
+    name = definition.query_name
     return FieldDefinition(
-        name=definition.query_name,
+        name=name,
         value_type=value_type,
         supports_range=value_type is FieldType.NUMBER,
         storage_name=f"tag:{definition.id}",
         supports_sort=True,
         unit_scales=unit_scales,
         numeric_step=definition.numeric_step,
+        unit=canonical.symbol if canonical is not None else None,
+        label=plain(definition.display_name),
+        group=FieldGroup.TAG,
+        examples={FieldType.NUMBER: (f"{name}>=1",), FieldType.BOOLEAN: (f"{name}:true",)}.get(value_type, ()),
     )

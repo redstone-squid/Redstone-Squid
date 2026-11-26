@@ -1208,16 +1208,16 @@ bot-starboard-screen-starboards = Starboards
 # squid/bot/starboard/screen.py:431
 bot-starboard-screen-up = Up
 
-# squid/bot/catalogue/browse.py:283, squid/bot/catalogue/browse.py:326
+# squid/bot/catalogue/browse.py:284, squid/bot/catalogue/browse.py:327
 bot-submission-build-browse-approve = Approve
 
-# squid/bot/catalogue/browse.py:473
+# squid/bot/catalogue/browse.py:474
 bot-submission-build-browse-build-catalogue = Build catalogue
 
-# squid/bot/catalogue/browse.py:1170
+# squid/bot/catalogue/browse.py:1171
 bot-submission-build-browse-build-id = Build ID
 
-# squid/bot/catalogue/browse.py:334
+# squid/bot/catalogue/browse.py:335
 bot-submission-build-browse-cancel = Cancel
 
 # squid/bot/catalogue/schematics/tools.py:360
@@ -1232,22 +1232,22 @@ bot-submission-build-browse-download-result = Download result
 # squid/bot/catalogue/schematics/tools.py:94
 bot-submission-build-browse-download-schematic = Download
 
-# squid/bot/catalogue/browse.py:860
+# squid/bot/catalogue/browse.py:861
 bot-submission-build-browse-edit = Edit
 
-# squid/bot/catalogue/browse.py:245
+# squid/bot/catalogue/browse.py:246
 bot-submission-build-browse-loading-build = Loading build.
 
-# squid/bot/catalogue/browse.py:1168
+# squid/bot/catalogue/browse.py:1169
 bot-submission-build-browse-open-build = Open build
 
-# squid/bot/catalogue/browse.py:685
+# squid/bot/catalogue/browse.py:686
 bot-submission-build-browse-open-by-id = Open by ID
 
 # squid/bot/catalogue/schematics/tools.py:372
 bot-submission-build-browse-output-format = Output format
 
-# squid/bot/catalogue/browse.py:292, squid/bot/catalogue/browse.py:328
+# squid/bot/catalogue/browse.py:293, squid/bot/catalogue/browse.py:329
 bot-submission-build-browse-reject = Reject
 
 # squid/bot/catalogue/schematics/tools.py:122
@@ -1813,13 +1813,13 @@ bot-voting-vote-working = Working
 # squid/bot/voting/cog.py:159
 bot-voting-vote-you-may-no-longer-publish-a-poll = You may no longer publish a poll to every server.
 
-# squid/bot/catalogue/browse.py:1138
+# squid/bot/catalogue/browse.py:1139
 browse-query-all-builds = All builds
 
-# squid/bot/catalogue/browse.py:1138
+# squid/bot/catalogue/browse.py:1139
 browse-query-all-records = All records
 
-# squid/bot/catalogue/browse.py:739
+# squid/bot/catalogue/browse.py:740
 browse-query-summary = { $query } · { $sort }
 
 # squid/bot/submission/attachments.py:63
@@ -1828,19 +1828,19 @@ build-attachment-type-rejected = `{ $filename }` is not a file type this command
 # squid/bot/submission/attachments.py:69
 build-attachment-types-help = Attach an image, a video, or a Minecraft schematic file.
 
-# squid/bot/catalogue/browse.py:662
+# squid/bot/catalogue/browse.py:663
 build-browse-all-builds = Builds
 
-# squid/bot/catalogue/browse.py:678
+# squid/bot/catalogue/browse.py:679
 build-browse-record-tools = Record tools
 
-# squid/bot/catalogue/browse.py:670
+# squid/bot/catalogue/browse.py:671
 build-browse-records = Records
 
-# squid/bot/catalogue/browse.py:741
+# squid/bot/catalogue/browse.py:742
 build-browser-close-search = Done
 
-# squid/bot/catalogue/browse.py:743
+# squid/bot/catalogue/browse.py:744
 build-browser-edit-search = Edit search
 
 # squid/bot/submission/ui/category_change.py:73
@@ -1900,13 +1900,13 @@ build-category-visible-closing-ticks = Visible closing (game ticks)
 # squid/bot/submission/ui/category_change.py:218
 build-category-visible-opening-ticks = Visible opening (game ticks)
 
-# squid/bot/catalogue/browse.py:1089
+# squid/bot/catalogue/browse.py:1090
 build-creators-heading = Creators of { $title }
 
-# squid/bot/catalogue/browse.py:1106
+# squid/bot/catalogue/browse.py:1107
 build-credit-open-page = Open creator page
 
-# squid/bot/catalogue/browse.py:1108
+# squid/bot/catalogue/browse.py:1109
 build-credit-search-name = Builds credited to this name
 
 # squid/bot/submission/ui/saved_drafts.py:68
@@ -2041,7 +2041,7 @@ build-editor-stale-form = These answers changed while the form was open. Open it
 # squid/bot/submission/ui/build_edit.py:445
 build-editor-unlisted = Not in the catalogue: { $names }
 
-# squid/bot/catalogue/browse.py:731, squid/bot/catalogue/browse.py:903
+# squid/bot/catalogue/browse.py:732, squid/bot/catalogue/browse.py:904
 build-id-not-visible = No visible build has that ID.
 
 # squid/core/builds/application/input.py:46
@@ -2053,25 +2053,25 @@ build-input-time-invalid = Enter a time such as 30gt, 15rt, or 1.5s.
 # squid/core/builds/application/input.py:19
 build-input-time-unit = Add a unit: gt for game ticks, rt for redstone ticks, or s for seconds.
 
-# squid/bot/catalogue/browse.py:474
+# squid/bot/catalogue/browse.py:475
 build-list-empty = No builds are available.
 
 # squid/bot/posts/renderers.py:57
 build-post-creators = Creators
 
-# squid/bot/catalogue/browse.py:307
+# squid/bot/catalogue/browse.py:308
 build-review-approve-effect = The build becomes visible in the public catalogue.
 
-# squid/bot/catalogue/browse.py:306
+# squid/bot/catalogue/browse.py:307
 build-review-approve-title = Approve build #{ $build_id }?
 
-# squid/bot/catalogue/browse.py:312
+# squid/bot/catalogue/browse.py:313
 build-review-reject-effect = The build is rejected and leaves the catalogue.
 
-# squid/bot/catalogue/browse.py:311
+# squid/bot/catalogue/browse.py:312
 build-review-reject-title = Reject build #{ $build_id }?
 
-# squid/bot/catalogue/browse.py:358, squid/bot/catalogue/browse.py:360
+# squid/bot/catalogue/browse.py:359, squid/bot/catalogue/browse.py:361
 build-review-state-updated = Build review state updated.
 
 # squid/bot/catalogue/schematics/tools.py:155
@@ -2080,10 +2080,10 @@ build-schematic-missing = This build has no schematic attached.
 # squid/bot/catalogue/schematics/tools.py:160
 build-schematic-not-public = This schematic is not publicly available.
 
-# squid/bot/catalogue/browse.py:273
+# squid/bot/catalogue/browse.py:274
 build-schematic-tools-hide = Hide schematic tools
 
-# squid/bot/catalogue/browse.py:275
+# squid/bot/catalogue/browse.py:276
 build-schematic-tools-show = Schematic tools
 
 # squid/bot/catalogue/search/results.py:170, squid/bot/catalogue/search/results.py:174, squid/bot/catalogue/search/results.py:250, squid/bot/catalogue/search/results.py:303
@@ -2176,10 +2176,10 @@ builds-revision-conflict-action = Fetch the latest build, merge the changes, and
 # squid/core/catalogue/domain/titles.py:147
 catalogue-piston-extender-length = Piston extender length must be positive.
 
-# squid/bot/catalogue/browse.py:811, squid/bot/catalogue/search/help.py:207
+# squid/bot/catalogue/browse.py:812, squid/bot/catalogue/search/help.py:207
 catalogue-search-help = Search help
 
-# squid/bot/catalogue/browse.py:634
+# squid/bot/catalogue/browse.py:635
 catalogue-search-help-close = Close help
 
 # squid/core/catalogue/domain/titles.py:67
@@ -3680,106 +3680,106 @@ give-redstoner-value = { $role_mention }
 # squid/bot/give_redstoner_cog.py:129
 give-redstoner-value-2 = { $source_channel_mention }
 
-# squid/bot/catalogue/search/filters.py:155, squid/bot/catalogue/search/filters.py:175
+# squid/bot/catalogue/search/filters.py:158, squid/bot/catalogue/search/filters.py:178
 guided-search-add-filter = Add filter
 
-# squid/bot/catalogue/search/filters.py:187
+# squid/bot/catalogue/search/filters.py:190
 guided-search-cancel-batch = Cancel adding filters
 
-# squid/bot/catalogue/search/filters.py:189
+# squid/bot/catalogue/search/filters.py:192
 guided-search-change-field = Choose another field
 
-# squid/bot/catalogue/search/filters.py:194
+# squid/bot/catalogue/search/filters.py:197
 guided-search-check-presence = Check presence
 
-# squid/bot/catalogue/search/filters.py:153
+# squid/bot/catalogue/search/filters.py:156
 guided-search-close-filters = Close filters
 
-# squid/bot/catalogue/search/filters.py:301
+# squid/bot/catalogue/search/filters.py:304
 guided-search-comparison = Comparison
 
-# squid/bot/catalogue/search/filters.py:147
+# squid/bot/catalogue/search/filters.py:150
 guided-search-edit-query = Type a query
 
-# squid/bot/catalogue/search/filters.py:366
+# squid/bot/catalogue/search/filters.py:369
 guided-search-edit-text = Edit keywords
 
-# squid/bot/catalogue/search/filters.py:351
+# squid/bot/catalogue/search/filters.py:354
 guided-search-field-presence = Field presence
 
-# squid/bot/catalogue/search/filters.py:184
+# squid/bot/catalogue/search/filters.py:187
 guided-search-filter-heading = Filter by { $name }
 
-# squid/bot/catalogue/search/filters.py:182
+# squid/bot/catalogue/search/filters.py:185
 guided-search-filter-progress = Filter by { $name } ({ $step } of { $total })
 
-# squid/bot/catalogue/search/filters.py:355
+# squid/bot/catalogue/search/filters.py:358
 guided-search-is-not-set = Is not set
 
-# squid/bot/catalogue/search/filters.py:354
+# squid/bot/catalogue/search/filters.py:357
 guided-search-is-set = Is set
 
-# squid/bot/catalogue/search/filters.py:369
+# squid/bot/catalogue/search/filters.py:372
 guided-search-keywords = Keywords
 
-# squid/bot/catalogue/search/filters.py:337, squid/bot/catalogue/search/filters.py:372
+# squid/bot/catalogue/search/filters.py:340, squid/bot/catalogue/search/filters.py:375
 guided-search-negated = Exclude matches
 
-# squid/bot/catalogue/search/filters.py:573
+# squid/bot/catalogue/search/filters.py:576
 guided-search-no = No
 
-# squid/bot/catalogue/search/filters.py:295
+# squid/bot/catalogue/search/filters.py:298
 guided-search-operator-at-least = at least
 
-# squid/bot/catalogue/search/filters.py:293
+# squid/bot/catalogue/search/filters.py:296
 guided-search-operator-at-most = at most
 
-# squid/bot/catalogue/search/filters.py:296
+# squid/bot/catalogue/search/filters.py:299
 guided-search-operator-between = between
 
-# squid/bot/catalogue/search/filters.py:291
+# squid/bot/catalogue/search/filters.py:294
 guided-search-operator-equal = is
 
-# squid/bot/catalogue/search/filters.py:294
+# squid/bot/catalogue/search/filters.py:297
 guided-search-operator-greater = more than
 
-# squid/bot/catalogue/search/filters.py:292
+# squid/bot/catalogue/search/filters.py:295
 guided-search-operator-less = less than
 
-# squid/bot/catalogue/search/filters.py:259
+# squid/bot/catalogue/search/filters.py:262
 guided-search-query-label = Words and filters, e.g. door width<=5
 
-# squid/bot/catalogue/search/filters.py:255
+# squid/bot/catalogue/search/filters.py:258
 guided-search-query-title = Search query
 
-# squid/bot/catalogue/search/filters.py:245
+# squid/bot/catalogue/search/filters.py:248
 guided-search-remove-clause = Remove
 
-# squid/bot/catalogue/browse.py:817
+# squid/bot/catalogue/browse.py:818
 guided-search-reset = Reset
 
-# squid/bot/catalogue/search/filters.py:466
+# squid/bot/catalogue/search/filters.py:469
 guided-search-search-filter = Search fields
 
-# squid/bot/catalogue/search/filters.py:481
+# squid/bot/catalogue/search/filters.py:484
 guided-search-search-options = Search sort orders
 
-# squid/bot/catalogue/search/filters.py:506
+# squid/bot/catalogue/search/filters.py:509
 guided-search-search-values = Search { $name }
 
-# squid/bot/catalogue/search/filters.py:216
+# squid/bot/catalogue/search/filters.py:219
 guided-search-selected-field = Set { $name } filter
 
-# squid/bot/catalogue/search/filters.py:141
+# squid/bot/catalogue/search/filters.py:144
 guided-search-sort = Sort by
 
-# squid/bot/catalogue/search/filters.py:161
+# squid/bot/catalogue/search/filters.py:164
 guided-search-sorting = Sort
 
-# squid/bot/catalogue/search/filters.py:328
+# squid/bot/catalogue/search/filters.py:331
 guided-search-upper = And (only for between)
 
-# squid/bot/catalogue/search/filters.py:573
+# squid/bot/catalogue/search/filters.py:576
 guided-search-yes = Yes
 
 # squid/bot/help_cog.py:27
@@ -4441,7 +4441,7 @@ minecraft-auth-server-profile-length = Server profile { $label } must contain 1 
 # squid/core/minecraft_auth/errors.py:131
 minecraft-auth-too-many-authorization = Too many authorization challenges are active.
 
-# squid/bot/catalogue/browse.py:1080, squid/bot/catalogue/browse.py:615
+# squid/bot/catalogue/browse.py:1081, squid/bot/catalogue/browse.py:616
 navigation-build-unavailable = That build is unavailable.
 
 # squid/bot/submission/ui/drafts.py:558
@@ -5186,7 +5186,7 @@ record-browse-pending = Newer inputs are waiting to be checked.
 # squid/bot/catalogue/record_browser.py:104
 record-browse-title = Records
 
-# squid/bot/catalogue/browse.py:778
+# squid/bot/catalogue/browse.py:779
 record-browser-all = All criteria
 
 # squid/bot/catalogue/record_display.py:66
@@ -5210,7 +5210,7 @@ record-search-query-help = Name, keywords, or filters, e.g. kind:door criterion:
 # squid/bot/catalogue/records.py:239
 records-active-version = the active version
 
-# squid/core/records/application/services.py:899, squid/core/records/application/services.py:930
+# squid/core/records/application/services.py:903, squid/core/records/application/services.py:934
 records-candidate-no-typed = Candidate { $build_id } has no typed category facts.
 
 # squid/bot/catalogue/records.py:460
@@ -5246,7 +5246,7 @@ records-exact-heading = Category without a record
 # squid/bot/catalogue/records.py:277
 records-exact-purpose = Create and compute a record category by its exact key, optionally narrowed by restrictions.
 
-# squid/core/records/application/services.py:943
+# squid/core/records/application/services.py:947
 records-fastest-records-unsupported = Fastest records are not supported for { $kind_name }.
 
 # squid/core/records/domain/models.py:130
@@ -5291,7 +5291,7 @@ records-no-titles-need-review = Every active record title uses known terms.
 # squid/core/records/application/published_points.py:75
 records-opening-width-invalid = Opening width must be a positive 32-bit integer.
 
-# squid/core/records/application/services.py:860
+# squid/core/records/application/services.py:864
 records-parameterized-record-restriction = Parameterized record restriction is missing a category value.
 
 # squid/bot/catalogue/records.py:432
@@ -5309,7 +5309,7 @@ records-record-category-not-found = Record category not found.
 # squid/core/records/errors.py:13
 records-record-not-found-title = Record not found
 
-# squid/core/records/application/services.py:961
+# squid/core/records/application/services.py:965
 records-records-not-supported = Records are not supported for { $kind_name }.
 
 # squid/bot/catalogue/records.py:464
@@ -5577,7 +5577,7 @@ schematics-upload-litematic-schem = Upload a .litematic, .schem, .schematic, .nb
 # squid/core/schematics/application/commands.py:63
 schematics-zoom-positive = Render zoom must be positive.
 
-# squid/core/search/application/fields.py:337
+# squid/core/search/application/fields.py:655
 search-align-increments = { $field_name } must align to increments of { $step }
 
 # squid/core/search/domain/query.py:131
@@ -5585,6 +5585,48 @@ search-boolean-minimum-operands = Boolean expressions require at least two opera
 
 # squid/core/search/application/ranking.py:75
 search-branch-limit-positive = branch_limit must be positive
+
+# squid/core/search/application/fields.py:204
+search-choice-criterion =
+    { $value ->
+        [first] First
+        [fastest] Fastest
+        [smallest] Smallest
+        [fastest_smallest] Fastest smallest
+       *[smallest_fastest] Smallest fastest
+    }
+
+# squid/core/search/application/fields.py:192
+search-choice-kind =
+    { $value ->
+        [door] Door
+        [entrance] Entrance
+        [extender] Extender
+        [utility] Utility
+       *[other] Other
+    }
+
+# squid/core/search/application/fields.py:225
+search-choice-record-state =
+    { $value ->
+        [current] Current
+       *[retired] Retired
+    }
+
+# squid/core/search/application/fields.py:182
+search-choice-status =
+    { $value ->
+        [pending] Pending
+        [approved] Approved
+       *[rejected] Rejected
+    }
+
+# squid/core/search/application/fields.py:216
+search-choice-version-scope =
+    { $value ->
+        [all_time] All time
+       *[up_to_date] Up to date
+    }
 
 # squid/bot/catalogue/search/results.py:607
 search-close-match = close spelling
@@ -5619,109 +5661,271 @@ search-example-fastest-tall-doors = All-time fastest doors at least 3 blocks tal
 # squid/bot/catalogue/search/help.py:29
 search-example-long-extenders = Current smallest extenders reaching at least 4 blocks
 
-# squid/core/search/application/fields.py:160
+# squid/core/search/application/fields.py:165
 search-expects-boolean = { $field_name } expects a boolean
 
-# squid/core/search/application/fields.py:150
+# squid/core/search/application/fields.py:155
 search-expects-iso-date = { $field_name } expects an ISO-8601 date or timestamp
 
-# squid/core/search/application/fields.py:142
+# squid/core/search/application/fields.py:147
 search-expects-number = { $field_name } expects a number
 
-# squid/bot/catalogue/search/labels.py:68
+# squid/core/search/application/fields.py:414
 search-field-base-title = Record criterion
 
-# squid/bot/catalogue/search/labels.py:86
+# squid/core/search/application/fields.py:603
+search-field-closing-reset-time = Closing reset time
+
+# squid/core/search/application/fields.py:604
+search-field-closing-reset-time-description = Ticks after closing until the door accepts input again.
+
+# squid/core/search/application/fields.py:586
+search-field-closing-time = Closing time
+
+# squid/core/search/application/fields.py:587
+search-field-closing-time-description = Ticks from input until the door is closed.
+
+# squid/core/search/application/fields.py:548
 search-field-completion-at = Completed
 
-# squid/bot/catalogue/search/labels.py:88
+# squid/core/search/application/fields.py:549
+search-field-completion-at-description = When the creators finished the build.
+
+# squid/core/search/application/fields.py:558
 search-field-created-at = Submitted
 
-# squid/bot/catalogue/search/labels.py:60
+# squid/core/search/application/fields.py:559
+search-field-created-at-description = When the build was submitted.
+
+# squid/core/search/application/fields.py:365
 search-field-creator = Creator
 
-# squid/bot/catalogue/search/labels.py:82
+# squid/core/search/application/fields.py:366
+search-field-creator-description = A credited creator's name or public creator ID.
+
+# squid/core/search/application/fields.py:415
+search-field-criterion-description = What the record measures, such as fastest or smallest.
+
+# squid/core/search/application/fields.py:500
 search-field-depth = Depth
 
-# squid/bot/catalogue/search/labels.py:46
+# squid/core/search/application/fields.py:501
+search-field-depth-description = The build's depth in blocks.
+
+# squid/core/search/application/fields.py:309
 search-field-description = Description
 
-# squid/core/search/application/fields.py:133
+# squid/core/search/application/fields.py:310
+search-field-description-description = Words in the build's description.
+
+# squid/core/search/application/fields.py:518
+search-field-door-depth = Door depth
+
+# squid/core/search/application/fields.py:519
+search-field-door-depth-description = The depth of the doorway in blocks.
+
+# squid/core/search/application/fields.py:512
+search-field-door-height = Door height
+
+# squid/core/search/application/fields.py:513
+search-field-door-height-description = The height of the doorway in blocks.
+
+# squid/core/search/application/fields.py:506
+search-field-door-width = Door width
+
+# squid/core/search/application/fields.py:507
+search-field-door-width-description = The width of the doorway in blocks.
+
+# squid/core/search/application/fields.py:138
 search-field-expects-choice = { $field_name } expects one of { $choices }.
 
-# squid/bot/catalogue/search/labels.py:74
+# squid/core/search/application/fields.py:538
+search-field-extender-length = Extender length
+
+# squid/core/search/application/fields.py:539
+search-field-extender-length-description = How many blocks the extender reaches.
+
+# squid/core/search/application/fields.py:620
+search-field-extension-reset-time = Extension reset time
+
+# squid/core/search/application/fields.py:621
+search-field-extension-reset-time-description = Ticks after extending until the extender accepts input again.
+
+# squid/core/search/application/fields.py:610
+search-field-extension-time = Extension time
+
+# squid/core/search/application/fields.py:611
+search-field-extension-time-description = Ticks from input until the extender is extended.
+
+# squid/core/search/application/fields.py:459
 search-field-former-holder = Former holder
 
-# squid/bot/catalogue/search/labels.py:80
+# squid/core/search/application/fields.py:460
+search-field-former-holder-description = The ID of a build that used to hold the record.
+
+# squid/core/search/application/fields.py:494
 search-field-height = Height
 
-# squid/bot/catalogue/search/labels.py:66
+# squid/core/search/application/fields.py:495
+search-field-height-description = The build's height in blocks.
+
+# squid/core/search/application/fields.py:397
 search-field-kind = Kind
 
-# squid/bot/catalogue/search/labels.py:48
+# squid/core/search/application/fields.py:398
+search-field-kind-description = What the build is: a door, entrance, extender or utility.
+
+# squid/core/search/application/fields.py:288
 search-field-name = Name
 
-# squid/bot/catalogue/search/labels.py:58
+# squid/core/search/application/fields.py:289
+search-field-name-description = Words in the build's own name.
+
+# squid/core/search/application/fields.py:596
+search-field-opening-reset-time = Opening reset time
+
+# squid/core/search/application/fields.py:597
+search-field-opening-reset-time-description = Ticks after opening until the door accepts input again.
+
+# squid/core/search/application/fields.py:575
+search-field-opening-time = Opening time
+
+# squid/core/search/application/fields.py:576
+search-field-opening-time-description = Ticks from input until the door is open.
+
+# squid/core/search/application/fields.py:526
+search-field-orientation = Orientation
+
+# squid/core/search/application/fields.py:527
+search-field-orientation-description = How the door is placed, such as door, trapdoor or skydoor.
+
+# squid/core/search/application/fields.py:354
 search-field-pattern = Pattern
 
-# squid/bot/catalogue/search/labels.py:72
+# squid/core/search/application/fields.py:355
+search-field-pattern-description = The door's opening pattern.
+
+# squid/core/search/application/fields.py:442
 search-field-record-state = Record state
 
-# squid/bot/catalogue/search/labels.py:54
+# squid/core/search/application/fields.py:443
+search-field-record-state-description = Whether a record is current or retired. Retired records only appear when asked for.
+
+# squid/core/search/application/fields.py:330
 search-field-restriction = Restriction
 
-# squid/bot/catalogue/search/labels.py:64
+# squid/core/search/application/fields.py:331
+search-field-restriction-description = A component or design restriction the build follows.
+
+# squid/core/search/application/fields.py:627
+search-field-retraction-reset-time = Retraction reset time
+
+# squid/core/search/application/fields.py:628
+search-field-retraction-reset-time-description = Ticks after retracting until the extender accepts input again.
+
+# squid/core/search/application/fields.py:615
+search-field-retraction-time = Retraction time
+
+# squid/core/search/application/fields.py:616
+search-field-retraction-time-description = Ticks from input until the extender is retracted.
+
+# squid/core/search/application/fields.py:385
 search-field-status = Status
 
-# squid/bot/catalogue/search/labels.py:50
+# squid/core/search/application/fields.py:386
+search-field-status-description = The build's review status.
+
+# squid/core/search/application/fields.py:299
 search-field-subtitle = Subtitle
 
-# squid/bot/catalogue/search/labels.py:52
+# squid/core/search/application/fields.py:300
+search-field-subtitle-description = Words in the line shown under the title.
+
+# squid/core/search/application/fields.py:318
 search-field-tag = Tag
 
-# squid/bot/catalogue/search/labels.py:76
+# squid/core/search/application/fields.py:319
+search-field-tag-description = A showcase tag on the build.
+
+# squid/core/search/application/fields.py:468
 search-field-tied = Tied build
 
-# squid/bot/catalogue/search/labels.py:44
+# squid/core/search/application/fields.py:469
+search-field-tied-description = The ID of a build that shares the record.
+
+# squid/core/search/application/fields.py:278
 search-field-title = Title
 
-# squid/bot/catalogue/search/labels.py:56
+# squid/core/search/application/fields.py:279
+search-field-title-description = Words in the build or record title.
+
+# squid/core/search/application/fields.py:344
 search-field-type = Type
 
-# squid/bot/catalogue/search/labels.py:90
+# squid/core/search/application/fields.py:345
+search-field-type-description = The build's type, such as flush or seamless.
+
+# squid/core/search/application/fields.py:568
 search-field-updated-at = Updated
 
-# squid/bot/catalogue/search/labels.py:62
+# squid/core/search/application/fields.py:569
+search-field-updated-at-description = When the build was last changed.
+
+# squid/core/search/application/fields.py:375
 search-field-version = Version
 
-# squid/bot/catalogue/search/labels.py:70
+# squid/core/search/application/fields.py:376
+search-field-version-description = A Minecraft version the build works in.
+
+# squid/core/search/application/fields.py:428
 search-field-version-scope = Version scope
 
-# squid/bot/catalogue/search/labels.py:84
+# squid/core/search/application/fields.py:429
+search-field-version-scope-description = Whether the record compares builds from every version or only those that work today.
+
+# squid/core/search/application/fields.py:591
+search-field-visible-closing-time = Visible closing time
+
+# squid/core/search/application/fields.py:592
+search-field-visible-closing-time-description = Ticks from input until the door looks closed.
+
+# squid/core/search/application/fields.py:581
+search-field-visible-opening-time = Visible opening time
+
+# squid/core/search/application/fields.py:582
+search-field-visible-opening-time-description = Ticks from input until the door looks open.
+
+# squid/core/search/application/fields.py:481
 search-field-volume = Volume
 
-# squid/bot/catalogue/search/labels.py:78
+# squid/core/search/application/fields.py:482
+search-field-volume-description = The number of blocks in the build's bounding box.
+
+# squid/core/search/application/fields.py:488
 search-field-width = Width
 
-# squid/bot/catalogue/search/labels.py:150
+# squid/core/search/application/fields.py:489
+search-field-width-description = The build's width in blocks.
+
+# squid/bot/catalogue/search/labels.py:96
 search-filter-contains = { $name } has “{ $shown }”
 
-# squid/bot/catalogue/search/labels.py:134, squid/bot/catalogue/search/labels.py:151
+# squid/bot/catalogue/search/labels.py:80, squid/bot/catalogue/search/labels.py:97
 search-filter-equals = { $name } is { $shown }
 
-# squid/bot/catalogue/search/labels.py:128
+# squid/bot/catalogue/search/labels.py:74
 search-filter-is-not-set = { $name } is not set
 
-# squid/bot/catalogue/search/labels.py:127
+# squid/bot/catalogue/search/labels.py:73
 search-filter-is-set = { $name } is set
 
-# squid/bot/catalogue/search/labels.py:123
+# squid/bot/catalogue/search/labels.py:69
 search-filter-keywords = Keywords: { $words }
 
-# squid/bot/catalogue/search/labels.py:120
+# squid/bot/catalogue/search/labels.py:66
 search-filter-not = Not: { $inner }
 
-# squid/bot/catalogue/search/labels.py:146
+# squid/bot/catalogue/search/labels.py:92
 search-filter-range = { $name } { $lower } to { $upper }
 
 # squid/bot/catalogue/search/results.py:509
@@ -5868,25 +6072,25 @@ search-reference-tags = `restriction:observerless`, `pattern:"full seamless"`, `
 # squid/bot/catalogue/search/help.py:81
 search-reference-version-scope = `version_scope:` { $scopes }
 
-# squid/core/search/application/fields.py:332
+# squid/core/search/application/fields.py:650
 search-search-numbers-finite = Search numbers must be finite
 
-# squid/core/search/application/services.py:83
+# squid/core/search/application/services.py:84
 search-search-results-sorted = Search results cannot be sorted by { $field_name }.
 
-# squid/bot/catalogue/search/labels.py:169
+# squid/bot/catalogue/search/labels.py:115
 search-sort-ascending = { $field }, smallest first
 
-# squid/bot/catalogue/search/labels.py:159
+# squid/bot/catalogue/search/labels.py:105
 search-sort-default = Default order
 
-# squid/bot/catalogue/search/labels.py:168
+# squid/bot/catalogue/search/labels.py:114
 search-sort-descending = { $field }, largest first
 
-# squid/bot/catalogue/search/labels.py:165
+# squid/bot/catalogue/search/labels.py:111
 search-sort-newest = { $field }, newest first
 
-# squid/bot/catalogue/search/labels.py:166
+# squid/bot/catalogue/search/labels.py:112
 search-sort-oldest = { $field }, oldest first
 
 # squid/core/search/application/ranking.py:82
