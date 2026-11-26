@@ -22,20 +22,24 @@ from litestar import Request, Response, Router, delete, get, post
 from litestar import status_codes as status
 from litestar.di import NamedDependency, Provide
 from litestar.params import FromPath, FromQuery, QueryParameter, SkipValidation
+from litestar.response import File
 
 from squid.api.attachment_edits import AttachmentEdit, attachment_edit_request
-from squid.api.contract import DEVICE, MINECRAFT, WEB, WEB_WRITE, cli_command, contract
+from squid.api.contract import DEVICE, MINECRAFT, WEB, WEB_WRITE, cli_command, contract, transport_only
 from squid.api.dependencies import DraftAttachments, get_draft_attachments
 from squid.api.errors import responses
 from squid.api.idempotency import edit_operation_id, reserve_edit_request, reserve_idempotent_request
+from squid.api.media_files import media_file
 from squid.api.request_body import streams_own_body
 from squid.api.v1.schemas.submission_media import (
+    DraftMediaArtifactRole,
     DraftMediaLimitsResponse,
     DraftMediaListResponse,
     DraftMediaResponse,
 )
 from squid.api.v1.submissions import SubmissionContext, authenticated_submission_context, get_submission_edits
 from squid.core.media.domain import MediaKind, MediaLimitMeasure, MediaLimits, MediaViolation
+from squid.core.media.domain.jobs import MediaArtifactRole
 from squid.core.media.errors import DraftMediaRequestError, MediaLimitExceededError
 from squid.core.submissions.application import StagedUpload
 from squid.core.submissions.application.attachment_edits import AttachmentValues, FileMembership
@@ -179,6 +183,31 @@ async def get_draft_media(
     snapshot = await attachments.get(draft_id, upload_id, context=context)
     _prevent_storage(response_headers, attachments.limits)
     return Response(content=DraftMediaResponse.from_snapshot(snapshot), headers=response_headers, status_code=200)
+
+
+@get(
+    "/{upload_id:uuid}/artifacts/{role:str}",
+    responses=responses(401, 403, 404, 422, 503),
+    operation_id="submission_media_content_get",
+    security=[WEB, DEVICE, MINECRAFT],
+    opt=contract(cli=transport_only()),
+    media_type="application/octet-stream",
+    dependencies={"context": Provide(authenticated_submission_context)},
+)
+async def get_draft_media_content(
+    draft_id: FromPath[UUID],
+    upload_id: FromPath[UUID],
+    role: FromPath[DraftMediaArtifactRole],
+    attachments: DraftAttachments,
+    context: SubmissionContext,
+) -> File:
+    """Serve a processed image, video, or thumbnail of an accessible draft's upload."""
+
+    async def fetch(path: Path) -> str:
+        artifact = await attachments.download(draft_id, upload_id, MediaArtifactRole(role.value), path, context=context)
+        return artifact.content_type
+
+    return await media_file(fetch)
 
 
 @delete(
@@ -372,5 +401,12 @@ router = Router(
     dependencies={"attachments": Provide(get_draft_attachments)},
     path="/submissions/drafts/{draft_id:uuid}/media",
     tags=["submissions"],
-    route_handlers=[upload_draft_media, list_draft_media, get_draft_media, discard_draft_media, attach_draft_media],
+    route_handlers=[
+        upload_draft_media,
+        list_draft_media,
+        get_draft_media,
+        get_draft_media_content,
+        discard_draft_media,
+        attach_draft_media,
+    ],
 )

@@ -489,6 +489,11 @@ class MediaProcessingJobService:
             async with self._uow_factory() as uow:
                 return await uow.media_jobs.list_for_draft(draft_id)
 
+    async def download(self, artifact: StoredMediaArtifact, destination: Path) -> bool:
+        """Copy a normalized artifact to disk and return whether its size and digest match."""
+        copied = await self._artifacts.get_path(artifact.object_key, destination, max_bytes=artifact.byte_size)
+        return copied is not None and copied.byte_size == artifact.byte_size and copied.sha256 == artifact.sha256
+
     async def discard(self, draft_id: UUID, upload_id: UUID, *, context: ActingContext) -> bool:
         """Discard a draft's upload reference, retaining the shared job if another draft needs it."""
         with context.scope():

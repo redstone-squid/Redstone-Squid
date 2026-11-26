@@ -21,8 +21,10 @@ from squid.core.media.application.jobs import (
     MediaJobSnapshot,
     MediaProcessingJobService,
     StagedMediaUploadSubmission,
+    StoredMediaArtifact,
 )
 from squid.core.media.domain import MediaKind, MediaLimits
+from squid.core.media.domain.jobs import MediaArtifactRole, MediaJobStatus
 from squid.core.media.errors import DraftMediaConflictError, DraftMediaNotFoundError, MediaUploadConflictError
 from squid.core.submissions.application.drafts import StoredDraft, SubmissionDraftService
 
@@ -48,6 +50,8 @@ class DraftAttachmentJobs(Protocol):
     async def list_for_draft(self, draft_id: UUID, *, context: ActingContext) -> Sequence[MediaJobSnapshot]: ...
 
     async def discard(self, draft_id: UUID, upload_id: UUID, *, context: ActingContext) -> bool: ...
+
+    async def download(self, artifact: StoredMediaArtifact, destination: Path) -> bool: ...
 
     async def attach(self, source_id: UUID, target_id: UUID, upload_id: UUID, *, context: ActingContext) -> bool: ...
 
@@ -181,6 +185,23 @@ class DraftAttachmentService:
         with context.scope():
             await self._drafts.get_accessible(draft_id, context=context)
             return await self._owned_snapshot(draft_id, upload_id, context)
+
+    async def download(
+        self, draft_id: UUID, upload_id: UUID, role: MediaArtifactRole, destination: Path, *, context: ActingContext
+    ) -> StoredMediaArtifact:
+        """Copy one processed image, video, or thumbnail of an accessible draft's upload to disk.
+
+        Raises DraftMediaNotFoundError unless processing completed with that artifact and the
+        stored bytes still match their recorded digest.
+        """
+        if role not in {MediaArtifactRole.OUTPUT, MediaArtifactRole.VIDEO_THUMBNAIL}:
+            raise DraftMediaNotFoundError(upload_id)
+        snapshot = await self.get(draft_id, upload_id, context=context)
+        artifacts = snapshot.artifacts if snapshot.status is MediaJobStatus.COMPLETED else ()
+        artifact = next((item for item in artifacts if item.role is role), None)
+        if artifact is None or not await self._jobs.download(artifact, destination):
+            raise DraftMediaNotFoundError(upload_id)
+        return artifact
 
     async def discard(self, draft_id: UUID, upload_id: UUID, *, context: ActingContext) -> None:
         """Discard an attachment after checking owner or staff access."""

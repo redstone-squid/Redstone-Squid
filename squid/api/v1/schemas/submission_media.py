@@ -34,12 +34,14 @@ class DraftMediaArtifactRole(StrEnum):
 
 
 class DraftMediaArtifactResponse(StrictSchema):
-    """Dimensions and media type of one normalized image, video, or thumbnail."""
+    """Dimensions, media type, and private content path of one normalized image, video, or thumbnail."""
 
     role: DraftMediaArtifactRole
     content_type: str
     width: int
     height: int
+    url: str
+    """Root-relative; it serves the bytes only to callers who can access the draft."""
 
 
 class DraftMediaResponse(StrictSchema):
@@ -86,6 +88,10 @@ class DraftMediaResponse(StrictSchema):
                     content_type=artifact.content_type,
                     width=_dimension(artifact.width),
                     height=_dimension(artifact.height),
+                    url=(
+                        f"/v1/submissions/drafts/{snapshot.upload.draft_id}/media/{snapshot.upload.id}"
+                        f"/artifacts/{artifact.role.value}"
+                    ),
                 )
                 for artifact in public_artifacts
             ],

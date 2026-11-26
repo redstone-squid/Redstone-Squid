@@ -1,14 +1,11 @@
 """Build read and write routes."""
 
 import re
-import shutil
-import tempfile
 from pathlib import Path
 from typing import Annotated, Literal
 from uuid import UUID
 
 from litestar import Request, Response, Router, get, patch
-from litestar.background_tasks import BackgroundTask
 from litestar.di import NamedDependency, Provide
 from litestar.openapi.datastructures import ResponseSpec
 from litestar.params import FromPath, FromQuery, HeaderParameter, JSONBody, QueryParameter
@@ -26,6 +23,7 @@ from squid.api.dependencies import (
 from squid.api.errors import responses
 from squid.api.i18n import locale_for_request
 from squid.api.idempotency import edit_operation_id, reserve_edit_before_request
+from squid.api.media_files import media_file
 from squid.api.pagination import (
     AfterIdParam,
     BeforeIdParam,
@@ -213,23 +211,14 @@ async def get_build_media(build_id: FromPath[int], upload_id: FromPath[UUID], se
     if media is None or not outputs:
         raise BuildNotFoundError(build_id)
     artifact = outputs[0]
-    directory = Path(tempfile.mkdtemp(prefix="squid-build-media-"))
-    path = directory / "content"
-    try:
+
+    async def fetch(path: Path) -> str:
         downloaded = await media.artifacts.get_path(artifact.object_key, path, max_bytes=artifact.byte_size)
-    except BaseException:
-        shutil.rmtree(directory)
-        raise
-    if downloaded is None or downloaded.byte_size != artifact.byte_size or downloaded.sha256 != artifact.sha256:
-        shutil.rmtree(directory)
-        raise BuildNotFoundError(build_id)
-    return File(
-        path,
-        media_type=artifact.content_type,
-        content_disposition_type="inline",
-        headers={"Cache-Control": "no-store", "X-Content-Type-Options": "nosniff"},
-        background=BackgroundTask(shutil.rmtree, directory),
-    )
+        if downloaded is None or downloaded.byte_size != artifact.byte_size or downloaded.sha256 != artifact.sha256:
+            raise BuildNotFoundError(build_id)
+        return artifact.content_type
+
+    return await media_file(fetch)
 
 
 @get(
