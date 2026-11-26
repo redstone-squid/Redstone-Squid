@@ -15,7 +15,8 @@
    * A schematic shown as its preview image until the visitor opens it in 3D. The renderer
    * weighs several megabytes, so it downloads only then; without JavaScript the preview stays.
    * `resourcePackUrl` supplies the textures, normally the API's `/v1/schematic-resource-pack`.
-   * The renderer draws nothing without them, so a missing pack fails like a missing schematic.
+   * The renderer draws nothing without them (Schem-at/schematic-renderer#14), so a missing
+   * pack fails like a missing schematic.
    */
   type Props = {
     title: string;
@@ -68,7 +69,7 @@
           callbacks: {
             onSchematicRendered: () => {
               status = "ready";
-              // The renderer draws on demand and would otherwise wait for the first pointer move.
+              // It would otherwise wait for the first pointer move (Schem-at/schematic-renderer#13).
               renderer?.invalidate();
             },
           },

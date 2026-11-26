@@ -59,7 +59,7 @@ export default defineConfig({
         // Build previews and avatars are user-submitted HTTPS URLs on any host. The schematic
         // viewer generates its textures as data and blob URLs.
         "img-src 'self' https: data: blob:",
-        // The schematic viewer's mesh workers fetch their WebAssembly from a data URL.
+        // The schematic viewer's mesh workers fetch their WebAssembly from a data URL (Schem-at/schematic-renderer#12).
         "connect-src 'self' data:",
         // The workbench's specimen fonts are inlined into its stylesheet.
         "font-src 'self' data:",
@@ -67,7 +67,7 @@ export default defineConfig({
         "base-uri 'none'",
         "form-action 'self'",
         "frame-ancestors 'none'",
-        // The schematic viewer builds its mesh workers from inline code.
+        // The schematic viewer builds its mesh workers from inline code (Schem-at/schematic-renderer#12).
         "worker-src 'self' blob:",
         // The endpoint is named in the Reporting-Endpoints header set by src/middleware.ts.
         "report-to csp",
