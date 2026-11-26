@@ -7361,6 +7361,65 @@ export type SchematicRenderContentGetResponses = {
 
 export type SchematicRenderContentGetResponse = SchematicRenderContentGetResponses[keyof SchematicRenderContentGetResponses];
 
+export type SchematicResourcePackGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/schematic-resource-pack';
+};
+
+export type SchematicResourcePackGetErrors = {
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type SchematicResourcePackGetError = SchematicResourcePackGetErrors[keyof SchematicResourcePackGetErrors];
+
+export type SchematicResourcePackContentGetData = {
+    body?: never;
+    path: {
+        sha256: string;
+    };
+    query?: never;
+    url: '/v1/schematic-resource-packs/{sha256}';
+};
+
+export type SchematicResourcePackContentGetErrors = {
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type SchematicResourcePackContentGetError = SchematicResourcePackContentGetErrors[keyof SchematicResourcePackContentGetErrors];
+
+export type SchematicResourcePackContentGetResponses = {
+    /**
+     * Minecraft resource pack
+     */
+    200: Blob | File;
+};
+
+export type SchematicResourcePackContentGetResponse = SchematicResourcePackContentGetResponses[keyof SchematicResourcePackContentGetResponses];
+
 export type SchematicVideoCreateData = {
     body: VideoCreateRequest;
     headers?: {

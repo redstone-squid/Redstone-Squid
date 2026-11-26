@@ -6,6 +6,7 @@ from litestar import Request, Response, Router, get, post
 from litestar.di import Provide
 from litestar.openapi.datastructures import ResponseSpec
 from litestar.params import FromPath, JSONBody, PathParameter, QueryParameter
+from litestar.response import Redirect
 
 from squid.api.contract import ANONYMOUS, DEVICE, MINECRAFT, WEB, WEB_WRITE, contract, transport_only
 from squid.api.dependencies import (
@@ -22,7 +23,7 @@ from squid.api.pagination import OffsetParam, Page, PageSizeParam, resolve_selec
 from squid.api.v1.schemas.schematics import SchematicSummary, VideoCreateRequest, VideoResponse
 from squid.core.actors import ActingContext
 from squid.core.schematics.application.commands import MAX_RENDER_EXTENT, MIN_RENDER_EXTENT
-from squid.core.schematics.errors import SchematicSupportUnavailableError
+from squid.core.schematics.errors import SchematicNotFoundError, SchematicSupportUnavailableError
 
 
 @get(
@@ -194,6 +195,55 @@ async def get_schematic_render_content(
     )
 
 
+@get(
+    "/schematic-resource-pack",
+    status_code=307,
+    responses=responses(503),
+    operation_id="schematic_resource_pack_get",
+    security=[ANONYMOUS],
+    opt=contract(cli=transport_only()),
+)
+async def get_schematic_resource_pack(request: Request, schematics: Schematics) -> Redirect:
+    """Redirect to the content-addressed resource pack that server renders use."""
+    pack = await schematics.previews.resource_pack(context=ActingContext.current())
+    return Redirect(
+        relative_url_for(request, "schematic_resource_pack_content", sha256=pack.sha256),
+        status_code=307,
+        # Short, because the target changes as soon as an operator configures another pack.
+        headers={"Cache-Control": "public, max-age=300"},
+    )
+
+
+@get(
+    "/schematic-resource-packs/{sha256:str}",
+    name="schematic_resource_pack_content",
+    responses={
+        **responses(404, 422, 503),
+        200: ResponseSpec(
+            generate_examples=False,
+            data_container=bytes,
+            media_type="application/zip",
+            description="Minecraft resource pack",
+        ),
+    },
+    operation_id="schematic_resource_pack_content_get",
+    security=[ANONYMOUS],
+    opt=contract(cli=transport_only()),
+)
+async def get_schematic_resource_pack_content(
+    sha256: Annotated[str, PathParameter(pattern=r"^[0-9a-f]{64}$")], schematics: Schematics
+) -> Response[bytes]:
+    """Return the configured resource pack while its digest still matches."""
+    pack = await schematics.previews.resource_pack(context=ActingContext.current())
+    if pack.sha256 != sha256:
+        raise SchematicNotFoundError(context={"sha256": sha256})
+    return Response(
+        content=pack.data,
+        media_type=pack.media_type,
+        headers={"Cache-Control": "public, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff"},
+    )
+
+
 @post(
     "/builds/{build_id:int}/schematics/{schematic_id:int}/videos",
     status_code=202,
@@ -319,6 +369,8 @@ router = Router(
         get_schematic_content,
         render_build_schematic,
         get_schematic_render_content,
+        get_schematic_resource_pack,
+        get_schematic_resource_pack_content,
         submit_schematic_video,
         get_schematic_video,
         get_schematic_video_content,

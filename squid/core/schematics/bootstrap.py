@@ -26,13 +26,14 @@ def create_schematic_service(
 ) -> SchematicService:
     """Build a schematic service that submits work to the durable queue.
 
-    When `render_capable` and rendering are enabled, attach a resource-pack loader
-    so this process can prepare render requests. Native rendering still runs in
-    the dedicated worker process.
+    When `render_capable` and rendering is enabled or a pack is configured, attach a
+    resource-pack loader so this process can prepare render requests and serve the pack
+    to browser viewers. Native rendering still runs in the dedicated worker process.
     """
     analyzer = QueuedSchematicAnalyzer(jobs, artifacts, config)
     resource_pack = None
-    if render_capable and (config.render_enabled or config.video_enabled):
+    pack_configured = config.render_pack_path is not None or config.render_pack_url is not None
+    if render_capable and (config.render_enabled or config.video_enabled or pack_configured):
         resource_pack = ResourcePackLoader(
             path=config.render_pack_path,
             url=str(config.render_pack_url) if config.render_pack_url is not None else None,

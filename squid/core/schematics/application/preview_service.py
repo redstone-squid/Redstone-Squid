@@ -273,6 +273,17 @@ class SchematicPreviewService:
                 raise SchematicNotFoundError(context={"recipe_hash": recipe_hash})
             return content
 
+    async def resource_pack(self, *, context: ActingContext) -> VerifiedResourcePack:
+        """Return the resource pack server renders use, so browser viewers can match them.
+
+        Unlike rendering, this needs no schematic engine, only a configured pack.
+        """
+        with context.scope():
+            if self._resource_pack is None:
+                msg = "No resource pack is configured."
+                raise SchematicRenderUnavailableError(msg)
+            return await self._resource_pack.load()
+
     async def aclose(self) -> None:
         """Release the resource-pack provider owned by this preview service."""
         if self._resource_pack is not None:
