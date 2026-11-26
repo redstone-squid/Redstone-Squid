@@ -34,7 +34,7 @@ Items 1–4 are implemented in the API.
 
 Items 12, 13, 15 and 17 share one **record holder summary**: `{build_id, title, creators: [{name, creator_id | null}], preview}`. It extends search's `RecordSearchHolder` rather than adding another holder type. **Metrics** everywhere use `{name: {value, unit, display}}`; search's flat `metrics` map changes to match, so the server owns units and formatting.
 
-11. **P7 is a search records query.** The records scope of `/v1/search` already filters by tag, criterion and version and returns holders and metrics. Missing filters or sorts go under Search, as item 9 decided for builds. `GET /v1/records` stays a plain list, with at most `build_kind` and `status` filters.
+11. **Record list filters and sorts.** `GET /v1/records` takes `build_kind`, `criterion`, `version_scope`, `status` and repeated `tag` IDs or slugs, as a `RecordListFilters`. Sorts are `recently_changed` and `title` beside `id`. Text search stays on `/v1/search`, whose records scope takes the same filters as query clauses. Needed by P7.
 12. **Holders on record lists.** The `/v1/records` list response gains `holders` (holder summaries), `metrics`, `category_key` and `holder_since`. Add them to the list's response type, not to the core `PublishedRecordResult`. `holder_since` is the `held_from` of the open history period, not `computed_at`, which changes on every recompute. Needed by P1 and RecordCard without N+1 requests.
 13. **Richer detail history.** `PublicRecordDetail.history` already returns stored periods with `build_ids`. Each entry gains holder summaries, because former holders are not always among the detail's builds, and `metrics`. Metrics are the holders' current values, so past measurements are not recoverable and chart 2 must not imply they are. History is short enough not to need paging. Needed by P8 Timeline and chart 2.
 14. **`PublicRecordDetail.siblings`:** `[{record_id, title, subtitle, criterion, version_scope, status}]` for the same category. Needed by the P8 switcher.
@@ -58,17 +58,17 @@ Items 12, 13, 15 and 17 share one **record holder summary**: `{build_id, title, 
 
 ## Tags
 
-21. **`GET /v1/tags` filters:** `kind`, `authority`, `q`. `TagDetail` gains `description`, `aliases`, `build_count`, `record_count`, and `rules_anchor` (a link into `/rules`). Needed by P11 and P12.
+21. **`GET /v1/tags` filters:** `kind`, `authority`, and `q` as a name and alias prefix match for pickers. `TagDetail` gains `description`, `aliases`, `build_count`, `record_count`, and `rules_anchor` (a link into `/rules`). Needed by P11 and P12.
 22. **Tag page builds.** `GET /v1/builds?tag=slug` (item 9) avoids the waterfall of tag, then query name, then search on P12.
-23. **Tag proposals:** `GET /v1/tags/proposals?status` (a queue, oldest first), `POST /v1/tags/proposals` (users propose showcase tags), `POST /v1/tags/proposals/{id}/{approve|reject|archive}`, `POST /v1/tags/{id}/aliases`. Needed by X3.
+23. **Tag proposals:** `GET /v1/tags/proposals?status&sort=oldest` (a queue), `POST /v1/tags/proposals` (users propose showcase tags), `POST /v1/tags/proposals/{id}/{approve|reject|archive}`, `POST /v1/tags/{id}/aliases`. Needed by X3.
 
 ## Creators and accounts
 
 24. **`GET /v1/creators/by-name/{name}`** returns `{alias: {name, claimed}, profile: CreatorProfileDetail | null, stats: {build_count, records_held, records_ever, builds_by_year: [{year, count}]}, records_held: [record summary]}`. This removes the alias-then-profile waterfall on P13.
-25. **Creator builds.** `GET /v1/builds?creator_id=` or `?alias=` for unclaimed names (item 9). Needed by P13.
+25. **Creator builds.** `GET /v1/builds?creator_id=` (item 9) serves claimed creators. Unclaimed names have no ID, so add `creator_name`, an exact alias match. Needed by P13.
 26. **Alias claims:**
     - `POST /v1/creator-aliases/{name}/claims` and `GET /v1/users/me/claims` (P13, A3).
-    - `GET /v1/claims?status` (a queue, oldest first), `POST /v1/claims/{id}/{approve|reject}` (X4).
+    - `GET /v1/claims?status&sort=oldest` (a queue), `POST /v1/claims/{id}/{approve|reject}` (X4).
 27. **Account lookup.** `GET /v1/accounts?q=&limit=` returns `{id, display_name, identities}` for staff. It serves pickers, so it's a completion with `limit`, not a paged list. Needed by X5 and X6.
 28. **Product decision: account deletion and data export.** `DELETE /v1/users/me` and `GET /v1/users/me/export`. Needed for A2 if the privacy notice promises them.
 53. **Merge code normalization.** `POST /v1/users/me/merge` and `/merge/preview` compare the code exactly, while CLI and Minecraft codes go through `normalize_user_code`. Normalize merge codes the same way (case, spaces, hyphens), since `CodeEntry` submits the grouped text. Needed by A3's merge flow.
@@ -87,12 +87,12 @@ Items 12, 13, 15 and 17 share one **record holder summary**: `{build_id, title, 
 34. **Manifest presentation hints:** `FormFieldResponse` gains `placeholder`, `unit`, `width: full | half | narrow`, and `description` on sections, plus confirmation that labels and help text are localized to the request locale.
 35. **Media preview URLs.** `DraftMediaArtifactResponse` gains `url` (signed and short-lived), `width` and `height`. Today S2 cannot show what was uploaded.
 36. **Finalization long-poll or events.** `GET /v1/submissions/drafts/{id}/status?wait=25` (long-poll) or an SSE stream. Removes polling loops on S3.
-37. **Correction proposals list.** `GET /v1/submissions/revisions?status=pending&build_id=` (today only lookup by source message), a queue, oldest first. `before` and `after` become `changes: [{field, label, before, after}]`. Needed by M1 and M3.
+37. **Correction proposals list.** `GET /v1/submissions/revisions?status=pending&build_id=&sort=oldest` (today only lookup by source message), a queue. `before` and `after` become `changes: [{field, label, before, after}]`. Needed by M1 and M3.
 38. **Draft sharing.** `submission_draft_access` already exists. Add `GET/POST/DELETE /v1/submissions/drafts/{id}/editors`, needed if S2 adds collaborators (todo.md). This is a product decision, so leave it as an optional phase.
 
 ## Voting and review
 
-39. **Review queue endpoint.** `GET /v1/review/builds?sort=deadline|submitted` is a queue that returns pending builds with `{build summary, submitted_by, vote: {id, status, tallies, pass_threshold, fail_threshold, deadline, own_selection}}`, plus `GET /v1/review/counts`. Needed by M1.
+39. **Review queue endpoint.** `GET /v1/review/builds?sort=soonest_deadline|oldest` is a queue that returns pending builds with `{build summary, submitted_by, vote: {id, status, tallies, pass_threshold, fail_threshold, deadline, own_selection}}`, plus `GET /v1/review/counts`. Needed by M1.
 40. **Web voting without a guild.** `POST /v1/vote-sessions/{id}/votes` requires `guild_id`, which a website voter doesn't have. Make it optional: the server resolves the caller's weight (for example, highest across guilds, or a network weight), and the session's `viewer` exposes `eligible: bool, weight`. This is a product decision.
 41. **`VoteSessionDetail` additions:** `build: summary`, `deadline`, and `voters: [{display_name, choice}]` when visibility is `visible_live`.
 
