@@ -34,6 +34,20 @@ export type AboveMaximumParams = {
 };
 
 /**
+ * AccountDetail
+ */
+export type AccountDetail = {
+    id: number;
+    revision: number;
+    creator_id: string;
+    created_at: string | null;
+    consent_version: string | null;
+    consent_pending: boolean;
+    identities: Array<IdentityDetail>;
+    profile: ProfileDetail;
+};
+
+/**
  * AccountMergeDetail
  */
 export type AccountMergeDetail = {
@@ -523,24 +537,6 @@ export type CreatorBuildNotification = {
 };
 
 /**
- * CreatorProfileDetail
- */
-export type CreatorProfileDetail = {
-    id: string;
-    hidden: boolean;
-    aliases?: Array<CreditedAlias>;
-    canonical_id?: string | null;
-    display_name?: string | null;
-    bio?: string | null;
-    pronouns?: string | null;
-    links?: Array<ProfileLink>;
-    avatar_url?: string | null;
-    joined_at?: string | null;
-    identities?: Array<IdentityDetails>;
-    viewer?: CreatorViewer | null;
-};
-
-/**
  * CreatorViewer
  */
 export type CreatorViewer = {
@@ -953,7 +949,7 @@ export type EmptyParams = {
  *
  * Stable machine-readable application error codes.
  */
-export type ErrorCode = 'ACCOUNT_ALREADY_LINKED' | 'ACCOUNT_IDENTITY_NOT_FOUND' | 'ACCOUNT_NOT_FOUND' | 'ALIAS_ALREADY_ADDED' | 'ALIAS_ALREADY_CLAIMED' | 'ALIAS_IN_USE' | 'BUILD_BUSY' | 'BUILD_NOT_FOUND' | 'BUILD_REVISION_MISMATCH' | 'BUILD_REVISION_REQUIRED' | 'CLAIM_NOT_FOUND' | 'CREATOR_ALIAS_NOT_FOUND' | 'CREATOR_NOT_FOUND' | 'CONFIGURATION_ERROR' | 'CONSENT_REQUIRED' | 'CONSENT_VERSION_STALE' | 'DATA_INTEGRITY_ERROR' | 'DOMAIN_ERROR' | 'INFRASTRUCTURE_ERROR' | 'IDEMPOTENCY_CONFLICT' | 'IDEMPOTENCY_IN_PROGRESS' | 'INTERNAL_ERROR' | 'INVALID_BUILD' | 'INVALID_MESSAGE' | 'INVALID_QUERY' | 'INVALID_REQUEST' | 'INVALID_STATE' | 'INVALID_ACCOUNT' | 'INVALID_MERGE_CODE' | 'INVALID_PROFILE' | 'INVALID_VERIFICATION_CODE' | 'INVALID_VERSION' | 'LAST_IDENTITY' | 'LINK_RESERVATION_EXPIRED' | 'INVALID_VOTE_CONFIGURATION' | 'MESSAGE_NOT_FOUND' | 'MINECRAFT_ACCOUNT_NOT_FOUND' | 'MINECRAFT_SERVICE_UNAVAILABLE' | 'NOT_FOUND' | 'PAGE_ANCHOR_NOT_FOUND' | 'PERSISTENCE_ERROR' | 'RATE_LIMITED' | 'RECORD_NOT_FOUND' | 'RESTRICTION_NOT_FOUND' | 'SCHEMATIC_INVALID' | 'SCHEMATIC_NOT_FOUND' | 'SCHEMATIC_RENDER_REFUSED' | 'SCHEMATIC_RENDER_UNAVAILABLE' | 'SCHEMATIC_SUPPORT_UNAVAILABLE' | 'SCHEMATIC_TIMEOUT' | 'SCHEMATIC_TOO_LARGE' | 'SCHEMATIC_WORKER_CRASHED' | 'TAG_NOT_FOUND' | 'UNAUTHORIZED' | 'VALIDATION_ERROR' | 'VERIFICATION_ATTEMPTS_EXHAUSTED' | 'VERSION_CATALOG_UNAVAILABLE' | 'VOTE_SESSION_NOT_FOUND';
+export type ErrorCode = 'ACCOUNT_ALREADY_LINKED' | 'ACCOUNT_IDENTITY_NOT_FOUND' | 'ACCOUNT_NOT_FOUND' | 'ALIAS_ALREADY_ADDED' | 'ALIAS_ALREADY_CLAIMED' | 'ALIAS_IN_USE' | 'BUILD_BUSY' | 'BUILD_NOT_FOUND' | 'BUILD_REVISION_MISMATCH' | 'BUILD_REVISION_REQUIRED' | 'CLAIM_NOT_FOUND' | 'CREATOR_ALIAS_NOT_FOUND' | 'CONFIGURATION_ERROR' | 'CONSENT_REQUIRED' | 'CONSENT_VERSION_STALE' | 'DATA_INTEGRITY_ERROR' | 'DOMAIN_ERROR' | 'INFRASTRUCTURE_ERROR' | 'IDEMPOTENCY_CONFLICT' | 'IDEMPOTENCY_IN_PROGRESS' | 'INTERNAL_ERROR' | 'INVALID_BUILD' | 'INVALID_MESSAGE' | 'INVALID_QUERY' | 'INVALID_REQUEST' | 'INVALID_STATE' | 'INVALID_ACCOUNT' | 'INVALID_MERGE_CODE' | 'INVALID_PROFILE' | 'INVALID_VERIFICATION_CODE' | 'INVALID_VERSION' | 'LAST_IDENTITY' | 'LINK_RESERVATION_EXPIRED' | 'INVALID_VOTE_CONFIGURATION' | 'MESSAGE_NOT_FOUND' | 'MINECRAFT_ACCOUNT_NOT_FOUND' | 'MINECRAFT_SERVICE_UNAVAILABLE' | 'NOT_FOUND' | 'PAGE_ANCHOR_NOT_FOUND' | 'PERSISTENCE_ERROR' | 'RATE_LIMITED' | 'RECORD_NOT_FOUND' | 'RESTRICTION_NOT_FOUND' | 'SCHEMATIC_INVALID' | 'SCHEMATIC_NOT_FOUND' | 'SCHEMATIC_RENDER_REFUSED' | 'SCHEMATIC_RENDER_UNAVAILABLE' | 'SCHEMATIC_SUPPORT_UNAVAILABLE' | 'SCHEMATIC_TIMEOUT' | 'SCHEMATIC_TOO_LARGE' | 'SCHEMATIC_WORKER_CRASHED' | 'TAG_NOT_FOUND' | 'UNAUTHORIZED' | 'VALIDATION_ERROR' | 'VERIFICATION_ATTEMPTS_EXHAUSTED' | 'VERSION_CATALOG_UNAVAILABLE' | 'VOTE_SESSION_NOT_FOUND';
 
 /**
  * ErrorReportDetail
@@ -1837,6 +1833,24 @@ export type ProtocolCapabilities = {
 export type ProtocolInterval = {
     minimum: number;
     maximum: number;
+};
+
+/**
+ * PublicAccountDetail
+ */
+export type PublicAccountDetail = {
+    id: string;
+    hidden: boolean;
+    aliases?: Array<CreditedAlias>;
+    canonical_id?: string | null;
+    display_name?: string | null;
+    bio?: string | null;
+    pronouns?: string | null;
+    links?: Array<ProfileLink>;
+    avatar_url?: string | null;
+    joined_at?: string | null;
+    identities?: Array<IdentityDetails>;
+    viewer?: CreatorViewer | null;
 };
 
 /**
@@ -3093,20 +3107,6 @@ export type User = {
 };
 
 /**
- * UserMe
- */
-export type UserMe = {
-    id: number;
-    revision: number;
-    creator_id: string;
-    created_at: string | null;
-    consent_version: string | null;
-    consent_pending: boolean;
-    identities: Array<IdentityDetail>;
-    profile: ProfileDetail;
-};
-
-/**
  * ValidationContext
  */
 export type ValidationContext = {
@@ -3548,6 +3548,744 @@ export type VerificationCreateCompatibilityResponses = {
 };
 
 export type VerificationCreateCompatibilityResponse = VerificationCreateCompatibilityResponses[keyof VerificationCreateCompatibilityResponses];
+
+export type AccountGetData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/accounts/me';
+};
+
+export type AccountGetErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type AccountGetError = AccountGetErrors[keyof AccountGetErrors];
+
+export type AccountGetResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: AccountDetail;
+};
+
+export type AccountGetResponse = AccountGetResponses[keyof AccountGetResponses];
+
+export type AccountConsentGrantData = {
+    body: ConsentGrantRequest | null;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/accounts/me/consent';
+};
+
+export type AccountConsentGrantErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type AccountConsentGrantError = AccountConsentGrantErrors[keyof AccountConsentGrantErrors];
+
+export type AccountConsentGrantResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: AccountDetail;
+};
+
+export type AccountConsentGrantResponse = AccountConsentGrantResponses[keyof AccountConsentGrantResponses];
+
+export type AccountProfileUpdateData = {
+    body: ProfileUpdateRequest;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+        'If-Match'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/accounts/me/profile';
+};
+
+export type AccountProfileUpdateErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Precondition Failed
+     */
+    412: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type AccountProfileUpdateError = AccountProfileUpdateErrors[keyof AccountProfileUpdateErrors];
+
+export type AccountProfileUpdateResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: ProfileDetail;
+};
+
+export type AccountProfileUpdateResponse = AccountProfileUpdateResponses[keyof AccountProfileUpdateResponses];
+
+export type AccountIdentityListData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/accounts/me/identities';
+};
+
+export type AccountIdentityListErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type AccountIdentityListError = AccountIdentityListErrors[keyof AccountIdentityListErrors];
+
+export type AccountIdentityListResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: Array<LinkedIdentityDetail>;
+};
+
+export type AccountIdentityListResponse = AccountIdentityListResponses[keyof AccountIdentityListResponses];
+
+export type AccountIdentityVisibilitySetData = {
+    body: IdentityVisibilityRequest;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+        'If-Match'?: string | null;
+    };
+    path: {
+        identity_id: number;
+    };
+    query?: never;
+    url: '/v1/accounts/me/identities/{identity_id}/visibility';
+};
+
+export type AccountIdentityVisibilitySetErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Precondition Failed
+     */
+    412: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type AccountIdentityVisibilitySetError = AccountIdentityVisibilitySetErrors[keyof AccountIdentityVisibilitySetErrors];
+
+export type AccountIdentityVisibilitySetResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: LinkedIdentityDetail;
+};
+
+export type AccountIdentityVisibilitySetResponse = AccountIdentityVisibilitySetResponses[keyof AccountIdentityVisibilitySetResponses];
+
+export type AccountIdentityUnlinkData = {
+    body?: never;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+        'If-Match'?: string | null;
+    };
+    path: {
+        identity_id: number;
+    };
+    query?: never;
+    url: '/v1/accounts/me/identities/{identity_id}';
+};
+
+export type AccountIdentityUnlinkErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Precondition Failed
+     */
+    412: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type AccountIdentityUnlinkError = AccountIdentityUnlinkErrors[keyof AccountIdentityUnlinkErrors];
+
+export type AccountIdentityUnlinkResponses = {
+    /**
+     * Request fulfilled, nothing follows
+     */
+    204: null;
+};
+
+export type AccountIdentityUnlinkResponse = AccountIdentityUnlinkResponses[keyof AccountIdentityUnlinkResponses];
+
+export type AccountMergeCodeCreateData = {
+    body?: never;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/accounts/me/merge-code';
+};
+
+export type AccountMergeCodeCreateErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type AccountMergeCodeCreateError = AccountMergeCodeCreateErrors[keyof AccountMergeCodeCreateErrors];
+
+export type AccountMergeCodeCreateResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: MergeCodeDetail;
+};
+
+export type AccountMergeCodeCreateResponse = AccountMergeCodeCreateResponses[keyof AccountMergeCodeCreateResponses];
+
+export type AccountMergePreviewData = {
+    body: MergeRequest;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/accounts/me/merge/preview';
+};
+
+export type AccountMergePreviewErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type AccountMergePreviewError = AccountMergePreviewErrors[keyof AccountMergePreviewErrors];
+
+export type AccountMergePreviewResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: MergePreviewDetail;
+};
+
+export type AccountMergePreviewResponse = AccountMergePreviewResponses[keyof AccountMergePreviewResponses];
+
+export type AccountMergeCompleteData = {
+    body: MergeRequest;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/accounts/me/merge';
+};
+
+export type AccountMergeCompleteErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type AccountMergeCompleteError = AccountMergeCompleteErrors[keyof AccountMergeCompleteErrors];
+
+export type AccountMergeCompleteResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: AccountMergeDetail;
+};
+
+export type AccountMergeCompleteResponse = AccountMergeCompleteResponses[keyof AccountMergeCompleteResponses];
+
+export type AccountMinecraftRefreshData = {
+    body?: never;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/accounts/me/minecraft/refresh';
+};
+
+export type AccountMinecraftRefreshErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type AccountMinecraftRefreshError = AccountMinecraftRefreshErrors[keyof AccountMinecraftRefreshErrors];
+
+export type AccountMinecraftRefreshResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: MinecraftIdentityRefresh;
+};
+
+export type AccountMinecraftRefreshResponse = AccountMinecraftRefreshResponses[keyof AccountMinecraftRefreshResponses];
+
+export type AccountPublicGetData = {
+    body?: never;
+    path: {
+        account_id: string;
+    };
+    query?: never;
+    url: '/v1/accounts/{account_id}';
+};
+
+export type AccountPublicGetErrors = {
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type AccountPublicGetError = AccountPublicGetErrors[keyof AccountPublicGetErrors];
+
+export type AccountPublicGetResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: PublicAccountDetail;
+};
+
+export type AccountPublicGetResponse = AccountPublicGetResponses[keyof AccountPublicGetResponses];
+
+export type AccountMinecraftRefreshForData = {
+    body?: never;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        account_id: string;
+    };
+    query?: never;
+    url: '/v1/accounts/{account_id}/minecraft/refresh';
+};
+
+export type AccountMinecraftRefreshForErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type AccountMinecraftRefreshForError = AccountMinecraftRefreshForErrors[keyof AccountMinecraftRefreshForErrors];
+
+export type AccountMinecraftRefreshForResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: MinecraftIdentityRefresh;
+};
+
+export type AccountMinecraftRefreshForResponse = AccountMinecraftRefreshForResponses[keyof AccountMinecraftRefreshForResponses];
+
+export type AccountProfileClearData = {
+    body?: never;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+        'If-Match'?: string | null;
+    };
+    path: {
+        account_id: string;
+    };
+    query?: never;
+    url: '/v1/accounts/{account_id}/profile';
+};
+
+export type AccountProfileClearErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Precondition Failed
+     */
+    412: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Precondition Required
+     */
+    428: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type AccountProfileClearError = AccountProfileClearErrors[keyof AccountProfileClearErrors];
+
+export type AccountProfileClearResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: ProfileDetail;
+};
+
+export type AccountProfileClearResponse = AccountProfileClearResponses[keyof AccountProfileClearResponses];
+
+export type AccountProfileReviewData = {
+    body?: never;
+    path: {
+        account_id: string;
+    };
+    query?: never;
+    url: '/v1/accounts/{account_id}/profile';
+};
+
+export type AccountProfileReviewErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Entity
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type AccountProfileReviewError = AccountProfileReviewErrors[keyof AccountProfileReviewErrors];
+
+export type AccountProfileReviewResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: ProfileDetail;
+};
+
+export type AccountProfileReviewResponse = AccountProfileReviewResponses[keyof AccountProfileReviewResponses];
 
 export type BrowserProvidersListData = {
     body?: never;
@@ -4747,705 +5485,6 @@ export type DiagnosticsErrorGetResponses = {
 
 export type DiagnosticsErrorGetResponse = DiagnosticsErrorGetResponses[keyof DiagnosticsErrorGetResponses];
 
-export type AccountGetData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/v1/users/me';
-};
-
-export type AccountGetErrors = {
-    /**
-     * Unauthorized
-     */
-    401: ProblemDetail;
-    /**
-     * Forbidden
-     */
-    403: ProblemDetail;
-    /**
-     * Not Found
-     */
-    404: ProblemDetail;
-    /**
-     * Too Many Requests
-     */
-    429: ProblemDetail;
-    /**
-     * Service Unavailable
-     */
-    503: ProblemDetail;
-};
-
-export type AccountGetError = AccountGetErrors[keyof AccountGetErrors];
-
-export type AccountGetResponses = {
-    /**
-     * Request fulfilled, document follows
-     */
-    200: UserMe;
-};
-
-export type AccountGetResponse = AccountGetResponses[keyof AccountGetResponses];
-
-export type AccountConsentGrantData = {
-    body: ConsentGrantRequest | null;
-    headers?: {
-        /**
-         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
-         */
-        'Idempotency-Key'?: string | null;
-    };
-    path?: never;
-    query?: never;
-    url: '/v1/users/me/consent';
-};
-
-export type AccountConsentGrantErrors = {
-    /**
-     * Unauthorized
-     */
-    401: ProblemDetail;
-    /**
-     * Forbidden
-     */
-    403: ProblemDetail;
-    /**
-     * Not Found
-     */
-    404: ProblemDetail;
-    /**
-     * Conflict
-     */
-    409: ProblemDetail;
-    /**
-     * Unprocessable Entity
-     */
-    422: ValidationProblemDetail;
-    /**
-     * Too Many Requests
-     */
-    429: ProblemDetail;
-    /**
-     * Service Unavailable
-     */
-    503: ProblemDetail;
-};
-
-export type AccountConsentGrantError = AccountConsentGrantErrors[keyof AccountConsentGrantErrors];
-
-export type AccountConsentGrantResponses = {
-    /**
-     * Request fulfilled, document follows
-     */
-    200: UserMe;
-};
-
-export type AccountConsentGrantResponse = AccountConsentGrantResponses[keyof AccountConsentGrantResponses];
-
-export type AccountProfileUpdateData = {
-    body: ProfileUpdateRequest;
-    headers?: {
-        /**
-         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
-         */
-        'Idempotency-Key'?: string | null;
-        'If-Match'?: string | null;
-    };
-    path?: never;
-    query?: never;
-    url: '/v1/users/me/profile';
-};
-
-export type AccountProfileUpdateErrors = {
-    /**
-     * Bad Request
-     */
-    400: ProblemDetail;
-    /**
-     * Unauthorized
-     */
-    401: ProblemDetail;
-    /**
-     * Forbidden
-     */
-    403: ProblemDetail;
-    /**
-     * Not Found
-     */
-    404: ProblemDetail;
-    /**
-     * Precondition Failed
-     */
-    412: ProblemDetail;
-    /**
-     * Unprocessable Content
-     */
-    422: ValidationProblemDetail;
-    /**
-     * Too Many Requests
-     */
-    429: ProblemDetail;
-    /**
-     * Service Unavailable
-     */
-    503: ProblemDetail;
-};
-
-export type AccountProfileUpdateError = AccountProfileUpdateErrors[keyof AccountProfileUpdateErrors];
-
-export type AccountProfileUpdateResponses = {
-    /**
-     * Request fulfilled, document follows
-     */
-    200: ProfileDetail;
-};
-
-export type AccountProfileUpdateResponse = AccountProfileUpdateResponses[keyof AccountProfileUpdateResponses];
-
-export type AccountIdentityListData = {
-    body?: never;
-    path?: never;
-    query?: never;
-    url: '/v1/users/me/identities';
-};
-
-export type AccountIdentityListErrors = {
-    /**
-     * Unauthorized
-     */
-    401: ProblemDetail;
-    /**
-     * Forbidden
-     */
-    403: ProblemDetail;
-    /**
-     * Not Found
-     */
-    404: ProblemDetail;
-    /**
-     * Too Many Requests
-     */
-    429: ProblemDetail;
-    /**
-     * Service Unavailable
-     */
-    503: ProblemDetail;
-};
-
-export type AccountIdentityListError = AccountIdentityListErrors[keyof AccountIdentityListErrors];
-
-export type AccountIdentityListResponses = {
-    /**
-     * Request fulfilled, document follows
-     */
-    200: Array<LinkedIdentityDetail>;
-};
-
-export type AccountIdentityListResponse = AccountIdentityListResponses[keyof AccountIdentityListResponses];
-
-export type AccountIdentityVisibilitySetData = {
-    body: IdentityVisibilityRequest;
-    headers?: {
-        /**
-         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
-         */
-        'Idempotency-Key'?: string | null;
-        'If-Match'?: string | null;
-    };
-    path: {
-        identity_id: number;
-    };
-    query?: never;
-    url: '/v1/users/me/identities/{identity_id}/visibility';
-};
-
-export type AccountIdentityVisibilitySetErrors = {
-    /**
-     * Unauthorized
-     */
-    401: ProblemDetail;
-    /**
-     * Forbidden
-     */
-    403: ProblemDetail;
-    /**
-     * Not Found
-     */
-    404: ProblemDetail;
-    /**
-     * Precondition Failed
-     */
-    412: ProblemDetail;
-    /**
-     * Unprocessable Content
-     */
-    422: ValidationProblemDetail;
-    /**
-     * Too Many Requests
-     */
-    429: ProblemDetail;
-    /**
-     * Service Unavailable
-     */
-    503: ProblemDetail;
-};
-
-export type AccountIdentityVisibilitySetError = AccountIdentityVisibilitySetErrors[keyof AccountIdentityVisibilitySetErrors];
-
-export type AccountIdentityVisibilitySetResponses = {
-    /**
-     * Request fulfilled, document follows
-     */
-    200: LinkedIdentityDetail;
-};
-
-export type AccountIdentityVisibilitySetResponse = AccountIdentityVisibilitySetResponses[keyof AccountIdentityVisibilitySetResponses];
-
-export type AccountIdentityUnlinkData = {
-    body?: never;
-    headers?: {
-        /**
-         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
-         */
-        'Idempotency-Key'?: string | null;
-        'If-Match'?: string | null;
-    };
-    path: {
-        identity_id: number;
-    };
-    query?: never;
-    url: '/v1/users/me/identities/{identity_id}';
-};
-
-export type AccountIdentityUnlinkErrors = {
-    /**
-     * Unauthorized
-     */
-    401: ProblemDetail;
-    /**
-     * Forbidden
-     */
-    403: ProblemDetail;
-    /**
-     * Not Found
-     */
-    404: ProblemDetail;
-    /**
-     * Conflict
-     */
-    409: ProblemDetail;
-    /**
-     * Precondition Failed
-     */
-    412: ProblemDetail;
-    /**
-     * Unprocessable Content
-     */
-    422: ValidationProblemDetail;
-    /**
-     * Too Many Requests
-     */
-    429: ProblemDetail;
-    /**
-     * Service Unavailable
-     */
-    503: ProblemDetail;
-};
-
-export type AccountIdentityUnlinkError = AccountIdentityUnlinkErrors[keyof AccountIdentityUnlinkErrors];
-
-export type AccountIdentityUnlinkResponses = {
-    /**
-     * Request fulfilled, nothing follows
-     */
-    204: null;
-};
-
-export type AccountIdentityUnlinkResponse = AccountIdentityUnlinkResponses[keyof AccountIdentityUnlinkResponses];
-
-export type AccountMergeCodeCreateData = {
-    body?: never;
-    headers?: {
-        /**
-         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
-         */
-        'Idempotency-Key'?: string | null;
-    };
-    path?: never;
-    query?: never;
-    url: '/v1/users/me/merge-code';
-};
-
-export type AccountMergeCodeCreateErrors = {
-    /**
-     * Unauthorized
-     */
-    401: ProblemDetail;
-    /**
-     * Forbidden
-     */
-    403: ProblemDetail;
-    /**
-     * Not Found
-     */
-    404: ProblemDetail;
-    /**
-     * Unprocessable Entity
-     */
-    422: ValidationProblemDetail;
-    /**
-     * Too Many Requests
-     */
-    429: ProblemDetail;
-    /**
-     * Service Unavailable
-     */
-    503: ProblemDetail;
-};
-
-export type AccountMergeCodeCreateError = AccountMergeCodeCreateErrors[keyof AccountMergeCodeCreateErrors];
-
-export type AccountMergeCodeCreateResponses = {
-    /**
-     * Request fulfilled, document follows
-     */
-    200: MergeCodeDetail;
-};
-
-export type AccountMergeCodeCreateResponse = AccountMergeCodeCreateResponses[keyof AccountMergeCodeCreateResponses];
-
-export type AccountMergePreviewData = {
-    body: MergeRequest;
-    headers?: {
-        /**
-         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
-         */
-        'Idempotency-Key'?: string | null;
-    };
-    path?: never;
-    query?: never;
-    url: '/v1/users/me/merge/preview';
-};
-
-export type AccountMergePreviewErrors = {
-    /**
-     * Bad Request
-     */
-    400: ProblemDetail;
-    /**
-     * Unauthorized
-     */
-    401: ProblemDetail;
-    /**
-     * Forbidden
-     */
-    403: ProblemDetail;
-    /**
-     * Not Found
-     */
-    404: ProblemDetail;
-    /**
-     * Unprocessable Content
-     */
-    422: ValidationProblemDetail;
-    /**
-     * Too Many Requests
-     */
-    429: ProblemDetail;
-    /**
-     * Service Unavailable
-     */
-    503: ProblemDetail;
-};
-
-export type AccountMergePreviewError = AccountMergePreviewErrors[keyof AccountMergePreviewErrors];
-
-export type AccountMergePreviewResponses = {
-    /**
-     * Request fulfilled, document follows
-     */
-    200: MergePreviewDetail;
-};
-
-export type AccountMergePreviewResponse = AccountMergePreviewResponses[keyof AccountMergePreviewResponses];
-
-export type AccountMergeCompleteData = {
-    body: MergeRequest;
-    headers?: {
-        /**
-         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
-         */
-        'Idempotency-Key'?: string | null;
-    };
-    path?: never;
-    query?: never;
-    url: '/v1/users/me/merge';
-};
-
-export type AccountMergeCompleteErrors = {
-    /**
-     * Bad Request
-     */
-    400: ProblemDetail;
-    /**
-     * Unauthorized
-     */
-    401: ProblemDetail;
-    /**
-     * Forbidden
-     */
-    403: ProblemDetail;
-    /**
-     * Not Found
-     */
-    404: ProblemDetail;
-    /**
-     * Unprocessable Content
-     */
-    422: ValidationProblemDetail;
-    /**
-     * Too Many Requests
-     */
-    429: ProblemDetail;
-    /**
-     * Service Unavailable
-     */
-    503: ProblemDetail;
-};
-
-export type AccountMergeCompleteError = AccountMergeCompleteErrors[keyof AccountMergeCompleteErrors];
-
-export type AccountMergeCompleteResponses = {
-    /**
-     * Request fulfilled, document follows
-     */
-    200: AccountMergeDetail;
-};
-
-export type AccountMergeCompleteResponse = AccountMergeCompleteResponses[keyof AccountMergeCompleteResponses];
-
-export type AccountMinecraftRefreshData = {
-    body?: never;
-    headers?: {
-        /**
-         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
-         */
-        'Idempotency-Key'?: string | null;
-    };
-    path?: never;
-    query?: never;
-    url: '/v1/users/me/minecraft/refresh';
-};
-
-export type AccountMinecraftRefreshErrors = {
-    /**
-     * Unauthorized
-     */
-    401: ProblemDetail;
-    /**
-     * Forbidden
-     */
-    403: ProblemDetail;
-    /**
-     * Not Found
-     */
-    404: ProblemDetail;
-    /**
-     * Conflict
-     */
-    409: ProblemDetail;
-    /**
-     * Unprocessable Entity
-     */
-    422: ValidationProblemDetail;
-    /**
-     * Too Many Requests
-     */
-    429: ProblemDetail;
-    /**
-     * Service Unavailable
-     */
-    503: ProblemDetail;
-};
-
-export type AccountMinecraftRefreshError = AccountMinecraftRefreshErrors[keyof AccountMinecraftRefreshErrors];
-
-export type AccountMinecraftRefreshResponses = {
-    /**
-     * Request fulfilled, document follows
-     */
-    200: MinecraftIdentityRefresh;
-};
-
-export type AccountMinecraftRefreshResponse = AccountMinecraftRefreshResponses[keyof AccountMinecraftRefreshResponses];
-
-export type AccountMinecraftRefreshForData = {
-    body?: never;
-    headers?: {
-        /**
-         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
-         */
-        'Idempotency-Key'?: string | null;
-    };
-    path: {
-        account_id: string;
-    };
-    query?: never;
-    url: '/v1/accounts/{account_id}/minecraft/refresh';
-};
-
-export type AccountMinecraftRefreshForErrors = {
-    /**
-     * Unauthorized
-     */
-    401: ProblemDetail;
-    /**
-     * Forbidden
-     */
-    403: ProblemDetail;
-    /**
-     * Not Found
-     */
-    404: ProblemDetail;
-    /**
-     * Conflict
-     */
-    409: ProblemDetail;
-    /**
-     * Unprocessable Entity
-     */
-    422: ValidationProblemDetail;
-    /**
-     * Too Many Requests
-     */
-    429: ProblemDetail;
-    /**
-     * Service Unavailable
-     */
-    503: ProblemDetail;
-};
-
-export type AccountMinecraftRefreshForError = AccountMinecraftRefreshForErrors[keyof AccountMinecraftRefreshForErrors];
-
-export type AccountMinecraftRefreshForResponses = {
-    /**
-     * Request fulfilled, document follows
-     */
-    200: MinecraftIdentityRefresh;
-};
-
-export type AccountMinecraftRefreshForResponse = AccountMinecraftRefreshForResponses[keyof AccountMinecraftRefreshForResponses];
-
-export type AccountProfileClearData = {
-    body?: never;
-    headers?: {
-        /**
-         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
-         */
-        'Idempotency-Key'?: string | null;
-        'If-Match'?: string | null;
-    };
-    path: {
-        account_id: string;
-    };
-    query?: never;
-    url: '/v1/accounts/{account_id}/profile';
-};
-
-export type AccountProfileClearErrors = {
-    /**
-     * Unauthorized
-     */
-    401: ProblemDetail;
-    /**
-     * Forbidden
-     */
-    403: ProblemDetail;
-    /**
-     * Not Found
-     */
-    404: ProblemDetail;
-    /**
-     * Precondition Failed
-     */
-    412: ProblemDetail;
-    /**
-     * Unprocessable Content
-     */
-    422: ValidationProblemDetail;
-    /**
-     * Precondition Required
-     */
-    428: ProblemDetail;
-    /**
-     * Too Many Requests
-     */
-    429: ProblemDetail;
-    /**
-     * Service Unavailable
-     */
-    503: ProblemDetail;
-};
-
-export type AccountProfileClearError = AccountProfileClearErrors[keyof AccountProfileClearErrors];
-
-export type AccountProfileClearResponses = {
-    /**
-     * Request fulfilled, document follows
-     */
-    200: ProfileDetail;
-};
-
-export type AccountProfileClearResponse = AccountProfileClearResponses[keyof AccountProfileClearResponses];
-
-export type AccountProfileReviewData = {
-    body?: never;
-    path: {
-        account_id: string;
-    };
-    query?: never;
-    url: '/v1/accounts/{account_id}/profile';
-};
-
-export type AccountProfileReviewErrors = {
-    /**
-     * Unauthorized
-     */
-    401: ProblemDetail;
-    /**
-     * Forbidden
-     */
-    403: ProblemDetail;
-    /**
-     * Not Found
-     */
-    404: ProblemDetail;
-    /**
-     * Unprocessable Entity
-     */
-    422: ValidationProblemDetail;
-    /**
-     * Too Many Requests
-     */
-    429: ProblemDetail;
-    /**
-     * Service Unavailable
-     */
-    503: ProblemDetail;
-};
-
-export type AccountProfileReviewError = AccountProfileReviewErrors[keyof AccountProfileReviewErrors];
-
-export type AccountProfileReviewResponses = {
-    /**
-     * Request fulfilled, document follows
-     */
-    200: ProfileDetail;
-};
-
-export type AccountProfileReviewResponse = AccountProfileReviewResponses[keyof AccountProfileReviewResponses];
-
 export type PaperInstallationsListData = {
     body?: never;
     path?: never;
@@ -6025,7 +6064,7 @@ export type NotificationPreferencesGetData = {
     body?: never;
     path?: never;
     query?: never;
-    url: '/v1/users/me/notifications/preferences';
+    url: '/v1/accounts/me/notifications/preferences';
 };
 
 export type NotificationPreferencesGetErrors = {
@@ -6069,7 +6108,7 @@ export type NotificationPreferencesUpdateData = {
     };
     path?: never;
     query?: never;
-    url: '/v1/users/me/notifications/preferences';
+    url: '/v1/accounts/me/notifications/preferences';
 };
 
 export type NotificationPreferencesUpdateErrors = {
@@ -6127,7 +6166,7 @@ export type NotificationSubscriptionsListData = {
          */
         subject_id?: string | null;
     };
-    url: '/v1/users/me/notifications/subscriptions';
+    url: '/v1/accounts/me/notifications/subscriptions';
 };
 
 export type NotificationSubscriptionsListErrors = {
@@ -6175,7 +6214,7 @@ export type NotificationSubscriptionCreateData = {
     };
     path?: never;
     query?: never;
-    url: '/v1/users/me/notifications/subscriptions';
+    url: '/v1/accounts/me/notifications/subscriptions';
 };
 
 export type NotificationSubscriptionCreateErrors = {
@@ -6241,7 +6280,7 @@ export type NotificationSubscriptionDeleteData = {
         subscription_id: number;
     };
     query?: never;
-    url: '/v1/users/me/notifications/subscriptions/{subscription_id}';
+    url: '/v1/accounts/me/notifications/subscriptions/{subscription_id}';
 };
 
 export type NotificationSubscriptionDeleteErrors = {
@@ -6315,7 +6354,7 @@ export type NotificationInboxListData = {
          */
         unread_only?: boolean;
     };
-    url: '/v1/users/me/notifications/inbox';
+    url: '/v1/accounts/me/notifications/inbox';
 };
 
 export type NotificationInboxListErrors = {
@@ -6371,7 +6410,7 @@ export type NotificationInboxMarkAllReadData = {
          */
         through_id?: number | null;
     };
-    url: '/v1/users/me/notifications/inbox/read-all';
+    url: '/v1/accounts/me/notifications/inbox/read-all';
 };
 
 export type NotificationInboxMarkAllReadErrors = {
@@ -6433,7 +6472,7 @@ export type NotificationInboxMarkReadData = {
         notification_id: number;
     };
     query?: never;
-    url: '/v1/users/me/notifications/inbox/{notification_id}/read';
+    url: '/v1/accounts/me/notifications/inbox/{notification_id}/read';
 };
 
 export type NotificationInboxMarkReadErrors = {
@@ -6495,7 +6534,7 @@ export type NotificationInboxMarkUnreadData = {
         notification_id: number;
     };
     query?: never;
-    url: '/v1/users/me/notifications/inbox/{notification_id}/unread';
+    url: '/v1/accounts/me/notifications/inbox/{notification_id}/unread';
 };
 
 export type NotificationInboxMarkUnreadErrors = {
@@ -9547,45 +9586,6 @@ export type CreatorAliasGetResponses = {
 };
 
 export type CreatorAliasGetResponse = CreatorAliasGetResponses[keyof CreatorAliasGetResponses];
-
-export type CreatorProfileGetData = {
-    body?: never;
-    path: {
-        creator_id: string;
-    };
-    query?: never;
-    url: '/v1/creators/{creator_id}';
-};
-
-export type CreatorProfileGetErrors = {
-    /**
-     * Not Found
-     */
-    404: ProblemDetail;
-    /**
-     * Unprocessable Content
-     */
-    422: ValidationProblemDetail;
-    /**
-     * Too Many Requests
-     */
-    429: ProblemDetail;
-    /**
-     * Service Unavailable
-     */
-    503: ProblemDetail;
-};
-
-export type CreatorProfileGetError = CreatorProfileGetErrors[keyof CreatorProfileGetErrors];
-
-export type CreatorProfileGetResponses = {
-    /**
-     * Request fulfilled, document follows
-     */
-    200: CreatorProfileDetail;
-};
-
-export type CreatorProfileGetResponse = CreatorProfileGetResponses[keyof CreatorProfileGetResponses];
 
 export type MinecraftVersionsListData = {
     body?: never;

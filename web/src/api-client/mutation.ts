@@ -78,7 +78,6 @@ const errorMessages = {
   BUILD_REVISION_REQUIRED: m.errorConflict,
   CLAIM_NOT_FOUND: m.errorGone,
   CREATOR_ALIAS_NOT_FOUND: m.errorGone,
-  CREATOR_NOT_FOUND: m.errorGone,
   CONFIGURATION_ERROR: m.errorGeneric,
   CONSENT_REQUIRED: m.errorConsent,
   CONSENT_VERSION_STALE: m.errorConsent,

@@ -3,16 +3,14 @@
 from litestar import Router
 
 from squid.api.rate_limit import enforce_route_rate_limits_before_request
+from squid.api.v1.accounts import router as accounts_router
 from squid.api.v1.auth import router as auth_router
 from squid.api.v1.builds import router as builds_router
 from squid.api.v1.capabilities import router as capabilities_router
 from squid.api.v1.cli_auth import router as cli_auth_router
 from squid.api.v1.consent import router as consent_router
-from squid.api.v1.creators import profiles_router
 from squid.api.v1.creators import router as creator_aliases_router
 from squid.api.v1.diagnostics import router as diagnostics_router
-from squid.api.v1.me import accounts_router as me_accounts_router
-from squid.api.v1.me import router as me_router
 from squid.api.v1.minecraft_auth import router as minecraft_auth_router
 from squid.api.v1.notifications import router as notifications_router
 from squid.api.v1.records import router as records_router
@@ -34,14 +32,13 @@ router = Router(
     path="/v1",
     before_request=enforce_route_rate_limits_before_request,
     route_handlers=[
+        accounts_router,
         auth_router,
         builds_router,
         capabilities_router,
         cli_auth_router,
         consent_router,
         diagnostics_router,
-        me_router,
-        me_accounts_router,
         minecraft_auth_router,
         notifications_router,
         records_router,
@@ -60,7 +57,6 @@ router = Router(
         suggest_router,
         tags_router,
         creator_aliases_router,
-        profiles_router,
         versions_router,
         votes_router,
     ],
@@ -71,7 +67,7 @@ TAGS_METADATA = [
     {"name": "capabilities", "description": "API, protocol, renderer, and upload compatibility."},
     {"name": "authentication", "description": "Discord OAuth2 browser sessions."},
     {"name": "cli-authentication", "description": "Browser-approved CLI devices and short-lived sessions."},
-    {"name": "users", "description": "Authenticated self-service account operations."},
+    {"name": "accounts", "description": "Your own account, public account profiles, and staff moderation."},
     {"name": "notifications", "description": "Notification preferences, subscriptions, and inbox."},
     {
         "name": "minecraft-authentication",
@@ -84,7 +80,7 @@ TAGS_METADATA = [
     {"name": "records", "description": "Active computed record results."},
     {"name": "tags", "description": "Published build and record tags."},
     {"name": "versions", "description": "Recognized Minecraft versions."},
-    {"name": "creators", "description": "Public creator profiles and credits."},
+    {"name": "creators", "description": "Creator names credited on builds."},
     {"name": "schematics", "description": "Schematic analysis metadata and content."},
     {"name": "vote sessions", "description": "Aggregate ballot-safe vote state."},
     {"name": "diagnostics", "description": "Stored error reports, resolvable by the reference a user was shown."},

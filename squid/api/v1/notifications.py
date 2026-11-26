@@ -391,7 +391,7 @@ router = Router(
     dependencies={
         "notifications": Provide(get_notifications, sync_to_thread=False),
     },
-    path="/users/me/notifications",
+    path="/accounts/me/notifications",
     tags=["notifications"],
     route_handlers=[
         get_preferences,

@@ -134,7 +134,7 @@ class Caller:
             raise AuthenticationError
         if self.consent_pending:
             raise ConsentRequiredError(account_id=self.account_id).with_context(
-                public_context={"consent_url": "/v1/users/me/consent", "notice_url": "/v1/consent/notice"},
+                public_context={"consent_url": "/v1/accounts/me/consent", "notice_url": "/v1/consent/notice"},
                 end_user_action="Accept the current privacy notice and retry.",
             )
         return self.account_id

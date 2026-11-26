@@ -25,7 +25,7 @@ describe("browser writes", () => {
         tokenFetches += 1;
         return HttpResponse.json({ csrf_token: "token-1234567890ab" });
       }),
-      http.patch(`${API}/v1/users/me/profile`, ({ request }) => {
+      http.patch(`${API}/v1/accounts/me/profile`, ({ request }) => {
         seen.push(request.headers);
         return HttpResponse.json({}, { headers: { ETag: '"account-7-r3"' } });
       }),
@@ -51,7 +51,7 @@ describe("browser writes", () => {
           ? HttpResponse.json({ title: "Unauthorized", status: 401 }, { status: 401 })
           : HttpResponse.json({ csrf_token: "token-1234567890ab" });
       }),
-      http.patch(`${API}/v1/users/me/profile`, () => HttpResponse.json({})),
+      http.patch(`${API}/v1/accounts/me/profile`, () => HttpResponse.json({})),
     );
     const api = new BrowserApi(API);
     await expect(api.mutate(update(api), { idempotencyKey: "k" })).rejects.toMatchObject({
@@ -65,7 +65,7 @@ describe("browser writes", () => {
       http.get(`${API}/v1/auth/csrf`, () =>
         HttpResponse.json({ csrf_token: "token-1234567890ab" }),
       ),
-      http.patch(`${API}/v1/users/me/profile`, () => HttpResponse.error()),
+      http.patch(`${API}/v1/accounts/me/profile`, () => HttpResponse.error()),
     );
     const api = new BrowserApi(API);
     await expect(api.mutate(update(api), { idempotencyKey: "k" })).rejects.toMatchObject({

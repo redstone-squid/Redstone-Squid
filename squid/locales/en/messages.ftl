@@ -574,7 +574,7 @@ account-workspace-review-privacy-notice = Review privacy notice
 # squid/bot/accounts/workspace.py:218
 account-workspace-set-up-profile = Set up your account
 
-# squid/core/accounts/errors.py:179
+# squid/core/accounts/errors.py:185
 accounts-account-already-linked = Your account is already linked to a different Minecraft account.
 
 # squid/core/accounts/errors.py:22
@@ -589,29 +589,26 @@ accounts-application-presentation-discord-user = Discord user { $discord_id }
 # squid/core/accounts/models.py:220
 accounts-bedrock-xuids-unsigned = Bedrock XUIDs must be unsigned 64-bit integers, got { $subject }.
 
-# squid/core/accounts/errors.py:370
+# squid/core/accounts/errors.py:359
 accounts-check-uuid-try-again = Check the UUID and try again.
 
-# squid/core/accounts/infrastructure/repository.py:686
+# squid/core/accounts/infrastructure/repository.py:688
 accounts-claim-reassign-required = Approve with `reassign: True` to move the name to the claimant.
 
-# squid/core/accounts/errors.py:330
+# squid/core/accounts/errors.py:319
 accounts-creator-already-credited = **{ $name }** is already credited to the creator known as **{ $holder_name }**.
 
-# squid/core/accounts/errors.py:294
+# squid/core/accounts/errors.py:283
 accounts-creator-name-already-claimed = Creator name already claimed
 
-# squid/core/accounts/errors.py:260
+# squid/core/accounts/errors.py:266
 accounts-creator-name-check = Check the spelling against the creator list on a build you worked on.
 
-# squid/core/accounts/errors.py:293
+# squid/core/accounts/errors.py:282
 accounts-creator-name-claimed = That creator name is already claimed by another account.
 
-# squid/core/accounts/errors.py:257
+# squid/core/accounts/errors.py:263
 accounts-creator-name-not-found = Creator name not found
-
-# squid/core/accounts/errors.py:273
-accounts-creator-not-found-title = Creator not found
 
 # squid/core/accounts/models.py:211
 accounts-discord-identity-subjects = Discord identity subjects must be positive signed 64-bit integers, got { $subject }.
@@ -646,70 +643,64 @@ accounts-domain-profiles-link-url = Link URL
 # squid/core/accounts/domain/profiles.py:192
 accounts-domain-profiles-pronouns = Pronouns
 
-# squid/core/accounts/errors.py:182
+# squid/core/accounts/errors.py:188
 accounts-errors-account-already-linked = Account already linked
 
 # squid/core/accounts/errors.py:45
 accounts-errors-account-not-found = Account not found.
 
-# squid/core/accounts/errors.py:297
+# squid/core/accounts/errors.py:286
 accounts-errors-ask-staff-to-review-the-claim-if = Ask staff to review the claim if you believe the name is yours.
 
-# squid/core/accounts/errors.py:276
-accounts-errors-check-the-creator-id-and-try-again = Check the creator ID and try again.
-
-# squid/core/accounts/errors.py:341
+# squid/core/accounts/errors.py:330
 accounts-errors-claim-not-found = Claim not found
 
-# squid/core/accounts/errors.py:209
+# squid/core/accounts/errors.py:215
 accounts-errors-consent-required = Consent required
 
-# squid/core/accounts/errors.py:272
-accounts-errors-creator-not-found = Creator not found.
-
-# squid/core/accounts/errors.py:144
+# squid/core/accounts/errors.py:150
 accounts-errors-generate-a-new-code-and-try-again = Generate a new code and try again.
 
-# squid/core/accounts/errors.py:118
+# squid/core/accounts/errors.py:124
 accounts-errors-generate-a-new-merge-code-from-the = Generate a new merge code from the account you want to absorb, then try again.
 
-# squid/core/accounts/errors.py:70
+# squid/core/accounts/errors.py:76
 accounts-errors-identity-not-found = Identity not found
 
-# squid/core/accounts/errors.py:115
+# squid/core/accounts/errors.py:121
 accounts-errors-invalid-merge-code = Invalid merge code
 
-# squid/core/accounts/errors.py:106
+# squid/core/accounts/errors.py:112
 accounts-errors-invalid-profile = Invalid profile
 
-# squid/core/accounts/errors.py:141
+# squid/core/accounts/errors.py:147
 accounts-errors-invalid-verification-code = Invalid verification code
 
-# squid/core/accounts/errors.py:90
+# squid/core/accounts/errors.py:96
 accounts-errors-last-identity = Last identity
 
-# squid/core/accounts/errors.py:254
+# squid/core/accounts/errors.py:260
 accounts-errors-no-build-credits-a-creator-by-that = No build credits a creator by that name.
 
-# squid/core/accounts/errors.py:153
+# squid/core/accounts/errors.py:159
 accounts-errors-prompt-expired = Prompt expired
 
-# squid/core/accounts/errors.py:167
+# squid/core/accounts/errors.py:173
 accounts-errors-too-many-attempts = Too many attempts
 
-# squid/core/accounts/errors.py:170
+# squid/core/accounts/errors.py:176
 accounts-errors-wait-for-the-cooling-off-period-to = Wait for the cooling-off period to pass, then generate a new code in game.
 
 # squid/core/accounts/models.py:233
 accounts-java-identity-subjects = Java identity subjects must be UUIDs, got { $subject }.
 
-# squid/core/accounts/errors.py:89
+# squid/core/accounts/errors.py:95
 accounts-last-identity-required = You cannot unlink your only remaining identity.
 
 # squid/core/accounts/domain/profiles.py:138
 accounts-link-credentials-forbidden = Links may not carry credentials.
 
-# squid/core/accounts/errors.py:93
+# squid/core/accounts/errors.py:99
 accounts-link-identity-before-unlink = Link another identity first, then unlink this one.
 
 # squid/core/accounts/domain/profiles.py:124
@@ -718,13 +709,13 @@ accounts-link-invalid-scheme = Links must be https URLs, got { $scheme }.
 # squid/core/accounts/domain/profiles.py:102
 accounts-link-label-required = Every link needs a label.
 
-# squid/core/accounts/errors.py:357
+# squid/core/accounts/errors.py:346
 accounts-link-minecraft-first = Link a Minecraft account first, then try again.
 
-# squid/core/accounts/errors.py:152
+# squid/core/accounts/errors.py:158
 accounts-link-prompt-expired = The linking prompt expired before you answered it.
 
-# squid/core/accounts/errors.py:156
+# squid/core/accounts/errors.py:162
 accounts-link-restart = Run /account link again with a fresh code from the game.
 
 # squid/core/accounts/domain/profiles.py:108
@@ -733,58 +724,58 @@ accounts-link-url-required = Every link needs a URL.
 # squid/core/accounts/domain/profiles.py:114
 accounts-link-url-too-long = Link URLs may be at most { $limit } characters.
 
-# squid/core/accounts/errors.py:69
+# squid/core/accounts/errors.py:75
 accounts-linked-identity-not-owned = That linked identity does not belong to your account.
 
 # squid/core/accounts/domain/profiles.py:131
 accounts-links-include-hostname = Links must include a hostname.
 
-# squid/core/accounts/errors.py:73
+# squid/core/accounts/errors.py:79
 accounts-list-linked-identities = List your linked identities and try again with one of those.
 
-# squid/core/accounts/errors.py:114
+# squid/core/accounts/errors.py:120
 accounts-merge-code-invalid = That merge code is invalid or expired.
 
-# squid/core/accounts/errors.py:127
+# squid/core/accounts/errors.py:133
 accounts-merge-proof-required = Both accounts must be authenticated again before they can be merged.
 
-# squid/core/accounts/errors.py:132
+# squid/core/accounts/errors.py:138
 accounts-merge-reauthenticate = Authenticate both accounts again, then retry the merge.
 
-# squid/core/accounts/errors.py:367
+# squid/core/accounts/errors.py:356
 accounts-minecraft-account-not-found = Minecraft account not found.
 
-# squid/core/accounts/errors.py:353
+# squid/core/accounts/errors.py:342
 accounts-minecraft-account-required = You do not have a Minecraft account linked.
 
-# squid/core/accounts/errors.py:384
+# squid/core/accounts/errors.py:373
 accounts-minecraft-account-service = The Minecraft account service is temporarily unavailable.
 
-# squid/core/accounts/errors.py:354
+# squid/core/accounts/errors.py:343
 accounts-no-minecraft-account-linked = No Minecraft account linked
 
-# squid/core/accounts/errors.py:340
+# squid/core/accounts/errors.py:329
 accounts-no-pending-claim-matches-id = No pending claim matches that ID.
 
-# squid/core/accounts/errors.py:205
+# squid/core/accounts/errors.py:211
 accounts-privacy-consent-required = You need to accept the current privacy notice before completing this action.
 
-# squid/core/accounts/errors.py:212
+# squid/core/accounts/errors.py:218
 accounts-privacy-notice-consent = Review and accept the current privacy notice, then try again.
 
-# squid/core/accounts/errors.py:235
+# squid/core/accounts/errors.py:241
 accounts-privacy-notice-outdated = Privacy notice out of date
 
-# squid/core/accounts/errors.py:238
+# squid/core/accounts/errors.py:244
 accounts-privacy-notice-refresh = Re-read the current privacy notice, then accept it again.
 
-# squid/core/accounts/errors.py:234
+# squid/core/accounts/errors.py:240
 accounts-privacy-notice-updated = The privacy notice has changed since this one was shown.
 
 # squid/core/accounts/domain/profiles.py:53
 accounts-profile-control-characters = { $field } may not contain control characters.
 
-# squid/core/accounts/errors.py:105
+# squid/core/accounts/errors.py:111
 accounts-profile-data-invalid = The profile data is invalid.
 
 # squid/core/accounts/domain/profiles.py:73
@@ -793,22 +784,22 @@ accounts-profile-field-too-long = { $field } may be at most { $limit } character
 # squid/core/accounts/domain/profiles.py:201
 accounts-profile-link-limit = A profile may have at most { $limit } links, got { $count }.
 
-# squid/core/accounts/errors.py:130
+# squid/core/accounts/errors.py:136
 accounts-recent-account-proof-required = Recent account proof required
 
-# squid/core/accounts/errors.py:389
+# squid/core/accounts/errors.py:378
 accounts-retry-soon = Try again in a few minutes.
 
 # squid/core/accounts/application/presentation.py:15
 accounts-unidentified-account-internal = unidentified account (internal ID { $account_id })
 
-# squid/core/accounts/errors.py:185
+# squid/core/accounts/errors.py:191
 accounts-unlink-before-link = Unlink the current account before linking a new one.
 
-# squid/core/accounts/errors.py:166
+# squid/core/accounts/errors.py:172
 accounts-verification-attempts-exceeded = Too many incorrect verification codes.
 
-# squid/core/accounts/errors.py:140
+# squid/core/accounts/errors.py:146
 accounts-verification-code-invalid = The verification code is invalid or expired.
 
 # squid/bot/admin_cog.py:342
@@ -2824,70 +2815,70 @@ contextual-search-pick = Select a match to add it
 # squid/bot/catalogue/search/contextual.py:88
 contextual-search-prompt = Use { $command } here within two minutes. Leave { $scope } empty.
 
-# squid/core/errors.py:270
+# squid/core/errors.py:269
 core-account-required-action = A linked account is required for this action.
 
-# squid/core/errors.py:307
+# squid/core/errors.py:306
 core-configuration-invalid = Application configuration is invalid.
 
-# squid/core/errors.py:321
+# squid/core/errors.py:320
 core-dependency-failed = An infrastructure dependency failed.
 
-# squid/core/errors.py:88
+# squid/core/errors.py:87
 core-errors-an-application-error-occurred = An application error occurred.
 
-# squid/core/errors.py:296
+# squid/core/errors.py:295
 core-errors-an-internal-application-error-occurred = An internal application error occurred.
 
-# squid/core/errors.py:91
+# squid/core/errors.py:90
 core-errors-application-error = Application error
 
-# squid/core/errors.py:266
+# squid/core/errors.py:265
 core-errors-forbidden = Forbidden
 
-# squid/core/errors.py:299
+# squid/core/errors.py:298
 core-errors-internal-error = Internal error
 
-# squid/core/errors.py:227
+# squid/core/errors.py:226
 core-errors-invalid-value = Invalid value
 
-# squid/core/errors.py:243
+# squid/core/errors.py:242
 core-errors-operation-conflict = Operation conflict
 
 # squid/core/pagination.py:67
 core-errors-page-anchor-not-found = Page anchor not found
 
-# squid/core/errors.py:179
+# squid/core/errors.py:178
 core-errors-request-failed = Request failed
 
-# squid/core/errors.py:235
+# squid/core/errors.py:234
 core-errors-resource-not-found = Resource not found
 
-# squid/core/errors.py:346
+# squid/core/errors.py:345
 core-errors-service-unavailable = Service unavailable
 
-# squid/core/errors.py:285
+# squid/core/errors.py:284
 core-errors-too-many-requests = Too many requests
 
-# squid/core/errors.py:249
+# squid/core/errors.py:248
 core-errors-unauthorized = Unauthorized.
 
-# squid/core/errors.py:250
+# squid/core/errors.py:249
 core-errors-unauthorized-2 = Unauthorized
 
-# squid/core/errors.py:263
+# squid/core/errors.py:262
 core-errors-you-do-not-have-permission-to-perform = You do not have permission to perform this action.
 
-# squid/core/errors.py:278
+# squid/core/errors.py:277
 core-guild-required-action = This action must be performed in the server it belongs to.
 
-# squid/core/errors.py:242
+# squid/core/errors.py:241
 core-operation-conflict = The operation conflicts with the current state.
 
-# squid/core/errors.py:178
+# squid/core/errors.py:177
 core-operation-failed = The requested operation could not be completed.
 
-# squid/core/errors.py:274
+# squid/core/errors.py:273
 core-owner-required-action = Only the owner can perform this action.
 
 # squid/core/pagination.py:66
@@ -2896,28 +2887,28 @@ core-page-anchor-not-found = The page anchor is no longer in this list.
 # squid/core/pagination.py:69
 core-page-anchor-not-found-action = Go back to the first page.
 
-# squid/core/errors.py:336
+# squid/core/errors.py:335
 core-persisted-data-inconsistent = Persisted data is inconsistent with application expectations.
 
-# squid/core/errors.py:328
+# squid/core/errors.py:327
 core-persistence-operation-failed = A persistence operation failed.
 
-# squid/core/errors.py:284
+# squid/core/errors.py:283
 core-rate-limited = Too many requests. Please try again later.
 
-# squid/core/errors.py:234
+# squid/core/errors.py:233
 core-requested-resource-not-found = The requested resource was not found.
 
-# squid/core/errors.py:345
+# squid/core/errors.py:344
 core-required-service-temporarily = A required service is temporarily unavailable.
 
-# squid/core/errors.py:301
+# squid/core/errors.py:300
 core-retry-later = Please try again later.
 
-# squid/core/errors.py:314
+# squid/core/errors.py:313
 core-state-invalid-operation = Application state is invalid for this operation.
 
-# squid/core/errors.py:226
+# squid/core/errors.py:225
 core-supplied-value-invalid = The supplied value is invalid.
 
 # squid/bot/accounts/creator_page.py:121

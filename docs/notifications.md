@@ -54,7 +54,7 @@ Subscriptions may target:
 - a structured record filter with optional build-kind, base-title, version-scope, tag-presence, and exact tag-value
   predicates. Omitted fields are wildcards.
 
-The REST surface is under `/v1/users/me/notifications`. It exposes notification consent/preferences, subscription
+The REST surface is under `/v1/accounts/me/notifications`. It exposes notification consent/preferences, subscription
 CRUD, a cursor-paginated inbox, and read acknowledgements. Subscriptions carry a readable label, site link, and
 localized filter summary. Inbox items carry a payload typed by kind, which names builds by their current title. Staff
 inbox entries are authorization-checked on every read and DM claim, so revoking a global-administrator grant removes

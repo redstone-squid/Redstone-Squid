@@ -11,7 +11,7 @@ from whenever import Instant
 
 from squid.api.revisions import RevisionRequiredError
 from squid.api.security import UNBOUNDED, Caller
-from squid.api.v1.me import (
+from squid.api.v1.accounts import (
     clear_profile,
     complete_merge,
     create_merge_code,
@@ -21,7 +21,7 @@ from squid.api.v1.me import (
     unlink_identity,
     update_profile,
 )
-from squid.api.v1.schemas.me import IdentityVisibilityRequest, MergeRequest, ProfileUpdateRequest
+from squid.api.v1.schemas.accounts import IdentityVisibilityRequest, MergeRequest, ProfileUpdateRequest
 from squid.core.accounts.application import AccountService
 from squid.core.accounts.application.edits import AccountEditorSnapshot
 from squid.core.accounts.domain import AccountMerge, IdentityProvider, MergePreview, ProfileLink, ProfileUpdate

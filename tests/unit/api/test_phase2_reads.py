@@ -328,7 +328,7 @@ def test_creator_profile_groups_public_aliases(app_factory: tuple[Litestar, Mock
     _override(app, accounts=AccountFake())
 
     with TestClient(app) as client:
-        response = client.get("/v1/creators/22222222-2222-2222-2222-222222222222")
+        response = client.get("/v1/accounts/22222222-2222-2222-2222-222222222222")
 
     assert response.status_code == 200
     assert response.json() == {
@@ -465,14 +465,14 @@ class TestTypedNotFound:
         assert problem["resource"] == "vote_session"
         assert problem["context"] == {"vote_session_id": 1234}
 
-    def test_a_missing_creator_profile_names_its_identifier(self, client: TestClient) -> None:
-        response = client.get(f"/v1/creators/{CREATOR_PUBLIC_ID}")
+    def test_a_missing_account_names_its_public_identifier(self, client: TestClient) -> None:
+        response = client.get(f"/v1/accounts/{CREATOR_PUBLIC_ID}")
 
         assert response.status_code == 404
         problem = response.json()
-        assert problem["code"] == "CREATOR_NOT_FOUND"
-        assert problem["resource"] == "creator"
-        assert problem["context"] == {"creator_id": str(CREATOR_PUBLIC_ID)}
+        assert problem["code"] == "ACCOUNT_NOT_FOUND"
+        assert problem["resource"] == "account"
+        assert problem["context"] == {"account_id": str(CREATOR_PUBLIC_ID)}
 
     def test_a_missing_record_names_its_identifier(self, client: TestClient) -> None:
         record_id = "00000000-0000-0000-0000-000000000077"

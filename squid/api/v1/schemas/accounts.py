@@ -1,4 +1,4 @@
-"""Authenticated self-account representations."""
+"""Account representations."""
 
 from uuid import UUID
 
@@ -110,7 +110,7 @@ class ProfileDetail(BaseModel):
         )
 
 
-class UserMe(BaseModel):
+class AccountDetail(BaseModel):
     """The caller's account, linked sign-in identities, and profile.
 
     Identities may include several entries from the same provider, or no entry from
@@ -137,7 +137,7 @@ class UserMe(BaseModel):
         profile: AccountProfile,
         *,
         consent_pending: bool,
-    ) -> UserMe:
+    ) -> AccountDetail:
         assert account.id is not None
         assert account.public_creator_id is not None
         return cls(

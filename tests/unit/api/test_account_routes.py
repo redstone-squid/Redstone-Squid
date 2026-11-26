@@ -11,7 +11,7 @@ import pytest
 from whenever import Instant
 
 from squid.api.security import UNBOUNDED, Caller
-from squid.api.v1.me import (
+from squid.api.v1.accounts import (
     get_me,
     grant_consent,
     refresh_minecraft_identity,

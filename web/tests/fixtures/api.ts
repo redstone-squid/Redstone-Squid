@@ -286,7 +286,7 @@ async function routeRequest(request: Request): Promise<Response> {
       body: "Redstone Squid stores your Discord user ID.\n\nAgreeing records this notice's version.",
     } satisfies PrivacyNoticeDetail);
   }
-  if (url.pathname === "/v1/users/me/consent" && request.method === "POST") {
+  if (url.pathname === "/v1/accounts/me/consent" && request.method === "POST") {
     if (session(request).user === null) return problem(request, 401, "AUTHENTICATION_REQUIRED");
     if (!csrfMatches(request)) return problem(request, 403, "FORBIDDEN");
     if (cookie(request, "__Host-squid_session") === "stale")

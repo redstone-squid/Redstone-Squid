@@ -1,4 +1,4 @@
-"""Public creator route contracts."""
+"""Public account profile route contracts."""
 
 from typing import override
 from uuid import UUID
@@ -11,7 +11,7 @@ from whenever import Instant
 
 from squid.api.openapi import ApplicationValueSchemaPlugin
 from squid.api.security import ANONYMOUS
-from squid.api.v1.creators import PublicCreatorDTO, get_creator_profile
+from squid.api.v1.accounts import PublicAccountDTO, get_public_account
 from squid.core.accounts.application import AccountService
 from squid.core.accounts.domain import (
     CreditedAlias,
@@ -41,7 +41,7 @@ def _accounts(profile: PublicCreatorProfile | None) -> AccountService:
 
 
 @pytest.mark.parametrize("hidden", [False, True])
-async def test_creator_dto_preserves_public_json_and_excludes_unpublished_properties(hidden: bool) -> None:
+async def test_public_account_dto_preserves_public_json_and_excludes_unpublished_properties(hidden: bool) -> None:
     profile = PublicCreatorProfile(
         public_id=CREATOR_ID,
         canonical_public_id=CANONICAL_ID,
@@ -57,19 +57,19 @@ async def test_creator_dto_preserves_public_json_and_excludes_unpublished_proper
     )
     accounts = _accounts(profile)
     handler = get(
-        "/creators/{creator_id:uuid}",
-        return_dto=PublicCreatorDTO,
+        "/accounts/{account_id:uuid}",
+        return_dto=PublicAccountDTO,
         dependencies={
             "accounts": Provide(lambda: accounts, sync_to_thread=False),
             "caller": Provide(lambda: ANONYMOUS, sync_to_thread=False),
             "services": Provide(lambda: None, sync_to_thread=False),
         },
-    )(get_creator_profile.fn)
+    )(get_public_account.fn)
     app = Litestar([handler], plugins=[ApplicationValueSchemaPlugin()], type_encoders={Instant: Instant.format_iso})
     # HTTPX and Litestar describe compatible ASGI interfaces with different scope types.
     transport = httpx.ASGITransport(app=app)  # type: ignore[bad-argument-type]
     async with httpx.AsyncClient(transport=transport, base_url="https://test") as client:
-        response = await client.get(f"/creators/{CREATOR_ID}")
+        response = await client.get(f"/accounts/{CREATOR_ID}")
 
     assert response.status_code == 200
     assert response.json() == {

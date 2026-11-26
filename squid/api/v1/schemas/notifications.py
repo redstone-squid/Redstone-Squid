@@ -15,7 +15,7 @@ from squid.core.notifications.domain import NotificationKind, NotifiedBuild, Not
 class NotificationPreferencesDetail(BaseModel):
     """Channel preferences and the account's privacy-consent status.
 
-    Consent_pending refers to the same notice as UserMe. Notifications do not have
+    Consent_pending refers to the same notice as AccountDetail. Notifications do not have
     a separate consent notice.
     """
 

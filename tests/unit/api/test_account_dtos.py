@@ -6,7 +6,7 @@ from litestar import Litestar, Response, get
 from litestar.testing import TestClient
 from whenever import Instant
 
-from squid.api.v1.me import AccountMergeDTO, LinkedIdentityDTO, MergePreviewDTO
+from squid.api.v1.accounts import AccountMergeDTO, LinkedIdentityDTO, MergePreviewDTO
 from squid.core.accounts.domain import AccountMerge, IdentityProvider, MergePreview
 from squid.core.accounts.models import AccountIdentity
 

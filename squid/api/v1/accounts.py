@@ -1,6 +1,6 @@
-"""Authenticated self-account routes."""
+"""Account routes: the caller's own account, public profiles, and staff moderation."""
 
-from typing import Annotated
+from typing import Annotated, override
 from uuid import UUID
 
 from advanced_alchemy.extensions.litestar import SQLAlchemyDTO
@@ -9,23 +9,34 @@ from litestar import Response, Router, delete, get, patch, post, put
 from litestar.di import NamedDependency, Provide
 from litestar.dto import DataclassDTO, DTOConfig
 from litestar.params import FromPath, HeaderParameter, JSONBody, SkipValidation
+from litestar.typing import FieldDefinition
 
-from squid.api.contract import ANONYMOUS, DEVICE, WEB, WEB_WRITE, browser_only, cli_command, contract
+from squid.api.contract import (
+    ANONYMOUS,
+    DEVICE,
+    WEB,
+    WEB_WRITE,
+    browser_only,
+    cli_command,
+    contract,
+    transport_only,
+)
 from squid.api.dependencies import Accounts, CurrentCaller, Services, get_accounts
 from squid.api.errors import responses
 from squid.api.idempotency import edit_operation_id, reserve_edit_request, reserve_idempotent_request
 from squid.api.revisions import RevisionRequiredError, expected_revision, revision_etag
 from squid.api.security import Caller, requires
-from squid.api.v1.schemas.consent import ConsentGrantRequest
-from squid.api.v1.schemas.me import (
+from squid.api.v1.browser_views import BrowserViews
+from squid.api.v1.schemas.accounts import (
+    AccountDetail,
     IdentityVisibilityRequest,
     MergeCodeDetail,
     MergeRequest,
     MinecraftIdentityRefresh,
     ProfileDetail,
     ProfileUpdateRequest,
-    UserMe,
 )
+from squid.api.v1.schemas.consent import ConsentGrantRequest
 from squid.core.accounts.application import AccountService
 from squid.core.accounts.application.edits import (
     PROFILE_CLEAR,
@@ -35,8 +46,8 @@ from squid.core.accounts.application.edits import (
     ProfileValues,
     account_target,
 )
-from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, AccountMerge, MergePreview
-from squid.core.accounts.errors import AccountIdentityNotFoundError, StaleConsentNoticeError
+from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, AccountMerge, MergePreview, PublicCreatorProfile
+from squid.core.accounts.errors import AccountIdentityNotFoundError, AccountNotFoundError, StaleConsentNoticeError
 from squid.core.accounts.models import AccountIdentity
 from squid.core.edits.domain import EditCommand, EditValues, Revision
 from squid.core.errors import AuthenticationError
@@ -79,6 +90,37 @@ class AccountMergeDTO(DataclassDTO[AccountMerge]):
     )
 
 
+class PublicAccountDTO(DataclassDTO[PublicCreatorProfile]):
+    """Expose the service's visibility-filtered profile with the public API's field names."""
+
+    __schema_name__ = "PublicAccountDetail"
+
+    config = DTOConfig(
+        rename_fields={"public_id": "id", "canonical_public_id": "canonical_id"},
+        include={
+            "public_id",
+            "viewer",
+            "canonical_public_id",
+            "hidden",
+            "display_name",
+            "bio",
+            "pronouns",
+            "avatar_url",
+            "joined_at",
+            "aliases",
+            "links",
+            "identities",
+        },
+    )
+
+    @classmethod
+    @override
+    def detect_nested_field(cls, field_definition: FieldDefinition) -> bool:
+        # These service-owned leaf dataclasses already contain only public fields. Keeping
+        # them native also avoids Litestar's process-global nested DTO schema-name counter.
+        return False
+
+
 async def resolve_account(account_id: FromPath[UUID], accounts: Accounts, caller: CurrentCaller) -> int:
     """Resolve the public account ID in the path, following merge redirects."""
     return await accounts.resolve_public_id(account_id, context=caller.context())
@@ -91,7 +133,7 @@ ManageCaller = NamedDependency[SkipValidation[Caller]]
 
 
 @get(
-    "/",
+    "/me",
     responses=responses(401, 403, 404, 503),
     operation_id="account_get",
     security=[WEB],
@@ -99,7 +141,7 @@ ManageCaller = NamedDependency[SkipValidation[Caller]]
     status_code=200,
     guards=[requires(ACCOUNT_SELF_READ)],
 )
-async def get_me(accounts: Accounts, caller: UserCaller) -> Response[UserMe]:
+async def get_me(accounts: Accounts, caller: UserCaller) -> Response[AccountDetail]:
     """Return the caller's account, linked identities, and profile.
 
     An account ID is required; the caller does not need a Discord identity.
@@ -112,15 +154,15 @@ async def get_me(accounts: Accounts, caller: UserCaller) -> Response[UserMe]:
     return Response(content=result, headers=response_headers, status_code=200)
 
 
-async def _render_me(accounts: AccountService, caller: Caller, *, consent_pending: bool) -> UserMe:
+async def _render_me(accounts: AccountService, caller: Caller, *, consent_pending: bool) -> AccountDetail:
     """Compose the self view from the account and its profile."""
     account_id = caller.to_actor().require_account_id()
     snapshot = await accounts.editor_snapshot(account_id, context=caller.context())
-    return UserMe.from_domain(snapshot.account, snapshot.profile, consent_pending=consent_pending)
+    return AccountDetail.from_domain(snapshot.account, snapshot.profile, consent_pending=consent_pending)
 
 
 @post(
-    "/consent",
+    "/me/consent",
     responses=responses(401, 403, 404, 409, 503),
     operation_id="account_consent_grant",
     security=[WEB_WRITE],
@@ -135,7 +177,7 @@ async def grant_consent(
     data: JSONBody[ConsentGrantRequest | None] = None,
     *,
     _reservation: NamedDependency[SkipValidation[None]],
-) -> UserMe:
+) -> AccountDetail:
     """Accept the current privacy notice for future writes.
 
     If a notice version is supplied, it must match the current version. This lets
@@ -150,7 +192,7 @@ async def grant_consent(
 
 
 @patch(
-    "/profile",
+    "/me/profile",
     responses=responses(400, 401, 403, 404, 412, 422, 503),
     operation_id="account_profile_update",
     security=[WEB_WRITE],
@@ -199,7 +241,7 @@ async def update_profile(
 
 
 @get(
-    "/identities",
+    "/me/identities",
     responses=responses(401, 403, 404, 503),
     operation_id="account_identity_list",
     return_dto=LinkedIdentityDTO,
@@ -220,7 +262,7 @@ async def list_identities(accounts: Accounts, caller: UserCaller) -> list[Accoun
 
 
 @put(
-    "/identities/{identity_id:int}/visibility",
+    "/me/identities/{identity_id:int}/visibility",
     responses=responses(401, 403, 404, 412, 422, 503),
     operation_id="account_identity_visibility_set",
     return_dto=LinkedIdentityDTO,
@@ -266,7 +308,7 @@ async def set_identity_visibility(
 
 
 @delete(
-    "/identities/{identity_id:int}",
+    "/me/identities/{identity_id:int}",
     status_code=204,
     responses=responses(401, 403, 404, 409, 412, 422, 503),
     operation_id="account_identity_unlink",
@@ -303,7 +345,7 @@ async def unlink_identity(
 
 
 @post(
-    "/merge-code",
+    "/me/merge-code",
     responses=responses(401, 403, 404, 503),
     operation_id="account_merge_code_create",
     security=[WEB_WRITE, DEVICE],
@@ -328,7 +370,7 @@ async def create_merge_code(
 
 
 @post(
-    "/merge/preview",
+    "/me/merge/preview",
     responses=responses(400, 401, 403, 404, 422, 503),
     operation_id="account_merge_preview",
     return_dto=MergePreviewDTO,
@@ -355,7 +397,7 @@ async def preview_merge(
 
 
 @post(
-    "/merge",
+    "/me/merge",
     responses=responses(400, 401, 403, 404, 422, 503),
     operation_id="account_merge_complete",
     return_dto=AccountMergeDTO,
@@ -382,7 +424,7 @@ async def complete_merge(
 
 
 @post(
-    "/minecraft/refresh",
+    "/me/minecraft/refresh",
     responses=responses(401, 403, 404, 409, 503),
     operation_id="account_minecraft_refresh",
     security=[ANONYMOUS],
@@ -403,6 +445,28 @@ async def refresh_minecraft_identity(
     return MinecraftIdentityRefresh.from_domain(
         await accounts.refresh_java_identity(caller.account_id, context=caller.context())
     )
+
+
+@get(
+    "/{account_id:uuid}",
+    responses=responses(404, 422, 503),
+    operation_id="account_public_get",
+    return_dto=PublicAccountDTO,
+    security=[ANONYMOUS, WEB],
+    opt=contract(cli=transport_only()),
+)
+async def get_public_account(
+    account_id: FromPath[UUID], accounts: Accounts, services: Services, caller: CurrentCaller
+) -> PublicCreatorProfile:
+    """Return an account's public profile, following account-merge redirects.
+
+    The account service applies profile and identity visibility before this route
+    serializes the result. Your own ID returns the same public view; `/accounts/me` is the private one.
+    """
+    profile = await accounts.get_public_profile(account_id, context=caller.context())
+    if profile is None:
+        raise AccountNotFoundError(public_id=account_id)
+    return await BrowserViews(services, caller).creator(profile)
 
 
 @post(
@@ -498,9 +562,10 @@ router = Router(
     opt={"x-squid-private-response": True},
     dependencies={
         "accounts": Provide(get_accounts, sync_to_thread=False),
+        "target": Provide(resolve_account),
     },
-    path="/users/me",
-    tags=["users"],
+    path="/accounts",
+    tags=["accounts"],
     route_handlers=[
         get_me,
         grant_consent,
@@ -512,17 +577,9 @@ router = Router(
         preview_merge,
         complete_merge,
         refresh_minecraft_identity,
+        get_public_account,
+        refresh_minecraft_identity_for,
+        review_profile,
+        clear_profile,
     ],
-)
-
-
-accounts_router = Router(
-    opt={"x-squid-private-response": True},
-    dependencies={
-        "accounts": Provide(get_accounts, sync_to_thread=False),
-        "target": Provide(resolve_account),
-    },
-    path="/accounts",
-    tags=["users"],
-    route_handlers=[refresh_minecraft_identity_for, review_profile, clear_profile],
 )

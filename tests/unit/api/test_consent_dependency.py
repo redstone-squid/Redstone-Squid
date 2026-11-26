@@ -46,7 +46,7 @@ async def test_a_consent_pending_caller_is_told_how_to_consent(name: str, gate: 
         await call(gate, account(consent_pending=True))
 
     assert error.value.public_context == {
-        "consent_url": "/v1/users/me/consent",
+        "consent_url": "/v1/accounts/me/consent",
         "notice_url": "/v1/consent/notice",
     }
 

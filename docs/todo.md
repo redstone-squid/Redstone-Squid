@@ -78,8 +78,8 @@
 
 ## Creator identity
 
-- [ ] Give creator profiles a first-party surface outside the REST API. `GET /v1/creators/{creator_id}`
-      (`squid/api/v1/users.py:28`) is already unauthenticated, but nothing in `squid/bot/` ever calls
+- [ ] Give creator profiles a first-party surface outside the REST API. `GET /v1/accounts/{account_id}`
+      is already unauthenticated, but nothing in `squid/bot/` ever calls
       `get_creator_profile`, so a public creator identity is unreachable from Discord.
   - Treating "who holds this creator credit" as staff-only information was a mistake: the profile is public data,
     and `accounts.public_creator_id` exists to be shown.

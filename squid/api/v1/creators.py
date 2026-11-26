@@ -1,52 +1,16 @@
-"""Public creator read routes."""
+"""Public creator credit routes."""
 
-from typing import Annotated, override
-from uuid import UUID
+from typing import Annotated
 
 from litestar import Router, get
 from litestar.di import Provide
-from litestar.dto import DataclassDTO, DTOConfig
-from litestar.params import FromPath, PathParameter
-from litestar.typing import FieldDefinition
+from litestar.params import PathParameter
 
-from squid.api.contract import ANONYMOUS, WEB, contract, transport_only
-from squid.api.dependencies import Accounts, CurrentCaller, Services, get_accounts
+from squid.api.contract import ANONYMOUS, contract, transport_only
+from squid.api.dependencies import Accounts, CurrentCaller, get_accounts
 from squid.api.errors import responses
-from squid.api.v1.browser_views import BrowserViews
 from squid.api.v1.schemas.creators import CreatorAliasDetail
-from squid.core.accounts.domain import PublicCreatorProfile
-from squid.core.accounts.errors import CreatorAliasNotFoundError, CreatorNotFoundError
-
-
-class PublicCreatorDTO(DataclassDTO[PublicCreatorProfile]):
-    """Expose the service's visibility-filtered profile with the public API's field names."""
-
-    __schema_name__ = "CreatorProfileDetail"
-
-    config = DTOConfig(
-        rename_fields={"public_id": "id", "canonical_public_id": "canonical_id"},
-        include={
-            "public_id",
-            "viewer",
-            "canonical_public_id",
-            "hidden",
-            "display_name",
-            "bio",
-            "pronouns",
-            "avatar_url",
-            "joined_at",
-            "aliases",
-            "links",
-            "identities",
-        },
-    )
-
-    @classmethod
-    @override
-    def detect_nested_field(cls, field_definition: FieldDefinition) -> bool:
-        # These service-owned leaf dataclasses already contain only public fields. Keeping
-        # them native also avoids Litestar's process-global nested DTO schema-name counter.
-        return False
+from squid.core.accounts.errors import CreatorAliasNotFoundError
 
 
 @get(
@@ -66,38 +30,9 @@ async def get_creator_alias(
     return CreatorAliasDetail.from_domain(alias)
 
 
-@get(
-    "/{creator_id:uuid}",
-    responses=responses(404, 422, 503),
-    operation_id="creator_profile_get",
-    response_headers={"Cache-Control": "private, no-store"},
-    return_dto=PublicCreatorDTO,
-    security=[ANONYMOUS, WEB],
-    opt=contract(cli=transport_only()),
-)
-async def get_creator_profile(
-    creator_id: FromPath[UUID], accounts: Accounts, services: Services, caller: CurrentCaller
-) -> PublicCreatorProfile:
-    """Return a creator's public profile, following account-merge redirects.
-
-    The account service applies profile and identity visibility before this route
-    serializes the result.
-    """
-    profile = await accounts.get_public_profile(creator_id, context=caller.context())
-    if profile is None:
-        raise CreatorNotFoundError(creator_id)
-    return await BrowserViews(services, caller).creator(profile)
-
-
 router = Router(
     dependencies={"accounts": Provide(get_accounts, sync_to_thread=False)},
     path="/creator-aliases",
     tags=["creators"],
     route_handlers=[get_creator_alias],
-)
-profiles_router = Router(
-    dependencies={"accounts": Provide(get_accounts, sync_to_thread=False)},
-    path="/creators",
-    tags=["creators"],
-    route_handlers=[get_creator_profile],
 )

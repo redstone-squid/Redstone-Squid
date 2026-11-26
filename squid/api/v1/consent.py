@@ -46,4 +46,4 @@ async def get_notice(request: Request) -> Response[PrivacyNoticeDetail]:
         )
 
 
-router = Router(path="/consent", tags=["users"], route_handlers=[get_notice])
+router = Router(path="/consent", tags=["accounts"], route_handlers=[get_notice])

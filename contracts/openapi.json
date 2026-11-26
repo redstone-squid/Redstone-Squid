@@ -118,7 +118,7 @@
     "/v1/verify": {
       "post": {
         "tags": [
-          "users"
+          "accounts"
         ],
         "summary": "GetVerificationCode",
         "description": "Generate a verification code for a user.",
@@ -466,6 +466,2353 @@
             "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
           }
         ]
+      }
+    },
+    "/v1/accounts/me": {
+      "get": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "GetMe",
+        "description": "Return the caller's account, linked identities, and profile.\n\nAn account ID is required; the caller does not need a Discord identity.",
+        "operationId": "account_get",
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountDetail"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "WebSession": []
+          }
+        ],
+        "x-squid-private-response": true,
+        "x-squid-cli": {
+          "classification": "browser-only"
+        }
+      }
+    },
+    "/v1/accounts/me/consent": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "GrantConsent",
+        "description": "Accept the current privacy notice for future writes.\n\nIf a notice version is supplied, it must match the current version. This lets\nclients detect that the displayed notice has become outdated.",
+        "operationId": "account_consent_grant",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maxLength": 255,
+              "minLength": 1,
+              "pattern": "^[\\x21-\\x7e]+$",
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+            "required": false,
+            "deprecated": false
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/ConsentGrantRequest"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountDetail"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "WebSession": [],
+            "CsrfToken": []
+          }
+        ],
+        "x-squid-private-response": true,
+        "x-squid-cli": {
+          "classification": "browser-only"
+        }
+      }
+    },
+    "/v1/accounts/me/profile": {
+      "patch": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "UpdateProfile",
+        "description": "Edit the caller's own public profile.\n\nPartial: an omitted field is left alone and an explicit `null` clears it, so a client that\nonly knows about some fields cannot wipe the ones it has never heard of.",
+        "operationId": "account_profile_update",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maxLength": 255,
+              "minLength": 1,
+              "pattern": "^[\\x21-\\x7e]+$",
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+            "required": false,
+            "deprecated": false
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false,
+            "deprecated": false
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileUpdateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "WebSession": [],
+            "CsrfToken": []
+          }
+        ],
+        "x-squid-private-response": true,
+        "x-squid-cli": {
+          "classification": "browser-only"
+        }
+      }
+    },
+    "/v1/accounts/me/identities": {
+      "get": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "ListIdentities",
+        "description": "List every identity linked to the caller's account, hidden ones included.\n\nUnfiltered by visibility on purpose: you can only unhide what you can see listed.",
+        "operationId": "account_identity_list",
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/LinkedIdentityDetail"
+                  },
+                  "type": "array"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "WebSession": []
+          }
+        ],
+        "x-squid-private-response": true,
+        "x-squid-cli": {
+          "classification": "browser-only"
+        }
+      }
+    },
+    "/v1/accounts/me/identities/{identity_id}/visibility": {
+      "put": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "SetIdentityVisibility",
+        "description": "Publish or withhold one linked identity on the public creator profile.",
+        "operationId": "account_identity_visibility_set",
+        "parameters": [
+          {
+            "name": "identity_id",
+            "in": "path",
+            "schema": {
+              "type": "integer"
+            },
+            "required": true,
+            "deprecated": false
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maxLength": 255,
+              "minLength": 1,
+              "pattern": "^[\\x21-\\x7e]+$",
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+            "required": false,
+            "deprecated": false
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false,
+            "deprecated": false
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IdentityVisibilityRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "": {
+                "schema": {
+                  "$ref": "#/components/schemas/LinkedIdentityDetail"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "WebSession": [],
+            "CsrfToken": []
+          }
+        ],
+        "x-squid-private-response": true,
+        "x-squid-cli": {
+          "classification": "browser-only"
+        }
+      }
+    },
+    "/v1/accounts/me/identities/{identity_id}": {
+      "delete": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "UnlinkIdentity",
+        "description": "Unlink one identity from the caller's account.\n\nRemoving the last identity returns 409 so the account retains a sign-in method.\nExisting creator credits remain attached to the account.",
+        "operationId": "account_identity_unlink",
+        "parameters": [
+          {
+            "name": "identity_id",
+            "in": "path",
+            "schema": {
+              "type": "integer"
+            },
+            "required": true,
+            "deprecated": false
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maxLength": 255,
+              "minLength": 1,
+              "pattern": "^[\\x21-\\x7e]+$",
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+            "required": false,
+            "deprecated": false
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false,
+            "deprecated": false
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Request fulfilled, nothing follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "null"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "WebSession": [],
+            "CsrfToken": []
+          },
+          {
+            "DeviceSession": []
+          }
+        ],
+        "x-squid-private-response": true,
+        "x-squid-cli": {
+          "classification": "command",
+          "command": "account.identity.unlink",
+          "required_api_features": [],
+          "interaction": "direct"
+        }
+      }
+    },
+    "/v1/accounts/me/merge-code": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "CreateMergeCode",
+        "description": "Create a code allowing another account to absorb this account.\n\nCreate the code while signed in to the account being given up, then redeem it\nas the account being kept. Completing the merge permanently redirects the old\ncreator ID. The code is shown on creation and replaces any previous code.",
+        "operationId": "account_merge_code_create",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maxLength": 255,
+              "minLength": 1,
+              "pattern": "^[\\x21-\\x7e]+$",
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+            "required": false,
+            "deprecated": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MergeCodeDetail"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "WebSession": [],
+            "CsrfToken": []
+          },
+          {
+            "DeviceSession": []
+          }
+        ],
+        "x-squid-private-response": true,
+        "x-squid-cli": {
+          "classification": "command",
+          "command": "account.merge.code",
+          "required_api_features": [],
+          "interaction": "direct"
+        }
+      }
+    },
+    "/v1/accounts/me/merge/preview": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "PreviewMerge",
+        "description": "Describe what redeeming a merge code would move, without spending it.\n\nA merge cannot be undone, so this exists to be shown before the irreversible call.",
+        "operationId": "account_merge_preview",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maxLength": 255,
+              "minLength": 1,
+              "pattern": "^[\\x21-\\x7e]+$",
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+            "required": false,
+            "deprecated": false
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MergeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MergePreviewDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "WebSession": [],
+            "CsrfToken": []
+          },
+          {
+            "DeviceSession": []
+          }
+        ],
+        "x-squid-private-response": true,
+        "x-squid-cli": {
+          "classification": "command",
+          "command": "account.merge.preview",
+          "required_api_features": [],
+          "interaction": "direct"
+        }
+      }
+    },
+    "/v1/accounts/me/merge": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "CompleteMerge",
+        "description": "Absorb the account that minted this code into the caller's account.\n\nIrreversible: the absorbed account's creator id becomes a permanent redirect to the caller's.",
+        "operationId": "account_merge_complete",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maxLength": 255,
+              "minLength": 1,
+              "pattern": "^[\\x21-\\x7e]+$",
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+            "required": false,
+            "deprecated": false
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MergeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountMergeDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "WebSession": [],
+            "CsrfToken": []
+          },
+          {
+            "DeviceSession": []
+          }
+        ],
+        "x-squid-private-response": true,
+        "x-squid-cli": {
+          "classification": "command",
+          "command": "account.merge.complete",
+          "required_api_features": [],
+          "interaction": "direct"
+        }
+      }
+    },
+    "/v1/accounts/me/minecraft/refresh": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "RefreshMinecraftIdentity",
+        "description": "Re-read the caller's linked Minecraft name and reconcile the creator credit.\n\nRate limited and idempotency-gated because it reaches Mojang on every call.",
+        "operationId": "account_minecraft_refresh",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maxLength": 255,
+              "minLength": 1,
+              "pattern": "^[\\x21-\\x7e]+$",
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+            "required": false,
+            "deprecated": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MinecraftIdentityRefresh"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {}
+        ],
+        "x-squid-private-response": true,
+        "x-squid-cli": {
+          "classification": "command",
+          "command": "account.refresh",
+          "required_api_features": [],
+          "interaction": "direct"
+        }
+      }
+    },
+    "/v1/accounts/{account_id}": {
+      "get": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "GetPublicAccount",
+        "description": "Return an account's public profile, following account-merge redirects.\n\nThe account service applies profile and identity visibility before this route\nserializes the result. Your own ID returns the same public view; `/accounts/me` is the private one.",
+        "operationId": "account_public_get",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "deprecated": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicAccountDetail"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {},
+          {
+            "WebSession": []
+          }
+        ],
+        "x-squid-private-response": true,
+        "x-squid-cli": {
+          "classification": "transport-only"
+        }
+      }
+    },
+    "/v1/accounts/{account_id}/minecraft/refresh": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "RefreshMinecraftIdentityFor",
+        "description": "Re-read another account's linked Minecraft name, for staff resolving a stale credit.",
+        "operationId": "account_minecraft_refresh_for",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "deprecated": false
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maxLength": 255,
+              "minLength": 1,
+              "pattern": "^[\\x21-\\x7e]+$",
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+            "required": false,
+            "deprecated": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MinecraftIdentityRefresh"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "WebSession": [],
+            "CsrfToken": []
+          }
+        ],
+        "x-squid-private-response": true,
+        "x-squid-cli": {
+          "classification": "browser-only"
+        }
+      }
+    },
+    "/v1/accounts/{account_id}/profile": {
+      "get": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "ReviewProfile",
+        "description": "Read a profile and its revision for staff moderation.",
+        "operationId": "account_profile_review",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "deprecated": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileDetail"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Entity",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "WebSession": []
+          }
+        ],
+        "x-squid-private-response": true,
+        "x-squid-cli": {
+          "classification": "browser-only"
+        }
+      },
+      "delete": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "ClearProfile",
+        "description": "Clear profile content at the revision staff reviewed, retaining moderation attribution.",
+        "operationId": "account_profile_clear",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true,
+            "deprecated": false
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maxLength": 255,
+              "minLength": 1,
+              "pattern": "^[\\x21-\\x7e]+$",
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+            "required": false,
+            "deprecated": false
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false,
+            "deprecated": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileDetail"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "428": {
+            "description": "Precondition Required",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "WebSession": [],
+            "CsrfToken": []
+          }
+        ],
+        "x-squid-private-response": true,
+        "x-squid-cli": {
+          "classification": "browser-only"
+        }
       }
     },
     "/v1/auth/providers": {
@@ -3740,7 +6087,7 @@
     "/v1/consent/notice": {
       "get": {
         "tags": [
-          "users"
+          "accounts"
         ],
         "summary": "GetNotice",
         "description": "Return the privacy notice in the negotiated language.\n\nClients should display this text and submit its version when recording consent.\nThe API and Discord use the same notice text and version.",
@@ -4245,2243 +6592,6 @@
         "x-required-api-scopes": [
           "diagnostics.error.read"
         ]
-      }
-    },
-    "/v1/users/me": {
-      "get": {
-        "tags": [
-          "users"
-        ],
-        "summary": "GetMe",
-        "description": "Return the caller's account, linked identities, and profile.\n\nAn account ID is required; the caller does not need a Discord identity.",
-        "operationId": "account_get",
-        "responses": {
-          "200": {
-            "description": "Request fulfilled, document follows",
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UserMe"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Too Many Requests",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          }
-        },
-        "deprecated": false,
-        "security": [
-          {
-            "WebSession": []
-          }
-        ],
-        "x-squid-private-response": true,
-        "x-squid-cli": {
-          "classification": "browser-only"
-        }
-      }
-    },
-    "/v1/users/me/consent": {
-      "post": {
-        "tags": [
-          "users"
-        ],
-        "summary": "GrantConsent",
-        "description": "Accept the current privacy notice for future writes.\n\nIf a notice version is supplied, it must match the current version. This lets\nclients detect that the displayed notice has become outdated.",
-        "operationId": "account_consent_grant",
-        "parameters": [
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "schema": {
-              "oneOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "maxLength": 255,
-              "minLength": 1,
-              "pattern": "^[\\x21-\\x7e]+$",
-              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
-            },
-            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
-            "required": false,
-            "deprecated": false
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "oneOf": [
-                  {
-                    "$ref": "#/components/schemas/ConsentGrantRequest"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Request fulfilled, document follows",
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/UserMe"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Too Many Requests",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Entity",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          }
-        },
-        "deprecated": false,
-        "security": [
-          {
-            "WebSession": [],
-            "CsrfToken": []
-          }
-        ],
-        "x-squid-private-response": true,
-        "x-squid-cli": {
-          "classification": "browser-only"
-        }
-      }
-    },
-    "/v1/users/me/profile": {
-      "patch": {
-        "tags": [
-          "users"
-        ],
-        "summary": "UpdateProfile",
-        "description": "Edit the caller's own public profile.\n\nPartial: an omitted field is left alone and an explicit `null` clears it, so a client that\nonly knows about some fields cannot wipe the ones it has never heard of.",
-        "operationId": "account_profile_update",
-        "parameters": [
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "schema": {
-              "oneOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "maxLength": 255,
-              "minLength": 1,
-              "pattern": "^[\\x21-\\x7e]+$",
-              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
-            },
-            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
-            "required": false,
-            "deprecated": false
-          },
-          {
-            "name": "If-Match",
-            "in": "header",
-            "schema": {
-              "oneOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "required": false,
-            "deprecated": false
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ProfileUpdateRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Request fulfilled, document follows",
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProfileDetail"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "429": {
-            "description": "Too Many Requests",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "412": {
-            "description": "Precondition Failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          }
-        },
-        "deprecated": false,
-        "security": [
-          {
-            "WebSession": [],
-            "CsrfToken": []
-          }
-        ],
-        "x-squid-private-response": true,
-        "x-squid-cli": {
-          "classification": "browser-only"
-        }
-      }
-    },
-    "/v1/users/me/identities": {
-      "get": {
-        "tags": [
-          "users"
-        ],
-        "summary": "ListIdentities",
-        "description": "List every identity linked to the caller's account, hidden ones included.\n\nUnfiltered by visibility on purpose: you can only unhide what you can see listed.",
-        "operationId": "account_identity_list",
-        "responses": {
-          "200": {
-            "description": "Request fulfilled, document follows",
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/LinkedIdentityDetail"
-                  },
-                  "type": "array"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Too Many Requests",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          }
-        },
-        "deprecated": false,
-        "security": [
-          {
-            "WebSession": []
-          }
-        ],
-        "x-squid-private-response": true,
-        "x-squid-cli": {
-          "classification": "browser-only"
-        }
-      }
-    },
-    "/v1/users/me/identities/{identity_id}/visibility": {
-      "put": {
-        "tags": [
-          "users"
-        ],
-        "summary": "SetIdentityVisibility",
-        "description": "Publish or withhold one linked identity on the public creator profile.",
-        "operationId": "account_identity_visibility_set",
-        "parameters": [
-          {
-            "name": "identity_id",
-            "in": "path",
-            "schema": {
-              "type": "integer"
-            },
-            "required": true,
-            "deprecated": false
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "schema": {
-              "oneOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "maxLength": 255,
-              "minLength": 1,
-              "pattern": "^[\\x21-\\x7e]+$",
-              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
-            },
-            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
-            "required": false,
-            "deprecated": false
-          },
-          {
-            "name": "If-Match",
-            "in": "header",
-            "schema": {
-              "oneOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "required": false,
-            "deprecated": false
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/IdentityVisibilityRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Request fulfilled, document follows",
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            },
-            "content": {
-              "": {
-                "schema": {
-                  "$ref": "#/components/schemas/LinkedIdentityDetail"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Too Many Requests",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "412": {
-            "description": "Precondition Failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          }
-        },
-        "deprecated": false,
-        "security": [
-          {
-            "WebSession": [],
-            "CsrfToken": []
-          }
-        ],
-        "x-squid-private-response": true,
-        "x-squid-cli": {
-          "classification": "browser-only"
-        }
-      }
-    },
-    "/v1/users/me/identities/{identity_id}": {
-      "delete": {
-        "tags": [
-          "users"
-        ],
-        "summary": "UnlinkIdentity",
-        "description": "Unlink one identity from the caller's account.\n\nRemoving the last identity returns 409 so the account retains a sign-in method.\nExisting creator credits remain attached to the account.",
-        "operationId": "account_identity_unlink",
-        "parameters": [
-          {
-            "name": "identity_id",
-            "in": "path",
-            "schema": {
-              "type": "integer"
-            },
-            "required": true,
-            "deprecated": false
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "schema": {
-              "oneOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "maxLength": 255,
-              "minLength": 1,
-              "pattern": "^[\\x21-\\x7e]+$",
-              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
-            },
-            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
-            "required": false,
-            "deprecated": false
-          },
-          {
-            "name": "If-Match",
-            "in": "header",
-            "schema": {
-              "oneOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "required": false,
-            "deprecated": false
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Request fulfilled, nothing follows",
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "null"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Too Many Requests",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "412": {
-            "description": "Precondition Failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          }
-        },
-        "deprecated": false,
-        "security": [
-          {
-            "WebSession": [],
-            "CsrfToken": []
-          },
-          {
-            "DeviceSession": []
-          }
-        ],
-        "x-squid-private-response": true,
-        "x-squid-cli": {
-          "classification": "command",
-          "command": "account.identity.unlink",
-          "required_api_features": [],
-          "interaction": "direct"
-        }
-      }
-    },
-    "/v1/users/me/merge-code": {
-      "post": {
-        "tags": [
-          "users"
-        ],
-        "summary": "CreateMergeCode",
-        "description": "Create a code allowing another account to absorb this account.\n\nCreate the code while signed in to the account being given up, then redeem it\nas the account being kept. Completing the merge permanently redirects the old\ncreator ID. The code is shown on creation and replaces any previous code.",
-        "operationId": "account_merge_code_create",
-        "parameters": [
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "schema": {
-              "oneOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "maxLength": 255,
-              "minLength": 1,
-              "pattern": "^[\\x21-\\x7e]+$",
-              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
-            },
-            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
-            "required": false,
-            "deprecated": false
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Request fulfilled, document follows",
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MergeCodeDetail"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Too Many Requests",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Entity",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          }
-        },
-        "deprecated": false,
-        "security": [
-          {
-            "WebSession": [],
-            "CsrfToken": []
-          },
-          {
-            "DeviceSession": []
-          }
-        ],
-        "x-squid-private-response": true,
-        "x-squid-cli": {
-          "classification": "command",
-          "command": "account.merge.code",
-          "required_api_features": [],
-          "interaction": "direct"
-        }
-      }
-    },
-    "/v1/users/me/merge/preview": {
-      "post": {
-        "tags": [
-          "users"
-        ],
-        "summary": "PreviewMerge",
-        "description": "Describe what redeeming a merge code would move, without spending it.\n\nA merge cannot be undone, so this exists to be shown before the irreversible call.",
-        "operationId": "account_merge_preview",
-        "parameters": [
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "schema": {
-              "oneOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "maxLength": 255,
-              "minLength": 1,
-              "pattern": "^[\\x21-\\x7e]+$",
-              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
-            },
-            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
-            "required": false,
-            "deprecated": false
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/MergeRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Request fulfilled, document follows",
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MergePreviewDetail"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "429": {
-            "description": "Too Many Requests",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          }
-        },
-        "deprecated": false,
-        "security": [
-          {
-            "WebSession": [],
-            "CsrfToken": []
-          },
-          {
-            "DeviceSession": []
-          }
-        ],
-        "x-squid-private-response": true,
-        "x-squid-cli": {
-          "classification": "command",
-          "command": "account.merge.preview",
-          "required_api_features": [],
-          "interaction": "direct"
-        }
-      }
-    },
-    "/v1/users/me/merge": {
-      "post": {
-        "tags": [
-          "users"
-        ],
-        "summary": "CompleteMerge",
-        "description": "Absorb the account that minted this code into the caller's account.\n\nIrreversible: the absorbed account's creator id becomes a permanent redirect to the caller's.",
-        "operationId": "account_merge_complete",
-        "parameters": [
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "schema": {
-              "oneOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "maxLength": 255,
-              "minLength": 1,
-              "pattern": "^[\\x21-\\x7e]+$",
-              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
-            },
-            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
-            "required": false,
-            "deprecated": false
-          }
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/MergeRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Request fulfilled, document follows",
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/AccountMergeDetail"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "429": {
-            "description": "Too Many Requests",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          }
-        },
-        "deprecated": false,
-        "security": [
-          {
-            "WebSession": [],
-            "CsrfToken": []
-          },
-          {
-            "DeviceSession": []
-          }
-        ],
-        "x-squid-private-response": true,
-        "x-squid-cli": {
-          "classification": "command",
-          "command": "account.merge.complete",
-          "required_api_features": [],
-          "interaction": "direct"
-        }
-      }
-    },
-    "/v1/users/me/minecraft/refresh": {
-      "post": {
-        "tags": [
-          "users"
-        ],
-        "summary": "RefreshMinecraftIdentity",
-        "description": "Re-read the caller's linked Minecraft name and reconcile the creator credit.\n\nRate limited and idempotency-gated because it reaches Mojang on every call.",
-        "operationId": "account_minecraft_refresh",
-        "parameters": [
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "schema": {
-              "oneOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "maxLength": 255,
-              "minLength": 1,
-              "pattern": "^[\\x21-\\x7e]+$",
-              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
-            },
-            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
-            "required": false,
-            "deprecated": false
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Request fulfilled, document follows",
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MinecraftIdentityRefresh"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Too Many Requests",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Entity",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          }
-        },
-        "deprecated": false,
-        "security": [
-          {}
-        ],
-        "x-squid-private-response": true,
-        "x-squid-cli": {
-          "classification": "command",
-          "command": "account.refresh",
-          "required_api_features": [],
-          "interaction": "direct"
-        }
-      }
-    },
-    "/v1/accounts/{account_id}/minecraft/refresh": {
-      "post": {
-        "tags": [
-          "users"
-        ],
-        "summary": "RefreshMinecraftIdentityFor",
-        "description": "Re-read another account's linked Minecraft name, for staff resolving a stale credit.",
-        "operationId": "account_minecraft_refresh_for",
-        "parameters": [
-          {
-            "name": "account_id",
-            "in": "path",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "required": true,
-            "deprecated": false
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "schema": {
-              "oneOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "maxLength": 255,
-              "minLength": 1,
-              "pattern": "^[\\x21-\\x7e]+$",
-              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
-            },
-            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
-            "required": false,
-            "deprecated": false
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Request fulfilled, document follows",
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/MinecraftIdentityRefresh"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Too Many Requests",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Entity",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          }
-        },
-        "deprecated": false,
-        "security": [
-          {
-            "WebSession": [],
-            "CsrfToken": []
-          }
-        ],
-        "x-squid-private-response": true,
-        "x-squid-cli": {
-          "classification": "browser-only"
-        }
-      }
-    },
-    "/v1/accounts/{account_id}/profile": {
-      "get": {
-        "tags": [
-          "users"
-        ],
-        "summary": "ReviewProfile",
-        "description": "Read a profile and its revision for staff moderation.",
-        "operationId": "account_profile_review",
-        "parameters": [
-          {
-            "name": "account_id",
-            "in": "path",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "required": true,
-            "deprecated": false
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Request fulfilled, document follows",
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProfileDetail"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Too Many Requests",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Entity",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          }
-        },
-        "deprecated": false,
-        "security": [
-          {
-            "WebSession": []
-          }
-        ],
-        "x-squid-private-response": true,
-        "x-squid-cli": {
-          "classification": "browser-only"
-        }
-      },
-      "delete": {
-        "tags": [
-          "users"
-        ],
-        "summary": "ClearProfile",
-        "description": "Clear profile content at the revision staff reviewed, retaining moderation attribution.",
-        "operationId": "account_profile_clear",
-        "parameters": [
-          {
-            "name": "account_id",
-            "in": "path",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "required": true,
-            "deprecated": false
-          },
-          {
-            "name": "Idempotency-Key",
-            "in": "header",
-            "schema": {
-              "oneOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "maxLength": 255,
-              "minLength": 1,
-              "pattern": "^[\\x21-\\x7e]+$",
-              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
-            },
-            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
-            "required": false,
-            "deprecated": false
-          },
-          {
-            "name": "If-Match",
-            "in": "header",
-            "schema": {
-              "oneOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "required": false,
-            "deprecated": false
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Request fulfilled, document follows",
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProfileDetail"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Too Many Requests",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "412": {
-            "description": "Precondition Failed",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "428": {
-            "description": "Precondition Required",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          }
-        },
-        "deprecated": false,
-        "security": [
-          {
-            "WebSession": [],
-            "CsrfToken": []
-          }
-        ],
-        "x-squid-private-response": true,
-        "x-squid-cli": {
-          "classification": "browser-only"
-        }
       }
     },
     "/v1/minecraft/auth/paper/installations": {
@@ -8311,7 +8421,7 @@
         }
       }
     },
-    "/v1/users/me/notifications/preferences": {
+    "/v1/accounts/me/notifications/preferences": {
       "get": {
         "tags": [
           "notifications"
@@ -8596,7 +8706,7 @@
         }
       }
     },
-    "/v1/users/me/notifications/subscriptions": {
+    "/v1/accounts/me/notifications/subscriptions": {
       "get": {
         "tags": [
           "notifications"
@@ -8972,7 +9082,7 @@
         }
       }
     },
-    "/v1/users/me/notifications/subscriptions/{subscription_id}": {
+    "/v1/accounts/me/notifications/subscriptions/{subscription_id}": {
       "delete": {
         "tags": [
           "notifications"
@@ -9177,7 +9287,7 @@
         }
       }
     },
-    "/v1/users/me/notifications/inbox": {
+    "/v1/accounts/me/notifications/inbox": {
       "get": {
         "tags": [
           "notifications"
@@ -9398,7 +9508,7 @@
         }
       }
     },
-    "/v1/users/me/notifications/inbox/read-all": {
+    "/v1/accounts/me/notifications/inbox/read-all": {
       "post": {
         "tags": [
           "notifications"
@@ -9599,7 +9709,7 @@
         }
       }
     },
-    "/v1/users/me/notifications/inbox/{notification_id}/read": {
+    "/v1/accounts/me/notifications/inbox/{notification_id}/read": {
       "post": {
         "tags": [
           "notifications"
@@ -9804,7 +9914,7 @@
         }
       }
     },
-    "/v1/users/me/notifications/inbox/{notification_id}/unread": {
+    "/v1/accounts/me/notifications/inbox/{notification_id}/unread": {
       "post": {
         "tags": [
           "notifications"
@@ -19606,122 +19716,6 @@
         }
       }
     },
-    "/v1/creators/{creator_id}": {
-      "get": {
-        "tags": [
-          "creators"
-        ],
-        "summary": "GetCreatorProfile",
-        "description": "Return a creator's public profile, following account-merge redirects.\n\nThe account service applies profile and identity visibility before this route\nserializes the result.",
-        "operationId": "creator_profile_get",
-        "parameters": [
-          {
-            "name": "creator_id",
-            "in": "path",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "required": true,
-            "deprecated": false
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Request fulfilled, document follows",
-            "headers": {
-              "Cache-Control": {
-                "schema": {
-                  "type": "string"
-                },
-                "required": false,
-                "deprecated": false
-              },
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CreatorProfileDetail"
-                }
-              }
-            }
-          },
-          "429": {
-            "description": "Too Many Requests",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "404": {
-            "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          }
-        },
-        "deprecated": false,
-        "security": [
-          {},
-          {
-            "WebSession": []
-          }
-        ],
-        "x-squid-cli": {
-          "classification": "transport-only"
-        }
-      }
-    },
     "/v1/versions": {
       "get": {
         "tags": [
@@ -20411,6 +20405,65 @@
         ],
         "title": "AboveMaximumParams",
         "type": "object"
+      },
+      "AccountDetail": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "creator_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "created_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "consent_version": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "consent_pending": {
+            "type": "boolean"
+          },
+          "identities": {
+            "items": {
+              "$ref": "#/components/schemas/IdentityDetail"
+            },
+            "type": "array"
+          },
+          "profile": {
+            "$ref": "#/components/schemas/ProfileDetail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "consent_pending",
+          "consent_version",
+          "created_at",
+          "creator_id",
+          "id",
+          "identities",
+          "profile",
+          "revision"
+        ],
+        "title": "AccountDetail"
       },
       "AccountMergeDetail": {
         "properties": {
@@ -22156,116 +22209,6 @@
         ],
         "title": "CreatorBuildNotification"
       },
-      "CreatorProfileDetail": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "hidden": {
-            "type": "boolean"
-          },
-          "aliases": {
-            "items": {
-              "$ref": "#/components/schemas/CreditedAlias"
-            },
-            "type": "array",
-            "default": []
-          },
-          "canonical_id": {
-            "oneOf": [
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "display_name": {
-            "oneOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "bio": {
-            "oneOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "pronouns": {
-            "oneOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "links": {
-            "items": {
-              "$ref": "#/components/schemas/ProfileLink"
-            },
-            "type": "array",
-            "default": []
-          },
-          "avatar_url": {
-            "oneOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "joined_at": {
-            "oneOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "identities": {
-            "items": {
-              "$ref": "#/components/schemas/IdentityDetails"
-            },
-            "type": "array",
-            "default": []
-          },
-          "viewer": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/CreatorViewer"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "type": "object",
-        "required": [
-          "hidden",
-          "id"
-        ],
-        "title": "CreatorProfileDetail"
-      },
       "CreatorViewer": {
         "properties": {
           "subscription_id": {
@@ -23617,7 +23560,6 @@
           "BUILD_REVISION_REQUIRED",
           "CLAIM_NOT_FOUND",
           "CREATOR_ALIAS_NOT_FOUND",
-          "CREATOR_NOT_FOUND",
           "CONFIGURATION_ERROR",
           "CONSENT_REQUIRED",
           "CONSENT_VERSION_STALE",
@@ -26826,6 +26768,116 @@
           "minimum"
         ],
         "title": "ProtocolInterval"
+      },
+      "PublicAccountDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "hidden": {
+            "type": "boolean"
+          },
+          "aliases": {
+            "items": {
+              "$ref": "#/components/schemas/CreditedAlias"
+            },
+            "type": "array",
+            "default": []
+          },
+          "canonical_id": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "display_name": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "bio": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pronouns": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "links": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileLink"
+            },
+            "type": "array",
+            "default": []
+          },
+          "avatar_url": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "joined_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "identities": {
+            "items": {
+              "$ref": "#/components/schemas/IdentityDetails"
+            },
+            "type": "array",
+            "default": []
+          },
+          "viewer": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CreatorViewer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "hidden",
+          "id"
+        ],
+        "title": "PublicAccountDetail"
       },
       "PublicBuildCreator": {
         "properties": {
@@ -31182,65 +31234,6 @@
         ],
         "title": "User"
       },
-      "UserMe": {
-        "properties": {
-          "id": {
-            "type": "integer"
-          },
-          "revision": {
-            "type": "integer"
-          },
-          "creator_id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "created_at": {
-            "oneOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "consent_version": {
-            "oneOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "consent_pending": {
-            "type": "boolean"
-          },
-          "identities": {
-            "items": {
-              "$ref": "#/components/schemas/IdentityDetail"
-            },
-            "type": "array"
-          },
-          "profile": {
-            "$ref": "#/components/schemas/ProfileDetail"
-          }
-        },
-        "type": "object",
-        "required": [
-          "consent_pending",
-          "consent_version",
-          "created_at",
-          "creator_id",
-          "id",
-          "identities",
-          "profile",
-          "revision"
-        ],
-        "title": "UserMe"
-      },
       "ValidationContext": {
         "additionalProperties": true,
         "properties": {
@@ -32084,8 +32077,8 @@
       "description": "Browser-approved CLI devices and short-lived sessions."
     },
     {
-      "name": "users",
-      "description": "Authenticated self-service account operations."
+      "name": "accounts",
+      "description": "Your own account, public account profiles, and staff moderation."
     },
     {
       "name": "notifications",
@@ -32125,7 +32118,7 @@
     },
     {
       "name": "creators",
-      "description": "Public creator profiles and credits."
+      "description": "Creator names credited on builds."
     },
     {
       "name": "schematics",

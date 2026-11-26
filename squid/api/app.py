@@ -117,7 +117,7 @@ class User(BaseModel):
     guards=[requires(ACCOUNT_VERIFY_RELAY)],
     before_request=reserve_idempotent_before_request,
     operation_id="verification_create",
-    tags=["users"],
+    tags=["accounts"],
     security=[SERVICE, WEB_WRITE, DEVICE],
     opt=contract(cli=transport_only(), scopes=("account.verify.relay",)),
 )

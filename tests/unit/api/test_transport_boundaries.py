@@ -101,7 +101,7 @@ async def test_private_paths_are_no_store_on_success_and_errors() -> None:
     async def private_draft(draft_id: UUID) -> dict[str, str]:
         return {"id": str(draft_id)}
 
-    @get("/v1/users/me/failure", opt={"x-squid-private-response": True})
+    @get("/v1/accounts/me/failure", opt={"x-squid-private-response": True})
     async def private_failure() -> None:
         raise HTTPException(status_code=404)
 
@@ -116,7 +116,7 @@ async def test_private_paths_are_no_store_on_success_and_errors() -> None:
     # Litestar and httpx describe the same ASGI callable with different scope types.
     async with AsyncClient(transport=ASGITransport(app=app), base_url="https://api.test") as client:  # type: ignore[bad-argument-type]
         private_response = await client.get(f"/v1/submissions/drafts/{_DRAFT_ID}")
-        error_response = await client.get("/v1/users/me/failure")
+        error_response = await client.get("/v1/accounts/me/failure")
         public_response = await client.get("/v1/builds/1")
 
     for response in (private_response, error_response):
