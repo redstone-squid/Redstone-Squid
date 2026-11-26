@@ -33,8 +33,8 @@ const builds = [
     category: "Door",
     dimensions: { width: 9, height: 7, depth: 4 },
     creators: [
-      { name: "CircuitSage", creator_id: null },
-      { name: "红石猫", creator_id: null },
+      { name: "CircuitSage", account_id: null },
+      { name: "红石猫", account_id: null },
     ],
     tags: [
       { key: "official_seamless", name: "Seamless", value: null, unit: null },
@@ -56,7 +56,7 @@ const builds = [
     status: "approved",
     category: "Entrance",
     dimensions: { width: 12, height: 12, depth: 5 },
-    creators: [{ name: "Space Builder", creator_id: null }],
+    creators: [{ name: "Space Builder", account_id: null }],
     tags: [],
     preview: { kind: "image", url: "https://media.fixture.invalid/broken.png" },
     version_spec: null,
@@ -74,7 +74,7 @@ const builds = [
     status: "approved",
     category: "Extender",
     dimensions: { width: 3, height: 5, depth: 8 },
-    creators: [{ name: "CircuitSage", creator_id: null }],
+    creators: [{ name: "CircuitSage", account_id: null }],
     tags: [],
     preview: null,
     version_spec: null,

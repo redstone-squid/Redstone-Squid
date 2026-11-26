@@ -337,7 +337,7 @@ export type BuildViewer = {
     can_edit: boolean;
     can_review: boolean;
     can_download_private_schematics: boolean;
-    followed_creator_subscription_ids: {
+    followed_account_subscription_ids: {
         [key: string]: number;
     };
     ballot: ViewerBallot | null;
@@ -524,7 +524,7 @@ export type CreatorAliasDetail = {
     id: number;
     name: string;
     claimed: boolean;
-    creator_id: string | null;
+    account_id: string | null;
 };
 
 /**
@@ -533,7 +533,7 @@ export type CreatorAliasDetail = {
 export type CreatorBuildNotification = {
     kind: 'creator_build_confirmed';
     build: NotifiedBuildDetail;
-    creator_ids: Array<string>;
+    account_ids: Array<string>;
 };
 
 /**
@@ -556,7 +556,7 @@ export type Credit = {
     role?: CreditRole;
     attribution?: CreditAttribution;
     source_message_id?: number | null;
-    creator_id?: string | null;
+    account_id?: string | null;
 };
 
 /**
@@ -1234,7 +1234,7 @@ export type GeneralDetails = {
  */
 export type HistoryActor = {
     display_name: string | null;
-    creator_id: string;
+    account_id: string;
 };
 
 /**
@@ -1887,7 +1887,7 @@ export type PublicAccountDetail = {
  */
 export type PublicBuildCreator = {
     name: string;
-    creator_id: string | null;
+    account_id: string | null;
 };
 
 /**
@@ -1899,7 +1899,7 @@ export type PublicBuildCredit = {
     username: string | null;
     role: CreditRole;
     attribution: CreditAttribution;
-    creator_id: string | null;
+    account_id: string | null;
 };
 
 /**

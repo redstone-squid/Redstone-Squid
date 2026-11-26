@@ -111,7 +111,7 @@ class BuildHistoryDetail(BuildHistorySummary):
 @dataclass(frozen=True, slots=True)
 class HistoryActor:
     display_name: str | None
-    creator_id: UUID
+    account_id: UUID
 
 
 @dataclass(frozen=True, slots=True)

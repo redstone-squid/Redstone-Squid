@@ -51,7 +51,8 @@ class Credit:
     role: CreditRole = CreditRole.CREATOR
     attribution: CreditAttribution = CreditAttribution.EXPLICIT
     source_message_id: int | None = None
-    creator_id: UUID | None = field(default=None, compare=False)
+    account_id: UUID | None = field(default=None, compare=False)
+    """The public ID of the account the credit resolves to, filled on load."""
 
     def __post_init__(self) -> None:
         name = self.name.strip()

@@ -323,7 +323,7 @@ def test_creator_alias_never_exposes_linked_account(
         "id": 7,
         "name": "Builder",
         "claimed": True,
-        "creator_id": "22222222-2222-2222-2222-222222222222",
+        "account_id": "22222222-2222-2222-2222-222222222222",
     }
     assert "user_id" not in response.text
 

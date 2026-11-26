@@ -267,7 +267,7 @@ async def list_builds(
             version_id,
             tag_ids=tuple(dict.fromkeys(tag_id or ())),
             tag_slugs=tuple(dict.fromkeys(tag_slug or ())),
-            creator_id=account_id,
+            public_account_id=account_id,
         ),
         sort=sort,
         selector=resolve_selector(offset=offset, after_id=after_id, before_id=before_id),

@@ -190,7 +190,7 @@ async def test_record_detail_serializes_the_application_read_model(expanded: boo
                 "status": "approved",
                 "category": "Door",
                 "dimensions": {"width": 5, "height": 6, "depth": None},
-                "creators": [{"name": "Alice", "creator_id": None}],
+                "creators": [{"name": "Alice", "account_id": None}],
                 "record_summary": {"held_count": 0, "former_count": 0},
                 "credits": [],
                 "subtitle": None,

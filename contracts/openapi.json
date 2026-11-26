@@ -22231,7 +22231,7 @@
           "can_download_private_schematics": {
             "type": "boolean"
           },
-          "followed_creator_subscription_ids": {
+          "followed_account_subscription_ids": {
             "additionalProperties": {
               "type": "integer"
             },
@@ -22254,7 +22254,7 @@
           "can_download_private_schematics",
           "can_edit",
           "can_review",
-          "followed_creator_subscription_ids"
+          "followed_account_subscription_ids"
         ],
         "title": "BuildViewer"
       },
@@ -22739,7 +22739,7 @@
           "claimed": {
             "type": "boolean"
           },
-          "creator_id": {
+          "account_id": {
             "oneOf": [
               {
                 "type": "string",
@@ -22753,8 +22753,8 @@
         },
         "type": "object",
         "required": [
+          "account_id",
           "claimed",
-          "creator_id",
           "id",
           "name"
         ],
@@ -22769,7 +22769,7 @@
           "build": {
             "$ref": "#/components/schemas/NotifiedBuildDetail"
           },
-          "creator_ids": {
+          "account_ids": {
             "items": {
               "type": "string",
               "format": "uuid"
@@ -22779,8 +22779,8 @@
         },
         "type": "object",
         "required": [
+          "account_ids",
           "build",
-          "creator_ids",
           "kind"
         ],
         "title": "CreatorBuildNotification"
@@ -22856,7 +22856,7 @@
               }
             ]
           },
-          "creator_id": {
+          "account_id": {
             "oneOf": [
               {
                 "type": "string",
@@ -25313,14 +25313,14 @@
               }
             ]
           },
-          "creator_id": {
+          "account_id": {
             "type": "string",
             "format": "uuid"
           }
         },
         "type": "object",
         "required": [
-          "creator_id",
+          "account_id",
           "display_name"
         ],
         "title": "HistoryActor"
@@ -27570,7 +27570,7 @@
           "name": {
             "type": "string"
           },
-          "creator_id": {
+          "account_id": {
             "oneOf": [
               {
                 "type": "string",
@@ -27584,7 +27584,7 @@
         },
         "type": "object",
         "required": [
-          "creator_id",
+          "account_id",
           "name"
         ],
         "title": "PublicBuildCreator"
@@ -27613,7 +27613,7 @@
           "attribution": {
             "$ref": "#/components/schemas/CreditAttribution"
           },
-          "creator_id": {
+          "account_id": {
             "oneOf": [
               {
                 "type": "string",
@@ -27627,8 +27627,8 @@
         },
         "type": "object",
         "required": [
+          "account_id",
           "attribution",
-          "creator_id",
           "kind",
           "name",
           "role",

@@ -118,13 +118,13 @@ async def test_creator_ids_follow_claims_and_identity_visibility(
     async with uow_factory() as uow:
         listed = await uow.builds.list_page(
             statuses=frozenset({BuildStatus.APPROVED}),
-            filters=BuildListFilters(creator_id=account.public_creator_id),
+            filters=BuildListFilters(public_account_id=account.public_creator_id),
             limit=10,
         )
         assert {build.id for build in listed} == {by_alias, by_java}
         summaries = await uow.builds.get_public_summaries([by_java, by_private_discord])
-        assert [summary.creators[0].creator_id for summary in summaries] == [account.public_creator_id, None]
-        assert [summary.credits[0].creator_id for summary in summaries] == [account.public_creator_id, None]
+        assert [summary.creators[0].account_id for summary in summaries] == [account.public_creator_id, None]
+        assert [summary.credits[0].account_id for summary in summaries] == [account.public_creator_id, None]
 
     async with migrated_session_factory.begin() as session:
         await session.execute(text("UPDATE account_identities SET is_public = true WHERE subject = '7'"))

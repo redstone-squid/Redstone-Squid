@@ -29,7 +29,7 @@ def filter_build_listing[S: Select[Any]](
             .where(BuildVersion.build_id == Build.id, BuildVersion.version_id == filters.version)
             .exists()
         )
-    if filters.creator_id is not None:
+    if filters.public_account_id is not None:
         linked = attributed_credits()
         identifiers = public_creator_ids()
         statement = statement.where(
@@ -41,7 +41,7 @@ def filter_build_listing[S: Select[Any]](
             )
             .where(
                 linked.c.build_id == Build.id,
-                identifiers.c.public_id == filters.creator_id,
+                identifiers.c.public_id == filters.public_account_id,
                 BuildCredit.role.in_(("creator", "designer")),
             )
             .exists()

@@ -83,7 +83,8 @@ class BuildRecordSummary:
 @dataclass(frozen=True, slots=True)
 class PublicBuildCreator:
     name: str
-    creator_id: UUID | None
+    account_id: UUID | None
+    """The public ID of the account credited under this name, if any."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -95,7 +96,7 @@ class PublicBuildCredit:
     username: str | None
     role: CreditRole
     attribution: CreditAttribution
-    creator_id: UUID | None
+    account_id: UUID | None
 
 
 class PublicBuildStatus(StrEnum):
@@ -158,7 +159,7 @@ class PublicBuildSummary:
             dimensions=PublicBuildDimensions(width=build.width, height=build.height, depth=build.depth),
             creators=tuple(
                 dict.fromkeys(
-                    PublicBuildCreator(credit.name, credit.creator_id)
+                    PublicBuildCreator(credit.name, credit.account_id)
                     for credit in build.credits
                     if credit.role in {CreditRole.CREATOR, CreditRole.DESIGNER}
                 )
@@ -166,7 +167,7 @@ class PublicBuildSummary:
             credits=tuple(
                 PublicBuildCredit(
                     name=credit.name,
-                    creator_id=credit.creator_id,
+                    account_id=credit.account_id,
                     kind=credit.kind,
                     username=credit.username,
                     role=credit.role,

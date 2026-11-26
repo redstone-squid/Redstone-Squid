@@ -134,8 +134,8 @@ class BuildListFilters:
     tag_ids: tuple[int, ...] = ()
     tag_slugs: tuple[str, ...] = ()
     """Current or former slugs."""
-    creator_id: uuid.UUID | None = None
-    """The public account ID of a credited creator or designer."""
+    public_account_id: uuid.UUID | None = None
+    """An account credited as creator or designer."""
 
 
 EMPTY_BUILD_FILTERS = BuildListFilters()

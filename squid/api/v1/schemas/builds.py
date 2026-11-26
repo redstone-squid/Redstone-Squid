@@ -142,7 +142,7 @@ class BuildViewer:
     can_edit: bool
     can_review: bool
     can_download_private_schematics: bool
-    followed_creator_subscription_ids: dict[UUID, int]
+    followed_account_subscription_ids: dict[UUID, int]
     ballot: ViewerBallot | None
 
 

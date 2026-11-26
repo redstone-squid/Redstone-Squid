@@ -176,8 +176,8 @@ class BuildLoader:
 
         credits: dict[int, list[Credit]] = {build_id: [] for build_id in build_ids}
         creator_accounts: dict[int, set[int]] = {build_id: set() for build_id in build_ids}
-        for row, linked_account, creator_id in await session.execute(BuildLoader.credit_rows(build_ids)):
-            credits[row.build_id].append(row.to_credit(creator_id))
+        for row, linked_account, public_account_id in await session.execute(BuildLoader.credit_rows(build_ids)):
+            credits[row.build_id].append(row.to_credit(public_account_id))
             if row.role is CreditRole.CREATOR and linked_account is not None:
                 creator_accounts[row.build_id].add(linked_account)
 

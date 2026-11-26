@@ -116,7 +116,7 @@ class BuildHistoryQueries:
         total = await session.scalar(select(func.count()).select_from(statement.subquery()))
         rows = await session.execute(statement.order_by(BuildHistoryEntry.id.desc()).limit(page_size).offset(offset))
         items: list[PublicBuildRevision] = []
-        for entry, old, new, creator_id, name in rows:
+        for entry, old, new, public_account_id, name in rows:
             previous = self.public_fields(old)
             current = self.public_fields(new)
             changes = tuple(
@@ -128,7 +128,7 @@ class BuildHistoryQueries:
                 PublicBuildRevision(
                     new.build_revision,
                     entry.recorded_at.to_stdlib(),
-                    HistoryActor(name, creator_id) if creator_id is not None else None,
+                    HistoryActor(name, public_account_id) if public_account_id is not None else None,
                     cast(HistoryOperation, entry.operation),
                     changes,
                 )

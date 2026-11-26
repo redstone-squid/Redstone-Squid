@@ -121,7 +121,7 @@ class BrowserViews:
                     can_edit=can_edit,
                     can_review=False,
                     can_download_private_schematics=BUILD_SCHEMATIC_DOWNLOAD_PRIVATE.name in allowed,
-                    followed_creator_subscription_ids=follows,
+                    followed_account_subscription_ids=follows,
                     ballot=ballot,
                 ),
             )

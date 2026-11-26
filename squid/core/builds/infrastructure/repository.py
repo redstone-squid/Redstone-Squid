@@ -278,8 +278,8 @@ class BuildRepository:
             return ()
 
         credits: dict[int, list[Credit]] = defaultdict(list)
-        for credit, _, creator_id in await session.execute(BuildLoader.credit_rows(public_ids)):
-            credits[credit.build_id].append(credit.to_credit(creator_id))
+        for credit, _, public_account_id in await session.execute(BuildLoader.credit_rows(public_ids)):
+            credits[credit.build_id].append(credit.to_credit(public_account_id))
 
         versions: dict[int, list[str]] = defaultdict(list)
         for build_id, edition, major, minor, patch in await session.execute(

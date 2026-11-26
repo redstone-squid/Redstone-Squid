@@ -15,9 +15,10 @@ class CreatorAliasDetail(BaseModel):
     id: int
     name: str
     claimed: bool
-    creator_id: UUID | None
+    account_id: UUID | None
+    """The public ID of the account holding this name, if claimed."""
 
     @classmethod
     def from_domain(cls, alias: CreatorAlias) -> CreatorAliasDetail:
         assert alias.id is not None
-        return cls(id=alias.id, name=alias.name, claimed=alias.is_claimed, creator_id=alias.public_creator_id)
+        return cls(id=alias.id, name=alias.name, claimed=alias.is_claimed, account_id=alias.public_creator_id)
