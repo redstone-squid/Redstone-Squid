@@ -13054,7 +13054,7 @@
           "search"
         ],
         "summary": "ListSearchFields",
-        "description": "Publish the effective allowlisted query-field registry.",
+        "description": "List the fields queries can use, labelled in the negotiated language.",
         "operationId": "search_fields_list",
         "responses": {
           "200": {
@@ -24319,6 +24319,21 @@
         ],
         "title": "FieldConstraintsResponse"
       },
+      "FieldGroup": {
+        "type": "string",
+        "enum": [
+          "text",
+          "classification",
+          "credit",
+          "size",
+          "timing",
+          "date",
+          "record",
+          "tag"
+        ],
+        "title": "FieldGroup",
+        "description": "The topic a field is listed under in field references and filter panels."
+      },
       "FieldMatch": {
         "properties": {
           "field": {
@@ -29504,31 +29519,122 @@
           "name": {
             "type": "string"
           },
-          "type": {
-            "$ref": "#/components/schemas/FieldType"
-          },
-          "supports_range": {
-            "type": "boolean",
-            "default": false
-          },
           "aliases": {
             "items": {
               "type": "string"
             },
+            "type": "array"
+          },
+          "type": {
+            "$ref": "#/components/schemas/FieldType"
+          },
+          "label": {
+            "type": "string"
+          },
+          "description": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "group": {
+            "$ref": "#/components/schemas/FieldGroup"
+          },
+          "unit": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The unit of a number written without a suffix, such as `gt`."
+          },
+          "scopes": {
+            "items": {
+              "$ref": "#/components/schemas/SearchScope"
+            },
             "type": "array",
-            "default": []
+            "description": "Catalogue tabs that can use the field. The all and metadata scopes accept every field."
+          },
+          "supports_range": {
+            "type": "boolean"
           },
           "supports_sort": {
+            "type": "boolean"
+          },
+          "metric": {
             "type": "boolean",
-            "default": false
+            "description": "A holder measurement that the records table shows as a column."
+          },
+          "choices": {
+            "oneOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SearchFieldChoice"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Every accepted value, or null for free-form fields."
+          },
+          "examples": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "description": "Complete queries that use the field."
           }
         },
         "type": "object",
         "required": [
+          "aliases",
+          "choices",
+          "description",
+          "examples",
+          "group",
+          "label",
+          "metric",
           "name",
-          "type"
+          "scopes",
+          "supports_range",
+          "supports_sort",
+          "type",
+          "unit"
         ],
         "title": "SearchField"
+      },
+      "SearchFieldChoice": {
+        "properties": {
+          "value": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "scopes": {
+            "items": {
+              "$ref": "#/components/schemas/SearchScope"
+            },
+            "type": "array",
+            "description": "Catalogue tabs that accept this value."
+          }
+        },
+        "type": "object",
+        "required": [
+          "label",
+          "scopes",
+          "value"
+        ],
+        "title": "SearchFieldChoice"
       },
       "SearchMatch": {
         "properties": {

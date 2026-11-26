@@ -4,9 +4,8 @@ import logging
 from collections.abc import Sequence
 from typing import Annotated
 
-from litestar import Router, get
+from litestar import Response, Router, get
 from litestar.di import Provide
-from litestar.dto import DataclassDTO, DTOConfig
 from litestar.params import QueryParameter
 
 from squid.api.contract import ANONYMOUS, contract, transport_only
@@ -19,6 +18,7 @@ from squid.api.v1.schemas.search import (
     MetadataSearchResult,
     RecordSearchEntry,
     RecordSearchResult,
+    SearchField,
     SearchResult,
     SearchSuggestions,
 )
@@ -26,7 +26,6 @@ from squid.core.actors import ActingContext
 from squid.core.builds.application import BuildQueryService, PublicBuildSummary
 from squid.core.builds.domain import BuildStatus
 from squid.core.errors import DataIntegrityError
-from squid.core.search.application.fields import FieldDefinition
 from squid.core.search.domain import SearchHit, SearchMode, SearchRequest, SearchScope, SearchSort
 
 logger = logging.getLogger(__name__)
@@ -36,28 +35,20 @@ logger = logging.getLogger(__name__)
 PUBLIC_SEARCH_STATUSES = frozenset({"approved"})
 
 
-class PublicSearchFieldDTO(DataclassDTO[FieldDefinition]):
-    """Describe supported search syntax without exposing storage keys or coercion settings."""
-
-    __schema_name__ = "SearchField"
-    config = DTOConfig(
-        include={"name", "value_type", "supports_range", "supports_sort", "aliases"},
-        rename_fields={"value_type": "type"},
-    )
-
-
 @get(
     "/fields",
     responses=responses(503),
     operation_id="search_fields_list",
-    return_dto=PublicSearchFieldDTO,
     security=[ANONYMOUS],
     opt=contract(cli=transport_only()),
 )
-async def list_search_fields(search_service: Search) -> tuple[FieldDefinition, ...]:
-    """Publish the effective allowlisted query-field registry."""
+async def list_search_fields(search_service: Search) -> Response[list[SearchField]]:
+    """List the fields queries can use, labelled in the negotiated language."""
     registry = await search_service.fields(context=ActingContext.current())
-    return registry.definitions
+    return Response(
+        [SearchField.from_domain(field) for field in registry.definitions],
+        headers={"Vary": "Accept-Language"},
+    )
 
 
 @get(

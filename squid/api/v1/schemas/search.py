@@ -7,8 +7,74 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from squid.core.builds.application.queries import PublicBuildSummary
 from squid.core.errors import ValidationError
-from squid.core.search.domain import FieldMatch, MetadataSearchHit, RecordSearchHit, SearchMatch
+from squid.core.search.domain import (
+    FieldDefinition,
+    FieldGroup,
+    FieldMatch,
+    FieldType,
+    MetadataSearchHit,
+    RecordSearchHit,
+    SearchMatch,
+    SearchScope,
+)
 from squid.core.search.domain.models import RecordSearchHolder
+
+
+class SearchFieldChoice(BaseModel):
+    """An accepted value of an enumerated field."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    value: str
+    label: str
+    scopes: list[SearchScope] = Field(description="Catalogue tabs that accept this value.")
+
+
+class SearchField(BaseModel):
+    """A field queries can filter or sort on, labelled in the response language."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    name: str
+    aliases: list[str]
+    type: FieldType
+    label: str
+    description: str | None
+    group: FieldGroup
+    unit: str | None = Field(description="The unit of a number written without a suffix, such as `gt`.")
+    scopes: list[SearchScope] = Field(
+        description="Catalogue tabs that can use the field. The all and metadata scopes accept every field."
+    )
+    supports_range: bool
+    supports_sort: bool
+    metric: bool = Field(description="A holder measurement that the records table shows as a column.")
+    choices: list[SearchFieldChoice] | None = Field(description="Every accepted value, or null for free-form fields.")
+    examples: list[str] = Field(description="Complete queries that use the field.")
+
+    @classmethod
+    def from_domain(cls, field: FieldDefinition) -> SearchField:
+        """Resolve labels in the current localization scope."""
+        choices = field.value_choices()
+        return cls(
+            name=field.name,
+            aliases=list(field.aliases),
+            type=field.value_type,
+            label=field.display_name.resolve(),
+            description=field.description.resolve() if field.description is not None else None,
+            group=field.group,
+            unit=field.unit,
+            scopes=sorted(field.scopes),
+            supports_range=field.supports_range,
+            supports_sort=field.supports_sort,
+            metric=field.holder_scoped,
+            choices=None
+            if choices is None
+            else [
+                SearchFieldChoice(value=choice.value, label=choice.label.resolve(), scopes=sorted(choice.scopes))
+                for choice in choices
+            ],
+            examples=list(field.examples),
+        )
 
 
 class SearchSuggestions(BaseModel):

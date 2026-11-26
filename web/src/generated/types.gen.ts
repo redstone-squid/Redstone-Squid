@@ -1094,6 +1094,13 @@ export type FieldConstraintsResponse = {
 };
 
 /**
+ * FieldGroup
+ *
+ * The topic a field is listed under in field references and filter panels.
+ */
+export type FieldGroup = 'text' | 'classification' | 'credit' | 'size' | 'timing' | 'date' | 'record' | 'tag';
+
+/**
  * FieldMatch
  */
 export type FieldMatch = {
@@ -2528,10 +2535,45 @@ export type SchematicSummary = {
  */
 export type SearchField = {
     name: string;
+    aliases: Array<string>;
     type: FieldType;
-    supports_range?: boolean;
-    aliases?: Array<string>;
-    supports_sort?: boolean;
+    label: string;
+    description: string | null;
+    group: FieldGroup;
+    /**
+     * The unit of a number written without a suffix, such as `gt`.
+     */
+    unit: string | null;
+    /**
+     * Catalogue tabs that can use the field. The all and metadata scopes accept every field.
+     */
+    scopes: Array<SearchScope>;
+    supports_range: boolean;
+    supports_sort: boolean;
+    /**
+     * A holder measurement that the records table shows as a column.
+     */
+    metric: boolean;
+    /**
+     * Every accepted value, or null for free-form fields.
+     */
+    choices: Array<SearchFieldChoice> | null;
+    /**
+     * Complete queries that use the field.
+     */
+    examples: Array<string>;
+};
+
+/**
+ * SearchFieldChoice
+ */
+export type SearchFieldChoice = {
+    value: string;
+    label: string;
+    /**
+     * Catalogue tabs that accept this value.
+     */
+    scopes: Array<SearchScope>;
 };
 
 /**

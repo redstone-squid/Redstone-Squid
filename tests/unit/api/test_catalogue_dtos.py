@@ -8,10 +8,10 @@ from litestar import Litestar, get
 from litestar.di import Provide
 
 from squid.api.security import ANONYMOUS
-from squid.api.v1.search import PublicSearchFieldDTO, list_search_fields
+from squid.api.v1.search import list_search_fields
 from squid.api.v1.tags import PublicTagDTO, get_tag, list_tags
 from squid.core.search.application import SearchService
-from squid.core.search.application.fields import FieldDefinition, FieldRegistry, FieldType
+from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldDefinition, FieldRegistry, FieldType
 from squid.core.tags.application import TagService
 from squid.core.tags.domain import RecordOperator, TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.core.tags.models import TagDefinition
@@ -78,10 +78,13 @@ async def test_tag_dto_preserves_public_fields_and_decimal_precision() -> None:
     assert set(schema["properties"]) == {*expected, "viewer"}
 
 
-async def test_search_field_dto_exposes_syntax_without_storage_or_coercion_details() -> None:
+async def test_search_fields_describe_syntax_without_storage_or_coercion_details() -> None:
+    kind = DEFAULT_FIELD_REGISTRY.resolve("kind")
+    assert kind is not None
     service = create_autospec(SearchService, instance=True)
     service.fields.return_value = FieldRegistry(
         [
+            kind,
             FieldDefinition(
                 name="height",
                 value_type=FieldType.NUMBER,
@@ -92,12 +95,11 @@ async def test_search_field_dto_exposes_syntax_without_storage_or_coercion_detai
                 unit_scales=(("block", Decimal(1)),),
                 numeric_step=Decimal("0.5"),
                 suggested_values=("private-hint",),
-            )
+            ),
         ]
     )
     handler = get(
         "/fields",
-        return_dto=PublicSearchFieldDTO,
         dependencies={"search_service": Provide(lambda: service, sync_to_thread=False)},
     )(list_search_fields.fn)
     app = Litestar([handler])
@@ -106,8 +108,25 @@ async def test_search_field_dto_exposes_syntax_without_storage_or_coercion_detai
             response = await client.get("/fields")
 
     assert response.status_code == 200
-    assert response.json() == [
-        {"name": "height", "type": "number", "supports_range": True, "supports_sort": True, "aliases": ["h"]}
-    ]
+    assert response.headers["vary"] == "Accept-Language"
+    kind_entry, height = response.json()
+    assert height == {
+        "name": "height",
+        "aliases": ["h"],
+        "type": "number",
+        "label": "Height",
+        "description": None,
+        "group": "text",
+        "unit": None,
+        "scopes": ["builds"],
+        "supports_range": True,
+        "supports_sort": True,
+        "metric": False,
+        "choices": None,
+        "examples": [],
+    }
+    assert kind_entry["label"] == "Kind"
+    assert kind_entry["choices"][0] == {"value": "door", "label": "Door", "scopes": ["builds", "records"]}
+    assert kind_entry["choices"][-1] == {"value": "other", "label": "Other", "scopes": ["builds"]}
     schema = app.openapi_schema.to_schema()["components"]["schemas"]["SearchField"]
-    assert set(schema["properties"]) == set(response.json()[0])
+    assert set(schema["properties"]) == set(height)
