@@ -43,9 +43,8 @@ were deployed. The examples were checked again then.
    the age of the oldest pending record request. When those are above zero, Discord
    shows "Records are still being indexed" with an empty or short record result,
    instead of the plain empty state.
-2. **Rebuild matching and highlighting.** Steps 2–4 of the original plan (phrase
-   matching, match provenance, match reasons in Discord) are now
-   [the search index redesign](search-index-redesign.md).
+2. **Rebuild matching and highlighting.** Done in
+   [the search index redesign](completed/search-index-redesign.md).
 3. **Report bounded totals honestly.** When any ranking branch reaches its cap,
    show the total as "200+" (or the pool size followed by "+"). Navigation pages
    only through the pool.
@@ -61,4 +60,4 @@ what a row must carry.
 - For `2x2 door`, paging agrees with the displayed total, and a capped total reads
   "200+".
 
-Matching and highlighting checks are in [the redesign](search-index-redesign.md).
+Matching and highlighting are covered by [the redesign](completed/search-index-redesign.md).
