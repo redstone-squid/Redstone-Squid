@@ -103,13 +103,11 @@ def resolve_selector[KeyT: int | UUID = int](
     offset: int | None,
     after_id: KeyT | None = None,
     before_id: KeyT | None = None,
-    keyset_allowed: bool = True,
 ) -> PageSelector[KeyT]:
     """Resolve the mutually exclusive pagination parameters into one selector.
 
     With no selector, start at offset zero. Supplying more than one selector raises
-    ValidationError. Set `keyset_allowed=False` for relevance ranking or another
-    ordering that cannot be paged by ID; after_id and before_id then raise too.
+    ValidationError.
     """
     provided = [
         name
@@ -125,30 +123,4 @@ def resolve_selector[KeyT: int | UUID = int](
                 SimpleIssue(field=f"/query/{key}", code=FieldErrorCode.INCOMPATIBLE_FIELDS) for key in provided
             ),
         )
-    if not keyset_allowed and (after_id is not None or before_id is not None):
-        msg = "after_id and before_id require ordering by id"
-        raise ValidationError(
-            msg,
-            code=ErrorCode.INVALID_QUERY,
-            issues=(SimpleIssue(field="/query/sort", code=FieldErrorCode.INVALID_VALUE),),
-        )
     return PageSelector(offset=offset or 0, after_id=after_id, before_id=before_id)
-
-
-def parse_page_sort(value: str | None, *, allowed: frozenset[str], default: str) -> tuple[str, bool]:
-    """Parse a `field` or `-field` sort parameter into a field and its descending flag.
-
-    Use `default` when no value is supplied. Fields outside `allowed` raise
-    ValidationError; callers choose that set to match the ordering they support.
-    """
-    raw = default if value is None else value
-    field = raw.removeprefix("-")
-    if field not in allowed:
-        msg = f"sort field {field!r} is not supported"
-        raise ValidationError(
-            msg,
-            code=ErrorCode.INVALID_QUERY,
-            issues=(SimpleIssue(field="/query/sort", code=FieldErrorCode.UNKNOWN_OPTION),),
-            public_context={"allowed": sorted(allowed)},
-        )
-    return field, raw.startswith("-")

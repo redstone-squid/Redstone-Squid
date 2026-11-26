@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.accounts.models import Account
-from squid.core.builds.application.queries import DEFAULT_BUILD_LIST_SORT, BuildListSort
+from squid.core.builds.application.queries import BuildListSort
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import OtherBuild
 from squid.core.pagination import FIRST_PAGE, PageAnchorNotFoundError, PageSelector
@@ -52,7 +52,7 @@ async def page_ids(
     *,
     selector: PageSelector = FIRST_PAGE,
     limit: int = 2,
-    sort: BuildListSort = DEFAULT_BUILD_LIST_SORT,
+    sort: BuildListSort = BuildListSort.ID,
 ) -> Sequence[int]:
     builds = await transact(
         repository,
@@ -140,20 +140,17 @@ async def test_volume_order_places_tied_builds_before_unknown_dimensions(
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     await set_widths(migrated_session_factory, identifiers, (3, None, 2, 2))
     async with factory() as uow:
-        ordered = await uow.builds.list_page(
-            statuses=_CONFIRMED, sort=BuildListSort("volume", descending=False), limit=4
-        )
+        ordered = await uow.builds.list_page(statuses=_CONFIRMED, sort=BuildListSort.SMALLEST_VOLUME, limit=4)
         assert [item.id for item in ordered] == [identifiers[2], identifiers[3], identifiers[0], identifiers[1]]
 
 
-@pytest.mark.parametrize("descending", [False, True])
+@pytest.mark.parametrize("sort", [BuildListSort.SMALLEST_VOLUME, BuildListSort.UPDATED, BuildListSort.NEWEST])
 async def test_anchors_walk_a_sorted_listing_through_ties_and_unknown_values(
-    migrated_session_factory: async_sessionmaker[AsyncSession], descending: bool
+    migrated_session_factory: async_sessionmaker[AsyncSession], sort: BuildListSort
 ) -> None:
     identifiers = await seed(migrated_session_factory, 6)
     repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     await set_widths(migrated_session_factory, identifiers, (3, None, 2, 2, None, 1))
-    sort = BuildListSort("volume", descending=descending)
     display = list(await page_ids(repository, sort=sort, limit=6))
 
     for index, anchor in enumerate(display):
@@ -171,7 +168,7 @@ async def test_a_sorted_anchor_outside_the_listing_is_rejected(
     missing = max(identifiers) + 100
 
     with pytest.raises(PageAnchorNotFoundError):
-        await page_ids(repository, selector=PageSelector(after_id=missing), sort=BuildListSort("volume"))
+        await page_ids(repository, selector=PageSelector(after_id=missing), sort=BuildListSort.SMALLEST_VOLUME)
     # The ID sort seeks on the anchor itself, so a deleted anchor still continues the walk.
     assert list(await page_ids(repository, selector=PageSelector(before_id=missing))) == []
     assert list(await page_ids(repository, selector=PageSelector(after_id=missing))) == sorted(identifiers)[::-1]

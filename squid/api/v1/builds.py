@@ -4,7 +4,7 @@ import re
 import shutil
 import tempfile
 from pathlib import Path
-from typing import Annotated, Literal, cast
+from typing import Annotated, Literal
 from uuid import UUID
 
 from litestar import Request, Response, Router, get, patch
@@ -19,11 +19,9 @@ from squid.api.dependencies import (
     BuildQueries,
     CurrentCaller,
     Permissions,
-    Search,
     Services,
     get_build_queries,
     get_permissions,
-    get_search,
 )
 from squid.api.errors import responses
 from squid.api.i18n import locale_for_request
@@ -33,26 +31,21 @@ from squid.api.pagination import (
     BeforeIdParam,
     OffsetParam,
     Page,
-    PageAnchor,
     PageSizeParam,
-    parse_page_sort,
     resolve_selector,
 )
 from squid.api.security import Caller, requires
 from squid.api.v1.browser_views import BrowserViews
 from squid.api.v1.schemas.builds import BuildDetail, BuildPatch, BuildStatusFilter
 from squid.api.v1.schemas.submissions import FormManifestResponse, SavedBuildFormResponse
-from squid.api.v1.search import build_hit_id, hydrate_builds
 from squid.core.actors import ActingContext
 from squid.core.builds.application import (
-    BUILD_SORT_FIELDS,
     BuildEditPatch,
     BuildListSort,
-    BuildSortField,
     PublicBuildSummary,
 )
 from squid.core.builds.application.edits import BUILD_EDIT, build_target, patch_values
-from squid.core.builds.domain import BuildCategory, BuildListFilters
+from squid.core.builds.domain import BuildCategory, BuildListFilters, BuildStatus
 from squid.core.builds.errors import (
     BuildNotFoundError,
     BuildRevisionMismatchError,
@@ -67,7 +60,6 @@ from squid.core.permissions.domain.catalogue import (
     BUILD_SUBMISSION_EDIT,
     BUILD_SUBMISSION_VIEW_PENDING,
 )
-from squid.core.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
 from squid.core.submissions.application.build_answers import answers_from_build
 
 UserWriter = CurrentCaller
@@ -249,99 +241,47 @@ async def get_build_media(build_id: FromPath[int], upload_id: FromPath[UUID], se
 )
 async def list_builds(
     build_queries: BuildQueries,
-    search_service: Search,
     permissions: Permissions,
     caller: CurrentCaller,
-    q: Annotated[str | None, QueryParameter(max_length=1_000)] = None,
     status: FromQuery[BuildStatusFilter | None] = None,
     category: FromQuery[BuildCategory | None] = None,
-    version: Annotated[int | None, QueryParameter(ge=1)] = None,
+    version_id: Annotated[int | None, QueryParameter(ge=1)] = None,
     tag: FromQuery[list[str] | None] = None,
     creator_id: FromQuery[UUID | None] = None,
     submitted_by: FromQuery[Literal["me"] | None] = None,
-    sort: FromQuery[Literal["newest", "oldest", "updated", "fastest_open", "smallest_volume", "title"] | None] = None,
+    sort: FromQuery[BuildListSort] = BuildListSort.ID,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
     after_id: AfterIdParam = None,
     before_id: BeforeIdParam = None,
-) -> Page[PublicBuildSummary]:
-    """Search approved builds, or list builds with a selected moderation status.
+) -> Response[Page[PublicBuildSummary]]:
+    """List builds in a named order, approved ones unless another status is selected.
 
-    Supplying q selects indexed search within the selected status. Search
-    uses offset pagination. Without q, results come from the build repository,
-    and after_id or before_id work with every sort; unless sorting by ID, an
-    anchor outside the filtered list returns PAGE_ANCHOR_NOT_FOUND. Unpublished
-    statuses require build.submission.view_pending permission.
+    Every tag must match. With submitted_by=me the caller sees their own builds in every status;
+    other unpublished listings require build.submission.view_pending permission. Text search
+    lives at /v1/search.
     """
-    orders = {
-        "newest": "-submission_time",
-        "oldest": "submission_time",
-        "updated": "-edited_time",
-        "fastest_open": "opening_time",
-        "smallest_volume": "volume",
-        "title": "title",
-    }
-    order = orders.get(sort, sort) if sort is not None else None
-    filters = BuildListFilters(category, version, tuple(dict.fromkeys(tag or ())), creator_id)
     submitter_id = caller.require_consented_account() if submitted_by is not None else None
-    effective = status or BuildStatusFilter.APPROVED
-    if effective is not BuildStatusFilter.APPROVED and submitter_id is None:
+    if status is not None:
+        statuses = frozenset({status.to_domain()})
+    else:
+        statuses = frozenset(BuildStatus) if submitter_id is not None else frozenset({BuildStatus.APPROVED})
+    if statuses != {BuildStatus.APPROVED} and submitter_id is None:
         await _require_pending_view(permissions, caller)
-    if q is not None:
-        # Relevance order has no identifier sequence to anchor to, so ranked pages are offset-only.
-        selector = resolve_selector(offset=offset, after_id=after_id, before_id=before_id, keyset_allowed=False)
-        result = await search_service.search(
-            SearchRequest(
-                query=q,
-                scope=SearchScope.BUILDS,
-                mode=SearchMode.LEXICAL,
-                page_size=page_size,
-                offset=selector.offset,
-                sort=SearchSort.parse(
-                    {
-                        "-submission_time": "-created_at",
-                        "submission_time": "created_at",
-                        "-edited_time": "-updated_at",
-                    }.get(order, order)
-                    if order is not None
-                    else None
-                ),
-                visible_statuses=frozenset({effective.value}),
-                catalogue_filters=filters,
-                submitter_account_id=submitter_id,
-            ),
-            context=caller.context(),
-        )
-        summaries = await hydrate_builds(
-            build_queries,
-            result.hits,
-            status=effective.to_domain(),
-            submitter_id=submitter_id,
-            context=caller.context(),
-        )
-        return Page(
-            # A page can come back short of `total` when the projection outlived a build; the count
-            # is the search backend's, and hydrate_builds has already logged the drift.
-            items=[
-                summary for hit in result.hits if (summary := summaries.get(build_hit_id(hit.source_id))) is not None
-            ],
-            total=result.total,
-            next=PageAnchor.from_domain(result.next) if result.next is not None else None,
-            prev=PageAnchor.from_domain(result.prev) if result.prev is not None else None,
-        )
-
-    sort_field, descending = parse_page_sort(order, allowed=BUILD_SORT_FIELDS, default="-id")
-    selector = resolve_selector(offset=offset, after_id=after_id, before_id=before_id)
     page = await build_queries.list_page(
-        statuses=frozenset({effective.to_domain()}),
+        statuses=statuses,
         submitter_account_id=submitter_id,
-        filters=filters,
-        sort=BuildListSort(field=cast(BuildSortField, sort_field), descending=descending),
-        selector=selector,
+        filters=BuildListFilters(category, version_id, tuple(dict.fromkeys(tag or ())), creator_id),
+        sort=sort,
+        selector=resolve_selector(offset=offset, after_id=after_id, before_id=before_id),
         page_size=page_size,
         context=caller.context(),
     )
-    return Page[PublicBuildSummary].from_domain(page, PublicBuildSummary.from_build)
+    personal = submitter_id is not None or statuses != {BuildStatus.APPROVED}
+    return Response(
+        Page[PublicBuildSummary].from_domain(page, PublicBuildSummary.from_build),
+        headers={"Cache-Control": "no-store"} if personal else None,
+    )
 
 
 async def _require_pending_view(permissions: PermissionService, caller: Caller) -> None:
@@ -376,7 +316,6 @@ router = Router(
     dependencies={
         "build_queries": Provide(get_build_queries, sync_to_thread=False),
         "permissions": Provide(get_permissions, sync_to_thread=False),
-        "search_service": Provide(get_search, sync_to_thread=False),
     },
     path="/builds",
     tags=["builds"],

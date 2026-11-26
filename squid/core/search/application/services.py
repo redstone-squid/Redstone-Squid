@@ -79,10 +79,12 @@ class SearchService:
             sort_field = registry.resolve(request.sort.field)
             if sort_field is None or not sort_field.supports_sort:
                 field_name = request.sort.field
+                allowed = sorted(field.name for field in registry.definitions if field.supports_sort)
                 raise ValidationError(
                     md_tr(t"search-search-results-sorted = Search results cannot be sorted by {field_name}."),
                     code=ErrorCode.INVALID_QUERY,
-                    issues=(SimpleIssue(field="sort", code=FieldErrorCode.UNKNOWN_OPTION),),
+                    issues=(SimpleIssue(field="/query/sort", code=FieldErrorCode.UNKNOWN_OPTION),),
+                    public_context={"allowed": allowed},
                 )
         query_embedding = None
         if (

@@ -8,23 +8,14 @@ from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTOConfig
 from litestar import Response, Router, delete, get, patch, post, put
 from litestar.di import NamedDependency, Provide
 from litestar.dto import DataclassDTO, DTOConfig
-from litestar.params import FromPath, FromQuery, HeaderParameter, JSONBody, SkipValidation
+from litestar.params import FromPath, HeaderParameter, JSONBody, SkipValidation
 
 from squid.api.contract import ANONYMOUS, DEVICE, WEB, WEB_WRITE, browser_only, cli_command, contract
-from squid.api.dependencies import Accounts, BuildQueries, Services, get_accounts, get_build_queries
+from squid.api.dependencies import Accounts, Services, get_accounts
 from squid.api.errors import responses
 from squid.api.idempotency import edit_operation_id, reserve_edit_request, reserve_idempotent_request
-from squid.api.pagination import (
-    AfterIdParam,
-    BeforeIdParam,
-    OffsetParam,
-    Page,
-    PageSizeParam,
-    resolve_selector,
-)
 from squid.api.revisions import RevisionRequiredError, expected_revision, revision_etag
 from squid.api.security import Caller, requires
-from squid.api.v1.schemas.builds import BuildStatusFilter
 from squid.api.v1.schemas.consent import ConsentGrantRequest
 from squid.api.v1.schemas.me import (
     IdentityVisibilityRequest,
@@ -47,8 +38,6 @@ from squid.core.accounts.application.edits import (
 from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, AccountMerge, MergePreview
 from squid.core.accounts.errors import AccountIdentityNotFoundError, StaleConsentNoticeError
 from squid.core.accounts.models import AccountIdentity
-from squid.core.builds.application import PublicBuildSummary
-from squid.core.builds.domain import BuildStatus
 from squid.core.edits.domain import EditCommand, EditValues, Revision
 from squid.core.errors import AuthenticationError
 from squid.core.permissions.domain.catalogue import (
@@ -93,7 +82,6 @@ class AccountMergeDTO(DataclassDTO[AccountMerge]):
 UserCaller = NamedDependency[SkipValidation[Caller]]
 RefreshCaller = NamedDependency[SkipValidation[Caller]]
 ManageCaller = NamedDependency[SkipValidation[Caller]]
-_ALL_STATUSES = frozenset(BuildStatus)
 
 
 @get(
@@ -502,48 +490,10 @@ async def clear_profile(
     )
 
 
-@get(
-    "/builds",
-    responses=responses(400, 401, 403, 422, 503),
-    operation_id="account_builds_list",
-    security=[WEB],
-    opt=contract(cli=browser_only()),
-    status_code=200,
-    guards=[requires(ACCOUNT_SELF_READ)],
-)
-async def list_my_builds(
-    build_queries: BuildQueries,
-    caller: UserCaller,
-    status: FromQuery[BuildStatusFilter | None] = None,
-    page_size: PageSizeParam = 20,
-    offset: OffsetParam = None,
-    after_id: AfterIdParam = None,
-    before_id: BeforeIdParam = None,
-) -> Page[PublicBuildSummary]:
-    """List the caller's own submissions, including the ones still awaiting review.
-
-    This is the authoritative counterpart to `GET /v1/builds`: submitters need to see their own
-    pending and rejected builds, which the public search path deliberately cannot return.
-    """
-    if caller.kind != "account" or caller.account_id is None:
-        raise AuthenticationError
-    selector = resolve_selector(offset=offset, after_id=after_id, before_id=before_id)
-    statuses = _ALL_STATUSES if status is None else frozenset({status.to_domain()})
-    page = await build_queries.list_page(
-        statuses=statuses,
-        submitter_account_id=caller.account_id,
-        selector=selector,
-        page_size=page_size,
-        context=caller.context(),
-    )
-    return Page[PublicBuildSummary].from_domain(page, PublicBuildSummary.from_build)
-
-
 router = Router(
     opt={"x-squid-private-response": True},
     dependencies={
         "accounts": Provide(get_accounts, sync_to_thread=False),
-        "build_queries": Provide(get_build_queries, sync_to_thread=False),
     },
     path="/users/me",
     tags=["users"],
@@ -558,7 +508,6 @@ router = Router(
         preview_merge,
         complete_merge,
         refresh_minecraft_identity,
-        list_my_builds,
     ],
 )
 
@@ -567,7 +516,6 @@ accounts_router = Router(
     opt={"x-squid-private-response": True},
     dependencies={
         "accounts": Provide(get_accounts, sync_to_thread=False),
-        "build_queries": Provide(get_build_queries, sync_to_thread=False),
     },
     path="/accounts",
     tags=["users"],

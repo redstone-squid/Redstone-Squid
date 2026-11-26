@@ -11,7 +11,6 @@ from typing import Any, cast
 
 from sqlalchemy import (
     BigInteger,
-    SQLColumnExpression,
     String,
     Table,
     delete,
@@ -29,10 +28,8 @@ from whenever import Instant
 from squid.core.accounts.domain import fold_creator_name
 from squid.core.accounts.models import Account, CreatorAlias
 from squid.core.builds.application.queries import (
-    DEFAULT_BUILD_LIST_SORT,
     BuildListSort,
     BuildRecordSummary,
-    BuildSortField,
     PublicBuildSummary,
     PublicBuildTag,
 )
@@ -385,7 +382,7 @@ class BuildRepository:
         statuses: frozenset[BuildStatus],
         filters: BuildListFilters = EMPTY_BUILD_FILTERS,
         submitter_account_id: int | None = None,
-        sort: BuildListSort = DEFAULT_BUILD_LIST_SORT,
+        sort: BuildListSort = BuildListSort.ID,
         offset: int = 0,
         after_id: int | None = None,
         before_id: int | None = None,
@@ -406,7 +403,7 @@ class BuildRepository:
             select(Build), statuses=statuses, submitter_account_id=submitter_account_id, filters=filters
         )
         reverse = before_id is not None
-        statement = await KeysetOrder(_build_sort_key(sort.field), Build.id, sort.descending).apply(
+        statement = await _build_order(sort).apply(
             session, listing, PageSelector(offset=offset, after_id=after_id, before_id=before_id)
         )
         rows = (await session.scalars(statement.limit(limit).options(*_mapper_load_options()))).unique().all()
@@ -981,24 +978,27 @@ def _sponsor_values(build: Build) -> tuple[uuid.UUID | None, str | None, str | N
     )
 
 
-def _build_sort_key(field: BuildSortField) -> SQLColumnExpression[Any]:
-    """Return the SQL expression a build listing sorts by."""
-    match field:
-        case "id":
-            return Build.id
-        case "submission_time":
-            return Build.submission_time
-        case "edited_time":
-            return Build.edited_time
-        case "opening_time":
+def _build_order(sort: BuildListSort) -> KeysetOrder:
+    """Return the keyset order a build listing displays in."""
+    match sort:
+        case BuildListSort.ID:
+            return KeysetOrder(Build.id, Build.id, descending=True)
+        case BuildListSort.NEWEST:
+            return KeysetOrder(Build.submission_time, Build.id, descending=True)
+        case BuildListSort.OLDEST:
+            return KeysetOrder(Build.submission_time, Build.id, descending=False)
+        case BuildListSort.UPDATED:
+            return KeysetOrder(Build.edited_time, Build.id, descending=True)
+        case BuildListSort.FASTEST_OPEN:
             doors = DoorBuild.__table__.c
-            return select(doors.normal_opening_time).where(doors.build_id == Build.id).scalar_subquery()
-        case "volume":
-            return Build.width.cast(BigInteger) * Build.height * Build.depth
-        case "title":
+            opening = select(doors.normal_opening_time).where(doors.build_id == Build.id).scalar_subquery()
+            return KeysetOrder(opening, Build.id, descending=False)
+        case BuildListSort.SMALLEST_VOLUME:
+            return KeysetOrder(Build.width.cast(BigInteger) * Build.height * Build.depth, Build.id, descending=False)
+        case BuildListSort.TITLE:
             indexed = (
                 select(SearchDocument.title)
                 .where(SearchDocument.resource_kind == "build", SearchDocument.source_key == Build.id.cast(String))
                 .scalar_subquery()
             )
-            return func.lower(func.coalesce(Build.display_name, indexed))
+            return KeysetOrder(func.lower(func.coalesce(Build.display_name, indexed)), Build.id, descending=False)

@@ -206,13 +206,10 @@ function buildPage(url: URL): BuildsListResponse {
       prev: { offset: null, after_id: null, before_id: builds[2].id },
     };
   }
-  const query = url.searchParams.get("q") ?? "";
-  if (query.includes("no-matches")) return { items: [], total: 0, next: null, prev: null };
-  const selected = query.includes("Space Builder") ? [builds[1]] : builds.slice(0, 2);
   return {
-    items: selected,
-    total: selected.length > 1 ? 3 : 1,
-    next: selected.length > 1 ? { offset: null, after_id: 2, before_id: null } : null,
+    items: builds.slice(0, 2),
+    total: 3,
+    next: { offset: null, after_id: 2, before_id: null },
     prev: null,
   };
 }
@@ -308,13 +305,7 @@ async function routeRequest(request: Request): Promise<Response> {
     return problem(request, 404, "not_found");
   }
 
-  if (url.pathname === "/v1/builds") {
-    const query = url.searchParams.get("q") ?? "";
-    if (query.includes("syntax:error") || query === "(")
-      return problem(request, 400, "invalid_query");
-    if (query.includes("force:unavailable")) return problem(request, 503, "service_unavailable");
-    return json(buildPage(url) satisfies BuildsListResponse);
-  }
+  if (url.pathname === "/v1/builds") return json(buildPage(url) satisfies BuildsListResponse);
   // Both detail reads exceed the catalogue client's five-second deadline.
   if (url.pathname === "/v1/builds/998") {
     await new Promise((resolve) => setTimeout(resolve, 5_500));

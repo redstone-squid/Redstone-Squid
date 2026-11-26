@@ -4,7 +4,7 @@ import pytest
 from litestar import Litestar
 from litestar.testing import TestClient
 
-from squid.api.pagination import Page, PageAnchor, parse_page_sort, resolve_selector
+from squid.api.pagination import Page, PageAnchor, resolve_selector
 from squid.core.errors import ErrorCode, ValidationError
 from squid.core.pagination import MAX_PAGE_OFFSET, PageSelector
 from squid.core.pagination import Page as ResultPage
@@ -20,29 +20,9 @@ def test_a_request_may_address_its_page_only_one_way() -> None:
     assert "offset, after_id cannot be combined" in str(error.value)
 
 
-def test_identifier_anchors_are_refused_for_an_order_they_do_not_address() -> None:
-    with pytest.raises(ValidationError, match="require ordering by id"):
-        resolve_selector(offset=None, after_id=9, keyset_allowed=False)
-
-
 def test_an_unaddressed_request_resolves_to_the_first_page() -> None:
     assert resolve_selector(offset=None) == PageSelector()
     assert resolve_selector(offset=None, before_id=9) == PageSelector(before_id=9)
-
-
-def test_sort_defaults_and_direction_come_from_the_parameter() -> None:
-    allowed = frozenset({"id", "submission_time"})
-
-    assert parse_page_sort(None, allowed=allowed, default="-id") == ("id", True)
-    assert parse_page_sort("submission_time", allowed=allowed, default="-id") == ("submission_time", False)
-    assert parse_page_sort("-submission_time", allowed=allowed, default="-id") == ("submission_time", True)
-
-
-def test_only_allowlisted_sort_fields_are_accepted() -> None:
-    with pytest.raises(ValidationError) as error:
-        parse_page_sort("title", allowed=frozenset({"id"}), default="-id")
-
-    assert error.value.code is ErrorCode.INVALID_QUERY
 
 
 def test_rendering_carries_the_totals_and_anchors_through() -> None:

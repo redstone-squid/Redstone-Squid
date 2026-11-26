@@ -27,10 +27,7 @@ from squid.core.auth.application.web import WebSessionService
 from squid.core.auth.impersonation import ImpersonationService
 from squid.core.builds.application import BuildQueryService, BuildService
 from squid.core.builds.application.editing import BuildEditPatch
-from squid.core.builds.application.queries import (
-    DEFAULT_BUILD_LIST_SORT,
-    BuildListSort,
-)
+from squid.core.builds.application.queries import BuildListSort
 from squid.core.builds.domain import EMPTY_BUILD_FILTERS, BuildListFilters
 from squid.core.builds.domain.models import BuildStatus
 from squid.core.builds.errors import BuildNotFoundError
@@ -72,7 +69,7 @@ from squid.core.permissions.application.epoch import PermissionEpochWatcher, Wak
 from squid.core.permissions.application.ports import PermissionSubject
 from squid.core.permissions.domain import Pattern
 from squid.core.records.application import PublicRecordQueryService, RecordAdministrationService, RecordService
-from squid.core.records.application.models import PublicRecordDetail, PublishedRecordResult
+from squid.core.records.application.models import PublicRecordDetail, PublishedRecordResult, RecordListSort
 from squid.core.records.application.range_publication import RangePublicationService
 from squid.core.records.application.range_snapshots import RangePublication
 from squid.core.records.domain import BuildKind, VersionScope
@@ -292,7 +289,7 @@ class MockBuildQueries(BuildQueryService):
         statuses: frozenset[BuildStatus],
         filters: BuildListFilters = EMPTY_BUILD_FILTERS,
         submitter_account_id: int | None = None,
-        sort: BuildListSort = DEFAULT_BUILD_LIST_SORT,
+        sort: BuildListSort = BuildListSort.ID,
         selector: PageSelector = FIRST_PAGE,
         page_size: int = 20,
     ) -> Page[Build]:
@@ -531,9 +528,8 @@ class MockRecords(RecordService):
         self,
         *,
         selector: PageSelector = FIRST_PAGE,
-        descending: bool = True,
+        sort: RecordListSort = RecordListSort.ID,
         page_size: int = 20,
-        resolved_only: bool = False,
         version_scope: VersionScope | None = None,
         context: ActingContext,
     ) -> Page[PublishedRecordResult]:

@@ -1,17 +1,16 @@
 """Authoritative build collection views: moderation status and submitter ownership."""
 
 from dataclasses import dataclass
-from typing import Any, NamedTuple, cast, override
+from typing import NamedTuple, override
 
 import pytest
 
 from squid.api.pagination import PageAnchor
 from squid.api.security import ANONYMOUS, UNBOUNDED, Caller
 from squid.api.v1.builds import list_builds
-from squid.api.v1.me import list_my_builds
 from squid.api.v1.schemas.builds import BuildStatusFilter
 from squid.core.actors import ActingContext, Actor
-from squid.core.builds.application import DEFAULT_BUILD_LIST_SORT, BuildListSort, BuildQueryService
+from squid.core.builds.application import BuildListSort, BuildQueryService
 from squid.core.builds.domain import EMPTY_BUILD_FILTERS, BuildListFilters, BuildStatus
 from squid.core.builds.models import Build, DoorBuild
 from squid.core.errors import AuthenticationError, AuthorizationError, ValidationError
@@ -55,7 +54,7 @@ class BuildQueryRecorder(BuildQueryService):
         statuses: frozenset[BuildStatus],
         filters: BuildListFilters = EMPTY_BUILD_FILTERS,
         submitter_account_id: int | None = None,
-        sort: BuildListSort = DEFAULT_BUILD_LIST_SORT,
+        sort: BuildListSort = BuildListSort.ID,
         selector: PageSelector = FIRST_PAGE,
         page_size: int = 20,
     ) -> Page[Build]:
@@ -119,7 +118,6 @@ async def test_anonymous_status_filter_defaults_to_approved_only() -> None:
 
     await list_builds.fn(
         graph.build_queries,
-        cast(Any, None),
         graph.permissions,
         ANONYMOUS,
     )
@@ -134,7 +132,6 @@ async def test_pending_view_requires_an_authenticated_human() -> None:
     with pytest.raises(AuthenticationError):
         await list_builds.fn(
             graph.build_queries,
-            cast(Any, None),
             graph.permissions,
             ANONYMOUS,
             status=BuildStatusFilter.PENDING,
@@ -151,7 +148,6 @@ async def test_a_service_key_without_the_node_cannot_read_unreviewed_submissions
     with pytest.raises(AuthorizationError):
         await list_builds.fn(
             graph.build_queries,
-            cast(Any, None),
             graph.permissions,
             SERVICE,
             status=BuildStatusFilter.REJECTED,
@@ -169,7 +165,6 @@ async def test_a_key_carrying_the_node_is_still_bounded_by_its_owner() -> None:
     with pytest.raises(AuthorizationError):
         await list_builds.fn(
             graph.build_queries,
-            cast(Any, None),
             graph.permissions,
             owned,
             status=BuildStatusFilter.REJECTED,
@@ -185,7 +180,6 @@ async def test_non_administrator_user_cannot_read_unreviewed_submissions() -> No
     with pytest.raises(AuthorizationError):
         await list_builds.fn(
             graph.build_queries,
-            cast(Any, None),
             graph.permissions,
             ACCOUNT,
             status=BuildStatusFilter.PENDING,
@@ -196,31 +190,16 @@ async def test_non_administrator_user_cannot_read_unreviewed_submissions() -> No
 async def test_administrator_reads_the_pending_queue() -> None:
     graph = fakes(builds=[persisted_build(9)], is_admin=True)
 
-    page = await list_builds.fn(
+    response = await list_builds.fn(
         graph.build_queries,
-        cast(Any, None),
         graph.permissions,
         ACCOUNT,
         status=BuildStatusFilter.PENDING,
     )
 
     assert graph.build_queries.calls[-1].statuses == frozenset({BuildStatus.PENDING})
-    assert [item.id for item in page.items] == [9]
-
-
-@pytest.mark.asyncio
-async def test_searching_unpublished_builds_requires_review_permission() -> None:
-    graph = fakes()
-
-    with pytest.raises(AuthorizationError):
-        await list_builds.fn(
-            graph.build_queries,
-            cast(Any, None),
-            graph.permissions,
-            ACCOUNT,
-            q="piston",
-            status=BuildStatusFilter.PENDING,
-        )
+    assert [item.id for item in response.content.items] == [9]
+    assert response.headers["Cache-Control"] == "no-store"
 
 
 @pytest.mark.asyncio
@@ -228,26 +207,29 @@ async def test_id_anchors_address_the_pages_on_either_side() -> None:
     builds = [persisted_build(9, BuildStatus.APPROVED), persisted_build(8, BuildStatus.APPROVED)]
     graph = fakes(builds=builds, is_admin=True)
 
-    first = await list_builds.fn(
-        graph.build_queries,
-        cast(Any, None),
-        graph.permissions,
-        ACCOUNT,
-        page_size=1,
-    )
+    first = (
+        await list_builds.fn(
+            graph.build_queries,
+            graph.permissions,
+            ACCOUNT,
+            page_size=1,
+        )
+    ).content
 
     assert [item.id for item in first.items] == [9]
     assert first.next == PageAnchor(after_id=9)
     assert first.prev is None
+    assert "Cache-Control" not in (await list_builds.fn(graph.build_queries, graph.permissions, ACCOUNT)).headers
 
-    back = await list_builds.fn(
-        graph.build_queries,
-        cast(Any, None),
-        graph.permissions,
-        ACCOUNT,
-        page_size=1,
-        before_id=8,
-    )
+    back = (
+        await list_builds.fn(
+            graph.build_queries,
+            graph.permissions,
+            ACCOUNT,
+            page_size=1,
+            before_id=8,
+        )
+    ).content
 
     assert graph.build_queries.calls[-1].selector.before_id == 8
     assert back.prev is not None
@@ -261,7 +243,6 @@ async def test_pagination_parameters_are_mutually_exclusive() -> None:
     with pytest.raises(ValidationError, match="cannot be combined"):
         await list_builds.fn(
             graph.build_queries,
-            cast(Any, None),
             graph.permissions,
             ACCOUNT,
             offset=20,
@@ -275,10 +256,10 @@ async def test_pagination_parameters_are_mutually_exclusive() -> None:
 async def test_id_anchors_page_a_named_sort() -> None:
     graph = fakes(is_admin=True)
 
-    await list_builds.fn(graph.build_queries, cast(Any, None), graph.permissions, ACCOUNT, sort="newest", after_id=9)
+    await list_builds.fn(graph.build_queries, graph.permissions, ACCOUNT, sort=BuildListSort.NEWEST, after_id=9)
 
     call = graph.build_queries.calls[-1]
-    assert call.sort == BuildListSort(field="submission_time", descending=True)
+    assert call.sort is BuildListSort.NEWEST
     assert call.selector == PageSelector(after_id=9)
 
 
@@ -286,18 +267,19 @@ async def test_id_anchors_page_a_named_sort() -> None:
 async def test_a_time_sorted_listing_pages_by_offset() -> None:
     graph = fakes(builds=[persisted_build(9, BuildStatus.APPROVED)], is_admin=True)
 
-    page = await list_builds.fn(
-        graph.build_queries,
-        cast(Any, None),
-        graph.permissions,
-        ACCOUNT,
-        sort="oldest",
-        page_size=1,
-        offset=20,
-    )
+    page = (
+        await list_builds.fn(
+            graph.build_queries,
+            graph.permissions,
+            ACCOUNT,
+            sort=BuildListSort.OLDEST,
+            page_size=1,
+            offset=20,
+        )
+    ).content
 
     call = graph.build_queries.calls[-1]
-    assert call.sort == BuildListSort(field="submission_time", descending=False)
+    assert call.sort is BuildListSort.OLDEST
     assert call.selector.offset == 20
     assert page.prev == PageAnchor(offset=19)
 
@@ -306,12 +288,13 @@ async def test_a_time_sorted_listing_pages_by_offset() -> None:
 async def test_submitters_see_their_own_builds_in_every_status() -> None:
     graph = fakes(builds=[persisted_build(5), persisted_build(4, BuildStatus.REJECTED)])
 
-    page = await list_my_builds.fn(graph.build_queries, ACCOUNT)
+    page = (await list_builds.fn(graph.build_queries, graph.permissions, ACCOUNT, submitted_by="me")).content
 
     call = graph.build_queries.calls[-1]
     assert call.statuses == frozenset(BuildStatus)
     assert call.submitter_account_id == 1
     assert [item.id for item in page.items] == [5, 4]
+    assert graph.permissions.calls == []
 
 
 @pytest.mark.asyncio
@@ -319,7 +302,7 @@ async def test_an_account_submitter_can_list_builds_without_discord() -> None:
     graph = fakes(builds=[persisted_build(5)])
     minecraft_only = Caller(kind="account", subject="account:7", nodes=UNBOUNDED, account_id=7)
 
-    page = await list_my_builds.fn(graph.build_queries, minecraft_only)
+    page = (await list_builds.fn(graph.build_queries, graph.permissions, minecraft_only, submitted_by="me")).content
 
     assert graph.build_queries.calls[-1].submitter_account_id == 7
     assert [item.id for item in page.items] == [5]
@@ -334,7 +317,7 @@ async def test_own_build_anchors_stay_scoped_to_the_submitter() -> None:
     graph = fakes(builds=[persisted_build(5)])
     other = Caller(kind="account", subject="account:2", nodes=UNBOUNDED, account_id=2)
 
-    await list_my_builds.fn(graph.build_queries, other, after_id=9)
+    await list_builds.fn(graph.build_queries, graph.permissions, other, submitted_by="me", after_id=9)
 
     call = graph.build_queries.calls[-1]
     assert call.selector.after_id == 9
@@ -343,5 +326,6 @@ async def test_own_build_anchors_stay_scoped_to_the_submitter() -> None:
 
 @pytest.mark.asyncio
 async def test_own_builds_reject_a_service_credential() -> None:
+    graph = fakes()
     with pytest.raises(AuthenticationError):
-        await list_my_builds.fn(fakes().build_queries, SERVICE)
+        await list_builds.fn(graph.build_queries, graph.permissions, SERVICE, submitted_by="me")

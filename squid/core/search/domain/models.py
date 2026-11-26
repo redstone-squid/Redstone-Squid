@@ -4,7 +4,6 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Literal
 
-from squid.core.builds.domain import EMPTY_BUILD_FILTERS, BuildListFilters
 from squid.core.errors import ErrorCode, ValidationError
 from squid.core.pagination import MAX_PAGE_OFFSET, PageAnchor
 from squid.core.search.domain.evidence import SearchEvidence
@@ -15,6 +14,8 @@ from squid.core.validation import (
     AboveMaximumParams,
     BelowMinimum,
     BelowMinimumParams,
+    FieldErrorCode,
+    SimpleIssue,
 )
 
 
@@ -52,7 +53,11 @@ class SearchSort:
         field = value.removeprefix("-")
         if not field:
             msg = "sort field is required"
-            raise ValidationError(msg, code=ErrorCode.INVALID_QUERY)
+            raise ValidationError(
+                msg,
+                code=ErrorCode.INVALID_QUERY,
+                issues=(SimpleIssue(field="/query/sort", code=FieldErrorCode.REQUIRED),),
+            )
         return cls(field, direction)
 
 
@@ -75,8 +80,6 @@ class SearchRequest:
     offset: int = 0
     sort: SearchSort | None = None
     visible_statuses: frozenset[str] | None = None
-    catalogue_filters: BuildListFilters = EMPTY_BUILD_FILTERS
-    submitter_account_id: int | None = None
     group_by_build: bool = False
     parsed_query: BuildQuery | RecordQuery | None = None
     anchor: SearchResultAnchor | None = None

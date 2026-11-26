@@ -7,7 +7,7 @@ from uuid import UUID
 from litestar import Router, get, post
 from litestar.di import Provide
 from litestar.dto import DataclassDTO, DTOConfig
-from litestar.params import FromPath, JSONBody, PathParameter, QueryParameter
+from litestar.params import FromPath, FromQuery, JSONBody, PathParameter
 
 from squid.api.contract import ANONYMOUS, DEVICE, SERVICE, WEB, WEB_WRITE, contract, transport_only
 from squid.api.dependencies import (
@@ -30,7 +30,6 @@ from squid.api.pagination import (
     OffsetParam,
     Page,
     PageSizeParam,
-    parse_page_sort,
     resolve_selector,
 )
 from squid.api.security import requires
@@ -44,6 +43,7 @@ from squid.core.records.application.models import (
     RecomputeItem,
     RecordDrift,
     RecordInspection,
+    RecordListSort,
 )
 from squid.core.records.application.published_points import PublishedDoorPoint
 from squid.core.records.application.range_snapshots import RangePublication
@@ -77,7 +77,6 @@ class PublicRecordDTO(DataclassDTO[PublishedRecordResult]):
 
 
 # Result identifiers ascend with computation, so recency needs no separate indexed column.
-_SORT_FIELDS = frozenset({"result_id"})
 
 
 @get(
@@ -114,18 +113,15 @@ async def get_record(
 async def list_records(
     records: Records,
     caller: CurrentCaller,
-    sort: Annotated[str | None, QueryParameter(max_length=80)] = None,
+    sort: FromQuery[RecordListSort] = RecordListSort.ID,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
     after_id: AfterIdParam = None,
     before_id: BeforeIdParam = None,
 ) -> Page[PublishedRecordResult]:
     """List authoritative published record results."""
-    _, descending = parse_page_sort(sort, allowed=_SORT_FIELDS, default="-result_id")
     selector = resolve_selector(offset=offset, after_id=after_id, before_id=before_id)
-    page = await records.list_page(
-        selector=selector, descending=descending, page_size=page_size, context=caller.context()
-    )
+    page = await records.list_page(selector=selector, sort=sort, page_size=page_size, context=caller.context())
     return Page[PublishedRecordResult].from_domain(page)
 
 

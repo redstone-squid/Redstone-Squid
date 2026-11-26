@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
-from typing import Literal, Protocol, get_args
+from typing import Literal, Protocol
 from urllib.parse import urlsplit
 from uuid import UUID
 
@@ -28,20 +28,21 @@ from squid.core.permissions.domain.catalogue import (
 )
 from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
-type BuildSortField = Literal["id", "submission_time", "edited_time", "opening_time", "volume", "title"]
-BUILD_SORT_FIELDS: frozenset[str] = frozenset(get_args(BuildSortField.__value__))
-"""Indexed columns available for sorting build listings."""
 
+class BuildListSort(StrEnum):
+    """A named display order for build listings.
 
-@dataclass(frozen=True, slots=True)
-class BuildListSort:
-    """Display ordering for a build listing."""
+    Each order is total, so identifier anchors work with all of them. `ID` lists the newest IDs
+    first and seeks without looking up the anchor, which makes it the order for full traversal.
+    """
 
-    field: BuildSortField = "id"
-    descending: bool = True
-
-
-DEFAULT_BUILD_LIST_SORT = BuildListSort()
+    ID = "id"
+    NEWEST = "newest"
+    OLDEST = "oldest"
+    UPDATED = "updated"
+    FASTEST_OPEN = "fastest_open"
+    SMALLEST_VOLUME = "smallest_volume"
+    TITLE = "title"
 
 
 @dataclass(frozen=True, slots=True)
@@ -355,7 +356,7 @@ class BuildQueryService:
         statuses: frozenset[BuildStatus],
         filters: BuildListFilters = EMPTY_BUILD_FILTERS,
         submitter_account_id: int | None = None,
-        sort: BuildListSort = DEFAULT_BUILD_LIST_SORT,
+        sort: BuildListSort = BuildListSort.ID,
         selector: PageSelector = FIRST_PAGE,
         page_size: int = 20,
     ) -> Page[Build]:

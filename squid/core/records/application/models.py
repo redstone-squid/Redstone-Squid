@@ -4,6 +4,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field, fields, replace
 from datetime import datetime
 from decimal import Decimal
+from enum import StrEnum
 from typing import Self
 from uuid import UUID
 
@@ -196,6 +197,15 @@ class RecordNameDiagnostic:
     title: str
     diagnostics: tuple[dict[str, str | list[str]], ...]
     build_kind: BuildKind
+
+
+class RecordListSort(StrEnum):
+    """A named display order for record listings.
+
+    `ID` lists the most recently published results first, anchored by result ID.
+    """
+
+    ID = "id"
 
 
 @dataclass(frozen=True, slots=True)

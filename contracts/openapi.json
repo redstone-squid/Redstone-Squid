@@ -1990,28 +1990,9 @@
           "builds"
         ],
         "summary": "ListBuilds",
-        "description": "Search approved builds, or list builds with a selected moderation status.\n\nSupplying q selects indexed search within the selected status. Search\nuses offset pagination. Without q, results come from the build repository,\nand after_id or before_id work with every sort; unless sorting by ID, an\nanchor outside the filtered list returns PAGE_ANCHOR_NOT_FOUND. Unpublished\nstatuses require build.submission.view_pending permission.",
+        "description": "List builds in a named order, approved ones unless another status is selected.\n\nEvery tag must match. With submitted_by=me the caller sees their own builds in every status;\nother unpublished listings require build.submission.view_pending permission. Text search\nlives at /v1/search.",
         "operationId": "builds_list",
         "parameters": [
-          {
-            "name": "q",
-            "in": "query",
-            "schema": {
-              "oneOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "maxLength": 1000
-            },
-            "required": false,
-            "deprecated": false,
-            "allowEmptyValue": false,
-            "allowReserved": false
-          },
           {
             "name": "status",
             "in": "query",
@@ -2049,7 +2030,7 @@
             "allowReserved": false
           },
           {
-            "name": "version",
+            "name": "version_id",
             "in": "query",
             "schema": {
               "oneOf": [
@@ -2129,20 +2110,9 @@
             "name": "sort",
             "in": "query",
             "schema": {
-              "type": [
-                "null",
-                "string"
-              ],
-              "enum": [
-                "newest",
-                "oldest",
-                "updated",
-                "fastest_open",
-                "smallest_volume",
-                "title",
-                null
-              ]
+              "$ref": "#/components/schemas/BuildListSort"
             },
+            "description": "A named display order for build listings.\n\nEach order is total, so identifier anchors work with all of them. `ID` lists the newest IDs\nfirst and seeks without looking up the anchor, which makes it the order for full traversal.\n",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -5991,232 +5961,6 @@
           "command": "account.refresh",
           "required_api_features": [],
           "interaction": "direct"
-        }
-      }
-    },
-    "/v1/users/me/builds": {
-      "get": {
-        "tags": [
-          "users"
-        ],
-        "summary": "ListMyBuilds",
-        "description": "List the caller's own submissions, including the ones still awaiting review.\n\nThis is the authoritative counterpart to `GET /v1/builds`: submitters need to see their own\npending and rejected builds, which the public search path deliberately cannot return.",
-        "operationId": "account_builds_list",
-        "parameters": [
-          {
-            "name": "status",
-            "in": "query",
-            "schema": {
-              "oneOf": [
-                {
-                  "$ref": "#/components/schemas/BuildStatusFilter"
-                },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "required": false,
-            "deprecated": false,
-            "allowEmptyValue": false,
-            "allowReserved": false
-          },
-          {
-            "name": "page_size",
-            "in": "query",
-            "schema": {
-              "type": "integer",
-              "maximum": 50.0,
-              "minimum": 1.0,
-              "description": "Maximum number of items to return.",
-              "default": 20
-            },
-            "description": "Maximum number of items to return.",
-            "required": false,
-            "deprecated": false,
-            "allowEmptyValue": false,
-            "allowReserved": false
-          },
-          {
-            "name": "offset",
-            "in": "query",
-            "schema": {
-              "oneOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "maximum": 10000,
-              "description": "Number of items to skip. Excludes after_id and before_id."
-            },
-            "description": "Number of items to skip. Excludes after_id and before_id.",
-            "required": false,
-            "deprecated": false,
-            "allowEmptyValue": false,
-            "allowReserved": false
-          },
-          {
-            "name": "after_id",
-            "in": "query",
-            "schema": {
-              "oneOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "minimum": 1,
-              "description": "Return the items after this identifier in display order. Excludes offset."
-            },
-            "description": "Return the items after this identifier in display order. Excludes offset.",
-            "required": false,
-            "deprecated": false,
-            "allowEmptyValue": false,
-            "allowReserved": false
-          },
-          {
-            "name": "before_id",
-            "in": "query",
-            "schema": {
-              "oneOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "minimum": 1,
-              "description": "Return the items before this identifier in display order. Excludes offset."
-            },
-            "description": "Return the items before this identifier in display order. Excludes offset.",
-            "required": false,
-            "deprecated": false,
-            "allowEmptyValue": false,
-            "allowReserved": false
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Request fulfilled, document follows",
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            },
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Page_squid.core.builds.application.queries.PublicBuildSummary_"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Bad Request",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "429": {
-            "description": "Too Many Requests",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "401": {
-            "description": "Unauthorized",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "403": {
-            "description": "Forbidden",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "422": {
-            "description": "Unprocessable Content",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "503": {
-            "description": "Service Unavailable",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          }
-        },
-        "deprecated": false,
-        "security": [
-          {
-            "WebSession": []
-          }
-        ],
-        "x-squid-private-response": true,
-        "x-squid-cli": {
-          "classification": "browser-only"
         }
       }
     },
@@ -10406,16 +10150,9 @@
             "name": "sort",
             "in": "query",
             "schema": {
-              "oneOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "maxLength": 80
+              "$ref": "#/components/schemas/RecordListSort"
             },
+            "description": "A named display order for record listings.\n\n`ID` lists the most recently published results first, anchored by result ID.\n",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -21207,6 +20944,21 @@
         ],
         "title": "BuildLinks"
       },
+      "BuildListSort": {
+        "type": "string",
+        "enum": [
+          "id",
+          "newest",
+          "oldest",
+          "updated",
+          "fastest_open",
+          "smallest_volume",
+          "title"
+        ],
+        "title": "BuildListSort",
+        "description": "A named display order for build listings.\n\nEach order is total, so identifier anchors work with all of them. `ID` lists the newest IDs\nfirst and seeks without looking up the anchor, which makes it the order for full traversal.\n",
+        "default": "id"
+      },
       "BuildMedia": {
         "properties": {
           "kind": {
@@ -28691,6 +28443,15 @@
           "title"
         ],
         "title": "RecordInspection"
+      },
+      "RecordListSort": {
+        "type": "string",
+        "enum": [
+          "id"
+        ],
+        "title": "RecordListSort",
+        "description": "A named display order for record listings.\n\n`ID` lists the most recently published results first, anchored by result ID.\n",
+        "default": "id"
       },
       "RecordOperator": {
         "type": "string",

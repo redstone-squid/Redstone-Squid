@@ -48,9 +48,8 @@ async def list_build_schematics(
 ) -> Page[SchematicSummary]:
     """List analyzed schematics attached to a approved build."""
     await build_queries.get_public(build_id, context=ActingContext.current())
-    # Attachment order has no identifier sequence worth anchoring to, so this listing is
-    # offset-only, like the ranked build search.
-    selector = resolve_selector(offset=offset, after_id=None, before_id=None, keyset_allowed=False)
+    # Attachment order has no identifier sequence worth anchoring to, so this listing is offset-only.
+    selector = resolve_selector(offset=offset)
     page = await schematics.list_public_page(
         build_id, selector=selector, page_size=page_size, context=ActingContext.current()
     )

@@ -42,6 +42,7 @@ from squid.core.records.application.models import (
     RecordDrift,
     RecordGap,
     RecordInspection,
+    RecordListSort,
     RecordLookupRequest,
     RecordNameDiagnostic,
     ScopedCategory,
@@ -559,12 +560,15 @@ class RecordService:
         self,
         *,
         selector: PageSelector = FIRST_PAGE,
-        descending: bool = True,
+        sort: RecordListSort = RecordListSort.ID,
         page_size: int = 20,
         version_scope: VersionScope | None = None,
         context: ActingContext,
     ) -> Page[PublishedRecordResult]:
         """Return one page of current record results in display order."""
+        match sort:
+            case RecordListSort.ID:
+                descending = True
         async with self._uow_factory() as uow:
             rows = await uow.records.list_published_records(
                 offset=selector.offset,

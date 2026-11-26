@@ -12,11 +12,8 @@ from squid.core.builds.application.inference import (
     InlineImage,
 )
 from squid.core.builds.application.queries import (
-    BUILD_SORT_FIELDS,
-    DEFAULT_BUILD_LIST_SORT,
     BuildListSort,
     BuildQueryService,
-    BuildSortField,
     PublicBuildDimensions,
     PublicBuildPreview,
     PublicBuildSummary,
@@ -28,8 +25,6 @@ from squid.core.builds.application.services import (
 )
 
 __all__ = [
-    "BUILD_SORT_FIELDS",
-    "DEFAULT_BUILD_LIST_SORT",
     "BuildEditPatch",
     "BuildEmbeddingService",
     "BuildInferenceInput",
@@ -37,7 +32,6 @@ __all__ = [
     "BuildListSort",
     "BuildQueryService",
     "BuildService",
-    "BuildSortField",
     "ContextIdentity",
     "ContextMessage",
     "InferenceResult",

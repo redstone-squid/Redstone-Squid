@@ -193,6 +193,17 @@ export type BuildLinks = {
 };
 
 /**
+ * BuildListSort
+ *
+ * A named display order for build listings.
+ *
+ * Each order is total, so identifier anchors work with all of them. `ID` lists the newest IDs
+ * first and seeks without looking up the anchor, which makes it the order for full traversal.
+ *
+ */
+export type BuildListSort = 'id' | 'newest' | 'oldest' | 'updated' | 'fastest_open' | 'smallest_volume' | 'title';
+
+/**
  * BuildMedia
  */
 export type BuildMedia = {
@@ -2187,6 +2198,16 @@ export type RecordInspection = {
 };
 
 /**
+ * RecordListSort
+ *
+ * A named display order for record listings.
+ *
+ * `ID` lists the most recently published results first, anchored by result ID.
+ *
+ */
+export type RecordListSort = 'id';
+
+/**
  * RecordOperator
  *
  * How a tag assignment satisfies a record-category predicate.
@@ -3896,14 +3917,20 @@ export type BuildsListData = {
     body?: never;
     path?: never;
     query?: {
-        q?: string | null;
         status?: BuildStatusFilter | null;
         category?: BuildCategory | null;
-        version?: number | null;
+        version_id?: number | null;
         tag?: Array<string> | null;
         creator_id?: string | null;
         submitted_by?: 'me' | null;
-        sort?: 'newest' | 'oldest' | 'updated' | 'fastest_open' | 'smallest_volume' | 'title' | null;
+        /**
+         * A named display order for build listings.
+         *
+         * Each order is total, so identifier anchors work with all of them. `ID` lists the newest IDs
+         * first and seeks without looking up the anchor, which makes it the order for full traversal.
+         *
+         */
+        sort?: BuildListSort;
         /**
          * Maximum number of items to return.
          */
@@ -5146,69 +5173,6 @@ export type AccountMinecraftRefreshResponses = {
 };
 
 export type AccountMinecraftRefreshResponse = AccountMinecraftRefreshResponses[keyof AccountMinecraftRefreshResponses];
-
-export type AccountBuildsListData = {
-    body?: never;
-    path?: never;
-    query?: {
-        status?: BuildStatusFilter | null;
-        /**
-         * Maximum number of items to return.
-         */
-        page_size?: number;
-        /**
-         * Number of items to skip. Excludes after_id and before_id.
-         */
-        offset?: number | null;
-        /**
-         * Return the items after this identifier in display order. Excludes offset.
-         */
-        after_id?: number | null;
-        /**
-         * Return the items before this identifier in display order. Excludes offset.
-         */
-        before_id?: number | null;
-    };
-    url: '/v1/users/me/builds';
-};
-
-export type AccountBuildsListErrors = {
-    /**
-     * Bad Request
-     */
-    400: ProblemDetail;
-    /**
-     * Unauthorized
-     */
-    401: ProblemDetail;
-    /**
-     * Forbidden
-     */
-    403: ProblemDetail;
-    /**
-     * Unprocessable Content
-     */
-    422: ValidationProblemDetail;
-    /**
-     * Too Many Requests
-     */
-    429: ProblemDetail;
-    /**
-     * Service Unavailable
-     */
-    503: ProblemDetail;
-};
-
-export type AccountBuildsListError = AccountBuildsListErrors[keyof AccountBuildsListErrors];
-
-export type AccountBuildsListResponses = {
-    /**
-     * Request fulfilled, document follows
-     */
-    200: PageSquidCoreBuildsApplicationQueriesPublicBuildSummary;
-};
-
-export type AccountBuildsListResponse = AccountBuildsListResponses[keyof AccountBuildsListResponses];
 
 export type AccountMinecraftRefreshForData = {
     body?: never;
@@ -6521,7 +6485,13 @@ export type RecordsListData = {
     body?: never;
     path?: never;
     query?: {
-        sort?: string | null;
+        /**
+         * A named display order for record listings.
+         *
+         * `ID` lists the most recently published results first, anchored by result ID.
+         *
+         */
+        sort?: RecordListSort;
         /**
          * Maximum number of items to return.
          */
