@@ -4,7 +4,8 @@ import logging
 from collections.abc import Callable, Sequence
 from typing import override
 
-from sqlalchemy import String, func, literal, or_, select, true
+from sqlalchemy import Integer, String, Text, cast, func, literal, or_, select, true
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql.elements import ColumnElement
 
@@ -21,6 +22,7 @@ from squid.core.search.application import (
     reciprocal_rank_fusion,
 )
 from squid.core.search.application.ports import QueryEmbedding
+from squid.core.search.application.query_analysis import close_match_terms, mentions_field
 from squid.core.search.domain import (
     FieldDefinition,
     SearchMode,
@@ -30,9 +32,10 @@ from squid.core.search.domain import (
     TextExpression,
 )
 from squid.core.search.domain.query import expression_applies_to
-from squid.core.search.infrastructure.compiler import compile_query
+from squid.core.search.domain.text import TermExpansion, close_distance, terms
+from squid.core.search.infrastructure.compiler import compile_query, rank_query
 from squid.core.search.infrastructure.results import ResultOrder, ResultPager
-from squid.core.search.models import SearchDocument
+from squid.core.search.models import SearchDocument, SearchTerm
 
 _CANDIDATE_LIMIT = 200
 _PUBLIC_BUILD_STATUSES = frozenset({"approved"})
@@ -43,11 +46,13 @@ logger = logging.getLogger(__name__)
 class PostgresSearchBackend(SearchBackend):
     """Filter search documents and choose the order in which ResultPager pages them.
 
+    Unquoted words also match indexed close spellings, looked up once per search.
     An explicit field sort orders all matches by that field. With no sort and no
-    positive text to rank, matches use title order. Otherwise, exact-title,
-    full-text, and trigram queries each collect a bounded list of candidates;
-    semantic mode adds a vector-similarity list. Reciprocal rank fusion combines
-    their positions into a relevance score.
+    positive text to rank, matches use title order. Otherwise, a heading match and
+    a weighted full-text rank each collect a bounded list of candidates, and record
+    searches add records whose heading contains every word; semantic mode adds a
+    vector-similarity list. Reciprocal rank fusion combines their positions into a
+    relevance score.
 
     Every branch applies the complete query and visibility filters. Ranked totals
     count the combined candidate pool, while sorted and filter-only totals count
@@ -67,17 +72,25 @@ class PostgresSearchBackend(SearchBackend):
         query_embedding: QueryEmbedding | None = None,
     ) -> SearchSlice:
         """Search indexed documents and return the window starting at `request.offset`."""
-        predicate = self.compile_predicate(request, query)
         session = self._session()
+        expansion = await self._expansion(session, query)
+        predicate = self.compile_predicate(request, query, expansion)
         order: ResultOrder = sort_field
         warnings: tuple[str, ...] = ()
         if sort_field is None and not is_filter_only(query):
-            order, warnings = await self._ranked(session, request, query, predicate, query_embedding)
-        return await ResultPager(session, request, query).page(predicate, order, warnings=warnings)
+            order, warnings = await self._ranked(session, request, query, predicate, expansion, query_embedding)
+        return await ResultPager(session, request, query, expansion).page(predicate, order, warnings=warnings)
 
-    def compile_predicate(self, request: SearchRequest, query: SearchQuery) -> ColumnElement[bool]:
-        """Compile scope, visibility policy, and the complete user predicate."""
-        predicate = self._scope_predicate(request.scope) & compile_query(query)
+    def compile_predicate(
+        self, request: SearchRequest, query: SearchQuery, expansion: TermExpansion | None = None
+    ) -> ColumnElement[bool]:
+        """Compile scope, visibility policy, and the complete user predicate.
+
+        Retired records only match a query that mentions `record_state`.
+        """
+        predicate = self._scope_predicate(request.scope) & compile_query(query, expansion or TermExpansion())
+        if request.scope in {SearchScope.RECORDS, SearchScope.ALL} and not mentions_field(query, "record_state"):
+            predicate &= or_(SearchDocument.resource_kind != "record", SearchDocument.status == "current")
         visible_statuses = request.visible_statuses
         if visible_statuses is None and request.scope in {SearchScope.BUILDS, SearchScope.ALL}:
             visible_statuses = _PUBLIC_BUILD_STATUSES
@@ -99,20 +112,43 @@ class PostgresSearchBackend(SearchBackend):
     @override
     async def suggest(self, query: SearchQuery, *, limit: int) -> tuple[str, ...]:
         """Suggest close indexed titles using trigram similarity."""
-        terms = _ranking_text(query)
-        if not terms:
+        text = _ranking_text(query)
+        if not text:
             return ()
         session = self._session()
+        similarity = func.similarity(SearchDocument.normalized_title, text)
         statement = (
             select(SearchDocument.title)
-            .where(
-                _visible_builds(_PUBLIC_BUILD_STATUSES),
-                func.similarity(SearchDocument.fuzzy_text, terms) > 0.1,
-            )
-            .order_by(func.similarity(SearchDocument.fuzzy_text, terms).desc(), SearchDocument.normalized_title)
+            .where(_visible_builds(_PUBLIC_BUILD_STATUSES), similarity > 0.1)
+            .order_by(similarity.desc(), SearchDocument.normalized_title)
             .limit(limit)
         )
         return tuple((await session.scalars(statement)).all())
+
+    async def _expansion(self, session: AsyncSession, query: SearchQuery) -> TermExpansion:
+        """Find indexed close spellings of the query's unquoted words in one lookup."""
+        words = sorted(close_match_terms(query))
+        if not words:
+            return TermExpansion()
+        requested = select(
+            func.unnest(cast(words, ARRAY(Text))).label("word"),
+            func.unnest(cast([close_distance(word) for word in words], ARRAY(Integer))).label("edits"),
+        ).subquery()
+        rows = await session.execute(
+            select(requested.c.word, SearchTerm.term).join(
+                SearchTerm,
+                (SearchTerm.term != requested.c.word)
+                & (func.abs(func.length(SearchTerm.term) - func.length(requested.c.word)) <= requested.c.edits)
+                & (
+                    func.levenshtein_less_equal(SearchTerm.term, requested.c.word, requested.c.edits)
+                    <= requested.c.edits
+                ),
+            )
+        )
+        close: dict[str, set[str]] = {}
+        for word, term in rows.tuples():
+            close.setdefault(word, set()).add(term)
+        return TermExpansion({word: frozenset(found) for word, found in close.items()})
 
     async def _ranked(
         self,
@@ -120,6 +156,7 @@ class PostgresSearchBackend(SearchBackend):
         request: SearchRequest,
         query: SearchQuery,
         predicate: ColumnElement[bool],
+        expansion: TermExpansion,
         query_embedding: QueryEmbedding | None,
     ) -> tuple[dict[int, RankedCandidate], tuple[str, ...]]:
         """Fuse the ranking branches into scored candidates by document ID, with any warnings.
@@ -128,7 +165,7 @@ class PostgresSearchBackend(SearchBackend):
         candidates are paged, so pagination ends at the documents we actually
         ranked even when more match the filters.
         """
-        terms = _ranking_text(query)
+        text = _ranking_text(query)
         # Record shorthand parses the leading base title as a filter. Keep it in
         # the heading comparison so "fastest 2x2 door" favors the general record.
         record_query = request.scope is SearchScope.RECORDS or (
@@ -137,29 +174,26 @@ class PostgresSearchBackend(SearchBackend):
             and expression_applies_to(query.expression, SearchScope.RECORDS)
             and not expression_applies_to(query.expression, SearchScope.BUILDS)
         )
-        exact_match = SearchDocument.normalized_title == terms.casefold()
-        heading = func.concat_ws(" ", SearchDocument.title, SearchDocument.subtitle)
-        if record_query:
-            exact_terms = " ".join(request.query.casefold().split())
-            # Restrictions can appear in the subtitle. Trigram sets recognize the
-            # same heading words even when the query puts a restriction first.
-            exact_match = or_(
-                (SearchDocument.resource_kind != "record") & exact_match,
-                (SearchDocument.resource_kind == "record") & (func.similarity(heading, exact_terms) == 1.0),
-            )
+        heading_terms = sorted(set(terms(request.query if record_query else text)))
         branches: dict[RankingBranch, Sequence[RankedCandidate]] = {
-            RankingBranch.EXACT: await self._candidate_rows(session, predicate & exact_match, literal(1.0)),
-            RankingBranch.FULL_TEXT: await self._fts_candidates(session, predicate, terms),
-            RankingBranch.TRIGRAM: await self._trigram_candidates(session, predicate, terms),
+            RankingBranch.EXACT: await self._candidate_rows(
+                session, predicate & (SearchDocument.heading_terms == heading_terms), literal(1.0)
+            ),
         }
-        if record_query:
-            # A holder can match the same words as a category. Prefer records whose
-            # own heading contains the terms, including any restriction in the subtitle.
-            heading_matches = func.to_tsvector("simple", heading).bool_op("@@")(func.plainto_tsquery("simple", terms))
+        # Rank by exact terms; documents matched only through close spellings come last.
+        if (ranking := rank_query(text)) is not None:
+            branches[RankingBranch.FULL_TEXT] = await self._candidate_rows(
+                session, predicate, func.ts_rank_cd(SearchDocument.search_vector, ranking)
+            )
+        if record_query and heading_terms:
+            # A holder can match the same words as a category. Prefer records whose own
+            # heading has every word, and among those the most general category.
             branches[RankingBranch.RECORD_TITLE] = await self._candidate_rows(
                 session,
-                predicate & (SearchDocument.resource_kind == "record") & heading_matches,
-                func.similarity(heading, terms),
+                predicate
+                & (SearchDocument.resource_kind == "record")
+                & SearchDocument.heading_terms.contains(heading_terms),
+                -func.cardinality(SearchDocument.heading_terms),
             )
         warnings: tuple[str, ...] = ()
         if request.mode is SearchMode.SEMANTIC:
@@ -177,23 +211,6 @@ class PostgresSearchBackend(SearchBackend):
                     warnings = (_SEMANTIC_WARNING,)
         return {candidate.document_id: candidate for candidate in reciprocal_rank_fusion(branches)}, warnings
 
-    async def _fts_candidates(
-        self, session: AsyncSession, predicate: ColumnElement[bool], terms: str
-    ) -> tuple[RankedCandidate, ...]:
-        text_query = func.plainto_tsquery("simple", terms)
-        score = func.ts_rank_cd(SearchDocument.combined_vector, text_query)
-        return await self._candidate_rows(
-            session,
-            predicate & SearchDocument.combined_vector.bool_op("@@")(text_query),
-            score,
-        )
-
-    async def _trigram_candidates(
-        self, session: AsyncSession, predicate: ColumnElement[bool], terms: str
-    ) -> tuple[RankedCandidate, ...]:
-        score = func.similarity(SearchDocument.fuzzy_text, terms)
-        return await self._candidate_rows(session, predicate & (score > 0.1), score)
-
     async def _candidate_rows(
         self,
         session: AsyncSession,
@@ -201,12 +218,14 @@ class PostgresSearchBackend(SearchBackend):
         score: ColumnElement[float],
     ) -> tuple[RankedCandidate, ...]:
         statement = (
-            select(SearchDocument.id)
+            select(SearchDocument.id, score.label("score"))
             .where(predicate)
             .order_by(score.desc(), SearchDocument.resource_kind, SearchDocument.source_key)
             .limit(_CANDIDATE_LIMIT)
         )
-        return tuple(RankedCandidate(document_id) for document_id in (await session.scalars(statement)).all())
+        return tuple(
+            RankedCandidate(document_id, float(value)) for document_id, value in (await session.execute(statement))
+        )
 
     async def _semantic_candidates(
         self,
@@ -225,12 +244,14 @@ class PostgresSearchBackend(SearchBackend):
             .subquery()
         )
         statement = (
-            select(SearchDocument.id)
+            select(SearchDocument.id, nearest.c.distance)
             .join(nearest, SearchDocument.id == nearest.c.id)
             .where(predicate)
             .order_by(nearest.c.distance)
         )
-        return tuple(RankedCandidate(document_id) for document_id in (await session.scalars(statement)).all())
+        return tuple(
+            RankedCandidate(document_id, -float(distance)) for document_id, distance in await session.execute(statement)
+        )
 
     @staticmethod
     def _scope_predicate(scope: SearchScope) -> ColumnElement[bool]:

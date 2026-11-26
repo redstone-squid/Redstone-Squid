@@ -1,7 +1,7 @@
 """Combine ordered search results without depending on database score scales.
 
-A ranking branch is one way of finding candidates: exact title, full-text,
-trigram, or semantic matching. Each branch supplies its own best-first list.
+A ranking branch is one way of finding candidates: a heading that names the
+query, a record heading with every word, weighted full text, or semantic matching. Each branch supplies its own best-first list.
 Reciprocal rank fusion rewards documents near the top of those lists and adds
 their contributions when several branches find the same document.
 """
@@ -22,7 +22,6 @@ class RankingBranch(StrEnum):
     RECORD_TITLE = "record_title"
     EXACT = "exact"
     FULL_TEXT = "full_text"
-    TRIGRAM = "trigram"
     SEMANTIC = "semantic"
 
 
@@ -30,17 +29,20 @@ DEFAULT_RRF_WEIGHTS: Mapping[RankingBranch, float] = {
     RankingBranch.RECORD_TITLE: 4.0,
     RankingBranch.EXACT: 4.0,
     RankingBranch.FULL_TEXT: 2.0,
-    RankingBranch.TRIGRAM: 1.0,
     RankingBranch.SEMANTIC: 1.5,
 }
 
 
 @dataclass(frozen=True, slots=True)
 class RankedCandidate:
-    """A search document's ID with its ranking score and the branches that found it."""
+    """A search document's ID with its ranking score and the branches that found it.
+
+    In a branch's input list, `score` only marks ties: candidates with the same score
+    share a rank. None ranks by position alone. Fused candidates carry their fused score.
+    """
 
     document_id: int
-    score: float = 0
+    score: float | None = None
     branches: tuple[RankingBranch, ...] = ()
 
 
@@ -55,7 +57,9 @@ def reciprocal_rank_fusion(
 
     Each branch must already be ordered from best to worst. A document receives
     `weight / (k + rank)` from each branch that contains it, with ranks starting
-    at one. Input scores are ignored because the branches use different scales.
+    at one. Candidates with the same score share the better rank, so a tie within
+    a branch does not favor whichever document the database listed first. Scores
+    are otherwise ignored, because the branches use different scales.
 
     Only the first `branch_limit` entries of each branch are considered. Repeated
     documents within that window count once and do not consume a rank. The
@@ -77,16 +81,21 @@ def reciprocal_rank_fusion(
             branch_name = branch.value
             raise ValidationError(md_tr(t"search-weight-negative = weight for {branch_name} cannot be negative"))
         seen: set[int] = set()
+        rank = 0
+        previous: float | None = None
         for candidate in candidates[:branch_limit]:
             key = candidate.document_id
             if key in seen:
                 continue
             seen.add(key)
+            if candidate.score is None or candidate.score != previous:
+                rank = len(seen)
+            previous = candidate.score
             contributions[key].append(branch)
-            scores[key] += weight / (k + len(seen))
+            scores[key] += weight / (k + rank)
     fused = (RankedCandidate(key, scores[key], tuple(found_by)) for key, found_by in contributions.items())
     return tuple(sorted(fused, key=_ranked_sort_key))
 
 
 def _ranked_sort_key(candidate: RankedCandidate) -> tuple[float, int]:
-    return (-candidate.score, candidate.document_id)
+    return (-(candidate.score or 0), candidate.document_id)

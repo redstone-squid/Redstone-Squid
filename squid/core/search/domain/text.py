@@ -9,7 +9,8 @@ searching the text again.
 
 import re
 import unicodedata
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 
 _TERM = re.compile(r"[^\W_]+")
 
@@ -53,3 +54,29 @@ def _fold(value: str) -> tuple[str, list[int]]:
             characters.append(folded)
             offsets.append(index)
     return "".join(characters), offsets
+
+
+def close_distance(term: str) -> int:
+    """Return how many edits a close spelling of `term` may differ by; 0 allows only the term itself.
+
+    Terms with digits name sizes and timings, where one edit is a different build:
+    `2x2` and `2x3` must not match each other.
+    """
+    if len(term) < 4 or any(character.isdigit() for character in term):
+        return 0
+    return 1 if len(term) < 8 else 2
+
+
+@dataclass(frozen=True, slots=True)
+class TermExpansion:
+    """The indexed close spellings found for a query's unquoted words.
+
+    The backend looks these up once per search, and filtering, ranking and the
+    explanation of each hit all read the same expansion, so they agree on what matched.
+    """
+
+    close: Mapping[str, frozenset[str]] = field(default_factory=dict)
+
+    def matches(self, term: str) -> frozenset[str]:
+        """Return the term and its close spellings."""
+        return self.close.get(term, frozenset()) | {term}

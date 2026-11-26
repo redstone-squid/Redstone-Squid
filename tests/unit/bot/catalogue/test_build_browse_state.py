@@ -278,26 +278,25 @@ async def test_sort_keeps_the_focused_record_and_its_open_holder(monkeypatch: py
     records.list_page.return_value = Page(items=(record,), total=1, next=None, prev=None)
     screen = _screen(initial_id=None, records=records, initial_records=True)
     service = cast(AsyncMock, screen._search_service)
-    hit = RecordSearchHit("result:10", record.title, None, 9, "Door 9", "smallest", "all_time", holder_build_ids=(7, 9))
+    key = f"record:{record.record_id}"
+    hit = RecordSearchHit(key, record.title, None, 9, "Door 9", "smallest", "all_time", holder_build_ids=(7, 9))
     service.search.return_value = SearchPage((hit,), total=1, next=None, prev=None)
     async with stage(screen, owner=object()) as ui:
         await ui.select("records.open", ["10"])
         await ui.press("holder-7")
         await pick_sort(ui, "-width", monkeypatch)
 
-        assert service.search.call_args.args[0].anchor == SearchResultAnchor("record", "result:10")
+        assert service.search.call_args.args[0].anchor == SearchResultAnchor("record", key)
         assert "Build #7" in ui.texts()
         await ui.press("linked-build.back")
         assert f"## {record.title}" in ui.texts()
         await ui.press("holder-7")
         await pick_sort(ui, "width", monkeypatch)
 
-        assert service.search.call_args.args[0].anchor == SearchResultAnchor("record", "result:10")
+        assert service.search.call_args.args[0].anchor == SearchResultAnchor("record", key)
         assert screen._sort == "width"
         assert screen._results is not None
-        assert screen._results.focus == SearchFocus(
-            SearchResultAnchor("record", "result:10"), record_id="result:10", show_records=True
-        )
+        assert screen._results.focus == SearchFocus(SearchResultAnchor("record", key), record_id=key, show_records=True)
         assert "Build #7" in ui.texts()
         await ui.press("linked-build.back")
         assert f"## {record.title}" in ui.texts()

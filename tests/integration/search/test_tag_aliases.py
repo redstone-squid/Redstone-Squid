@@ -27,8 +27,9 @@ from squid.core.records.models import (
 )
 from squid.core.search.application import SearchService
 from squid.core.search.domain import BuildSearchHit, SearchPage, SearchRequest, SearchScope, SearchSort
+from squid.core.search.domain.text import normalize_text
 from squid.core.search.infrastructure.projection import SearchProjectionWorker
-from squid.core.search.models import SearchDocument, SearchProjectionQueueItem
+from squid.core.search.models import SearchDocument, SearchProjectionQueueItem, SearchValue
 from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.core.tags.models import TagAlias, TagAssignment, TagDefinition
 from tests.support.build_edits import build_edit_session
@@ -111,9 +112,9 @@ async def test_keyword_aliases_and_exact_filters_keep_display_names(
     assert _ids(page) == {target_id, textual_id}
     target = next(hit for hit in page.hits if hit.source_id == str(target_id))
     assert isinstance(target, BuildSearchHit)
-    assert "no observers" in target.tags
-    assert "observerless" not in target.tags
-    assert "ghostkeyword" not in target.tags
+    assert "No Observers" in target.tags
+    assert "Observerless" not in target.tags
+    assert "Unapproved Feature" not in target.tags
     assert any("full_text" in match.branches for match in target.matches)
 
     for query in (
@@ -225,15 +226,19 @@ async def test_alias_addition_rename_and_removal_refresh_assigned_builds(
                 )
                 == set()
             )
-            # Check the indexed text too: fuzzy matching could still find the renamed synonym.
+            # Check the indexed values too: bare text could still find the renamed synonym.
             async with migrated_session_factory() as session:
-                document = await session.scalar(
-                    select(SearchDocument).where(
-                        SearchDocument.resource_kind == "build", SearchDocument.source_key == str(target_id)
+                stale = await session.scalar(
+                    select(func.count())
+                    .select_from(SearchValue)
+                    .join(SearchDocument, SearchDocument.id == SearchValue.document_id)
+                    .where(
+                        SearchDocument.resource_kind == "build",
+                        SearchDocument.source_key == str(target_id),
+                        SearchValue.normalized_text == normalize_text(old),
                     )
                 )
-                assert document is not None
-                assert old.casefold() not in document.fuzzy_text
+                assert stale == 0
 
 
 async def test_migration_requeues_existing_builds_and_tag_metadata(
@@ -314,7 +319,7 @@ async def test_record_category_filters_match_without_holders_and_refresh_aliases
                 )
                 session.add(result)
                 await session.flush()
-                result_ids.append(f"result:{result.id}")
+                result_ids.append(f"record:{record.public_id}")
     await _refresh(migrated_session_factory)
 
     service = SearchService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))

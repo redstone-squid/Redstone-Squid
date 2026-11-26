@@ -2,6 +2,7 @@
 
 from collections.abc import Sequence
 from typing import NamedTuple, override
+from uuid import UUID
 
 import pytest
 
@@ -90,7 +91,7 @@ async def test_search_renders_each_resource_kind_and_hydrates_builds() -> None:
         hits=(
             BuildSearchHit(source_id="42", title="Stale projection title", status="approved", score=1.5),
             RecordSearchHit(
-                source_id="result:7",
+                source_id="record:00000000-0000-0000-0000-000000000007",
                 title="Smallest 2x2",
                 subtitle="all-time",
                 build_id=42,
@@ -118,7 +119,7 @@ async def test_search_renders_each_resource_kind_and_hydrates_builds() -> None:
     # The authoritative row wins over the projection snapshot's copy of the same facts.
     assert build_item.build.title != "Stale projection title"
     assert build_item.build.id == 42
-    assert record_item.record.record_id == 7
+    assert record_item.record.record_id == UUID(int=7)
     assert metadata_item.metadata.id == "tag:3"
     assert result.total == 9
     assert result.next is not None
@@ -127,7 +128,7 @@ async def test_search_renders_each_resource_kind_and_hydrates_builds() -> None:
 
 async def test_grouped_api_returns_record_context_and_origin() -> None:
     record = RecordSearchHit(
-        "result:7",
+        "record:00000000-0000-0000-0000-000000000007",
         "Smallest door",
         None,
         42,
@@ -142,7 +143,7 @@ async def test_grouped_api_returns_record_context_and_origin() -> None:
         "Stale title",
         "approved",
         records=(record,),
-        matches=(SearchMatch("record", "result:7", ("trigram",)),),
+        matches=(SearchMatch("record", "record:00000000-0000-0000-0000-000000000007", ("full_text",)),),
         title_match=SearchText("Stale title", ((0, 5),)),
     )
     graph = fakes(SearchPage((hit,), total=1, next=None, prev=None), [indexed_build()])
@@ -157,7 +158,7 @@ async def test_grouped_api_returns_record_context_and_origin() -> None:
     assert item.records[0].title_match == record.title_match
     assert item.matches == list(hit.matches)
     assert item.title_match is None  # Hydration changed the text those offsets referred to.
-    assert item.model_dump(mode="json")["matches"][0]["branches"] == ["trigram"]
+    assert item.model_dump(mode="json")["matches"][0]["branches"] == ["full_text"]
 
 
 @pytest.mark.asyncio

@@ -638,7 +638,7 @@ def _result_description(hit: SearchHit, request: SearchRequest) -> sl.TextLike:
 
 def _detail_text(hit: SearchHit) -> sl.TextLike:
     if isinstance(hit, RecordSearchHit):
-        tags = ", ".join(tag for tag in hit.tags)
+        tags = ""
         build_title = hit.build_title
         build_id = hit.build_id
         criterion = RECORD_CRITERIA[RecordCriterion(hit.criterion)]

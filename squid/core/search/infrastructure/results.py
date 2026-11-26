@@ -35,6 +35,7 @@ from squid.core.search.domain import (
     SearchText,
     SortDirection,
 )
+from squid.core.search.domain.text import TermExpansion
 from squid.core.search.infrastructure.compiler import (
     compile_holder_query,
     compile_query,
@@ -42,7 +43,7 @@ from squid.core.search.infrastructure.compiler import (
     matching_holder,
 )
 from squid.core.search.infrastructure.hits import document_hit, public_identity
-from squid.core.search.models import SearchDocument, SearchDocumentFilter
+from squid.core.search.models import SearchDocument, SearchValue
 
 type ResultOrder = Mapping[int, RankedCandidate] | FieldDefinition | None
 """How result units are ordered.
@@ -66,10 +67,13 @@ class ResultPager:
     builds, so a bounded relevance pool does not truncate a build's records.
     """
 
-    def __init__(self, session: AsyncSession, request: SearchRequest, query: SearchQuery) -> None:
+    def __init__(
+        self, session: AsyncSession, request: SearchRequest, query: SearchQuery, expansion: TermExpansion
+    ) -> None:
         self.session = session
         self.request = request
         self.query = query
+        self.expansion = expansion
         self.holder_filters = has_holder_filters(query)
         self.statuses = request.visible_statuses if request.visible_statuses is not None else frozenset({"approved"})
 
@@ -93,9 +97,8 @@ class ResultPager:
             statement = statement.add_columns(func.min(units.c.unit_title).label("order_value"))
         elif isinstance(order, FieldDefinition):
             statement = statement.outerjoin(
-                SearchDocumentFilter,
-                (SearchDocumentFilter.document_id == units.c.document_id)
-                & (SearchDocumentFilter.field_name == (order.storage_name or order.name)),
+                SearchValue,
+                (SearchValue.document_id == units.c.document_id) & (SearchValue.field_name == order.storage),
             ).add_columns(self._sort_value(order).label("order_value"))
         paged = statement.cte("result_units")
         total = await self.session.scalar(select(func.count()).select_from(paged)) or 0
@@ -142,7 +145,7 @@ class ResultPager:
             preferred_holders: dict[int, int | None] = {}
             if self.holder_filters:
                 rows = await self.session.execute(
-                    select(SearchDocument.id, matching_holder(self.query)).where(
+                    select(SearchDocument.id, matching_holder(self.query, self.expansion)).where(
                         SearchDocument.id.in_(unit_ids), SearchDocument.resource_kind == "record"
                     )
                 )
@@ -171,10 +174,10 @@ class ResultPager:
         once per value, which would shift page offsets.
         """
         value = {
-            FieldType.TEXT: func.lower(SearchDocumentFilter.text_value),
-            FieldType.NUMBER: SearchDocumentFilter.numeric_value,
-            FieldType.TIMESTAMP: SearchDocumentFilter.timestamp_value,
-            FieldType.BOOLEAN: SearchDocumentFilter.boolean_value,
+            FieldType.TEXT: func.lower(SearchValue.text_value),
+            FieldType.NUMBER: SearchValue.numeric_value,
+            FieldType.TIMESTAMP: SearchValue.timestamp_value,
+            FieldType.BOOLEAN: SearchValue.boolean_value,
         }[field.value_type]
         if field.value_type is FieldType.BOOLEAN:
             # PostgreSQL has no min/max over boolean; these are the same aggregates on false < true.
@@ -201,7 +204,7 @@ class ResultPager:
         ).all()
         for unit_id, document in rows:
             contributions[unit_id].append(document)
-        records = await self._records(documents, compile_query(self.query), ranked)
+        records = await self._records(documents, compile_query(self.query, self.expansion), ranked)
         hits: list[SearchHit] = []
         for unit_id in unit_ids:
             hit = document_hit(documents[unit_id], scores[unit_id])
@@ -238,7 +241,7 @@ class ResultPager:
         if not self.request.group_by_build:
             return own.cte("matches")
         build = aliased(SearchDocument)
-        holder = SearchDocumentFilter
+        holder = SearchValue
         statuses = sorted(status.casefold() for status in self.statuses)
         # In record scope the result is headed by its best record, so it sorts by record title.
         record_title = (
@@ -262,7 +265,7 @@ class ResultPager:
             .where(predicate, document.resource_kind == "record", func.lower(build.status).in_(statuses))
         )
         if self.holder_filters:
-            held = held.where(compile_holder_query(self.query, holder.holder_build_id))
+            held = held.where(compile_holder_query(self.query, holder.holder_build_id, self.expansion))
         return union_all(own.where(document.resource_kind != "record"), held).cte("matches")
 
     async def _records(
@@ -277,9 +280,9 @@ class ResultPager:
         }
         if not build_keys:
             return {}
-        holder = SearchDocumentFilter
+        holder = SearchValue
         if self.holder_filters:
-            predicate = compile_holder_query(self.query, holder.holder_build_id)
+            predicate = compile_holder_query(self.query, holder.holder_build_id, self.expansion)
         statement = (
             select(SearchDocument, holder.text_value, predicate.label("matched"))
             .join(
@@ -334,7 +337,7 @@ class ResultPager:
                     key=lambda hit: (
                         not hit.matched,
                         -(hit.score or 0),
-                        int(hit.source_id.removeprefix("result:")),
+                        hit.source_id,
                     ),
                 )
             )

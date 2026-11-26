@@ -4,10 +4,13 @@ from squid.core.search.domain import (
     BooleanExpression,
     FieldExpression,
     NotExpression,
+    PresenceExpression,
     QueryExpression,
     SearchQuery,
     TextExpression,
+    TextMatch,
 )
+from squid.core.search.domain.text import close_distance, terms
 
 
 def positive_text_expressions(query: SearchQuery) -> tuple[TextExpression | FieldExpression, ...]:
@@ -43,3 +46,33 @@ def _collect_positive_text(
         return
     elif isinstance(expression, TextExpression) or (isinstance(expression, FieldExpression) and expression.ranked):
         output.append(expression)
+
+
+def close_match_terms(query: SearchQuery) -> frozenset[str]:
+    """Return the unquoted, non-negated query terms that may match close spellings."""
+    found: set[str] = set()
+    for expression in positive_text_expressions(query):
+        if isinstance(expression, FieldExpression) and expression.field.text_match is not TextMatch.WORDS:
+            continue
+        if expression.phrase:
+            continue
+        value = expression.value if isinstance(expression, TextExpression) else str(expression.value)
+        found.update(term for term in terms(value) if close_distance(term))
+    return frozenset(found)
+
+
+def mentions_field(query: SearchQuery, name: str) -> bool:
+    """Tell whether any clause, including negated ones, names the field."""
+
+    def visit(expression: QueryExpression | None) -> bool:
+        match expression:
+            case BooleanExpression(operands=operands):
+                return any(visit(operand) for operand in operands)
+            case NotExpression(operand=operand):
+                return visit(operand)
+            case FieldExpression(field=field) | PresenceExpression(field=field):
+                return field.name == name
+            case _:
+                return False
+
+    return visit(query.expression)

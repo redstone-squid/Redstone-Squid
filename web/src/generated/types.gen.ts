@@ -2155,20 +2155,20 @@ export type RecordResolution = {
  * RecordSearchEntry
  */
 export type RecordSearchEntry = {
-    record_id: number;
+    record_id: string;
     title: string;
     subtitle: string | null;
     build_id: number;
     build_title: string;
     criterion: string;
     version_scope: string;
-    tags: Array<string>;
     metrics: {
         [key: string]: string | number | number | boolean;
     };
     holder_build_ids?: Array<number>;
     holders?: Array<RecordSearchHolder>;
     matched?: boolean;
+    retired?: boolean;
     title_match?: SearchText | null;
 };
 

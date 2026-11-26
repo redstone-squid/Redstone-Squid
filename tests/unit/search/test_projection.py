@@ -1,8 +1,9 @@
-"""Tests for search projection normalization and typed filters."""
+"""Tests for the field values that builds, records and tags project."""
 
 from dataclasses import replace
 from decimal import Decimal
 from unittest.mock import AsyncMock
+from uuid import UUID
 
 import pytest
 from sqlalchemy.engine import IteratorResult
@@ -11,32 +12,33 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
 from squid.core.builds.domain import BuildStatus
-from squid.core.builds.models import Build, DoorBuild, OtherBuild
+from squid.core.builds.models import Build, DoorBuild, ExtenderBuild, OtherBuild
+from squid.core.search.infrastructure.documents import FieldValue, SearchProjection
 from squid.core.search.infrastructure.projection import (
-    ProjectionFilter,
     RecordHolderProjectionSource,
     RecordProjectionSource,
-    SearchProjection,
     SearchProjectionLoader,
     TagProjectionSource,
-    build_filter_models,
     build_record_projection,
     build_tag_projection,
-    normalize_search_text,
     parse_projection_key,
-    projection_source_hash,
 )
 from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.core.tags.models import TagAlias, TagAssignment, TagDefinition
 
-
-def test_loader_rejects_retired_legacy_record_keys() -> None:
-    assert parse_projection_key("record", "legacy-smallest:1") is None
+_RECORD_ID = UUID("6f1c2a4e-0d3b-4c5a-9e7f-1a2b3c4d5e6f")
 
 
-def test_record_documents_carry_titles_not_category_keys() -> None:
+def test_records_are_keyed_by_their_public_id() -> None:
+    assert parse_projection_key("record", f"record:{_RECORD_ID}") == ("record", _RECORD_ID)
+    assert parse_projection_key("record", "result:1") is None
+    assert parse_projection_key("record", "record:not-a-uuid") is None
+
+
+def _record_source(*, result_id: int | None = 3, **changes: object) -> RecordProjectionSource:
     source = RecordProjectionSource(
-        result_id=3,
+        record_id=_RECORD_ID,
+        result_id=result_id,
         definition_id=7,
         history_complete=True,
         gap_reasons={},
@@ -47,13 +49,20 @@ def test_record_documents_carry_titles_not_category_keys() -> None:
         title="Fastest 2x2 Door",
         subtitle="All-time",
     )
+    return replace(source, **changes)  # type: ignore[arg-type]
+
+
+def test_record_documents_keep_category_text_apart_from_holder_text() -> None:
+    source = _record_source()
 
     projection = build_record_projection(source)
 
-    # With no holder, the definition's formatted title is the fallback, never the raw key.
+    assert projection.source_key == f"record:{_RECORD_ID}"
     assert projection.title == "Fastest 2x2 Door"
-    assert projection.subtitle == "All-time"
-    assert projection.tags == ("fastest", "door", "all_time")
+    assert projection.status == "current"
+    assert FieldValue("title", "Fastest 2x2 Door") in projection.values
+    assert FieldValue("subtitle", "All-time") in projection.values
+    assert FieldValue("base_title", "fastest") in projection.values
     assert projection.document_data["category_key"] == source.category_key
 
     held = build_record_projection(
@@ -63,53 +72,33 @@ def test_record_documents_carry_titles_not_category_keys() -> None:
             RecordHolderProjectionSource(57, "2x2 Compact Door", {"opening": 4}, ("Bob",), ("bob-id",)),
         ),
     )
-    assert held.description == "2x2 Seamless Door Alice\n2x2 Compact Door Bob"
-    assert ProjectionFilter("creator", "Bob") in held.filters
-    assert ProjectionFilter("creator_id", "bob-id") in held.filters
-    assert held.title == source.title
-    assert held.subtitle == source.subtitle
+    assert held.description is None
+    assert FieldValue("holder_title", "2x2 Seamless Door", 42) in held.values
+    assert FieldValue("holder_creator", "Bob", 57) in held.values
+    assert FieldValue("creator", "Bob") in held.values
+    assert FieldValue("creator_id", "bob-id") in held.values
     assert held.document_data["holder_build_ids"] == (42, 57)
     assert held.document_data["build_title"] == "2x2 Seamless Door"
     assert held.document_data["holder_metrics"] == {"42": {"opening": 4}, "57": {"opening": 4}}
 
 
-def test_normalize_collapses_case_and_whitespace() -> None:
-    assert normalize_search_text("  Three   BY   Three ") == "three by three"
+def test_a_retired_record_keeps_its_key_and_lists_former_holders() -> None:
+    projection = build_record_projection(_record_source(result_id=None, former_holder_ids=(9, 12), tied_build_ids=()))
+
+    assert projection.source_key == f"record:{_RECORD_ID}"
+    assert projection.status == "retired"
+    assert FieldValue("record_state", "retired") in projection.values
+    assert FieldValue("former_holder", Decimal(9)) in projection.values
+    assert FieldValue("former_holder", Decimal(12)) in projection.values
 
 
-def test_source_hash_changes_with_searchable_content() -> None:
-    original = SearchProjection(resource_kind="build", source_key="1", title="3x3 Door")
-    edited = SearchProjection(resource_kind="build", source_key="1", title="Fast 3x3 Door")
-
-    assert projection_source_hash(original) == projection_source_hash(original)
-    assert projection_source_hash(original) != projection_source_hash(edited)
-    assert projection_source_hash(original) != projection_source_hash(replace(original, search_aliases=("Compact",)))
-
-
-def test_filter_models_assign_per_field_ordinals_and_typed_columns() -> None:
-    completion = Instant.parse_iso("2026-07-30T12:00:00Z")
-    models = build_filter_models(
-        42,
-        (
-            ProjectionFilter("tag", "slimeless"),
-            ProjectionFilter("tag", "seamless"),
-            ProjectionFilter("volume", Decimal(27)),
-            ProjectionFilter("completion_at", completion),
-            ProjectionFilter("verified", value=True),
-        ),
+def test_ties_are_indexed_apart_from_holders() -> None:
+    projection = build_record_projection(
+        _record_source(tied_build_ids=(77,)), (RecordHolderProjectionSource(42, "Door", {}),)
     )
 
-    assert [(model.field_name, model.ordinal) for model in models] == [
-        ("tag", 0),
-        ("tag", 1),
-        ("volume", 0),
-        ("completion_at", 0),
-        ("verified", 0),
-    ]
-    assert models[0].text_value == "slimeless"
-    assert models[2].numeric_value == Decimal(27)
-    assert models[3].timestamp_value == completion
-    assert models[4].boolean_value is True
+    assert FieldValue("tied", Decimal(77)) in projection.values
+    assert not any(value.field == "holder" and value.value == "77" for value in projection.values)
 
 
 def _tag_source(*, semantic_kind: str = "pattern", moderation_status: str = "approved") -> TagProjectionSource:
@@ -132,9 +121,7 @@ def test_a_tag_document_says_which_kind_of_tag_it_is(semantic_kind: str) -> None
 
     assert projection is not None
     assert projection.document_data["metadata_kind"] == semantic_kind
-    assert (semantic_kind, "Full Lacing") in [
-        (filter_value.field_name, filter_value.value) for filter_value in projection.filters
-    ]
+    assert FieldValue(semantic_kind, "Full Lacing") in projection.values
 
 
 def test_a_tag_document_still_answers_the_question_it_used_to() -> None:
@@ -142,7 +129,7 @@ def test_a_tag_document_still_answers_the_question_it_used_to() -> None:
     projection = build_tag_projection(_tag_source(semantic_kind="pattern"))
 
     assert projection is not None
-    kinds = {filter_value.value for filter_value in projection.filters if filter_value.field_name == "kind"}
+    kinds = {value.value for value in projection.values if value.field == "kind"}
     assert kinds == {"tag", "pattern"}
 
 
@@ -181,9 +168,8 @@ async def test_build_aliases_are_searchable_only_for_approved_assignments(
 
     assert projection is not None
     if status is TagModerationStatus.APPROVED:
-        assert projection.search_aliases == ("Observerless",)
-        assert projection.tags == ("No Observers",)
-        names = {(filter_value.field_name, filter_value.value) for filter_value in projection.filters}
+        assert projection.document_data["tags"] == ("No Observers",)
+        names = {(value.field, value.value) for value in projection.values}
         assert ("tag", "Observerless") in names
         assert ("tag", "No Observers") in names
         if semantic_kind is TagSemanticKind.RESTRICTION:
@@ -192,9 +178,8 @@ async def test_build_aliases_are_searchable_only_for_approved_assignments(
             assert ("pattern", "Observerless") in names
             assert ("type", "Observerless") in names
     else:
-        assert projection.search_aliases == ()
-        assert projection.tags == ()
-        assert not any(filter_value.value in {"No Observers", "Observerless"} for filter_value in projection.filters)
+        assert projection.document_data["tags"] == ()
+        assert not any(value.value in {"No Observers", "Observerless"} for value in projection.values)
 
 
 @pytest.mark.parametrize("door", [True, False])
@@ -209,7 +194,7 @@ async def test_build_projection_keeps_opening_dimensions_separate(door: bool, de
     projection = await _project_build(build)
 
     assert projection is not None
-    filters = {filter_value.field_name: filter_value.value for filter_value in projection.filters}
+    filters = {value.field: value.value for value in projection.values}
     assert filters["width"] == Decimal(10)
     assert filters["height"] == Decimal(12)
     if depth is None:
@@ -225,3 +210,20 @@ async def test_build_projection_keeps_opening_dimensions_separate(door: bool, de
     else:
         assert "door_width" not in filters
         assert "door_height" not in filters
+
+
+async def test_build_projection_indexes_its_name_orientation_and_extender_fields() -> None:
+    now = Instant.parse_iso("2026-11-16T12:00:00Z")
+    build = ExtenderBuild(orientation="Horizontal", extension_length=4, extender_type="Double", extension_time=6)
+    build.id = 42
+    build.display_name = "hidden piston extender"
+    build.submission_status = BuildStatus.APPROVED
+    build.submission_time = build.edited_time = now
+    projection = await _project_build(build)
+
+    assert projection is not None
+    assert FieldValue("name", "hidden piston extender") in projection.values
+    assert FieldValue("orientation", "Horizontal") in projection.values
+    assert FieldValue("extender_length", Decimal(4)) in projection.values
+    assert FieldValue("type", "Double") in projection.values
+    assert FieldValue("extension_time", Decimal(6)) in projection.values

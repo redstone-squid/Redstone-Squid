@@ -2,7 +2,7 @@
 
 Check case-insensitive prefix matching through the service and index selection with a
 representative SQL query. Autocomplete runs on each keystroke, so selective prefixes should
-avoid scanning the entire filter_value table.
+avoid scanning the entire search_values table.
 """
 
 from collections.abc import AsyncGenerator
@@ -16,14 +16,18 @@ from squid.core.actors import ActingContext, AnonymousActor
 from squid.core.persistence.base import Base
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldRegistry
-from squid.core.search.models import SearchDocument, SearchDocumentFilter
+from squid.core.search.infrastructure.documents import FieldValue, SearchProjection
+from squid.core.search.infrastructure.projection import SearchProjectionRepository
 from squid.core.suggestions.application.queries import SuggestionQueryService
 from squid.core.suggestions.domain import SuggestionRequest
 from squid.core.suggestions.infrastructure.providers.search_query import SearchQueryProvider
 
 pytestmark = pytest.mark.asyncio
 
-_TABLES = [Base.metadata.tables["search_documents"], Base.metadata.tables["search_document_filters"]]
+_TABLES = [
+    Base.metadata.tables[name]
+    for name in ("search_documents", "search_values", "search_terms", "search_embedding_queue")
+]
 
 RESTRICTIONS = ["Seamless", "Semi-Seamless", "Full Lamp", "Flush", "Skydoor"]
 
@@ -49,35 +53,19 @@ async def search_tables(async_engine: AsyncEngine) -> AsyncGenerator[None]:
 async def seed(session_factory: async_sessionmaker[AsyncSession], *, creator_count: int = 7) -> None:
     """Seed restrictions and enough creator values to check filtering, deduplication and limits."""
     async with session_factory() as session, session.begin():
+        store = SearchProjectionRepository(session)
         for index, name in enumerate(RESTRICTIONS):
-            document = SearchDocument(
-                resource_kind="build",
-                source_key=str(index + 1),
-                title=f"{name} door",
-                normalized_title=f"{name.casefold()} door",
-                fuzzy_text=f"{name.casefold()} door",
-                source_hash=f"hash-{index}",
-            )
-            session.add(document)
-            await session.flush()
-            session.add(
-                SearchDocumentFilter(document_id=document.id, field_name="restriction", ordinal=0, text_value=name)
+            await store.replace(
+                SearchProjection("build", str(index + 1), f"{name} door", values=(FieldValue("restriction", name),))
             )
         # The first two documents share a creator, so DISTINCT has observable work to do.
         for index in range(creator_count):
-            filler = SearchDocument(
-                resource_kind="build",
-                source_key=f"filler-{index}",
-                title=f"filler {index}",
-                normalized_title=f"filler {index}",
-                fuzzy_text=f"filler {index}",
-                source_hash=f"filler-hash-{index}",
-            )
-            session.add(filler)
-            await session.flush()
-            session.add(
-                SearchDocumentFilter(
-                    document_id=filler.id, field_name="creator", ordinal=0, text_value=f"Builder {max(0, index - 1)}"
+            await store.replace(
+                SearchProjection(
+                    "build",
+                    f"filler-{index}",
+                    f"filler {index}",
+                    values=(FieldValue("creator", f"Builder {max(0, index - 1)}"),),
                 )
             )
 
@@ -120,13 +108,13 @@ async def test_the_prefix_query_uses_the_prefix_index(
     """A selective prefix should use the index without disabling sequential scans."""
     await seed(async_session_factory, creator_count=2_000)
     async with async_session_factory() as session:
-        await session.execute(text("ANALYZE search_document_filters"))
+        await session.execute(text("ANALYZE search_values"))
         plan = "\n".join(
             row
             for row in (
                 await session.scalars(
                     text(
-                        "EXPLAIN SELECT DISTINCT text_value FROM search_document_filters "
+                        "EXPLAIN SELECT DISTINCT text_value FROM search_values "
                         "WHERE field_name = 'creator' AND text_value IS NOT NULL "
                         "AND lower(text_value) LIKE 'builder 1%' "
                         "ORDER BY text_value LIMIT 10"
@@ -134,7 +122,7 @@ async def test_the_prefix_query_uses_the_prefix_index(
                 )
             ).all()
         )
-    assert "search_document_filters_text_prefix_idx" in plan, plan
+    assert "search_values_text_prefix_idx" in plan, plan
     assert "Seq Scan" not in plan, plan
 
 

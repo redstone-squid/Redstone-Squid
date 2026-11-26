@@ -15,7 +15,7 @@ from squid.core.accounts.domain import fold_creator_name
 from squid.core.accounts.models import Account, CreatorAlias
 from squid.core.records.domain import VersionScope
 from squid.core.records.models import Record, RecordDefinition
-from squid.core.search.models import SearchDocument, SearchDocumentFilter
+from squid.core.search.models import SearchDocument, SearchValue
 from squid.core.suggestions.application.queries import DocumentEntry, TagEntry
 from squid.core.tags.domain import TagValueType
 from squid.core.tags.models import TagApplicability, TagDefinition
@@ -81,7 +81,7 @@ class PostgresSuggestionRepository:
         statuses: Collection[str] | None = None,
         limit: int,
     ) -> Sequence[DocumentEntry]:
-        """Rank exact IDs before trigram matches against projected search text.
+        """Rank exact IDs before trigram matches against the projected title and subtitle.
 
         Empty queries return the most recently refreshed rows. Status filtering
         is optional; the caller must supply it when a source excludes private builds.
@@ -100,7 +100,7 @@ class PostgresSuggestionRepository:
             # from an embed is how people reach a specific build and trigram similarity scores a
             # short numeric string against a long title badly.
             exact = SearchDocument.source_key == terms
-            similarity = func.similarity(SearchDocument.fuzzy_text, terms)
+            similarity = func.similarity(SearchDocument.normalized_title, terms)
             statement = statement.where(or_(exact, similarity > TRIGRAM_FLOOR)).order_by(
                 exact.desc(), similarity.desc(), SearchDocument.normalized_title
             )
@@ -189,14 +189,14 @@ class PostgresSuggestionRepository:
         Prefix matching uses `lower(text_value)` to match the expression in the
         functional index. The query is stripped and casefolded before matching.
         """
-        statement = select(SearchDocumentFilter.text_value).where(
-            SearchDocumentFilter.field_name == field_name,
-            SearchDocumentFilter.text_value.is_not(None),
+        statement = select(SearchValue.text_value).where(
+            SearchValue.field_name == field_name,
+            SearchValue.text_value.is_not(None),
         )
         normalized = prefix.strip().casefold()
         if normalized:
-            statement = statement.where(func.lower(SearchDocumentFilter.text_value).startswith(normalized))
-        statement = statement.distinct().order_by(SearchDocumentFilter.text_value).limit(limit)
+            statement = statement.where(func.lower(SearchValue.text_value).startswith(normalized))
+        statement = statement.distinct().order_by(SearchValue.text_value).limit(limit)
         session = self._session()
         return [value for value in (await session.scalars(statement)).all() if value is not None]
 

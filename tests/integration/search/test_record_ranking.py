@@ -3,6 +3,7 @@
 from dataclasses import replace
 from decimal import Decimal
 from functools import partial
+from uuid import UUID
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -10,18 +11,35 @@ from squid.core.actors import ActingContext, AnonymousActor
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.search.application import SearchService
 from squid.core.search.domain import BuildSearchHit, RecordSearchHit, SearchRequest, SearchScope
+from squid.core.search.infrastructure.documents import FieldValue, SearchProjection
 from squid.core.search.infrastructure.projection import (
-    ProjectionFilter,
     RecordHolderProjectionSource,
     RecordProjectionSource,
-    SearchProjection,
     SearchProjectionRepository,
     build_record_projection,
 )
 
+GENERAL = UUID(int=1)
+RESTRICTED = UUID(int=2)
+
+
+async def _builds(store: SearchProjectionRepository, *holders: RecordHolderProjectionSource) -> None:
+    """Index the holders' builds, which record searches require to be approved."""
+    for holder in holders:
+        await store.replace(
+            SearchProjection(
+                "build",
+                str(holder.build_id),
+                holder.title,
+                status="approved",
+                values=(FieldValue("title", holder.title),),
+            )
+        )
+
 
 async def test_record_heading_and_holder_matches(migrated_session_factory: async_sessionmaker[AsyncSession]) -> None:
     source = RecordProjectionSource(
+        record_id=GENERAL,
         result_id=1,
         definition_id=1,
         history_complete=True,
@@ -37,15 +55,20 @@ async def test_record_heading_and_holder_matches(migrated_session_factory: async
     bob = RecordHolderProjectionSource(57, "Flush Door", {}, ("Bob",))
     async with migrated_session_factory.begin() as session:
         store = SearchProjectionRepository(session)
-        await store.replace(build_record_projection(replace(source, result_id=2, subtitle="Observerless"), (alice,)))
+        await _builds(store, alice, bob)
+        await store.replace(
+            build_record_projection(
+                replace(source, record_id=RESTRICTED, result_id=2, subtitle="Observerless"), (alice,)
+            )
+        )
         await store.replace(build_record_projection(source, (alice, bob)))
 
     service = SearchService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
     for query, expected in (
-        ("fastest 2x2 door", "result:1"),
-        ("fastest observerless 2x2 door", "result:2"),
-        ("fastest 2x2 Bob", "result:1"),
-        ("creator:Bob", "result:1"),
+        ("fastest 2x2 door", f"record:{GENERAL}"),
+        ("fastest observerless 2x2 door", f"record:{RESTRICTED}"),
+        ("fastest 2x2 Bob", f"record:{GENERAL}"),
+        ("creator:Bob", f"record:{GENERAL}"),
     ):
         for scope in (SearchScope.ALL, SearchScope.RECORDS):
             result = await service.search(
@@ -54,7 +77,7 @@ async def test_record_heading_and_holder_matches(migrated_session_factory: async
             assert result.hits[0].source_id == expected
     page = await service.search(SearchRequest("seamless Alice"), context=ActingContext.direct(AnonymousActor()))
     assert page.total == 2
-    general = next(hit for hit in page.hits if hit.source_id == "result:1")
+    general = next(hit for hit in page.hits if hit.source_id == f"record:{GENERAL}")
     assert isinstance(general, RecordSearchHit)
     assert [(holder.build_id, holder.creators) for holder in general.holders] == [(42, ("Alice",)), (57, ("Bob",))]
 
@@ -63,6 +86,7 @@ async def test_record_measurements_match_one_known_holder(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     source = RecordProjectionSource(
+        record_id=GENERAL,
         result_id=1,
         definition_id=1,
         history_complete=True,
@@ -79,8 +103,7 @@ async def test_record_measurements_match_one_known_holder(
     unknown = RecordHolderProjectionSource(60, "Unknown", {"volume": None, "timing": [10, 0]})
     async with migrated_session_factory.begin() as session:
         store = SearchProjectionRepository(session)
-        for holder in (large, compact, unknown):
-            await store.replace(SearchProjection("build", str(holder.build_id), holder.title, status="approved"))
+        await _builds(store, large, compact, unknown)
         await store.replace(build_record_projection(source, (large, compact, unknown)))
 
     service = SearchService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
@@ -120,7 +143,7 @@ async def test_record_measurements_match_one_known_holder(
         SearchRequest("NOT volume<=100", scope=SearchScope.RECORDS),
         context=ActingContext.direct(AnonymousActor()),
     )
-    assert {result.source_id for result in outside.hits} == {"result:1"}
+    assert {result.source_id for result in outside.hits} == {f"record:{GENERAL}"}
     only = await service.search(
         SearchRequest("NOT volume:[1 TO 200]", scope=SearchScope.RECORDS),
         context=ActingContext.direct(AnonymousActor()),
@@ -141,7 +164,7 @@ async def test_record_measurements_match_one_known_holder(
         assert hit.build_id == holder_id
 
 
-async def test_build_presence_matches_indexed_values_and_document_text(
+async def test_build_presence_matches_indexed_values(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     async with migrated_session_factory.begin() as session:
@@ -153,10 +176,17 @@ async def test_build_presence_matches_indexed_values_and_document_text(
                 "Full",
                 description="A description",
                 status="approved",
-                filters=(ProjectionFilter("volume", Decimal(100)), ProjectionFilter("opening_time", Decimal(0))),
+                values=(
+                    FieldValue("title", "Full"),
+                    FieldValue("description", "A description"),
+                    FieldValue("volume", Decimal(100)),
+                    FieldValue("opening_time", Decimal(0)),
+                ),
             )
         )
-        await store.replace(SearchProjection("build", "2", "Partial", description=" \n", status="approved"))
+        await store.replace(
+            SearchProjection("build", "2", "Partial", status="approved", values=(FieldValue("title", "Partial"),))
+        )
 
     service = SearchService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
     for query, expected in (

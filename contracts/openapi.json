@@ -28267,7 +28267,8 @@
       "RecordSearchEntry": {
         "properties": {
           "record_id": {
-            "type": "integer"
+            "type": "string",
+            "format": "uuid"
           },
           "title": {
             "type": "string"
@@ -28293,12 +28294,6 @@
           },
           "version_scope": {
             "type": "string"
-          },
-          "tags": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
           },
           "metrics": {
             "additionalProperties": {
@@ -28335,6 +28330,10 @@
             "type": "boolean",
             "default": true
           },
+          "retired": {
+            "type": "boolean",
+            "default": false
+          },
           "title_match": {
             "oneOf": [
               {
@@ -28354,7 +28353,6 @@
           "metrics",
           "record_id",
           "subtitle",
-          "tags",
           "title",
           "version_scope"
         ],

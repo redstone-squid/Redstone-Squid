@@ -1037,7 +1037,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
                 if focus is not None:
                     return focus
             elif (browser := self._record_browser) is not None and (record := browser.opened) is not None:
-                record_id = f"result:{record.result_id}"
+                record_id = f"record:{record.record_id}"
                 return SearchFocus(SearchResultAnchor("record", record_id), record_id=record_id, show_records=True)
         if self._selected is not None:
             build = self._selected.opened

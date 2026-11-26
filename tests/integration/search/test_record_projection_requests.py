@@ -1,7 +1,10 @@
-"""Record result and holder triggers queue only search requests that change something."""
+"""Record changes queue each affected record once, by its public ID."""
+
+from dataclasses import dataclass
+from uuid import UUID
 
 import pytest
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
@@ -42,12 +45,22 @@ async def _queued(sessions: async_sessionmaker[AsyncSession]) -> set[tuple[str, 
                 SearchProjectionQueueItem.resource_kind == "record"
             )
         )
-        return {(key, action) for key, action in rows}
+        return set(rows.tuples().all())
+
+
+@dataclass(frozen=True)
+class HeldRecords:
+    """Two indexed records whose results share one holder."""
+
+    records: tuple[UUID, UUID]
+    results: tuple[int, int]
+
+    def keys(self) -> set[tuple[str, str]]:
+        return {(f"record:{record_id}", "upsert") for record_id in self.records}
 
 
 @pytest.fixture
-async def held_results(migrated_session_factory: async_sessionmaker[AsyncSession]) -> tuple[int, int]:
-    """Two indexed results that share one holder."""
+async def held(migrated_session_factory: async_sessionmaker[AsyncSession]) -> HeldRecords:
     async with build_edit_session(migrated_session_factory) as session:
         account = Account()
         session.add(account)
@@ -64,7 +77,8 @@ async def held_results(migrated_session_factory: async_sessionmaker[AsyncSession
         run = ComputationRun(rules_revision_id=rules.id, build_kind=BuildKind.DOOR, input_generation=1)
         session.add(run)
         await session.flush()
-        result_ids: list[int] = []
+        records: list[UUID] = []
+        results: list[int] = []
         for key in ("door:door|2x2|t[]|Door:r[]:p[]", "door:door|3x3|t[]|Door:r[]:p[]"):
             record = Record(
                 criterion=RecordCriterion.SMALLEST,
@@ -88,29 +102,61 @@ async def held_results(migrated_session_factory: async_sessionmaker[AsyncSession
             session.add(result)
             await session.flush()
             session.add(RecordHolder(result_id=result.id, build_id=build.id, rank=1, metric_snapshot={}, title="Door"))
-            result_ids.append(result.id)
+            records.append(record.public_id)
+            results.append(result.id)
     await _refresh(migrated_session_factory)
-    first, second = result_ids
-    return first, second
+    return HeldRecords((records[0], records[1]), (results[0], results[1]))
 
 
-async def test_a_holder_change_queues_its_result(
-    migrated_session_factory: async_sessionmaker[AsyncSession], held_results: tuple[int, int]
+async def _document_states(sessions: async_sessionmaker[AsyncSession]) -> dict[str, str | None]:
+    async with sessions() as session:
+        rows = await session.execute(
+            select(SearchDocument.source_key, SearchDocument.status).where(SearchDocument.resource_kind == "record")
+        )
+        return dict(rows.tuples().all())
+
+
+async def test_a_holder_change_queues_its_record(
+    migrated_session_factory: async_sessionmaker[AsyncSession], held: HeldRecords
 ) -> None:
-    first, _ = held_results
     async with migrated_session_factory.begin() as session:
-        await session.execute(update(RecordHolder).where(RecordHolder.result_id == first).values(rank=2))
+        await session.execute(update(RecordHolder).where(RecordHolder.result_id == held.results[0]).values(rank=2))
 
-    assert await _queued(migrated_session_factory) == {(f"result:{first}", "upsert")}
+    assert await _queued(migrated_session_factory) == {(f"record:{held.records[0]}", "upsert")}
 
 
-async def test_a_bulk_delete_queues_only_results_with_documents(
-    migrated_session_factory: async_sessionmaker[AsyncSession], held_results: tuple[int, int]
+async def test_a_bulk_delete_queues_each_record_once(
+    migrated_session_factory: async_sessionmaker[AsyncSession], held: HeldRecords
 ) -> None:
-    first, second = held_results
     async with migrated_session_factory.begin() as session:
-        await session.execute(delete(SearchDocument).where(SearchDocument.source_key == f"result:{second}"))
-        # Holders go with their results, and must not turn the delete back into an upsert.
-        await session.execute(delete(RecordResult).where(RecordResult.id.in_(held_results)))
+        # Holders go with their results; they must not queue anything of their own.
+        await session.execute(delete(RecordResult).where(RecordResult.id.in_(held.results)))
 
-    assert await _queued(migrated_session_factory) == {(f"result:{first}", "delete")}
+    assert await _queued(migrated_session_factory) == held.keys()
+    await _refresh(migrated_session_factory)
+    # Neither record retired, so with no result neither is searchable.
+    assert await _document_states(migrated_session_factory) == {}
+
+
+async def test_a_retired_record_stays_searchable(
+    migrated_session_factory: async_sessionmaker[AsyncSession], held: HeldRecords
+) -> None:
+    first, second = held.records
+    async with migrated_session_factory.begin() as session:
+        await session.execute(update(Record).where(Record.public_id == first).values(retired_at=Instant.now()))
+        await session.execute(delete(RecordResult).where(RecordResult.id == held.results[0]))
+    await _refresh(migrated_session_factory)
+
+    assert await _document_states(migrated_session_factory) == {
+        f"record:{first}": "retired",
+        f"record:{second}": "current",
+    }
+
+
+async def test_recompute_bookkeeping_does_not_queue_records(
+    migrated_session_factory: async_sessionmaker[AsyncSession], held: HeldRecords
+) -> None:
+    async with migrated_session_factory.begin() as session:
+        await session.execute(update(Record).values(input_generation=func.coalesce(Record.input_generation, 0) + 1))
+
+    assert await _queued(migrated_session_factory) == set()

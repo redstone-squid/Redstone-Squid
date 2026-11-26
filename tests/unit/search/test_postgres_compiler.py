@@ -6,12 +6,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.core.search.application import SearchQueryParser
 from squid.core.search.domain import SearchRequest, SearchScope
+from squid.core.search.domain.text import TermExpansion
 from squid.core.search.infrastructure.compiler import compile_query
 from squid.core.search.infrastructure.repository import PostgresSearchBackend
 
+_EXACT = TermExpansion()
 
-def _compile(query: str) -> tuple[str, dict[str, object]]:
-    expression = compile_query(SearchQueryParser().parse(query))
+
+def _compile(query: str, expansion: TermExpansion = _EXACT) -> tuple[str, dict[str, object]]:
+    expression = compile_query(SearchQueryParser().parse(query), expansion)
     compiled = expression.compile(dialect=postgresql.dialect())
     return str(compiled), dict(compiled.params)
 
@@ -19,68 +22,51 @@ def _compile(query: str) -> tuple[str, dict[str, object]]:
 def test_compiler_preserves_full_boolean_semantics_with_bound_values() -> None:
     sql, parameters = _compile('door OR (status:approved NOT title:"slow door")')
 
-    assert "search_documents.combined_vector @@ plainto_tsquery" in sql
-    assert "search_documents.status" in sql
+    assert "search_documents.search_vector @@ CAST" in sql
+    assert "search_values.term_vector @@ CAST" in sql
     assert "NOT" in sql
-    assert "search_documents.title_vector @@ phraseto_tsquery" in sql
-    assert {"door", "approved", "slow door"}.issubset(set(parameters.values()))
-    assert "slow door" not in sql
+    assert {"('door')", "approved", "'slow' <-> 'door'"}.issubset(set(parameters.values()))
+    assert "slow" not in sql
 
 
-def test_compiler_uses_typed_filter_value_exists_for_numeric_range() -> None:
+def test_words_match_close_spellings_but_phrases_and_negations_do_not() -> None:
+    expansion = TermExpansion({"glass": frozenset({"glas"}), "door": frozenset({"dor"})})
+
+    _, parameters = _compile('glass "glass door" NOT door', expansion)
+
+    assert {"('glas' | 'glass')", "'glass' <-> 'door'", "('door')"} <= set(parameters.values())
+
+
+def test_text_without_terms_constrains_nothing() -> None:
+    sql, _ = _compile("🤖")
+
+    assert sql == "true"
+
+
+def test_compiler_uses_typed_value_exists_for_numeric_range() -> None:
     sql, parameters = _compile("volume:[10 TO 20]")
 
     assert "EXISTS" in sql
-    assert "search_document_filters.numeric_value BETWEEN" in sql
-    assert "search_document_filters.field_name" in sql
+    assert "search_values.numeric_value BETWEEN" in sql
+    assert "search_values.field_name" in sql
     assert "volume" in parameters.values()
     assert "10" in {str(value) for value in parameters.values()}
     assert "20" in {str(value) for value in parameters.values()}
 
 
-def test_compiler_uses_typed_filter_value_exists_for_timestamp_comparison() -> None:
+def test_compiler_uses_typed_value_exists_for_timestamp_comparison() -> None:
     sql, parameters = _compile("completion_at>=2026-07-30")
 
-    assert "search_document_filters.timestamp_value >=" in sql
+    assert "search_values.timestamp_value >=" in sql
     assert "completion_at" in parameters.values()
 
 
-def test_compiler_maps_kind_and_restriction_to_filters_without_dynamic_identifiers() -> None:
-    sql, parameters = _compile("kind:door restriction:slim")
-    flattened = {
-        item for value in parameters.values() for item in (value if isinstance(value, list | tuple) else (value,))
-    }
+def test_keywords_compare_whole_normalized_values() -> None:
+    sql, parameters = _compile('kind:door restriction:"  NO   Óbservers  "')
 
     assert sql.count("EXISTS") == 2
-    assert "search_document_filters.text_value" in sql
-    assert {"kind", "door", "restriction", "slim"}.issubset(flattened)
-
-
-def test_compiler_allows_trigram_candidates_to_recover_typo_text() -> None:
-    sql, parameters = _compile("dorr")
-
-    assert "search_documents.combined_vector @@ plainto_tsquery" in sql
-    assert "similarity(search_documents.fuzzy_text" in sql
-    assert "search_documents.normalized_title" in sql
-    assert " OR " in sql
-    assert "dorr" in parameters.values()
-
-
-def test_tag_filter_accepts_name_filters_and_legacy_indexed_terms() -> None:
-    sql, parameters = _compile('tag:"  NO   OBSERVERS  "')
-
-    assert "EXISTS" in sql
-    assert "search_documents.tags @>" in sql
-    assert "no observers" in parameters.values()
-    assert ["no observers"] in parameters.values()
-
-
-def test_title_field_allows_trigram_but_description_remains_fts_only() -> None:
-    title_sql, _ = _compile("title:dorr")
-    description_sql, _ = _compile("description:dorr")
-
-    assert "similarity(search_documents.normalized_title" in title_sql
-    assert "similarity" not in description_sql
+    assert "search_values.normalized_text" in sql
+    assert {"kind", "door", "restriction", "no observers"}.issubset(set(parameters.values()))
 
 
 def test_compiler_treats_injection_text_as_a_bound_value() -> None:
@@ -88,7 +74,7 @@ def test_compiler_treats_injection_text_as_a_bound_value() -> None:
     sql, parameters = _compile(f'title:"{value}"')
 
     assert "DROP TABLE" not in sql
-    assert value in parameters.values()
+    assert "'door' <-> 'drop' <-> 'table' <-> 'builds'" in parameters.values()
 
 
 def test_backend_predicate_defaults_builds_to_confirmed() -> None:
@@ -139,6 +125,6 @@ def unused_session() -> AsyncSession:
 def test_door_dimensions_compile_to_numeric_filters(field: str, predicate: str) -> None:
     sql, parameters = _compile(f"{field}{predicate}")
 
-    assert "search_document_filters.numeric_value" in sql
+    assert "search_values.numeric_value" in sql
     assert field in parameters.values()
     assert "3" in {str(value) for value in parameters.values()}

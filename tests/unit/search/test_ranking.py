@@ -39,7 +39,7 @@ def test_rrf_applies_branch_limit_before_fusion() -> None:
 def test_rrf_orders_by_fused_score_across_branches() -> None:
     ranked = reciprocal_rank_fusion(
         {
-            RankingBranch.TRIGRAM: (
+            RankingBranch.SEMANTIC: (
                 RankedCandidate(2),
                 RankedCandidate(1),
             ),

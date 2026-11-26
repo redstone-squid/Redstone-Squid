@@ -25,13 +25,17 @@ from squid.core.search.domain import (
     SearchSort,
     SortDirection,
 )
-from squid.core.search.models import SearchDocument, SearchDocumentFilter
+from squid.core.search.infrastructure.documents import FieldValue, SearchProjection
+from squid.core.search.infrastructure.projection import SearchProjectionRepository
 from squid.core.unit_of_work import UnitOfWorkFactory
 from tests.support.unit_of_work import transact
 
 pytestmark = pytest.mark.asyncio
 
-_TABLES = [Base.metadata.tables["search_documents"], Base.metadata.tables["search_document_filters"]]
+_TABLES = [
+    Base.metadata.tables[name]
+    for name in ("search_documents", "search_values", "search_terms", "search_embedding_queue")
+]
 
 
 @pytest.fixture
@@ -39,6 +43,7 @@ async def search_tables(async_engine: AsyncEngine) -> AsyncGenerator[None]:
     async with async_engine.begin() as connection:
         await connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await connection.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
+        await connection.execute(text("CREATE EXTENSION IF NOT EXISTS fuzzystrmatch"))
         await connection.run_sync(Base.metadata.create_all, tables=_TABLES)
     try:
         yield
@@ -47,35 +52,44 @@ async def search_tables(async_engine: AsyncEngine) -> AsyncGenerator[None]:
             await connection.run_sync(Base.metadata.drop_all, tables=list(reversed(_TABLES)))
 
 
+async def _index(
+    session: AsyncSession,
+    kind: str,
+    key: str,
+    title: str,
+    *,
+    status: str | None = None,
+    values: tuple[FieldValue, ...] = (),
+    data: dict[str, object] | None = None,
+) -> None:
+    await SearchProjectionRepository(session).replace(
+        SearchProjection(
+            kind, key, title, status=status, document_data=data or {}, values=(FieldValue("title", title), *values)
+        )
+    )
+
+
 async def seed_builds(
     session_factory: async_sessionmaker[AsyncSession],
     titles: list[str],
     *,
     widths: dict[str, list[int]] | None = None,
 ) -> None:
-    """Index one build document per title, with optional `width` filter values."""
+    """Index one build document per title, with optional `width` values."""
     async with session_factory.begin() as session:
         for index, title in enumerate(titles):
-            document = SearchDocument(
-                resource_kind="build",
-                source_key=str(index + 1),
-                title=title,
-                normalized_title=title.casefold(),
-                fuzzy_text=title.casefold(),
+            widths_of = (widths or {}).get(title, [])
+            await _index(
+                session,
+                "build",
+                str(index + 1),
+                title,
                 status="approved",
-                source_hash=f"hash-{index}",
+                values=(
+                    FieldValue("status", "approved"),
+                    *(FieldValue("width", Decimal(width)) for width in widths_of),
+                ),
             )
-            session.add(document)
-            await session.flush()
-            for ordinal, width in enumerate((widths or {}).get(title, [])):
-                session.add(
-                    SearchDocumentFilter(
-                        document_id=document.id,
-                        field_name="width",
-                        ordinal=ordinal,
-                        numeric_value=Decimal(width),
-                    )
-                )
 
 
 async def seed_grouped_records(session_factory: async_sessionmaker[AsyncSession]) -> None:
@@ -89,55 +103,26 @@ async def seed_grouped_records(session_factory: async_sessionmaker[AsyncSession]
             (104, "Holderless door", [], 1),
             (105, "Narrowest door", [2], 1),
         ):
-            document = SearchDocument(
-                resource_kind="record",
-                source_key=f"result:{result_id}",
-                title=title,
-                normalized_title=title.casefold(),
-                fuzzy_text=title.casefold(),
-                source_hash=f"record-{result_id}",
-                document_data={
+            await _index(
+                session,
+                "record",
+                f"record:{result_id}",
+                title,
+                status="current",
+                data={
                     "holder_build_ids": holders,
                     "base_title": title.split()[0].casefold(),
                     "version_scope": "all_time",
                     "metric": {"volume": 24},
                     "holder_metrics": {str(holder): {"volume": 24, "width": width} for holder in holders},
                 },
+                values=(
+                    FieldValue("width", Decimal(width)),
+                    FieldValue("base_title", title.split()[0].casefold()),
+                    *(FieldValue("holder", str(holder), holder) for holder in holders),
+                ),
             )
-            session.add(document)
-            await session.flush()
-            session.add(
-                SearchDocumentFilter(
-                    document_id=document.id, field_name="width", ordinal=0, numeric_value=Decimal(width)
-                )
-            )
-            session.add(
-                SearchDocumentFilter(
-                    document_id=document.id,
-                    field_name="base_title",
-                    ordinal=0,
-                    text_value=title.split()[0].casefold(),
-                )
-            )
-            for ordinal, holder in enumerate(holders):
-                session.add(
-                    SearchDocumentFilter(
-                        document_id=document.id,
-                        field_name="holder",
-                        ordinal=ordinal,
-                        text_value=str(holder),
-                    )
-                )
-        session.add(
-            SearchDocument(
-                resource_kind="pattern",
-                source_key="tag:1",
-                title="Door pattern",
-                normalized_title="door pattern",
-                fuzzy_text="door pattern",
-                source_hash="pattern",
-            )
-        )
+        await _index(session, "pattern", "tag:1", "Door pattern")
 
 
 @pytest.mark.parametrize("query", ["", "door"])
@@ -162,14 +147,14 @@ async def test_grouping_precedes_pagination_and_keeps_all_visible_holders(
     assert len({(hit.resource_kind, hit.source_id) for hit in hits}) == expected
     builds = {hit.source_id: hit for hit in hits if isinstance(hit, BuildSearchHit)}
     assert "4" not in builds
-    assert {record.source_id for record in builds["1"].records} == {"result:101", "result:102"}
+    assert {record.source_id for record in builds["1"].records} == {"record:101", "record:102"}
     assert builds["2"].records[0].holder_build_ids == (1, 2)
     assert builds["2"].records[0].metrics == {"volume": 24, "width": 2}
     if scope is SearchScope.ALL:
         assert {(source.resource_kind, source.source_id) for source in builds["1"].matches} == {
             ("build", "1"),
-            ("record", "result:101"),
-            ("record", "result:102"),
+            ("record", "record:101"),
+            ("record", "record:102"),
         }
     if scope is SearchScope.BUILDS:
         assert all(not record.matched for record in builds["1"].records)
@@ -212,16 +197,16 @@ async def test_record_scope_includes_only_matching_records(
     assert page.total == 2
     for hit in page.hits:
         assert isinstance(hit, BuildSearchHit)
-        assert [record.source_id for record in hit.records] == ["result:101"]
+        assert [record.source_id for record in hit.records] == ["record:101"]
 
 
 @pytest.mark.parametrize(
     ("anchor", "offset", "build"),
     [
         (SearchResultAnchor("build", "1"), 1, "1"),
-        (SearchResultAnchor("record", "result:102"), 1, "1"),
-        (SearchResultAnchor("record", "result:101"), 0, "2"),
-        (SearchResultAnchor("record", "result:103"), 0, "2"),
+        (SearchResultAnchor("record", "record:102"), 1, "1"),
+        (SearchResultAnchor("record", "record:101"), 0, "2"),
+        (SearchResultAnchor("record", "record:103"), 0, "2"),
     ],
 )
 async def test_sorted_grouped_search_locates_the_anchor_in_visible_results(
@@ -254,7 +239,7 @@ async def test_grouped_rank_limit_does_not_truncate_record_details(
     hit = page.hits[0]
     assert isinstance(hit, BuildSearchHit)
     assert hit.source_id == "1"
-    assert {record.source_id for record in hit.records} == {"result:101", "result:102"}
+    assert {record.source_id for record in hit.records} == {"record:101", "record:102"}
     assert len(hit.matches) == 3
     empty = await search(backend, SearchRequest("xyzzyq", group_by_build=True))
     assert empty.total == 0
@@ -407,22 +392,12 @@ async def test_public_title_suggestions_share_search_visibility(
         ("build", "pending", "Piston pending"),
         ("build", "rejected", "Piston rejected"),
         ("build", None, "Piston unclassified"),
-        ("record", None, "Piston record"),
+        ("record", "current", "Piston record"),
         ("tag", None, "Piston metadata"),
     )
     async with async_session_factory.begin() as session:
-        session.add_all(
-            SearchDocument(
-                resource_kind=kind,
-                source_key=str(index),
-                title=title,
-                normalized_title=title.casefold(),
-                fuzzy_text=title.casefold(),
-                status=status,
-                source_hash=f"visibility-{index}",
-            )
-            for index, (kind, status, title) in enumerate(documents)
-        )
+        for index, (kind, status, title) in enumerate(documents):
+            await _index(session, kind, str(index), title, status=status)
     backend = partial(SqlAlchemyUnitOfWork, async_session_factory)
     query = SearchQueryParser().parse("piston")
     public_titles = {"Piston approved", "Piston uppercase", "Piston record", "Piston metadata"}

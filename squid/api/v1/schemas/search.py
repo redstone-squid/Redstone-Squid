@@ -1,6 +1,7 @@
 """Public search metadata and result representations."""
 
 from typing import Annotated, Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -27,18 +28,18 @@ class RecordSearchEntry(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    record_id: int
+    record_id: UUID
     title: str
     subtitle: str | None
     build_id: int
     build_title: str
     criterion: str
     version_scope: str
-    tags: list[str]
     metrics: dict[str, str | int | float | bool]
     holder_build_ids: list[int] = Field(default_factory=list)
     holders: list[RecordSearchHolder] = Field(default_factory=list)
     matched: bool = True
+    retired: bool = False
     title_match: SearchText | None = None
 
     @classmethod
@@ -51,11 +52,11 @@ class RecordSearchEntry(BaseModel):
             build_title=hit.build_title,
             criterion=hit.criterion,
             version_scope=hit.version_scope,
-            tags=list(hit.tags),
             metrics=dict(hit.metrics),
             holder_build_ids=list(hit.holder_build_ids),
             holders=list(hit.holders),
             matched=hit.matched,
+            retired=hit.retired,
             title_match=hit.title_match,
         )
 
@@ -124,11 +125,11 @@ type SearchResult = Annotated[
 ]
 
 
-def _record_id(source_id: str) -> int:
-    """Parse the ``result:<id>`` projection key records are indexed under."""
+def _record_id(source_id: str) -> UUID:
+    """Parse the ``record:<public ID>`` key records are indexed under."""
     _, separator, raw_id = source_id.partition(":")
     try:
-        return int(raw_id if separator else source_id)
+        return UUID(raw_id if separator else source_id)
     except ValueError as error:
         msg = "search returned an invalid record identifier"
         raise ValidationError(msg) from error

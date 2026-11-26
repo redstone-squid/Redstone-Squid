@@ -61,12 +61,9 @@ async def test_public_values_and_incompatible_assignment_units(
     async with migrated_session_factory() as session:
         projection = await SearchProjectionLoader(session).load("build", str(build.id))
     assert projection is not None
-    assert projection.tags == ("Delay: 1 test_second",)
+    assert projection.document_data["tags"] == ("Delay: 1 test_second",)
     assert projection.document_data["restrictions"] == ("Delay",)
-    assert any(
-        filter_value.field_name == f"tag:{definition.id}" and filter_value.value == Decimal(20)
-        for filter_value in projection.filters
-    )
+    assert any(value.field == f"tag:{definition.id}" and value.value == Decimal(20) for value in projection.values)
 
     loaded = await transact(factory, lambda uow: uow.builds.get_by_id(build.id))
     assert loaded is not None

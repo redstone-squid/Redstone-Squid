@@ -140,7 +140,7 @@ class RecordSearchHolder:
 
 @dataclass(frozen=True, slots=True)
 class RecordSearchHit:
-    """A computed record search result."""
+    """A record search result. `source_id` is `record:<public ID>`."""
 
     source_id: str
     title: str
@@ -150,13 +150,14 @@ class RecordSearchHit:
     criterion: str
     version_scope: str
     score: float | None = None
-    tags: tuple[str, ...] = ()
     metrics: dict[str, str | int | float | bool] = field(default_factory=dict)
     holder_build_ids: tuple[int, ...] = ()
     holders: tuple[RecordSearchHolder, ...] = ()
     matched_holder_id: int | None = None
     matched: bool = True
     title_match: SearchText | None = None
+    retired: bool = False
+    """A retired record has no competitors and no holders; only a `record_state` query finds it."""
     resource_kind: Literal["record"] = field(default="record", init=False)
 
     @property

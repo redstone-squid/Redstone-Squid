@@ -27,7 +27,6 @@ def public_identity(document: SearchDocument) -> tuple[Literal["build", "record"
 
 def document_hit(document: SearchDocument, score: float | None, *, holder_id: int | None = None) -> SearchHit:
     data = document.document_data
-    tags = tuple(document.tags)
     if document.resource_kind == "record":
         # `metric` and `build_title` describe the first ranked holder. A record without a holder
         # has no build to open, which 0 represents.
@@ -60,9 +59,9 @@ def document_hit(document: SearchDocument, score: float | None, *, holder_id: in
             holder_build_ids=tuple(holder_ids) if isinstance(holder_ids, list | tuple) else (),
             holders=holders,
             score=score,
-            tags=tags,
             metrics=public_metrics,
             matched_holder_id=holder_id,
+            retired=document.status == "retired",
         )
     if document.resource_kind == "build":
         return BuildSearchHit(
@@ -71,21 +70,24 @@ def document_hit(document: SearchDocument, score: float | None, *, holder_id: in
             status=document.status or "unknown",
             description=document.description,
             score=score,
-            tags=tags,
+            tags=_strings(data.get("tags")),
             dimensions=_dimensions(data.get("dimensions")),
         )
-    aliases = data.get("aliases", ())
-    if not isinstance(aliases, list | tuple):
-        aliases = ()
-    typed_aliases = cast(list[object] | tuple[object, ...], aliases)
     return MetadataSearchHit(
         source_id=public_identity(document)[1],
         title=document.title,
         metadata_kind=_string(data, "metadata_kind", document.resource_kind),
         description=document.description,
         score=score,
-        aliases=tuple(str(alias) for alias in typed_aliases),
+        aliases=_strings(data.get("aliases")),
     )
+
+
+def _strings(value: object) -> tuple[str, ...]:
+    """Read a projected list of names; anything else reads as none."""
+    if not isinstance(value, list | tuple):
+        return ()
+    return tuple(str(item) for item in cast(list[object] | tuple[object, ...], value))
 
 
 def _dimensions(value: object) -> tuple[int | None, int | None, int | None]:

@@ -11,7 +11,7 @@ from functools import partial
 from uuid import uuid4
 
 import pytest
-from sqlalchemy import func, select, text, update
+from sqlalchemy import delete, func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from squid.core.actors import ActingContext
@@ -20,12 +20,17 @@ from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.search.application import SearchEmbeddingService, SearchQueryParser
 from squid.core.search.application.ports import QueryEmbedding
 from squid.core.search.domain import SearchMode, SearchRequest, SearchScope
+from squid.core.search.infrastructure.documents import FieldValue, SearchProjection
+from squid.core.search.infrastructure.projection import SearchProjectionRepository
 from squid.core.search.models import SearchDocument, SearchEmbeddingQueueItem
 from tests.support.unit_of_work import transact
 
 pytestmark = pytest.mark.asyncio
 
-_TABLES = [Base.metadata.tables["search_documents"], Base.metadata.tables["search_embedding_queue"]]
+_TABLES = [
+    Base.metadata.tables[name]
+    for name in ("search_documents", "search_values", "search_terms", "search_embedding_queue")
+]
 
 
 class FakeEmbeddingModel:
@@ -44,6 +49,7 @@ async def search_embedding_tables(async_engine: AsyncEngine) -> AsyncGenerator[N
     async with async_engine.begin() as connection:
         await connection.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
         await connection.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
+        await connection.execute(text("CREATE EXTENSION IF NOT EXISTS fuzzystrmatch"))
         await connection.run_sync(Base.metadata.create_all, tables=_TABLES)
     try:
         yield
@@ -52,19 +58,22 @@ async def search_embedding_tables(async_engine: AsyncEngine) -> AsyncGenerator[N
             await connection.run_sync(Base.metadata.drop_all, tables=list(reversed(_TABLES)))
 
 
-async def _document(session_factory: async_sessionmaker[AsyncSession], source_key: str, *, source_hash: str) -> int:
+async def _document(
+    session_factory: async_sessionmaker[AsyncSession], source_key: str, *, source_hash: str, title: str | None = None
+) -> int:
+    """Index a build whose embedding text has the given hash, with no embedding job queued yet."""
+    title = title or f"Build {source_key}"
     async with session_factory.begin() as session:
-        document = SearchDocument(
-            resource_kind="build",
-            source_key=source_key,
-            title=f"Build {source_key}",
-            normalized_title=f"build {source_key}",
-            fuzzy_text=f"build {source_key}",
-            source_hash=source_hash,
+        document_id = await SearchProjectionRepository(session).replace(
+            SearchProjection("build", source_key, title, values=(FieldValue("title", title),))
         )
-        session.add(document)
-        await session.flush()
-        return document.id
+        await session.execute(
+            delete(SearchEmbeddingQueueItem).where(SearchEmbeddingQueueItem.document_id == document_id)
+        )
+        await session.execute(
+            update(SearchDocument).where(SearchDocument.id == document_id).values(embedding_hash=source_hash)
+        )
+        return document_id
 
 
 async def test_worker_embeds_the_exact_claimed_source_revision(
@@ -102,7 +111,9 @@ async def test_source_changes_fence_a_stale_embedding_completion(
     queue = partial(SqlAlchemyUnitOfWork, async_session_factory)
     stale = (await transact(queue, lambda uow: uow.search_embeddings.claim(limit=1), commit=True))[0]
     async with async_session_factory.begin() as session:
-        await session.execute(update(SearchDocument).where(SearchDocument.id == document_id).values(source_hash="v2"))
+        await session.execute(
+            update(SearchDocument).where(SearchDocument.id == document_id).values(embedding_hash="v2")
+        )
         await session.execute(
             update(SearchEmbeddingQueueItem)
             .where(SearchEmbeddingQueueItem.document_id == document_id)
@@ -150,7 +161,7 @@ async def test_semantic_search_ranks_vectors_and_respects_visibility_and_query_f
     first = await _document(async_session_factory, "near", source_hash="v1")
     second = await _document(async_session_factory, "far", source_hash="v1")
     hidden = await _document(async_session_factory, "hidden", source_hash="v1")
-    outside = await _document(async_session_factory, "outside", source_hash="v1")
+    outside = await _document(async_session_factory, "outside", source_hash="v1", title="Unrelated")
     async with async_session_factory.begin() as session:
         await session.execute(
             update(SearchDocument)
@@ -174,9 +185,6 @@ async def test_semantic_search_ranks_vectors_and_respects_visibility_and_query_f
                 embedding=[1.0] + [0.0] * 1535,
                 embedding_model="test-model",
                 status="approved",
-                title="Unrelated",
-                normalized_title="unrelated",
-                fuzzy_text="unrelated",
             )
         )
     request = SearchRequest("title:build", mode=SearchMode.SEMANTIC, scope=SearchScope.BUILDS)

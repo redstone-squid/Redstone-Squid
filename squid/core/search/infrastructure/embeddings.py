@@ -26,7 +26,7 @@ SEARCH_EMBEDDING_QUEUE_SPEC = QueueSpec(
 class PostgresSearchEmbeddingQueue:
     """Claim documents for embedding and reject results from stale jobs.
 
-    Completion checks the source hash so a vector for old text cannot replace
+    Completion checks the text's hash so a vector for old text cannot replace
     one for the current document. The claim token separately prevents a worker
     from completing a job another worker has reclaimed. SearchEmbeddingService
     commits these queue and document updates in its unit of work.
@@ -41,7 +41,7 @@ class PostgresSearchEmbeddingQueue:
         if not rows:
             return ()
         # Read text from the document after claiming its queue row. If the document
-        # changes while embedding runs, complete() rejects the old source hash.
+        # changes while embedding runs, complete() rejects the old text's hash.
         session = self._session()
         documents = {
             document.id: document
@@ -55,7 +55,7 @@ class PostgresSearchEmbeddingQueue:
             SearchEmbeddingJob(
                 document_id=row.document_id,
                 source_hash=row.source_hash,
-                text=_embedding_text(document),
+                text=document.embedding_text,
                 attempts=row.attempts,
                 claim_token=self._queue.token_of(row),
             )
@@ -69,7 +69,7 @@ class PostgresSearchEmbeddingQueue:
         # Projection updates lock documents before queue rows. Keep that order.
         document = await session.scalar(
             select(SearchDocument)
-            .where(SearchDocument.id == job.document_id, SearchDocument.source_hash == job.source_hash)
+            .where(SearchDocument.id == job.document_id, SearchDocument.embedding_hash == job.source_hash)
             .with_for_update()
         )
         if document is None:
@@ -99,16 +99,3 @@ class PostgresSearchEmbeddingQueue:
             SearchEmbeddingQueueItem.document_id == job.document_id,
             SearchEmbeddingQueueItem.source_hash == job.source_hash,
         )
-
-
-def _embedding_text(document: SearchDocument) -> str:
-    return "\n".join(
-        part
-        for part in (
-            document.title,
-            document.subtitle,
-            document.description,
-            " ".join(document.tags),
-        )
-        if part
-    )

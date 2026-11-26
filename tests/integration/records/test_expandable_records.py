@@ -98,7 +98,7 @@ async def test_ordinary_publication_uses_saved_configuration_and_survives_source
         build_projection = await loader.load("build", str(family_id))
         assert build_projection is not None
         await SearchProjectionRepository(session).replace(build_projection)
-        projection = await loader.load("record", f"result:{smallest.result_id}")
+        projection = await loader.load("record", f"record:{smallest.record_id}")
         assert projection is not None
         assert projection.document_data["holder_metrics"] == {str(family_id): holder.metric_snapshot}
 

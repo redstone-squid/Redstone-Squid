@@ -1,14 +1,22 @@
-"""Turn parsed search expressions into SQLAlchemy predicates with bound values."""
+"""Turn parsed search expressions into SQLAlchemy predicates with bound values.
 
-from dataclasses import replace
+Bare text matches a document's weighted vector, and a clause on a field matches
+that field's values. Words become tsquery terms, ORed with the close spellings in
+the search's TermExpansion; a quoted phrase must appear in order within one value;
+a keyword compares the whole normalized value. Negated clauses never use close
+spellings, so `NOT slime` excludes only what was typed.
+"""
+
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import cast
 
-from sqlalchemy import and_, false, func, not_, null, or_, select, true
+from sqlalchemy import and_, false, not_, null, or_, select, true
+from sqlalchemy import cast as sql_cast
+from sqlalchemy.dialects.postgresql import TSQUERY
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql.elements import ColumnElement, SQLColumnExpression
-from sqlalchemy.sql.selectable import ScalarSelect
+from sqlalchemy.sql.selectable import ScalarSelect, Select
 from whenever import Instant
 
 from squid.core.search.domain import (
@@ -24,18 +32,15 @@ from squid.core.search.domain import (
     RangeValue,
     SearchQuery,
     TextExpression,
+    TextMatch,
 )
-from squid.core.search.models import SearchDocument, SearchDocumentFilter
+from squid.core.search.domain.text import TermExpansion, normalize_text, terms
+from squid.core.search.models import SearchDocument, SearchValue
 
-_DIRECT_TEXT_FIELDS = frozenset({"status"})
-_TAG_NAME_FIELDS = frozenset({"tag", "restriction", "type", "pattern"})
-_VECTOR_FIELDS = {
-    "title": SearchDocument.title_vector,
-    "description": SearchDocument.description_vector,
-}
+_EXACT = TermExpansion()
 
 
-def compile_query(query: SearchQuery) -> ColumnElement[bool]:
+def compile_query(query: SearchQuery, expansion: TermExpansion = _EXACT) -> ColumnElement[bool]:
     """Compile a parsed query into a predicate on SearchDocument; an empty query matches every document.
 
     User text only ever reaches the statement as bound values. Column and field
@@ -44,7 +49,7 @@ def compile_query(query: SearchQuery) -> ColumnElement[bool]:
     if query.expression is None:
         return true()
     expression = query.expression
-    ordinary = _compile_expression(expression)
+    ordinary = _Compiler(expansion).expression(expression)
     if not has_holder_filters(query):
         return ordinary
     is_record = SearchDocument.resource_kind == "record"
@@ -53,8 +58,8 @@ def compile_query(query: SearchQuery) -> ColumnElement[bool]:
         and_(
             is_record,
             or_(
-                matching_holder(query).is_not(None),
-                _compile_expression(expression, on_record=True),
+                matching_holder(query, expansion).is_not(None),
+                _Compiler(expansion, on_record=True).expression(expression),
             ),
         ),
     )
@@ -77,16 +82,16 @@ def has_holder_filters(query: SearchQuery) -> bool:
     return not isinstance(query, BuildQuery) and contains(query.expression)
 
 
-def matching_holder(query: SearchQuery) -> ScalarSelect[int | None]:
+def matching_holder(query: SearchQuery, expansion: TermExpansion = _EXACT) -> ScalarSelect[int | None]:
     """Select the first published holder that satisfies the record query."""
-    holder = aliased(SearchDocumentFilter)
+    holder = aliased(SearchValue)
     return (
         select(holder.holder_build_id)
         .where(
             holder.document_id == SearchDocument.id,
             holder.field_name == "holder",
             holder.holder_build_id.is_not(None),
-            compile_holder_query(query, holder.holder_build_id),
+            compile_holder_query(query, holder.holder_build_id, expansion),
         )
         .order_by(holder.ordinal)
         .limit(1)
@@ -95,45 +100,57 @@ def matching_holder(query: SearchQuery) -> ScalarSelect[int | None]:
     )
 
 
-def compile_holder_query(query: SearchQuery, holder_id: SQLColumnExpression[int | None]) -> ColumnElement[bool]:
+def compile_holder_query(
+    query: SearchQuery, holder_id: SQLColumnExpression[int | None], expansion: TermExpansion = _EXACT
+) -> ColumnElement[bool]:
     """Match a record query for the given holder, keeping category clauses on the record."""
     if query.expression is None:
         return true()
-    return _compile_expression(query.expression, on_record=True, holder_id=holder_id)
+    return _Compiler(expansion, on_record=True, holder_id=holder_id).expression(query.expression)
 
 
-def _compile_expression(
-    expression: QueryExpression,
-    *,
-    on_record: bool = False,
-    holder_id: SQLColumnExpression[int | None] | None = None,
-) -> ColumnElement[bool]:
-    if isinstance(expression, TextExpression):
-        return _fuzzy_text_predicate(
-            cast(ColumnElement[object], SearchDocument.combined_vector),
-            cast(ColumnElement[object], SearchDocument.fuzzy_text),
-            expression.value,
-            phrase=expression.phrase,
-            exact_column=cast(ColumnElement[object], SearchDocument.normalized_title),
-        )
-    if isinstance(expression, NotExpression):
-        return not_(_compile_expression(expression.operand, on_record=on_record, holder_id=holder_id))
-    if isinstance(expression, BooleanExpression):
-        operands = tuple(
-            _compile_expression(operand, on_record=on_record, holder_id=holder_id) for operand in expression.operands
-        )
-        return and_(*operands) if expression.operator is BooleanOperator.AND else or_(*operands)
-    if on_record and expression.field.holder_scoped:
-        if holder_id is None:
+class _Compiler:
+    def __init__(
+        self,
+        expansion: TermExpansion,
+        *,
+        on_record: bool = False,
+        holder_id: SQLColumnExpression[int | None] | None = None,
+    ) -> None:
+        self._expansion = expansion
+        self._on_record = on_record
+        self._holder_id = holder_id
+
+    def expression(self, expression: QueryExpression, *, negated: bool = False) -> ColumnElement[bool]:
+        if isinstance(expression, TextExpression):
+            query = text_query(expression.value, phrase=expression.phrase, expansion=self._fuzzy(negated))
+            return true() if query is None else SearchDocument.search_vector.bool_op("@@")(query)
+        if isinstance(expression, NotExpression):
+            return not_(self.expression(expression.operand, negated=not negated))
+        if isinstance(expression, BooleanExpression):
+            operands = tuple(self.expression(operand, negated=negated) for operand in expression.operands)
+            return and_(*operands) if expression.operator is BooleanOperator.AND else or_(*operands)
+        if self._on_record and expression.field.holder_scoped:
+            return self._holder_measurement(expression)
+        if isinstance(expression, PresenceExpression):
+            present = _values(expression.field.storage).exists()
+            return present if expression.is_set else not_(present)
+        return self._field(expression, negated=negated)
+
+    def _fuzzy(self, negated: bool) -> TermExpansion:
+        return _EXACT if negated else self._expansion
+
+    def _holder_measurement(self, expression: FieldExpression | PresenceExpression) -> ColumnElement[bool]:
+        if self._holder_id is None:
             return cast(ColumnElement[bool], null())
-        measurement = aliased(SearchDocumentFilter)
+        measurement = aliased(SearchValue)
         # A scalar subquery preserves SQL unknown for absent measurements, even under NOT.
         value = (
             select(measurement.numeric_value)
             .where(
                 measurement.document_id == SearchDocument.id,
-                measurement.holder_build_id == holder_id,
-                measurement.field_name == (expression.field.storage_name or expression.field.name),
+                measurement.holder_build_id == self._holder_id,
+                measurement.field_name == expression.field.storage,
             )
             .correlate_except(measurement)
             .scalar_subquery()
@@ -141,109 +158,83 @@ def _compile_expression(
         if isinstance(expression, PresenceExpression):
             return value.is_not(None) if expression.is_set else value.is_(None)
         return _comparison(cast(ColumnElement[object], value), expression, expression.field.value_type)
-    if isinstance(expression, PresenceExpression):
-        return _compile_presence(expression)
-    return _compile_field(expression)
+
+    def _field(self, expression: FieldExpression, *, negated: bool) -> ColumnElement[bool]:
+        """Compare one field's values. Each clause gets its own EXISTS: a document may
+        satisfy two clauses through different values of the same field."""
+        field = expression.field
+        storage, stored_value = expression.stored()
+        if field.value_type is FieldType.TEXT:
+            if expression.operator is not ComparisonOperator.EQUAL or isinstance(stored_value, RangeValue):
+                return false()
+            if field.text_match is TextMatch.WORDS:
+                query = text_query(str(stored_value), phrase=expression.phrase, expansion=self._fuzzy(negated))
+                if query is None:
+                    return true()
+                return _values(storage, SearchValue.term_vector.bool_op("@@")(query)).exists()
+            return _values(storage, SearchValue.normalized_text == normalize_text(str(stored_value))).exists()
+        column = {
+            FieldType.NUMBER: SearchValue.numeric_value,
+            FieldType.TIMESTAMP: SearchValue.timestamp_value,
+            FieldType.BOOLEAN: SearchValue.boolean_value,
+        }[field.value_type]
+        comparison = _comparison(cast(ColumnElement[object], column), expression, field.value_type, stored_value)
+        return _values(storage, comparison).exists()
 
 
-def _compile_presence(expression: PresenceExpression) -> ColumnElement[bool]:
-    field = expression.field
-    column = {
-        "title": SearchDocument.title,
-        "description": SearchDocument.description,
-        "status": SearchDocument.status,
-    }.get(field.name)
-    if column is not None:
-        present = func.nullif(func.btrim(column, " \t\r\n"), "").is_not(None)
+def text_query(value: str, *, phrase: bool, expansion: TermExpansion) -> ColumnElement[object] | None:
+    """Build the tsquery for a word, words or a phrase; None when the text has no terms.
+
+    Text without terms, such as a lone symbol, constrains nothing.
+    """
+    value_terms = terms(value)
+    if not value_terms:
+        return None
+    if phrase:
+        source = " <-> ".join(f"'{term}'" for term in value_terms)
     else:
-        values = SearchDocumentFilter
-        present = (
-            select(values.document_id)
-            .where(
-                values.document_id == SearchDocument.id,
-                values.holder_build_id.is_(None),
-                values.field_name == (field.storage_name or field.name),
-            )
-            .correlate(SearchDocument)
-            .exists()
+        source = " & ".join(
+            "(" + " | ".join(f"'{match}'" for match in sorted(expansion.matches(term))) + ")" for term in value_terms
         )
-        if field.name == "tag":
-            present = or_(present, func.cardinality(SearchDocument.tags) > 0)
-    return present if expression.is_set else not_(present)
+    return sql_cast(source, TSQUERY)
 
 
-def _compile_field(expression: FieldExpression) -> ColumnElement[bool]:
-    """Compare a document column or its indexed field values."""
-    field = expression.field
-    if field.name in _VECTOR_FIELDS:
-        if expression.operator is not ComparisonOperator.EQUAL or isinstance(expression.value, RangeValue):
-            return false()
-        value = str(expression.value)
-        vector_match = _VECTOR_FIELDS[field.name].bool_op("@@")(_text_query(value, phrase=expression.phrase))
-        if field.name == "description":
-            return vector_match
-        return or_(
-            func.lower(SearchDocument.title) == value.casefold(),
-            vector_match,
-            func.similarity(SearchDocument.normalized_title, value) > 0.1,
-        )
-    if field.name in _DIRECT_TEXT_FIELDS:
-        return _compile_direct(expression)
-    # Use a separate EXISTS for each clause: a document may satisfy two clauses
-    # through different indexed values. EXISTS keeps each matching document unique.
-    storage_name, stored_value = expression.stored()
-    filter_value = SearchDocumentFilter
-    value_column = {
-        FieldType.TEXT: filter_value.text_value,
-        FieldType.NUMBER: filter_value.numeric_value,
-        FieldType.TIMESTAMP: filter_value.timestamp_value,
-        FieldType.BOOLEAN: filter_value.boolean_value,
-    }[field.value_type]
-    if field.name in _TAG_NAME_FIELDS:
-        if expression.operator is not ComparisonOperator.EQUAL or isinstance(expression.value, RangeValue):
-            return false()
-        value = " ".join(str(expression.value).split()).lower()
-        comparison = func.lower(func.btrim(func.regexp_replace(value_column, r"\s+", " ", "g"))) == value
-    elif field.name in {"kind", "orientation"}:
-        comparison = func.lower(value_column) == str(expression.value).casefold()
-    else:
-        comparison = _comparison(
-            cast(ColumnElement[object], value_column), replace(expression, value=stored_value), field.value_type
-        )
-    predicate = (
-        select(filter_value.document_id)
+def rank_query(value: str) -> ColumnElement[object] | None:
+    """Build a tsquery matching any exact term of `value`, for ranking; None without terms."""
+    value_terms = sorted(set(terms(value)))
+    if not value_terms:
+        return None
+    return sql_cast(" | ".join(f"'{term}'" for term in value_terms), TSQUERY)
+
+
+def _values(storage: str, *conditions: ColumnElement[bool]) -> Select[int]:
+    """Select the document's own values of a field, leaving out record holders' values."""
+    return (
+        select(SearchValue.document_id)
         .where(
-            filter_value.document_id == SearchDocument.id,
-            filter_value.holder_build_id.is_(None),
-            filter_value.field_name == storage_name,
-            comparison,
+            SearchValue.document_id == SearchDocument.id,
+            SearchValue.holder_build_id.is_(None),
+            SearchValue.field_name == storage,
+            *conditions,
         )
         .correlate(SearchDocument)
-        .exists()
     )
-    if field.name == "tag":
-        # Keep matching the indexed creator/version terms that tag: historically accepted.
-        return or_(predicate, SearchDocument.tags.bool_op("@>")([" ".join(str(expression.value).casefold().split())]))
-    return predicate
-
-
-def _compile_direct(expression: FieldExpression) -> ColumnElement[bool]:
-    if expression.operator is not ComparisonOperator.EQUAL or isinstance(expression.value, RangeValue):
-        return false()
-    value = str(expression.value).casefold()
-    return func.lower(SearchDocument.status) == value
 
 
 def _comparison(
     column: ColumnElement[object],
     expression: FieldExpression,
     field_type: FieldType,
+    compared: object = None,
 ) -> ColumnElement[bool]:
-    if isinstance(expression.value, RangeValue):
-        lower = _database_value(expression.value.lower, field_type)
-        upper = _database_value(expression.value.upper, field_type)
+    """Compare a column with the clause's value, or with `compared` when the stored value differs."""
+    target = expression.value if compared is None else compared
+    if isinstance(target, RangeValue):
+        lower = _database_value(target.lower, field_type)
+        upper = _database_value(target.upper, field_type)
         return column.between(lower, upper)
-    value = _database_value(expression.value, field_type)
+    assert isinstance(target, str | int | float | Decimal | bool)
+    value = _database_value(target, field_type)
     return {
         ComparisonOperator.EQUAL: column == value,
         ComparisonOperator.LESS_THAN: column < value,
@@ -265,23 +256,3 @@ def _database_value(value: str | int | float | Decimal | bool, field_type: Field
     if field_type is FieldType.BOOLEAN:
         return bool(value)
     return str(value)
-
-
-def _text_query(value: str, *, phrase: bool) -> ColumnElement[object]:
-    query_function = func.phraseto_tsquery if phrase else func.plainto_tsquery
-    return query_function("simple", value)
-
-
-def _fuzzy_text_predicate(
-    vector: ColumnElement[object],
-    fuzzy_column: ColumnElement[object],
-    value: str,
-    *,
-    phrase: bool,
-    exact_column: ColumnElement[object],
-) -> ColumnElement[bool]:
-    return or_(
-        func.lower(exact_column) == value.casefold(),
-        vector.bool_op("@@")(_text_query(value, phrase=phrase)),
-        func.similarity(fuzzy_column, value) > 0.1,
-    )

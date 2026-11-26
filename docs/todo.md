@@ -31,7 +31,7 @@
 - [ ] Connect a semantic candidate provider to the cross-resource search backend.
 - [ ] Process `search_embedding_queue` items and store embeddings for projected search documents.
 - [ ] Consider dynamic `tag:<name>` search fields so new projected filters do not require a field-registry code change.
-- [ ] Add live PostgreSQL integration coverage for exact, full-text, trigram, and RRF behavior.
+- [ ] Add live PostgreSQL integration coverage for exact, full-text, close-spelling, and RRF behavior.
   - Pagination and sorting by indexed field values are covered by `tests/integration/search/test_repository_pagination.py`.
 - [x] Add autocomplete for field names, tag values, and canonical record base keys.
   - See `docs/plans/autocomplete.md` for the source registry the three surfaces share.

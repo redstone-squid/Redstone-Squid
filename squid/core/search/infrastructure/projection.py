@@ -1,8 +1,9 @@
 """Refresh search documents from queued changes to builds, records, and metadata.
 
-The loader assembles the display text, result data, and typed values used by
-structured filters. The store replaces the document and its indexed field values
-in one transaction. A field can have multiple values, such as the creators of a build.
+The loader turns a resource into a SearchProjection: what its hit displays, and
+every searchable fact as a field value. A field can have several values, such as
+the creators of a build. The store writes the document and its values in one
+transaction, and leaves a document whose content has not changed untouched.
 
 The worker processes each queued resource in a savepoint, so one failed refresh
 can be retried without losing the other refreshes in the batch. refresh_search_index
@@ -10,20 +11,17 @@ commits the batch. Embedding jobs are queued here but run separately, because
 their model calls should not keep this database transaction open.
 """
 
-import hashlib
-import json
 import logging
 import uuid
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from decimal import Decimal
 from math import prod
 
-from sqlalchemy import Text, case, cast, delete, func, literal_column, select
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import Text, case, cast, delete, func, select
+from sqlalchemy.dialects.postgresql import TSVECTOR, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
-from whenever import Instant
 
 from squid.core.accounts.infrastructure.attribution import attributed_credits, public_creator_ids
 from squid.core.accounts.models import CreatorAlias
@@ -36,6 +34,7 @@ from squid.core.builds.models import (
     BuildCredit,
     BuildVersion,
     DoorBuild,
+    ExtenderBuild,
 )
 from squid.core.diagnostics.log_capture import work_lost
 from squid.core.errors import DataIntegrityError
@@ -45,17 +44,22 @@ from squid.core.records.application.door_categories import door_category_lookup
 from squid.core.records.application.models import CategoryIdentity
 from squid.core.records.domain import BuildKind
 from squid.core.records.models import (
+    Record,
     RecordDefinition,
     RecordHolder,
+    RecordHolderHistory,
     RecordResult,
+    RecordTiedBuild,
 )
 from squid.core.search.domain import CREATOR_ID_STORAGE
+from squid.core.search.infrastructure.documents import FieldValue, SearchProjection, index_document
 from squid.core.search.infrastructure.holder_metrics import timing_values
 from squid.core.search.models import (
     SearchDocument,
-    SearchDocumentFilter,
     SearchEmbeddingQueueItem,
     SearchProjectionQueueItem,
+    SearchTerm,
+    SearchValue,
 )
 from squid.core.tags.domain import TagSemanticKind
 from squid.core.tags.infrastructure.loading import assignment_units
@@ -66,6 +70,16 @@ from squid.core.worker_context import worker_execution, worker_scope
 
 logger = logging.getLogger(__name__)
 PROJECTION_MAX_ATTEMPTS = 5
+
+_BUILD_TIMINGS = (
+    ("normal_opening_time", "opening_time"),
+    ("visible_opening_time", "visible_opening_time"),
+    ("normal_closing_time", "closing_time"),
+    ("visible_closing_time", "visible_closing_time"),
+    ("extension_time", "extension_time"),
+    ("retraction_time", "retraction_time"),
+)
+"""Build timing columns and the search fields they fill."""
 
 SEARCH_PROJECTION_QUEUE_SPEC = QueueSpec(
     name="search_projections",
@@ -82,35 +96,14 @@ SEARCH_PROJECTION_QUEUE_SPEC = QueueSpec(
 
 
 @dataclass(frozen=True, slots=True)
-class ProjectionFilter:
-    """One typed filter value emitted by a search projection."""
-
-    field_name: str
-    value: str | Decimal | Instant | bool
-    holder_build_id: int | None = None
-
-
-@dataclass(frozen=True, slots=True)
-class SearchProjection:
-    """The complete replacement state of one search document."""
-
-    resource_kind: str
-    source_key: str
-    title: str
-    subtitle: str | None = None
-    description: str | None = None
-    status: str | None = None
-    tags: tuple[str, ...] = ()
-    search_aliases: tuple[str, ...] = ()
-    document_data: dict[str, object] = field(default_factory=dict)
-    filters: tuple[ProjectionFilter, ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
 class RecordProjectionSource:
-    """Record fields needed to build its search document."""
+    """Record fields needed to build its search document.
 
-    result_id: int
+    A retired record has no result. Its title comes from its latest definition.
+    """
+
+    record_id: uuid.UUID
+    result_id: int | None
     definition_id: int
     history_complete: bool
     gap_reasons: dict[str, object]
@@ -120,7 +113,13 @@ class RecordProjectionSource:
     category_key: str
     title: str
     subtitle: str | None
-    category_filters: tuple[ProjectionFilter, ...] = ()
+    category_values: tuple[FieldValue, ...] = ()
+    former_holder_ids: tuple[int, ...] = ()
+    tied_build_ids: tuple[int, ...] = ()
+
+    @property
+    def retired(self) -> bool:
+        return self.result_id is None
 
 
 @dataclass(frozen=True, slots=True)
@@ -133,16 +132,21 @@ class RecordHolderProjectionSource:
     creators: tuple[str, ...] = ()
     creator_ids: tuple[str, ...] = ()
 
-    def filters(self, build_kind: str) -> tuple[ProjectionFilter, ...]:
-        filters = [ProjectionFilter("holder", str(self.build_id), self.build_id)]
+    def values(self, build_kind: str) -> tuple[FieldValue, ...]:
+        holder = self.build_id
+        values = [
+            FieldValue("holder", str(holder), holder),
+            FieldValue("holder_title", self.title, holder),
+            *(FieldValue("holder_creator", name, holder) for name in self.creators),
+        ]
         volume = self.metric.get("volume")
         if type(volume) is int:
-            filters.append(ProjectionFilter("volume", Decimal(volume), self.build_id))
-        filters.extend(
-            ProjectionFilter(name, Decimal(value), self.build_id)
+            values.append(FieldValue("volume", Decimal(volume), holder))
+        values.extend(
+            FieldValue(name, Decimal(value), holder)
             for name, value in timing_values(build_kind, self.metric.get("timing"))
         )
-        return tuple(filters)
+        return tuple(values)
 
 
 @dataclass(frozen=True, slots=True)
@@ -222,47 +226,23 @@ class SearchProjectionRepository:
         )
 
     async def replace(self, projection: SearchProjection) -> int:
-        """Save a document and its indexed field values, then return its database ID.
+        """Save a document and its values unless its content is unchanged; return its database ID.
 
-        A changed source hash clears the old embedding. Builds and records also
-        enqueue embedding work. An existing queue item with the same hash is left
-        alone so that refreshing a projection does not reset its claim or retries.
-        The caller owns the transaction.
+        A changed embedding text clears the old vector, and builds and records then queue
+        a new embedding. An embedding job for the same text is left alone, so refreshing
+        a document does not reset its claim or retries. The caller owns the transaction.
         """
-        normalized_title = normalize_search_text(projection.title)
-        tags = sorted({normalize_search_text(tag) for tag in projection.tags if tag.strip()})
-        search_terms = sorted(
-            {*tags, *(normalize_search_text(alias) for alias in projection.search_aliases if alias.strip())}
-        )
-        fuzzy_text = " ".join(
-            part for part in (normalized_title, normalize_search_text(projection.subtitle or ""), *search_terms) if part
-        )
-        source_hash = projection_source_hash(projection)
-        title_vector = func.to_tsvector(literal_column("'simple'"), func.unaccent(projection.title))
-        description_vector = func.to_tsvector(
-            literal_column("'simple'"),
-            func.unaccent(projection.description or ""),
-        )
-        tag_text = " ".join(search_terms)
-        combined_vector = (
-            func.setweight(title_vector, literal_column("'A'"))
-            .op("||")(
-                func.setweight(
-                    func.to_tsvector(literal_column("'simple'"), func.unaccent(tag_text)),
-                    literal_column("'A'"),
+        indexed = index_document(projection)
+        existing = (
+            await self._session.execute(
+                select(SearchDocument.id, SearchDocument.source_hash).where(
+                    SearchDocument.resource_kind == projection.resource_kind,
+                    SearchDocument.source_key == projection.source_key,
                 )
             )
-            .op("||")(
-                func.setweight(
-                    func.to_tsvector(
-                        literal_column("'simple'"),
-                        func.unaccent(projection.subtitle or ""),
-                    ),
-                    literal_column("'B'"),
-                )
-            )
-            .op("||")(func.setweight(description_vector, literal_column("'C'")))
-        )
+        ).one_or_none()
+        if existing is not None and existing.source_hash == indexed.source_hash:
+            return existing.id
         statement = insert(SearchDocument).values(
             resource_kind=projection.resource_kind,
             source_key=projection.source_key,
@@ -270,49 +250,69 @@ class SearchProjectionRepository:
             subtitle=projection.subtitle,
             description=projection.description,
             status=projection.status,
-            normalized_title=func.unaccent(normalized_title),
-            fuzzy_text=func.unaccent(fuzzy_text),
-            tags=tags,
-            title_vector=title_vector,
-            description_vector=description_vector,
-            combined_vector=combined_vector,
+            normalized_title=indexed.normalized_title,
+            heading_terms=list(indexed.heading_terms),
+            search_vector=cast(indexed.search_vector, TSVECTOR),
             document_data=projection.document_data,
-            source_hash=source_hash,
+            source_hash=indexed.source_hash,
+            embedding_text=indexed.embedding_text,
+            embedding_hash=indexed.embedding_hash,
             refreshed_at=func.now(),
         )
+        same_text = SearchDocument.embedding_hash == statement.excluded.embedding_hash
         statement = statement.on_conflict_do_update(
             constraint="search_documents_resource_key",
             set_={
-                "title": statement.excluded.title,
-                "subtitle": statement.excluded.subtitle,
-                "description": statement.excluded.description,
-                "status": statement.excluded.status,
-                "normalized_title": statement.excluded.normalized_title,
-                "fuzzy_text": statement.excluded.fuzzy_text,
-                "tags": statement.excluded.tags,
-                "title_vector": statement.excluded.title_vector,
-                "description_vector": statement.excluded.description_vector,
-                "combined_vector": statement.excluded.combined_vector,
-                "document_data": statement.excluded.document_data,
-                "source_hash": statement.excluded.source_hash,
-                "embedding": case(
-                    (SearchDocument.source_hash == statement.excluded.source_hash, SearchDocument.embedding),
-                    else_=None,
-                ),
-                "embedding_model": case(
-                    (SearchDocument.source_hash == statement.excluded.source_hash, SearchDocument.embedding_model),
-                    else_=None,
-                ),
+                **{
+                    name: statement.excluded[name]
+                    for name in (
+                        "title",
+                        "subtitle",
+                        "description",
+                        "status",
+                        "normalized_title",
+                        "heading_terms",
+                        "search_vector",
+                        "document_data",
+                        "source_hash",
+                        "embedding_text",
+                        "embedding_hash",
+                    )
+                },
+                "embedding": case((same_text, SearchDocument.embedding), else_=None),
+                "embedding_model": case((same_text, SearchDocument.embedding_model), else_=None),
                 "refreshed_at": func.now(),
             },
         ).returning(SearchDocument.id)
         document_id = (await self._session.execute(statement)).scalar_one()
-        await self._session.execute(delete(SearchDocumentFilter).where(SearchDocumentFilter.document_id == document_id))
-        self._session.add_all(build_filter_models(document_id, projection.filters))
-        if projection.resource_kind in {"build", "record"}:
+        await self._session.execute(delete(SearchValue).where(SearchValue.document_id == document_id))
+        if indexed.values:
+            await self._session.execute(
+                insert(SearchValue),
+                [
+                    {
+                        "document_id": document_id,
+                        "field_name": value.field,
+                        "ordinal": value.ordinal,
+                        "holder_build_id": value.holder_build_id,
+                        "text_value": value.text,
+                        "normalized_text": value.normalized,
+                        "term_vector": value.term_vector,
+                        "numeric_value": value.numeric,
+                        "timestamp_value": value.timestamp,
+                        "boolean_value": value.boolean,
+                    }
+                    for value in indexed.values
+                ],
+            )
+        if indexed.terms:
+            await self._session.execute(
+                insert(SearchTerm).values([{"term": term} for term in sorted(indexed.terms)]).on_conflict_do_nothing()
+            )
+        if projection.embedded and indexed.embedding_text:
             embedding_statement = insert(SearchEmbeddingQueueItem).values(
                 document_id=document_id,
-                source_hash=source_hash,
+                source_hash=indexed.embedding_hash,
                 enqueued_at=func.now(),
                 available_at=func.now(),
                 attempts=0,
@@ -354,10 +354,10 @@ class SearchProjectionLoader:
         if parsed is None:
             return None
         subtype, source_id = parsed
+        if isinstance(source_id, uuid.UUID):
+            return await self._record(source_id)
         if resource_kind == "build":
             return await self._build(source_id)
-        if resource_kind == "record":
-            return await self._computed_record(source_id)
         if resource_kind == "metadata":
             return await self._metadata(subtype, source_id)
         return None
@@ -412,9 +412,6 @@ class SearchProjectionLoader:
             assignment for assignment in build.tags if assignment.definition.moderation_status == "approved"
         )
         assigned_tag_names = tuple(assignment.rendered for assignment in approved_assignments)
-        search_aliases = tuple(
-            sorted({alias.alias for assignment in approved_assignments for alias in assignment.definition.aliases})
-        )
         restriction_names = tuple(
             assignment.definition.display_name
             for assignment in approved_assignments
@@ -448,26 +445,29 @@ class SearchProjectionLoader:
         }
         assert build.submission_status is not None
         assert build.submission_time is not None and build.edited_time is not None
-        # Index typed values for structured filters. The text tags above support lexical matching.
-        filters = [
-            *build_tag_name_filters(approved_assignments),
-            *(ProjectionFilter("creator", name) for name in creator_names),
-            *(ProjectionFilter(CREATOR_ID_STORAGE, public_id) for public_id in creator_ids),
-            *(ProjectionFilter("version", name) for name in version_names),
-            ProjectionFilter("status", build.submission_status.name.lower()),
-            ProjectionFilter("kind", build.category or "unknown"),
-            *(ProjectionFilter(name, Decimal(value)) for name, value in dimensions.items()),
+        # The title already ends with the subtitle, so the subtitle is displayed but not indexed again.
+        values = [
+            FieldValue("title", title),
+            *((FieldValue("name", build.display_name),) if build.display_name else ()),
+            *((FieldValue("description", description),) if description else ()),
+            *build_tag_name_values(approved_assignments),
+            *(FieldValue("creator", name) for name in creator_names),
+            *(FieldValue(CREATOR_ID_STORAGE, public_id) for public_id in creator_ids),
+            *(FieldValue("version", name) for name in version_names),
+            FieldValue("status", build.submission_status.name.lower()),
+            FieldValue("kind", build.category or "unknown"),
+            *(FieldValue(name, Decimal(value)) for name, value in dimensions.items()),
             *(
-                ProjectionFilter(f"tag:{assignment.tag_id}", value)
+                FieldValue(f"tag:{assignment.tag_id}", value)
                 for assignment in approved_assignments
                 if (value := _assignment_value(assignment)) is not None
             ),
         ]
         if len(dimensions) == 3:
-            filters.append(ProjectionFilter("volume", Decimal(prod(dimensions.values()))))
+            values.append(FieldValue("volume", Decimal(prod(dimensions.values()))))
         if isinstance(build, DoorBuild):
-            filters.extend(
-                ProjectionFilter(name, Decimal(value))
+            values.extend(
+                FieldValue(name, Decimal(value))
                 for name, value in (
                     ("door_width", build.door_width),
                     ("door_height", build.door_height),
@@ -475,19 +475,21 @@ class SearchProjectionLoader:
                 )
                 if value is not None
             )
-        for name in (
-            "normal_opening_time",
-            "visible_opening_time",
-            "normal_closing_time",
-            "visible_closing_time",
-        ):
-            value = getattr(build, name, None)
+        if isinstance(build, DoorBuild | ExtenderBuild) and build.orientation:
+            values.append(FieldValue("orientation", build.orientation))
+        if isinstance(build, ExtenderBuild):
+            if build.extension_length is not None:
+                values.append(FieldValue("extender_length", Decimal(build.extension_length)))
+            if build.extender_type:
+                values.append(FieldValue("type", build.extender_type))
+        for column, name in _BUILD_TIMINGS:
+            value = getattr(build, column, None)
             if value is not None:
-                filters.append(ProjectionFilter(name.removeprefix("normal_"), Decimal(value)))
+                values.append(FieldValue(name, Decimal(value)))
         if build.completion_at is not None:
-            filters.append(ProjectionFilter("completion_at", build.completion_at))
-        filters.append(ProjectionFilter("created_at", build.submission_time))
-        filters.append(ProjectionFilter("updated_at", build.edited_time))
+            values.append(FieldValue("completion_at", build.completion_at))
+        values.append(FieldValue("created_at", build.submission_time))
+        values.append(FieldValue("updated_at", build.edited_time))
         return SearchProjection(
             resource_kind="build",
             source_key=str(build.id),
@@ -495,8 +497,6 @@ class SearchProjectionLoader:
             subtitle=canonical_subtitle,
             description=description,
             status=build.submission_status.name.lower(),
-            tags=(*assigned_tag_names, *creator_names, *version_names),
-            search_aliases=search_aliases,
             document_data={
                 "build_id": build.id,
                 "canonical_title": canonical_title,
@@ -511,53 +511,44 @@ class SearchProjectionLoader:
                 "tags": assigned_tag_names,
                 "versions": version_names,
             },
-            filters=tuple(filters),
+            values=tuple(values),
         )
 
-    async def _computed_record(self, result_id: int) -> SearchProjection | None:
-        row = (
-            await self._session.execute(
-                select(RecordResult, RecordDefinition)
-                .options(selectinload(RecordDefinition.record))
-                .join(RecordDefinition, RecordDefinition.id == RecordResult.definition_id)
-                .where(RecordResult.id == result_id)
-            )
-        ).one_or_none()
-        if row is None:
+    async def _record(self, record_id: uuid.UUID) -> SearchProjection | None:
+        """Load a current or retired record; a record that never had competitors is not searchable."""
+        record = await self._session.get(Record, record_id)
+        if record is None:
             return None
-        result, definition = row
-        # Holder snapshots carry the record category title. The build document
-        # supplies the actual build title and its public credits in one join.
-        holders = await self._session.execute(
-            select(
-                RecordHolder,
-                SearchDocument.title,
-                SearchDocument.document_data["creators"],
-                SearchDocument.document_data["creator_ids"],
+        result = await self._session.scalar(select(RecordResult).where(RecordResult.record_id == record_id))
+        if result is None and record.retired_at is None:
+            return None
+        definition_query = select(RecordDefinition).where(RecordDefinition.record_id == record_id)
+        if result is not None:
+            definition_query = definition_query.where(RecordDefinition.id == result.definition_id)
+        definition = await self._session.scalar(definition_query.order_by(RecordDefinition.id.desc()).limit(1))
+        if definition is None:
+            return None
+        holders: tuple[RecordHolderProjectionSource, ...] = ()
+        tied: tuple[int, ...] = ()
+        if result is not None:
+            # Holder snapshots carry the record category title. The build document
+            # supplies the actual build title and its public credits in one join.
+            rows = await self._session.execute(
+                select(
+                    RecordHolder,
+                    SearchDocument.title,
+                    SearchDocument.document_data["creators"],
+                    SearchDocument.document_data["creator_ids"],
+                )
+                .join(
+                    SearchDocument,
+                    (SearchDocument.resource_kind == "build")
+                    & (SearchDocument.source_key == cast(RecordHolder.build_id, Text)),
+                )
+                .where(RecordHolder.result_id == result.id, SearchDocument.status == "approved")
+                .order_by(RecordHolder.rank, RecordHolder.build_id)
             )
-            .join(
-                SearchDocument,
-                (SearchDocument.resource_kind == "build")
-                & (SearchDocument.source_key == cast(RecordHolder.build_id, Text)),
-            )
-            .where(RecordHolder.result_id == result_id, SearchDocument.status == "approved")
-            .order_by(RecordHolder.rank, RecordHolder.build_id)
-        )
-        return build_record_projection(
-            RecordProjectionSource(
-                result_id=result.id,
-                definition_id=definition.id,
-                history_complete=result.history_complete,
-                gap_reasons=result.gap_reasons,
-                criterion=definition.criterion,
-                build_kind=definition.build_kind,
-                version_scope=definition.version_scope,
-                category_key=definition.category_key,
-                title=definition.title,
-                subtitle=definition.subtitle,
-                category_filters=await self._record_category_filters(definition.category_key),
-            ),
-            tuple(
+            holders = tuple(
                 RecordHolderProjectionSource(
                     build_id=holder.build_id,
                     title=title,
@@ -565,39 +556,79 @@ class SearchProjectionLoader:
                     creator_ids=tuple(creator_ids or ()),
                     metric=holder.metric_snapshot,
                 )
-                for holder, title, creators, creator_ids in holders
+                for holder, title, creators, creator_ids in rows
+            )
+            tied = tuple(
+                (
+                    await self._session.scalars(
+                        select(RecordTiedBuild.build_id)
+                        .where(RecordTiedBuild.result_id == result.id)
+                        .order_by(RecordTiedBuild.build_id)
+                    )
+                ).all()
+            )
+        current = {holder.build_id for holder in holders}
+        former = tuple(
+            build_id
+            for build_id in (
+                await self._session.scalars(
+                    select(RecordHolderHistory.build_id)
+                    .where(RecordHolderHistory.record_id == record_id)
+                    .distinct()
+                    .order_by(RecordHolderHistory.build_id)
+                )
+            ).all()
+            if build_id not in current
+        )
+        return build_record_projection(
+            RecordProjectionSource(
+                record_id=record_id,
+                result_id=result.id if result is not None else None,
+                definition_id=definition.id,
+                history_complete=result.history_complete if result is not None else True,
+                gap_reasons=result.gap_reasons if result is not None else {},
+                criterion=definition.criterion,
+                build_kind=definition.build_kind,
+                version_scope=definition.version_scope,
+                category_key=definition.category_key,
+                title=definition.title,
+                subtitle=definition.subtitle,
+                category_values=await self._record_category_values(definition.category_key),
+                former_holder_ids=former,
+                tied_build_ids=tied,
             ),
+            holders,
         )
 
-    async def _record_category_filters(self, key: str) -> tuple[ProjectionFilter, ...]:
+    async def _record_category_values(self, key: str) -> tuple[FieldValue, ...]:
         identity = CategoryIdentity.from_key(key)
         if identity is None:
             return ()
 
-        filters: list[ProjectionFilter] = []
+        values: list[FieldValue] = []
         pattern_ids: frozenset[int] = frozenset()
         if identity.kind is BuildKind.DOOR and (door := door_category_lookup(identity)) is not None:
             width, height, depth = door.opening
-            filters.extend(
+            values.extend(
                 (
-                    ProjectionFilter("door_width", Decimal(width)),
-                    ProjectionFilter("door_height", Decimal(height)),
-                    ProjectionFilter("door_depth", Decimal(depth)),
-                    ProjectionFilter("orientation", door.orientation),
+                    FieldValue("door_width", Decimal(width)),
+                    FieldValue("door_height", Decimal(height)),
+                    FieldValue("door_depth", Decimal(depth)),
+                    FieldValue("orientation", door.orientation),
                 )
             )
             pattern_ids = door.type_ids
             if not pattern_ids:
-                filters.append(ProjectionFilter("type", "Regular"))
+                values.append(FieldValue("type", "Regular"))
         elif identity.kind is BuildKind.EXTENDER:
             parts = identity.base_key.split("|", maxsplit=3)
             if len(parts) == 4 and parts[0] == "extender":
                 _, orientation, length, types = parts
                 if length.isdecimal():
-                    filters.extend(
+                    values.extend(
                         (
-                            ProjectionFilter("extender_length", Decimal(length)),
-                            ProjectionFilter("orientation", orientation),
+                            FieldValue("extender_length", Decimal(length)),
+                            FieldValue("orientation", orientation),
                         )
                     )
                 if types.startswith("t[") and types.endswith("]"):
@@ -606,12 +637,12 @@ class SearchProjectionLoader:
                         pattern_ids = frozenset(int(part) for part in type_key.split(","))
                     elif type_key:
                         # Extender categories without pattern tags use the stored type name.
-                        filters.append(ProjectionFilter("type", type_key))
+                        values.append(FieldValue("type", type_key))
 
         restriction_ids = frozenset(identity.restriction_ids)
         tag_ids = pattern_ids | restriction_ids
         if tag_ids:
-            filters.extend(ProjectionFilter("category_tag_id", Decimal(tag_id)) for tag_id in sorted(tag_ids))
+            values.extend(FieldValue("category_tag_id", Decimal(tag_id)) for tag_id in sorted(tag_ids))
             definitions = await self._session.scalars(
                 select(TagDefinition)
                 .options(selectinload(TagDefinition.aliases))
@@ -630,8 +661,8 @@ class SearchProjectionLoader:
                 else:
                     continue
                 names = {definition.display_name, *(alias.alias for alias in definition.aliases)}
-                filters.extend(ProjectionFilter(field_name, name) for name in sorted(names))
-        return tuple(filters)
+                values.extend(FieldValue(field_name, name) for name in sorted(names))
+        return tuple(values)
 
     async def _metadata(self, subtype: str, source_id: int) -> SearchProjection | None:
         if subtype == "tag":
@@ -723,29 +754,29 @@ class SearchProjectionWorker:
                                 await self._session.execute(
                                     select(
                                         func.upsert_search_projection_request(
-                                            "record", func.concat("result:", RecordResult.id), "upsert"
+                                            "record", func.concat("record:", RecordResult.record_id), "upsert"
                                         )
                                     )
                                     .select_from(RecordResult)
                                     .join(RecordHolder, RecordHolder.result_id == RecordResult.id)
                                     .where(RecordHolder.build_id == int(source_key))
-                                    .order_by(RecordResult.id)
+                                    .order_by(RecordResult.record_id)
                                 )
                             if resource_kind == "metadata" and (key := parse_projection_key(resource_kind, source_key)):
                                 subtype, tag_id = key
-                                if subtype == "tag":
+                                if subtype == "tag" and isinstance(tag_id, int):
                                     await self._session.execute(
                                         select(
                                             func.upsert_search_projection_request(
                                                 "record", SearchDocument.source_key, "upsert"
                                             )
                                         )
-                                        .select_from(SearchDocumentFilter)
-                                        .join(SearchDocument, SearchDocument.id == SearchDocumentFilter.document_id)
+                                        .select_from(SearchValue)
+                                        .join(SearchDocument, SearchDocument.id == SearchValue.document_id)
                                         .where(
                                             SearchDocument.resource_kind == "record",
-                                            SearchDocumentFilter.field_name == "category_tag_id",
-                                            SearchDocumentFilter.numeric_value == Decimal(tag_id),
+                                            SearchValue.field_name == "category_tag_id",
+                                            SearchValue.numeric_value == Decimal(tag_id),
                                         )
                                         .order_by(SearchDocument.source_key)
                                     )
@@ -779,24 +810,23 @@ class PostgresSearchProjection:
             return await SearchProjectionWorker(self._session()).process_batch(limit=limit, context=context)
 
 
-def parse_projection_key(resource_kind: str, source_key: str) -> tuple[str, int] | None:
-    """Return the subtype and numeric ID encoded by a queue key.
+def parse_projection_key(resource_kind: str, source_key: str) -> tuple[str, int | uuid.UUID] | None:
+    """Return the subtype and ID encoded by a queue key.
 
-    Builds use a bare ID, records use `result:ID`, and metadata uses `subtype:ID`.
-    Return None for an unsupported resource kind or malformed key. Metadata
-    subtypes are checked later by the loader.
+    Builds use a bare ID, records use `record:<public ID>`, and metadata uses
+    `subtype:ID`. Return None for an unsupported resource kind or malformed key.
+    Metadata subtypes are checked later by the loader.
     """
     if resource_kind == "build" and source_key.isdecimal():
         return "build", int(source_key)
-    if resource_kind == "record":
-        subtype, separator, raw_id = source_key.partition(":")
-        if separator and subtype == "result" and raw_id.isdecimal():
-            return subtype, int(raw_id)
-        return None
-    if resource_kind == "metadata":
-        subtype, separator, raw_id = source_key.partition(":")
-        if separator and raw_id.isdecimal():
-            return subtype, int(raw_id)
+    subtype, separator, raw_id = source_key.partition(":")
+    if resource_kind == "record" and separator and subtype == "record":
+        try:
+            return subtype, uuid.UUID(raw_id)
+        except ValueError:
+            return None
+    if resource_kind == "metadata" and separator and raw_id.isdecimal():
+        return subtype, int(raw_id)
     return None
 
 
@@ -804,20 +834,18 @@ def build_record_projection(
     source: RecordProjectionSource,
     holders: Sequence[RecordHolderProjectionSource] = (),
 ) -> SearchProjection:
-    """Index each record with the builds and creators that currently hold it."""
+    """Index a record's category, its current holders, and the builds that held or tie it."""
     first_holder = holders[0] if holders else None
     holder_ids = tuple(holder.build_id for holder in holders)
-    tags = (source.criterion, source.build_kind, source.version_scope)
+    state = "retired" if source.retired else "current"
     return SearchProjection(
         resource_kind="record",
-        source_key=f"result:{source.result_id}",
+        source_key=f"record:{source.record_id}",
         title=source.title,
         subtitle=source.subtitle,
-        description="\n".join(" ".join((holder.title, *holder.creators)) for holder in holders) or None,
-        # Only live records have results, so every record document is current.
-        status="current",
-        tags=tags,
+        status=state,
         document_data={
+            "record_id": str(source.record_id),
             "result_id": source.result_id,
             "definition_id": source.definition_id,
             "base_title": source.criterion,
@@ -831,24 +859,27 @@ def build_record_projection(
             "build_title": first_holder.title if first_holder is not None else source.title,
             "holder_metrics": {str(holder.build_id): holder.metric for holder in holders},
             "metric": first_holder.metric if first_holder is not None else {},
+            "former_holder_ids": source.former_holder_ids,
+            "tied_build_ids": source.tied_build_ids,
             "history_complete": source.history_complete,
             "gap_reasons": source.gap_reasons,
         },
-        filters=(
-            ProjectionFilter("base_title", source.criterion),
-            ProjectionFilter("record_state", "current"),
-            ProjectionFilter("kind", source.build_kind),
-            ProjectionFilter("version_scope", source.version_scope),
-            *source.category_filters,
+        values=(
+            FieldValue("title", source.title),
+            *((FieldValue("subtitle", source.subtitle),) if source.subtitle else ()),
+            FieldValue("base_title", source.criterion),
+            FieldValue("record_state", state),
+            FieldValue("kind", source.build_kind),
+            FieldValue("version_scope", source.version_scope),
+            *source.category_values,
+            *(FieldValue("creator", name) for name in dict.fromkeys(n for holder in holders for n in holder.creators)),
             *(
-                ProjectionFilter("creator", name)
-                for name in dict.fromkeys(n for holder in holders for n in holder.creators)
-            ),
-            *(
-                ProjectionFilter(CREATOR_ID_STORAGE, public_id)
+                FieldValue(CREATOR_ID_STORAGE, public_id)
                 for public_id in dict.fromkeys(i for holder in holders for i in holder.creator_ids)
             ),
-            *(value for holder in holders for value in holder.filters(source.build_kind)),
+            *(value for holder in holders for value in holder.values(source.build_kind)),
+            *(FieldValue("former_holder", Decimal(build_id)) for build_id in source.former_holder_ids),
+            *(FieldValue("tied", Decimal(build_id)) for build_id in source.tied_build_ids),
         ),
     )
 
@@ -863,11 +894,10 @@ def build_tag_projection(source: TagProjectionSource) -> SearchProjection | None
         source_key=f"tag:{source.tag_id}",
         title=source.display_name,
         subtype=source.semantic_kind,
-        tags=source.aliases,
-        extra_filters=(
-            ProjectionFilter("kind", "tag"),
-            *(ProjectionFilter(source.semantic_kind, alias) for alias in source.aliases),
-            *(ProjectionFilter("tag", name) for name in (source.display_name, *source.aliases)),
+        extra_values=(
+            FieldValue("kind", "tag"),
+            *(FieldValue(source.semantic_kind, alias) for alias in source.aliases),
+            *(FieldValue("tag", name) for name in (source.display_name, *source.aliases)),
         ),
         data={
             "tag_id": source.tag_id,
@@ -885,100 +915,35 @@ def _metadata_projection(
     source_key: str,
     title: str,
     subtype: str,
-    tags: Sequence[str] = (),
-    extra_filters: Sequence[ProjectionFilter] = (),
+    extra_values: Sequence[FieldValue] = (),
     data: dict[str, object],
 ) -> SearchProjection:
     return SearchProjection(
         resource_kind="metadata",
         source_key=source_key,
         title=title,
-        tags=tuple(tags),
         document_data={"metadata_kind": subtype, **data},
-        filters=(ProjectionFilter("kind", subtype), ProjectionFilter(subtype, title), *extra_filters),
+        values=(
+            FieldValue("title", title),
+            FieldValue("kind", subtype),
+            FieldValue(subtype, title),
+            *extra_values,
+        ),
     )
 
 
-def build_filter_models(document_id: int, filters: Sequence[ProjectionFilter]) -> list[SearchDocumentFilter]:
-    """Number indexed values separately for each field."""
-    models: list[SearchDocumentFilter] = []
-    ordinals: dict[str, int] = {}
-    for filter_value in filters:
-        ordinal = ordinals.get(filter_value.field_name, 0)
-        ordinals[filter_value.field_name] = ordinal + 1
-        text_value: str | None = None
-        numeric_value: Decimal | None = None
-        timestamp_value: Instant | None = None
-        boolean_value: bool | None = None
-        if isinstance(filter_value.value, bool):
-            boolean_value = filter_value.value
-        elif isinstance(filter_value.value, Decimal):
-            numeric_value = filter_value.value
-        elif isinstance(filter_value.value, Instant):
-            timestamp_value = filter_value.value
-        else:
-            text_value = filter_value.value
-        models.append(
-            SearchDocumentFilter(
-                document_id=document_id,
-                field_name=filter_value.field_name,
-                ordinal=ordinal,
-                holder_build_id=filter_value.holder_build_id,
-                text_value=text_value,
-                numeric_value=numeric_value,
-                timestamp_value=timestamp_value,
-                boolean_value=boolean_value,
-            )
-        )
-    return models
-
-
-def normalize_search_text(value: str) -> str:
-    """Case-fold text and collapse whitespace to single spaces."""
-    return " ".join(value.casefold().split())
-
-
-def build_tag_name_filters(assignments: Sequence[TagAssignment]) -> tuple[ProjectionFilter, ...]:
+def build_tag_name_values(assignments: Sequence[TagAssignment]) -> tuple[FieldValue, ...]:
     """Index assigned names and aliases without changing the displayed tags."""
-    filters: list[ProjectionFilter] = []
+    values: list[FieldValue] = []
     for assignment in assignments:
         definition = assignment.definition
         names = tuple(dict.fromkeys((definition.display_name, *(alias.alias for alias in definition.aliases))))
         tag_names = tuple(dict.fromkeys((assignment.rendered, *names)))
-        filters.extend(ProjectionFilter("tag", name) for name in tag_names)
+        values.extend(FieldValue("tag", name) for name in tag_names)
         if definition.authority == "official":
             fields = {"restriction": ("restriction",), "pattern": ("type", "pattern")}.get(definition.semantic_kind, ())
-            filters.extend(ProjectionFilter(field, name) for field in fields for name in names)
-    return tuple(filters)
-
-
-def projection_source_hash(projection: SearchProjection) -> str:
-    """Hash document content to detect changes that invalidate an embedding.
-
-    Dictionary keys are sorted, but tag and indexed field value order remains significant.
-    Resource identity is excluded because the hash tracks content within a document.
-    """
-    serialized = json.dumps(
-        {
-            "title": projection.title,
-            "subtitle": projection.subtitle,
-            "description": projection.description,
-            "status": projection.status,
-            "tags": projection.tags,
-            "search_aliases": projection.search_aliases,
-            "document_data": projection.document_data,
-            "filters": tuple(
-                (value.field_name, value.value)
-                if value.holder_build_id is None
-                else (value.field_name, value.value, value.holder_build_id)
-                for value in projection.filters
-            ),
-        },
-        sort_keys=True,
-        separators=(",", ":"),
-        default=str,
-    )
-    return hashlib.sha256(serialized.encode()).hexdigest()
+            values.extend(FieldValue(field, name) for field in fields for name in names)
+    return tuple(values)
 
 
 def _version_name(version: Version) -> str:
