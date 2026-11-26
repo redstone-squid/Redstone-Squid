@@ -257,7 +257,7 @@ function session(request: Request): SessionSnapshot {
     user:
       display === null
         ? null
-        : { id: 7, creator_id: "creator-7", display_name: display, avatar_url: null },
+        : { id: "00000000-0000-4000-8000-000000000007", display_name: display, avatar_url: null },
     consent_pending: display !== null && name !== "member",
     permissions: [],
     counts: { unread_notifications: 0, drafts: 0, drafts_needing_attention: 0, review_queue: null },

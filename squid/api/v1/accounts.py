@@ -67,12 +67,12 @@ class LinkedIdentityDTO(SQLAlchemyDTO[AccountIdentity]):
 
 
 class MergePreviewDTO(DataclassDTO[MergePreview]):
-    """Keep the public creator ID and merge counts in the existing preview shape."""
+    """Show the absorbed account's public ID and what the merge would move."""
 
     __schema_name__ = "MergePreviewDetail"
     config = DTOConfig(
         include={"absorbed_public_creator_id", "alias_names", "identity_count", "build_count"},
-        rename_fields={"absorbed_public_creator_id": "absorbed_creator_id"},
+        rename_fields={"absorbed_public_creator_id": "absorbed_account_id"},
     )
 
 
@@ -83,8 +83,8 @@ class AccountMergeDTO(DataclassDTO[AccountMerge]):
     config = DTOConfig(
         include={"surviving_public_creator_id", "redirected_public_creator_id"},
         rename_fields={
-            "surviving_public_creator_id": "surviving_creator_id",
-            "redirected_public_creator_id": "redirected_creator_id",
+            "surviving_public_creator_id": "surviving_account_id",
+            "redirected_public_creator_id": "redirected_account_id",
         },
     )
 
@@ -372,7 +372,7 @@ async def create_merge_code(
 
     Create the code while signed in to the account being given up, then redeem it
     as the account being kept. Completing the merge permanently redirects the old
-    creator ID. The code is shown on creation and replaces any previous code.
+    account ID. The code is shown on creation and replaces any previous code.
     """
     if caller.account_id is None:
         raise AuthenticationError
@@ -427,7 +427,7 @@ async def complete_merge(
 ) -> AccountMerge:
     """Absorb the account that minted this code into the caller's account.
 
-    Irreversible: the absorbed account's creator id becomes a permanent redirect to the caller's.
+    Irreversible: the absorbed account's ID becomes a permanent redirect to the caller's.
     """
     if caller.account_id is None:
         raise AuthenticationError

@@ -70,8 +70,8 @@ class PostgresViewerRepository:
         row = (await session.execute(query)).one_or_none()
         if row is None:
             raise AccountNotFoundError(account_id)
-        creator_id, display_name, avatar, unread_count, active, attention, review = row
-        user = SessionUser(account_id, creator_id, display_name, avatar_url_for(avatar) if avatar else None)
+        public_id, display_name, avatar, unread_count, active, attention, review = row
+        user = SessionUser(public_id, display_name, avatar_url_for(avatar) if avatar else None)
         return user, SessionCounts(unread_count, active, attention, review)
 
     async def build_state(self, account_id: int, build: Build) -> tuple[dict[UUID, int], ViewerBallot | None]:

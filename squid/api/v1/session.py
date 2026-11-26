@@ -14,6 +14,7 @@ from squid.api.idempotency import IdempotencyKey, reserve_idempotent_request_for
 from squid.api.private_responses import private_response
 from squid.api.security import requires
 from squid.api.v1.browser_views import BrowserViews, SessionSnapshot
+from squid.core.accounts.errors import AccountNotFoundError
 from squid.core.permissions.domain.catalogue import ACCOUNT_IMPERSONATE
 
 
@@ -26,7 +27,7 @@ async def session_snapshot(caller: CurrentCaller, services: Services) -> Session
 
 @dataclass
 class StartImpersonation:
-    account_id: int
+    account_id: UUID
     reason: str
 
 
@@ -54,13 +55,14 @@ async def start_impersonation(
 ) -> UUID:
     """Start debugging as an account. Send the returned UUID in Squid-Impersonation-Session."""
     binding = caller.browser_binding()
-    session = await services.impersonation.start(binding, data.account_id, data.reason, context=caller.context())
+    target_id = await services.accounts.resolve_public_id(data.account_id, context=caller.context())
+    session = await services.impersonation.start(binding, target_id, data.reason, context=caller.context())
     return session.id
 
 
 @dataclass(frozen=True, slots=True)
 class ImpersonationDetails:
-    target_id: int
+    account_id: UUID
     reason: str
     expires_at: Instant
     revoked_at: Instant | None
@@ -78,7 +80,10 @@ async def inspect_impersonation(
 ) -> ImpersonationDetails:
     """Inspect a session belonging to the current browser login."""
     session = await services.impersonation.inspect(caller.browser_binding(), session_id, context=caller.context())
-    return ImpersonationDetails(session.target_id, session.reason, session.expires_at, session.revoked_at)
+    target = await services.accounts.get_account_by_id(session.target_id)
+    if target is None:
+        raise AccountNotFoundError(session.target_id)
+    return ImpersonationDetails(target.public_creator_id, session.reason, session.expires_at, session.revoked_at)
 
 
 @delete(

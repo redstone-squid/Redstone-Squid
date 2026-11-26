@@ -58,12 +58,12 @@ def test_merge_dtos_rename_public_ids_without_exposing_internal_account_ids() ->
     app = Litestar([preview, complete], openapi_config=None)
     with TestClient(app) as client:
         assert client.get("/preview").json() == {
-            "absorbed_creator_id": str(REDIRECT_ID),
+            "absorbed_account_id": str(REDIRECT_ID),
             "alias_names": ["Builder"],
             "identity_count": 2,
             "build_count": 4,
         }
         assert client.get("/complete").json() == {
-            "surviving_creator_id": str(CREATOR_ID),
-            "redirected_creator_id": str(REDIRECT_ID),
+            "surviving_account_id": str(CREATOR_ID),
+            "redirected_account_id": str(REDIRECT_ID),
         }

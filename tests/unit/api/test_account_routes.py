@@ -101,8 +101,7 @@ async def test_a_cli_caller_can_read_its_own_account() -> None:
     """A Java-only account remains readable through its CLI credential."""
     accounts = _accounts(account=_account(discord=False))
     response = (await get_me.fn(accounts, _caller("cli"))).content
-    assert response.id == 1
-    assert response.creator_id == CREATOR_ID
+    assert response.id == CREATOR_ID
     assert _identity_of(response, IdentityProvider.DISCORD) is None
     assert _identity_of(response, IdentityProvider.JAVA).display_name == "Steve"
 

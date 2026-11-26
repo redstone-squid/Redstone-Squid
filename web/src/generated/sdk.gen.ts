@@ -221,7 +221,7 @@ export const accountIdentityUnlink = <ThrowOnError extends boolean = false>(opti
  *
  * Create the code while signed in to the account being given up, then redeem it
  * as the account being kept. Completing the merge permanently redirects the old
- * creator ID. The code is shown on creation and replaces any previous code.
+ * account ID. The code is shown on creation and replaces any previous code.
  */
 export const accountMergeCodeCreate = <ThrowOnError extends boolean = false>(options?: Options<AccountMergeCodeCreateData, ThrowOnError>): RequestResult<AccountMergeCodeCreateResponses, AccountMergeCodeCreateErrors, ThrowOnError> => (options?.client ?? client).post<AccountMergeCodeCreateResponses, AccountMergeCodeCreateErrors, ThrowOnError>({
     security: [
@@ -275,7 +275,7 @@ export const accountMergePreview = <ThrowOnError extends boolean = false>(option
  *
  * Absorb the account that minted this code into the caller's account.
  *
- * Irreversible: the absorbed account's creator id becomes a permanent redirect to the caller's.
+ * Irreversible: the absorbed account's ID becomes a permanent redirect to the caller's.
  */
 export const accountMergeComplete = <ThrowOnError extends boolean = false>(options: Options<AccountMergeCompleteData, ThrowOnError>): RequestResult<AccountMergeCompleteResponses, AccountMergeCompleteErrors, ThrowOnError> => (options.client ?? client).post<AccountMergeCompleteResponses, AccountMergeCompleteErrors, ThrowOnError>({
     security: [

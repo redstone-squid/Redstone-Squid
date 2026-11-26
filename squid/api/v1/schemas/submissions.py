@@ -378,7 +378,6 @@ class DraftSummaryResponse(StrictSchema):
     """Compact active-draft metadata safe for cross-client discovery."""
 
     id: UUID
-    owner_account_id: int
     inferred: bool
     schema_id: str
     schema_revision: int
@@ -396,7 +395,6 @@ class DraftSummaryResponse(StrictSchema):
         display_name = draft.snapshot.answers.get("display_name")
         return cls(
             id=draft.snapshot.id,
-            owner_account_id=draft.snapshot.owner_account_id,
             inferred=draft.inferred,
             schema_id=draft.snapshot.schema_id,
             schema_revision=draft.snapshot.schema_revision,

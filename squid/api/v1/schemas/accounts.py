@@ -119,10 +119,8 @@ class AccountDetail(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    id: int
+    id: UUID
     revision: int
-    creator_id: UUID
-    """The public identifier this account's creator page is served under."""
 
     created_at: Instant | None
     consent_version: str | None
@@ -138,11 +136,9 @@ class AccountDetail(BaseModel):
         *,
         consent_pending: bool,
     ) -> AccountDetail:
-        assert account.id is not None
         assert account.public_creator_id is not None
         return cls(
-            id=account.id,
-            creator_id=account.public_creator_id,
+            id=account.public_creator_id,
             revision=account.revision,
             created_at=account.created_at,
             consent_version=account.consent.version if account.consent is not None else None,

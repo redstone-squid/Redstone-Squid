@@ -17,8 +17,9 @@ from squid.core.unit_of_work import UnitOfWorkFactory
 
 @dataclass(frozen=True)
 class SessionUser:
-    id: int
-    creator_id: UUID
+    id: UUID
+    """The account's public ID."""
+
     display_name: str | None
     avatar_url: str | None
 

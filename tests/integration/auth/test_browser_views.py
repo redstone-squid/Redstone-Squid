@@ -59,7 +59,7 @@ async def test_browser_reads_and_links_are_scoped_to_the_account(
     staff_context = ActingContext.direct(staff)
     user, counts, allowed = await views.session(context=owner_context)
     assert BUILD_SUBMISSION_VIEW_PENDING.name not in allowed
-    assert user.creator_id == owner.public_creator_id
+    assert user.id == owner.public_creator_id
     assert counts == SessionCounts(0, 1, 1, None)
     _, counts, allowed = await views.session(context=staff_context)
     assert BUILD_SUBMISSION_VIEW_PENDING.name in allowed

@@ -37,9 +37,8 @@ export type AboveMaximumParams = {
  * AccountDetail
  */
 export type AccountDetail = {
-    id: number;
+    id: string;
     revision: number;
-    creator_id: string;
     created_at: string | null;
     consent_version: string | null;
     consent_pending: boolean;
@@ -51,8 +50,8 @@ export type AccountDetail = {
  * AccountMergeDetail
  */
 export type AccountMergeDetail = {
-    surviving_creator_id: string;
-    redirected_creator_id: string;
+    surviving_account_id: string;
+    redirected_account_id: string;
 };
 
 /**
@@ -923,7 +922,6 @@ export type DraftStatus = 'editing' | 'processing' | 'needs_attention' | 'submit
  */
 export type DraftSummaryResponse = {
     id: string;
-    owner_account_id: number;
     inferred: boolean;
     schema_id: string;
     schema_revision: number;
@@ -1280,7 +1278,7 @@ export type IdentityVisibilityRequest = {
  * ImpersonationDetails
  */
 export type ImpersonationDetails = {
-    target_id: number;
+    account_id: string;
     reason: string;
     expires_at: string;
     revoked_at: string | null;
@@ -1461,7 +1459,7 @@ export type MergeCodeDetail = {
  * MergePreviewDetail
  */
 export type MergePreviewDetail = {
-    absorbed_creator_id: string;
+    absorbed_account_id: string;
     alias_names?: Array<string>;
     identity_count?: number;
     build_count?: number;
@@ -2713,8 +2711,7 @@ export type SessionSnapshot = {
  * SessionUser
  */
 export type SessionUser = {
-    id: number;
-    creator_id: string;
+    id: string;
     display_name: string | null;
     avatar_url: string | null;
 };
@@ -2779,7 +2776,7 @@ export type StaffSubmissionNotification = {
  * StartImpersonation
  */
 export type StartImpersonation = {
-    account_id: number;
+    account_id: string;
     reason: string;
 };
 
