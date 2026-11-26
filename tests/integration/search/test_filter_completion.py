@@ -16,7 +16,8 @@ from squid.core.actors import ActingContext, AnonymousActor
 from squid.core.persistence.base import Base
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldRegistry
-from squid.core.search.infrastructure.documents import FieldValue, SearchProjection
+from squid.core.search.domain import FieldValue
+from squid.core.search.infrastructure.documents import SearchProjection
 from squid.core.search.infrastructure.projection import SearchProjectionRepository
 from squid.core.suggestions.application.queries import SuggestionQueryService
 from squid.core.suggestions.domain import SuggestionRequest

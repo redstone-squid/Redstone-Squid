@@ -26,6 +26,7 @@ from squid.config import EMBEDDING_DIMENSION
 from squid.core.persistence.base import Base
 from squid.core.persistence.queue_models import DeadLetterColumns, QueueColumns
 from squid.core.persistence.types import InstantUTC
+from squid.core.search.domain import FieldValue
 
 
 class SearchDocument(Base, kw_only=True):
@@ -172,6 +173,15 @@ class SearchValue(Base, kw_only=True):
     numeric_value: Mapped[Decimal | None] = mapped_column(Numeric, default=None)
     timestamp_value: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     boolean_value: Mapped[bool | None] = mapped_column(Boolean, default=None)
+
+    def field_value(self) -> FieldValue:
+        """Return the value as the projection that wrote it described it."""
+        value = next(
+            item
+            for item in (self.text_value, self.numeric_value, self.timestamp_value, self.boolean_value)
+            if item is not None
+        )
+        return FieldValue(self.field_name, value, self.holder_build_id)
 
 
 class SearchTerm(Base, kw_only=True):

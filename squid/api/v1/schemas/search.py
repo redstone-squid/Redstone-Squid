@@ -7,7 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from squid.core.builds.application.queries import PublicBuildSummary
 from squid.core.errors import ValidationError
-from squid.core.search.domain import MetadataSearchHit, RecordSearchHit, SearchMatch, SearchText
+from squid.core.search.domain import FieldMatch, MetadataSearchHit, RecordSearchHit, SearchMatch
 from squid.core.search.domain.models import RecordSearchHolder
 
 
@@ -40,7 +40,8 @@ class RecordSearchEntry(BaseModel):
     holders: list[RecordSearchHolder] = Field(default_factory=list)
     matched: bool = True
     retired: bool = False
-    title_match: SearchText | None = None
+    evidence: list[FieldMatch] = Field(default_factory=list)
+    """Values that made the record match, with character ranges to highlight."""
 
     @classmethod
     def from_domain(cls, hit: RecordSearchHit) -> RecordSearchEntry:
@@ -57,7 +58,7 @@ class RecordSearchEntry(BaseModel):
             holders=list(hit.holders),
             matched=hit.matched,
             retired=hit.retired,
-            title_match=hit.title_match,
+            evidence=list(hit.evidence.matches),
         )
 
 
@@ -94,7 +95,8 @@ class BuildSearchResult(BaseModel):
     grouped: bool = False
     records: list[RecordSearchEntry] = Field(default_factory=list)
     matches: list[SearchMatch] = Field(default_factory=list)
-    title_match: SearchText | None = None
+    evidence: list[FieldMatch] = Field(default_factory=list)
+    """Values of this document that matched, with character ranges to highlight."""
 
 
 class RecordSearchResult(BaseModel):
@@ -116,7 +118,8 @@ class MetadataSearchResult(BaseModel):
     score: float | None
     metadata: MetadataSearchEntry
     matches: list[SearchMatch] = Field(default_factory=list)
-    title_match: SearchText | None = None
+    evidence: list[FieldMatch] = Field(default_factory=list)
+    """Values of this document that matched, with character ranges to highlight."""
 
 
 type SearchResult = Annotated[

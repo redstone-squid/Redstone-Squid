@@ -24,7 +24,9 @@ from squid.core.search.application import SearchService
 from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldRegistry
 from squid.core.search.domain import (
     BuildSearchHit,
+    FieldMatch,
     RecordSearchHit,
+    SearchEvidence,
     SearchMode,
     SearchPage,
     SearchRequest,
@@ -352,7 +354,7 @@ def grouped_build() -> BuildSearchHit:
         "42",
         "2x2 Seamless Door",
         "confirmed",
-        title_match=SearchText("2x2 Seamless Door", ((0, 3),)),
+        evidence=SearchEvidence((FieldMatch("title", "2x2 Seamless Door", ((0, 3),)),)),
         records=(
             RecordSearchHit(
                 "result:1",
@@ -364,7 +366,7 @@ def grouped_build() -> BuildSearchHit:
                 "all_time",
                 holder_build_ids=(42, 57),
                 metrics={"volume": 48},
-                title_match=SearchText("Smallest 2x2 Door", ((9, 12),)),
+                evidence=SearchEvidence((FieldMatch("title", "Smallest 2x2 Door", ((9, 12),)),)),
             ),
             RecordSearchHit(
                 "result:2",
@@ -397,6 +399,31 @@ def test_record_result_lists_each_holder_with_its_credits() -> None:
     ]
 
 
+def test_a_record_found_through_its_holder_names_the_holder() -> None:
+    record = replace(
+        grouped_build().records[0],
+        evidence=SearchEvidence((FieldMatch("holder_title", "No Furnaces Door", ((3, 11),), 57),)),
+    )
+
+    description = source_text(_result_description(record, SearchRequest("furnaces")), format="plain")
+
+    assert "↳ Holder #57 No Furnaces Door" in description.splitlines()
+
+
+def test_a_build_found_by_its_name_shows_the_name_and_marks_close_spellings() -> None:
+    hit = replace(
+        grouped_build(),
+        records=(),
+        evidence=SearchEvidence((FieldMatch("name", "hidden enchant table", ((0, 6),), close=True),)),
+    )
+
+    description = source_text(
+        _result_description(hit, SearchRequest("hiden", scope=SearchScope.BUILDS)), format="plain"
+    )
+
+    assert description.splitlines() == ["#42 2x2 Seamless Door", "↳ Name: hidden enchant table · close spelling"]
+
+
 def test_grouped_result_titles_follow_the_scope_and_do_not_repeat_the_heading() -> None:
     hit = grouped_build()
 
@@ -412,7 +439,7 @@ def test_grouped_result_titles_follow_the_scope_and_do_not_repeat_the_heading() 
             "Smallest 2x2 Door · Java Edition",
             "Fastest 2x2 Door · Java Edition",
         ]
-    same = replace(hit, title="Smallest 2x2 Door", title_match=None, records=hit.records[:1])
+    same = replace(hit, title="Smallest 2x2 Door", evidence=SearchEvidence(), records=hit.records[:1])
     for scope in (SearchScope.BUILDS, SearchScope.ALL):
         assert source_text(_result_description(same, grouped(scope)), format="plain").splitlines() == [
             "#42 Smallest 2x2 Door",
@@ -482,7 +509,7 @@ async def test_many_grouped_records_and_ties_remain_browsable_within_discord_lim
                 hit.records[0],
                 source_id=f"result:{index}",
                 title=f"Record {index}: " + "2x2 seamless piston door " * 5,
-                title_match=None,
+                evidence=SearchEvidence(),
                 holder_build_ids=(42, *range(100, 130)),
             )
             for index in range(12)

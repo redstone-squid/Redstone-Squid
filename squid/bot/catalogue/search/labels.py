@@ -44,6 +44,10 @@ def field_label(name: str) -> sl.TextLike:
             return tr(t"search-field-title = Title")
         case "description":
             return tr(t"search-field-description = Description")
+        case "name":
+            return tr(t"search-field-name = Name")
+        case "subtitle":
+            return tr(t"search-field-subtitle = Subtitle")
         case "tag":
             return tr(t"search-field-tag = Tag")
         case "restriction":
@@ -64,6 +68,12 @@ def field_label(name: str) -> sl.TextLike:
             return tr(t"search-field-base-title = Record criterion")
         case "version_scope":
             return tr(t"search-field-version-scope = Version scope")
+        case "record_state":
+            return tr(t"search-field-record-state = Record state")
+        case "former_holder":
+            return tr(t"search-field-former-holder = Former holder")
+        case "tied":
+            return tr(t"search-field-tied = Tied build")
         case "width":
             return tr(t"search-field-width = Width")
         case "height":

@@ -7,7 +7,7 @@ several matching records, or matches in its own right as well, appears once.
 """
 
 from collections import defaultdict
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import replace
 from typing import Any
 
@@ -18,28 +18,29 @@ from sqlalchemy.sql.elements import ColumnElement
 from sqlalchemy.sql.selectable import CTE
 
 from squid.core.pagination import MAX_PAGE_OFFSET
-from squid.core.search.application.highlighting import highlight_title
+from squid.core.search.application.explanation import explain
 from squid.core.search.application.ports import SearchSlice
 from squid.core.search.application.ranking import RankedCandidate
 from squid.core.search.domain import (
     BuildSearchHit,
     FieldDefinition,
     FieldType,
+    FieldValue,
     MetadataSearchHit,
     RecordSearchHit,
+    SearchEvidence,
     SearchHit,
     SearchMatch,
     SearchQuery,
     SearchRequest,
     SearchScope,
-    SearchText,
     SortDirection,
 )
+from squid.core.search.domain.query import has_holder_clauses
 from squid.core.search.domain.text import TermExpansion
 from squid.core.search.infrastructure.compiler import (
     compile_holder_query,
     compile_query,
-    has_holder_filters,
     matching_holder,
 )
 from squid.core.search.infrastructure.hits import document_hit, public_identity
@@ -74,7 +75,7 @@ class ResultPager:
         self.request = request
         self.query = query
         self.expansion = expansion
-        self.holder_filters = has_holder_filters(query)
+        self.holder_filters = has_holder_clauses(query)
         self.statuses = request.visible_statuses if request.visible_statuses is not None else frozenset({"approved"})
 
     async def page(
@@ -150,13 +151,15 @@ class ResultPager:
                     )
                 )
                 preferred_holders = {document_id: holder_id for document_id, holder_id in rows}
-            hits: list[SearchHit] = []
-            for unit_id in unit_ids:
-                hit = document_hit(documents[unit_id], scores[unit_id], holder_id=preferred_holders.get(unit_id))
-                if isinstance(hit, RecordSearchHit):
-                    hit = replace(hit, title_match=highlight_title(hit.title, self.query))
-                hits.append(hit)
-            return SearchSlice(tuple(hits), total, warnings, page_offset)
+            evidence = await self._evidence(documents.values())
+            hits = tuple(
+                replace(
+                    document_hit(documents[unit_id], scores[unit_id], holder_id=preferred_holders.get(unit_id)),
+                    evidence=evidence[unit_id],
+                )
+                for unit_id in unit_ids
+            )
+            return SearchSlice(hits, total, warnings, page_offset)
         # Use every match rather than the ranked ones, so a hit also lists matches outside the candidate pool.
         grouped_hits = await self._grouped_hits(matches, unit_ids, documents, scores, ranked or {})
         return SearchSlice(grouped_hits, total, warnings, page_offset)
@@ -205,6 +208,7 @@ class ResultPager:
         for unit_id, document in rows:
             contributions[unit_id].append(document)
         records = await self._records(documents, compile_query(self.query, self.expansion), ranked)
+        evidence = await self._evidence(documents.values())
         hits: list[SearchHit] = []
         for unit_id in unit_ids:
             hit = document_hit(documents[unit_id], scores[unit_id])
@@ -218,12 +222,31 @@ class ResultPager:
                         hit,
                         records=records.get(hit.source_id, ()),
                         matches=sources,
-                        title_match=highlight_title(hit.title, self.query),
+                        evidence=evidence[unit_id],
                     )
                 )
             elif isinstance(hit, MetadataSearchHit):
-                hits.append(replace(hit, matches=sources, title_match=highlight_title(hit.title, self.query)))
+                hits.append(replace(hit, matches=sources, evidence=evidence[unit_id]))
         return tuple(hits)
+
+    async def _evidence(self, documents: Iterable[SearchDocument]) -> dict[int, SearchEvidence]:
+        """Explain each document with its indexed values; a document that matched only as a holder has none."""
+        kinds = {document.id: document.resource_kind for document in documents}
+        values: dict[int, list[FieldValue]] = {document_id: [] for document_id in kinds}
+        rows = await self.session.scalars(
+            select(SearchValue)
+            .where(SearchValue.document_id.in_(kinds))
+            .order_by(SearchValue.document_id, SearchValue.field_name, SearchValue.ordinal)
+        )
+        for row in rows:
+            values[row.document_id].append(row.field_value())
+        return {
+            document_id: explain(
+                self.query, document_values, record=kinds[document_id] == "record", expansion=self.expansion
+            )
+            or SearchEvidence()
+            for document_id, document_values in values.items()
+        }
 
     def _units(self, predicate: ColumnElement[bool]) -> CTE:
         """Pair each matching document with the unit it contributes to.
@@ -314,6 +337,7 @@ class ResultPager:
         for document_id, source_key in ties:
             visible_holders[document_id].append(int(source_key))
         records: dict[str, list[RecordSearchHit]] = defaultdict(list)
+        evidence = await self._evidence(row[0] for row in rows)
         for document, build_key, matched in rows:
             assert build_key is not None  # The query restricted these rows to the selected builds.
             candidate = ranked.get(document.id)
@@ -327,7 +351,7 @@ class ResultPager:
                     holder_build_ids=tuple(visible_holders[document.id]),
                     holders=tuple(holder for holder in hit.holders if holder.build_id in visible_holders[document.id]),
                     matched=bool(matched) and self.request.scope is not SearchScope.BUILDS,
-                    title_match=highlight_title(hit.title, self.query) if matched else SearchText(hit.title),
+                    evidence=evidence[document.id] if matched else SearchEvidence(),
                 )
             )
         return {

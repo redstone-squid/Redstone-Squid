@@ -12,7 +12,7 @@ from squid_i18n import Text
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 
-def record_row(title: sl.TextLike, subtitle: str | None) -> Text:
+def record_row(title: sl.TextLike, subtitle: sl.TextLike | None) -> Text:
     """Keep the qualifier visible in compact lists of similarly named records."""
     return Text(t"{title} · {subtitle}") if subtitle else Text(title)
 

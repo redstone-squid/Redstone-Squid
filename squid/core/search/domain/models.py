@@ -7,6 +7,7 @@ from typing import Literal
 from squid.core.builds.domain import EMPTY_BUILD_FILTERS, BuildListFilters
 from squid.core.errors import ErrorCode, ValidationError
 from squid.core.pagination import MAX_PAGE_OFFSET, PageAnchor
+from squid.core.search.domain.evidence import SearchEvidence
 from squid.core.search.domain.query import BuildQuery, RecordQuery
 from squid.core.search.domain.scope import SearchScope as SearchScope
 from squid.core.validation import (
@@ -109,18 +110,6 @@ class SearchRequest:
 
 
 @dataclass(frozen=True, slots=True)
-class SearchText:
-    """Display text with best-effort literal spans, using Python character offsets.
-
-    Spans are half-open and refer to this exact text, not a subsequently hydrated
-    title. An empty tuple means no reliable word-level highlight is available.
-    """
-
-    text: str
-    spans: tuple[tuple[int, int], ...] = ()
-
-
-@dataclass(frozen=True, slots=True)
 class SearchMatch:
     """A contributing document and its ranking branches, if relevance was used."""
 
@@ -155,7 +144,8 @@ class RecordSearchHit:
     holders: tuple[RecordSearchHolder, ...] = ()
     matched_holder_id: int | None = None
     matched: bool = True
-    title_match: SearchText | None = None
+    evidence: SearchEvidence = field(default_factory=SearchEvidence)
+    """The values that made this hit match."""
     retired: bool = False
     """A retired record has no competitors and no holders; only a `record_state` query finds it."""
     resource_kind: Literal["record"] = field(default="record", init=False)
@@ -178,7 +168,8 @@ class BuildSearchHit:
     tags: tuple[str, ...] = ()
     records: tuple[RecordSearchHit, ...] = ()
     matches: tuple[SearchMatch, ...] = ()
-    title_match: SearchText | None = None
+    evidence: SearchEvidence = field(default_factory=SearchEvidence)
+    """The values that made this hit match."""
     dimensions: tuple[int | None, int | None, int | None] = (None, None, None)
     """Width, height, and depth in blocks; None marks an unknown dimension."""
     resource_kind: Literal["build"] = field(default="build", init=False)
@@ -195,7 +186,8 @@ class MetadataSearchHit:
     score: float | None = None
     aliases: tuple[str, ...] = ()
     matches: tuple[SearchMatch, ...] = ()
-    title_match: SearchText | None = None
+    evidence: SearchEvidence = field(default_factory=SearchEvidence)
+    """The values that made this hit match."""
     resource_kind: Literal["metadata"] = field(default="metadata", init=False)
 
 

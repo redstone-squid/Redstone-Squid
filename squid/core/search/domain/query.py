@@ -7,14 +7,17 @@ converts values before the backend compiles the tree into a filter.
 """
 
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from decimal import Decimal
 from enum import StrEnum
 from typing import ClassVar
 from uuid import UUID
 
+from whenever import Instant
+
 from squid.core.errors import ErrorCode, ValidationError
 from squid.core.i18n import tr
-from squid.core.search.domain.fields import FieldDefinition
+from squid.core.search.domain.fields import FieldDefinition, FieldType
 from squid.core.search.domain.scope import CATALOGUE_SCOPES, SearchScope
 from squid_i18n import md_tr
 
@@ -178,3 +181,37 @@ def expression_applies_to(expression: QueryExpression, scope: SearchScope) -> bo
             return True
         case FieldExpression() | PresenceExpression():
             return expression.applies_to(scope)
+
+
+def has_holder_clauses(query: SearchQuery) -> bool:
+    """Tell whether record matches need to be correlated to one holder."""
+
+    def contains(expression: QueryExpression | None) -> bool:
+        match expression:
+            case BooleanExpression(operands=operands):
+                return any(contains(operand) for operand in operands)
+            case NotExpression(operand=operand):
+                return contains(operand)
+            case FieldExpression(field=field) | PresenceExpression(field=field):
+                return field.holder_scoped
+            case _:
+                return False
+
+    return not isinstance(query, BuildQuery) and contains(query.expression)
+
+
+def typed_value(value: ScalarValue, field_type: FieldType) -> str | Decimal | bool | Instant:
+    """Convert a query value to the type its field stores.
+
+    Dates and timestamps without an explicit offset are UTC.
+    """
+    if field_type is FieldType.NUMBER:
+        return Decimal(str(value))
+    if field_type is FieldType.TIMESTAMP:
+        parsed = datetime.fromisoformat(str(value))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=UTC)
+        return Instant(parsed)
+    if field_type is FieldType.BOOLEAN:
+        return bool(value)
+    return str(value)

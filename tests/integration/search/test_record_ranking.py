@@ -10,8 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from squid.core.actors import ActingContext, AnonymousActor
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.search.application import SearchService
-from squid.core.search.domain import BuildSearchHit, RecordSearchHit, SearchRequest, SearchScope
-from squid.core.search.infrastructure.documents import FieldValue, SearchProjection
+from squid.core.search.domain import BuildSearchHit, FieldValue, RecordSearchHit, SearchRequest, SearchScope
+from squid.core.search.infrastructure.documents import SearchProjection
 from squid.core.search.infrastructure.projection import (
     RecordHolderProjectionSource,
     RecordProjectionSource,

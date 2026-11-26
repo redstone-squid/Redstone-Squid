@@ -18,6 +18,7 @@ from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.search.application import DEFAULT_FIELD_REGISTRY, SearchQueryParser
 from squid.core.search.domain import (
     BuildSearchHit,
+    FieldValue,
     SearchMode,
     SearchRequest,
     SearchResultAnchor,
@@ -25,7 +26,7 @@ from squid.core.search.domain import (
     SearchSort,
     SortDirection,
 )
-from squid.core.search.infrastructure.documents import FieldValue, SearchProjection
+from squid.core.search.infrastructure.documents import SearchProjection
 from squid.core.search.infrastructure.projection import SearchProjectionRepository
 from squid.core.unit_of_work import UnitOfWorkFactory
 from tests.support.unit_of_work import transact

@@ -128,9 +128,7 @@ async def search(
                             grouped=group_by_build,
                             records=[RecordSearchEntry.from_domain(record) for record in hit.records],
                             matches=list(hit.matches),
-                            title_match=hit.title_match
-                            if hit.title_match is not None and hit.title_match.text == build.title
-                            else None,
+                            evidence=list(hit.evidence.matches),
                         )
                     )
             case "record":
@@ -141,7 +139,7 @@ async def search(
                         score=hit.score,
                         metadata=MetadataSearchEntry.from_domain(hit),
                         matches=list(hit.matches),
-                        title_match=hit.title_match,
+                        evidence=list(hit.evidence.matches),
                     )
                 )
     return Page(

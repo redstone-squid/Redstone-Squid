@@ -20,7 +20,7 @@ from decimal import Decimal
 from whenever import Instant
 
 from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldRegistry
-from squid.core.search.domain import FreeTextWeight
+from squid.core.search.domain import FieldValue, FreeTextWeight
 from squid.core.search.domain.text import normalize_text, terms
 
 PROJECTION_FORMAT = 1
@@ -29,19 +29,6 @@ PROJECTION_FORMAT = 1
 _MAX_POSITION = 16383
 _MAX_POSITIONS_PER_TERM = 256
 """PostgreSQL's limits on tsvector positions."""
-
-
-@dataclass(frozen=True, slots=True)
-class FieldValue:
-    """One value of a field, keyed by the field's storage name.
-
-    Record holder values name the holder's build, so clauses such as `volume<20`
-    can be matched against a single holder.
-    """
-
-    field: str
-    value: str | Decimal | Instant | bool
-    holder_build_id: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

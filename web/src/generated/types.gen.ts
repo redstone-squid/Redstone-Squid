@@ -277,7 +277,7 @@ export type BuildSearchResult = {
     grouped?: boolean;
     records?: Array<RecordSearchEntry>;
     matches?: Array<SearchMatch>;
-    title_match?: SearchText | null;
+    evidence?: Array<FieldMatch>;
 };
 
 /**
@@ -1066,6 +1066,20 @@ export type FieldConstraintsResponse = {
 };
 
 /**
+ * FieldMatch
+ */
+export type FieldMatch = {
+    field: string;
+    text: string;
+    spans?: Array<[
+        number,
+        number
+    ]>;
+    holder_build_id?: number | null;
+    close?: boolean;
+};
+
+/**
  * FieldOperationKind
  *
  * Mutations supported by the v1 field-operation protocol.
@@ -1432,7 +1446,7 @@ export type MetadataSearchResult = {
     score: number | null;
     metadata: MetadataSearchEntry;
     matches?: Array<SearchMatch>;
-    title_match?: SearchText | null;
+    evidence?: Array<FieldMatch>;
 };
 
 /**
@@ -2169,7 +2183,7 @@ export type RecordSearchEntry = {
     holders?: Array<RecordSearchHolder>;
     matched?: boolean;
     retired?: boolean;
-    title_match?: SearchText | null;
+    evidence?: Array<FieldMatch>;
 };
 
 /**
@@ -2475,17 +2489,6 @@ export type SearchScope = 'records' | 'builds' | 'metadata' | 'all';
  */
 export type SearchSuggestions = {
     suggestions: Array<string>;
-};
-
-/**
- * SearchText
- */
-export type SearchText = {
-    text: string;
-    spans?: Array<[
-        number,
-        number
-    ]>;
 };
 
 /**

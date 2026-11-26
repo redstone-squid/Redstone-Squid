@@ -10,6 +10,7 @@ import squid_ui_widgets as sp
 from squid.bot.app import RedstoneSquid
 from squid.bot.catalogue.record_display import record_row, record_standings
 from squid.bot.catalogue.rows import build_row
+from squid.bot.catalogue.search.labels import field_label
 from squid.bot.ui import tr, truncate_display_text
 from squid.core.actors import ActingContext
 from squid.core.builds.domain import BuildStatus
@@ -17,6 +18,7 @@ from squid.core.builds.models import Build
 from squid.core.records.domain.models import RecordCriterion, VersionScope
 from squid.core.search.domain import (
     BuildSearchHit,
+    FieldMatch,
     RecordSearchHit,
     SearchHit,
     SearchPage,
@@ -313,7 +315,7 @@ class _GroupedBuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, Redst
     ) -> sl.LayoutNode[ComponentsV2Target, sd.Request[Any, RedstoneSquid]]:
         metrics = ", ".join(f"{key}: {value}" for key, value in record.metrics.items())
         return record_standings(
-            _highlighted(record.title_match or SearchText(record.title)),
+            _title(record),
             record.subtitle,
             RecordCriterion(record.criterion),
             VersionScope(record.version_scope),
@@ -467,7 +469,7 @@ class SearchScreen(sd.Screen[None, Any, RedstoneSquid]):
             if hit.matched_holder_id is not None and hit.metrics:
                 details.insert(0, sl.paragraph(_detail_text(hit)).truncate())
             return record_standings(
-                _highlighted(hit.title_match or SearchText(hit.title)),
+                _title(hit),
                 hit.subtitle,
                 RecordCriterion(hit.criterion),
                 VersionScope(hit.version_scope),
@@ -560,8 +562,8 @@ def _result_title(hit: SearchHit, request: SearchRequest) -> SearchText:
         and hit.records
     ):
         record = hit.records[0]
-        return record.title_match or SearchText(record.title)
-    return hit.title_match or SearchText(hit.title)
+        return record.evidence.highlight(record.title, "title")
+    return hit.evidence.highlight(hit.title, "title")
 
 
 def _heading_subtitle(hit: SearchHit, request: SearchRequest) -> str | None:
@@ -573,8 +575,56 @@ def _heading_subtitle(hit: SearchHit, request: SearchRequest) -> str | None:
 
 def _record_line(record: RecordSearchHit) -> Text:
     """Show a record with its subtitle; many records share a title and differ only by restrictions."""
-    title = _highlighted(record.title_match or SearchText(record.title))
-    return record_row(title, record.subtitle)
+    subtitle = record.subtitle
+    return record_row(
+        _title(record), _highlighted(record.evidence.highlight(subtitle, "subtitle")) if subtitle else None
+    )
+
+
+def _title(hit: SearchHit) -> Text:
+    return _highlighted(hit.evidence.highlight(hit.title, "title"))
+
+
+def _match_note(hit: SearchHit) -> Text | None:
+    """Say where a hit matched when its heading does not show it, and mark close spellings.
+
+    A holder match is always named, because a record found through its holder's build
+    title must not read as a restriction of the record itself.
+    """
+    evidence = hit.evidence
+    shown = [match for match in evidence.matches if match.spans]
+    note: Text | None = None
+    if (holder := next((match for match in shown if match.holder_build_id is not None), None)) is not None:
+        assert holder.holder_build_id is not None
+        label = tr(t"search-match-holder = Holder")
+        note = Text(t"↳ {label} {build_row(holder.holder_build_id, _excerpt(holder), (None, None, None))}")
+    elif not any(match.field in _HEADING_FIELDS for match in shown) and (
+        other := next((match for match in shown if match.field not in _HEADING_FIELDS), None)
+    ):
+        label = field_label(other.field)
+        note = Text(t"↳ {label}: {_excerpt(other)}")
+    if evidence.close:
+        close = tr(t"search-close-match = close spelling")
+        note = Text(t"{note} · {close}") if note is not None else Text(t"↳ {close}")
+    return note
+
+
+_HEADING_FIELDS = frozenset({"title", "subtitle"})
+_EXCERPT_CONTEXT = 30
+_EXCERPT_LIMIT = 80
+
+
+def _excerpt(match: FieldMatch) -> Text:
+    """Highlight a matched value, cut around its first match when it is long, like a description."""
+    text, spans = match.text, match.spans
+    if len(text) > _EXCERPT_LIMIT and spans:
+        start = max(0, spans[0][0] - _EXCERPT_CONTEXT)
+        end = min(len(text), start + _EXCERPT_LIMIT)
+        spans = tuple((max(a, start) - start, min(b, end) - start) for a, b in spans if a < end and b > start)
+        text = ("…" if start else "") + text[start:end] + ("…" if end < len(match.text) else "")
+        if start:
+            spans = tuple((a + 1, b + 1) for a, b in spans)
+    return _highlighted(SearchText(text, spans))
 
 
 def _holder_lines(hit: RecordSearchHit) -> tuple[Text, ...]:
@@ -618,22 +668,26 @@ def _result_description(hit: SearchHit, request: SearchRequest) -> sl.TextLike:
             record = _record_line(hit.records[0])
             extra = len(hit.records) - 1
             return record + f" (+{extra}) · #{hit.source_id}" if extra else record + f" · #{hit.source_id}"
-        build = build_row(hit.source_id, _highlighted(hit.title_match or SearchText(hit.title)), hit.dimensions)
+        build = build_row(hit.source_id, _title(hit), hit.dimensions)
+        note = _match_note(hit)
         if not request.group_by_build:
-            return build
+            return Text.join("\n", (build, note)) if note is not None else build
         others = hit.records
         # A build whose only record repeats its title adds nothing.
         if len(others) == 1 and others[0].title == hit.title:
             others = ()
         lines: list[sl.TextLike] = [build]
+        if note is not None:
+            lines.append(note)
         lines.extend(_record_line(record) for record in others[:2])
         if len(others) > 2:
             count = len(others) - 2
             lines.append(tr(t"search-grouped-more-records = +{count} more records"))
         return Text.join("\n", lines)
+    note = _match_note(hit)
     if isinstance(hit, RecordSearchHit):
-        return Text.join("\n", (_record_line(hit), *_holder_lines(hit)))
-    return Text.join("\n", (_highlighted(hit.title_match or SearchText(hit.title)), _metadata_label(hit.metadata_kind)))
+        return Text.join("\n", (_record_line(hit), *((note,) if note is not None else ()), *_holder_lines(hit)))
+    return Text.join("\n", (_title(hit), *((note,) if note is not None else ()), _metadata_label(hit.metadata_kind)))
 
 
 def _detail_text(hit: SearchHit) -> sl.TextLike:

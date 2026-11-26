@@ -13,7 +13,8 @@ from whenever import Instant
 
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build, DoorBuild, ExtenderBuild, OtherBuild
-from squid.core.search.infrastructure.documents import FieldValue, SearchProjection
+from squid.core.search.domain import FieldValue
+from squid.core.search.infrastructure.documents import SearchProjection
 from squid.core.search.infrastructure.projection import (
     RecordHolderProjectionSource,
     RecordProjectionSource,

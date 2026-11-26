@@ -51,8 +51,8 @@ from squid.core.records.models import (
     RecordResult,
     RecordTiedBuild,
 )
-from squid.core.search.domain import CREATOR_ID_STORAGE
-from squid.core.search.infrastructure.documents import FieldValue, SearchProjection, index_document
+from squid.core.search.domain import CREATOR_ID_STORAGE, FieldValue
+from squid.core.search.infrastructure.documents import SearchProjection, index_document
 from squid.core.search.infrastructure.holder_metrics import timing_values
 from squid.core.search.models import (
     SearchDocument,

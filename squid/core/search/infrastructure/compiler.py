@@ -7,7 +7,6 @@ a keyword compares the whole normalized value. Negated clauses never use close
 spellings, so `NOT slime` excludes only what was typed.
 """
 
-from datetime import UTC, datetime
 from decimal import Decimal
 from typing import cast
 
@@ -17,12 +16,10 @@ from sqlalchemy.dialects.postgresql import TSQUERY
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql.elements import ColumnElement, SQLColumnExpression
 from sqlalchemy.sql.selectable import ScalarSelect, Select
-from whenever import Instant
 
 from squid.core.search.domain import (
     BooleanExpression,
     BooleanOperator,
-    BuildQuery,
     ComparisonOperator,
     FieldExpression,
     FieldType,
@@ -34,6 +31,7 @@ from squid.core.search.domain import (
     TextExpression,
     TextMatch,
 )
+from squid.core.search.domain.query import has_holder_clauses, typed_value
 from squid.core.search.domain.text import TermExpansion, normalize_text, terms
 from squid.core.search.models import SearchDocument, SearchValue
 
@@ -50,7 +48,7 @@ def compile_query(query: SearchQuery, expansion: TermExpansion = _EXACT) -> Colu
         return true()
     expression = query.expression
     ordinary = _Compiler(expansion).expression(expression)
-    if not has_holder_filters(query):
+    if not has_holder_clauses(query):
         return ordinary
     is_record = SearchDocument.resource_kind == "record"
     return or_(
@@ -63,23 +61,6 @@ def compile_query(query: SearchQuery, expansion: TermExpansion = _EXACT) -> Colu
             ),
         ),
     )
-
-
-def has_holder_filters(query: SearchQuery) -> bool:
-    """Tell whether record matches need to be correlated to a holder."""
-
-    def contains(expression: QueryExpression | None) -> bool:
-        match expression:
-            case BooleanExpression(operands=operands):
-                return any(contains(operand) for operand in operands)
-            case NotExpression(operand=operand):
-                return contains(operand)
-            case FieldExpression(field=field) | PresenceExpression(field=field):
-                return field.holder_scoped
-            case _:
-                return False
-
-    return not isinstance(query, BuildQuery) and contains(query.expression)
 
 
 def matching_holder(query: SearchQuery, expansion: TermExpansion = _EXACT) -> ScalarSelect[int | None]:
@@ -230,11 +211,11 @@ def _comparison(
     """Compare a column with the clause's value, or with `compared` when the stored value differs."""
     target = expression.value if compared is None else compared
     if isinstance(target, RangeValue):
-        lower = _database_value(target.lower, field_type)
-        upper = _database_value(target.upper, field_type)
+        lower = typed_value(target.lower, field_type)
+        upper = typed_value(target.upper, field_type)
         return column.between(lower, upper)
     assert isinstance(target, str | int | float | Decimal | bool)
-    value = _database_value(target, field_type)
+    value = typed_value(target, field_type)
     return {
         ComparisonOperator.EQUAL: column == value,
         ComparisonOperator.LESS_THAN: column < value,
@@ -242,17 +223,3 @@ def _comparison(
         ComparisonOperator.GREATER_THAN: column > value,
         ComparisonOperator.GREATER_THAN_OR_EQUAL: column >= value,
     }[expression.operator]
-
-
-def _database_value(value: str | int | float | Decimal | bool, field_type: FieldType) -> str | Decimal | bool | Instant:
-    if field_type is FieldType.NUMBER:
-        return Decimal(str(value))
-    if field_type is FieldType.TIMESTAMP:
-        parsed = datetime.fromisoformat(str(value))
-        # Dates and timestamps without an explicit offset are interpreted as UTC.
-        if parsed.tzinfo is None:
-            parsed = parsed.replace(tzinfo=UTC)
-        return Instant(parsed)
-    if field_type is FieldType.BOOLEAN:
-        return bool(value)
-    return str(value)

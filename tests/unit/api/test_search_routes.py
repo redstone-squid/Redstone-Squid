@@ -18,14 +18,15 @@ from squid.core.pagination import PageAnchor
 from squid.core.search.application import SearchService
 from squid.core.search.domain import (
     BuildSearchHit,
+    FieldMatch,
     MetadataSearchHit,
     RecordSearchHit,
+    SearchEvidence,
     SearchMatch,
     SearchPage,
     SearchQuery,
     SearchRequest,
     SearchScope,
-    SearchText,
 )
 
 
@@ -136,7 +137,7 @@ async def test_grouped_api_returns_record_context_and_origin() -> None:
         "smallest",
         "all_time",
         holder_build_ids=(42, 57),
-        title_match=SearchText("Smallest door", ((9, 13),)),
+        evidence=SearchEvidence((FieldMatch("title", "Smallest door", ((9, 13),)),)),
     )
     hit = BuildSearchHit(
         "42",
@@ -144,7 +145,7 @@ async def test_grouped_api_returns_record_context_and_origin() -> None:
         "approved",
         records=(record,),
         matches=(SearchMatch("record", "record:00000000-0000-0000-0000-000000000007", ("full_text",)),),
-        title_match=SearchText("Stale title", ((0, 5),)),
+        evidence=SearchEvidence((FieldMatch("title", "Stale title", ((0, 5),)),)),
     )
     graph = fakes(SearchPage((hit,), total=1, next=None, prev=None), [indexed_build()])
 
@@ -155,9 +156,9 @@ async def test_grouped_api_returns_record_context_and_origin() -> None:
     assert isinstance(item, BuildSearchResult)
     assert item.grouped
     assert item.records[0].holder_build_ids == [42, 57]
-    assert item.records[0].title_match == record.title_match
+    assert item.records[0].evidence == list(record.evidence.matches)
     assert item.matches == list(hit.matches)
-    assert item.title_match is None  # Hydration changed the text those offsets referred to.
+    assert item.evidence == list(hit.evidence.matches)
     assert item.model_dump(mode="json")["matches"][0]["branches"] == ["full_text"]
 
 

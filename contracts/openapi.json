@@ -21451,15 +21451,11 @@
             },
             "type": "array"
           },
-          "title_match": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/SearchText"
-              },
-              {
-                "type": "null"
-              }
-            ]
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/FieldMatch"
+            },
+            "type": "array"
           }
         },
         "type": "object",
@@ -24253,6 +24249,51 @@
         ],
         "title": "FieldConstraintsResponse"
       },
+      "FieldMatch": {
+        "properties": {
+          "field": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "spans": {
+            "items": {
+              "prefixItems": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                }
+              ],
+              "type": "array"
+            },
+            "type": "array",
+            "default": []
+          },
+          "holder_build_id": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "close": {
+            "type": "boolean",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "field",
+          "text"
+        ],
+        "title": "FieldMatch"
+      },
       "FieldOperationKind": {
         "type": "string",
         "enum": [
@@ -25436,15 +25477,11 @@
             },
             "type": "array"
           },
-          "title_match": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/SearchText"
-              },
-              {
-                "type": "null"
-              }
-            ]
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/FieldMatch"
+            },
+            "type": "array"
           }
         },
         "type": "object",
@@ -28334,15 +28371,11 @@
             "type": "boolean",
             "default": false
           },
-          "title_match": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/SearchText"
-              },
-              {
-                "type": "null"
-              }
-            ]
+          "evidence": {
+            "items": {
+              "$ref": "#/components/schemas/FieldMatch"
+            },
+            "type": "array"
           }
         },
         "type": "object",
@@ -29339,33 +29372,6 @@
           "suggestions"
         ],
         "title": "SearchSuggestions"
-      },
-      "SearchText": {
-        "properties": {
-          "text": {
-            "type": "string"
-          },
-          "spans": {
-            "items": {
-              "prefixItems": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "integer"
-                }
-              ],
-              "type": "array"
-            },
-            "type": "array",
-            "default": []
-          }
-        },
-        "type": "object",
-        "required": [
-          "text"
-        ],
-        "title": "SearchText"
       },
       "ServerProfileSchema": {
         "properties": {

@@ -19,8 +19,8 @@ from squid.core.persistence.base import Base
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.search.application import SearchEmbeddingService, SearchQueryParser
 from squid.core.search.application.ports import QueryEmbedding
-from squid.core.search.domain import SearchMode, SearchRequest, SearchScope
-from squid.core.search.infrastructure.documents import FieldValue, SearchProjection
+from squid.core.search.domain import FieldValue, SearchMode, SearchRequest, SearchScope
+from squid.core.search.infrastructure.documents import SearchProjection
 from squid.core.search.infrastructure.projection import SearchProjectionRepository
 from squid.core.search.models import SearchDocument, SearchEmbeddingQueueItem
 from tests.support.unit_of_work import transact

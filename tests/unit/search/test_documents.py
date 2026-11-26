@@ -3,13 +3,8 @@
 from dataclasses import replace
 from decimal import Decimal
 
-from squid.core.search.domain import FreeTextWeight
-from squid.core.search.infrastructure.documents import (
-    FieldValue,
-    SearchProjection,
-    index_document,
-    tsvector_literal,
-)
+from squid.core.search.domain import FieldValue, FreeTextWeight
+from squid.core.search.infrastructure.documents import SearchProjection, index_document, tsvector_literal
 
 _RECORD = SearchProjection(
     resource_kind="record",
