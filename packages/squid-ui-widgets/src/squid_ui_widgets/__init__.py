@@ -64,7 +64,6 @@ from squid_ui_widgets.multi_choice import (
 )
 from squid_ui_widgets.ranked import RankedEntry, RankedList, RankedListState
 from squid_ui_widgets.search_picker import SearchPicker, SearchPickHandler, SearchProvider
-from squid_ui_widgets.source_flow import SourceFlow
 from squid_ui_widgets.source_ranked import SourceRankedList
 from squid_ui_widgets.tabs import Tab, Tabs, TabsState
 from squid_ui_widgets.wizard import (
@@ -134,7 +133,6 @@ __all__ = [
     "SearchPickHandler",
     "SearchPicker",
     "SearchProvider",
-    "SourceFlow",
     "SourceRankedList",
     "StateMachine",
     "Tab",

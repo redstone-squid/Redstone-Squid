@@ -401,9 +401,6 @@ def semantic_graph[RenderTargetT, ContextT](
                     visit(value.heading, root, 0, name="@heading")
                 for i, child in enumerate(value.children):
                     visit(child, root, i)
-                if isinstance(value, sem.SourcePage):
-                    for i, ending in enumerate(value.endings):
-                        visit(ending, root, i, name=f"@ending-{i}")
                 if isinstance(value, sem.Region):
                     for part, children in (
                         (StructuralGroup("header"), value.header),

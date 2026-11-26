@@ -17,7 +17,6 @@ def test_patterns_import_without_a_transport_installed() -> None:
             "squid_ui_widgets",
             "squid_ui_widgets.guards",
             "squid_ui_widgets.machines",
-            "squid_ui_widgets.source_flow",
         ],
         "discord",
         "anyio",

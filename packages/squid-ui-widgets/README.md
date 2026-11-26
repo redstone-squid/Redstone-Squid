@@ -87,8 +87,4 @@ the detail on a focus change, while a refresh of the same focus preserves the
 child's local state. Use a separate child screen to open an object outside the
 current collection, keeping the parent's filters and focus intact.
 
-Use `fetch_size` to limit how many items a source returns in one batch.
-`SourceFlow` can read across batches and split an item at its paragraph
-boundaries. Set `max_paragraphs_per_page` to cap how many paragraphs to prepare.
-The planner fits a prefix alongside the surrounding content, navigation, and footer.
-Next resumes at the first paragraph beyond the delivered cut.
+Use `fetch_size` to set how many items a source returns in one batch; each batch is one page.

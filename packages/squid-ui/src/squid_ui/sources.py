@@ -58,13 +58,6 @@ class Chronology(StrEnum):
         return chrome.older, chrome.newer
 
 
-class SourceStability(StrEnum):
-    """How a flow can combine batches from successive fetches."""
-
-    ASSUMED = "assumed"
-    VERIFIED = "verified"
-
-
 class CountPrecision(StrEnum):
     """Accuracy of the total a source returns with each batch."""
 
@@ -86,7 +79,6 @@ class SourceCapabilities:
     jumpable: bool = False
     count: CountPrecision = CountPrecision.NONE
     fixed_groups: bool = False
-    stability: SourceStability = SourceStability.ASSUMED
 
     def group_count[T](self, batch: Batch[T], fetch_size: int) -> int | None:
         """Count declared groups, independently of target fit certification."""
@@ -120,7 +112,6 @@ class Batch[ItemT]:
     previous: Position | None = None
     next: Position | None = None
     item_count: int | None = None
-    revision: str | None = None
 
     @property
     def has_previous(self) -> bool:
@@ -273,9 +264,6 @@ class BatchLoader[ItemT]:
             message = f"BatchSource returned {len(batch.items)} items for fetch_size {self.fetch_size}"
             raise ValueError(message)
         capabilities = self.source.capabilities
-        if capabilities.stability is SourceStability.VERIFIED and batch.revision is None:
-            msg = "a verified source must supply a batch revision"
-            raise ValueError(msg)
         if capabilities.fixed_groups:
             if batch.position.offset % self.fetch_size:
                 message = "a fixed-group source returned an unaligned position"
@@ -348,6 +336,5 @@ __all__ = [
     "LoadedBatch",
     "Position",
     "SourceCapabilities",
-    "SourceStability",
     "list_source",
 ]

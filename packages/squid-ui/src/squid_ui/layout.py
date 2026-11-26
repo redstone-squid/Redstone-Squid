@@ -76,20 +76,9 @@ def element_ref[T](kind: type[T], *keys: str) -> ElementRef[T]:
 
 
 @dataclass(frozen=True, slots=True)
-class ContentAddress:
-    """A captured flow-relative anchor, not a persisted navigation checkpoint."""
-
-    flow: RegionRef
-    anchor: tuple[str, ...]
-    continuation: tuple[int, int] | None = None
-    revision: str | None = None
-
-
-@dataclass(frozen=True, slots=True)
 class PageCoordinate:
     region: OccurrenceId
     index: Fact[int]
-    address: ContentAddress | None = None
 
     @property
     def number(self) -> Fact[int]:

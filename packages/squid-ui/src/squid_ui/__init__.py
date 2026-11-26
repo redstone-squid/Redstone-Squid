@@ -198,7 +198,6 @@ from squid_ui.interactions import guards as guards
 from squid_ui.interactions import ownership as ownership
 from squid_ui.interactions.handlers import handlers
 from squid_ui.layout import (
-    ContentAddress,
     DocumentScope,
     ElementRef,
     Fact,
@@ -235,7 +234,6 @@ __all__ = [
     "ChoicesHandle",
     "Component",
     "Conditional",
-    "ContentAddress",
     "ContextKey",
     "Contextual",
     "Correspondence",

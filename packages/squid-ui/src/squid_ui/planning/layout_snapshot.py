@@ -10,7 +10,6 @@ from squid_ui.authoring.presentations import Alternatives, Omission, SemanticRef
 from squid_ui.authoring.semantic import ComponentPlacement, Contextual, FallbackContent, List, OptionalContent
 from squid_ui.content.text import NEUTRAL, Localization
 from squid_ui.layout import (
-    ContentAddress,
     DocumentScope,
     ElementRef,
     FragmentLocation,
@@ -423,7 +422,6 @@ class LayoutSnapshot:
                             PageCoordinate(
                                 identity,
                                 Known(index) if complete or index == 0 else unknown_index,
-                                ContentAddress(self.region_refs[identity], source.keys, fragment.span),
                             )
                             for identity, index in fragment.page
                         )

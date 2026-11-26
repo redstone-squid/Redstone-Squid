@@ -1,14 +1,10 @@
 """Browsing through mounted Discord actions."""
 
-from typing import override
-
 import anyio
 import pytest
 
-import squid_ui as sl
 import squid_ui_widgets as sp
 from squid_ui.ext.discord.testing import stage
-from squid_ui.planning.joint_search import JointInfeasibleError
 from squid_ui.sources import Batch, Position, SourceCapabilities, list_source
 
 
@@ -105,149 +101,6 @@ async def test_failed_back_delivery_keeps_the_reveal_pending_for_retry(monkeypat
         await ui.root.refresh()
         assert any("Entry 7:" in text for text in ui.texts())
         assert not ui.root.presentation.pending_reveals
-
-
-async def test_forward_flow_retries_a_split_item_without_advancing_twice(monkeypatch: pytest.MonkeyPatch) -> None:
-    requests: list[Position] = []
-
-    class Source:
-        capabilities = SourceCapabilities()
-
-        async def fetch(self, position: Position, fetch_size: int) -> Batch[str]:
-            requests.append(position)
-            assert fetch_size == 2
-            if position == Position():
-                return Batch(position, ("A", "B"), next=Position("C"))
-            assert position == Position("C")
-            return Batch(position, ("C", "D"))
-
-    flow = sp.SourceFlow(
-        Source(),
-        identity=str,
-        paragraphs=lambda item: ("C1", "C2") if item == "C" else (item,),
-        max_paragraphs_per_page=3,
-        fetch_size=2,
-    )
-    async with stage(flow, owner=object()) as ui:
-        first = " ".join(ui.texts())
-        assert all(text in first for text in ("A", "B", "C1", "Page 1"))
-        assert "C2" not in first
-        with monkeypatch.context() as patch:
-
-            async def fail(*args: object, **kwargs: object) -> None:
-                raise RuntimeError("delivery failed")
-
-            patch.setattr(ui.root, "_deliver", fail)
-            with pytest.raises(RuntimeError, match="delivery failed"):
-                await ui.press("flow.next")
-        assert " ".join(ui.texts()) == first
-        await ui.press("flow.next")
-        second = " ".join(ui.texts())
-        assert all(text in second for text in ("C2", "D", "Page 2"))
-        assert "C1" not in second
-        assert requests == [Position(), Position("C")]
-
-
-async def test_flow_numbers_reappear_at_origin_after_opening_mid_collection() -> None:
-    class Source:
-        capabilities = SourceCapabilities()
-
-        async def fetch(self, position: Position, fetch_size: int) -> Batch[str]:
-            if position.anchor is None:
-                return Batch(Position("a"), ("A",), next=Position("b"))
-            if position.anchor == "b":
-                return Batch(position, ("B",), next=Position("c"))
-            return Batch(position, ("C",))
-
-    flow = sp.SourceFlow(
-        Source(),
-        identity=str,
-        paragraphs=lambda item: (item,),
-        initial_position=Position("b"),
-        fetch_size=1,
-        max_paragraphs_per_page=1,
-    )
-    async with stage(flow, owner=object()) as ui:
-        assert "B" in ui.texts()
-        assert "Page" not in " ".join(ui.texts())
-        await ui.press("flow.next")
-        assert "C" in ui.texts()
-        assert "Page" not in " ".join(ui.texts())
-        await ui.press("flow.first")
-        assert "Page 1" in " ".join(ui.texts())
-        await ui.press("flow.next")
-        assert "Page 2" in " ".join(ui.texts())
-        assert "B" in ui.texts()
-
-
-async def test_flow_resumes_a_timed_out_fill_on_next() -> None:
-    class Source:
-        capabilities = SourceCapabilities()
-        attempts = 0
-
-        async def fetch(self, position: Position, fetch_size: int) -> Batch[str]:
-            if position == Position():
-                return Batch(position, ("A",), next=Position("b"))
-            self.attempts += 1
-            if self.attempts == 1:
-                await anyio.sleep_forever()
-            return Batch(position, ("B",))
-
-    flow = sp.SourceFlow(
-        Source(),
-        identity=str,
-        paragraphs=lambda item: (item,),
-        fetch_size=1,
-        max_paragraphs_per_page=2,
-        fill_timeout=0.01,
-    )
-    with anyio.fail_after(5):
-        async with stage(flow, owner=object()) as ui:
-            assert "A" in ui.texts()
-            assert "B" not in ui.texts()
-            await ui.press("flow.next")
-            assert "B" in ui.texts()
-            assert "Page 2" in " ".join(ui.texts())
-
-
-async def test_flow_fits_the_delivered_view_and_resumes_at_the_selected_cut() -> None:
-    # The heading plus the first two paragraphs alone would fit the 4000-character target.
-    parts = ("a" * 1499, "b" * 1499, "c" * 300)
-    flow = sp.SourceFlow(
-        list_source(("build",)),
-        identity=str,
-        paragraphs=lambda _: parts,
-        max_paragraphs_per_page=3,
-        fetch_size=1,
-    )
-
-    class Screen(sl.Component):
-        @override
-        def render(self) -> sl.DocumentLike:
-            return sl.stack(sl.paragraph("h" * 1000), flow.keyed("results"))
-
-    async with stage(Screen(), owner=object()) as ui:
-        assert parts[0] in ui.texts()
-        assert parts[1] not in ui.texts()
-        assert "Page 1" in " ".join(ui.texts())
-        await ui.press("flow.next")
-        assert parts[0] not in ui.texts()
-        assert all(part in ui.texts() for part in parts[1:])
-        assert "Page 2" in " ".join(ui.texts())
-        assert not any(key.endswith("flow.next") for key in ui.root.snapshot().handler_keys)
-
-
-async def test_flow_rejects_an_indivisible_paragraph_that_cannot_fit() -> None:
-    flow = sp.SourceFlow(
-        list_source(("x" * 4001,)),
-        identity=str,
-        paragraphs=lambda item: (item,),
-        max_paragraphs_per_page=2,
-        fetch_size=1,
-    )
-    with pytest.RaisesGroup(JointInfeasibleError):
-        async with stage(flow, owner=object()):
-            pytest.fail("oversized paragraph was delivered")
 
 
 def _long_entries(**options: object) -> sp.Browser[str]:
