@@ -8,18 +8,18 @@ for every command.
 
 ## Layout
 
-| Directory        | Owns                                                                     | May import                                                    |
-| ---------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------- |
-| `src/pages`      | Routes: read the request, load data, set the status, choose what to show | anything                                                      |
-| `src/layouts`    | Document shells (`CatalogueLayout`, `DocumentHead`, `PlaceholderPage`)   | `ui`, `locales`, `generated`                                  |
-| `src/features/x` | Components and browser logic for one area, such as `builds` or `records` | its own directory, `api-client`, `ui`, `locales`, `generated` |
-| `src/workbench`  | The `/design-system` playground, its stories, and fixtures               | everything except `server` and `pages`                        |
-| `src/server`     | Runtime config and the page API client. Server only                      | `navigation`, `api-client`, `locales`, `generated`            |
-| `src/api-client` | API errors for both sides, and the islands' write client                 | `locales`, `generated`                                        |
-| `src/navigation` | Localized links, query updates, and native GET form destinations         | `locales`                                                     |
-| `src/locales`    | Locales, URL prefixes, catalogs, and the compiled message functions      | `locales`, `generated`                                        |
-| `src/ui`         | The design system. Knows nothing about the application                   | `ui` only                                                     |
-| `src/generated`  | The OpenAPI SDK. Run `bun run sdk:generate` after the contract changes   |                                                               |
+| Directory        | Owns                                                                     | May import                                                                  |
+| ---------------- | ------------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| `src/pages`      | Routes: read the request, load data, set the status, choose what to show | anything                                                                    |
+| `src/layouts`    | Document shells (`CatalogueLayout`, `DocumentHead`, `PlaceholderPage`)   | `navigation`, `ui`, `locales`, `generated`                                  |
+| `src/features/x` | Components and browser logic for one area, such as `builds` or `records` | its own directory, `navigation`, `api-client`, `ui`, `locales`, `generated` |
+| `src/workbench`  | The `/design-system` playground, its stories, and fixtures               | everything except `server` and `pages`                                      |
+| `src/server`     | Runtime config and the page API client. Server only                      | `navigation`, `api-client`, `locales`, `generated`                          |
+| `src/api-client` | API errors for both sides, and the islands' write client                 | `locales`, `generated`                                                      |
+| `src/navigation` | Localized links, query updates, and native GET form destinations         | `locales`                                                                   |
+| `src/locales`    | Locales, URL prefixes, catalogs, and the compiled message functions      | `locales`, `generated`                                                      |
+| `src/ui`         | The design system. Knows nothing about the application                   | `ui` only                                                                   |
+| `src/generated`  | The OpenAPI SDK. Run `bun run sdk:generate` after the contract changes   |                                                                             |
 
 Import across directories with `@/` (`@/server/api`); only same-directory imports stay
 relative. Generated files end in `.gen.ts`, are rebuilt by a script, and are never edited by
@@ -77,8 +77,8 @@ read their page with `readPageAddress` from `src/server/pagination.ts`, turn the
 and `prev` anchors into links with `pageHref`, and pass those to the feature, which renders
 `Pagination`; mark pages after the first `noindex`.
 
-For query-driven navigation, bind `RouteNavigation<State>` in the feature that owns the
-fields. Use `link` for a fresh destination, `update` for same-page changes (null removes a
+For query-driven navigation, declare a `Route<State>` alongside the feature that owns its
+fields and bind it to the current URL with `route.at(url)`. Use `link` for a fresh destination, `update` for same-page changes (null removes a
 key), and `form` for the action, repeated hidden entries, and reset link. Destinations sharing
 a scope symbol inherit its resolved values. The workbench declares its appearance scope in
 `src/workbench/appearance.ts`; Patterns passes plain form props into its hydrated island.

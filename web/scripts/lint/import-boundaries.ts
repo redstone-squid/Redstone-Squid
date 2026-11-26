@@ -21,8 +21,8 @@ const LAYERS = {
     "generated",
   ],
   navigation: ["navigation", "locales"],
-  layouts: ["layouts", "ui", "locales", "generated"],
-  features: ["api-client", "ui", "locales", "generated"],
+  layouts: ["layouts", "navigation", "ui", "locales", "generated"],
+  features: ["navigation", "api-client", "ui", "locales", "generated"],
   workbench: [
     "navigation",
     "workbench",
