@@ -218,6 +218,12 @@ class FakeAccountRepository:
         del build_id
         return {}
 
+    async def account_id_for_public_id(self, public_id: UUID) -> int | None:
+        return next(
+            (account_id for account_id, account in self.accounts.items() if account.public_creator_id == public_id),
+            None,
+        )
+
     async def get_creator_profile_record(self, public_id: UUID) -> CreatorProfileRecord | None:
         account = next(
             (candidate for candidate in self.accounts.values() if candidate.public_creator_id == public_id),

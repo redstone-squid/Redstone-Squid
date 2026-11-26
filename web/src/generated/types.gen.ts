@@ -5289,7 +5289,7 @@ export type AccountMinecraftRefreshForData = {
         'Idempotency-Key'?: string | null;
     };
     path: {
-        account_id: number;
+        account_id: string;
     };
     query?: never;
     url: '/v1/accounts/{account_id}/minecraft/refresh';
@@ -5347,7 +5347,7 @@ export type AccountProfileClearData = {
         'If-Match'?: string | null;
     };
     path: {
-        account_id: number;
+        account_id: string;
     };
     query?: never;
     url: '/v1/accounts/{account_id}/profile';
@@ -5402,7 +5402,7 @@ export type AccountProfileClearResponse = AccountProfileClearResponses[keyof Acc
 export type AccountProfileReviewData = {
     body?: never;
     path: {
-        account_id: number;
+        account_id: string;
     };
     query?: never;
     url: '/v1/accounts/{account_id}/profile';

@@ -11,7 +11,13 @@ import pytest
 from whenever import Instant
 
 from squid.api.security import UNBOUNDED, Caller
-from squid.api.v1.me import get_me, grant_consent, refresh_minecraft_identity, refresh_minecraft_identity_for
+from squid.api.v1.me import (
+    get_me,
+    grant_consent,
+    refresh_minecraft_identity,
+    refresh_minecraft_identity_for,
+    resolve_account,
+)
 from squid.core.accounts.domain import (
     CURRENT_CONSENT_VERSION,
     AccountConsent,
@@ -19,6 +25,7 @@ from squid.core.accounts.domain import (
     IdentityProvider,
     IdentityRefresh,
 )
+from squid.core.accounts.errors import AccountNotFoundError
 from squid.core.accounts.models import Account, AccountIdentity, AccountProfile, AliasClaim, CreatorAlias
 from squid.core.actors import ActingContext
 from squid.core.errors import AuthenticationError
@@ -198,3 +205,11 @@ async def test_staff_refresh_targets_the_named_account() -> None:
     response = await refresh_minecraft_identity_for.fn(_caller(), 42, accounts, _reservation=None)
     assert accounts.refreshes == [(42, None)]
     assert response.ign == "Steve"
+
+
+async def test_staff_routes_resolve_the_public_account_id() -> None:
+    accounts = _accounts()
+    assert await resolve_account(CREATOR_ID, accounts, _caller()) == 1
+    with pytest.raises(AccountNotFoundError) as raised:
+        await resolve_account(JAVA_UUID, accounts, _caller())
+    assert raised.value.public_context == {"account_id": str(JAVA_UUID)}

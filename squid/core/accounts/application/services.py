@@ -280,6 +280,18 @@ class AccountService:
             return await uow.accounts.get_alias_by_name(name)
 
     @application_operation
+    async def resolve_public_id(self, public_id: UUID, *, context: ActingContext) -> int:
+        """Return the account a public ID names, following merge redirects.
+
+        Raises AccountNotFoundError for an ID that never existed.
+        """
+        async with self._uow_factory() as uow:
+            account_id = await uow.accounts.account_id_for_public_id(public_id)
+        if account_id is None:
+            raise AccountNotFoundError(public_id=public_id)
+        return account_id
+
+    @application_operation
     async def get_creator_profile(self, public_id: UUID, *, context: ActingContext) -> CreatorProfile | None:
         """Return a public creator profile, following permanent merge redirects."""
         async with self._uow_factory() as uow:

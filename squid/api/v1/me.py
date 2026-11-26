@@ -11,7 +11,7 @@ from litestar.dto import DataclassDTO, DTOConfig
 from litestar.params import FromPath, HeaderParameter, JSONBody, SkipValidation
 
 from squid.api.contract import ANONYMOUS, DEVICE, WEB, WEB_WRITE, browser_only, cli_command, contract
-from squid.api.dependencies import Accounts, Services, get_accounts
+from squid.api.dependencies import Accounts, CurrentCaller, Services, get_accounts
 from squid.api.errors import responses
 from squid.api.idempotency import edit_operation_id, reserve_edit_request, reserve_idempotent_request
 from squid.api.revisions import RevisionRequiredError, expected_revision, revision_etag
@@ -79,6 +79,12 @@ class AccountMergeDTO(DataclassDTO[AccountMerge]):
     )
 
 
+async def resolve_account(account_id: FromPath[UUID], accounts: Accounts, caller: CurrentCaller) -> int:
+    """Resolve the public account ID in the path, following merge redirects."""
+    return await accounts.resolve_public_id(account_id, context=caller.context())
+
+
+TargetAccount = NamedDependency[SkipValidation[int]]
 UserCaller = NamedDependency[SkipValidation[Caller]]
 RefreshCaller = NamedDependency[SkipValidation[Caller]]
 ManageCaller = NamedDependency[SkipValidation[Caller]]
@@ -400,7 +406,7 @@ async def refresh_minecraft_identity(
 
 
 @post(
-    "/{account_id:int}/minecraft/refresh",
+    "/{account_id:uuid}/minecraft/refresh",
     responses=responses(401, 403, 404, 409, 503),
     operation_id="account_minecraft_refresh_for",
     security=[WEB_WRITE],
@@ -411,19 +417,17 @@ async def refresh_minecraft_identity(
 )
 async def refresh_minecraft_identity_for(
     caller: NamedDependency[SkipValidation[Caller]],
-    account_id: FromPath[int],
+    target: TargetAccount,
     accounts: Accounts,
     *,
     _reservation: NamedDependency[SkipValidation[None]],
 ) -> MinecraftIdentityRefresh:
     """Re-read another account's linked Minecraft name, for staff resolving a stale credit."""
-    return MinecraftIdentityRefresh.from_domain(
-        await accounts.refresh_java_identity(account_id, context=caller.context())
-    )
+    return MinecraftIdentityRefresh.from_domain(await accounts.refresh_java_identity(target, context=caller.context()))
 
 
 @get(
-    "/{account_id:int}/profile",
+    "/{account_id:uuid}/profile",
     responses=responses(401, 403, 404, 503),
     operation_id="account_profile_review",
     security=[WEB],
@@ -432,12 +436,12 @@ async def refresh_minecraft_identity_for(
     guards=[requires(ACCOUNT_PROFILE_MODERATE)],
 )
 async def review_profile(
-    account_id: FromPath[int], accounts: Accounts, caller: NamedDependency[SkipValidation[Caller]]
+    target: TargetAccount, accounts: Accounts, caller: NamedDependency[SkipValidation[Caller]]
 ) -> Response[ProfileDetail]:
     """Read a profile and its revision for staff moderation."""
     response_headers: dict[str, str] = {}
-    snapshot = await accounts.editor_snapshot(account_id, context=caller.context())
-    response_headers["ETag"] = revision_etag(Revision(account_target(account_id), snapshot.account.revision))
+    snapshot = await accounts.editor_snapshot(target, context=caller.context())
+    response_headers["ETag"] = revision_etag(Revision(account_target(target), snapshot.account.revision))
     return Response(
         content=ProfileDetail.from_domain(snapshot.profile, snapshot.account.identities),
         headers=response_headers,
@@ -446,7 +450,7 @@ async def review_profile(
 
 
 @delete(
-    "/{account_id:int}/profile",
+    "/{account_id:uuid}/profile",
     responses=responses(401, 403, 404, 412, 422, 428, 503),
     operation_id="account_profile_clear",
     security=[WEB_WRITE],
@@ -459,7 +463,7 @@ async def review_profile(
     },
 )
 async def clear_profile(
-    account_id: FromPath[int],
+    target: TargetAccount,
     accounts: Accounts,
     caller: NamedDependency[SkipValidation[Caller]],
     services: Services,
@@ -475,14 +479,14 @@ async def clear_profile(
     await services.edits.execute(
         EditCommand(
             PROFILE_CLEAR,
-            (expected_revision(account_target(account_id), if_match),),
+            (expected_revision(account_target(target), if_match),),
             EditValues.of({}),
             operation_id=operation_id,
         ),
         context=caller.context(),
     )
-    snapshot = await accounts.editor_snapshot(account_id, context=caller.context())
-    response_headers["ETag"] = revision_etag(Revision(account_target(account_id), snapshot.account.revision))
+    snapshot = await accounts.editor_snapshot(target, context=caller.context())
+    response_headers["ETag"] = revision_etag(Revision(account_target(target), snapshot.account.revision))
     return Response(
         content=ProfileDetail.from_domain(snapshot.profile, snapshot.account.identities),
         headers=response_headers,
@@ -516,6 +520,7 @@ accounts_router = Router(
     opt={"x-squid-private-response": True},
     dependencies={
         "accounts": Provide(get_accounts, sync_to_thread=False),
+        "target": Provide(resolve_account),
     },
     path="/accounts",
     tags=["users"],

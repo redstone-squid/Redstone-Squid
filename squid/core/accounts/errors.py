@@ -50,11 +50,17 @@ class AccountNotFoundError(NotFoundError):
         self,
         account_id: int | None = None,
         *,
+        public_id: UUID | None = None,
         provider: IdentityProvider | None = None,
         subject: str | None = None,
     ) -> None:
-        super().__init__(context=_identity_context(account_id, provider, subject))
+        public_context: dict[str, JSONValue] = {} if public_id is None else {"account_id": str(public_id)}
+        super().__init__(
+            context={**_identity_context(account_id, provider, subject), **public_context},
+            public_context=public_context,
+        )
         self.account_id = account_id
+        self.public_id = public_id
         self.provider = provider
         self.subject = subject
 

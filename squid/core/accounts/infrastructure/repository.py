@@ -474,20 +474,29 @@ class AccountRepository:
         ).one_or_none()
         return None if row is None else _hydrate_creator(row[0], row[1])
 
+    async def account_id_for_public_id(self, public_id: uuid.UUID) -> int | None:
+        """Return the account a public ID names, following merge redirects."""
+        account = await self._account_for_public_id(self._session(), public_id)
+        return None if account is None else account.id
+
+    @staticmethod
+    async def _account_for_public_id(session: AsyncSession, public_id: uuid.UUID) -> Account | None:
+        account = await session.scalar(select(Account).where(Account.public_creator_id == public_id))
+        if account is not None:
+            return account
+        return await session.scalar(
+            select(Account)
+            .join(PublicCreatorRedirect, PublicCreatorRedirect.target_account_id == Account.id)
+            .where(PublicCreatorRedirect.retired_public_creator_id == public_id)
+        )
+
     async def get_creator_profile(self, public_id: uuid.UUID) -> CreatorProfile | None:
         """Return aliases for a public ID, including a permanent merge redirect."""
         session = self._session()
-        account = await session.scalar(select(Account).where(Account.public_creator_id == public_id))
-        canonical_id = public_id
+        account = await self._account_for_public_id(session, public_id)
         if account is None:
-            account = await session.scalar(
-                select(Account)
-                .join(PublicCreatorRedirect, PublicCreatorRedirect.target_account_id == Account.id)
-                .where(PublicCreatorRedirect.retired_public_creator_id == public_id)
-            )
-            if account is None:
-                return None
-            canonical_id = account.public_creator_id
+            return None
+        canonical_id = account.public_creator_id
         aliases = (
             await session.scalars(
                 select(CreatorAlias.name)
@@ -504,17 +513,10 @@ class AccountRepository:
         result publicly.
         """
         session = self._session()
-        account = await session.scalar(select(Account).where(Account.public_creator_id == public_id))
-        canonical_id = public_id
+        account = await self._account_for_public_id(session, public_id)
         if account is None:
-            account = await session.scalar(
-                select(Account)
-                .join(PublicCreatorRedirect, PublicCreatorRedirect.target_account_id == Account.id)
-                .where(PublicCreatorRedirect.retired_public_creator_id == public_id)
-            )
-            if account is None:
-                return None
-            canonical_id = account.public_creator_id
+            return None
+        canonical_id = account.public_creator_id
 
         profile_model = await session.get(AccountProfile, account.id)
         profile = AccountProfile.empty(account.id) if profile_model is None else profile_model

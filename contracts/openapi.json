@@ -5977,7 +5977,8 @@
             "name": "account_id",
             "in": "path",
             "schema": {
-              "type": "integer"
+              "type": "string",
+              "format": "uuid"
             },
             "required": true,
             "deprecated": false
@@ -6152,7 +6153,8 @@
             "name": "account_id",
             "in": "path",
             "schema": {
-              "type": "integer"
+              "type": "string",
+              "format": "uuid"
             },
             "required": true,
             "deprecated": false
@@ -6288,7 +6290,8 @@
             "name": "account_id",
             "in": "path",
             "schema": {
-              "type": "integer"
+              "type": "string",
+              "format": "uuid"
             },
             "required": true,
             "deprecated": false
