@@ -14,7 +14,7 @@ were deployed. The examples were checked again then.
   drained at three per second, roughly 39 hours away. Until then, search served
   pre-deploy documents for current results, 222 current results had no document, and
   32,372 documents still pointed at deleted `no_candidate` results. The no-op requests
-  were deleted by hand, and `1ebc0a9c7` and `58c1c8ec0` fix the causes.
+  were deleted by hand, and `57b752189` and `8134e5d52` fix the causes.
   [Record trigger](../../squid/core/persistence/postgres_entities/functions/enqueue_computed_record_search_projection.sql) ·
   [Projection run](../../squid/core/search/application/projection.py)
 - **Free text blends category and holder facts.** `no furnaces` matches
@@ -38,44 +38,27 @@ were deployed. The examples were checked again then.
 
 ## Steps
 
-1. **Ship the queue fixes and watch coverage.** Deploy the two commits above. Add
-   two figures to the `queue-health` job: current results without a document, and
+1. **Watch coverage.** The queue fixes are deployed, and the backlog cleared in
+   minutes. Add two figures to the `queue-health` job: current results without a document, and
    the age of the oldest pending record request. When those are above zero, Discord
    shows "Records are still being indexed" with an empty or short record result,
    instead of the plain empty state.
-2. **Fix phrase matching and OR highlights.** These are independent of the other steps.
-   - A quoted value compiles to `phraseto_tsquery` plus exact equality, with no
-     trigram branch. Unquoted text keeps fuzzy matching.
-   - The highlighter marks a term from an OR branch when that term occurs in the
-     text. Negated terms stay plain.
-3. **Keep the source of each match.** Index category text (title, subtitle,
-   restriction names and aliases) separately from holder text (build title,
-   creators).
-   - Bare free text matches both. A bare alias such as `entityless` matches the
-     category, so it finds **No Entities**.
-   - Category matches rank above holder matches.
-   - `restriction:` filters only on the category. A holder's build title never
-     satisfies it.
-4. **Show the match reason in Discord.** Carry match spans and their source into the
-   hit. Highlight spans in the heading and subtitle. A holder-only match adds a line
-   such as "Matched holder #8329: …". Show the qualifying holder with its
-   measurements, and show a null volume as unmeasured rather than as zero.
-5. **Report bounded totals honestly.** When any ranking branch reaches its cap,
+2. **Rebuild matching and highlighting.** Steps 2–4 of the original plan (phrase
+   matching, match provenance, match reasons in Discord) are now
+   [the search index redesign](search-index-redesign.md).
+3. **Report bounded totals honestly.** When any ranking branch reaches its cap,
    show the total as "200+" (or the pool size followed by "+"). Navigation pages
    only through the pool.
 
 Grouping many records held by one build is a screen design question. Plan it
-separately against [the bot screen guide](../bot-screens.md) once steps 3 and 4 show
+separately against [the bot screen guide](../bot-screens.md) once the redesign shows
 what a row must carry.
 
 ## Verification
 
-- After the deploy, the record request queue empties within minutes. Every current
-  result has a document, and no record document points at a deleted result.
-- In Discord, search Records for `fastest 2x2 glass door` and check that both
-  `result:629507` and `result:632822` appear. Check the reason shown for
-  `no entities`, `entityless`, `restriction:entityless`, `no furnaces`, and
-  `fastest 2x2 (glass OR door)`.
-- Search Builds for `title:"glass door"`, and check that `#3292` is gone and the
-  literal phrase is highlighted. For `2x2 door`, check that paging agrees with the
-  displayed total.
+- Every current result has a document, and no record document points at a deleted
+  result. Pausing the worker makes Discord show the indexing notice.
+- For `2x2 door`, paging agrees with the displayed total, and a capped total reads
+  "200+".
+
+Matching and highlighting checks are in [the redesign](search-index-redesign.md).
