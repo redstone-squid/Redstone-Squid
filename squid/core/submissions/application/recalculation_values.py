@@ -1,6 +1,7 @@
 """Conservative, reviewable inference changes to an existing build."""
 
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 from uuid import UUID
 
@@ -120,6 +121,27 @@ class RecalculationFacts:
                 if (value := getattr(self, name)) is not None:
                     values[name] = value
         return BuildEditPatch(**values)
+
+
+class RecalculationProposalStatus(StrEnum):
+    """Review state of a proposal; pending ones may still lack a matched build."""
+
+    PENDING = "pending"
+    APPLIED = "applied"
+    EXPIRED = "expired"
+
+
+class RecalculationProposalSort(StrEnum):
+    """Display order of a proposal listing. `ID` is the order for full traversal."""
+
+    ID = "id"
+    OLDEST = "oldest"
+
+
+@dataclass(frozen=True, slots=True)
+class RecalculationProposalFilters:
+    status: RecalculationProposalStatus | None = None
+    build_id: int | None = None
 
 
 @dataclass(frozen=True, slots=True)

@@ -21,11 +21,14 @@ from squid.core.errors import (
     OwnershipRequiredError,
     ValidationError,
 )
+from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT, BUILD_SUBMISSION_RECALC
 from squid.core.submissions.application.recalculation_values import (
     RecalculationFacts,
     RecalculationProposal,
+    RecalculationProposalFilters,
+    RecalculationProposalSort,
     recalculation_values,
 )
 from squid.core.unit_of_work import UnitOfWorkFactory
@@ -37,6 +40,16 @@ class RecalculationProposalRepository(Protocol):
     async def create(self, proposal: RecalculationProposal) -> RecalculationProposal: ...
     async def get(self, proposal_id: UUID) -> RecalculationProposal | None: ...
     async def list_for_source(self, source_message_id: int, *, limit: int) -> tuple[RecalculationProposal, ...]: ...
+    async def list_page(
+        self,
+        filters: RecalculationProposalFilters,
+        *,
+        sort: RecalculationProposalSort,
+        selector: PageSelector[UUID],
+        limit: int,
+        now: Instant,
+    ) -> tuple[RecalculationProposal, ...]: ...
+    async def count(self, filters: RecalculationProposalFilters, *, now: Instant) -> int: ...
     async def match(self, proposal: RecalculationProposal) -> RecalculationProposal: ...
     async def get_for_update(self, proposal_id: UUID) -> RecalculationProposal | None: ...
     async def mark_approved(self, proposal_id: UUID, *, account_id: int, revision: int) -> RecalculationProposal: ...
@@ -121,6 +134,32 @@ class RecalculationProposalService:
                 rows = await uow.recalculation_proposals.list_for_source(source_message_id, limit=20)
                 await self._require_read_access(uow, rows, actor)
                 return rows
+
+    async def list_page(
+        self,
+        filters: RecalculationProposalFilters,
+        *,
+        sort: RecalculationProposalSort = RecalculationProposalSort.ID,
+        selector: PageSelector[UUID] = FIRST_PAGE,
+        page_size: int = 20,
+        context: ActingContext,
+    ) -> Page[RecalculationProposal, UUID]:
+        """Page every proposal for staff review; an anchor outside the listing raises PageAnchorNotFoundError."""
+        actor = context.effective
+        with context.scope():
+            async with self._uow_factory() as uow:
+                await self._permissions.require(actor, BUILD_SUBMISSION_EDIT, uow=uow)
+                now = Instant.now()
+                rows = await uow.recalculation_proposals.list_page(
+                    filters, sort=sort, selector=selector, limit=page_size + 1, now=now
+                )
+                return keyset_page(
+                    rows,
+                    selector=selector,
+                    page_size=page_size,
+                    total=await uow.recalculation_proposals.count(filters, now=now),
+                    id_of=lambda proposal: proposal.id,
+                )
 
     async def _require_read_access(
         self, uow: RevisionUnitOfWork, proposals: Sequence[RecalculationProposal], actor: Actor

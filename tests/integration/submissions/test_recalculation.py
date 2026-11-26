@@ -26,6 +26,9 @@ from squid.core.submissions.application.recalculation import RecalculationPropos
 from squid.core.submissions.application.recalculation_values import (
     RecalculationFacts,
     RecalculationProposal,
+    RecalculationProposalFilters,
+    RecalculationProposalSort,
+    RecalculationProposalStatus,
     recalculation_values,
 )
 from squid.core.submissions.infrastructure.recalculation import PostgresRecalculationProposals
@@ -255,3 +258,60 @@ def revision_service(
     factory: UnitOfWorkFactory[SqlAlchemyUnitOfWork], builds: BuildService
 ) -> RecalculationProposalService:
     return RecalculationProposalService(builds, PermissionService(uow_factory=factory), uow_factory=factory)
+
+
+async def test_staff_list_filters_by_status_and_build_and_pages_oldest_first(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    repository, original, build, owner, builds = await prepared_proposal(migrated_session_factory)
+    async with build_edit_session(migrated_session_factory) as session:
+        staff = Account()
+        session.add(staff)
+        await session.flush()
+        session.add(PermissionGrant(pattern=BUILD_SUBMISSION_EDIT.name, effect=1, subject_account_id=staff.id))
+    past = original.created_at.subtract(hours=1)
+    variants = {
+        "older_pending": replace(original, id=uuid4(), created_at=past.subtract(hours=1)),
+        "expired": replace(original, id=uuid4(), created_at=past.subtract(hours=2), expires_at=past),
+        "unmatched": replace(
+            original, id=uuid4(), build_id=None, expected_revision=None, before={}, after={}, created_at=past
+        ),
+        "applied": replace(original, id=uuid4(), created_at=past.subtract(hours=3)),
+    }
+    for proposal in variants.values():
+        await transact(repository, lambda uow, p=proposal: uow.recalculation_proposals.create(p), commit=True)
+    await transact(
+        repository,
+        lambda uow: uow.recalculation_proposals.mark_approved(
+            variants["applied"].id, account_id=original.owner_account_id, revision=1
+        ),
+        commit=True,
+    )
+    service = revision_service(repository, builds)
+    context = ActingContext.for_actor(UserActor(account_id=staff.id))
+    pending = RecalculationProposalFilters(RecalculationProposalStatus.PENDING)
+
+    first = await service.list_page(pending, sort=RecalculationProposalSort.OLDEST, page_size=2, context=context)
+    assert first.next is not None
+    second = await service.list_page(
+        pending, sort=RecalculationProposalSort.OLDEST, selector=first.next.selector(), page_size=2, context=context
+    )
+
+    assert [row.id for row in first.items + second.items] == [
+        variants["older_pending"].id,
+        variants["unmatched"].id,
+        original.id,
+    ]
+    assert first.total == 3
+    assert second.next is None
+    applied = await service.list_page(
+        RecalculationProposalFilters(RecalculationProposalStatus.APPLIED), context=context
+    )
+    expired = await service.list_page(
+        RecalculationProposalFilters(RecalculationProposalStatus.EXPIRED), context=context
+    )
+    assert [row.id for row in applied.items] == [variants["applied"].id]
+    assert [row.id for row in expired.items] == [variants["expired"].id]
+    assert (await service.list_page(RecalculationProposalFilters(build_id=build.id), context=context)).total == 4
+    with pytest.raises(AuthorizationError):
+        await service.list_page(pending, context=ActingContext.for_actor(owner))

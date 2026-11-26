@@ -4,19 +4,35 @@ The routes live under `/submissions/revisions` and their operation IDs say `subm
 because clients already call them by those names. They serve the same recalculation proposals.
 """
 
+from typing import Annotated
 from uuid import UUID
 
 from litestar import Router, get, post
 from litestar.di import NamedDependency, Provide
-from litestar.params import FromPath, JSONBody, SkipValidation
+from litestar.params import FromPath, FromQuery, JSONBody, QueryParameter, SkipValidation
 from pydantic import BaseModel, Field
 
 from squid.api.contract import DEVICE, WEB, WEB_WRITE, contract, transport_only
 from squid.api.dependencies import CurrentCaller, Services
 from squid.api.idempotency import reserve_idempotent_request
+from squid.api.pagination import (
+    OffsetParam,
+    Page,
+    PageSizeParam,
+    UuidAfterIdParam,
+    UuidBeforeIdParam,
+    resolve_selector,
+)
+from squid.api.private_responses import private_response
 from squid.core.errors import JSONValue
 from squid.core.submissions.application.recalculation import RecalculationProposalService
-from squid.core.submissions.application.recalculation_values import RecalculationFacts, RecalculationProposal
+from squid.core.submissions.application.recalculation_values import (
+    RecalculationFacts,
+    RecalculationProposal,
+    RecalculationProposalFilters,
+    RecalculationProposalSort,
+    RecalculationProposalStatus,
+)
 
 
 class RecalculationProposalResponse(BaseModel):
@@ -63,6 +79,38 @@ def recalculation_proposals(services: Services) -> RecalculationProposalService:
 Proposals = NamedDependency[SkipValidation[RecalculationProposalService]]
 _READ = contract(cli=transport_only())
 _WRITE = contract(cli=transport_only())
+
+
+@get(
+    "/",
+    operation_id="submission_revision_list",
+    security=[WEB, DEVICE],
+    opt=_READ,
+    status_code=200,
+    dependencies={"proposals": Provide(recalculation_proposals, sync_to_thread=False)},
+)
+@private_response
+async def list_proposals(
+    caller: CurrentCaller,
+    proposals: Proposals,
+    status: FromQuery[RecalculationProposalStatus | None] = None,
+    build_id: Annotated[int | None, QueryParameter(ge=1)] = None,
+    sort: FromQuery[RecalculationProposalSort] = RecalculationProposalSort.ID,
+    page_size: PageSizeParam = 20,
+    offset: OffsetParam = None,
+    after_id: UuidAfterIdParam = None,
+    before_id: UuidBeforeIdParam = None,
+) -> Page[RecalculationProposalResponse]:
+    """Page recalculation proposals for staff review; `status=pending&sort=oldest` is the review queue."""
+    caller.require_consented_account()
+    page = await proposals.list_page(
+        RecalculationProposalFilters(status, build_id),
+        sort=sort,
+        selector=resolve_selector(offset=offset, after_id=after_id, before_id=before_id),
+        page_size=page_size,
+        context=caller.context(),
+    )
+    return Page[RecalculationProposalResponse].from_domain(page, RecalculationProposalResponse.from_domain)
 
 
 @get(
@@ -172,5 +220,5 @@ async def approve_proposal(
 router = Router(
     path="/submissions/revisions",
     tags=["submissions"],
-    route_handlers=[history, get_proposal, match_proposal, approve_proposal],
+    route_handlers=[list_proposals, history, get_proposal, match_proposal, approve_proposal],
 )

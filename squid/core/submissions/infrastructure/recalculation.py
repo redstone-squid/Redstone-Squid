@@ -5,15 +5,25 @@ Rows live in `submission_revision_proposals`, the table's name from before the r
 
 from collections.abc import Callable
 from dataclasses import asdict
+from typing import Any
 from uuid import UUID
 
 from pydantic import TypeAdapter
-from sqlalchemy import select
+from sqlalchemy import Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from whenever import Instant
 
 from squid.core.errors import AuthorizationError, ConflictError, NotFoundError
+from squid.core.pagination import PageSelector
 from squid.core.persistence.advisory_locks import AdvisoryLockNamespace, lock_uuid
-from squid.core.submissions.application.recalculation_values import RecalculationFacts, RecalculationProposal
+from squid.core.persistence.paging import KeysetOrder
+from squid.core.submissions.application.recalculation_values import (
+    RecalculationFacts,
+    RecalculationProposal,
+    RecalculationProposalFilters,
+    RecalculationProposalSort,
+    RecalculationProposalStatus,
+)
 from squid.core.submissions.models.recalculation import SubmissionRecalculationProposal
 
 _REVISION_FACTS = TypeAdapter(RecalculationFacts)
@@ -60,6 +70,31 @@ class PostgresRecalculationProposals:
         )
         return tuple(_snapshot(row) for row in rows)
 
+    async def list_page(
+        self,
+        filters: RecalculationProposalFilters,
+        *,
+        sort: RecalculationProposalSort,
+        selector: PageSelector[UUID],
+        limit: int,
+        now: Instant,
+    ) -> tuple[RecalculationProposal, ...]:
+        """Read one page in display order; a `before_id` page is read in reverse and restored."""
+        session = self._session()
+        proposal = SubmissionRecalculationProposal
+        order = (
+            KeysetOrder(proposal.id, proposal.id, descending=True)
+            if sort is RecalculationProposalSort.ID
+            else KeysetOrder(proposal.created_at, proposal.id, descending=False)
+        )
+        statement = await order.apply(session, _filtered(select(proposal), filters, now), selector)
+        rows = tuple(_snapshot(row) for row in await session.scalars(statement.limit(limit)))
+        return rows[::-1] if selector.before_id is not None else rows
+
+    async def count(self, filters: RecalculationProposalFilters, *, now: Instant) -> int:
+        statement = _filtered(select(func.count()).select_from(SubmissionRecalculationProposal), filters, now)
+        return await self._session().scalar(statement) or 0
+
     async def match(self, proposal: RecalculationProposal) -> RecalculationProposal:
         session = self._session()
         model = await session.scalar(
@@ -95,6 +130,22 @@ class PostgresRecalculationProposals:
         model.applied_revision = revision
         await session.flush()
         return _snapshot(model)
+
+
+def _filtered[S: Select[Any]](statement: S, filters: RecalculationProposalFilters, now: Instant) -> S:
+    proposal = SubmissionRecalculationProposal
+    if filters.build_id is not None:
+        statement = statement.where(proposal.build_id == filters.build_id)
+    match filters.status:
+        case RecalculationProposalStatus.PENDING:
+            statement = statement.where(proposal.applied_revision.is_(None), proposal.expires_at > now)
+        case RecalculationProposalStatus.APPLIED:
+            statement = statement.where(proposal.applied_revision.is_not(None))
+        case RecalculationProposalStatus.EXPIRED:
+            statement = statement.where(proposal.applied_revision.is_(None), proposal.expires_at <= now)
+        case None:
+            pass
+    return statement
 
 
 def _snapshot(model: SubmissionRecalculationProposal) -> RecalculationProposal:
