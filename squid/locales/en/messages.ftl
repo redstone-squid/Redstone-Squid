@@ -2107,7 +2107,7 @@ builds-alias-restriction = That alias is already on this restriction.
 # squid/core/builds/errors.py:139
 builds-alias-used = That alias is already used by another restriction.
 
-# squid/core/builds/domain/models.py:163
+# squid/core/builds/domain/models.py:166
 builds-attribute-immutable = Attribute `{ $name }` is immutable!
 
 # squid/core/builds/errors.py:12
@@ -2152,7 +2152,7 @@ builds-errors-wait-for-the-other-edit-to-finish = Wait for the other edit to fin
 # squid/core/builds/errors.py:68
 builds-if-match-build = An If-Match build revision is required for this operation.
 
-# squid/core/builds/domain/models.py:187
+# squid/core/builds/domain/models.py:190
 builds-not-dataclass = { $class_name } is not a dataclass
 
 # squid/core/builds/errors.py:112
@@ -4495,7 +4495,7 @@ notifications-confirmed-summary = { $build } was approved.
 # squid/bot/notification_text.py:21
 notifications-creator-summary = { $build } by a creator you follow was approved.
 
-# squid/core/notifications/application.py:325
+# squid/core/notifications/application.py:324
 notifications-delivery-claim-limit = delivery claim limit must be between 1 and 100
 
 # squid/bot/notifications_view.py:148
@@ -4596,7 +4596,7 @@ notifications-open-build = Open build
 # squid/bot/notifications_cog.py:139
 notifications-open-in-discord = Open it in Discord with `/build browse id:{ $build_id }`.
 
-# squid/core/notifications/application.py:250
+# squid/core/notifications/application.py:249
 notifications-page-size = page_size must be between 1 and 100
 
 # squid/core/notifications/domain.py:374
@@ -4627,7 +4627,7 @@ notifications-record-summary =
        *[other] { $build } gained { $count } records.
     }
 
-# squid/core/notifications/application.py:159
+# squid/core/notifications/application.py:158
 notifications-retention-days-positive = retention_days must be positive
 
 # squid/bot/notification_text.py:32
