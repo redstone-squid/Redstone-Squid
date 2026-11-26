@@ -82,12 +82,12 @@ Items 12, 13, 15 and 17 share one **record holder summary**: `{build_id, title, 
 
 ## Submissions
 
-32. **`DraftSummaryResponse` additions:** `completeness: {required: int, filled: int}`, `issue_count`, `preview_url`, `build_id` (after submission), and `source_build_id`. Needed by the S1 list and A5.
-33. **Live validation on every change.** `DraftChangeResponse.issues: [{field_id, reason, params: {minimum?, maximum?, min_length?, ...}}]`, computed after each change. `SubmissionAttentionIssueResponse` also gains `params`. S2 needs this to show "must be at least 3" at the field as the user types, instead of only after finalizing.
-34. **Manifest presentation hints:** `FormFieldResponse` gains `placeholder`, `unit`, `width: full | half | narrow`, and `description` on sections, plus confirmation that labels and help text are localized to the request locale.
-35. **Media preview URLs.** `DraftMediaArtifactResponse` gains `url` (signed and short-lived), `width` and `height`. Today S2 cannot show what was uploaded.
-36. **Finalization long-poll or events.** `GET /v1/submissions/drafts/{id}/status?wait=25` (long-poll) or an SSE stream. Removes polling loops on S3.
-37. **Correction proposals list.** `GET /v1/submissions/revisions?status=pending&build_id=&sort=oldest` (today only lookup by source message), a queue. `before` and `after` become `changes: [{field, label, before, after}]`. Needed by M1 and M3.
+32. **`DraftSummaryResponse` additions:** `source_build_id` (already on `StoredDraftResponse`), `issue_count` from `preparation_issues`, and `completeness: [{section_id, required, filled}]`. The server computes completeness because only it knows which required fields `visible_when` hides. Needed by S1 and S2's section navigation. Submitted drafts leave this list, and A5 reads `builds?submitted_by=me`, so the summary needs no `build_id`.
+33. **Missing answers before finalizing.** Changes already reject out-of-bounds values with 422 field errors carrying `params` (item 50), and the manifest's `constraints` let S2 check bounds as the user types. Required fields are only checked at finalization, though. Add the complete-draft issues to `StoredDraftResponse` so S2's submit panel lists them in advance. Product decision: rejecting invalid values means a half-typed value that breaks a bound can't autosave. Saving it would require storing invalid answers and reporting them as issues.
+34. **Manifest additions:** `unit` on duration and measurement fields, and `description` on sections. Layout (width, placeholders) stays with the client, which decides how fields are drawn. Labels and help text are already localized to the request locale.
+35. **Media previews.** `DraftMediaArtifactResponse` already has `width` and `height`. Add a private route that streams each artifact, such as `GET /v1/submissions/drafts/{id}/media/{upload_id}/artifacts/{role}`. Islands are same-origin with cookie auth (item 52), so no signed URLs. S2 cannot show uploads without it.
+36. **Finalization push (phase 2).** S3 polls `/drafts/{id}/status` with `If-None-Match`. Add a long-poll or SSE stream only if polling proves costly.
+37. **Correction proposals list.** `/v1/submissions/revisions` looks proposals up only by source message. Add a list filtered by `status` and `build_id`, with the `id` and `oldest` sorts and UUID anchors (items 55 and 58). Keep `before` and `after`: M3 diffs them and takes labels from the manifest. Needed by M1 and M3.
 38. **Draft sharing.** `submission_draft_access` already exists. Add `GET/POST/DELETE /v1/submissions/drafts/{id}/editors`, needed if S2 adds collaborators (todo.md). This is a product decision, so leave it as an optional phase.
 
 ## Voting and review
