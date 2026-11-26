@@ -62,7 +62,8 @@ function locate(file: string): { src: string; segments: string[] } | undefined {
 }
 
 // Libraries that only src/ui wraps, so features get one accessible, themed version of each.
-const UI_ONLY = /^(?:bits-ui|layerchart|@tanstack\/svelte-table)(?:\/|$)/;
+// The date fields hand features ISO text, which keeps bits-ui's date values out of them.
+const UI_ONLY = /^(?:bits-ui|layerchart|@tanstack\/svelte-table|@internationalized\/date)(?:\/|$)/;
 
 /**
  * Enforce the `LAYERS` table, keep `UI_ONLY` libraries and the shared `styles.ts` of each

@@ -23,7 +23,7 @@ stories per folder; `/zh-cn/design-system` shows them in Simplified Chinese.
 | The outcome after a POST redirect                         | `patterns/FlashNotice` in the `PageHeader` notice slot                           |
 | Headings, body text, links, code                          | `content/Heading`, `Text`, `Link`, `Code`, `CodeBlock`, `Prose` for Markdown     |
 | Text only screen readers need                             | `content/VisuallyHidden`                                                         |
-| Dates                                                     | `content/Timestamp`; format the label in a message                               |
+| Showing a date                                            | `content/Timestamp`; format the label in a message                               |
 | Two or three facts of one kind, such as count and version | `content/MetaList`; facts with other roles go elsewhere                          |
 | Icons                                                     | `content/Icon` wrapping a lucide icon; decorative unless labelled                |
 | Commands and links that look like them                    | `actions/Button`, with `href` for a link and `pending` while saving              |
@@ -51,6 +51,7 @@ stories per folder; `/zh-cn/design-system` shows them in Simplified Chinese.
 | Text, numbers, choices from a short list                  | `forms/TextField`, `TextareaField`, `SelectField`, `ChoiceGroup`                 |
 | Booleans                                                  | `forms/CheckField` saved with the form, `Switch` applied at once                 |
 | Related fields, ranges, units, one-time codes             | `forms/FieldGroup`, `RangeField`, `UnitField`, `CodeEntry`                       |
+| Entering dates, times, and spans of dates                 | `forms/DateField` (`time` adds the time), `TimeField`, `DateRangeField`          |
 | Suggestions or picking from a long set                    | `forms/Autocomplete` for free text, `Combobox` for values from a set             |
 | Repeatable rows and files                                 | `forms/ListField`, `FileDrop`                                                    |
 | Ending a form and reporting its state                     | `forms/FormActions`, `ErrorSummary` after a failed submit, `feedback/SaveStatus` |
@@ -61,7 +62,7 @@ stories per folder; `/zh-cn/design-system` shows them in Simplified Chinese.
 
 Features and layouts build on these: lint rejects raw `<button>`, `<input>`, `<select>`,
 `<textarea>`, `<table>`, `<dialog>`, `<img>` and `<style>` there, and imports of `bits-ui`,
-`layerchart`, `@tanstack/svelte-table` or a folder's `styles.ts`. Components take their text through props
+`layerchart`, `@tanstack/svelte-table`, `@internationalized/date` or a folder's `styles.ts`. Components take their text through props
 and know nothing about builds, records, or the API. A component's own text, such as button
 names and status messages, arrives in one `labels` object; text that depends on a value is a
 function there, such as `labels.count(n)`, so plurals stay in the catalogs. Add one here only when two features need

@@ -1686,6 +1686,286 @@ export function storyUseAMaximumOfAtLeast9(locale: Locale = getLocale()): string
   }
 }
 
+/** A date, or a date and time, typed in the reader's order or picked from a calendar. */
+export function storyDateFieldDescription(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "A date, or a date and time, typed in the reader's order or picked from a calendar.";
+    case "zh-CN":
+      return "日期或日期加时间，按读者习惯的顺序输入，或在日历中选择。";
+    case "en-XA":
+      return (
+        "[" +
+        "Å đåţé, öŕ å đåţé åñđ ţîɱé, ţýþéđ îñ ţĥé ŕéåđéŕ'š öŕđéŕ öŕ þîçķéđ ƒŕöɱ å çåļéñđåŕ." +
+        "·································]"
+      );
+  }
+}
+
+/** A time of day. */
+export function storyTimeFieldDescription(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "A time of day.";
+    case "zh-CN":
+      return "一天中的时间。";
+    case "en-XA":
+      return "[" + "Å ţîɱé öƒ đåý." + "······]";
+  }
+}
+
+/** A span of dates. */
+export function storyDateRangeFieldDescription(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "A span of dates.";
+    case "zh-CN":
+      return "一段日期。";
+    case "en-XA":
+      return "[" + "Å šþåñ öƒ đåţéš." + "·······]";
+  }
+}
+
+/** date */
+export function storyDateOnly(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "date";
+    case "zh-CN":
+      return "仅日期";
+    case "en-XA":
+      return "[" + "đåţé" + "··]";
+  }
+}
+
+/** with time and time zone */
+export function storyWithTimeAndZone(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "with time and time zone";
+    case "zh-CN":
+      return "带时间和时区";
+    case "en-XA":
+      return "[" + "ŵîţĥ ţîɱé åñđ ţîɱé žöñé" + "··········]";
+  }
+}
+
+/** Year */
+export function storyDateYear(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Year";
+    case "zh-CN":
+      return "年";
+    case "en-XA":
+      return "[" + "Ýéåŕ" + "··]";
+  }
+}
+
+/** Month */
+export function storyDateMonth(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Month";
+    case "zh-CN":
+      return "月";
+    case "en-XA":
+      return "[" + "Ṁöñţĥ" + "··]";
+  }
+}
+
+/** Day */
+export function storyDateDay(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Day";
+    case "zh-CN":
+      return "日";
+    case "en-XA":
+      return "[" + "Đåý" + "··]";
+  }
+}
+
+/** Hour */
+export function storyDateHour(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Hour";
+    case "zh-CN":
+      return "时";
+    case "en-XA":
+      return "[" + "Ĥöûŕ" + "··]";
+  }
+}
+
+/** Minute */
+export function storyDateMinute(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Minute";
+    case "zh-CN":
+      return "分";
+    case "en-XA":
+      return "[" + "Ṁîñûţé" + "···]";
+  }
+}
+
+/** AM or PM */
+export function storyDateDayPeriod(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "AM or PM";
+    case "zh-CN":
+      return "上午或下午";
+    case "en-XA":
+      return "[" + "ÅṀ öŕ ÞṀ" + "····]";
+  }
+}
+
+/** Empty */
+export function storyDateEmpty(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Empty";
+    case "zh-CN":
+      return "空";
+    case "en-XA":
+      return "[" + "Éɱþţý" + "··]";
+  }
+}
+
+/** Choose date */
+export function storyChooseDate(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Choose date";
+    case "zh-CN":
+      return "选择日期";
+    case "en-XA":
+      return "[" + "Çĥööšé đåţé" + "·····]";
+  }
+}
+
+/** Previous month */
+export function storyPreviousMonth(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Previous month";
+    case "zh-CN":
+      return "上个月";
+    case "en-XA":
+      return "[" + "Þŕéṽîöûš ɱöñţĥ" + "······]";
+  }
+}
+
+/** Next month */
+export function storyNextMonth(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Next month";
+    case "zh-CN":
+      return "下个月";
+    case "en-XA":
+      return "[" + "Ñéẋţ ɱöñţĥ" + "····]";
+  }
+}
+
+/** Built on */
+export function storyBuiltOn(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Built on";
+    case "zh-CN":
+      return "建成日期";
+    case "en-XA":
+      return "[" + "Ɓûîļţ öñ" + "····]";
+  }
+}
+
+/** The day the build first worked. */
+export function storyTheDayTheBuildFirstWorked(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "The day the build first worked.";
+    case "zh-CN":
+      return "作品首次正常运作的那天。";
+    case "en-XA":
+      return "[" + "Ţĥé đåý ţĥé ƀûîļđ ƒîŕšţ ŵöŕķéđ." + "·············]";
+  }
+}
+
+/** Voting closes */
+export function storyVotingCloses(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Voting closes";
+    case "zh-CN":
+      return "投票截止";
+    case "en-XA":
+      return "[" + "Ṽöţîñĝ çļöšéš" + "······]";
+  }
+}
+
+/** Enter a date that has passed. */
+export function storyEnterADateThatHasPassed(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Enter a date that has passed.";
+    case "zh-CN":
+      return "请输入已经过去的日期。";
+    case "en-XA":
+      return "[" + "Éñţéŕ å đåţé ţĥåţ ĥåš þåššéđ." + "············]";
+  }
+}
+
+/** Event starts */
+export function storyEventStarts(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Event starts";
+    case "zh-CN":
+      return "活动开始";
+    case "en-XA":
+      return "[" + "Éṽéñţ šţåŕţš" + "·····]";
+  }
+}
+
+/** Submitted between */
+export function storySubmittedBetween(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Submitted between";
+    case "zh-CN":
+      return "提交时间范围";
+    case "en-XA":
+      return "[" + "Šûƀɱîţţéđ ƀéţŵééñ" + "·······]";
+  }
+}
+
+/** From */
+export function storyFrom(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "From";
+    case "zh-CN":
+      return "起";
+    case "en-XA":
+      return "[" + "Ƒŕöɱ" + "··]";
+  }
+}
+
+/** Until */
+export function storyUntil(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Until";
+    case "zh-CN":
+      return "止";
+    case "en-XA":
+      return "[" + "Ûñţîļ" + "··]";
+  }
+}
+
 /** Farm */
 export function storyFarm(locale: Locale = getLocale()): string {
   switch (locale) {

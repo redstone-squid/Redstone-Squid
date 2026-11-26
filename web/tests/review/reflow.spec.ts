@@ -51,7 +51,9 @@ async function overflowing(page: Page): Promise<string[]> {
     const pageEdge = document.documentElement.clientWidth;
     for (const element of document.body.querySelectorAll("*")) {
       // Visually hidden text lives in a 1px clipped box by design.
-      if (element.closest(".sr-only, [hidden], dialog:not([open])") !== null) continue;
+      // bits-ui parks the date fields' screen-reader announcer just off the page's start edge.
+      if (element.closest(".sr-only, [hidden], dialog:not([open]), [data-bits-announcer]") !== null)
+        continue;
       const box = element.getBoundingClientRect();
       if (box.width === 0 || box.height === 0) continue;
       let left = 0;

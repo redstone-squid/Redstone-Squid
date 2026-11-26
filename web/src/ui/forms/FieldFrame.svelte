@@ -8,7 +8,8 @@
 
   /**
    * The label, hint and error around one control. `children` receives the control's id,
-   * description and invalid state. The error is plain text, not an alert: `ErrorSummary`
+   * description and invalid state. A control `<label for>` cannot name, such as a group of
+   * date segments, takes `aria-labelledby` from the label's id: the control's id plus `-label`. The error is plain text, not an alert: `ErrorSummary`
    * announces a failed submit, and focusing the field reads its error.
    *
    * `inline` puts the control before its label, for checkboxes. `aside` sits at the end of
@@ -52,8 +53,10 @@
       >{@render children(control)}<span class={labelClass}>{@render caption()}</span></label
     >
   {:else}
-    <label class={cn(labelClass, labelVisibility === "hidden" && "sr-only")} for={control.id}
-      >{@render caption()}</label
+    <label
+      id={`${control.id}-label`}
+      class={cn(labelClass, labelVisibility === "hidden" && "sr-only")}
+      for={control.id}>{@render caption()}</label
     >
     <div class={cn("relative min-w-0", widths[width])}>{@render children(control)}</div>
   {/if}

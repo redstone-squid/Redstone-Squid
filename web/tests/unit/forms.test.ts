@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import ChoiceGroup from "@/ui/forms/ChoiceGroup.svelte";
 import CodeEntry from "@/ui/forms/CodeEntry.svelte";
 import Combobox from "@/ui/forms/Combobox.svelte";
+import DateField from "@/ui/forms/DateField.svelte";
+import DateRangeField from "@/ui/forms/DateRangeField.svelte";
 import ErrorSummary from "@/ui/forms/ErrorSummary.svelte";
 import FileDrop from "@/ui/forms/FileDrop.svelte";
 import FormActions from "@/ui/forms/FormActions.svelte";
@@ -14,6 +16,7 @@ import SelectField from "@/ui/forms/SelectField.svelte";
 import Switch from "@/ui/forms/Switch.svelte";
 import TextareaField from "@/ui/forms/TextareaField.svelte";
 import TextField from "@/ui/forms/TextField.svelte";
+import TimeField from "@/ui/forms/TimeField.svelte";
 import UnitField from "@/ui/forms/UnitField.svelte";
 import ListHarness from "./fixtures/ListFieldHarness.svelte";
 
@@ -404,5 +407,114 @@ describe("ListField", () => {
       "a.example",
     ]);
     expect(screen.getByRole("button", { name: "Move Link 2 up" })).toHaveFocus();
+  });
+});
+
+describe("date fields", () => {
+  const labels = {
+    segments: {
+      year: "Year",
+      month: "Month",
+      day: "Day",
+      hour: "Hour",
+      minute: "Minute",
+      dayPeriod: "AM or PM",
+      empty: "Not set",
+    },
+    calendar: "Choose date",
+    previousMonth: "Previous month",
+    nextMonth: "Next month",
+  };
+  const hidden = (container: HTMLElement, name: string) =>
+    container.querySelector<HTMLInputElement>(`input[type="hidden"][name="${name}"]`);
+
+  it("names segments in the caller's language and submits typed dates as ISO text", async () => {
+    const user = userEvent.setup();
+    const onchange = vi.fn();
+    const { container } = render(DateField, {
+      label: "Built on",
+      name: "built",
+      hint: "When the build was finished.",
+      error: "Enter a date.",
+      labels,
+      onchange,
+    });
+    const group = await screen.findByRole("group", { name: "Built on" });
+    const month = within(group).getByRole("spinbutton", { name: "Month" });
+    expect(month).toHaveAttribute("aria-valuetext", "Not set");
+    expect(month).toHaveAccessibleDescription("When the build was finished. Enter a date.");
+    expect(month).toHaveAttribute("aria-invalid", "true");
+    await user.click(month);
+    await user.keyboard("03052024");
+    expect(onchange).toHaveBeenLastCalledWith("2024-03-05");
+    expect(hidden(container, "built")).toHaveValue("2024-03-05");
+  });
+
+  it("picks a day from the calendar", async () => {
+    const user = userEvent.setup();
+    const onchange = vi.fn();
+    render(DateField, { label: "Built on", name: "built", value: "2024-03-05", labels, onchange });
+    await user.click(await screen.findByRole("button", { name: "Choose date" }));
+    // jsdom has no layout, so the floating calendar counts as hidden and its buttons have no
+    // computed name. Their aria-label still shows the localized names replaced bits-ui's.
+    await user.click(await screen.findByLabelText("Next month"));
+    await user.click(
+      screen.getByText("12", { selector: "[data-bits-day]:not([data-outside-month])" }),
+    );
+    expect(onchange).toHaveBeenLastCalledWith("2024-04-12");
+  });
+
+  it("submits a date and time as wall-clock text beside its time zone", async () => {
+    const user = userEvent.setup();
+    const onchange = vi.fn();
+    render(DateField, {
+      label: "Voting closes",
+      name: "closes",
+      time: true,
+      timeZone: "Europe/Berlin",
+      value: "2024-03-05T09:30",
+      labels,
+      onchange,
+    });
+    const group = await screen.findByRole("group", { name: "Voting closes" });
+    const hour = within(group).getByRole("spinbutton", { name: "Hour" });
+    expect(hour).toHaveAccessibleDescription("Europe/Berlin");
+    await user.click(hour);
+    await user.keyboard("{ArrowUp}");
+    expect(onchange).toHaveBeenLastCalledWith("2024-03-05T10:30");
+  });
+
+  it("submits a time of day as HH:mm", async () => {
+    const user = userEvent.setup();
+    const onchange = vi.fn();
+    const { container } = render(TimeField, {
+      label: "Event starts",
+      name: "starts",
+      value: "18:05",
+      labels,
+      onchange,
+    });
+    const group = await screen.findByRole("group", { name: "Event starts" });
+    await user.click(within(group).getByRole("spinbutton", { name: "Minute" }));
+    await user.keyboard("{ArrowDown}");
+    expect(onchange).toHaveBeenLastCalledWith("18:04");
+    expect(hidden(container, "starts")).toHaveValue("18:04");
+  });
+
+  it("keeps each end of a span from crossing the other", async () => {
+    const user = userEvent.setup();
+    render(DateRangeField, {
+      label: "Submitted",
+      separator: "to",
+      start: { name: "from", value: "2024-03-10", label: "From" },
+      end: { name: "until", value: "2024-03-20", label: "Until" },
+      labels,
+    });
+    const opensFrom = (await screen.findAllByRole("button", { name: "Choose date" }))[0];
+    if (opensFrom === undefined) throw new Error("The start field has no calendar button.");
+    await user.click(opensFrom);
+    const day = (date: string) => document.querySelector(`[data-bits-day][data-value="${date}"]`);
+    await waitFor(() => expect(day("2024-03-21")).toHaveAttribute("data-disabled"));
+    expect(day("2024-03-20")).not.toHaveAttribute("data-disabled");
   });
 });

@@ -10,6 +10,8 @@
   import ChoiceGroup from "@/ui/forms/ChoiceGroup.svelte";
   import CodeEntry from "@/ui/forms/CodeEntry.svelte";
   import Combobox from "@/ui/forms/Combobox.svelte";
+  import DateField from "@/ui/forms/DateField.svelte";
+  import DateRangeField from "@/ui/forms/DateRangeField.svelte";
   import ErrorSummary from "@/ui/forms/ErrorSummary.svelte";
   import FieldGroup from "@/ui/forms/FieldGroup.svelte";
   import FileDrop from "@/ui/forms/FileDrop.svelte";
@@ -20,6 +22,7 @@
   import Switch from "@/ui/forms/Switch.svelte";
   import TextareaField from "@/ui/forms/TextareaField.svelte";
   import TextField from "@/ui/forms/TextField.svelte";
+  import TimeField from "@/ui/forms/TimeField.svelte";
   import UnitField from "@/ui/forms/UnitField.svelte";
   import Layout from "@/ui/layout/Layout.svelte";
   import { versionOptions } from "@/workbench/draft-fixture";
@@ -43,6 +46,20 @@
     remove: (label: string) => m.storyRemoveOption({ label }),
     create: (text: string) => m.storyAddOption({ text }),
   };
+  const dateLabels = {
+    segments: {
+      year: m.storyDateYear(),
+      month: m.storyDateMonth(),
+      day: m.storyDateDay(),
+      hour: m.storyDateHour(),
+      minute: m.storyDateMinute(),
+      dayPeriod: m.storyDateDayPeriod(),
+      empty: m.storyDateEmpty(),
+    },
+    calendar: m.storyChooseDate(),
+    previousMonth: m.storyPreviousMonth(),
+    nextMonth: m.storyNextMonth(),
+  };
   const delayUnits = [
     { id: "gt", label: m.storyGameTicks(), factor: 1 },
     { id: "rt", label: m.storyRedstoneTicks(), factor: 2 },
@@ -64,6 +81,11 @@
   let rejected = $state<string[]>([]);
   let width = $state({ name: "width-min", value: "3", label: m.storyMinimumWidth() });
   let widthMax = $state({ name: "width-max", value: "", label: m.storyMaximumWidth() });
+  let builtOn = $state("2025-06-14");
+  let closes = $state("2026-12-01T18:00");
+  let starts = $state("19:30");
+  let submittedFrom = $state({ name: "submitted-from", value: "2026-01-01", label: m.storyFrom() });
+  let submittedUntil = $state({ name: "submitted-until", value: "", label: m.storyUntil() });
   let badMin = $state({ name: "bad-min", value: "9", label: m.storyMinimumHeight() });
   let badMax = $state({
     name: "bad-max",
@@ -376,6 +398,73 @@
       />
     </Variant>
   </Layout>
+</Story>
+
+<Story name="DateField" source="forms/DateField" description={m.storyDateFieldDescription()}>
+  <Layout pattern="grid" min="card-wide">
+    <Variant label={m.storyDateOnly()}>
+      <DateField
+        label={m.storyBuiltOn()}
+        name="story-built-on"
+        hint={m.storyTheDayTheBuildFirstWorked()}
+        max="2026-11-26"
+        bind:value={builtOn}
+        labels={dateLabels}
+      />
+    </Variant>
+    <Variant label={m.storyWithTimeAndZone()}>
+      <DateField
+        label={m.storyVotingCloses()}
+        name="story-voting-closes"
+        time
+        timeZone="Europe/Berlin"
+        bind:value={closes}
+        labels={dateLabels}
+      />
+    </Variant>
+    <Variant label={m.storyError()}>
+      <DateField
+        label={m.storyBuiltOn()}
+        name="story-built-on-error"
+        value="2030-01-01"
+        error={m.storyEnterADateThatHasPassed()}
+        labels={dateLabels}
+      />
+    </Variant>
+    <Variant label={m.storyDisabled()}>
+      <DateField
+        label={m.storyBuiltOn()}
+        name="story-built-on-disabled"
+        value="2025-06-14"
+        disabled
+        labels={dateLabels}
+      />
+    </Variant>
+  </Layout>
+</Story>
+
+<Story name="TimeField" source="forms/TimeField" description={m.storyTimeFieldDescription()}>
+  <TimeField
+    label={m.storyEventStarts()}
+    name="story-event-starts"
+    bind:value={starts}
+    labels={dateLabels}
+  />
+</Story>
+
+<Story
+  name="DateRangeField"
+  source="forms/DateRangeField"
+  description={m.storyDateRangeFieldDescription()}
+>
+  <DateRangeField
+    label={m.storySubmittedBetween()}
+    hint={m.storyLeaveEitherEndEmptyForNoLimit()}
+    separator={m.storyTo()}
+    bind:start={submittedFrom}
+    bind:end={submittedUntil}
+    labels={dateLabels}
+  />
 </Story>
 
 <Story name="UnitField" source="forms/UnitField" description={m.storyUnitFieldDescription()}>

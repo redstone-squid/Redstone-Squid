@@ -37,6 +37,14 @@ export const checkboxClass = cn(
   "mt-0.5 size-4.5 shrink-0 cursor-pointer accent-accent disabled:cursor-not-allowed",
 );
 
+/** The typed parts of a date or time inside `boxClass`, and each part. */
+export const segmentGroupClass = cn(
+  "flex min-w-0 flex-1 flex-wrap items-center px-3 py-2 tabular-nums",
+);
+export const segmentClass = cn(
+  "rounded-xs px-0.5 caret-transparent focus-visible:forced-highlight focus-visible:bg-accent-soft focus-visible:outline-none",
+  "data-empty:text-fg-muted data-[segment=literal]:px-0 data-[segment=literal]:text-fg-muted",
+);
 /** Hint and error text under a control. */
 export const fieldMessageClass = cn("text-xs text-fg-muted");
 export const fieldErrorClass = cn("flex items-start gap-1.5 text-xs font-medium text-danger");
