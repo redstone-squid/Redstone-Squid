@@ -19,7 +19,7 @@ Items 1–4 are implemented in the API.
 4. **Callback failures return to A1** with a stable `auth_error` query parameter. Use `cancelled` for provider denial, `invalid_state` for missing, expired or mismatched state, and `provider_unavailable` for provider failures. Consume and validate state even on denial. Only a validated attempt can carry its saved return destination into a retry. Successful sign-in retains the existing return redirect.
 
 56. **Consent before the account.** The OAuth callback creates the account and its identity before the visitor sees the privacy notice, yet the notice says "Cancelling stores nothing". A1's decline signs the visitor out, but the account row stays. Either create the account on acceptance (hold the verified identity in the session until then) or reword the notice. The callback's error redirect also goes to the unprefixed `/sign-in`, so a zh-CN visitor sees English errors; carry the locale in the saved state.
-57. **List Minecraft grants.** A4 lists grants with origin, server and expiry, but `/v1/minecraft` has only `DELETE /grants/{id}`. Add `GET /v1/users/me/minecraft/grants`.
+57. **List Minecraft grants.** A4 lists grants with origin, server and expiry, but `/v1/minecraft` has only `DELETE /grants/{id}`. Add `GET /v1/accounts/me/minecraft/grants`.
 
 ## Builds
 
@@ -32,7 +32,7 @@ Items 1–4 are implemented in the API.
 
 ## Records
 
-Items 12, 13, 15 and 17 share one **record holder summary**: `{build_id, title, creators: [{name, creator_id | null}], preview}`. It extends search's `RecordSearchHolder` rather than adding another holder type. **Metrics** everywhere use `{name: {value, unit, display}}`; search's flat `metrics` map changes to match, so the server owns units and formatting.
+Items 12, 13, 15 and 17 share one **record holder summary**: `{build_id, title, creators: [{name, account_id | null}], preview}`. It extends search's `RecordSearchHolder` rather than adding another holder type. **Metrics** everywhere use `{name: {value, unit, display}}`; search's flat `metrics` map changes to match, so the server owns units and formatting.
 
 11. **Record list filters and sorts.** `GET /v1/records` takes `build_kind`, `criterion`, `version_scope`, `status` and repeated `tag` IDs or slugs, as a `RecordListFilters`. Sorts are `recently_changed` and `title` beside `id`. Text search stays on `/v1/search`, whose records scope takes the same filters as query clauses. Needed by P7.
 12. **Holders on record lists.** The `/v1/records` list response gains `holders` (holder summaries), `metrics`, `category_key` and `holder_since`. Add them to the list's response type, not to the core `PublishedRecordResult`. `holder_since` is the `held_from` of the open history period, not `computed_at`, which changes on every recompute. Needed by P1 and RecordCard without N+1 requests.
@@ -59,26 +59,26 @@ Items 12, 13, 15 and 17 share one **record holder summary**: `{build_id, title, 
 ## Tags
 
 21. **`GET /v1/tags` filters:** `kind`, `authority`, and `q` as a name and alias prefix match for pickers. `TagDetail` gains `description`, `aliases`, `build_count`, `record_count`, and `rules_anchor` (a link into `/rules`). Needed by P11 and P12.
-22. **Tag page builds.** `GET /v1/builds?tag=slug` (item 9) avoids the waterfall of tag, then query name, then search on P12.
+22. **Tag page builds.** `GET /v1/builds?tag_slug=` (items 9 and 59) avoids the waterfall of tag, then query name, then search on P12.
 23. **Tag proposals:** `GET /v1/tags/proposals?status&sort=oldest` (a queue), `POST /v1/tags/proposals` (users propose showcase tags), `POST /v1/tags/proposals/{id}/{approve|reject|archive}`, `POST /v1/tags/{id}/aliases`. Needed by X3.
 
 ## Creators and accounts
 
-24. **`GET /v1/creators/by-name/{name}`** returns `{alias: {name, claimed}, profile: CreatorProfileDetail | null, stats: {build_count, records_held, records_ever, builds_by_year: [{year, count}]}, records_held: [record summary]}`. This removes the alias-then-profile waterfall on P13.
-25. **Creator builds.** `GET /v1/builds?creator_id=` (item 9) serves claimed creators. Unclaimed names have no ID, so add `creator_name`, an exact alias match. Needed by P13.
+24. **`GET /v1/creator-aliases/lookup?name=`** returns `{alias: {id, name, claimed}, account: PublicAccountDetail | null, stats: {build_count, records_held, records_ever, builds_by_year: [{year, count}]}, records_held: [record summary]}`. This removes the alias-then-account waterfall on P13.
+25. **Creator builds.** `GET /v1/builds?account_id=` (item 9) serves claimed creators. Unclaimed names have no account, so add `creator_alias_id`. Needed by P13.
 26. **Alias claims:**
-    - `POST /v1/creator-aliases/{name}/claims` and `GET /v1/users/me/claims` (P13, A3).
+    - `POST /v1/creator-aliases/{id}/claims` and `GET /v1/accounts/me/claims` (P13, A3).
     - `GET /v1/claims?status&sort=oldest` (a queue), `POST /v1/claims/{id}/{approve|reject}` (X4).
 27. **Account lookup.** `GET /v1/accounts?q=&limit=` returns `{id, display_name, identities}` for staff. It serves pickers, so it's a completion with `limit`, not a paged list. Needed by X5 and X6.
-28. **Product decision: account deletion and data export.** `DELETE /v1/users/me` and `GET /v1/users/me/export`. Needed for A2 if the privacy notice promises them.
-53. **Merge code normalization.** `POST /v1/users/me/merge` and `/merge/preview` compare the code exactly, while CLI and Minecraft codes go through `normalize_user_code`. Normalize merge codes the same way (case, spaces, hyphens), since `CodeEntry` submits the grouped text. Needed by A3's merge flow.
+28. **Product decision: account deletion and data export.** `DELETE /v1/accounts/me` and `GET /v1/accounts/me/export`. Needed for A2 if the privacy notice promises them.
+53. **Merge code normalization.** `POST /v1/accounts/me/merge` and `/merge/preview` compare the code exactly, while CLI and Minecraft codes go through `normalize_user_code`. Normalize merge codes the same way (case, spaces, hyphens), since `CodeEntry` submits the grouped text. Needed by A3's merge flow.
 
 ## Notifications
 
 29. **Typed payloads (implemented).** `InboxNotificationDetail.payload` is a union discriminated by `kind`. Build kinds carry `build: {id, title}`, record kinds carry `records: [{id, title}]`, and the item has an `href`. Builds link to `/builds/{id}` even while pending or rejected, so those links need item 8.
-30. **Inbox list improvements (implemented).** The inbox page carries `unread_count`, `unread_only=true` filters it, and `POST /v1/users/me/notifications/inbox/read-all` marks everything read as one undoable edit. Its optional `through_id` leaves items that arrived after the page loaded unread.
+30. **Inbox list improvements (implemented).** The inbox page carries `unread_count`, `unread_only=true` filters it, and `POST /v1/accounts/me/notifications/inbox/read-all` marks everything read as one undoable edit. Its optional `through_id` leaves items that arrived after the page loaded unread.
 31. **Readable subscriptions (implemented).** `NotificationSubscriptionDetail` carries `subject_label`, `subject_href`, and a localized `filter_summary`. `GET …/subscriptions?kind&subject_id` answers toggle state for pages without a `viewer` block.
-    - *Open:* creator follows link to `/creators/{name}`, using the alphabetically first alias, because P13 routes by name. Follows store the public creator ID, so these links break when an alias is renamed or released. Decide with item 24 whether claimed creators get an ID route (with names redirecting to it); `subject_href` should then use the ID.
+    - *Open:* creator follows link to `/creators/{name}` using the alphabetically first alias, so they break when an alias is renamed or released. Follows store the account ID; `subject_href` should link by it (item 59).
 
 ## Submissions
 
@@ -150,3 +150,10 @@ Items 12, 13, 15 and 17 share one **record holder summary**: `{build_id, title, 
     - **`q` means text search** and belongs to `/v1/search`, where filters are query clauses. Repository lists have no `q` until one needs prefix matching for a picker.
     - **Errors.** An unknown value carries a field issue on `/query/<param>`. Enum parameters fail in request decoding with 422; search checks its sort against the catalogue and answers 400 `INVALID_QUERY` with the `allowed` sorts.
     - A personalized list, such as `submitted_by=me` or an unpublished status, answers `Cache-Control: no-store`.
+59. **Resource addresses.** A resource lives at `/{collection}/{id}`, keyed by an ID that never changes. Names are found by lookup, never used as path keys.
+    - **Lookups** are `GET /{collection}/lookup?{key}=`, returning one resource or 404 with the same body as the ID route. Query parameters carry any text, whereas creator names in a path would need percent-encoding, and `%2F` is decoded inconsistently by proxies. `/tags/by-slug/{slug}` becomes `/tags/lookup?slug=`, and `/creator-aliases/{name}` becomes `/creator-aliases/lookup?name=`.
+    - **Stored links use IDs.** Notification hrefs, follows and payloads never embed a name. The website may keep readable routes such as `/creators/{name}` and `/tags/{slug}` that resolve through a lookup.
+    - **Filters** follow item 58: `tag_id` and `tag_slug` replace the `tag` parameter that accepts either, and `creator_id` becomes `account_id`.
+    - **Values defined in code** (`/auth/{provider}`, `/suggest/{source}`, `/media/{kind}`) and opaque references (`/diagnostics/errors/{reference}`, `/schematic-renders/{recipe_hash}`) may be path segments.
+    - **Accounts** are one collection, `/accounts/{id}`, keyed by the public UUID, with `me` in place of an ID. `/users/me` and its notifications and merge routes move under `/accounts/me`, `/creators/{uuid}` becomes `GET /accounts/{id}`, and the integer account ID leaves the API, including `session.user.id`. The UUID survives merges through `retired_public_creator_id`; the integer does not. Owner and staff routes merge into one route that allows the account itself or a permission holder, so `refresh_minecraft_identity` and `refresh_minecraft_identity_for` become one handler.
+    - **Creators** are credited names: `/creator-aliases/{id}` by alias ID, with the account summary when claimed. "Creator" stays out of account routes because unclaimed creators have no account; account references in bodies are `account_id`, not `creator_id`.
