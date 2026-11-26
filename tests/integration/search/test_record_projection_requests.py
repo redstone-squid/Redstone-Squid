@@ -54,6 +54,7 @@ class HeldRecords:
 
     records: tuple[UUID, UUID]
     results: tuple[int, int]
+    build_id: int
 
     def keys(self) -> set[tuple[str, str]]:
         return {(f"record:{record_id}", "upsert") for record_id in self.records}
@@ -105,7 +106,7 @@ async def held(migrated_session_factory: async_sessionmaker[AsyncSession]) -> He
             records.append(record.public_id)
             results.append(result.id)
     await _refresh(migrated_session_factory)
-    return HeldRecords((records[0], records[1]), (results[0], results[1]))
+    return HeldRecords((records[0], records[1]), (results[0], results[1]), build.id)
 
 
 async def _document_states(sessions: async_sessionmaker[AsyncSession]) -> dict[str, str | None]:
@@ -160,3 +161,41 @@ async def test_recompute_bookkeeping_does_not_queue_records(
         await session.execute(update(Record).values(input_generation=func.coalesce(Record.input_generation, 0) + 1))
 
     assert await _queued(migrated_session_factory) == set()
+
+
+async def test_records_follow_changes_to_their_holders_documents(
+    migrated_session_factory: async_sessionmaker[AsyncSession], held: HeldRecords
+) -> None:
+    build_key = str(held.build_id)
+    async with migrated_session_factory.begin() as session:
+        await session.execute(select(func.upsert_search_projection_request("build", build_key, "upsert")))
+    await _refresh(migrated_session_factory)
+    async with migrated_session_factory() as session:
+        refreshed = await session.scalar(
+            select(SearchDocument.refreshed_at).where(
+                SearchDocument.resource_kind == "record", SearchDocument.source_key == f"record:{held.records[0]}"
+            )
+        )
+    async with migrated_session_factory.begin() as session:
+        await session.execute(select(func.upsert_search_projection_request("build", build_key, "upsert")))
+        await SearchProjectionWorker(session).process_batch(context=ActingContext.worker("test-worker"), limit=1)
+    # The build did not change, so nothing that reads it was queued.
+    assert await _queued(migrated_session_factory) == set()
+
+    async with migrated_session_factory.begin() as session:
+        await session.execute(
+            update(SearchDocument)
+            .where(SearchDocument.resource_kind == "build", SearchDocument.source_key == build_key)
+            .values(title="Renamed Door")
+        )
+    assert await _queued(migrated_session_factory) == held.keys()
+    await _refresh(migrated_session_factory)
+    async with migrated_session_factory() as session:
+        document = await session.scalar(
+            select(SearchDocument).where(
+                SearchDocument.resource_kind == "record", SearchDocument.source_key == f"record:{held.records[0]}"
+            )
+        )
+    assert document is not None
+    assert document.document_data["build_title"] == "Renamed Door"
+    assert document.refreshed_at != refreshed

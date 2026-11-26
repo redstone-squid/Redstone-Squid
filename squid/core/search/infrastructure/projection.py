@@ -7,8 +7,10 @@ transaction, and leaves a document whose content has not changed untouched.
 
 The worker processes each queued resource in a savepoint, so one failed refresh
 can be retried without losing the other refreshes in the batch. refresh_search_index
-commits the batch. Embedding jobs are queued here but run separately, because
-their model calls should not keep this database transaction open.
+commits the batch. Records read their holders' build documents and their tags'
+names; a trigger on search_documents queues them when those documents change.
+Embedding jobs are queued here but run separately, because their model calls
+should not keep this database transaction open.
 """
 
 import logging
@@ -750,36 +752,6 @@ class SearchProjectionWorker:
                                     await self._store.delete_document(resource_kind, source_key)
                                 else:
                                     await self._store.replace(projection)
-                            if resource_kind == "build" and source_key.isdecimal():
-                                await self._session.execute(
-                                    select(
-                                        func.upsert_search_projection_request(
-                                            "record", func.concat("record:", RecordResult.record_id), "upsert"
-                                        )
-                                    )
-                                    .select_from(RecordResult)
-                                    .join(RecordHolder, RecordHolder.result_id == RecordResult.id)
-                                    .where(RecordHolder.build_id == int(source_key))
-                                    .order_by(RecordResult.record_id)
-                                )
-                            if resource_kind == "metadata" and (key := parse_projection_key(resource_kind, source_key)):
-                                subtype, tag_id = key
-                                if subtype == "tag" and isinstance(tag_id, int):
-                                    await self._session.execute(
-                                        select(
-                                            func.upsert_search_projection_request(
-                                                "record", SearchDocument.source_key, "upsert"
-                                            )
-                                        )
-                                        .select_from(SearchValue)
-                                        .join(SearchDocument, SearchDocument.id == SearchValue.document_id)
-                                        .where(
-                                            SearchDocument.resource_kind == "record",
-                                            SearchValue.field_name == "category_tag_id",
-                                            SearchValue.numeric_value == Decimal(tag_id),
-                                        )
-                                        .order_by(SearchDocument.source_key)
-                                    )
                             await self._store.complete(item_id, token)
                         succeeded += 1
                     except Exception as error:
