@@ -1505,7 +1505,11 @@ export const recordsGet = <ThrowOnError extends boolean = false>(options: Option
 /**
  * ListRecords
  *
- * List authoritative published record results.
+ * List current record results with their visible holders.
+ *
+ * Every tag_id and tag_slug must be one of the record's types or restrictions.
+ * Retired records are not listed; search finds them with `record_state:retired`.
+ * Door evidence is left out, so it is always null here; read it from the record.
  */
 export const recordsList = <ThrowOnError extends boolean = false>(options?: Options<RecordsListData, ThrowOnError>): RequestResult<RecordsListResponses, RecordsListErrors, ThrowOnError> => (options?.client ?? client).get<RecordsListResponses, RecordsListErrors, ThrowOnError>({ url: '/v1/records', ...options });
 

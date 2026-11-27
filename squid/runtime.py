@@ -179,6 +179,7 @@ class BotServices:
     permission_admin: PermissionAdministrationService
     permission_epoch: PermissionEpochWatcher
     records: RecordService
+    public_records: PublicRecordQueryService
     record_administration: RecordAdministrationService
     schematics: SchematicService
     search: SearchService

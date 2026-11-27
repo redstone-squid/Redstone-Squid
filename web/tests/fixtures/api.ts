@@ -11,7 +11,7 @@ import type {
   BuildSchematicsListResponse,
   ProblemDetail,
   PublicRecordDetail,
-  PublishedRecordResult,
+  PublicRecordSummary,
   BrowserProvider,
   PrivacyNoticeDetail,
   SessionSnapshot,
@@ -134,7 +134,11 @@ const records = [
     criterion: "fastest_smallest",
     build_kind: "door",
     version_scope: "all_time",
+    category_key: "door:door|5x5|t[]|Door:r[]:p[]",
+    status: "resolved",
     holder_build_ids: [1],
+    holders: [{ build_id: 1, title: "Fastest 5×5 seamless door", creators: [], preview: null }],
+    metrics: { opening_time: { value: 12, unit: "game_ticks", display: "12 gt" } },
     computed_at: frozenDate,
   },
   {
@@ -146,10 +150,13 @@ const records = [
     criterion: "smallest",
     build_kind: "extender",
     version_scope: "up_to_date",
+    category_key: "extender:extender|Upward|3|t[]:r[]:p[]",
+    status: "resolved",
     holder_build_ids: [3],
+    holders: [{ build_id: 3, title: "Smallest piston extender", creators: [], preview: null }],
     computed_at: frozenDate,
   },
-] satisfies [PublishedRecordResult, PublishedRecordResult];
+] satisfies [PublicRecordSummary, PublicRecordSummary];
 
 const recordDetail: PublicRecordDetail = { ...records[0], holder_builds: [builds[0]] };
 const expandableRecord: PublicRecordDetail = {

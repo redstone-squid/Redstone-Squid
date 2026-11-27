@@ -32,8 +32,13 @@ from squid.core.permissions.domain.catalogue import (
     BUILD_SUBMISSION_VIEW_PENDING,
     RECORD_ENTRY_INSPECT,
 )
-from squid.core.records.application import RecordService
-from squid.core.records.application.models import PublishedRecordResult, RecordGap, RecordNameDiagnostic
+from squid.core.records.application import PublicRecordQueryService, RecordService
+from squid.core.records.application.models import (
+    PublishedRecordResult,
+    RecordGap,
+    RecordListFilters,
+    RecordNameDiagnostic,
+)
 from squid.core.records.domain import BuildKind, RecordCriterion, RecordFact, VersionScope
 from squid.core.schematics.application import SchematicService
 from squid.core.search.application import SearchService
@@ -71,7 +76,7 @@ def _screen(
     schematics_available: bool = False,
     schematic_attached: bool = True,
     video_enabled: bool = False,
-    records: RecordService | None = None,
+    records: PublicRecordQueryService | None = None,
     initial_records: bool = False,
     record_tools: RecordsScreen | None = None,
     submitter_account_id: int | None = None,
@@ -262,7 +267,7 @@ async def test_sort_keeps_the_focused_build_on_its_new_page(entry: str, monkeypa
 
 
 async def test_sort_keeps_the_focused_record_and_its_open_holder(monkeypatch: pytest.MonkeyPatch) -> None:
-    records = AsyncMock(spec=RecordService)
+    records = AsyncMock(spec=PublicRecordQueryService)
     record = PublishedRecordResult(
         result_id=10,
         definition_id=1,
@@ -272,6 +277,7 @@ async def test_sort_keeps_the_focused_record_and_its_open_holder(monkeypatch: py
         criterion=RecordCriterion.SMALLEST,
         build_kind=BuildKind.DOOR,
         version_scope=VersionScope.ALL_TIME,
+        category_key="door:door|2x3|t[]|Door:r[]:p[]",
         holder_build_ids=(7, 9),
         computed_at=datetime.now(UTC),
     )
@@ -440,7 +446,7 @@ async def test_list_selection_and_return_keep_the_list_available() -> None:
 
 
 async def test_records_open_holders_and_preserve_the_selected_record() -> None:
-    records = AsyncMock(spec=RecordService)
+    records = AsyncMock(spec=PublicRecordQueryService)
     records.list_page.return_value = Page(
         items=(
             PublishedRecordResult(
@@ -452,6 +458,7 @@ async def test_records_open_holders_and_preserve_the_selected_record() -> None:
                 criterion=RecordCriterion.SMALLEST,
                 build_kind=BuildKind.DOOR,
                 version_scope=VersionScope.ALL_TIME,
+                category_key="door:door|2x3|t[]|Door:r[]:p[]",
                 holder_build_ids=(7, 9),
                 computed_at=datetime.now(UTC),
             ),
@@ -507,7 +514,8 @@ async def test_record_tools_load_on_request_and_return_to_builds() -> None:
 @pytest.mark.parametrize("browser", ["records", "gaps", "titles"])
 async def test_long_record_titles_fit_picker_controls_and_timeout(browser: str, count: int) -> None:
     title = "Smallest seamless flush redstone door " * 4
-    records = AsyncMock(spec=RecordService)
+    records = AsyncMock(spec=PublicRecordQueryService)
+    inspection = AsyncMock(spec=RecordService)
     records.list_page.return_value = Page(
         items=tuple(
             PublishedRecordResult(
@@ -519,6 +527,7 @@ async def test_long_record_titles_fit_picker_controls_and_timeout(browser: str, 
                 criterion=RecordCriterion.SMALLEST,
                 build_kind=BuildKind.DOOR,
                 version_scope=VersionScope.ALL_TIME,
+                category_key="door:door|2x3|t[]|Door:r[]:p[]",
                 holder_build_ids=(7,),
                 computed_at=datetime.now(UTC),
             )
@@ -528,14 +537,14 @@ async def test_long_record_titles_fit_picker_controls_and_timeout(browser: str, 
         next=None,
         prev=None,
     )
-    records.gaps.return_value = tuple(
+    inspection.gaps.return_value = tuple(
         RecordGap(index, title, None, RecordCriterion.SMALLEST, (7,), (RecordFact.FIXED_VOLUME,), BuildKind.DOOR)
         for index in range(count)
     )
-    records.title_gaps.return_value = tuple(
+    inspection.title_gaps.return_value = tuple(
         RecordNameDiagnostic(index, title, ({"code": "unknown"},), BuildKind.DOOR) for index in range(count)
     )
-    tools = RecordsScreen(records, AsyncMock(), grants=grants(RECORD_ENTRY_INSPECT))
+    tools = RecordsScreen(inspection, AsyncMock(), grants=grants(RECORD_ENTRY_INSPECT))
     screen = _screen(initial_id=None, records=records, initial_records=True, record_tools=tools)
     async with stage(screen, owner=object()) as ui:
         if browser == "records":
@@ -619,7 +628,7 @@ async def test_query_expression_is_submitted_from_the_guided_search(records: boo
 
 
 async def test_record_category_shortcut_includes_all_statuses() -> None:
-    records = AsyncMock(spec=RecordService)
+    records = AsyncMock(spec=PublicRecordQueryService)
     records.list_page.return_value = Page(items=(), total=0, next=None, prev=None)
     screen = _screen(initial_id=None, records=records, initial_records=True)
     async with stage(screen, owner=object()) as ui:
@@ -631,9 +640,11 @@ async def test_record_category_shortcut_includes_all_statuses() -> None:
 
 
 async def test_record_versions_filter_browse_and_search() -> None:
-    records = AsyncMock(spec=RecordService)
+    records = AsyncMock(spec=PublicRecordQueryService)
 
-    async def list_page(*, version_scope: VersionScope, **kwargs: object) -> Page[PublishedRecordResult]:
+    async def list_page(*, filters: RecordListFilters, **kwargs: object) -> Page[PublishedRecordResult]:
+        version_scope = filters.version_scope
+        assert version_scope is not None
         current = version_scope is VersionScope.UP_TO_DATE
         record = PublishedRecordResult(
             result_id=2 if current else 1,
@@ -644,6 +655,7 @@ async def test_record_versions_filter_browse_and_search() -> None:
             criterion=RecordCriterion.FASTEST if current else RecordCriterion.SMALLEST,
             build_kind=BuildKind.DOOR,
             version_scope=version_scope,
+            category_key="door:door|2x3|t[]|Door:r[]:p[]",
             holder_build_ids=(7,),
             computed_at=datetime.now(UTC),
         )
@@ -747,7 +759,7 @@ async def test_all_types_preserves_literal_keywords() -> None:
 
 
 async def test_all_types_clears_title_filters_and_preserves_other_filters() -> None:
-    records = AsyncMock(spec=RecordService)
+    records = AsyncMock(spec=PublicRecordQueryService)
     records.list_page.return_value = Page(items=(), total=0, next=None, prev=None)
     screen = _screen(initial_id=None, records=records, initial_records=True)
     service = cast(AsyncMock, screen._search_service)
@@ -770,7 +782,7 @@ async def test_all_types_clears_title_filters_and_preserves_other_filters() -> N
 
 @pytest.mark.parametrize("records", [False, True])
 async def test_search_help_precedes_lists_and_results_without_refetching(records: bool) -> None:
-    record_service = AsyncMock(spec=RecordService)
+    record_service = AsyncMock(spec=PublicRecordQueryService)
     record_service.list_page.return_value = Page(items=(), total=0, next=None, prev=None)
     screen = _screen(initial_id=None, records=record_service, initial_records=records)
     service = cast(AsyncMock, screen._search_service)
@@ -824,10 +836,11 @@ async def test_failed_toggle_keeps_the_previous_selection_and_results() -> None:
 
 
 async def test_catalogue_shows_exactly_one_active_workspace() -> None:
-    records = AsyncMock(spec=RecordService)
-    records.gaps.return_value = ()
-    records.title_gaps.return_value = ()
-    tools = RecordsScreen(records, AsyncMock(), grants=grants(RECORD_ENTRY_INSPECT))
+    records = AsyncMock(spec=PublicRecordQueryService)
+    inspection = AsyncMock(spec=RecordService)
+    inspection.gaps.return_value = ()
+    inspection.title_gaps.return_value = ()
+    tools = RecordsScreen(inspection, AsyncMock(), grants=grants(RECORD_ENTRY_INSPECT))
     screen = _screen(initial_id=None, records=records, record_tools=tools)
     keys = ("all-builds", "all-records", "record-tools")
     async with stage(screen, owner=object()) as ui:
@@ -947,7 +960,7 @@ async def test_help_keeps_an_open_builds_schematic_tools() -> None:
 
 @pytest.mark.parametrize("records", [False, True])
 async def test_help_with_full_catalogue_and_search_pages(records: bool) -> None:
-    record_service = AsyncMock(spec=RecordService)
+    record_service = AsyncMock(spec=PublicRecordQueryService)
     record_service.list_page.return_value = Page(
         items=tuple(
             PublishedRecordResult(
@@ -959,6 +972,7 @@ async def test_help_with_full_catalogue_and_search_pages(records: bool) -> None:
                 criterion=RecordCriterion.SMALLEST,
                 build_kind=BuildKind.DOOR,
                 version_scope=VersionScope.ALL_TIME,
+                category_key="door:door|2x3|t[]|Door:r[]:p[]",
                 holder_build_ids=(7,),
                 computed_at=datetime.now(UTC),
             )
@@ -1184,7 +1198,7 @@ async def test_search_panel_and_pickers_keep_browse_controls_and_results(monkeyp
 
 
 async def test_records_default_to_browse_and_highlight_active_controls() -> None:
-    records = AsyncMock(spec=RecordService)
+    records = AsyncMock(spec=PublicRecordQueryService)
     records.list_page.return_value = Page(items=(), total=0, next=None, prev=None)
     screen = _screen(initial_id=None, records=records, initial_records=True)
     async with stage(screen, owner=object()) as ui:
@@ -1263,7 +1277,7 @@ async def test_expanded_editor_and_help_fit_together(records: bool) -> None:
 
 
 async def test_editor_expansion_survives_switching_catalogue_tabs() -> None:
-    records = AsyncMock(spec=RecordService)
+    records = AsyncMock(spec=PublicRecordQueryService)
     records.list_page.return_value = Page(items=(), total=0, next=None, prev=None)
     screen = _screen(initial_id=None, records=records)
     async with stage(screen, owner=object()) as ui:
@@ -1282,7 +1296,7 @@ async def test_editor_expansion_survives_switching_catalogue_tabs() -> None:
 
 
 async def test_catalogue_tabs_share_filters_and_restore_local_queries_and_sort() -> None:
-    records = AsyncMock(spec=RecordService)
+    records = AsyncMock(spec=PublicRecordQueryService)
     records.list_page.return_value = Page(items=(), total=0, next=None, prev=None)
     screen = _screen(initial_id=None, records=records)
     service = cast(AsyncMock, screen._search_service)
@@ -1326,10 +1340,11 @@ async def test_catalogue_tabs_share_filters_and_restore_local_queries_and_sort()
 
 
 async def test_catalogue_keeps_mixed_boolean_groups_local_across_record_tools() -> None:
-    records = AsyncMock(spec=RecordService)
+    records = AsyncMock(spec=PublicRecordQueryService)
+    inspection = AsyncMock(spec=RecordService)
     records.list_page.return_value = Page(items=(), total=0, next=None, prev=None)
-    records.gaps.return_value = ()
-    tools = RecordsScreen(records, AsyncMock(), grants=grants(RECORD_ENTRY_INSPECT))
+    inspection.gaps.return_value = ()
+    tools = RecordsScreen(inspection, AsyncMock(), grants=grants(RECORD_ENTRY_INSPECT))
     screen = _screen(initial_id=None, records=records, record_tools=tools)
     async with stage(screen, owner=object()) as ui:
         build_query = "  NOT (title:door AND width:5)  "
@@ -1356,7 +1371,7 @@ async def test_catalogue_keeps_mixed_boolean_groups_local_across_record_tools() 
 
 
 async def test_shared_keywords_keep_their_meaning_when_entering_records() -> None:
-    records = AsyncMock(spec=RecordService)
+    records = AsyncMock(spec=PublicRecordQueryService)
     records.list_page.return_value = Page(items=(), total=0, next=None, prev=None)
     screen = _screen(initial_id=None, records=records)
     async with stage(screen, owner=object()) as ui:
@@ -1388,10 +1403,11 @@ async def test_expanded_reset_is_disabled_until_query_sort_or_categories_change(
 
 
 async def test_open_id_is_available_beside_record_tools() -> None:
-    records = AsyncMock(spec=RecordService)
-    records.gaps.return_value = ()
-    records.title_gaps.return_value = ()
-    tools = RecordsScreen(records, AsyncMock(), grants=grants(RECORD_ENTRY_INSPECT))
+    records = AsyncMock(spec=PublicRecordQueryService)
+    inspection = AsyncMock(spec=RecordService)
+    inspection.gaps.return_value = ()
+    inspection.title_gaps.return_value = ()
+    tools = RecordsScreen(inspection, AsyncMock(), grants=grants(RECORD_ENTRY_INSPECT))
     screen = _screen(initial_id=None, records=records, record_tools=tools)
     async with stage(screen, owner=object()) as ui:
         await ui.press("record-tools")
@@ -1474,7 +1490,7 @@ async def test_expanded_search_filters_and_help_survive_expanding_a_build() -> N
 
 
 async def test_records_start_unfiltered_and_reset_clears_a_field_filter() -> None:
-    records = AsyncMock(spec=RecordService)
+    records = AsyncMock(spec=PublicRecordQueryService)
     records.list_page.return_value = Page(items=(), total=0, next=None, prev=None)
     screen = _screen(initial_id=None, records=records, initial_records=True)
     service = cast(AsyncMock, screen._search_service)
@@ -1513,7 +1529,7 @@ async def test_catalogue_reopens_with_field_filters_and_sort() -> None:
         preference,
         CataloguePreference(account_id=1, scope="records", filters="criterion:fastest", sort=""),
     ]
-    reopened = _screen(initial_id=None, records=AsyncMock(spec=RecordService))
+    reopened = _screen(initial_id=None, records=AsyncMock(spec=PublicRecordQueryService))
     reopened._accounts = accounts
     await reopened._restore_preferences()
     assert reopened._sort == "-width"

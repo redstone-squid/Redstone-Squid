@@ -5210,7 +5210,7 @@ record-search-query-help = Name, keywords, or filters, e.g. kind:door criterion:
 # squid/bot/catalogue/records.py:239
 records-active-version = the active version
 
-# squid/core/records/application/services.py:903, squid/core/records/application/services.py:934
+# squid/core/records/application/services.py:882, squid/core/records/application/services.py:913
 records-candidate-no-typed = Candidate { $build_id } has no typed category facts.
 
 # squid/bot/catalogue/records.py:460
@@ -5246,7 +5246,7 @@ records-exact-heading = Category without a record
 # squid/bot/catalogue/records.py:277
 records-exact-purpose = Create and compute a record category by its exact key, optionally narrowed by restrictions.
 
-# squid/core/records/application/services.py:947
+# squid/core/records/application/services.py:926
 records-fastest-records-unsupported = Fastest records are not supported for { $kind_name }.
 
 # squid/core/records/domain/models.py:130
@@ -5276,6 +5276,15 @@ records-maintenance-tools = Recompute
 # squid/core/records/domain/categories.py:50
 records-maximum-category-size = Maximum category size cannot be negative.
 
+# squid/core/records/application/metrics.py:45
+records-metric-blocks = { NUMBER($value) } blocks
+
+# squid/core/records/application/metrics.py:43
+records-metric-date = { DATETIME($moment, dateStyle: "medium") }
+
+# squid/core/records/application/metrics.py:47
+records-metric-game-ticks = { NUMBER($value) } gt
+
 # squid/core/records/errors.py:42
 records-no-confirmed-build = No approved build satisfies the requested record category.
 
@@ -5291,7 +5300,7 @@ records-no-titles-need-review = Every active record title uses known terms.
 # squid/core/records/application/published_points.py:75
 records-opening-width-invalid = Opening width must be a positive 32-bit integer.
 
-# squid/core/records/application/services.py:864
+# squid/core/records/application/services.py:843
 records-parameterized-record-restriction = Parameterized record restriction is missing a category value.
 
 # squid/bot/catalogue/records.py:432
@@ -5309,7 +5318,7 @@ records-record-category-not-found = Record category not found.
 # squid/core/records/errors.py:13
 records-record-not-found-title = Record not found
 
-# squid/core/records/application/services.py:965
+# squid/core/records/application/services.py:944
 records-records-not-supported = Records are not supported for { $kind_name }.
 
 # squid/bot/catalogue/records.py:464
@@ -5529,13 +5538,13 @@ schematics-schematic-engine-failed = The schematic engine failed while reading t
 # squid/core/schematics/application/previews.py:55
 schematics-schematic-file-crashed = This schematic file already crashed the engine on this instance.
 
-# squid/core/schematics/application/jobs.py:157
+# squid/core/schematics/application/jobs.py:183
 schematics-schematic-job-claim = Schematic job claim limit must be between 1 and 32.
 
-# squid/core/schematics/application/jobs.py:240
+# squid/core/schematics/application/jobs.py:266
 schematics-schematic-job-cleanup = Schematic job cleanup limit must be between 1 and 500.
 
-# squid/core/schematics/application/jobs.py:127
+# squid/core/schematics/application/jobs.py:136
 schematics-schematic-job-retry = Schematic job retry and retention settings must be positive.
 
 # squid/core/schematics/errors.py:56

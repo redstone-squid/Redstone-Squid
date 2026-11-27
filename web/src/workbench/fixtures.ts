@@ -1,5 +1,5 @@
 import * as m from "@/locales/messages.gen";
-import type { PublicBuildSummary, PublishedRecordResult } from "@/generated/types.gen";
+import type { PublicBuildSummary, PublicRecordSummary } from "@/generated/types.gen";
 
 function build(
   id: number,
@@ -52,7 +52,7 @@ export function buildFixtures(): PublicBuildSummary[] {
   ];
 }
 
-export function recordFixtures(): PublishedRecordResult[] {
+export function recordFixtures(): PublicRecordSummary[] {
   return [
     {
       result_id: 1,
@@ -63,7 +63,10 @@ export function recordFixtures(): PublishedRecordResult[] {
       criterion: "fastest",
       build_kind: "door",
       version_scope: "all_time",
+      category_key: "door:door|3x3|t[]|Door:r[]:p[]",
+      status: "resolved",
       holder_build_ids: [1],
+      holders: [{ build_id: 1, title: m.storyFastestFlushDoor(), creators: [], preview: null }],
       computed_at: "2026-01-12T00:00:00Z",
     },
     {
@@ -75,7 +78,13 @@ export function recordFixtures(): PublishedRecordResult[] {
       criterion: "smallest",
       build_kind: "door",
       version_scope: "up_to_date",
+      category_key: "door:door|2x2|t[]|Door:r[]:p[]",
+      status: "unresolved",
       holder_build_ids: [1, 2],
+      holders: [
+        { build_id: 1, title: m.storySmallestIris(), creators: [], preview: null },
+        { build_id: 2, title: m.storySmallestIris(), creators: [], preview: null },
+      ],
       tied_build_ids: [3],
       computed_at: "2026-01-12T00:00:00Z",
       refresh_pending: true,

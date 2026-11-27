@@ -50,9 +50,7 @@ async def test_publication_separates_holder_tied_builds_and_contenders(
     )
 
     async with factory() as uow:
-        listing = await uow.records.list_published_records(
-            offset=0, after_id=None, before_id=None, descending=False, limit=50
-        )
+        listing = await uow.records.list_published_records(limit=50)
         smallest = next(r for r in listing if r.criterion is RecordCriterion.SMALLEST)
         assert smallest
         assert smallest.holder_build_ids == (earliest_id,)

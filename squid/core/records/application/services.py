@@ -26,6 +26,7 @@ from squid.core.records.application.live import (
     resolve_door_configurations,
 )
 from squid.core.records.application.models import (
+    ALL_RECORDS,
     CandidateBuild,
     CandidateTag,
     CategoryCandidates,
@@ -33,6 +34,7 @@ from squid.core.records.application.models import (
     ComputationBatch,
     ComputedRecordResult,
     PublicRecordDetail,
+    PublicRecordSummary,
     PublishedRecordResult,
     QueueProcessSummary,
     RebuildSummary,
@@ -41,6 +43,7 @@ from squid.core.records.application.models import (
     RecordDrift,
     RecordGap,
     RecordInspection,
+    RecordListFilters,
     RecordListSort,
     RecordLookupRequest,
     RecordNameDiagnostic,
@@ -555,38 +558,6 @@ class RecordService:
             return await uow.records.get_published_record(result_id)
 
     @application_operation
-    async def list_page(
-        self,
-        *,
-        selector: PageSelector = FIRST_PAGE,
-        sort: RecordListSort = RecordListSort.ID,
-        page_size: int = 20,
-        version_scope: VersionScope | None = None,
-        context: ActingContext,
-    ) -> Page[PublishedRecordResult]:
-        """Return one page of current record results in display order."""
-        match sort:
-            case RecordListSort.ID:
-                descending = True
-        async with self._uow_factory() as uow:
-            rows = await uow.records.list_published_records(
-                offset=selector.offset,
-                after_id=selector.after_id,
-                before_id=selector.before_id,
-                descending=descending,
-                # One row past the page proves whether another page follows.
-                limit=page_size + 1,
-                version_scope=version_scope,
-            )
-            return keyset_page(
-                rows,
-                selector=selector,
-                page_size=page_size,
-                total=await uow.records.count_published_records(version_scope=version_scope),
-                id_of=lambda record: record.result_id or 0,
-            )
-
-    @application_operation
     async def lookup_door_ranges(self, request: DoorRangeQuery, *, context: ActingContext) -> DoorRangeResult:
         """Analyze live smallest-record widths without publishing or storing regions.
 
@@ -713,13 +684,43 @@ class RecordService:
 
 
 class PublicRecordQueryService:
-    """Combine a record with all its holders' public build summaries and its history."""
+    """Combine records with their holders' public build summaries."""
 
     def __init__(
         self, builds: PublicBuildSummaryReader, *, uow_factory: UnitOfWorkFactory[RecordQueryUnitOfWork]
     ) -> None:
         self._uow_factory = uow_factory
         self._builds = builds
+
+    async def list_page(
+        self,
+        *,
+        selector: PageSelector = FIRST_PAGE,
+        sort: RecordListSort = RecordListSort.ID,
+        filters: RecordListFilters = ALL_RECORDS,
+        page_size: int = 20,
+        context: ActingContext,
+    ) -> Page[PublicRecordSummary]:
+        """Return one page of current results in display order, with one summary load for the page."""
+        async with self._uow_factory() as uow:
+            rows = await uow.records.list_published_records(
+                selector=selector,
+                sort=sort,
+                filters=filters,
+                # One row past the page proves whether another page follows.
+                limit=page_size + 1,
+            )
+            page = keyset_page(
+                rows,
+                selector=selector,
+                page_size=page_size,
+                total=await uow.records.count_published_records(filters=filters),
+                id_of=lambda record: record.result_id or 0,
+            )
+        holder_ids = tuple(dict.fromkeys(build_id for record in page.items for build_id in record.holder_build_ids))
+        builds = {build.id: build for build in await self._builds.get_public_summaries(holder_ids, context=context)}
+        items = tuple(PublicRecordSummary.with_builds(record, builds) for record in page.items)
+        return Page(items, page.total, page.next, page.prev)
 
     async def get(self, record_id: UUID, *, context: ActingContext) -> PublicRecordDetail | None:
         """Return a record's current result, or its retired state, with the builds it names.
@@ -729,9 +730,10 @@ class PublicRecordQueryService:
         """
         async with self._uow_factory() as uow:
             result = await uow.records.get_latest_record(record_id)
-            history = await uow.records.get_record_history(record_id) if result is not None else ()
-        if result is None:
-            return None
+            if result is None:
+                return None
+            history = await uow.records.get_record_history(record_id)
+            siblings = await uow.records.list_siblings(record_id)
         if result.result_id is not None and not result.holder_build_ids:
             msg = "A current record result has no holders."
             raise DataIntegrityError(msg, context={"record_id": str(record_id), "result_id": result.result_id})
@@ -747,7 +749,7 @@ class PublicRecordQueryService:
                 msg,
                 context={"record_id": str(record_id), "unavailable_holder_build_ids": unavailable_ids},
             )
-        return PublicRecordDetail.with_builds(result, by_id, history)
+        return PublicRecordDetail.with_builds(result, by_id, history, siblings)
 
 
 def _observed_thresholds(

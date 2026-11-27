@@ -6,7 +6,6 @@ from uuid import UUID
 
 from litestar import Router, get, post
 from litestar.di import Provide
-from litestar.dto import DataclassDTO, DTOConfig
 from litestar.params import FromPath, FromQuery, JSONBody, PathParameter
 
 from squid.api.contract import ANONYMOUS, DEVICE, SERVICE, WEB, WEB_WRITE, contract, transport_only
@@ -38,44 +37,18 @@ from squid.core.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD
 from squid.core.records.application.expansion_regions import DoorRangeQuery, DoorRangeResult
 from squid.core.records.application.models import (
     PublicRecordDetail,
-    PublishedRecordResult,
+    PublicRecordSummary,
     RecomputeItem,
     RecordDrift,
     RecordInspection,
+    RecordListFilters,
     RecordListSort,
+    RecordStatus,
 )
 from squid.core.records.application.published_points import PublishedDoorPoint
 from squid.core.records.application.range_snapshots import RangePublication
-from squid.core.records.domain import BuildKind
+from squid.core.records.domain import BuildKind, RecordCriterion, VersionScope
 from squid.core.records.errors import RecordNotFoundError
-
-
-class PublicRecordDTO(DataclassDTO[PublishedRecordResult]):
-    """Serialize published record facts directly without another Python record model."""
-
-    __schema_name__ = "PublishedRecordResult"
-
-    config = DTOConfig(
-        include={
-            "result_id",
-            "definition_id",
-            "record_id",
-            "title",
-            "subtitle",
-            "criterion",
-            "build_kind",
-            "version_scope",
-            "holder_build_ids",
-            "tied_build_ids",
-            "computed_at",
-            "last_checked_at",
-            "refresh_pending",
-            "version_id",
-        }
-    )
-
-
-# Result identifiers ascend with computation, so recency needs no separate indexed column.
 
 
 @get(
@@ -105,23 +78,46 @@ async def get_record(
     "/",
     responses=responses(400, 422, 503),
     operation_id="records_list",
-    return_dto=PublicRecordDTO,
+    dependencies={"records": Provide(get_public_records, sync_to_thread=False)},
     security=[ANONYMOUS],
     opt=contract(cli=transport_only()),
 )
 async def list_records(
-    records: Records,
+    records: PublicRecords,
     caller: CurrentCaller,
+    build_kind: FromQuery[BuildKind | None] = None,
+    criterion: FromQuery[RecordCriterion | None] = None,
+    version_scope: FromQuery[VersionScope | None] = None,
+    status: FromQuery[RecordStatus | None] = None,
+    tag_id: FromQuery[list[int] | None] = None,
+    tag_slug: FromQuery[list[str] | None] = None,
     sort: FromQuery[RecordListSort] = RecordListSort.ID,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
     after_id: AfterIdParam = None,
     before_id: BeforeIdParam = None,
-) -> Page[PublishedRecordResult]:
-    """List authoritative published record results."""
-    selector = resolve_selector(offset=offset, after_id=after_id, before_id=before_id)
-    page = await records.list_page(selector=selector, sort=sort, page_size=page_size, context=caller.context())
-    return Page[PublishedRecordResult].from_domain(page)
+) -> Page[PublicRecordSummary]:
+    """List current record results with their visible holders.
+
+    Every tag_id and tag_slug must be one of the record's types or restrictions.
+    Retired records are not listed; search finds them with `record_state:retired`.
+    Door evidence is left out, so it is always null here; read it from the record.
+    """
+    page = await records.list_page(
+        selector=resolve_selector(offset=offset, after_id=after_id, before_id=before_id),
+        sort=sort,
+        filters=RecordListFilters(
+            build_kind,
+            criterion,
+            version_scope,
+            status,
+            tag_ids=tuple(dict.fromkeys(tag_id or ())),
+            tag_slugs=tuple(dict.fromkeys(tag_slug or ())),
+        ),
+        page_size=page_size,
+        context=caller.context(),
+    )
+    return Page[PublicRecordSummary].from_domain(page)
 
 
 @post(

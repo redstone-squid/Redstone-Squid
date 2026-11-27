@@ -13,8 +13,8 @@ from squid.bot.ui import tr, truncate_display_text
 from squid.core.actors import ActingContext
 from squid.core.notifications.domain import SubscriptionKind
 from squid.core.pagination import PageSelector
-from squid.core.records.application import RecordService
-from squid.core.records.application.models import PublishedRecordResult
+from squid.core.records.application import PublicRecordQueryService
+from squid.core.records.application.models import PublishedRecordResult, RecordListFilters
 from squid.core.records.domain.models import VersionScope
 from squid_i18n import md_tr
 from squid_ui.ext.discord.target_types import ComponentsV2Target
@@ -32,7 +32,7 @@ class RecordSource:
         count=sl.sources.CountPrecision.EXACT,
     )
 
-    def __init__(self, records: RecordService, version_scope: VersionScope) -> None:
+    def __init__(self, records: PublicRecordQueryService, version_scope: VersionScope) -> None:
         self._records = records
         self._version_scope = version_scope
 
@@ -40,7 +40,7 @@ class RecordSource:
         page = await self._records.list_page(
             selector=PageSelector(offset=position.offset),
             page_size=fetch_size,
-            version_scope=self._version_scope,
+            filters=RecordListFilters(version_scope=self._version_scope),
             context=ActingContext.current(),
         )
         # This source exposes offset jumps; the service may return ID links at offset zero.
@@ -63,7 +63,7 @@ def _record_label(record: PublishedRecordResult) -> str:
 
 
 def record_browser(
-    records: RecordService,
+    records: PublicRecordQueryService,
     open_build: Callable[[int, sl.PressEvent], Awaitable[None]],
     *,
     version_scope: VersionScope,

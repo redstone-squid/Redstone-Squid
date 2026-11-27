@@ -6,34 +6,58 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from itertools import batched, pairwise, zip_longest
-from typing import cast
+from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, and_, case, delete, exists, func, not_, or_, select, text, tuple_, update
+from sqlalchemy import (
+    ColumnElement,
+    Row,
+    Select,
+    and_,
+    case,
+    delete,
+    exists,
+    false,
+    func,
+    not_,
+    or_,
+    select,
+    text,
+    tuple_,
+    update,
+)
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import defer, selectinload
+from sqlalchemy.orm import aliased, defer, selectinload
 from whenever import Instant
 
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import DoorBuild, ExtenderBuild
 from squid.core.errors import ServiceUnavailableError
 from squid.core.events.infrastructure.repository import publish_domain_event
+from squid.core.pagination import FIRST_PAGE, PageSelector
+from squid.core.persistence.paging import KeysetOrder
 from squid.core.persistence.queue import ClaimedRowQueue, QueueSpec
+from squid.core.records.application.metrics import holder_metrics
 from squid.core.records.application.models import (
+    ALL_RECORDS,
     CandidateBuild,
     CandidateTag,
     CategoryIdentity,
     ComputationBatch,
     ComputedRecordResult,
-    HolderHistoryEntry,
     PriorPublication,
     PublishedRecordResult,
     RebuildSummary,
     RecomputeItem,
     RecordDrift,
     RecordGap,
+    RecordHolderPeriod,
+    RecordListFilters,
+    RecordListSort,
     RecordNameDiagnostic,
+    RecordSibling,
+    RecordStatus,
     ScopedCategory,
 )
 from squid.core.records.application.ports import RecomputeLease, StoredRecord
@@ -75,7 +99,7 @@ from squid.core.records.models import (
 )
 from squid.core.records.models import RecordDrift as RecordDriftRow
 from squid.core.tags.infrastructure.loading import assignment_units
-from squid.core.tags.models import TagAssignment, TagDefinition, display_conversion_scale
+from squid.core.tags.models import TagAssignment, TagDefinition, TagSlug, display_conversion_scale
 
 RULES_REVISION_DOCUMENT_HASH = "312af53ee50a0cb0cee37673a763a6072321039777451997acc23cb26a6ba9ac"
 CALCULATOR_VERSION = "8"
@@ -583,14 +607,12 @@ class PostgresRecordRepository:
 
     async def get_published_record(self, result_id: int) -> PublishedRecordResult | None:
         """Return a current result by its identifier."""
-        records = await self._active_records(result_id=result_id, limit=1)
-        return records[0] if records else None
+        return await self._active_record(RecordResult.id == result_id)
 
     async def get_latest_record(self, record_id: UUID) -> PublishedRecordResult | None:
         """Return the record's current result, or its retired state."""
-        records = await self._active_records(record_id=record_id, limit=1)
-        if records:
-            return records[0]
+        if (current := await self._active_record(RecordResult.record_id == record_id)) is not None:
+            return current
         session = self._session()
         row = (
             await session.execute(
@@ -615,6 +637,7 @@ class PostgresRecordRepository:
             criterion=definition.criterion,
             build_kind=definition.build_kind,
             version_scope=definition.version_scope,
+            category_key=definition.category_key,
             holder_build_ids=(),
             computed_at=retired_at.to_stdlib(),
             refresh_pending=pending,
@@ -622,23 +645,59 @@ class PostgresRecordRepository:
             retired_at=retired_at.to_stdlib(),
         )
 
-    async def get_record_history(self, record_id: UUID) -> tuple[HolderHistoryEntry, ...]:
+    async def get_record_history(self, record_id: UUID) -> tuple[RecordHolderPeriod, ...]:
         """Return holder periods in order; builds sharing a period are grouped."""
         rows = await self._session().execute(
-            select(RecordHolderHistory.held_from, RecordHolderHistory.held_until, RecordHolderHistory.build_id)
+            select(
+                RecordHolderHistory.held_from,
+                RecordHolderHistory.held_until,
+                RecordHolderHistory.build_id,
+                RecordHolderHistory.metric_snapshot,
+                Record.build_kind,
+            )
+            .join(Record, Record.public_id == RecordHolderHistory.record_id)
             .where(RecordHolderHistory.record_id == record_id)
             .order_by(RecordHolderHistory.held_from, RecordHolderHistory.build_id)
         )
         periods: dict[tuple[Instant, Instant | None], list[int]] = {}
-        for held_from, held_until, build_id in rows:
+        snapshots: dict[tuple[Instant, Instant | None], tuple[BuildKind, dict[str, object]]] = {}
+        for held_from, held_until, build_id, snapshot, kind in rows:
             periods.setdefault((held_from, held_until), []).append(build_id)
+            snapshots.setdefault((held_from, held_until), (kind, snapshot))
         return tuple(
-            HolderHistoryEntry(
+            RecordHolderPeriod(
                 build_ids=tuple(build_ids),
                 held_from=held_from.to_stdlib(),
                 held_until=held_until.to_stdlib() if held_until is not None else None,
+                metrics=holder_metrics(*snapshots[held_from, held_until]),
             )
             for (held_from, held_until), build_ids in periods.items()
+        )
+
+    async def list_siblings(self, record_id: UUID) -> tuple[RecordSibling, ...]:
+        """Return the other records of the record's category, with their latest wording."""
+        record = aliased(Record)
+        rows = await self._session().execute(
+            select(RecordDefinition, Record.retired_at)
+            .join(Record, Record.public_id == RecordDefinition.record_id)
+            .join(record, (record.build_kind == Record.build_kind) & (record.category_key == Record.category_key))
+            .options(selectinload(RecordDefinition.record))
+            .where(record.public_id == record_id, Record.public_id != record_id)
+            .distinct(Record.criterion, Record.version_scope, Record.version_id, Record.public_id)
+            .order_by(
+                Record.criterion, Record.version_scope, Record.version_id, Record.public_id, RecordDefinition.id.desc()
+            )
+        )
+        return tuple(
+            RecordSibling(
+                record_id=definition.record_id,
+                title=definition.title,
+                subtitle=definition.subtitle,
+                criterion=definition.criterion,
+                version_scope=definition.version_scope,
+                retired=retired_at is not None,
+            )
+            for definition, retired_at in rows
         )
 
     async def stored_record(self, record_id: UUID) -> StoredRecord | None:
@@ -670,81 +729,90 @@ class PostgresRecordRepository:
     async def list_published_records(
         self,
         *,
-        offset: int,
-        after_id: int | None,
-        before_id: int | None,
-        descending: bool,
+        selector: PageSelector = FIRST_PAGE,
+        sort: RecordListSort = RecordListSort.ID,
+        filters: RecordListFilters = ALL_RECORDS,
         limit: int,
-        version_scope: VersionScope | None = None,
     ) -> Sequence[PublishedRecordResult]:
         """List one page of current results in display order.
 
-        ID anchors page relative to the display order; a `before_id` page is fetched in reversed
-        order and restored in memory, leaving its overfetched row at the front for the caller.
+        Ties fall back to the result ID, so anchors work with every sort; except for
+        the ID sort, an anchor outside the filtered list raises PageAnchorNotFoundError.
+        A `before_id` page is fetched in reversed order and restored in memory,
+        leaving its overfetched row at the front for the caller.
         """
-        return await self._active_records(
-            offset=offset,
-            after_id=after_id,
-            before_id=before_id,
-            descending=descending,
-            limit=limit,
-            version_scope=version_scope,
-        )
-
-    async def count_published_records(self, *, version_scope: VersionScope | None = None) -> int:
-        """Count current results."""
-        statement = select(func.count()).select_from(RecordResult)
-        if version_scope is not None:
-            statement = statement.join(Record, Record.public_id == RecordResult.record_id).where(
-                Record.version_scope == version_scope
-            )
-        return await self._session().scalar(statement) or 0
-
-    async def _active_records(
-        self,
-        *,
-        result_id: int | None = None,
-        record_id: UUID | None = None,
-        offset: int = 0,
-        after_id: int | None = None,
-        before_id: int | None = None,
-        descending: bool = True,
-        limit: int,
-        version_scope: VersionScope | None = None,
-    ) -> tuple[PublishedRecordResult, ...]:
         session = self._session()
+        listing = await self._filtered(self._published_statement(include_evidence=False), filters)
+        statement = await _record_order(sort).apply(session, listing, selector)
+        rows = (await session.execute(statement.limit(limit))).all()
+        ordered = rows[::-1] if selector.before_id is not None else rows
+        return await self._published(ordered, include_evidence=False)
+
+    async def count_published_records(self, *, filters: RecordListFilters = ALL_RECORDS) -> int:
+        """Count current results."""
+        statement = (
+            select(func.count()).select_from(RecordResult).join(Record, Record.public_id == RecordResult.record_id)
+        )
+        return await self._session().scalar(await self._filtered(statement, filters)) or 0
+
+    async def _filtered[S: Select[*tuple[Any, ...]]](self, statement: S, filters: RecordListFilters) -> S:
+        """Apply list filters to a statement that joins `RecordResult` and `Record`."""
+        if filters.build_kind is not None:
+            statement = statement.where(Record.build_kind == filters.build_kind)
+        if filters.criterion is not None:
+            statement = statement.where(Record.criterion == filters.criterion)
+        if filters.version_scope is not None:
+            statement = statement.where(Record.version_scope == filters.version_scope)
+        if filters.status is not None:
+            has_gaps = func.coalesce(func.jsonb_array_length(RecordResult.gap_reasons["missing"]), 0) > 0
+            statement = statement.where(has_gaps if filters.status is RecordStatus.UNRESOLVED else not_(has_gaps))
+        tag_ids = list(filters.tag_ids)
+        if filters.tag_slugs:
+            # A slug names at most one tag, so an unknown slug matches nothing.
+            rows = await self._session().execute(
+                select(TagSlug.slug, TagSlug.tag_id).where(
+                    TagSlug.slug.in_(filters.tag_slugs), TagSlug.tag_id.is_not(None)
+                )
+            )
+            by_slug = {slug: tag_id for slug, tag_id in rows.tuples() if tag_id is not None}
+            if len(by_slug) < len(set(filters.tag_slugs)):
+                return statement.where(false())
+            tag_ids.extend(by_slug.values())
+        for tag_id in dict.fromkeys(tag_ids):
+            restriction = (
+                select(RecordDefinitionTag.tag_id)
+                .where(
+                    RecordDefinitionTag.definition_id == RecordResult.definition_id,
+                    RecordDefinitionTag.tag_id == tag_id,
+                )
+                .exists()
+            )
+            # Types appear only in the category key, as `t[3,17]`.
+            pattern = Record.category_key.regexp_match(rf"\|t\[([0-9]+,)*{tag_id}(,[0-9]+)*\]")
+            statement = statement.where(or_(restriction, pattern))
+        return statement
+
+    @staticmethod
+    def _published_statement(*, include_evidence: bool) -> Select[RecordResult, RecordDefinition, bool]:
         statement = (
             select(RecordResult, RecordDefinition, _refresh_pending())
             .options(selectinload(RecordDefinition.record))
             .join(RecordDefinition, RecordDefinition.id == RecordResult.definition_id)
             .join(Record, Record.public_id == RecordResult.record_id)
         )
-        include_evidence = result_id is not None or record_id is not None
-        if not include_evidence:
-            statement = statement.options(defer(RecordResult.door_evidence))
-        if version_scope is not None:
-            statement = statement.where(Record.version_scope == version_scope)
-        if result_id is not None:
-            statement = statement.where(RecordResult.id == result_id)
-        if record_id is not None:
-            statement = statement.where(RecordResult.record_id == record_id)
-        reverse = before_id is not None
-        if before_id is not None:
-            # Walk away from the anchor in reversed display order; the page is flipped back below.
-            statement = statement.where(
-                RecordResult.id > before_id if descending else RecordResult.id < before_id
-            ).order_by(RecordResult.id.asc() if descending else RecordResult.id.desc())
-        else:
-            if after_id is not None:
-                statement = statement.where(RecordResult.id < after_id if descending else RecordResult.id > after_id)
-            statement = statement.order_by(RecordResult.id.desc() if descending else RecordResult.id.asc())
-        if offset:
-            statement = statement.offset(offset)
-        rows = (await session.execute(statement.limit(limit))).all()
-        if reverse:
-            rows = list(reversed(rows))
+        return statement if include_evidence else statement.options(defer(RecordResult.door_evidence))
+
+    async def _active_record(self, condition: ColumnElement[bool]) -> PublishedRecordResult | None:
+        rows = (await self._session().execute(self._published_statement(include_evidence=True).where(condition))).all()
+        records = await self._published(rows, include_evidence=True)
+        return records[0] if records else None
+
+    async def _published(
+        self, rows: Sequence[Row[RecordResult, RecordDefinition, bool]], *, include_evidence: bool
+    ) -> tuple[PublishedRecordResult, ...]:
         if not rows:
             return ()
+        session = self._session()
         result_ids = [result.id for result, _definition, _pending in rows]
         holders = await _holders_of(session, result_ids)
         tied_rows = (
@@ -757,6 +825,33 @@ class PostgresRecordRepository:
         tied: dict[int, list[int]] = {}
         for tied_result_id, build_id in tied_rows:
             tied.setdefault(tied_result_id, []).append(build_id)
+        # The first holder's snapshot, which co-holders match on the criterion.
+        snapshots = dict(
+            (
+                await session.execute(
+                    select(RecordHolder.result_id, RecordHolder.metric_snapshot)
+                    .where(RecordHolder.result_id.in_(result_ids))
+                    .distinct(RecordHolder.result_id)
+                    .order_by(RecordHolder.result_id, RecordHolder.rank, RecordHolder.build_id)
+                )
+            )
+            .tuples()
+            .all()
+        )
+        since = dict(
+            (
+                await session.execute(
+                    select(RecordHolderHistory.record_id, func.min(RecordHolderHistory.held_from))
+                    .where(
+                        RecordHolderHistory.record_id.in_([result.record_id for result, _definition, _pending in rows]),
+                        RecordHolderHistory.held_until.is_(None),
+                    )
+                    .group_by(RecordHolderHistory.record_id)
+                )
+            )
+            .tuples()
+            .all()
+        )
         return tuple(
             PublishedRecordResult(
                 result_id=result.id,
@@ -767,6 +862,7 @@ class PostgresRecordRepository:
                 criterion=definition.criterion,
                 build_kind=definition.build_kind,
                 version_scope=definition.version_scope,
+                category_key=definition.category_key,
                 holder_build_ids=holders.get(result.id, ()),
                 tied_build_ids=tuple(tied.get(result.id, ())),
                 gaps=_stored_gaps(result),
@@ -775,6 +871,8 @@ class PostgresRecordRepository:
                 refresh_pending=pending,
                 version_id=definition.version_id,
                 door_evidence=result.door_evidence if include_evidence else None,
+                metrics=holder_metrics(definition.build_kind, snapshots.get(result.id, {})),
+                holder_since=held_from.to_stdlib() if (held_from := since.get(result.record_id)) is not None else None,
             )
             for result, definition, pending in rows
         )
@@ -1444,6 +1542,19 @@ async def _enqueue(
             },
         )
     )
+
+
+def _record_order(sort: RecordListSort) -> KeysetOrder:
+    """Return the keyset order a record listing displays in."""
+    match sort:
+        case RecordListSort.ID:
+            return KeysetOrder(RecordResult.id, RecordResult.id, descending=True)
+        case RecordListSort.RECENTLY_CHANGED:
+            return KeysetOrder(RecordResult.computed_at, RecordResult.id, descending=True)
+        case RecordListSort.TITLE:
+            # Many records share a title and differ only by subtitle.
+            title = func.lower(func.concat(RecordDefinition.title, " ", func.coalesce(RecordDefinition.subtitle, "")))
+            return KeysetOrder(title, RecordResult.id, descending=False)
 
 
 def _refresh_pending() -> ColumnElement[bool]:

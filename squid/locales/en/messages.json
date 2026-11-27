@@ -17019,8 +17019,8 @@
       }
     ],
     "locations": [
-      "squid/core/records/application/services.py:903",
-      "squid/core/records/application/services.py:934"
+      "squid/core/records/application/services.py:882",
+      "squid/core/records/application/services.py:913"
     ]
   },
   "records-category-id": {
@@ -17144,7 +17144,7 @@
       }
     ],
     "locations": [
-      "squid/core/records/application/services.py:947"
+      "squid/core/records/application/services.py:926"
     ]
   },
   "records-fixed-volume-positive": {
@@ -17263,6 +17263,60 @@
       "squid/core/records/domain/categories.py:50"
     ]
   },
+  "records-metric-blocks": {
+    "fingerprint": "e6b0123ee18ae966dc20075a0e9492896c721d0254b3d41ec2e5985fb7de78fc",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "value",
+        "function": "NUMBER",
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/core/records/application/metrics.py:45"
+    ]
+  },
+  "records-metric-date": {
+    "fingerprint": "403583a840193ed9b1c37fcc124ba2cfe94e56c30d4117b628f3bd71b457f464",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "moment",
+        "function": "DATETIME",
+        "options": [
+          [
+            "dateStyle",
+            "medium"
+          ],
+          [
+            "timeZone",
+            "UTC"
+          ]
+        ]
+      }
+    ],
+    "locations": [
+      "squid/core/records/application/metrics.py:43"
+    ]
+  },
+  "records-metric-game-ticks": {
+    "fingerprint": "9065389b546fdf0ea538d75f1b06ea971be7626e8e6d1ef677a1149ef4db2e98",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [
+      {
+        "name": "value",
+        "function": "NUMBER",
+        "options": []
+      }
+    ],
+    "locations": [
+      "squid/core/records/application/metrics.py:47"
+    ]
+  },
   "records-no-confirmed-build": {
     "fingerprint": "d4cc574b43b51bb3ba3a6a226c067a2a958c28950dbe6781a4383623410fc519",
     "attributes": [],
@@ -17314,7 +17368,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/records/application/services.py:864"
+      "squid/core/records/application/services.py:843"
     ]
   },
   "records-rebuild-summary": {
@@ -17397,7 +17451,7 @@
       }
     ],
     "locations": [
-      "squid/core/records/application/services.py:965"
+      "squid/core/records/application/services.py:944"
     ]
   },
   "records-remove-restriction": {
@@ -18220,7 +18274,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/schematics/application/jobs.py:157"
+      "squid/core/schematics/application/jobs.py:183"
     ]
   },
   "schematics-schematic-job-cleanup": {
@@ -18229,7 +18283,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/schematics/application/jobs.py:240"
+      "squid/core/schematics/application/jobs.py:266"
     ]
   },
   "schematics-schematic-job-retry": {
@@ -18238,7 +18292,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/schematics/application/jobs.py:127"
+      "squid/core/schematics/application/jobs.py:136"
     ]
   },
   "schematics-schematic-no-input": {

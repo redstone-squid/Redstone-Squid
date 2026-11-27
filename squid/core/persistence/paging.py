@@ -20,7 +20,9 @@ class KeysetOrder:
     id: SQLColumnExpression[Any]
     descending: bool
 
-    async def apply[S: Select[Any]](self, session: AsyncSession, statement: S, selector: PageSelector[Any]) -> S:
+    async def apply[S: Select[*tuple[Any, ...]]](
+        self, session: AsyncSession, statement: S, selector: PageSelector[Any]
+    ) -> S:
         """Order a filtered `statement` and move it to the page `selector` addresses.
 
         A `before_id` page reads in reversed display order, so callers reverse its rows. Unless the

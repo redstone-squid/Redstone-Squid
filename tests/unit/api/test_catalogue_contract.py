@@ -62,6 +62,7 @@ def published_record(*holder_build_ids: int) -> PublishedRecordResult:
         criterion=RecordCriterion.FASTEST,
         build_kind=BuildKind.DOOR,
         version_scope=VersionScope.ALL_TIME,
+        category_key="door:door|2x3|t[]|Door:r[]:p[]",
         holder_build_ids=holder_build_ids,
         computed_at=datetime(2026, 8, 10, 12, tzinfo=UTC),
     )

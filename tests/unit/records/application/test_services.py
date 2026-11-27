@@ -16,16 +16,17 @@ from squid.core.builds.domain import BuildCategory
 from squid.core.builds.domain.expansion import DoorExpansion, ExpansionBranch, ExpansionParameter, ExpansionTiming
 from squid.core.builds.domain.expansion_evaluation import PointStatus
 from squid.core.errors import DataIntegrityError, ServiceUnavailableError
+from squid.core.pagination import FIRST_PAGE, PageSelector
 from squid.core.permissions.application.services import PermissionService
 from squid.core.permissions.errors import PermissionDeniedError
 from squid.core.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery, analyze_door_widths
 from squid.core.records.application.live import DoorRecordLookup
 from squid.core.records.application.models import (
+    ALL_RECORDS,
     CandidateBuild,
     CandidateTag,
     CategoryIdentity,
     ComputationBatch,
-    HolderHistoryEntry,
     PriorPublication,
     PublishedRecordResult,
     RebuildSummary,
@@ -33,8 +34,12 @@ from squid.core.records.application.models import (
     RecomputeTarget,
     RecordDrift,
     RecordGap,
+    RecordHolderPeriod,
+    RecordListFilters,
+    RecordListSort,
     RecordLookupRequest,
     RecordNameDiagnostic,
+    RecordSibling,
     ScopedCategory,
 )
 from squid.core.records.application.ports import DoorRangeAnalyzer, RecomputeLease, StoredRecord
@@ -115,7 +120,7 @@ class FakeRuns:
         self.failed: tuple[BuildKind | None, str] | None = None
         self.current_version_id: int | None = None
         self.published_records: dict[int, PublishedRecordResult] = {}
-        self.history: dict[uuid.UUID, tuple[HolderHistoryEntry, ...]] = {}
+        self.history: dict[uuid.UUID, tuple[RecordHolderPeriod, ...]] = {}
 
     async def active_rules_revision_id(self) -> int:
         return 7
@@ -154,8 +159,11 @@ class FakeRuns:
     async def get_latest_record(self, record_id: uuid.UUID) -> PublishedRecordResult | None:
         return next((result for result in self.published_records.values() if result.record_id == record_id), None)
 
-    async def get_record_history(self, record_id: uuid.UUID) -> tuple[HolderHistoryEntry, ...]:
+    async def get_record_history(self, record_id: uuid.UUID) -> tuple[RecordHolderPeriod, ...]:
         return self.history.get(record_id, ())
+
+    async def list_siblings(self, record_id: uuid.UUID) -> tuple[RecordSibling, ...]:
+        return ()
 
     async def stored_record(self, record_id: uuid.UUID) -> StoredRecord | None:
         return None
@@ -163,31 +171,31 @@ class FakeRuns:
     async def list_published_records(
         self,
         *,
-        offset: int = 0,
-        after_id: int | None = None,
-        before_id: int | None = None,
-        descending: bool = True,
+        selector: PageSelector = FIRST_PAGE,
+        sort: RecordListSort = RecordListSort.ID,
+        filters: RecordListFilters = ALL_RECORDS,
         limit: int,
-        version_scope: VersionScope | None = None,
     ) -> Sequence[PublishedRecordResult]:
+        assert sort is RecordListSort.ID
         ordered = sorted(
             (
                 key
                 for key, record in self.published_records.items()
-                if version_scope is None or record.version_scope is version_scope
+                if filters.version_scope is None or record.version_scope is filters.version_scope
             ),
-            reverse=descending,
+            reverse=True,
         )
-        if before_id is not None:
-            kept = [rid for rid in ordered if (rid > before_id if descending else rid < before_id)]
+        if selector.before_id is not None:
+            kept = [rid for rid in ordered if rid > selector.before_id]
             return tuple(self.published_records[rid] for rid in kept[-limit:])
-        if after_id is not None:
-            ordered = [rid for rid in ordered if (rid < after_id if descending else rid > after_id)]
-        return tuple(self.published_records[rid] for rid in ordered[offset : offset + limit])
+        if selector.after_id is not None:
+            ordered = [rid for rid in ordered if rid < selector.after_id]
+        return tuple(self.published_records[rid] for rid in ordered[selector.offset : selector.offset + limit])
 
-    async def count_published_records(self, *, version_scope: VersionScope | None = None) -> int:
+    async def count_published_records(self, *, filters: RecordListFilters = ALL_RECORDS) -> int:
         return sum(
-            version_scope is None or record.version_scope is version_scope for record in self.published_records.values()
+            filters.version_scope is None or record.version_scope is filters.version_scope
+            for record in self.published_records.values()
         )
 
     async def list_requested_categories(self, kind: BuildKind) -> Sequence[CategoryIdentity]:
@@ -289,6 +297,7 @@ def _published_record(*holder_build_ids: int) -> PublishedRecordResult:
         criterion=RecordCriterion.FASTEST,
         build_kind=BuildKind.DOOR,
         version_scope=VersionScope.ALL_TIME,
+        category_key="door:door|2x3|t[]|Door:r[]:p[]",
         holder_build_ids=holder_build_ids,
         computed_at=datetime(2026, 8, 10, 12, tzinfo=UTC),
     )
@@ -625,7 +634,7 @@ async def test_public_record_query_shows_a_retired_record_with_its_history() -> 
     retired_at = datetime(2026, 9, 1, tzinfo=UTC)
     record = replace(_published_record(), result_id=None, retired_at=retired_at, computed_at=retired_at)
     runs.published_records[7] = record
-    runs.history[record.record_id] = (HolderHistoryEntry((41,), datetime(2020, 1, 1, tzinfo=UTC), retired_at),)
+    runs.history[record.record_id] = (RecordHolderPeriod((41,), datetime(2020, 1, 1, tzinfo=UTC), retired_at),)
     builds = FakePublicBuilds((_public_build(41),))
     service = PublicRecordQueryService(builds, uow_factory=lambda: RecordQueryScope(runs))
 

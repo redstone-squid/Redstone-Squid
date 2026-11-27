@@ -1393,15 +1393,6 @@ export type HistoryChange = {
 };
 
 /**
- * HolderHistoryEntry
- */
-export type HolderHistoryEntry = {
-    build_ids: Array<number>;
-    held_from: string;
-    held_until: string | null;
-};
-
-/**
  * IdentityDetail
  */
 export type IdentityDetail = {
@@ -1664,6 +1655,11 @@ export type MetadataSearchResult = {
 };
 
 /**
+ * MetricUnit
+ */
+export type MetricUnit = 'blocks' | 'game_ticks' | 'date';
+
+/**
  * MinecraftClientOrigin
  *
  * A server-established Minecraft client transport.
@@ -1781,16 +1777,6 @@ export type PageAnchor = {
     offset?: number | null;
     after_id?: number | string | null;
     before_id?: number | string | null;
-};
-
-/**
- * Page[PublishedRecordResult]
- */
-export type PageLitestarDtoBackendPublishedRecordResult = {
-    items: Array<PublishedRecordResult>;
-    total: number;
-    next: PageAnchor | null;
-    prev: PageAnchor | null;
 };
 
 /**
@@ -1938,6 +1924,16 @@ export type PageSquidCoreBuildsApplicationQueriesPublicBuildSummary = {
  */
 export type PageSquidCoreBuildsHistoryPublicBuildRevision = {
     items: Array<PublicBuildRevision>;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+};
+
+/**
+ * Page[PublicRecordSummary]
+ */
+export type PageSquidCoreRecordsApplicationModelsPublicRecordSummary = {
+    items: Array<PublicRecordSummary>;
     total: number;
     next: PageAnchor | null;
     prev: PageAnchor | null;
@@ -2223,6 +2219,7 @@ export type PublicRecordDetail = {
     criterion: RecordCriterion;
     build_kind: BuildKind;
     version_scope: VersionScope;
+    category_key: string;
     holder_build_ids: Array<number>;
     computed_at: string;
     tied_build_ids?: Array<number>;
@@ -2232,11 +2229,47 @@ export type PublicRecordDetail = {
     version_id?: number | null;
     door_evidence?: DoorRecordEvidence | null;
     retired_at?: string | null;
+    metrics?: {
+        [key: string]: RecordMetric;
+    };
+    holder_since?: string | null;
+    status: RecordStatus | null;
     holder_builds: Array<PublicBuildSummary>;
     tied_builds?: Array<PublicBuildSummary>;
     contender_builds?: Array<PublicBuildSummary>;
-    history?: Array<HolderHistoryEntry>;
+    history?: Array<RecordHolderPeriod>;
+    siblings?: Array<RecordSibling>;
     viewer?: RecordViewer | null;
+};
+
+/**
+ * PublicRecordSummary
+ */
+export type PublicRecordSummary = {
+    result_id: number | null;
+    definition_id: number;
+    record_id: string;
+    title: string;
+    subtitle: string | null;
+    criterion: RecordCriterion;
+    build_kind: BuildKind;
+    version_scope: VersionScope;
+    category_key: string;
+    holder_build_ids: Array<number>;
+    computed_at: string;
+    tied_build_ids?: Array<number>;
+    gaps?: Array<CandidateGap>;
+    last_checked_at?: string | null;
+    refresh_pending?: boolean;
+    version_id?: number | null;
+    door_evidence?: DoorRecordEvidence | null;
+    retired_at?: string | null;
+    metrics?: {
+        [key: string]: RecordMetric;
+    };
+    holder_since?: string | null;
+    status: RecordStatus | null;
+    holders: Array<RecordHolderSummary>;
 };
 
 /**
@@ -2263,26 +2296,6 @@ export type PublishedDoorPoint = {
  * PublishedPointStatus
  */
 export type PublishedPointStatus = 'published' | 'not_published' | 'outside_query';
-
-/**
- * PublishedRecordResult
- */
-export type PublishedRecordResult = {
-    result_id: number | null;
-    definition_id: number;
-    record_id: string;
-    title: string;
-    subtitle: string | null;
-    criterion: RecordCriterion;
-    build_kind: BuildKind;
-    version_scope: VersionScope;
-    holder_build_ids: Array<number>;
-    computed_at: string;
-    tied_build_ids?: Array<number>;
-    last_checked_at?: string | null;
-    refresh_pending?: boolean;
-    version_id?: number | null;
-};
 
 /**
  * RangeAttempt
@@ -2491,6 +2504,29 @@ export type RecordGainedNotification = {
 };
 
 /**
+ * RecordHolderPeriod
+ */
+export type RecordHolderPeriod = {
+    build_ids: Array<number>;
+    held_from: string;
+    held_until: string | null;
+    metrics?: {
+        [key: string]: RecordMetric;
+    };
+    holders?: Array<RecordHolderSummary>;
+};
+
+/**
+ * RecordHolderSummary
+ */
+export type RecordHolderSummary = {
+    build_id: number;
+    title: string;
+    creators: Array<PublicBuildCreator>;
+    preview: PublicBuildPreview | null;
+};
+
+/**
  * RecordInspection
  */
 export type RecordInspection = {
@@ -2509,10 +2545,20 @@ export type RecordInspection = {
  *
  * A named display order for record listings.
  *
- * `ID` lists the most recently published results first, anchored by result ID.
+ * `ID` lists the newest results first. A result keeps its ID while it is
+ * updated, so `RECENTLY_CHANGED` orders by when its contents last changed.
  *
  */
-export type RecordListSort = 'id';
+export type RecordListSort = 'id' | 'recently_changed' | 'title';
+
+/**
+ * RecordMetric
+ */
+export type RecordMetric = {
+    value: number | string;
+    unit: MetricUnit;
+    display: string;
+};
 
 /**
  * RecordOperator
@@ -2576,6 +2622,25 @@ export type RecordSearchResult = {
     score: number | null;
     record: RecordSearchEntry;
 };
+
+/**
+ * RecordSibling
+ */
+export type RecordSibling = {
+    record_id: string;
+    title: string;
+    subtitle: string | null;
+    criterion: RecordCriterion;
+    version_scope: VersionScope;
+    retired: boolean;
+};
+
+/**
+ * RecordStatus
+ *
+ * Whether a current result is settled; `UNRESOLVED` results have gaps.
+ */
+export type RecordStatus = 'resolved' | 'unresolved';
 
 /**
  * RecordViewer
@@ -8073,10 +8138,17 @@ export type RecordsListData = {
     body?: never;
     path?: never;
     query?: {
+        build_kind?: BuildKind | null;
+        criterion?: RecordCriterion | null;
+        version_scope?: VersionScope | null;
+        status?: RecordStatus | null;
+        tag_id?: Array<number> | null;
+        tag_slug?: Array<string> | null;
         /**
          * A named display order for record listings.
          *
-         * `ID` lists the most recently published results first, anchored by result ID.
+         * `ID` lists the newest results first. A result keeps its ID while it is
+         * updated, so `RECENTLY_CHANGED` orders by when its contents last changed.
          *
          */
         sort?: RecordListSort;
@@ -8125,7 +8197,7 @@ export type RecordsListResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: PageLitestarDtoBackendPublishedRecordResult;
+    200: PageSquidCoreRecordsApplicationModelsPublicRecordSummary;
 };
 
 export type RecordsListResponse = RecordsListResponses[keyof RecordsListResponses];

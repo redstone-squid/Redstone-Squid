@@ -13517,16 +13517,130 @@
           "records"
         ],
         "summary": "ListRecords",
-        "description": "List authoritative published record results.",
+        "description": "List current record results with their visible holders.\n\nEvery tag_id and tag_slug must be one of the record's types or restrictions.\nRetired records are not listed; search finds them with `record_state:retired`.\nDoor evidence is left out, so it is always null here; read it from the record.",
         "operationId": "records_list",
         "parameters": [
+          {
+            "name": "build_kind",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/BuildKind"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "criterion",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/RecordCriterion"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "version_scope",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/VersionScope"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/RecordStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "tag_id",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "items": {
+                    "type": "integer"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "tag_slug",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
           {
             "name": "sort",
             "in": "query",
             "schema": {
               "$ref": "#/components/schemas/RecordListSort"
             },
-            "description": "A named display order for record listings.\n\n`ID` lists the most recently published results first, anchored by result ID.\n",
+            "description": "A named display order for record listings.\n\n`ID` lists the newest results first. A result keeps its ID while it is\nupdated, so `RECENTLY_CHANGED` orders by when its contents last changed.\n",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -13623,7 +13737,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Page_litestar.dto._backend.PublishedRecordResult_"
+                  "$ref": "#/components/schemas/Page_squid.core.records.application.models.PublicRecordSummary_"
                 }
               }
             }
@@ -30451,38 +30565,6 @@
         ],
         "title": "HistoryChange"
       },
-      "HolderHistoryEntry": {
-        "properties": {
-          "build_ids": {
-            "items": {
-              "type": "integer"
-            },
-            "type": "array"
-          },
-          "held_from": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "held_until": {
-            "oneOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "type": "object",
-        "required": [
-          "build_ids",
-          "held_from",
-          "held_until"
-        ],
-        "title": "HolderHistoryEntry"
-      },
       "IdentityDetail": {
         "properties": {
           "id": {
@@ -31326,6 +31408,15 @@
         ],
         "title": "MetadataSearchResult"
       },
+      "MetricUnit": {
+        "type": "string",
+        "enum": [
+          "blocks",
+          "game_ticks",
+          "date"
+        ],
+        "title": "MetricUnit"
+      },
       "MinecraftClientOrigin": {
         "type": "string",
         "enum": [
@@ -31687,47 +31778,6 @@
         "type": "object",
         "required": [],
         "title": "PageAnchor"
-      },
-      "Page_litestar.dto._backend.PublishedRecordResult_": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/PublishedRecordResult"
-            },
-            "type": "array"
-          },
-          "total": {
-            "type": "integer"
-          },
-          "next": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/PageAnchor"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "prev": {
-            "oneOf": [
-              {
-                "$ref": "#/components/schemas/PageAnchor"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "type": "object",
-        "required": [
-          "items",
-          "next",
-          "prev",
-          "total"
-        ],
-        "title": "Page[PublishedRecordResult]"
       },
       "Page_litestar.dto._backend.TagSummary_": {
         "properties": {
@@ -32343,6 +32393,47 @@
           "total"
         ],
         "title": "Page[PublicBuildRevision]"
+      },
+      "Page_squid.core.records.application.models.PublicRecordSummary_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PublicRecordSummary"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "next": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prev": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "next",
+          "prev",
+          "total"
+        ],
+        "title": "Page[PublicRecordSummary]"
       },
       "Page_squid.core.records.application.models.RecordDrift_": {
         "properties": {
@@ -33384,6 +33475,9 @@
           "version_scope": {
             "$ref": "#/components/schemas/VersionScope"
           },
+          "category_key": {
+            "type": "string"
+          },
           "holder_build_ids": {
             "items": {
               "type": "integer"
@@ -33454,6 +33548,33 @@
               }
             ]
           },
+          "metrics": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/RecordMetric"
+            },
+            "type": "object"
+          },
+          "holder_since": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RecordStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "holder_builds": {
             "items": {
               "$ref": "#/components/schemas/PublicBuildSummary"
@@ -33476,7 +33597,14 @@
           },
           "history": {
             "items": {
-              "$ref": "#/components/schemas/HolderHistoryEntry"
+              "$ref": "#/components/schemas/RecordHolderPeriod"
+            },
+            "type": "array",
+            "default": []
+          },
+          "siblings": {
+            "items": {
+              "$ref": "#/components/schemas/RecordSibling"
             },
             "type": "array",
             "default": []
@@ -33495,6 +33623,7 @@
         "type": "object",
         "required": [
           "build_kind",
+          "category_key",
           "computed_at",
           "criterion",
           "definition_id",
@@ -33502,11 +33631,178 @@
           "holder_builds",
           "record_id",
           "result_id",
+          "status",
           "subtitle",
           "title",
           "version_scope"
         ],
         "title": "PublicRecordDetail"
+      },
+      "PublicRecordSummary": {
+        "properties": {
+          "result_id": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "definition_id": {
+            "type": "integer"
+          },
+          "record_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "subtitle": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "criterion": {
+            "$ref": "#/components/schemas/RecordCriterion"
+          },
+          "build_kind": {
+            "$ref": "#/components/schemas/BuildKind"
+          },
+          "version_scope": {
+            "$ref": "#/components/schemas/VersionScope"
+          },
+          "category_key": {
+            "type": "string"
+          },
+          "holder_build_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "computed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "tied_build_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "default": []
+          },
+          "gaps": {
+            "items": {
+              "$ref": "#/components/schemas/CandidateGap"
+            },
+            "type": "array",
+            "default": []
+          },
+          "last_checked_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "refresh_pending": {
+            "type": "boolean",
+            "default": false
+          },
+          "version_id": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "door_evidence": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DoorRecordEvidence"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "retired_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "metrics": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/RecordMetric"
+            },
+            "type": "object"
+          },
+          "holder_since": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "status": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/RecordStatus"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "holders": {
+            "items": {
+              "$ref": "#/components/schemas/RecordHolderSummary"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "required": [
+          "build_kind",
+          "category_key",
+          "computed_at",
+          "criterion",
+          "definition_id",
+          "holder_build_ids",
+          "holders",
+          "record_id",
+          "result_id",
+          "status",
+          "subtitle",
+          "title",
+          "version_scope"
+        ],
+        "title": "PublicRecordSummary"
       },
       "PublishedDoorPoint": {
         "properties": {
@@ -33606,105 +33902,6 @@
           "outside_query"
         ],
         "title": "PublishedPointStatus"
-      },
-      "PublishedRecordResult": {
-        "properties": {
-          "result_id": {
-            "oneOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "definition_id": {
-            "type": "integer"
-          },
-          "record_id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "title": {
-            "type": "string"
-          },
-          "subtitle": {
-            "oneOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "criterion": {
-            "$ref": "#/components/schemas/RecordCriterion"
-          },
-          "build_kind": {
-            "$ref": "#/components/schemas/BuildKind"
-          },
-          "version_scope": {
-            "$ref": "#/components/schemas/VersionScope"
-          },
-          "holder_build_ids": {
-            "items": {
-              "type": "integer"
-            },
-            "type": "array"
-          },
-          "computed_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "tied_build_ids": {
-            "items": {
-              "type": "integer"
-            },
-            "type": "array",
-            "default": []
-          },
-          "last_checked_at": {
-            "oneOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "refresh_pending": {
-            "type": "boolean",
-            "default": false
-          },
-          "version_id": {
-            "oneOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "type": "object",
-        "required": [
-          "build_kind",
-          "computed_at",
-          "criterion",
-          "definition_id",
-          "holder_build_ids",
-          "record_id",
-          "result_id",
-          "subtitle",
-          "title",
-          "version_scope"
-        ],
-        "title": "PublishedRecordResult"
       },
       "RangeAttempt": {
         "properties": {
@@ -34518,6 +34715,85 @@
         ],
         "title": "RecordGainedNotification"
       },
+      "RecordHolderPeriod": {
+        "properties": {
+          "build_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array"
+          },
+          "held_from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "held_until": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "metrics": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/RecordMetric"
+            },
+            "type": "object"
+          },
+          "holders": {
+            "items": {
+              "$ref": "#/components/schemas/RecordHolderSummary"
+            },
+            "type": "array",
+            "default": []
+          }
+        },
+        "type": "object",
+        "required": [
+          "build_ids",
+          "held_from",
+          "held_until"
+        ],
+        "title": "RecordHolderPeriod"
+      },
+      "RecordHolderSummary": {
+        "properties": {
+          "build_id": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "creators": {
+            "items": {
+              "$ref": "#/components/schemas/PublicBuildCreator"
+            },
+            "type": "array"
+          },
+          "preview": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PublicBuildPreview"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "build_id",
+          "creators",
+          "preview",
+          "title"
+        ],
+        "title": "RecordHolderSummary"
+      },
       "RecordInspection": {
         "properties": {
           "record_id": {
@@ -34580,11 +34856,40 @@
       "RecordListSort": {
         "type": "string",
         "enum": [
-          "id"
+          "id",
+          "recently_changed",
+          "title"
         ],
         "title": "RecordListSort",
-        "description": "A named display order for record listings.\n\n`ID` lists the most recently published results first, anchored by result ID.\n",
+        "description": "A named display order for record listings.\n\n`ID` lists the newest results first. A result keeps its ID while it is\nupdated, so `RECENTLY_CHANGED` orders by when its contents last changed.\n",
         "default": "id"
+      },
+      "RecordMetric": {
+        "properties": {
+          "value": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "unit": {
+            "$ref": "#/components/schemas/MetricUnit"
+          },
+          "display": {
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "required": [
+          "display",
+          "unit",
+          "value"
+        ],
+        "title": "RecordMetric"
       },
       "RecordOperator": {
         "type": "string",
@@ -34786,6 +35091,55 @@
           "score"
         ],
         "title": "RecordSearchResult"
+      },
+      "RecordSibling": {
+        "properties": {
+          "record_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "title": {
+            "type": "string"
+          },
+          "subtitle": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "criterion": {
+            "$ref": "#/components/schemas/RecordCriterion"
+          },
+          "version_scope": {
+            "$ref": "#/components/schemas/VersionScope"
+          },
+          "retired": {
+            "type": "boolean"
+          }
+        },
+        "type": "object",
+        "required": [
+          "criterion",
+          "record_id",
+          "retired",
+          "subtitle",
+          "title",
+          "version_scope"
+        ],
+        "title": "RecordSibling"
+      },
+      "RecordStatus": {
+        "type": "string",
+        "enum": [
+          "resolved",
+          "unresolved"
+        ],
+        "title": "RecordStatus",
+        "description": "Whether a current result is settled; `UNRESOLVED` results have gaps."
       },
       "RecordViewer": {
         "properties": {

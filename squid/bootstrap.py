@@ -738,6 +738,7 @@ def create_bot_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         permission_admin=graph.permission_admin,
         permission_epoch=graph.permission_epoch,
         records=graph.records,
+        public_records=graph.public_records,
         record_administration=RecordAdministrationService(
             graph.record_computation, graph.permissions, uow_factory=graph.uow_factory
         ),

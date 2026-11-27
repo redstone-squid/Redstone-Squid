@@ -43,7 +43,7 @@ from squid.core.permissions.domain.catalogue import (
     RECORD_ENTRY_INSPECT,
     RECORD_ENTRY_REBUILD,
 )
-from squid.core.records.application import RecordService
+from squid.core.records.application import PublicRecordQueryService
 from squid.core.records.application.models import PublishedRecordResult
 from squid.core.records.domain import RecordCriterion, VersionScope
 from squid.core.schematics.application import SchematicService
@@ -423,7 +423,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
         grants: Grants,
         actor_account_id: int | None,
         refresh_posts: RefreshPosts,
-        records: RecordService | None = None,
+        records: PublicRecordQueryService | None = None,
         record_tools: RecordsScreen | None = None,
         initial_records: bool = False,
         search: SearchService | None = None,
@@ -529,7 +529,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             grants=grants,
             actor_account_id=subject.account_id,
             refresh_posts=refresh_posts,
-            records=request.client.services.records,
+            records=request.client.services.public_records,
             search=request.client.services.search,
             accounts=request.client.services.accounts,
             record_tools=record_tools,

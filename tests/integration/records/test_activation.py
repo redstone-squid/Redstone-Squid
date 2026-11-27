@@ -140,9 +140,7 @@ async def test_publication_updates_results_in_place_and_reports_holder_changes(
 
     await transact(records, lambda uow: uow.records.publish(batch), commit=True)
     async with records() as uow:
-        (original,) = await uow.records.list_published_records(
-            offset=0, after_id=None, before_id=None, descending=False, limit=10
-        )
+        (original,) = await uow.records.list_published_records(limit=10)
     # A changed title publishes even when the holders stay the same, but announces nothing.
     batch = _with_records(batch, (replace(batch.records[0], title=FormattedTitle("Updated smallest door")),))
     with record_queries(sessions) as statements:
@@ -195,9 +193,7 @@ async def test_retirement_keeps_history_and_revival_keeps_the_record(
     batch = _batch(await transact(records, lambda uow: uow.records.active_rules_revision_id(), commit=True), build_ids)
     await transact(records, lambda uow: uow.records.publish(batch), commit=True)
     async with records() as uow:
-        (live,) = await uow.records.list_published_records(
-            offset=0, after_id=None, before_id=None, descending=False, limit=10
-        )
+        (live,) = await uow.records.list_published_records(limit=10)
 
     retired = await transact(
         records, lambda uow: uow.records.publish(replace(batch, records=(), input_generation=2)), commit=True
@@ -247,9 +243,7 @@ async def test_an_older_generation_cannot_replace_a_newer_publication(
     )
 
     async with records() as uow:
-        (published,) = await uow.records.list_published_records(
-            offset=0, after_id=None, before_id=None, descending=False, limit=10
-        )
+        (published,) = await uow.records.list_published_records(limit=10)
     assert published.holder_build_ids == (build_ids[-1],)
 
 

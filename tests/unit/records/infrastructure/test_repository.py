@@ -6,7 +6,8 @@ from sqlalchemy.dialects import postgresql
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.core.builds.models import ExtenderBuild
-from squid.core.records.application.models import CategoryIdentity
+from squid.core.pagination import PageSelector
+from squid.core.records.application.models import CategoryIdentity, RecordListFilters, RecordStatus
 from squid.core.records.domain import (
     BuildKind,
     Candidate,
@@ -103,24 +104,27 @@ def test_rules_versions_are_pinned() -> None:
     assert CALCULATOR_VERSION == "8"
 
 
-async def test_version_scope_filter_is_applied_to_both_rows_and_count() -> None:
+async def test_list_filters_are_applied_to_both_rows_and_count() -> None:
     session = AsyncMock(spec=AsyncSession)
     session.execute.return_value = Mock(all=Mock(return_value=[]))
     session.scalar.return_value = 0
     repository = PostgresRecordRepository(lambda: session)
-    await repository.list_published_records(
-        offset=8,
-        after_id=None,
-        before_id=None,
-        descending=True,
-        limit=9,
+    filters = RecordListFilters(
+        build_kind=BuildKind.DOOR,
         version_scope=VersionScope.UP_TO_DATE,
+        status=RecordStatus.UNRESOLVED,
+        tag_ids=(17,),
     )
-    await repository.count_published_records(version_scope=VersionScope.UP_TO_DATE)
+    await repository.list_published_records(selector=PageSelector(offset=8), filters=filters, limit=9)
+    await repository.count_published_records(filters=filters)
 
     for statement in (session.execute.call_args.args[0], session.scalar.call_args.args[0]):
         sql = str(statement.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
         assert "record_titles.version_scope = 'up_to_date'" in sql
+        assert "record_titles.build_kind = 'door'" in sql
+        assert "jsonb_array_length" in sql
+        assert "title_definition_tags.tag_id = 17" in sql
+        assert "(,[0-9]+)*" in sql
 
 
 def test_an_extender_without_measured_variants_competes_on_its_own_timings() -> None:

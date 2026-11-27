@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { PublishedRecordResult } from "@/generated/types.gen";
+  import type { PublicRecordSummary } from "@/generated/types.gen";
   import { localizePath } from "@/locales/locale";
   import * as m from "@/locales/messages.gen";
   import { recordCriterionLabel, versionScopeLabel } from "@/locales/vocabulary.gen";
@@ -15,12 +15,12 @@
    * single holder goes unmentioned; shared records and ties are called out.
    */
   type Props = {
-    record: PublishedRecordResult;
+    record: PublicRecordSummary;
     as?: "article" | "li";
     headingLevel?: 2 | 3;
   };
   let { record, as = "article", headingLevel = 3 }: Props = $props();
-  const shared = $derived(record.holder_build_ids.length);
+  const shared = $derived(record.holders.length);
   const tied = $derived(record.tied_build_ids?.length ?? 0);
   const facts = $derived([
     ...(shared > 1 ? [m.recordSharedCount({ count: shared })] : []),

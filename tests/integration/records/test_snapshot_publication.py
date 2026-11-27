@@ -139,17 +139,13 @@ async def test_source_edit_during_computation_survives_atomic_acknowledgement(
         assert all(holder.metric_snapshot.get("volume") == 100 for holder in holders)
 
     async with factory() as uow:
-        records = await uow.records.list_published_records(
-            offset=0, after_id=None, before_id=None, descending=False, limit=100
-        )
+        records = await uow.records.list_published_records(limit=100)
         assert records
         assert all(record.refresh_pending for record in records)
 
     await computation.process_queue(context=ActingContext.worker("test-worker"))
     async with factory() as uow:
-        records = await uow.records.list_published_records(
-            offset=0, after_id=None, before_id=None, descending=False, limit=100
-        )
+        records = await uow.records.list_published_records(limit=100)
         assert records
         assert all(not record.refresh_pending and record.last_checked_at is not None for record in records)
     async with sessions() as session:

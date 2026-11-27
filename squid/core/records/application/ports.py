@@ -7,12 +7,12 @@ from typing import Protocol
 
 from squid.core.actors import ActingContext
 from squid.core.builds.application.queries import PublicBuildSummary
+from squid.core.pagination import PageSelector
 from squid.core.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery
 from squid.core.records.application.models import (
     CandidateBuild,
     CategoryIdentity,
     ComputationBatch,
-    HolderHistoryEntry,
     PriorPublication,
     PublishedRecordResult,
     RebuildSummary,
@@ -20,10 +20,14 @@ from squid.core.records.application.models import (
     RecomputeTarget,
     RecordDrift,
     RecordGap,
+    RecordHolderPeriod,
+    RecordListFilters,
+    RecordListSort,
     RecordNameDiagnostic,
+    RecordSibling,
     ScopedCategory,
 )
-from squid.core.records.domain import BuildKind, CandidateGap, FormattedTitle, RecordCriterion, VersionScope
+from squid.core.records.domain import BuildKind, CandidateGap, FormattedTitle, RecordCriterion
 from squid.core.unit_of_work import UnitOfWork
 
 
@@ -132,22 +136,17 @@ class RecordRunRepository(Protocol):
         """Return the current result, or a retired record's last name without holders."""
         ...
 
-    async def get_record_history(self, record_id: uuid.UUID) -> tuple[HolderHistoryEntry, ...]: ...
+    async def get_record_history(self, record_id: uuid.UUID) -> tuple[RecordHolderPeriod, ...]: ...
+
+    async def list_siblings(self, record_id: uuid.UUID) -> tuple[RecordSibling, ...]: ...
 
     async def stored_record(self, record_id: uuid.UUID) -> StoredRecord | None: ...
 
     async def list_published_records(
-        self,
-        *,
-        offset: int,
-        after_id: int | None,
-        before_id: int | None,
-        descending: bool,
-        limit: int,
-        version_scope: VersionScope | None = None,
+        self, *, selector: PageSelector, sort: RecordListSort, filters: RecordListFilters, limit: int
     ) -> Sequence[PublishedRecordResult]: ...
 
-    async def count_published_records(self, *, version_scope: VersionScope | None = None) -> int: ...
+    async def count_published_records(self, *, filters: RecordListFilters) -> int: ...
 
     async def list_requested_categories(self, kind: BuildKind) -> Sequence[CategoryIdentity]: ...
 

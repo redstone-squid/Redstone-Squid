@@ -5,11 +5,12 @@ from dataclasses import dataclass, field, fields, replace
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
-from typing import Self
+from typing import Any, Self
 from uuid import UUID
 
 from squid.core.builds.application.queries import PublicBuildSummary
 from squid.core.builds.domain.expansion import DoorExpansion
+from squid.core.records.application.metrics import RecordHolderSummary, RecordMetric
 from squid.core.records.domain import (
     BuildKind,
     Candidate,
@@ -202,10 +203,36 @@ class RecordNameDiagnostic:
 class RecordListSort(StrEnum):
     """A named display order for record listings.
 
-    `ID` lists the most recently published results first, anchored by result ID.
+    `ID` lists the newest results first. A result keeps its ID while it is
+    updated, so `RECENTLY_CHANGED` orders by when its contents last changed.
     """
 
     ID = "id"
+    RECENTLY_CHANGED = "recently_changed"
+    TITLE = "title"
+
+
+class RecordStatus(StrEnum):
+    """Whether a current result is settled; `UNRESOLVED` results have gaps."""
+
+    RESOLVED = "resolved"
+    UNRESOLVED = "unresolved"
+
+
+@dataclass(frozen=True, slots=True)
+class RecordListFilters:
+    """Filters for current results; every given tag must be one of the record's types or restrictions."""
+
+    build_kind: BuildKind | None = None
+    criterion: RecordCriterion | None = None
+    version_scope: VersionScope | None = None
+    status: RecordStatus | None = None
+    tag_ids: tuple[int, ...] = ()
+    tag_slugs: tuple[str, ...] = ()
+    """Current or former slugs."""
+
+
+ALL_RECORDS = RecordListFilters()
 
 
 @dataclass(frozen=True, slots=True)
@@ -216,6 +243,11 @@ class PublishedRecordResult:
     current result and stays the same while it is updated; it is `None` once the
     record retires, which happens when no build competes for it. `definition_id`
     identifies the record's wording under one rules revision.
+
+    `metrics` are the first holder's measurements; co-holders match it on the
+    criterion. `holder_since` is when the current holders' period began, which
+    comes from completion dates, while `computed_at` is when the result last
+    changed.
     """
 
     result_id: int | None
@@ -226,6 +258,7 @@ class PublishedRecordResult:
     criterion: RecordCriterion
     build_kind: BuildKind
     version_scope: VersionScope
+    category_key: str
     holder_build_ids: tuple[int, ...]
     computed_at: datetime
     tied_build_ids: tuple[int, ...] = field(default=(), kw_only=True)
@@ -235,11 +268,61 @@ class PublishedRecordResult:
     version_id: int | None = field(default=None, kw_only=True)
     door_evidence: DoorRecordEvidence | None = field(default=None, kw_only=True)
     retired_at: datetime | None = field(default=None, kw_only=True)
+    metrics: Mapping[str, RecordMetric] = field(default_factory=dict, kw_only=True)
+    holder_since: datetime | None = field(default=None, kw_only=True)
+    status: RecordStatus | None = field(init=False)
+    """Null once the record retires."""
+
+    def __post_init__(self) -> None:
+        status = None if self.result_id is None else RecordStatus.UNRESOLVED if self.gaps else RecordStatus.RESOLVED
+        object.__setattr__(self, "status", status)
 
     @property
     def one_line_title(self) -> str:
         """The title and subtitle on one line; many records share a title and differ only by subtitle."""
         return f"{self.title} · {self.subtitle}" if self.subtitle else self.title
+
+
+@dataclass(frozen=True, slots=True)
+class PublicRecordSummary(PublishedRecordResult):
+    """A current result in a public list, with summaries of its visible holders."""
+
+    holders: tuple[RecordHolderSummary, ...] = field(kw_only=True)
+
+    @classmethod
+    def with_builds(cls, result: PublishedRecordResult, builds: Mapping[int, PublicBuildSummary]) -> Self:
+        """Attach summaries of the holders present in `builds`; hidden holders are left out."""
+        return cls(
+            **_init_fields(result),
+            holders=tuple(RecordHolderSummary.from_build(builds[id]) for id in result.holder_build_ids if id in builds),
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class RecordHolderPeriod:
+    """A past or current holder period of a published record.
+
+    `metrics` are the first holder's measurements from its current facts: each
+    publication rewrites history, so past measurements are not kept.
+    """
+
+    build_ids: tuple[int, ...]
+    held_from: datetime
+    held_until: datetime | None
+    metrics: Mapping[str, RecordMetric] = field(default_factory=dict)
+    holders: tuple[RecordHolderSummary, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class RecordSibling:
+    """Another record of the same category, under a different criterion or version scope."""
+
+    record_id: UUID
+    title: str
+    subtitle: str | None
+    criterion: RecordCriterion
+    version_scope: VersionScope
+    retired: bool
 
 
 @dataclass(frozen=True, slots=True)
@@ -262,7 +345,8 @@ class PublicRecordDetail(PublishedRecordResult):
     holder_builds: tuple[PublicBuildSummary, ...]
     tied_builds: tuple[PublicBuildSummary, ...] = ()
     contender_builds: tuple[PublicBuildSummary, ...] = ()
-    history: tuple[HolderHistoryEntry, ...] = ()
+    history: tuple[RecordHolderPeriod, ...] = ()
+    siblings: tuple[RecordSibling, ...] = ()
     viewer: RecordViewer | None = None
 
     @property
@@ -276,13 +360,23 @@ class PublicRecordDetail(PublishedRecordResult):
         cls,
         result: PublishedRecordResult,
         builds: Mapping[int, PublicBuildSummary],
-        history: tuple[HolderHistoryEntry, ...] = (),
+        history: tuple[RecordHolderPeriod, ...] = (),
+        siblings: tuple[RecordSibling, ...] = (),
     ) -> Self:
         """Attach public summaries; every holder must be present in `builds`."""
-        detail = cls(**{field.name: getattr(result, field.name) for field in fields(result)}, holder_builds=())
+        detail = cls(**_init_fields(result), holder_builds=())
         return replace(
             detail,
-            history=history,
+            history=tuple(
+                replace(
+                    period,
+                    holders=tuple(
+                        RecordHolderSummary.from_build(builds[id]) for id in period.build_ids if id in builds
+                    ),
+                )
+                for period in history
+            ),
+            siblings=siblings,
             holder_builds=tuple(builds[id] for id in result.holder_build_ids),
             tied_builds=tuple(builds[id] for id in result.tied_build_ids if id in builds),
             contender_builds=tuple(builds[id] for id in detail.contender_build_ids if id in builds),
@@ -297,6 +391,10 @@ class RecordLookupRequest:
     base_key: str
     restriction_ids: frozenset[int]
     restriction_values: tuple[tuple[int, str, str], ...] = ()
+
+
+def _init_fields(result: PublishedRecordResult) -> dict[str, Any]:
+    return {field.name: getattr(result, field.name) for field in fields(result) if field.init}
 
 
 def _render_scalar(value: Decimal | str | bool) -> str:

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import type { PublishedRecordResult } from "@/generated/types.gen";
+  import type { PublicRecordSummary } from "@/generated/types.gen";
   import * as m from "@/locales/messages.gen";
   import EmptyState from "@/ui/feedback/EmptyState.svelte";
   import Layout from "@/ui/layout/Layout.svelte";
@@ -8,7 +8,7 @@
 
   /** One page of records with links to the adjacent pages, which the page computes. */
   type Props = {
-    records: PublishedRecordResult[];
+    records: PublicRecordSummary[];
     prevHref: string | null;
     nextHref: string | null;
   };

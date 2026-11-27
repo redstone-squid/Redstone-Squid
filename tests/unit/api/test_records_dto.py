@@ -13,7 +13,6 @@ from litestar.di import Provide
 
 from squid.api.security import ANONYMOUS
 from squid.api.v1.records import (
-    PublicRecordDTO,
     get_door_ranges,
     get_record,
     list_records,
@@ -28,7 +27,15 @@ from squid.core.pagination import Page, PageAnchor
 from squid.core.records.application import PublicRecordQueryService, RecordService
 from squid.core.records.application.expansion_regions import DoorRangeQuery, DoorRangeResult, analyze_door_widths
 from squid.core.records.application.live import LiveDoorConfiguration, LiveDoorRecord
-from squid.core.records.application.models import PublicRecordDetail, PublishedRecordResult
+from squid.core.records.application.metrics import MetricUnit, RecordMetric
+from squid.core.records.application.models import (
+    PublicRecordDetail,
+    PublicRecordSummary,
+    PublishedRecordResult,
+    RecordListFilters,
+    RecordListSort,
+    RecordStatus,
+)
 from squid.core.records.application.range_publication import RangePublicationService
 from squid.core.records.application.range_snapshots import RangeAttempt, RangePublication
 from squid.core.records.domain import BuildKind, RecordCriterion, RecordResolution, VersionScope
@@ -44,6 +51,7 @@ _RECORD = PublishedRecordResult(
     criterion=RecordCriterion.FASTEST,
     build_kind=BuildKind.DOOR,
     version_scope=VersionScope.ALL_TIME,
+    category_key="door:door|2x3|t[]|Door:r[]:p[]",
     holder_build_ids=(42,),
     computed_at=datetime(2026, 8, 10, 12, tzinfo=UTC),
     last_checked_at=datetime(2026, 8, 11, 12, tzinfo=UTC),
@@ -58,47 +66,81 @@ _RECORD_JSON = {
     "criterion": RecordCriterion.FASTEST.value,
     "build_kind": BuildKind.DOOR.value,
     "version_scope": VersionScope.ALL_TIME.value,
+    "category_key": "door:door|2x3|t[]|Door:r[]:p[]",
     "holder_build_ids": [42],
     "tied_build_ids": [],
     "computed_at": "2026-08-10T12:00:00Z",
     "last_checked_at": "2026-08-11T12:00:00Z",
     "refresh_pending": True,
     "version_id": None,
+    "metrics": {},
+    "holder_since": None,
+    "status": "resolved",
 }
 
 
-async def test_record_listing_dto_preserves_json_and_declares_public_fields() -> None:
-    record = _RECORD
-    records = create_autospec(RecordService, instance=True)
-    page = Page(items=(record,), total=2, next=PageAnchor(after_id=7), prev=None)
-    records.list_page.return_value = page
-    handler = get(
-        "/records",
-        return_dto=PublicRecordDTO,
-        dependencies={"records": Provide(lambda: records, sync_to_thread=False)},
-    )(list_records.fn)
+async def test_record_listing_serializes_holders_and_metrics_and_passes_filters() -> None:
+    record = PublicRecordSummary.with_builds(
+        replace(
+            _RECORD,
+            metrics={"opening_time": RecordMetric.render(8, MetricUnit.GAME_TICKS)},
+            holder_since=datetime(2026, 8, 1, tzinfo=UTC),
+        ),
+        {42: _holder()},
+    )
+    records = create_autospec(PublicRecordQueryService, instance=True)
+    records.list_page.return_value = Page(items=(record,), total=2, next=PageAnchor(after_id=7), prev=None)
+    handler = get("/records", dependencies={"records": Provide(lambda: records, sync_to_thread=False)})(list_records.fn)
     app = Litestar([handler], dependencies={"caller": Provide(lambda: ANONYMOUS, sync_to_thread=False)})
 
     # Litestar annotates ASGI scopes more narrowly than httpx's mutable dictionaries.
     transport = httpx.ASGITransport(app=app)  # type: ignore[bad-argument-type]
     async with httpx.AsyncClient(transport=transport, base_url="https://test") as client:
-        response = await client.get("/records")
+        response = await client.get(
+            "/records",
+            params={"build_kind": "door", "status": "unresolved", "tag_slug": ["flush", "flush"], "sort": "title"},
+        )
 
     assert response.status_code == 200
-    assert response.json() == {
-        "items": [_RECORD_JSON],
-        "total": 2,
-        "next": {"offset": None, "after_id": 7, "before_id": None},
-        "prev": None,
-    }
-    # The HTTP wrapper may be transformed by the DTO, but the service's frozen page stays intact.
-    assert page.items == (record,)
-    schemas = app.openapi_schema.to_schema()["components"]["schemas"]
-    public = schemas["PublishedRecordResult"]
-    assert set(public["properties"]) == PublicRecordDTO.config.include
-    assert public["properties"]["holder_build_ids"]["type"] == "array"
-    assert public["properties"]["computed_at"]["format"] == "date-time"
-    assert public["properties"]["record_id"]["format"] == "uuid"
+    (item,) = response.json()["items"]
+    assert item["holders"] == [
+        {
+            "build_id": 42,
+            "title": "Fastest 2x3 door",
+            "creators": [{"name": "Alice", "account_id": None}],
+            "preview": {"kind": "render", "url": "https://media.example/render.png", "width": None, "height": None},
+        }
+    ]
+    assert item["metrics"] == {"opening_time": {"value": 8, "unit": "game_ticks", "display": "8 gt"}}
+    assert item["holder_since"] == "2026-08-01T00:00:00Z"
+    assert item["category_key"] == "door:door|2x3|t[]|Door:r[]:p[]"
+    assert item["status"] == "resolved"
+    kwargs = records.list_page.call_args.kwargs
+    assert kwargs["sort"] is RecordListSort.TITLE
+    assert kwargs["filters"] == RecordListFilters(
+        build_kind=BuildKind.DOOR, status=RecordStatus.UNRESOLVED, tag_slugs=("flush",)
+    )
+
+
+def _holder() -> PublicBuildSummary:
+    return PublicBuildSummary(
+        id=42,
+        revision=3,
+        title="Fastest 2x3 door",
+        display_name=None,
+        status=PublicBuildStatus.APPROVED,
+        category=BuildCategory.DOOR,
+        dimensions=PublicBuildDimensions(width=5, height=6, depth=None),
+        creators=(PublicBuildCreator("Alice", None),),
+        tags=(PublicBuildTag(key="official_delay", name="Delay", value=Decimal("1.5"), unit="second"),),
+        preview=PublicBuildPreview(kind="render", url="https://media.example/render.png"),
+        version_spec=">=1.21",
+        versions=("Java 1.21.5",),
+        opening_time=8,
+        closing_time=None,
+        created_at=datetime(2026, 8, 1, 9, 30, tzinfo=UTC),
+        updated_at=None,
+    )
 
 
 @pytest.mark.parametrize("expanded", [False, True])
@@ -179,6 +221,7 @@ async def test_record_detail_serializes_the_application_read_model(expanded: boo
         "tied_builds": [],
         "contender_builds": [],
         "history": [],
+        "siblings": [],
         "retired_at": None,
         "holder_builds": [
             {

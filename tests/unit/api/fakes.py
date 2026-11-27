@@ -69,10 +69,17 @@ from squid.core.permissions.application.epoch import PermissionEpochWatcher, Wak
 from squid.core.permissions.application.ports import PermissionSubject
 from squid.core.permissions.domain import Pattern
 from squid.core.records.application import PublicRecordQueryService, RecordAdministrationService, RecordService
-from squid.core.records.application.models import PublicRecordDetail, PublishedRecordResult, RecordListSort
+from squid.core.records.application.models import (
+    ALL_RECORDS,
+    PublicRecordDetail,
+    PublicRecordSummary,
+    PublishedRecordResult,
+    RecordListFilters,
+    RecordListSort,
+)
 from squid.core.records.application.range_publication import RangePublicationService
 from squid.core.records.application.range_snapshots import RangePublication
-from squid.core.records.domain import BuildKind, VersionScope
+from squid.core.records.domain import BuildKind
 from squid.core.schematics.application import SchematicService
 from squid.core.schematics.application.attachments import PublicSchematicDownload, StoredSchematic
 from squid.core.schematics.application.commands import RenderRequest
@@ -523,18 +530,6 @@ class MockRecords(RecordService):
     async def get(self, result_id: int, *, context: ActingContext) -> PublishedRecordResult | None:
         return None
 
-    @override
-    async def list_page(
-        self,
-        *,
-        selector: PageSelector = FIRST_PAGE,
-        sort: RecordListSort = RecordListSort.ID,
-        page_size: int = 20,
-        version_scope: VersionScope | None = None,
-        context: ActingContext,
-    ) -> Page[PublishedRecordResult]:
-        return cast(Page[PublishedRecordResult], _EMPTY_PAGE)
-
 
 class MockRecordAdministration(RecordAdministrationService):
     def __init__(self) -> None:
@@ -552,6 +547,18 @@ class MockPublicRecords(PublicRecordQueryService):
     @override
     async def get(self, record_id: UUID, *, context: ActingContext) -> PublicRecordDetail | None:
         return None
+
+    @override
+    async def list_page(
+        self,
+        *,
+        selector: PageSelector = FIRST_PAGE,
+        sort: RecordListSort = RecordListSort.ID,
+        filters: RecordListFilters = ALL_RECORDS,
+        page_size: int = 20,
+        context: ActingContext,
+    ) -> Page[PublicRecordSummary]:
+        return cast(Page[PublicRecordSummary], _EMPTY_PAGE)
 
 
 class MockSubmissionForms(SubmissionFormService):
