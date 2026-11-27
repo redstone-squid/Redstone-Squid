@@ -149,7 +149,7 @@ describe("navigation", () => {
   it("omits pagination for one page and disables missing directions", () => {
     render(Pagination, { labels });
     expect(screen.queryByRole("navigation")).not.toBeInTheDocument();
-    render(Pagination, { nextHref: "/records?after_id=4", range: "1–20 of 30", labels });
+    render(Pagination, { nextHref: "/records?cursor=abc", range: "1–20 of 30", labels });
     const nav = screen.getByRole("navigation", { name: "Pages" });
     expect(within(nav).getByRole("link", { name: "Previous" })).toHaveAttribute(
       "aria-disabled",

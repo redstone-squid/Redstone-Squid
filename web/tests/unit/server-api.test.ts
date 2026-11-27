@@ -50,8 +50,8 @@ describe("per-request API client", () => {
       }),
     );
     const client = createApiClient("zh-CN", config, "203.0.113.9, 172.18.0.2");
-    expect(unwrap(await buildsList({ client, query: { after_id: 7 } }))).toEqual(emptyPage);
-    expect(request?.url).toBe(`${API}/v1/builds?after_id=7`);
+    expect(unwrap(await buildsList({ client, query: { cursor: "abc" } }))).toEqual(emptyPage);
+    expect(request?.url).toBe(`${API}/v1/builds?cursor=abc`);
     expect(request?.headers.get("Accept-Language")).toBe("zh-CN");
     expect(request?.headers.get("X-Forwarded-For")).toBe("203.0.113.9, 172.18.0.2");
   });

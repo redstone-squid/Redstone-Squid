@@ -2,32 +2,23 @@ import type { PageAnchor } from "@/generated/types.gen";
 import { RouteNavigation } from "@/navigation/route";
 
 /** The query parameters that address one page of a listing. The API accepts at most one. */
-export type PageAddress = { after_id?: number; before_id?: number; offset?: number };
-const PAGE_PARAMS = ["after_id", "before_id", "offset"] as const;
-
-function positiveInteger(value: string | null): number | undefined {
-  if (value === null) return undefined;
-  const parsed = Number(value.trim());
-  return Number.isSafeInteger(parsed) && parsed >= 1 ? parsed : undefined;
-}
+export type PageAddress = { cursor?: string; offset?: number };
 
 /**
- * Read the page a URL addresses, preferring `after_id`, then `before_id`, then `offset`.
- * Invalid values are skipped, so a hand-edited link still renders a page.
+ * Read the page a URL addresses, preferring `cursor` over `offset`.
+ * Invalid offsets are skipped, so a hand-edited link still renders a page. Cursors are opaque;
+ * the API answers a damaged one with `INVALID_PAGE_CURSOR`.
  */
 export function readPageAddress(params: URLSearchParams): PageAddress {
-  for (const name of PAGE_PARAMS) {
-    const value = positiveInteger(params.get(name));
-    if (value !== undefined) return { [name]: value };
-  }
-  return {};
+  const cursor = params.get("cursor")?.trim() ?? "";
+  if (cursor !== "") return { cursor };
+  const offset = Number(params.get("offset")?.trim() ?? Number.NaN);
+  return Number.isSafeInteger(offset) && offset >= 1 ? { offset } : {};
 }
 
 /** The localized link to the page an API anchor points to, keeping the URL's other parameters. */
 export function pageHref(url: URL, anchor: PageAnchor): string {
-  type Cursor = { [K in keyof PageAnchor]-?: NonNullable<PageAnchor[K]> };
-  const cleared = { after_id: null, before_id: null, offset: null };
-  const key = PAGE_PARAMS.find((name) => anchor[name] != null);
-  const nav = new RouteNavigation<Cursor>(url);
-  return nav.update(key === undefined ? cleared : { ...cleared, [key]: anchor[key] });
+  type Address = { cursor: string; offset: number };
+  const nav = new RouteNavigation<Address>(url);
+  return nav.update({ cursor: anchor.cursor ?? null, offset: anchor.offset ?? null });
 }

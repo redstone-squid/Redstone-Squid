@@ -7,12 +7,12 @@ import { buildFixtures, recordFixtures } from "@/workbench/fixtures";
 
 describe("catalogue", () => {
   it("explains an empty record list and links to the next page", () => {
-    render(RecordList, { records: [], prevHref: null, nextHref: "/records?after_id=4" });
+    render(RecordList, { records: [], prevHref: null, nextHref: "/records?cursor=abc" });
     expect(screen.getByText(m.recordsEmpty())).toBeVisible();
     const pages = screen.getByRole("navigation", { name: m.navPagination() });
     expect(within(pages).getByRole("link", { name: m.commonNext() })).toHaveAttribute(
       "href",
-      "/records?after_id=4",
+      "/records?cursor=abc",
     );
   });
 

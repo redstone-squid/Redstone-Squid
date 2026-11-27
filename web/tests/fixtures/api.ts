@@ -205,18 +205,18 @@ function problem(request: Request, status: number, code: string): Response {
 function buildPage(url: URL): BuildsListResponse {
   if (url.searchParams.get("page_size") === "6")
     return { items: builds, total: builds.length, next: null, prev: null };
-  if (url.searchParams.get("after_id") === "2") {
+  if (url.searchParams.get("cursor") === "builds-2") {
     return {
       items: [builds[2]],
       total: 3,
       next: null,
-      prev: { offset: null, after_id: null, before_id: builds[2].id },
+      prev: { offset: null, cursor: "builds-2-back" },
     };
   }
   return {
     items: builds.slice(0, 2),
     total: 3,
-    next: { offset: null, after_id: 2, before_id: null },
+    next: { offset: null, cursor: "builds-2" },
     prev: null,
   };
 }
@@ -224,20 +224,15 @@ function buildPage(url: URL): BuildsListResponse {
 function recordPage(url: URL): RecordsListResponse {
   if (url.searchParams.get("page_size") === "3")
     return { items: records, total: records.length, next: null, prev: null };
-  if (url.searchParams.get("after_id") === "1") {
+  if (url.searchParams.get("cursor") === "records-1") {
     return {
       items: [records[1]],
       total: 2,
       next: null,
-      prev: { offset: null, after_id: null, before_id: records[1].result_id },
+      prev: { offset: null, cursor: "records-1-back" },
     };
   }
-  return {
-    items: [records[0]],
-    total: 2,
-    next: { offset: null, after_id: 1, before_id: null },
-    prev: null,
-  };
+  return { items: [records[0]], total: 2, next: { offset: null, cursor: "records-1" }, prev: null };
 }
 
 /**
@@ -348,6 +343,8 @@ async function routeRequest(request: Request): Promise<Response> {
           license: "cc_by_4_0",
           license_url: "https://creativecommons.org/licenses/by/4.0/",
           download_url: "/v1/builds/1/schematics/8/content",
+          attached_at: "2026-08-01T00:00:00Z",
+          blocks: null,
         },
       ],
       total: 1,

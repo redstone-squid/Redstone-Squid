@@ -270,8 +270,8 @@ export type BuildLinks = {
  *
  * A named display order for build listings.
  *
- * Each order is total, so identifier anchors work with all of them. `ID` lists the newest IDs
- * first and seeks without looking up the anchor, which makes it the order for full traversal.
+ * Each order is total, so cursors work with all of them. `ID` lists the newest IDs first and
+ * never moves a row, which makes it the order for full traversal.
  *
  */
 export type BuildListSort = 'id' | 'newest' | 'oldest' | 'updated' | 'fastest_open' | 'smallest_volume' | 'title';
@@ -409,6 +409,15 @@ export type BuildViewer = {
 export type CandidateGap = {
     build_id: number;
     field: RecordFact;
+};
+
+/**
+ * CatalogueStatsDetail
+ */
+export type CatalogueStatsDetail = {
+    builds: number;
+    records: number;
+    creators: number;
 };
 
 /**
@@ -1059,7 +1068,7 @@ export type EmptyParams = {
  *
  * Stable machine-readable application error codes.
  */
-export type ErrorCode = 'ACCOUNT_ALREADY_LINKED' | 'ACCOUNT_IDENTITY_NOT_FOUND' | 'ACCOUNT_NOT_FOUND' | 'ALIAS_ALREADY_ADDED' | 'ALIAS_ALREADY_CLAIMED' | 'ALIAS_IN_USE' | 'BUILD_BUSY' | 'BUILD_NOT_FOUND' | 'BUILD_REVISION_REQUIRED' | 'CLAIM_NOT_FOUND' | 'CREATOR_ALIAS_NOT_FOUND' | 'CONFIGURATION_ERROR' | 'CONSENT_REQUIRED' | 'CONSENT_VERSION_STALE' | 'DATA_INTEGRITY_ERROR' | 'DOMAIN_ERROR' | 'INFRASTRUCTURE_ERROR' | 'IDEMPOTENCY_CONFLICT' | 'IDEMPOTENCY_IN_PROGRESS' | 'INTERNAL_ERROR' | 'INVALID_BUILD' | 'INVALID_MESSAGE' | 'INVALID_QUERY' | 'INVALID_REQUEST' | 'INVALID_STATE' | 'INVALID_ACCOUNT' | 'INVALID_MERGE_CODE' | 'INVALID_PROFILE' | 'INVALID_VERIFICATION_CODE' | 'INVALID_VERSION' | 'LAST_IDENTITY' | 'LINK_RESERVATION_EXPIRED' | 'INVALID_VOTE_CONFIGURATION' | 'MESSAGE_NOT_FOUND' | 'MINECRAFT_ACCOUNT_NOT_FOUND' | 'MINECRAFT_SERVICE_UNAVAILABLE' | 'NOT_FOUND' | 'PAGE_ANCHOR_NOT_FOUND' | 'PERSISTENCE_ERROR' | 'RATE_LIMITED' | 'RECORD_NOT_FOUND' | 'RESTRICTION_NOT_FOUND' | 'REVISION_CONFLICT' | 'SCHEMATIC_INVALID' | 'SCHEMATIC_NOT_FOUND' | 'SCHEMATIC_RENDER_REFUSED' | 'SCHEMATIC_RENDER_UNAVAILABLE' | 'SCHEMATIC_SUPPORT_UNAVAILABLE' | 'SCHEMATIC_TIMEOUT' | 'SCHEMATIC_TOO_LARGE' | 'SCHEMATIC_WORKER_CRASHED' | 'TAG_NOT_FOUND' | 'UNAUTHORIZED' | 'VALIDATION_ERROR' | 'VERIFICATION_ATTEMPTS_EXHAUSTED' | 'VERSION_CATALOG_UNAVAILABLE' | 'VERSION_EXISTS' | 'VERSION_IN_USE' | 'VERSION_NOT_FOUND' | 'VOTE_SESSION_NOT_FOUND';
+export type ErrorCode = 'ACCOUNT_ALREADY_LINKED' | 'ACCOUNT_IDENTITY_NOT_FOUND' | 'ACCOUNT_NOT_FOUND' | 'ALIAS_ALREADY_ADDED' | 'ALIAS_ALREADY_CLAIMED' | 'ALIAS_IN_USE' | 'BUILD_BUSY' | 'BUILD_NOT_FOUND' | 'BUILD_REVISION_REQUIRED' | 'CLAIM_NOT_FOUND' | 'CREATOR_ALIAS_NOT_FOUND' | 'CONFIGURATION_ERROR' | 'CONSENT_REQUIRED' | 'CONSENT_VERSION_STALE' | 'DATA_INTEGRITY_ERROR' | 'DOMAIN_ERROR' | 'INFRASTRUCTURE_ERROR' | 'IDEMPOTENCY_CONFLICT' | 'IDEMPOTENCY_IN_PROGRESS' | 'INTERNAL_ERROR' | 'INVALID_BUILD' | 'INVALID_MESSAGE' | 'INVALID_PAGE_CURSOR' | 'INVALID_QUERY' | 'INVALID_REQUEST' | 'INVALID_STATE' | 'INVALID_ACCOUNT' | 'INVALID_MERGE_CODE' | 'INVALID_PROFILE' | 'INVALID_VERIFICATION_CODE' | 'INVALID_VERSION' | 'LAST_IDENTITY' | 'LINK_RESERVATION_EXPIRED' | 'INVALID_VOTE_CONFIGURATION' | 'MESSAGE_NOT_FOUND' | 'MINECRAFT_ACCOUNT_NOT_FOUND' | 'MINECRAFT_SERVICE_UNAVAILABLE' | 'NOT_FOUND' | 'PERSISTENCE_ERROR' | 'RATE_LIMITED' | 'RECORD_NOT_FOUND' | 'RESTRICTION_NOT_FOUND' | 'REVISION_CONFLICT' | 'SCHEMATIC_INVALID' | 'SCHEMATIC_NOT_FOUND' | 'SCHEMATIC_RENDER_REFUSED' | 'SCHEMATIC_RENDER_UNAVAILABLE' | 'SCHEMATIC_SUPPORT_UNAVAILABLE' | 'SCHEMATIC_TIMEOUT' | 'SCHEMATIC_TOO_LARGE' | 'SCHEMATIC_WORKER_CRASHED' | 'TAG_NOT_FOUND' | 'UNAUTHORIZED' | 'VALIDATION_ERROR' | 'VERIFICATION_ATTEMPTS_EXHAUSTED' | 'VERSION_CATALOG_UNAVAILABLE' | 'VERSION_EXISTS' | 'VERSION_IN_USE' | 'VERSION_NOT_FOUND' | 'VOTE_SESSION_NOT_FOUND';
 
 /**
  * ErrorReportDayDetail
@@ -1777,8 +1786,7 @@ export type OwnVoteSelection = {
  */
 export type PageAnchor = {
     offset?: number | null;
-    after_id?: number | string | null;
-    before_id?: number | string | null;
+    cursor?: string | null;
 };
 
 /**
@@ -1786,6 +1794,16 @@ export type PageAnchor = {
  */
 export type PageLitestarDtoBackendTagSummary = {
     items: Array<TagSummary>;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+};
+
+/**
+ * Page[PublicServerSummary]
+ */
+export type PageSquidApiV1MinecraftServersPublicServerSummary = {
+    items: Array<PublicServerSummary>;
     total: number;
     next: PageAnchor | null;
     prev: PageAnchor | null;
@@ -2282,6 +2300,19 @@ export type PublicRecordSummary = {
     holder_since?: string | null;
     status: RecordStatus | null;
     holders: Array<RecordHolderSummary>;
+};
+
+/**
+ * PublicServerSummary
+ */
+export type PublicServerSummary = {
+    installation_id: string;
+    display_name: string | null;
+    address: string | null;
+    description: string | null;
+    website_url: string | null;
+    sponsor: boolean;
+    listed_since: string;
 };
 
 /**
@@ -5193,7 +5224,7 @@ export type BuildsHistoryListData = {
     };
     query?: {
         /**
-         * Number of items to skip. Excludes after_id and before_id.
+         * Number of items to skip. Excludes cursor.
          */
         offset?: number | null;
         /**
@@ -5288,8 +5319,8 @@ export type BuildsListData = {
         /**
          * A named display order for build listings.
          *
-         * Each order is total, so identifier anchors work with all of them. `ID` lists the newest IDs
-         * first and seeks without looking up the anchor, which makes it the order for full traversal.
+         * Each order is total, so cursors work with all of them. `ID` lists the newest IDs first and
+         * never moves a row, which makes it the order for full traversal.
          *
          */
         sort?: BuildListSort;
@@ -5298,17 +5329,13 @@ export type BuildsListData = {
          */
         page_size?: number;
         /**
-         * Number of items to skip. Excludes after_id and before_id.
+         * Number of items to skip. Excludes cursor.
          */
         offset?: number | null;
         /**
-         * Return the items after this identifier in display order. Excludes offset.
+         * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
          */
-        after_id?: number | null;
-        /**
-         * Return the items before this identifier in display order. Excludes offset.
-         */
-        before_id?: number | null;
+        cursor?: string | null;
     };
     url: '/v1/builds';
 };
@@ -5908,17 +5935,13 @@ export type DiagnosticsErrorsListData = {
          */
         page_size?: number;
         /**
-         * Number of items to skip. Excludes after_id and before_id.
+         * Number of items to skip. Excludes cursor.
          */
         offset?: number | null;
         /**
-         * Return the items after this identifier in display order. Excludes offset.
+         * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
          */
-        after_id?: string | null;
-        /**
-         * Return the items before this identifier in display order. Excludes offset.
-         */
-        before_id?: string | null;
+        cursor?: string | null;
         /**
          * Return only failures that permanently abandoned work, such as a dead-lettered job.
          */
@@ -6631,6 +6654,52 @@ export type MinecraftGrantRevokeResponses = {
 
 export type MinecraftGrantRevokeResponse = MinecraftGrantRevokeResponses[keyof MinecraftGrantRevokeResponses];
 
+export type MinecraftServersListData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Maximum number of items to return.
+         */
+        page_size?: number;
+        /**
+         * Number of items to skip. Excludes cursor.
+         */
+        offset?: number | null;
+    };
+    url: '/v1/minecraft/servers';
+};
+
+export type MinecraftServersListErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type MinecraftServersListError = MinecraftServersListErrors[keyof MinecraftServersListErrors];
+
+export type MinecraftServersListResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: PageSquidApiV1MinecraftServersPublicServerSummary;
+};
+
+export type MinecraftServersListResponse = MinecraftServersListResponses[keyof MinecraftServersListResponses];
+
 export type NotificationPreferencesGetData = {
     body?: never;
     path?: never;
@@ -6909,17 +6978,13 @@ export type NotificationInboxListData = {
          */
         page_size?: number;
         /**
-         * Number of items to skip. Excludes after_id and before_id.
+         * Number of items to skip. Excludes cursor.
          */
         offset?: number | null;
         /**
-         * Return the items after this identifier in display order. Excludes offset.
+         * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
          */
-        after_id?: number | null;
-        /**
-         * Return the items before this identifier in display order. Excludes offset.
-         */
-        before_id?: number | null;
+        cursor?: string | null;
         /**
          * Only list unread items.
          */
@@ -7208,7 +7273,7 @@ export type PermissionsGrantsListData = {
          */
         page_size?: number;
         /**
-         * Number of items to skip. Excludes after_id and before_id.
+         * Number of items to skip. Excludes cursor.
          */
         offset?: number | null;
     };
@@ -7374,7 +7439,7 @@ export type PermissionsRolesListData = {
          */
         page_size?: number;
         /**
-         * Number of items to skip. Excludes after_id and before_id.
+         * Number of items to skip. Excludes cursor.
          */
         offset?: number | null;
     };
@@ -7847,7 +7912,7 @@ export type PermissionsAssignmentsListData = {
          */
         page_size?: number;
         /**
-         * Number of items to skip. Excludes after_id and before_id.
+         * Number of items to skip. Excludes cursor.
          */
         offset?: number | null;
     };
@@ -8079,17 +8144,13 @@ export type PermissionsAuditData = {
          */
         page_size?: number;
         /**
-         * Number of items to skip. Excludes after_id and before_id.
+         * Number of items to skip. Excludes cursor.
          */
         offset?: number | null;
         /**
-         * Return the items after this identifier in display order. Excludes offset.
+         * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
          */
-        after_id?: number | null;
-        /**
-         * Return the items before this identifier in display order. Excludes offset.
-         */
-        before_id?: number | null;
+        cursor?: string | null;
     };
     url: '/v1/permissions/audit';
 };
@@ -8194,17 +8255,13 @@ export type RecordsListData = {
          */
         page_size?: number;
         /**
-         * Number of items to skip. Excludes after_id and before_id.
+         * Number of items to skip. Excludes cursor.
          */
         offset?: number | null;
         /**
-         * Return the items after this identifier in display order. Excludes offset.
+         * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
          */
-        after_id?: number | null;
-        /**
-         * Return the items before this identifier in display order. Excludes offset.
-         */
-        before_id?: number | null;
+        cursor?: string | null;
     };
     url: '/v1/records';
 };
@@ -8288,17 +8345,13 @@ export type RecordsListDoorRangesData = {
          */
         page_size?: number;
         /**
-         * Number of items to skip. Excludes after_id and before_id.
+         * Number of items to skip. Excludes cursor.
          */
         offset?: number | null;
         /**
-         * Return the items after this identifier in display order. Excludes offset.
+         * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
          */
-        after_id?: number | null;
-        /**
-         * Return the items before this identifier in display order. Excludes offset.
-         */
-        before_id?: number | null;
+        cursor?: string | null;
     };
     url: '/v1/records/ranges/door';
 };
@@ -8737,17 +8790,13 @@ export type RecordsDriftData = {
          */
         page_size?: number;
         /**
-         * Number of items to skip. Excludes after_id and before_id.
+         * Number of items to skip. Excludes cursor.
          */
         offset?: number | null;
         /**
-         * Return the items after this identifier in display order. Excludes offset.
+         * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
          */
-        after_id?: number | null;
-        /**
-         * Return the items before this identifier in display order. Excludes offset.
-         */
-        before_id?: number | null;
+        cursor?: string | null;
     };
     url: '/v1/records/drift';
 };
@@ -8801,7 +8850,7 @@ export type BuildSchematicsListData = {
          */
         page_size?: number;
         /**
-         * Number of items to skip. Excludes after_id and before_id.
+         * Number of items to skip. Excludes cursor.
          */
         offset?: number | null;
     };
@@ -9097,17 +9146,13 @@ export type AccountSchematicVideoListData = {
          */
         page_size?: number;
         /**
-         * Number of items to skip. Excludes after_id and before_id.
+         * Number of items to skip. Excludes cursor.
          */
         offset?: number | null;
         /**
-         * Return the items after this identifier in display order. Excludes offset.
+         * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
          */
-        after_id?: number | null;
-        /**
-         * Return the items before this identifier in display order. Excludes offset.
-         */
-        before_id?: number | null;
+        cursor?: string | null;
     };
     url: '/v1/accounts/me/schematic-videos';
 };
@@ -9320,7 +9365,7 @@ export type SearchExecuteData = {
          */
         page_size?: number;
         /**
-         * Number of items to skip. Excludes after_id and before_id.
+         * Number of items to skip. Excludes cursor.
          */
         offset?: number | null;
         /**
@@ -9553,6 +9598,35 @@ export type BrowserSessionGetResponses = {
 
 export type BrowserSessionGetResponse = BrowserSessionGetResponses[keyof BrowserSessionGetResponses];
 
+export type CatalogueStatsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/stats';
+};
+
+export type CatalogueStatsErrors = {
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type CatalogueStatsError = CatalogueStatsErrors[keyof CatalogueStatsErrors];
+
+export type CatalogueStatsResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: CatalogueStatsDetail;
+};
+
+export type CatalogueStatsResponse = CatalogueStatsResponses[keyof CatalogueStatsResponses];
+
 export type BrowserImpersonationStartData = {
     body: StartImpersonation;
     headers?: {
@@ -9665,17 +9739,13 @@ export type SubmissionCorrectionInboxData = {
          */
         page_size?: number;
         /**
-         * Number of items to skip. Excludes after_id and before_id.
+         * Number of items to skip. Excludes cursor.
          */
         offset?: number | null;
         /**
-         * Return the items after this identifier in display order. Excludes offset.
+         * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
          */
-        after_id?: string | null;
-        /**
-         * Return the items before this identifier in display order. Excludes offset.
-         */
-        before_id?: string | null;
+        cursor?: string | null;
     };
     url: '/v1/submissions/inbox';
 };
@@ -10162,17 +10232,13 @@ export type SubmissionAttemptsListData = {
          */
         page_size?: number;
         /**
-         * Number of items to skip. Excludes after_id and before_id.
+         * Number of items to skip. Excludes cursor.
          */
         offset?: number | null;
         /**
-         * Return the items after this identifier in display order. Excludes offset.
+         * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
          */
-        after_id?: number | null;
-        /**
-         * Return the items before this identifier in display order. Excludes offset.
-         */
-        before_id?: number | null;
+        cursor?: string | null;
     };
     url: '/v1/submissions/drafts/{draft_id}/attempts';
 };
@@ -10929,17 +10995,13 @@ export type SubmissionRevisionListData = {
          */
         page_size?: number;
         /**
-         * Number of items to skip. Excludes after_id and before_id.
+         * Number of items to skip. Excludes cursor.
          */
         offset?: number | null;
         /**
-         * Return the items after this identifier in display order. Excludes offset.
+         * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
          */
-        after_id?: string | null;
-        /**
-         * Return the items before this identifier in display order. Excludes offset.
-         */
-        before_id?: string | null;
+        cursor?: string | null;
     };
     url: '/v1/submissions/revisions';
 };
@@ -11301,7 +11363,7 @@ export type TagsListData = {
          */
         page_size?: number;
         /**
-         * Number of items to skip. Excludes after_id and before_id.
+         * Number of items to skip. Excludes cursor.
          */
         offset?: number | null;
     };
@@ -11503,7 +11565,7 @@ export type MinecraftVersionsListData = {
          */
         page_size?: number;
         /**
-         * Number of items to skip. Excludes after_id and before_id.
+         * Number of items to skip. Excludes cursor.
          */
         offset?: number | null;
     };
@@ -11728,17 +11790,13 @@ export type VoteSessionListData = {
          */
         page_size?: number;
         /**
-         * Number of items to skip. Excludes after_id and before_id.
+         * Number of items to skip. Excludes cursor.
          */
         offset?: number | null;
         /**
-         * Return the items after this identifier in display order. Excludes offset.
+         * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
          */
-        after_id?: number | null;
-        /**
-         * Return the items before this identifier in display order. Excludes offset.
-         */
-        before_id?: number | null;
+        cursor?: string | null;
     };
     url: '/v1/vote-sessions';
 };

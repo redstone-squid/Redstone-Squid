@@ -12,8 +12,8 @@ describe("locale mapping", () => {
   });
 
   it("preserves routes, queries, fragments, and page addresses while switching language", () => {
-    expect(localizePath("/builds?q=door&after_id=42#results", "zh-CN")).toBe(
-      "/zh-cn/builds?q=door&after_id=42#results",
+    expect(localizePath("/builds?q=door&cursor=abc#results", "zh-CN")).toBe(
+      "/zh-cn/builds?q=door&cursor=abc#results",
     );
     expect(localizePath("/zh-cn/builds?q=door&offset=20", "en")).toBe("/builds?q=door&offset=20");
     expect(localizePath("/", "zh-CN")).toBe("/zh-cn");
