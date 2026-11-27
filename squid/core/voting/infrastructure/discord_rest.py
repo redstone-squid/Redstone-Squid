@@ -69,12 +69,16 @@ class DiscordRestActorResolver:
         self._cache: dict[tuple[int, int], tuple[float, _Membership]] = {}
 
     async def member(self, account_id: int, guild_id: int, kind: VoteKind) -> UserActor | None:
+        """Return `actor`'s answer; every kind's nodes resolve together, so the kind changes nothing."""
+        del kind
+        return await self.actor(account_id, guild_id)
+
+    async def actor(self, account_id: int, guild_id: int) -> UserActor | None:
         """Return cached or fetched membership facts for an interactive request.
 
         Missing identities, absent members, and unreadable guilds return None. Other
         lookup failures raise `DiscordMemberServiceUnavailableError`.
         """
-        del kind  # Every kind's nodes resolve together, so one lookup answers all of them.
         discord_id = await self._discord_id(account_id)
         if discord_id is None:
             return None

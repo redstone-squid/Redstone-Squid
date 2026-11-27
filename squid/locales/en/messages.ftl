@@ -592,7 +592,7 @@ accounts-bedrock-xuids-unsigned = Bedrock XUIDs must be unsigned 64-bit integers
 # squid/core/accounts/errors.py:360
 accounts-check-uuid-try-again = Check the UUID and try again.
 
-# squid/core/accounts/infrastructure/repository.py:694
+# squid/core/accounts/infrastructure/repository.py:702
 accounts-claim-reassign-required = Approve with `reassign: True` to move the name to the claimant.
 
 # squid/core/accounts/errors.py:320
@@ -4748,7 +4748,7 @@ permissions-archive-tag = Archive a tag.
 # squid/core/permissions/domain/catalogue.py:516
 permissions-browse-permission = Browse the permission catalogue and your own permissions.
 
-# squid/core/permissions/application/administration.py:84
+# squid/core/permissions/application/administration.py:91
 permissions-built-role = Built-in role
 
 # squid/core/permissions/domain/catalogue.py:410
@@ -4859,7 +4859,7 @@ permissions-measure-schematic-timing = Measure a schematic's timing.
 # squid/core/permissions/domain/models.py:95
 permissions-not-valid-permission = That is not a valid permission pattern.
 
-# squid/core/permissions/application/administration.py:72
+# squid/core/permissions/application/administration.py:79
 permissions-outside-authority = Outside your authority
 
 # squid/core/permissions/domain/catalogue.py:468
@@ -4919,7 +4919,7 @@ permissions-resynchronise-redstoner-role = Resynchronise Redstoner role membersh
 # squid/core/permissions/domain/catalogue.py:495
 permissions-review-poll-recount = Inspect and retry an incomplete final poll count.
 
-# squid/core/permissions/application/administration.py:78
+# squid/core/permissions/application/administration.py:85
 permissions-role-not-yours = Role is not yours to manage
 
 # squid/core/permissions/domain/catalogue.py:378

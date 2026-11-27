@@ -13,6 +13,7 @@ from squid.api.v1.creators import router as creator_aliases_router
 from squid.api.v1.diagnostics import router as diagnostics_router
 from squid.api.v1.minecraft_auth import router as minecraft_auth_router
 from squid.api.v1.notifications import router as notifications_router
+from squid.api.v1.permissions import router as permissions_router
 from squid.api.v1.records import router as records_router
 from squid.api.v1.schematics import router as schematics_router
 from squid.api.v1.search import router as search_router
@@ -41,6 +42,7 @@ router = Router(
         diagnostics_router,
         minecraft_auth_router,
         notifications_router,
+        permissions_router,
         records_router,
         schematics_router,
         search_router,
@@ -79,9 +81,10 @@ TAGS_METADATA = [
     {"name": "submissions", "description": "Revisioned submission forms and drafts."},
     {"name": "records", "description": "Active computed record results."},
     {"name": "tags", "description": "Published build and record tags."},
-    {"name": "versions", "description": "Recognized Minecraft versions."},
+    {"name": "versions", "description": "Recognized Minecraft versions and their corrections."},
     {"name": "creators", "description": "Creator names credited on builds."},
     {"name": "schematics", "description": "Schematic analysis metadata and content."},
     {"name": "vote sessions", "description": "Aggregate ballot-safe vote state."},
     {"name": "diagnostics", "description": "Stored error reports, resolvable by the reference a user was shown."},
+    {"name": "permissions", "description": "Permission grants, roles, assignments, explanations, and their audit log."},
 ]

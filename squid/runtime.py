@@ -127,6 +127,7 @@ class ApiServices:
     notifications: NotificationService
     build_queries: BuildQueryService
     permissions: PermissionService
+    permission_admin: PermissionAdministrationService
     permission_epoch: PermissionEpochWatcher
     records: RecordService
     record_administration: RecordAdministrationService

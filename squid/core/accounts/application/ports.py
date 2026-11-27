@@ -1,6 +1,6 @@
 """Account application ports, keyed by account rather than by identity provider."""
 
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
@@ -127,6 +127,10 @@ class AccountRepository(Protocol):
     async def get_alias_by_name(self, name: str) -> CreatorAlias | None: ...
 
     async def account_id_for_public_id(self, public_id: UUID) -> int | None: ...
+
+    async def public_ids_for(self, account_ids: Collection[int]) -> dict[int, UUID]:
+        """Return the public ID of each existing account; merged-away accounts are omitted."""
+        ...
 
     async def get_creator_profile(self, public_id: UUID) -> CreatorProfile | None: ...
 

@@ -6,6 +6,7 @@ from typing import Protocol
 from whenever import Instant
 
 from squid.core.actors import Actor, UserActor
+from squid.core.pagination import FIRST_PAGE, PageSelector
 from squid.core.permissions.domain import PermissionCheck
 from squid.core.permissions.domain.models import AuditAction, AuditSubjectKind, RolePermissionSubject
 from squid.core.permissions.models import (
@@ -189,7 +190,13 @@ class PermissionAdminRepository(Protocol):
         audit: AuditEntry,
     ) -> bool: ...
 
-    async def list_audit(self, *, guild_id: int | None = None, limit: int = 20) -> tuple[PermissionAuditEntry, ...]: ...
+    async def list_audit(
+        self, *, guild_id: int | None = None, limit: int = 20, selector: PageSelector[int] = FIRST_PAGE
+    ) -> tuple[PermissionAuditEntry, ...]:
+        """Entries newest first, optionally only those about one guild."""
+        ...
+
+    async def count_audit(self, *, guild_id: int | None = None) -> int: ...
 
 
 class PermissionUnitOfWork(UnitOfWork, Protocol):

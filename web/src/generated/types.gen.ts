@@ -55,6 +55,22 @@ export type AccountMergeDetail = {
 };
 
 /**
+ * AccountSubject
+ */
+export type AccountSubject = {
+    kind?: 'account';
+    account_id: string | null;
+};
+
+/**
+ * AccountSubjectRequest
+ */
+export type AccountSubjectRequest = {
+    kind: 'account';
+    account_id: string;
+};
+
+/**
  * ApiCapabilities
  */
 export type ApiCapabilities = {
@@ -81,10 +97,54 @@ export type ApiVersionCapabilities = {
 };
 
 /**
+ * AssignmentDetail
+ */
+export type AssignmentDetail = {
+    id: number;
+    role_id: number;
+    subject: AccountSubject | DiscordRoleSubject;
+    scope_guild_id: string | null;
+    expires_at: string | null;
+    granted_at: string;
+    granted_by_account_id: string | null;
+    reason: string | null;
+};
+
+/**
+ * AssignmentRequest
+ */
+export type AssignmentRequest = {
+    role_id: number;
+    subject: AccountSubjectRequest | DiscordRoleSubjectRequest;
+    scope_guild_id?: string | null;
+    expires_at?: string | null;
+    reason?: string | null;
+};
+
+/**
  * AttachSchematicRequest
  */
 export type AttachSchematicRequest = {
     source_draft_id: string;
+};
+
+/**
+ * AuditEntryDetail
+ */
+export type AuditEntryDetail = {
+    id: number;
+    at: string;
+    action: string;
+    actor_account_id: string | null;
+    subject_kind: string | null;
+    subject_id: string | null;
+    subject_guild_id: string | null;
+    pattern: string | null;
+    role_id: number | null;
+    scope_guild_id: string | null;
+    effect: 'allow' | 'deny' | 'forbid' | null;
+    expires_at: string | null;
+    reason: string | null;
 };
 
 /**
@@ -601,6 +661,16 @@ export type CsrfTokenResponse = {
 };
 
 /**
+ * DecisionDetail
+ */
+export type DecisionDetail = {
+    node: string;
+    allowed: boolean;
+    reason: Reason;
+    trace: Array<RuleDetail>;
+};
+
+/**
  * DiscordChannelDetail
  */
 export type DiscordChannelDetail = {
@@ -623,6 +693,24 @@ export type DiscordReference = {
 export type DiscordRoleDetail = {
     id: string;
     name: string;
+};
+
+/**
+ * DiscordRoleSubject
+ */
+export type DiscordRoleSubject = {
+    kind?: 'discord_role';
+    guild_id: string;
+    discord_role_id: string;
+};
+
+/**
+ * DiscordRoleSubjectRequest
+ */
+export type DiscordRoleSubjectRequest = {
+    kind: 'discord_role';
+    guild_id: string;
+    discord_role_id: string;
 };
 
 /**
@@ -1277,6 +1365,33 @@ export type GeneralDetails = {
 };
 
 /**
+ * GrantDetail
+ */
+export type GrantDetail = {
+    id: number;
+    subject: AccountSubject | DiscordRoleSubject;
+    pattern: string;
+    effect: 'allow' | 'deny' | 'forbid';
+    scope_guild_id: string | null;
+    expires_at: string | null;
+    granted_at: string;
+    granted_by_account_id: string | null;
+    reason: string | null;
+};
+
+/**
+ * GrantRequest
+ */
+export type GrantRequest = {
+    subject: AccountSubjectRequest | DiscordRoleSubjectRequest;
+    pattern: string;
+    effect?: 'allow' | 'deny' | 'forbid';
+    scope_guild_id?: string | null;
+    expires_at?: string | null;
+    reason?: string | null;
+};
+
+/**
  * HistoryActor
  */
 export type HistoryActor = {
@@ -1373,6 +1488,13 @@ export type InboxPage = {
     next: PageAnchor | null;
     prev: PageAnchor | null;
     unread_count: number;
+};
+
+/**
+ * IncludedRoleRequest
+ */
+export type IncludedRoleRequest = {
+    role_id: number;
 };
 
 /**
@@ -1584,6 +1706,18 @@ export type MinecraftIdentityRefresh = {
 };
 
 /**
+ * NodeScope
+ *
+ * Where a permission node's authority applies.
+ *
+ * `GLOBAL` nodes touch cross-guild state, such as the shared build database or
+ * bot-wide configuration. Only unscoped rules can affect them. `GUILD` nodes
+ * affect a single Discord server and may be delegated by its administrators.
+ *
+ */
+export type NodeScope = 'global' | 'guild';
+
+/**
  * NotificationPreferenceUpdate
  */
 export type NotificationPreferenceUpdate = {
@@ -1701,6 +1835,46 @@ export type PageSquidApiV1SchemasDiagnosticsErrorReportSummary = {
 };
 
 /**
+ * Page[AssignmentDetail]
+ */
+export type PageSquidApiV1SchemasPermissionsAssignmentDetail = {
+    items: Array<AssignmentDetail>;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+};
+
+/**
+ * Page[AuditEntryDetail]
+ */
+export type PageSquidApiV1SchemasPermissionsAuditEntryDetail = {
+    items: Array<AuditEntryDetail>;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+};
+
+/**
+ * Page[GrantDetail]
+ */
+export type PageSquidApiV1SchemasPermissionsGrantDetail = {
+    items: Array<GrantDetail>;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+};
+
+/**
+ * Page[RoleDetail]
+ */
+export type PageSquidApiV1SchemasPermissionsRoleDetail = {
+    items: Array<RoleDetail>;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+};
+
+/**
  * Page[SchematicSummary]
  */
 export type PageSquidApiV1SchemasSchematicsSchematicSummary = {
@@ -1807,6 +1981,25 @@ export type PatternMatch = {
         number,
         number
     ]>;
+};
+
+/**
+ * PermissionDomainDetail
+ */
+export type PermissionDomainDetail = {
+    domain: string;
+    nodes: Array<PermissionNodeDetail>;
+};
+
+/**
+ * PermissionNodeDetail
+ */
+export type PermissionNodeDetail = {
+    name: string;
+    scope: NodeScope;
+    description: string;
+    default_allowed: boolean;
+    tags: Array<Tag>;
 };
 
 /**
@@ -2139,6 +2332,13 @@ export type RangePublication = {
 };
 
 /**
+ * Reason
+ *
+ * Why a decision came out the way it did.
+ */
+export type Reason = 'credential' | 'owner' | 'forbidden' | 'rule' | 'default';
+
+/**
  * RecalculationFacts
  */
 export type RecalculationFacts = {
@@ -2418,6 +2618,63 @@ export type RequiredValue = {
  */
 export type RequiredValueParams = {
     expected: JsonValue2;
+};
+
+/**
+ * RoleCreateRequest
+ */
+export type RoleCreateRequest = {
+    slug: string;
+    name: string;
+    description?: string | null;
+    guild_id?: string | null;
+    rank?: number;
+};
+
+/**
+ * RoleDetail
+ */
+export type RoleDetail = {
+    id: number;
+    slug: string;
+    name: string;
+    description: string | null;
+    guild_id: string | null;
+    rank: number;
+    builtin: boolean;
+    protected: boolean;
+    includes: Array<string>;
+    excludes: Array<string>;
+    included_role_ids: Array<number>;
+};
+
+/**
+ * RolePatternRequest
+ */
+export type RolePatternRequest = {
+    pattern: string;
+    mode?: 'include' | 'exclude';
+};
+
+/**
+ * RoleRankRequest
+ */
+export type RoleRankRequest = {
+    rank: number;
+};
+
+/**
+ * RuleDetail
+ */
+export type RuleDetail = {
+    pattern: string;
+    effect: 'allow' | 'deny' | 'forbid';
+    origin: 'guild_admin_bridge' | 'role' | 'discord_role_grant' | 'account_grant';
+    source: string;
+    via: string | null;
+    scope_guild_id: string | null;
+    decisive: boolean;
+    lost_on: 'specificity' | 'scope' | 'subject' | 'origin' | 'effect' | 'tie' | null;
 };
 
 /**
@@ -3001,6 +3258,17 @@ export type SuppliedFileResponse = {
     kind: string;
     status: IntakeStatus;
 };
+
+/**
+ * Tag
+ *
+ * A category that selects related nodes across namespaces.
+ *
+ * Roles can exclude a tag such as `@destructive` so newly declared nodes with
+ * that tag receive the same exclusion.
+ *
+ */
+export type Tag = 'destructive' | 'moderation' | 'diagnostic' | 'readonly';
 
 /**
  * TagAuthority
@@ -6723,6 +6991,980 @@ export type NotificationInboxMarkUnreadResponses = {
 };
 
 export type NotificationInboxMarkUnreadResponse = NotificationInboxMarkUnreadResponses[keyof NotificationInboxMarkUnreadResponses];
+
+export type PermissionsNodesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/permissions/nodes';
+};
+
+export type PermissionsNodesErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type PermissionsNodesError = PermissionsNodesErrors[keyof PermissionsNodesErrors];
+
+export type PermissionsNodesResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: Array<PermissionDomainDetail>;
+};
+
+export type PermissionsNodesResponse = PermissionsNodesResponses[keyof PermissionsNodesResponses];
+
+export type PermissionsGrantsListData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Only rows about this account.
+         */
+        account_id?: string | null;
+        /**
+         * Only rows about this Discord role.
+         */
+        discord_role_id?: string | null;
+        /**
+         * Only rows about this guild, or resolve in it.
+         */
+        guild_id?: string | null;
+        /**
+         * Maximum number of items to return.
+         */
+        page_size?: number;
+        /**
+         * Number of items to skip. Excludes after_id and before_id.
+         */
+        offset?: number | null;
+    };
+    url: '/v1/permissions/grants';
+};
+
+export type PermissionsGrantsListErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type PermissionsGrantsListError = PermissionsGrantsListErrors[keyof PermissionsGrantsListErrors];
+
+export type PermissionsGrantsListResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: PageSquidApiV1SchemasPermissionsGrantDetail;
+};
+
+export type PermissionsGrantsListResponse = PermissionsGrantsListResponses[keyof PermissionsGrantsListResponses];
+
+export type PermissionsGrantsCreateData = {
+    body: GrantRequest;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/permissions/grants';
+};
+
+export type PermissionsGrantsCreateErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type PermissionsGrantsCreateError = PermissionsGrantsCreateErrors[keyof PermissionsGrantsCreateErrors];
+
+export type PermissionsGrantsCreateResponses = {
+    /**
+     * Document created, URL follows
+     */
+    201: GrantDetail;
+};
+
+export type PermissionsGrantsCreateResponse = PermissionsGrantsCreateResponses[keyof PermissionsGrantsCreateResponses];
+
+export type PermissionsGrantsRevokeData = {
+    body?: never;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        grant_id: number;
+    };
+    query?: never;
+    url: '/v1/permissions/grants/{grant_id}';
+};
+
+export type PermissionsGrantsRevokeErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type PermissionsGrantsRevokeError = PermissionsGrantsRevokeErrors[keyof PermissionsGrantsRevokeErrors];
+
+export type PermissionsGrantsRevokeResponses = {
+    /**
+     * Request fulfilled, nothing follows
+     */
+    204: void;
+};
+
+export type PermissionsGrantsRevokeResponse = PermissionsGrantsRevokeResponses[keyof PermissionsGrantsRevokeResponses];
+
+export type PermissionsRolesListData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Only rows about this guild, or resolve in it.
+         */
+        guild_id?: string | null;
+        /**
+         * Maximum number of items to return.
+         */
+        page_size?: number;
+        /**
+         * Number of items to skip. Excludes after_id and before_id.
+         */
+        offset?: number | null;
+    };
+    url: '/v1/permissions/roles';
+};
+
+export type PermissionsRolesListErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type PermissionsRolesListError = PermissionsRolesListErrors[keyof PermissionsRolesListErrors];
+
+export type PermissionsRolesListResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: PageSquidApiV1SchemasPermissionsRoleDetail;
+};
+
+export type PermissionsRolesListResponse = PermissionsRolesListResponses[keyof PermissionsRolesListResponses];
+
+export type PermissionsRolesCreateData = {
+    body: RoleCreateRequest;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/permissions/roles';
+};
+
+export type PermissionsRolesCreateErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type PermissionsRolesCreateError = PermissionsRolesCreateErrors[keyof PermissionsRolesCreateErrors];
+
+export type PermissionsRolesCreateResponses = {
+    /**
+     * Document created, URL follows
+     */
+    201: RoleDetail;
+};
+
+export type PermissionsRolesCreateResponse = PermissionsRolesCreateResponses[keyof PermissionsRolesCreateResponses];
+
+export type PermissionsRolesDeleteData = {
+    body?: never;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        role_id: number;
+    };
+    query?: never;
+    url: '/v1/permissions/roles/{role_id}';
+};
+
+export type PermissionsRolesDeleteErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type PermissionsRolesDeleteError = PermissionsRolesDeleteErrors[keyof PermissionsRolesDeleteErrors];
+
+export type PermissionsRolesDeleteResponses = {
+    /**
+     * Request fulfilled, nothing follows
+     */
+    204: void;
+};
+
+export type PermissionsRolesDeleteResponse = PermissionsRolesDeleteResponses[keyof PermissionsRolesDeleteResponses];
+
+export type PermissionsRolesGetData = {
+    body?: never;
+    path: {
+        role_id: number;
+    };
+    query?: never;
+    url: '/v1/permissions/roles/{role_id}';
+};
+
+export type PermissionsRolesGetErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type PermissionsRolesGetError = PermissionsRolesGetErrors[keyof PermissionsRolesGetErrors];
+
+export type PermissionsRolesGetResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: RoleDetail;
+};
+
+export type PermissionsRolesGetResponse = PermissionsRolesGetResponses[keyof PermissionsRolesGetResponses];
+
+export type PermissionsRolesRankData = {
+    body: RoleRankRequest;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        role_id: number;
+    };
+    query?: never;
+    url: '/v1/permissions/roles/{role_id}';
+};
+
+export type PermissionsRolesRankErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type PermissionsRolesRankError = PermissionsRolesRankErrors[keyof PermissionsRolesRankErrors];
+
+export type PermissionsRolesRankResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: RoleDetail;
+};
+
+export type PermissionsRolesRankResponse = PermissionsRolesRankResponses[keyof PermissionsRolesRankResponses];
+
+export type PermissionsRolesRemovePatternData = {
+    body?: never;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        role_id: number;
+    };
+    query: {
+        pattern: string;
+    };
+    url: '/v1/permissions/roles/{role_id}/patterns';
+};
+
+export type PermissionsRolesRemovePatternErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type PermissionsRolesRemovePatternError = PermissionsRolesRemovePatternErrors[keyof PermissionsRolesRemovePatternErrors];
+
+export type PermissionsRolesRemovePatternResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: RoleDetail;
+};
+
+export type PermissionsRolesRemovePatternResponse = PermissionsRolesRemovePatternResponses[keyof PermissionsRolesRemovePatternResponses];
+
+export type PermissionsRolesAddPatternData = {
+    body: RolePatternRequest;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        role_id: number;
+    };
+    query?: never;
+    url: '/v1/permissions/roles/{role_id}/patterns';
+};
+
+export type PermissionsRolesAddPatternErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type PermissionsRolesAddPatternError = PermissionsRolesAddPatternErrors[keyof PermissionsRolesAddPatternErrors];
+
+export type PermissionsRolesAddPatternResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: RoleDetail;
+};
+
+export type PermissionsRolesAddPatternResponse = PermissionsRolesAddPatternResponses[keyof PermissionsRolesAddPatternResponses];
+
+export type PermissionsRolesAddIncludeData = {
+    body: IncludedRoleRequest;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        role_id: number;
+    };
+    query?: never;
+    url: '/v1/permissions/roles/{role_id}/includes';
+};
+
+export type PermissionsRolesAddIncludeErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type PermissionsRolesAddIncludeError = PermissionsRolesAddIncludeErrors[keyof PermissionsRolesAddIncludeErrors];
+
+export type PermissionsRolesAddIncludeResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: RoleDetail;
+};
+
+export type PermissionsRolesAddIncludeResponse = PermissionsRolesAddIncludeResponses[keyof PermissionsRolesAddIncludeResponses];
+
+export type PermissionsRolesRemoveIncludeData = {
+    body?: never;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        role_id: number;
+        included_id: number;
+    };
+    query?: never;
+    url: '/v1/permissions/roles/{role_id}/includes/{included_id}';
+};
+
+export type PermissionsRolesRemoveIncludeErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type PermissionsRolesRemoveIncludeError = PermissionsRolesRemoveIncludeErrors[keyof PermissionsRolesRemoveIncludeErrors];
+
+export type PermissionsRolesRemoveIncludeResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: RoleDetail;
+};
+
+export type PermissionsRolesRemoveIncludeResponse = PermissionsRolesRemoveIncludeResponses[keyof PermissionsRolesRemoveIncludeResponses];
+
+export type PermissionsAssignmentsListData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Only rows about this account.
+         */
+        account_id?: string | null;
+        /**
+         * Only rows about this Discord role.
+         */
+        discord_role_id?: string | null;
+        /**
+         * Only rows about this guild, or resolve in it.
+         */
+        guild_id?: string | null;
+        /**
+         * Maximum number of items to return.
+         */
+        page_size?: number;
+        /**
+         * Number of items to skip. Excludes after_id and before_id.
+         */
+        offset?: number | null;
+    };
+    url: '/v1/permissions/assignments';
+};
+
+export type PermissionsAssignmentsListErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type PermissionsAssignmentsListError = PermissionsAssignmentsListErrors[keyof PermissionsAssignmentsListErrors];
+
+export type PermissionsAssignmentsListResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: PageSquidApiV1SchemasPermissionsAssignmentDetail;
+};
+
+export type PermissionsAssignmentsListResponse = PermissionsAssignmentsListResponses[keyof PermissionsAssignmentsListResponses];
+
+export type PermissionsAssignmentsCreateData = {
+    body: AssignmentRequest;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/permissions/assignments';
+};
+
+export type PermissionsAssignmentsCreateErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type PermissionsAssignmentsCreateError = PermissionsAssignmentsCreateErrors[keyof PermissionsAssignmentsCreateErrors];
+
+export type PermissionsAssignmentsCreateResponses = {
+    /**
+     * Document created, URL follows
+     */
+    201: AssignmentDetail;
+};
+
+export type PermissionsAssignmentsCreateResponse = PermissionsAssignmentsCreateResponses[keyof PermissionsAssignmentsCreateResponses];
+
+export type PermissionsAssignmentsDeleteData = {
+    body?: never;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        assignment_id: number;
+    };
+    query?: never;
+    url: '/v1/permissions/assignments/{assignment_id}';
+};
+
+export type PermissionsAssignmentsDeleteErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type PermissionsAssignmentsDeleteError = PermissionsAssignmentsDeleteErrors[keyof PermissionsAssignmentsDeleteErrors];
+
+export type PermissionsAssignmentsDeleteResponses = {
+    /**
+     * Request fulfilled, nothing follows
+     */
+    204: void;
+};
+
+export type PermissionsAssignmentsDeleteResponse = PermissionsAssignmentsDeleteResponses[keyof PermissionsAssignmentsDeleteResponses];
+
+export type PermissionsExplainData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Only rows about this account.
+         */
+        account_id?: string | null;
+        /**
+         * Only rows about this Discord role.
+         */
+        discord_role_id?: string | null;
+        /**
+         * Only rows about this guild, or resolve in it.
+         */
+        guild_id?: string | null;
+        /**
+         * Explain only these nodes.
+         */
+        node?: Array<string> | null;
+    };
+    url: '/v1/permissions/explain';
+};
+
+export type PermissionsExplainErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type PermissionsExplainError = PermissionsExplainErrors[keyof PermissionsExplainErrors];
+
+export type PermissionsExplainResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: Array<DecisionDetail>;
+};
+
+export type PermissionsExplainResponse = PermissionsExplainResponses[keyof PermissionsExplainResponses];
+
+export type PermissionsAuditData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Only rows about this guild, or resolve in it.
+         */
+        guild_id?: string | null;
+        /**
+         * Maximum number of items to return.
+         */
+        page_size?: number;
+        /**
+         * Number of items to skip. Excludes after_id and before_id.
+         */
+        offset?: number | null;
+        /**
+         * Return the items after this identifier in display order. Excludes offset.
+         */
+        after_id?: number | null;
+        /**
+         * Return the items before this identifier in display order. Excludes offset.
+         */
+        before_id?: number | null;
+    };
+    url: '/v1/permissions/audit';
+};
+
+export type PermissionsAuditErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type PermissionsAuditError = PermissionsAuditErrors[keyof PermissionsAuditErrors];
+
+export type PermissionsAuditResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: PageSquidApiV1SchemasPermissionsAuditEntryDetail;
+};
+
+export type PermissionsAuditResponse = PermissionsAuditResponses[keyof PermissionsAuditResponses];
 
 export type RecordsGetData = {
     body?: never;

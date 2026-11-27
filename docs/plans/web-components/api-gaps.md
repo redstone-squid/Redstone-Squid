@@ -110,13 +110,11 @@ Items 12, 13, 15 and 17 share one **record holder summary**: `{build_id, title, 
     - The list filters by `surface`, `error_code`, `work_lost` and an `occurred_after`/`occurred_before` range (a time without an offset is UTC). Anchors already seek on `(occurred_at, id)`.
     - `GET /v1/diagnostics/errors/stats` returns `{retention_hours, days: [{day, surface, count}]}` for chart 7, counting unexpired reports per UTC day. Retention is configurable, so the chart takes its window from `retention_hours`.
     - No per-report delete. Reports expire anyway, and deleting one just destroys evidence.
-45. **Permissions.** `PermissionAdministrationService` already implements all of this, so the work is mostly routing. Every route takes an optional `guild_id` scope, and subjects are accounts or Discord roles. Needed by X6.
-    - `GET /v1/permissions/nodes` lists the catalogue by domain.
-    - Grants are granted and revoked, never edited: `GET`, `POST` and `DELETE /v1/permissions/grants`.
-    - Roles: `GET`, `POST` and `DELETE /v1/permissions/roles`, plus `PATCH` for rank and endpoints to add or remove patterns.
-    - Role assignments: `GET`, `POST` and `DELETE /v1/permissions/assignments`.
-    - `GET /v1/permissions/explain?subject&node` returns the resolver's `Decision` (reason, trace, and each rule's source and the role it came through) for one node, or for every node when `node` is omitted.
-    - `GET /v1/permissions/audit` pages with item 55 anchors. It only takes `limit` today.
+45. **Permissions (implemented).** Routes over `PermissionAdministrationService`, whose authority and rank checks decide every write. Needed by X6.
+    - Subjects are accounts, by public ID, or Discord roles with their guild. Stored rows are addressed by ID: `GET`, `POST /v1/permissions/grants` and `DELETE /grants/{id}`, the same for `/assignments`, and `/roles` with `PATCH` for rank, `POST`/`DELETE /roles/{id}/patterns` and `/roles/{id}/includes`. Grants are granted and revoked, never edited.
+    - `GET /v1/permissions/nodes` lists the catalogue by domain. `GET /explain` returns each node's decision with its rule trace (origin, source and the role it came through). An account explained with `guild_id` counts its member roles there, which needs Discord; callers without global authority see only guild-scoped nodes, as `/access` shows them.
+    - `GET /v1/permissions/audit` pages with item 55 anchors.
+    - The website acts without a guild, so only global administrators can change permissions there; server admins keep using `/access`. Acting for a guild would need the caller's own membership resolved per request.
 46. **Record operations (implemented).** `POST /v1/records/{id}/recompute`, `GET /v1/records/{id}/inspection`, `POST /v1/records/recomputes`, `GET /v1/records/recompute-queue` and `GET /v1/records/drift`; see [Admin operations](../completed/incremental-records.md#admin-operations). Needed by X7.
 47. **Version corrections (implemented).** `POST /v1/versions` adds a release the announcement channel missed. `PATCH /v1/versions/{id}` corrects edition, release numbers or `data_version` in place, so builds and records that use the entry follow it; the change is recorded as a build edit of every build that uses it. `DELETE` only removes an entry nothing refers to and answers 409 `VERSION_IN_USE` otherwise. Needed by X8.
 

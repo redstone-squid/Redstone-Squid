@@ -3,7 +3,7 @@
 import base64
 import logging
 import secrets
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable, Collection, Sequence
 from uuid import UUID
 
 from whenever import Instant
@@ -292,6 +292,12 @@ class AccountService:
         if account_id is None:
             raise AccountNotFoundError(public_id=public_id)
         return account_id
+
+    @application_operation
+    async def public_ids(self, account_ids: Collection[int], *, context: ActingContext) -> dict[int, UUID]:
+        """Return the public ID of each existing account, for responses that name internal accounts."""
+        async with self._uow_factory() as uow:
+            return await uow.accounts.public_ids_for(account_ids)
 
     @application_operation
     async def get_creator_profile(self, public_id: UUID, *, context: ActingContext) -> CreatorProfile | None:

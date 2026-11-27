@@ -15,7 +15,7 @@ from squid.core.errors import ServiceUnavailableError
 from squid.core.media.errors import DraftMediaUnavailableError
 from squid.core.minecraft_auth.application import InstallationCredentialService, PlayerAuthorizationService
 from squid.core.notifications import NotificationService
-from squid.core.permissions.application import PermissionService
+from squid.core.permissions.application import PermissionAdministrationService, PermissionService
 from squid.core.records.application import PublicRecordQueryService, RecordAdministrationService, RecordService
 from squid.core.records.application.range_publication import RangePublicationService
 from squid.core.schematics.application import SchematicService
@@ -52,6 +52,10 @@ def get_records(services: Services) -> RecordService:
 
 def get_record_administration(services: Services) -> RecordAdministrationService:
     return services.record_administration
+
+
+def get_permission_admin(services: Services) -> PermissionAdministrationService:
+    return services.permission_admin
 
 
 def get_range_publication(services: Services) -> RangePublicationService:
@@ -141,6 +145,7 @@ CurrentCaller = NamedDependency[SkipValidation[Caller]]
 Records = NamedDependency[SkipValidation[RecordService]]
 RangePublications = NamedDependency[SkipValidation[RangePublicationService]]
 RecordAdministration = NamedDependency[SkipValidation[RecordAdministrationService]]
+PermissionAdmin = NamedDependency[SkipValidation[PermissionAdministrationService]]
 PublicRecords = NamedDependency[SkipValidation[PublicRecordQueryService]]
 Notifications = NamedDependency[SkipValidation[NotificationService]]
 Schematics = NamedDependency[SkipValidation[SchematicService]]

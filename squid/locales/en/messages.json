@@ -2018,7 +2018,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/accounts/infrastructure/repository.py:694"
+      "squid/core/accounts/infrastructure/repository.py:702"
     ]
   },
   "accounts-creator-already-credited": {
@@ -15568,7 +15568,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/application/administration.py:84"
+      "squid/core/permissions/application/administration.py:91"
     ]
   },
   "permissions-change-server-bot": {
@@ -15907,7 +15907,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/application/administration.py:72"
+      "squid/core/permissions/application/administration.py:79"
     ]
   },
   "permissions-post-manage-redstoner": {
@@ -16087,7 +16087,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/application/administration.py:78"
+      "squid/core/permissions/application/administration.py:85"
     ]
   },
   "permissions-run-raw-database": {

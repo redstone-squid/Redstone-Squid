@@ -64,7 +64,7 @@ from squid.core.notifications import NotificationPreferences, NotificationServic
 from squid.core.notifications.application import Inbox
 from squid.core.notifications.models import NotificationSubscription
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, offset_page
-from squid.core.permissions.application import PermissionService, SubjectRecords
+from squid.core.permissions.application import PermissionAdministrationService, PermissionService, SubjectRecords
 from squid.core.permissions.application.epoch import PermissionEpochWatcher, WakeListener
 from squid.core.permissions.application.ports import PermissionSubject
 from squid.core.permissions.domain import Pattern
@@ -823,6 +823,7 @@ def build_services(
     error_reports: ErrorReportService | None = None,
     range_publication: RangePublicationService | None = None,
     versions: VersionService | None = None,
+    permission_admin: PermissionAdministrationService | None = None,
 ) -> ApiServices:
     """Build the complete API graph with empty stores and injectable service replacements.
 
@@ -846,6 +847,7 @@ def build_services(
         build_queries=MockBuildQueries(),
         # Empty stored rules exercise the permission catalogue defaults.
         permissions=PermissionService(uow_factory=permission_uow_factory(EmptyPermissionStore())),
+        permission_admin=permission_admin or create_autospec(PermissionAdministrationService, instance=True),
         permission_epoch=MockPermissionEpoch(),
         search=MockSearch(),
         # An empty registry preserves the service's unknown-source error.
@@ -880,6 +882,7 @@ def build_app(
     error_reports: ErrorReportService | None = None,
     range_publication: RangePublicationService | None = None,
     versions: VersionService | None = None,
+    permission_admin: PermissionAdministrationService | None = None,
     config: ApiProcessConfig = TEST_CONFIG,
 ) -> tuple[Litestar, MockDatabaseManager]:
     """Build the API app wired to in-memory fakes instead of real infrastructure."""
@@ -892,6 +895,7 @@ def build_app(
         error_reports=error_reports,
         range_publication=range_publication,
         versions=versions,
+        permission_admin=permission_admin,
     )
     runtime = ApplicationRuntime(services, database.close, keep_database_active)
     return create_api_app(lambda _config: runtime, config=config), database

@@ -6,7 +6,7 @@ Linking and merging return scripted results instead of performing their database
 verification lockouts use the wall clock while everything else uses `NOW`.
 """
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Collection, Sequence
 from dataclasses import replace
 from uuid import UUID
 
@@ -223,6 +223,13 @@ class FakeAccountRepository:
             (account_id for account_id, account in self.accounts.items() if account.public_account_id == public_id),
             None,
         )
+
+    async def public_ids_for(self, account_ids: Collection[int]) -> dict[int, UUID]:
+        return {
+            account_id: account.public_account_id
+            for account_id, account in self.accounts.items()
+            if account_id in account_ids
+        }
 
     async def get_creator_profile_record(self, public_id: UUID) -> CreatorProfileRecord | None:
         account = next(

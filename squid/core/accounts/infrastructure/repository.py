@@ -4,7 +4,7 @@ import hashlib
 import hmac
 import secrets
 import uuid
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Collection, Sequence
 
 from sqlalchemy import ColumnElement, case, delete, func, literal, or_, select, text, update
 from sqlalchemy.dialects.postgresql import insert
@@ -484,6 +484,14 @@ class AccountRepository:
         """Return the account a public ID names, following merge redirects."""
         account = await self._account_for_public_id(self._session(), public_id)
         return None if account is None else account.id
+
+    async def public_ids_for(self, account_ids: Collection[int]) -> dict[int, uuid.UUID]:
+        if not account_ids:
+            return {}
+        rows = await self._session().execute(
+            select(Account.id, Account.public_account_id).where(Account.id.in_(account_ids))
+        )
+        return {account_id: public_id for account_id, public_id in rows.tuples()}
 
     @staticmethod
     async def _account_for_public_id(session: AsyncSession, public_id: uuid.UUID) -> Account | None:

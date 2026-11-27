@@ -2,14 +2,16 @@
 
 from collections.abc import Callable, Sequence
 from dataclasses import replace
+from typing import Any
 
-from sqlalchemy import delete, exists, func, or_, select, text, update
+from sqlalchemy import Select, delete, exists, func, or_, select, text, update
 from sqlalchemy.dialects.postgresql import aggregate_order_by, insert
 from sqlalchemy.engine import Row
 from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
 from squid.core.actors import UserActor
+from squid.core.pagination import FIRST_PAGE, PageSelector
 from squid.core.permissions.application.ports import AuditEntry, PermissionSubject, SubjectRecords
 from squid.core.permissions.domain.models import PatternMode
 from squid.core.permissions.models import (
@@ -21,6 +23,7 @@ from squid.core.permissions.models import (
     PermissionRoleInclude,
     PermissionRolePattern,
 )
+from squid.core.persistence.paging import KeysetOrder
 
 _ROLE_PATTERNS = (
     select(
@@ -527,18 +530,28 @@ class PostgresPermissionAdminRepository:
         await session.flush()
         return removed
 
-    async def list_audit(self, *, guild_id: int | None = None, limit: int = 20) -> tuple[PermissionAuditEntry, ...]:
-        statement = select(PermissionAuditEntry).order_by(PermissionAuditEntry.at.desc()).limit(limit)
-        if guild_id is not None:
-            statement = statement.where(
-                or_(
-                    PermissionAuditEntry.subject_guild_id == guild_id,
-                    PermissionAuditEntry.scope_guild_id == guild_id,
-                )
-            )
+    async def list_audit(
+        self, *, guild_id: int | None = None, limit: int = 20, selector: PageSelector[int] = FIRST_PAGE
+    ) -> tuple[PermissionAuditEntry, ...]:
+        """Read entries newest first; a `before_id` page is read in reverse and restored to that order."""
         session = self._session()
-        rows = (await session.scalars(statement)).all()
-        return tuple(row for row in rows)
+        order = KeysetOrder(PermissionAuditEntry.at, PermissionAuditEntry.id, descending=True)
+        statement = await order.apply(session, _audit_in(select(PermissionAuditEntry), guild_id), selector)
+        rows = (await session.scalars(statement.limit(limit))).all()
+        return tuple(rows[::-1] if selector.before_id is not None else rows)
+
+    async def count_audit(self, *, guild_id: int | None = None) -> int:
+        statement = _audit_in(select(func.count()).select_from(PermissionAuditEntry), guild_id)
+        return await self._session().scalar(statement) or 0
+
+
+def _audit_in[S: Select[Any]](statement: S, guild_id: int | None) -> S:
+    """Keep entries about `guild_id`, or every entry when it is None."""
+    if guild_id is None:
+        return statement
+    return statement.where(
+        or_(PermissionAuditEntry.subject_guild_id == guild_id, PermissionAuditEntry.scope_guild_id == guild_id)
+    )
 
 
 def _role_records(

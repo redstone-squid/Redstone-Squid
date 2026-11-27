@@ -219,7 +219,9 @@ class _ServiceGraph:
 
     @cached_property
     def permission_admin(self) -> PermissionAdministrationService:
-        return PermissionAdministrationService(self.permissions, uow_factory=self.uow_factory)
+        return PermissionAdministrationService(
+            self.permissions, uow_factory=self.uow_factory, members=self.vote_members
+        )
 
     @cached_property
     def permission_epoch(self) -> PermissionEpochWatcher:
@@ -682,6 +684,7 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         notifications=graph.notifications,
         build_queries=graph.build_queries,
         permissions=graph.permissions,
+        permission_admin=graph.permission_admin,
         permission_epoch=graph.permission_epoch,
         records=graph.records,
         record_administration=RecordAdministrationService(

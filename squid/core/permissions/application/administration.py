@@ -17,12 +17,14 @@ cannot silently change which permission rule wins.
 from collections.abc import AsyncIterator, Iterable, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import replace
+from typing import Protocol
 
 from whenever import Instant
 
 from squid.core.actors import ActingContext, Actor, UserActor, application_operation
-from squid.core.errors import AuthorizationError, ConflictError, NotFoundError, ValidationError
+from squid.core.errors import AuthorizationError, ConflictError, NotFoundError, ServiceUnavailableError, ValidationError
 from squid.core.i18n import tr
+from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
 from squid.core.permissions.application.ports import AuditEntry, PermissionAdminUnitOfWork
 from squid.core.permissions.application.roles import PermissionRuleSnapshot
 from squid.core.permissions.application.services import PermissionService
@@ -30,6 +32,7 @@ from squid.core.permissions.domain import (
     CATALOGUE,
     BuiltinRoleKeys,
     Catalogue,
+    Decision,
     Effect,
     InvalidPatternError,
     NodeScope,
@@ -41,14 +44,18 @@ from squid.core.permissions.domain import (
 from squid.core.permissions.domain.catalogue import (
     PERM_GRANT_GLOBAL,
     PERM_GRANT_GUILD,
+    PERM_SUBJECT_INSPECT,
     ROLE_DEFINITION_MANAGE,
     ROLE_DEFINITION_MANAGE_GUILD,
 )
 from squid.core.permissions.domain.models import (
+    AccountGrantSubject,
     AuditAction,
     AuditSubjectKind,
+    ExternalRoleGrantSubject,
     GrantSubject,
     PatternMode,
+    RolePermissionSubject,
 )
 from squid.core.permissions.models import (
     PermissionAuditEntry,
@@ -84,6 +91,17 @@ class ProtectedRoleError(AuthorizationError):
     default_title = tr(t"permissions-built-role = Built-in role")
 
 
+class GuildMembers(Protocol):
+    """Discord membership, needed to explain an account's permissions inside one guild."""
+
+    async def actor(self, account_id: int, guild_id: int) -> UserActor | None:
+        """Return the account with its member roles, or None when it is not a member.
+
+        Raises ServiceUnavailableError when Discord cannot answer.
+        """
+        ...
+
+
 class PermissionAdministrationService:
     """Validate administrative changes and commit them with their audit entries.
 
@@ -98,16 +116,22 @@ class PermissionAdministrationService:
         uow_factory: UnitOfWorkFactory[PermissionAdminUnitOfWork],
         catalogue: Catalogue = CATALOGUE,
         transaction: PermissionAdminUnitOfWork | None = None,
+        members: GuildMembers | None = None,
     ) -> None:
         self._uow_factory = uow_factory
         self._permissions = permissions
         self._catalogue = catalogue
         self._transaction = transaction
+        self._members = members
 
     def in_transaction(self, uow: PermissionAdminUnitOfWork) -> PermissionAdministrationService:
         """Reuse policy inside a caller-owned transaction without committing it."""
         return PermissionAdministrationService(
-            self._permissions, uow_factory=self._uow_factory, catalogue=self._catalogue, transaction=uow
+            self._permissions,
+            uow_factory=self._uow_factory,
+            catalogue=self._catalogue,
+            transaction=uow,
+            members=self._members,
         )
 
     @asynccontextmanager
@@ -512,6 +536,102 @@ class PermissionAdministrationService:
         async with self._read() as uow:
             return await uow.permission_admin.list_audit(guild_id=guild_id, limit=limit)
 
+    @application_operation
+    async def audit_page(
+        self,
+        *,
+        context: ActingContext,
+        guild_id: int | None = None,
+        selector: PageSelector[int] = FIRST_PAGE,
+        page_size: int = 20,
+    ) -> Page[PermissionAuditEntry, int]:
+        """Page permission mutations newest first, anchored by entry ID."""
+        async with self._read() as uow:
+            rows = await uow.permission_admin.list_audit(guild_id=guild_id, limit=page_size + 1, selector=selector)
+            total = await uow.permission_admin.count_audit(guild_id=guild_id)
+        return keyset_page(rows, selector=selector, page_size=page_size, total=total, id_of=lambda entry: entry.id)
+
+    @application_operation
+    async def stored_grant(self, grant_id: int, *, context: ActingContext) -> PermissionGrant:
+        async with self._read() as uow:
+            found = next((rule for rule in await uow.permission_admin.list_rules() if rule.id == grant_id), None)
+        if found is None:
+            msg = f"No permission grant {grant_id}."
+            raise NotFoundError(msg, resource="permission_grant")
+        return found
+
+    @application_operation
+    async def revoke_stored(self, grant_id: int, *, context: ActingContext) -> None:
+        """Revoke one stored grant by ID, with the same checks as `revoke`."""
+        grant = await self.stored_grant(grant_id, context=context)
+        await self.revoke(
+            context=context, subject=subject_of(grant), pattern=grant.pattern, scope_guild_id=grant.scope_guild_id
+        )
+
+    @application_operation
+    async def stored_assignment(self, assignment_id: int, *, context: ActingContext) -> PermissionRoleAssignment:
+        async with self._read() as uow:
+            assignments = await uow.permission_admin.list_assignments()
+        found = next((assignment for assignment in assignments if assignment.id == assignment_id), None)
+        if found is None:
+            msg = f"No role assignment {assignment_id}."
+            raise NotFoundError(msg, resource="permission_assignment")
+        return found
+
+    @application_operation
+    async def unassign_stored(self, assignment_id: int, *, context: ActingContext) -> None:
+        """Remove one stored assignment by ID, with the same checks as `unassign`."""
+        assignment = await self.stored_assignment(assignment_id, context=context)
+        role = await self.role_by_id(assignment.role_id, context=context)
+        await self.unassign(
+            role, context=context, subject=subject_of(assignment), scope_guild_id=assignment.scope_guild_id
+        )
+
+    @application_operation
+    async def explain(
+        self,
+        subject: GrantSubject,
+        *,
+        context: ActingContext,
+        guild_id: int | None = None,
+        nodes: Sequence[str] = (),
+    ) -> tuple[Decision, ...]:
+        """Resolve `nodes`, or every node the caller may inspect, for one subject.
+
+        Without `guild_id`, an account is resolved as it is everywhere: only global
+        rules apply. With it, the account's member roles in that guild count too, so
+        Discord must answer. A Discord role is always resolved in its own guild.
+        Callers who cannot grant globally or manage global roles see only guild-scoped
+        nodes, as `/access` shows them.
+        """
+        await self._permissions.require(context.effective, PERM_SUBJECT_INSPECT)
+        if unknown := [name for name in nodes if name not in self._catalogue]:
+            msg = f"Unknown permission node {unknown[0]!r}."
+            raise ValidationError(
+                msg,
+                issues=(SimpleIssue(field="/query/node", code=FieldErrorCode.UNKNOWN_OPTION),),
+            )
+        caller = await self._permissions.check(context.effective, PERM_GRANT_GLOBAL, ROLE_DEFINITION_MANAGE, mode="any")
+        visible = [
+            node.name
+            for node in self._catalogue.values()
+            if (not nodes or node.name in nodes) and (caller.allowed or node.scope is NodeScope.GUILD)
+        ]
+        target: UserActor | RolePermissionSubject
+        if isinstance(subject, ExternalRoleGrantSubject):
+            target = RolePermissionSubject(
+                guild_id=subject.guild_id, discord_role_ids=frozenset({subject.discord_role_id})
+            )
+        elif guild_id is None:
+            target = UserActor(account_id=subject.account_id)
+        elif self._members is None:
+            msg = "Discord membership is unavailable in this process."
+            raise ServiceUnavailableError(msg, resource="discord")
+        else:
+            member = await self._members.actor(subject.account_id, guild_id)
+            target = member or UserActor(account_id=subject.account_id, guild_id=guild_id)
+        return (await self._permissions.check(target, *visible)).decisions
+
     # ---- Permission roles ----------------------------------------------
 
     @application_operation
@@ -550,6 +670,15 @@ class PermissionAdministrationService:
         except InvalidPatternError:
             return False
         return bool(scopes) and scopes <= {NodeScope.GUILD}
+
+    @application_operation
+    async def role_by_id(self, role_id: int, *, context: ActingContext) -> PermissionRole:
+        async with self._read() as uow:
+            found = next((role for role in await uow.permission_admin.list_roles() if role.id == role_id), None)
+        if found is None:
+            msg = f"No permission role {role_id}."
+            raise NotFoundError(msg, resource="permission_role")
+        return found
 
     @application_operation
     async def reserve_role_identity(self, *, context: ActingContext) -> int:
@@ -802,6 +931,14 @@ class PermissionAdministrationService:
         if actor.is_bot_owner:
             return ()
         return tuple(sorted(frozenset(self.resolved_leaves(role, roles)) - actor.capabilities))
+
+
+def subject_of(row: PermissionGrant | PermissionRoleAssignment) -> GrantSubject:
+    """The account or Discord role a stored grant or assignment belongs to."""
+    if row.subject_account_id is not None:
+        return AccountGrantSubject(row.subject_account_id)
+    assert row.subject_guild_id is not None and row.subject_role_id is not None
+    return ExternalRoleGrantSubject(guild_id=row.subject_guild_id, discord_role_id=row.subject_role_id)
 
 
 def _is_live(expires_at: Instant | None, now: Instant) -> bool:
