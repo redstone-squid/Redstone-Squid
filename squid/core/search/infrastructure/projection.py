@@ -43,6 +43,7 @@ from squid.core.errors import DataIntegrityError
 from squid.core.persistence.provenance import bind_work_attribution
 from squid.core.persistence.queue import ClaimedRowQueue, QueueSpec
 from squid.core.records.application.door_categories import door_category_lookup
+from squid.core.records.application.metrics import MetricUnit, snapshot_values
 from squid.core.records.application.models import CategoryIdentity
 from squid.core.records.domain import BuildKind
 from squid.core.records.models import (
@@ -55,7 +56,6 @@ from squid.core.records.models import (
 )
 from squid.core.search.domain import ACCOUNT_ID_STORAGE, FieldValue
 from squid.core.search.infrastructure.documents import SearchProjection, index_document
-from squid.core.search.infrastructure.holder_metrics import timing_values
 from squid.core.search.models import (
     SearchDocument,
     SearchEmbeddingQueueItem,
@@ -141,12 +141,10 @@ class RecordHolderProjectionSource:
             FieldValue("holder_title", self.title, holder),
             *(FieldValue("holder_creator", name, holder) for name in self.creators),
         ]
-        volume = self.metric.get("volume")
-        if type(volume) is int:
-            values.append(FieldValue("volume", Decimal(volume), holder))
         values.extend(
             FieldValue(name, Decimal(value), holder)
-            for name, value in timing_values(build_kind, self.metric.get("timing"))
+            for name, value, unit in snapshot_values(build_kind, self.metric)
+            if isinstance(value, int) and unit is not MetricUnit.DATE
         )
         return tuple(values)
 

@@ -2596,22 +2596,13 @@ export type RecordSearchEntry = {
     criterion: string;
     version_scope: string;
     metrics: {
-        [key: string]: string | number | number | boolean;
+        [key: string]: RecordMetric;
     };
     holder_build_ids?: Array<number>;
-    holders?: Array<RecordSearchHolder>;
+    holders?: Array<RecordHolderSummary>;
     matched?: boolean;
     retired?: boolean;
     evidence?: Array<FieldMatch>;
-};
-
-/**
- * RecordSearchHolder
- */
-export type RecordSearchHolder = {
-    build_id: number;
-    title: string;
-    creators: Array<string>;
 };
 
 /**

@@ -115,7 +115,7 @@ async def seed_grouped_records(session_factory: async_sessionmaker[AsyncSession]
                     "base_title": title.split()[0].casefold(),
                     "version_scope": "all_time",
                     "metric": {"volume": 24},
-                    "holder_metrics": {str(holder): {"volume": 24, "width": width} for holder in holders},
+                    "holder_metrics": {str(holder): {"volume": 20 + width} for holder in holders},
                 },
                 values=(
                     FieldValue("width", Decimal(width)),
@@ -150,7 +150,7 @@ async def test_grouping_precedes_pagination_and_keeps_all_visible_holders(
     assert "4" not in builds
     assert {record.source_id for record in builds["1"].records} == {"record:101", "record:102"}
     assert builds["2"].records[0].holder_build_ids == (1, 2)
-    assert builds["2"].records[0].metrics == {"volume": 24, "width": 2}
+    assert builds["2"].records[0].metrics["volume"].value == 22
     if scope is SearchScope.ALL:
         assert {(source.resource_kind, source.source_id) for source in builds["1"].matches} == {
             ("build", "1"),

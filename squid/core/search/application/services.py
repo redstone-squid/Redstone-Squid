@@ -7,12 +7,24 @@ from typing import Protocol
 from squid.core.actors import ActingContext, application_operation
 from squid.core.errors import ErrorCode, ValidationError
 from squid.core.pagination import PageAnchor
+from squid.core.records.application.metrics import RecordHolderSummary
+from squid.core.records.application.ports import PublicBuildSummaryReader
 from squid.core.search.application.embeddings import SearchEmbeddingModel
 from squid.core.search.application.fields import FieldRegistry
 from squid.core.search.application.parser import SearchQueryParser
 from squid.core.search.application.ports import QueryEmbedding, SearchBackend
 from squid.core.search.application.query_analysis import is_filter_only
-from squid.core.search.domain import QueryClause, SearchMode, SearchPage, SearchQuery, SearchRequest, SearchScope
+from squid.core.search.domain import (
+    BuildSearchHit,
+    QueryClause,
+    RecordSearchHit,
+    SearchHit,
+    SearchMode,
+    SearchPage,
+    SearchQuery,
+    SearchRequest,
+    SearchScope,
+)
 from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from squid.core.validation import (
     AboveMaximum,
@@ -46,15 +58,20 @@ class SearchService:
     Query vectors are generated before opening the search transaction, so a slow
     model call does not hold a database connection. Filter-only queries and explicit
     field sorts do not need a vector.
+
+    Record holders are replaced with current public build summaries, loaded once
+    per page, so they match the records API; holders that are not public are dropped.
     """
 
     def __init__(
         self,
         *,
         uow_factory: UnitOfWorkFactory[SearchUnitOfWork],
+        builds: PublicBuildSummaryReader,
         embedding_model: SearchEmbeddingModel | None = None,
     ) -> None:
         self._uow_factory = uow_factory
+        self._builds = builds
         self._embedding_model = embedding_model
 
     @application_operation
@@ -108,13 +125,40 @@ class SearchService:
         offset = request.offset if result.offset is None else result.offset
         following = offset + request.page_size
         return SearchPage(
-            hits=result.hits,
+            hits=await self._with_holders(result.hits, context=context),
             total=result.total,
             next=PageAnchor(offset=following) if following < result.total else None,
             prev=PageAnchor(offset=max(offset - request.page_size, 0)) if offset else None,
             warnings=result.warnings,
             offset=offset,
             clauses=clauses,
+        )
+
+    async def _with_holders(self, hits: tuple[SearchHit, ...], *, context: ActingContext) -> tuple[SearchHit, ...]:
+        records = [
+            record
+            for hit in hits
+            for record in (hit.records if isinstance(hit, BuildSearchHit) else (hit,))
+            if isinstance(record, RecordSearchHit)
+        ]
+        holder_ids = tuple(dict.fromkeys(id for record in records for id in record.holder_build_ids))
+        if not holder_ids:
+            return hits
+        builds = {build.id: build for build in await self._builds.get_public_summaries(holder_ids, context=context)}
+
+        def summarize(record: RecordSearchHit) -> RecordSearchHit:
+            holders = tuple(
+                RecordHolderSummary.from_build(builds[id]) for id in record.holder_build_ids if id in builds
+            )
+            return replace(record, holders=holders)
+
+        return tuple(
+            replace(hit, records=tuple(summarize(record) for record in hit.records))
+            if isinstance(hit, BuildSearchHit)
+            else summarize(hit)
+            if isinstance(hit, RecordSearchHit)
+            else hit
+            for hit in hits
         )
 
     @application_operation

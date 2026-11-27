@@ -1,14 +1,24 @@
 """Search application service tests."""
 
+from collections.abc import Sequence
 from functools import partial
 from types import TracebackType
 from typing import Self, override
+from uuid import UUID
 
 import pytest
 
 from squid.core.actors import ActingContext, AnonymousActor
+from squid.core.builds.application.queries import (
+    PublicBuildCreator,
+    PublicBuildDimensions,
+    PublicBuildStatus,
+    PublicBuildSummary,
+)
+from squid.core.builds.domain import BuildCategory
 from squid.core.errors import ValidationError
 from squid.core.pagination import PageAnchor
+from squid.core.records.application.metrics import RecordHolderSummary
 from squid.core.search.application import SearchQueryParser, SearchService, SearchSlice
 from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldRegistry
 from squid.core.search.application.ports import QueryEmbedding
@@ -16,12 +26,14 @@ from squid.core.search.domain import (
     BuildQuery,
     BuildSearchHit,
     FieldDefinition,
+    RecordSearchHit,
     SearchMode,
     SearchQuery,
     SearchRequest,
     SearchScope,
     SearchSort,
 )
+from tests.support.public_builds import NoPublicBuilds
 from tests.support.unit_of_work import CommittedState, FakeUnitOfWork
 
 
@@ -57,9 +69,79 @@ class FakeSearchBackend:
         return self.suggestions[:limit]
 
 
+class RecordHitBackend(FakeSearchBackend):
+    @override
+    async def search(
+        self,
+        request: SearchRequest,
+        query: SearchQuery,
+        *,
+        sort_field: FieldDefinition | None = None,
+        query_embedding: QueryEmbedding | None = None,
+    ) -> SearchSlice:
+        indexed = (RecordHolderSummary(7, "Indexed title", (PublicBuildCreator("Alice", None),), None),)
+        record = RecordSearchHit(
+            "record:1",
+            "Smallest door",
+            None,
+            7,
+            "Door",
+            "smallest",
+            "all_time",
+            holder_build_ids=(7, 9),
+            holders=indexed,
+        )
+        return SearchSlice((record, BuildSearchHit("7", "Door", "approved", records=(record,))), 2)
+
+
+class OnePublicBuild:
+    def __init__(self) -> None:
+        self.requested: list[tuple[int, ...]] = []
+
+    async def get_public_summaries(
+        self, build_ids: Sequence[int], *, context: ActingContext
+    ) -> Sequence[PublicBuildSummary]:
+        self.requested.append(tuple(build_ids))
+        return (
+            PublicBuildSummary(
+                id=7,
+                revision=1,
+                title="Current title",
+                display_name=None,
+                status=PublicBuildStatus.APPROVED,
+                category=BuildCategory.DOOR,
+                dimensions=PublicBuildDimensions(None, None, None),
+                creators=(PublicBuildCreator("Alice", UUID(int=1)),),
+                tags=(),
+                preview=None,
+                version_spec=None,
+                versions=(),
+                opening_time=None,
+                closing_time=None,
+                created_at=None,
+                updated_at=None,
+            ),
+        )
+
+
+async def test_record_holders_are_current_public_summaries_loaded_once() -> None:
+    builds = OnePublicBuild()
+    service = SearchService(uow_factory=partial(SearchUnitOfWork, RecordHitBackend()), builds=builds)
+
+    page = await service.search(SearchRequest("door"), context=ActingContext.direct(AnonymousActor()))
+
+    record, build = page.hits
+    assert isinstance(record, RecordSearchHit)
+    assert isinstance(build, BuildSearchHit)
+    # Build 9 is not public, so it has no card.
+    expected = (RecordHolderSummary(7, "Current title", (PublicBuildCreator("Alice", UUID(int=1)),), None),)
+    assert record.holders == build.records[0].holders == expected
+    assert builds.requested == [(7, 9)]
+
+
 async def test_service_parses_query_and_reports_the_backend_total() -> None:
     backend = FakeSearchBackend()
-    service = SearchService(uow_factory=partial(SearchUnitOfWork, backend))
+    service = SearchService(uow_factory=partial(SearchUnitOfWork, backend), builds=NoPublicBuilds())
 
     page = await service.search(
         SearchRequest("status:approved door", scope=SearchScope.BUILDS, page_size=5),
@@ -75,7 +157,7 @@ async def test_service_parses_query_and_reports_the_backend_total() -> None:
 
 async def test_service_resolves_the_sort_field_before_searching() -> None:
     backend = FakeSearchBackend()
-    service = SearchService(uow_factory=partial(SearchUnitOfWork, backend))
+    service = SearchService(uow_factory=partial(SearchUnitOfWork, backend), builds=NoPublicBuilds())
 
     await service.search(
         SearchRequest("door", sort=SearchSort("width")), context=ActingContext.direct(AnonymousActor())
@@ -86,7 +168,7 @@ async def test_service_resolves_the_sort_field_before_searching() -> None:
 
 async def test_service_uses_the_scoped_tree_without_reparsing_display_text() -> None:
     backend = FakeSearchBackend()
-    service = SearchService(uow_factory=partial(SearchUnitOfWork, backend))
+    service = SearchService(uow_factory=partial(SearchUnitOfWork, backend), builds=NoPublicBuilds())
     parsed = SearchQueryParser(scope=SearchScope.BUILDS).parse("door width:5")
     assert isinstance(parsed, BuildQuery)
 
@@ -103,7 +185,7 @@ async def test_service_uses_the_scoped_tree_without_reparsing_display_text() -> 
 @pytest.mark.parametrize("field", ["orientation", "nonexistent"])
 async def test_service_rejects_unsortable_and_unknown_sort_fields(field: str) -> None:
     backend = FakeSearchBackend()
-    service = SearchService(uow_factory=partial(SearchUnitOfWork, backend))
+    service = SearchService(uow_factory=partial(SearchUnitOfWork, backend), builds=NoPublicBuilds())
 
     with pytest.raises(ValidationError, match="cannot be sorted"):
         await service.search(
@@ -114,7 +196,7 @@ async def test_service_rejects_unsortable_and_unknown_sort_fields(field: str) ->
 
 
 async def test_service_addresses_neighbouring_pages_by_offset() -> None:
-    service = SearchService(uow_factory=partial(SearchUnitOfWork, FakeSearchBackend()))
+    service = SearchService(uow_factory=partial(SearchUnitOfWork, FakeSearchBackend()), builds=NoPublicBuilds())
 
     page = await service.search(
         SearchRequest("door", page_size=5, offset=10), context=ActingContext.direct(AnonymousActor())
@@ -124,7 +206,7 @@ async def test_service_addresses_neighbouring_pages_by_offset() -> None:
 
 
 async def test_service_stops_paging_at_the_end_of_the_results() -> None:
-    service = SearchService(uow_factory=partial(SearchUnitOfWork, FakeSearchBackend(total=12)))
+    service = SearchService(uow_factory=partial(SearchUnitOfWork, FakeSearchBackend(total=12)), builds=NoPublicBuilds())
 
     first = await service.search(SearchRequest("door", page_size=5), context=ActingContext.direct(AnonymousActor()))
     last = await service.search(
@@ -136,7 +218,7 @@ async def test_service_stops_paging_at_the_end_of_the_results() -> None:
 
 
 async def test_service_delegates_suggestions_and_bounds_limit() -> None:
-    service = SearchService(uow_factory=partial(SearchUnitOfWork, FakeSearchBackend()))
+    service = SearchService(uow_factory=partial(SearchUnitOfWork, FakeSearchBackend()), builds=NoPublicBuilds())
 
     assert await service.suggest("dor", limit=1, context=ActingContext.direct(AnonymousActor())) == ("door",)
 
@@ -199,7 +281,9 @@ class FakeEmbeddingModel:
 async def test_query_embedding_is_generated_outside_scopes_and_passed_to_search() -> None:
     backend = FakeSearchBackend()
     model = FakeEmbeddingModel(backend)
-    service = SearchService(uow_factory=partial(SearchUnitOfWork, backend), embedding_model=model)
+    service = SearchService(
+        uow_factory=partial(SearchUnitOfWork, backend), builds=NoPublicBuilds(), embedding_model=model
+    )
 
     await service.search(
         SearchRequest("door", mode=SearchMode.SEMANTIC), context=ActingContext.direct(AnonymousActor())
@@ -221,7 +305,9 @@ async def test_query_embedding_is_generated_outside_scopes_and_passed_to_search(
 async def test_search_skips_embedding_when_semantic_ranking_is_unused(search_request: SearchRequest) -> None:
     backend = FakeSearchBackend()
     model = FakeEmbeddingModel(backend)
-    service = SearchService(uow_factory=partial(SearchUnitOfWork, backend), embedding_model=model)
+    service = SearchService(
+        uow_factory=partial(SearchUnitOfWork, backend), builds=NoPublicBuilds(), embedding_model=model
+    )
 
     await service.search(search_request, context=ActingContext.direct(AnonymousActor()))
 
@@ -233,7 +319,9 @@ async def test_search_skips_embedding_when_semantic_ranking_is_unused(search_req
 async def test_missing_or_failed_embedding_still_runs_the_result_query(raises: bool) -> None:
     backend = FakeSearchBackend()
     model = FakeEmbeddingModel(backend, unavailable=True, error=raises)
-    service = SearchService(uow_factory=partial(SearchUnitOfWork, backend), embedding_model=model)
+    service = SearchService(
+        uow_factory=partial(SearchUnitOfWork, backend), builds=NoPublicBuilds(), embedding_model=model
+    )
 
     page = await service.search(
         SearchRequest("door", mode=SearchMode.SEMANTIC), context=ActingContext.direct(AnonymousActor())
@@ -245,7 +333,7 @@ async def test_missing_or_failed_embedding_still_runs_the_result_query(raises: b
 
 
 async def test_service_lists_the_parsed_clauses_with_each_page() -> None:
-    service = SearchService(uow_factory=partial(SearchUnitOfWork, FakeSearchBackend()))
+    service = SearchService(uow_factory=partial(SearchUnitOfWork, FakeSearchBackend()), builds=NoPublicBuilds())
 
     page = await service.search(
         SearchRequest("door width<=3", scope=SearchScope.BUILDS), context=ActingContext.direct(AnonymousActor())
@@ -255,7 +343,7 @@ async def test_service_lists_the_parsed_clauses_with_each_page() -> None:
 
 
 async def test_service_counts_each_scope_and_skips_scopes_that_cannot_run_the_query() -> None:
-    service = SearchService(uow_factory=partial(SearchUnitOfWork, FakeSearchBackend()))
+    service = SearchService(uow_factory=partial(SearchUnitOfWork, FakeSearchBackend()), builds=NoPublicBuilds())
 
     counts = await service.counts(SearchRequest("criterion:fastest"), context=ActingContext.direct(AnonymousActor()))
 

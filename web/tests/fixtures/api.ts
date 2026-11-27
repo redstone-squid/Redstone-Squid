@@ -398,7 +398,7 @@ async function routeRequest(request: Request): Promise<Response> {
             build_title: builds[0].title,
             criterion: records[0].criterion,
             version_scope: records[0].version_scope,
-            metrics: { opening_time: 8 },
+            metrics: { opening_time: { value: 8, unit: "game_ticks", display: "8 gt" } },
           },
         },
         {

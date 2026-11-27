@@ -18,6 +18,7 @@ from squid.core.search.infrastructure.projection import (
     SearchProjectionRepository,
     build_record_projection,
 )
+from tests.support.public_builds import NoPublicBuilds
 
 GENERAL = UUID(int=1)
 RESTRICTED = UUID(int=2)
@@ -63,7 +64,10 @@ async def test_record_heading_and_holder_matches(migrated_session_factory: async
         )
         await store.replace(build_record_projection(source, (alice, bob)))
 
-    service = SearchService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
+    service = SearchService(
+        uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory),
+        builds=NoPublicBuilds(),
+    )
     for query, expected in (
         ("fastest 2x2 door", f"record:{GENERAL}"),
         ("fastest observerless 2x2 door", f"record:{RESTRICTED}"),
@@ -79,7 +83,7 @@ async def test_record_heading_and_holder_matches(migrated_session_factory: async
     assert page.total == 2
     general = next(hit for hit in page.hits if hit.source_id == f"record:{GENERAL}")
     assert isinstance(general, RecordSearchHit)
-    assert [(holder.build_id, holder.creators) for holder in general.holders] == [(42, ("Alice",)), (57, ("Bob",))]
+    assert general.holder_build_ids == (42, 57)
 
 
 async def test_record_measurements_match_one_known_holder(
@@ -106,7 +110,10 @@ async def test_record_measurements_match_one_known_holder(
         await _builds(store, large, compact, unknown)
         await store.replace(build_record_projection(source, (large, compact, unknown)))
 
-    service = SearchService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
+    service = SearchService(
+        uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory),
+        builds=NoPublicBuilds(),
+    )
     for scope in (SearchScope.RECORDS, SearchScope.ALL):
         query = "criterion:fastest volume<=100 opening_time<=0.5s"
         (hit,) = (
@@ -114,7 +121,11 @@ async def test_record_measurements_match_one_known_holder(
         ).hits
         assert isinstance(hit, RecordSearchHit)
         assert hit.build_id == compact.build_id
-        assert hit.metrics == {"volume": 80, "opening_time": 10, "visible_opening_time": 15}
+        assert {name: metric.value for name, metric in hit.metrics.items()} == {
+            "volume": 80,
+            "opening_time": 10,
+            "visible_opening_time": 15,
+        }
         assert hit.matched_holder_id == compact.build_id
         assert hit.holder_build_ids == (42, 57, 60)
 
@@ -188,7 +199,10 @@ async def test_build_presence_matches_indexed_values(
             SearchProjection("build", "2", "Partial", status="approved", values=(FieldValue("title", "Partial"),))
         )
 
-    service = SearchService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
+    service = SearchService(
+        uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory),
+        builds=NoPublicBuilds(),
+    )
     for query, expected in (
         ("volume IS SET opening_time IS SET", "1"),
         ("volume IS NOT SET description IS NOT SET", "2"),

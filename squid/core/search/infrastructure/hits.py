@@ -2,14 +2,10 @@
 
 from typing import Literal, cast
 
-from pydantic import TypeAdapter
-
+from squid.core.builds.application.queries import PublicBuildCreator
+from squid.core.records.application.metrics import RecordHolderSummary, holder_metrics
 from squid.core.search.domain import BuildSearchHit, MetadataSearchHit, RecordSearchHit, SearchHit
-from squid.core.search.domain.models import RecordSearchHolder
-from squid.core.search.infrastructure.holder_metrics import timing_values
 from squid.core.search.models import SearchDocument
-
-_HOLDERS = TypeAdapter(tuple[RecordSearchHolder, ...])
 
 
 def public_identity(document: SearchDocument) -> tuple[Literal["build", "record", "metadata"], str]:
@@ -37,17 +33,15 @@ def document_hit(document: SearchDocument, score: float | None, *, holder_id: in
         build_id = 0
         if isinstance(holder_ids, list | tuple) and holder_ids and type(holder_ids[0]) is int:
             build_id = holder_ids[0]
-        holders = _HOLDERS.validate_python(data.get("holders", ()))
+        holders = _holders(data.get("holders"))
         build_title = _string(data, "build_title", document.title)
         if holder_id is not None:
             build_id = holder_id
             if (holder := next((h for h in holders if h.build_id == holder_id), None)) is not None:
                 build_title = holder.title
-            holder_metrics = data.get("holder_metrics")
-            if isinstance(holder_metrics, dict) and isinstance(selected := holder_metrics.get(str(build_id)), dict):
+            per_holder = data.get("holder_metrics")
+            if isinstance(per_holder, dict) and isinstance(selected := per_holder.get(str(build_id)), dict):
                 metrics = selected
-        public_metrics = {name: value for name, value in metrics.items() if isinstance(value, str | int | float | bool)}
-        public_metrics.update(timing_values(_string(data, "build_kind", ""), metrics.get("timing")))
         return RecordSearchHit(
             source_id=document.source_key,
             title=document.title,
@@ -59,7 +53,7 @@ def document_hit(document: SearchDocument, score: float | None, *, holder_id: in
             holder_build_ids=tuple(holder_ids) if isinstance(holder_ids, list | tuple) else (),
             holders=holders,
             score=score,
-            metrics=public_metrics,
+            metrics=holder_metrics(_string(data, "build_kind", ""), cast(dict[str, object], metrics)),
             matched_holder_id=holder_id,
             retired=document.status == "retired",
         )
@@ -80,6 +74,22 @@ def document_hit(document: SearchDocument, score: float | None, *, holder_id: in
         description=document.description,
         score=score,
         aliases=_strings(data.get("aliases")),
+    )
+
+
+def _holders(value: object) -> tuple[RecordHolderSummary, ...]:
+    """Read the indexed holders; search replaces them with current public summaries before returning."""
+    if not isinstance(value, list):
+        return ()
+    return tuple(
+        RecordHolderSummary(
+            holder["build_id"],
+            str(holder.get("title", "")),
+            tuple(PublicBuildCreator(name, None) for name in _strings(holder.get("creators"))),
+            None,
+        )
+        for holder in cast(list[object], value)
+        if isinstance(holder, dict) and type(holder.get("build_id")) is int
     )
 
 

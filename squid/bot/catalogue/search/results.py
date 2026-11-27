@@ -632,7 +632,7 @@ def _holder_lines(hit: RecordSearchHit) -> tuple[Text, ...]:
     for holder in hit.holders:
         line = build_row(holder.build_id, holder.title, (None, None, None))
         if holder.creators:
-            line += " · " + ", ".join(holder.creators)
+            line += " · " + ", ".join(creator.name for creator in holder.creators)
         lines.append(line)
     if not lines and hit.build_id:
         lines.append(build_row(hit.build_id, hit.build_title, (None, None, None)))
@@ -707,7 +707,7 @@ def _detail_text(hit: SearchHit) -> sl.TextLike:
             """,
         )
         if hit.metrics:
-            metrics = ", ".join(f"{key}: {value}" for key, value in hit.metrics.items())
+            metrics = ", ".join(f"{key}: {metric.display}" for key, metric in hit.metrics.items())
             fields = md_tr(
                 t"""
                 bot-submission-search-view-metrics =

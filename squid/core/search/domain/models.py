@@ -1,11 +1,13 @@
 """Search requests and results, built the same way by the bot and the API."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Literal
 
 from squid.core.errors import ErrorCode, ValidationError
 from squid.core.pagination import MAX_PAGE_OFFSET, PageAnchor
+from squid.core.records.application.metrics import RecordHolderSummary, RecordMetric
 from squid.core.search.domain.evidence import SearchEvidence
 from squid.core.search.domain.query import BuildQuery, QueryClause, RecordQuery
 from squid.core.search.domain.scope import SearchScope as SearchScope
@@ -122,15 +124,6 @@ class SearchMatch:
 
 
 @dataclass(frozen=True, slots=True)
-class RecordSearchHolder:
-    """A current holder and the public credits for its build."""
-
-    build_id: int
-    title: str
-    creators: tuple[str, ...]
-
-
-@dataclass(frozen=True, slots=True)
 class RecordSearchHit:
     """A record search result. `source_id` is `record:<public ID>`."""
 
@@ -142,9 +135,10 @@ class RecordSearchHit:
     criterion: str
     version_scope: str
     score: float | None = None
-    metrics: dict[str, str | int | float | bool] = field(default_factory=dict)
+    metrics: Mapping[str, RecordMetric] = field(default_factory=dict)
+    """The measurements of `build_id`'s holder."""
     holder_build_ids: tuple[int, ...] = ()
-    holders: tuple[RecordSearchHolder, ...] = ()
+    holders: tuple[RecordHolderSummary, ...] = ()
     matched_holder_id: int | None = None
     matched: bool = True
     evidence: SearchEvidence = field(default_factory=SearchEvidence)

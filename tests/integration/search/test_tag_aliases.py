@@ -33,6 +33,7 @@ from squid.core.search.models import SearchDocument, SearchProjectionQueueItem, 
 from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.core.tags.models import TagAlias, TagAssignment, TagDefinition, TagSlug
 from tests.support.build_edits import build_edit_session
+from tests.support.public_builds import public_builds
 
 
 async def _refresh(sessions: async_sessionmaker[AsyncSession]) -> None:
@@ -104,7 +105,10 @@ async def test_keyword_aliases_and_exact_filters_keep_display_names(
     migrated_session_factory: async_sessionmaker[AsyncSession], catalogue: tuple[int, int, int]
 ) -> None:
     target_id, textual_id, _ = catalogue
-    service = SearchService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
+    service = SearchService(
+        uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory),
+        builds=public_builds(partial(SqlAlchemyUnitOfWork, migrated_session_factory)),
+    )
     page = await service.search(
         SearchRequest("observerless", scope=SearchScope.BUILDS, group_by_build=True),
         context=ActingContext.direct(AnonymousActor()),
@@ -175,7 +179,10 @@ async def test_alias_addition_rename_and_removal_refresh_assigned_builds(
     migrated_session_factory: async_sessionmaker[AsyncSession], catalogue: tuple[int, int, int]
 ) -> None:
     target_id, _, tag_id = catalogue
-    service = SearchService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
+    service = SearchService(
+        uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory),
+        builds=public_builds(partial(SqlAlchemyUnitOfWork, migrated_session_factory)),
+    )
     async with migrated_session_factory.begin() as session:
         definition = await session.get(TagDefinition, tag_id)
         assert definition is not None
@@ -264,7 +271,10 @@ async def test_migration_requeues_existing_builds_and_tag_metadata(
         )
         assert {("build", str(target_id)), ("build", str(textual_id)), ("metadata", f"tag:{tag_id}")} <= queued
     await _refresh(migrated_session_factory)
-    service = SearchService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
+    service = SearchService(
+        uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory),
+        builds=public_builds(partial(SqlAlchemyUnitOfWork, migrated_session_factory)),
+    )
     assert _ids(
         await service.search(
             SearchRequest("restriction:observerless", scope=SearchScope.BUILDS),
@@ -322,7 +332,10 @@ async def test_record_category_filters_match_without_holders_and_refresh_aliases
                 result_ids.append(f"record:{record.public_id}")
     await _refresh(migrated_session_factory)
 
-    service = SearchService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
+    service = SearchService(
+        uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory),
+        builds=public_builds(partial(SqlAlchemyUnitOfWork, migrated_session_factory)),
+    )
 
     async def matches(query: str) -> set[str]:
         page = await service.search(

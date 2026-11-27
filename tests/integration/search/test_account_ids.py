@@ -19,6 +19,7 @@ from squid.core.search.domain import SearchRequest, SearchScope
 from squid.core.search.infrastructure.projection import SearchProjectionWorker
 from tests.support.build_edits import build_edit_session
 from tests.support.build_edits import transact_build_edit as transact
+from tests.support.public_builds import public_builds
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
 CONSENT = AccountConsent(CURRENT_CONSENT_VERSION, Instant.from_utc(2026, 8, 4))
@@ -107,7 +108,7 @@ async def test_account_ids_follow_claims_and_identity_visibility(
         commit=True,
     )
     await _project(migrated_session_factory)
-    service = SearchService(uow_factory=uow_factory)
+    service = SearchService(uow_factory=uow_factory, builds=public_builds(uow_factory))
     assert await _found(service, f"creator:{public_id}") == {str(by_alias), str(by_java)}
     assert await _found(service, f"creator:{public_id.upper()}") == {str(by_alias), str(by_java)}
     assert str(impostor) not in await _found(service, f'creator:"{public_id}"')
@@ -155,7 +156,7 @@ async def test_a_merged_accounts_old_id_still_finds_its_builds(
 
     await transact(uow_factory, lambda uow: uow.accounts.merge(surviving.id, absorbed.id), commit=True)
     await _project(migrated_session_factory)
-    service = SearchService(uow_factory=uow_factory)
+    service = SearchService(uow_factory=uow_factory, builds=public_builds(uow_factory))
 
     assert await _found(service, f"creator:{old_id}") == {str(build)}
     assert await _found(service, f"creator:{surviving.public_account_id}") == {str(build)}

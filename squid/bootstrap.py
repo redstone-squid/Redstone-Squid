@@ -482,6 +482,7 @@ class _ServiceGraph:
     def search(self) -> SearchService:
         return SearchService(
             uow_factory=self.uow_factory,
+            builds=self.build_queries,
             embedding_model=self.embedding_model,
         )
 

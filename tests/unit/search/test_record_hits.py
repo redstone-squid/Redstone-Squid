@@ -2,6 +2,7 @@
 
 from unittest.mock import Mock
 
+from squid.core.records.application.metrics import MetricUnit, RecordMetric
 from squid.core.search.domain import BuildSearchHit, RecordSearchHit
 from squid.core.search.infrastructure.hits import document_hit
 from squid.core.search.models import SearchDocument
@@ -17,7 +18,8 @@ def test_record_hit_opens_the_first_ranked_holder_from_the_projection() -> None:
         tags=["smallest", "door", "all_time"],
         document_data={
             "holder_build_ids": [7, 9],
-            "metric": {"volume": 24},
+            "metric": {"volume": 24, "timing": [3, None, 5]},
+            "build_kind": "door",
             "base_title": "smallest",
             "version_scope": "all_time",
         },
@@ -27,7 +29,11 @@ def test_record_hit_opens_the_first_ranked_holder_from_the_projection() -> None:
 
     assert isinstance(hit, RecordSearchHit)
     assert hit.build_id == 7
-    assert hit.metrics == {"volume": 24}
+    assert hit.metrics == {
+        "volume": RecordMetric(24, MetricUnit.BLOCKS, "24 blocks"),
+        "opening_time": RecordMetric(3, MetricUnit.GAME_TICKS, "3 gt"),
+        "closing_time": RecordMetric(5, MetricUnit.GAME_TICKS, "5 gt"),
+    }
 
 
 def test_build_hit_reads_projected_dimensions_and_leaves_missing_ones_unknown() -> None:

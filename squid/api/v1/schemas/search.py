@@ -10,6 +10,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from squid.api.pagination import PageAnchor
 from squid.core.builds.application.queries import PublicBuildSummary
 from squid.core.errors import ValidationError
+from squid.core.records.application.metrics import RecordHolderSummary, RecordMetric
 from squid.core.search.domain import (
     ComparisonOperator,
     FieldDefinition,
@@ -27,7 +28,6 @@ from squid.core.search.domain import (
     SearchScope,
     TextExpression,
 )
-from squid.core.search.domain.models import RecordSearchHolder
 from squid.core.search.domain.query import ScalarValue
 
 
@@ -99,10 +99,10 @@ class SearchSuggestions(BaseModel):
 
 
 class RecordSearchEntry(BaseModel):
-    """Record facts copied from the search index.
+    """Record facts copied from the search index, with current holder summaries.
 
-    These values are returned without reloading the record or its holder build.
-    They reflect the last projection update and may lag behind current data.
+    Everything except `holders` reflects the last projection update and may lag
+    behind current data.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -114,9 +114,10 @@ class RecordSearchEntry(BaseModel):
     build_title: str
     criterion: str
     version_scope: str
-    metrics: dict[str, str | int | float | bool]
+    metrics: dict[str, RecordMetric]
+    """The measurements of `build_id`'s holder."""
     holder_build_ids: list[int] = Field(default_factory=list)
-    holders: list[RecordSearchHolder] = Field(default_factory=list)
+    holders: list[RecordHolderSummary] = Field(default_factory=list)
     matched: bool = True
     retired: bool = False
     evidence: list[FieldMatch] = Field(default_factory=list)

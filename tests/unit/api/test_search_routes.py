@@ -15,6 +15,7 @@ from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build, DoorBuild
 from squid.core.errors import DataIntegrityError
 from squid.core.pagination import PageAnchor
+from squid.core.records.application.metrics import MetricUnit, RecordMetric
 from squid.core.search.application import SearchQueryParser, SearchService
 from squid.core.search.domain import (
     BuildSearchHit,
@@ -105,7 +106,7 @@ async def test_search_renders_each_resource_kind_and_hydrates_builds() -> None:
                 criterion="smallest",
                 version_scope="all-time",
                 score=1.0,
-                metrics={"volume": 30},
+                metrics={"volume": RecordMetric.render(30, MetricUnit.BLOCKS)},
             ),
             MetadataSearchHit(source_id="tag:3", title="Seamless", metadata_kind="tag", score=0.5),
         ),

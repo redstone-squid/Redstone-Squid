@@ -34984,20 +34984,7 @@
           },
           "metrics": {
             "additionalProperties": {
-              "oneOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "number"
-                },
-                {
-                  "type": "boolean"
-                }
-              ]
+              "$ref": "#/components/schemas/RecordMetric"
             },
             "type": "object"
           },
@@ -35009,7 +34996,7 @@
           },
           "holders": {
             "items": {
-              "$ref": "#/components/schemas/RecordSearchHolder"
+              "$ref": "#/components/schemas/RecordHolderSummary"
             },
             "type": "array"
           },
@@ -35040,29 +35027,6 @@
           "version_scope"
         ],
         "title": "RecordSearchEntry"
-      },
-      "RecordSearchHolder": {
-        "properties": {
-          "build_id": {
-            "type": "integer"
-          },
-          "title": {
-            "type": "string"
-          },
-          "creators": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array"
-          }
-        },
-        "type": "object",
-        "required": [
-          "build_id",
-          "creators",
-          "title"
-        ],
-        "title": "RecordSearchHolder"
       },
       "RecordSearchResult": {
         "properties": {

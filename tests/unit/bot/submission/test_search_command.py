@@ -15,11 +15,13 @@ from squid.bot.catalogue.search.results import SearchScreen, _highlighted, _resu
 from squid.bot.submission.cog import BuildCommands, SearchModeChoice
 from squid.core.actors import ActingContext, AnonymousActor
 from squid.core.builds.application import BuildQueryService
+from squid.core.builds.application.queries import PublicBuildCreator
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build, DoorBuild
 from squid.core.errors import ValidationError
 from squid.core.pagination import PageAnchor
 from squid.core.records.application import RecordService
+from squid.core.records.application.metrics import MetricUnit, RecordHolderSummary, RecordMetric
 from squid.core.search.application import SearchService
 from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldRegistry
 from squid.core.search.domain import (
@@ -35,7 +37,6 @@ from squid.core.search.domain import (
     SortDirection,
 )
 from squid.core.search.domain.fields import FieldDefinition, FieldType
-from squid.core.search.domain.models import RecordSearchHolder
 from squid.core.settings.application import SettingsService
 from squid.runtime import BotServices
 from squid_i18n import source_text
@@ -365,7 +366,7 @@ def grouped_build() -> BuildSearchHit:
                 "smallest",
                 "all_time",
                 holder_build_ids=(42, 57),
-                metrics={"volume": 48},
+                metrics={"volume": RecordMetric.render(48, MetricUnit.BLOCKS)},
                 evidence=SearchEvidence((FieldMatch("title", "Smallest 2x2 Door", ((9, 12),)),)),
             ),
             RecordSearchHit(
@@ -377,7 +378,7 @@ def grouped_build() -> BuildSearchHit:
                 "fastest",
                 "all_time",
                 holder_build_ids=(42,),
-                metrics={"opening": 4},
+                metrics={"opening_time": RecordMetric.render(4, MetricUnit.GAME_TICKS)},
             ),
         ),
     )
@@ -387,8 +388,10 @@ def test_record_result_lists_each_holder_with_its_credits() -> None:
     record = replace(
         grouped_build().records[0],
         holders=(
-            RecordSearchHolder(42, "Seamless Door", ("Alice", "Bob")),
-            RecordSearchHolder(57, "Flush Door", ("Casey",)),
+            RecordHolderSummary(
+                42, "Seamless Door", (PublicBuildCreator("Alice", None), PublicBuildCreator("Bob", None)), None
+            ),
+            RecordHolderSummary(57, "Flush Door", (PublicBuildCreator("Casey", None),), None),
         ),
     )
     description = source_text(_result_description(record, SearchRequest("smallest")), format="plain")
