@@ -1,5 +1,6 @@
 """Public schematic metadata representations."""
 
+from datetime import datetime
 from typing import Literal, Self, override
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -26,6 +27,27 @@ class SchematicSize(FromDomain[SchematicDimensions]):
         return cls(width=dimensions.width, height=dimensions.height, depth=dimensions.length)
 
 
+class SchematicBlockCount(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    block: str
+    """Namespaced block ID without its state, e.g. `minecraft:redstone_wire`."""
+    count: int
+
+
+class SchematicBlocks(BaseModel):
+    """The most common blocks, for a breakdown chart."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    top: list[SchematicBlockCount]
+    other: int
+    """Blocks not in `top`, so `top` and `other` sum to `block_count`."""
+
+
+_TOP_BLOCKS = 10
+
+
 class SchematicSummary(FromDomain[StoredSchematic]):
     """Allowlisted analysis metadata for one stored build schematic."""
 
@@ -33,11 +55,14 @@ class SchematicSummary(FromDomain[StoredSchematic]):
 
     id: int
     primary: bool
+    attached_at: datetime
     format: str
     byte_size: int
     dimensions: SchematicSize
     allocated_dimensions: SchematicSize
     block_count: int
+    blocks: SchematicBlocks | None
+    """Null for files analyzed before block counts were stored."""
     bounding_volume: int
     entity_count: int
     palette_size: int
@@ -65,14 +90,21 @@ class SchematicSummary(FromDomain[StoredSchematic]):
         if download_url is None:
             msg = "Public schematic representations require a route-derived download URL."
             raise ValueError(msg)
+        assert schematic.attached_at is not None, "a published schematic has been stored"
+        by_name = metrics.blocks_by_name()
+        top = [SchematicBlockCount(block=name, count=count) for name, count in (by_name or ())[:_TOP_BLOCKS]]
         return cls(
             id=schematic.id,
             primary=schematic.is_primary,
+            attached_at=schematic.attached_at.to_stdlib(),
             format=metrics.source_format.value,
             byte_size=metrics.byte_size,
             dimensions=SchematicSize.from_domain(metrics.dimensions),
             allocated_dimensions=SchematicSize.from_domain(metrics.allocated_dimensions),
             block_count=metrics.block_count,
+            blocks=None
+            if by_name is None
+            else SchematicBlocks(top=top, other=metrics.block_count - sum(item.count for item in top)),
             bounding_volume=metrics.bounding_volume,
             entity_count=metrics.entity_count,
             palette_size=metrics.palette_size,

@@ -98,6 +98,7 @@ class PublicSchematics(SchematicService):
             original_filename="private-player-name.litematic",
             analysis=make_analysis(),
             publication=_public_publication(),
+            attached_at=Instant.parse_iso("2026-08-11T12:00:00Z"),
         )
         self.items = tuple(replace(self.stored, id=self.stored.id + offset) for offset in range(count))
 
@@ -232,6 +233,34 @@ async def test_public_metadata_omits_digest_and_original_filename() -> None:
     assert "filename" not in item
     assert item["license"] == "cc_by_4_0"
     assert item["download_url"] == "/v1/builds/7/schematics/3/content"
+
+
+async def test_public_metadata_charts_blocks_by_name_with_the_rest_as_other() -> None:
+    counts = {f"minecraft:block_{index:02}": 2 for index in range(11)}
+    counts |= {"minecraft:lever[powered=true]": 3, "minecraft:lever[powered=false]": 4}
+    schematics = PublicSchematics()
+    schematics.items = (
+        replace(
+            schematics.stored,
+            analysis=make_analysis(block_count=sum(counts.values()), block_counts=counts),
+        ),
+    )
+
+    page = await list_build_schematics.fn(7, api_request(), ConfirmedBuilds(), schematics, page_size=50, offset=None)
+
+    blocks = page.items[0].model_dump(mode="json")["blocks"]
+    assert blocks["top"][0] == {"block": "minecraft:lever", "count": 7}
+    assert len(blocks["top"]) == 10
+    assert blocks["other"] == 4
+    assert page.items[0].attached_at.isoformat() == "2026-08-11T12:00:00+00:00"
+
+
+async def test_public_metadata_has_no_block_chart_for_files_analyzed_without_counts() -> None:
+    page = await list_build_schematics.fn(
+        7, api_request(), ConfirmedBuilds(), PublicSchematics(), page_size=50, offset=None
+    )
+
+    assert page.items[0].blocks is None
 
 
 async def test_public_download_links_follow_the_mounted_root_without_using_forwarded_host() -> None:
