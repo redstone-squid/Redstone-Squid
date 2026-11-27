@@ -165,7 +165,7 @@ Rules that apply to every screen:
 
 **A5. My builds `/account/builds`**
 - *Goal:* track submissions.
-- *Needs:* tabs for pending, approved and rejected, with counts. Pending rows show vote progress against thresholds and the deadline. Rejected rows show the reason when there is one. Each row offers edit (pending) and view.
+- *Needs:* tabs for pending, approved and rejected, with counts. Pending rows show vote progress against thresholds. Rejected rows show the reason when there is one. Each row offers edit (pending) and view.
 
 **A6. Notifications `/notifications`**
 - *Goal:* catch up on what happened.
@@ -219,11 +219,11 @@ Rules that apply to every screen:
 
 **M1. Review queue `/review`**
 - *Goal:* process pending builds and correction proposals.
-- *Needs:* a table of pending builds with title, category, submitter, submitted date, vote tallies against pass and fail thresholds, deadline, and my vote. A second tab holds correction proposals with source, build, expiry and change count. Filters and sort.
+- *Needs:* a table of pending builds with title, category, submitter, submitted date, vote tallies against pass and fail thresholds, and my vote. A second tab holds correction proposals with source, build, expiry and change count. Filters and sort.
 
 **M2. Review build `/review/builds/[id]`**
 - *Goal:* decide on one build.
-- *Needs:* the P5 content, plus a vote panel (options, my vote, tallies, thresholds, deadline, visibility mode) and edit access. Approve and reject are shown only if the user has those permissions.
+- *Needs:* the P5 content, plus a vote panel (options, my vote, tallies, thresholds) and edit access. Approve and reject are shown only if the user has those permissions.
 
 **M3. Correction proposal `/review/corrections/[id]`**
 - *Goal:* accept or reject an inferred correction.

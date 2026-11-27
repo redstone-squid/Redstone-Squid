@@ -18,7 +18,8 @@ A *revision* is an integer column on a record that changes on every write. Reade
 remember the revision they displayed, and a writer sends it back as the *expected
 revision*. If the stored revision differs, someone else changed the record in the
 meantime, and the write fails with `RevisionConflictError` instead of overwriting
-their change.
+their change. Every stale-revision error derives from `StaleRevisionError`, which the API
+answers with 412 `REVISION_CONFLICT`.
 
 An *edit target* (`EditTarget`) names one versioned record, such as
 `EditTarget("build", "42")`. Its `identity` string, `"build:42"`, identifies the target in session
