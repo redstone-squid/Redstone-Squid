@@ -11,6 +11,7 @@ from whenever import Instant
 from squid.core.accounts.domain import AccountConsent
 from squid.core.actors import ActingContext, UserActor
 from squid.core.diagnostics.application import ErrorReportService
+from squid.core.diagnostics.domain import EVERY_REPORT, ErrorReportFilters
 from squid.core.diagnostics.models import ErrorReport
 from squid.core.notifications import (
     NotificationPreferences,
@@ -141,7 +142,7 @@ class StoredReports(ErrorReportService):
         context: ActingContext,
         selector: PageSelector[UUID] = FIRST_PAGE,
         page_size: int = 20,
-        work_lost_only: bool = False,
+        filters: ErrorReportFilters = EVERY_REPORT,
     ) -> Page[ErrorReport, UUID]:
-        self.recent_calls.append((page_size, work_lost_only))
+        self.recent_calls.append((page_size, filters.work_lost_only))
         return offset_page((self.report,), offset=selector.offset, page_size=page_size)

@@ -9,7 +9,13 @@ from uuid import UUID, uuid4
 from whenever import Instant
 
 from squid.core.actors import ActingContext
-from squid.core.diagnostics.domain import MAX_REFERENCE_LENGTH, ErrorReportNotFoundError
+from squid.core.diagnostics.domain import (
+    EVERY_REPORT,
+    MAX_REFERENCE_LENGTH,
+    ErrorReportDayCount,
+    ErrorReportFilters,
+    ErrorReportNotFoundError,
+)
 from squid.core.diagnostics.models import ErrorReport
 from squid.core.errors import InvalidStateError, JSONValue, SquidError
 from squid.core.i18n import tr
@@ -32,10 +38,14 @@ class ErrorReportRepository(Protocol):
     async def count_matching(self, reference: str, *, now: Instant, prefix: bool = False) -> int: ...
 
     async def list_recent(
-        self, *, selector: PageSelector[UUID], limit: int, now: Instant, work_lost_only: bool = False
+        self, *, selector: PageSelector[UUID], limit: int, now: Instant, filters: ErrorReportFilters = EVERY_REPORT
     ) -> Sequence[ErrorReport]: ...
 
-    async def count_recent(self, *, now: Instant, work_lost_only: bool = False) -> int: ...
+    async def count_recent(self, *, now: Instant, filters: ErrorReportFilters = EVERY_REPORT) -> int: ...
+
+    async def daily_counts(self, *, now: Instant) -> Sequence[ErrorReportDayCount]:
+        """Count unexpired reports by UTC day and surface, oldest day first."""
+        ...
 
     async def purge_expired(self, *, now: Instant) -> int: ...
 
@@ -139,26 +149,39 @@ class ErrorReportService:
         context: ActingContext,
         selector: PageSelector[UUID] = FIRST_PAGE,
         page_size: int = 20,
-        work_lost_only: bool = False,
+        filters: ErrorReportFilters = EVERY_REPORT,
     ) -> Page[ErrorReport, UUID]:
         """Page unexpired reports, newest first, anchored by report ID.
 
-        Set work_lost_only to select reports marked as abandoned work, such as
-        jobs that exhausted their retries. This separates lost work from failures
-        the application recovered from. An expired or filtered-out anchor raises
-        PageAnchorNotFoundError.
+        An expired or filtered-out anchor raises PageAnchorNotFoundError.
         """
         with context.scope():
             await self._permissions.require(context.effective, DIAGNOSTICS_ERROR_READ)
             now = self._now()
             async with self._uow_factory() as uow:
                 rows = await uow.error_reports.list_recent(
-                    selector=selector, limit=page_size + 1, now=now, work_lost_only=work_lost_only
+                    selector=selector, limit=page_size + 1, now=now, filters=filters
                 )
-                total = await uow.error_reports.count_recent(now=now, work_lost_only=work_lost_only)
+                total = await uow.error_reports.count_recent(now=now, filters=filters)
             return keyset_page(
                 rows, selector=selector, page_size=page_size, total=total, id_of=lambda report: report.id
             )
+
+    @property
+    def retention_hours(self) -> int:
+        """How long a report stays readable after it is stored."""
+        return self._retention_hours
+
+    async def daily_counts(self, *, context: ActingContext) -> Sequence[ErrorReportDayCount]:
+        """Count unexpired reports by UTC day and surface, oldest day first.
+
+        Reports expire after `retention_hours`, so the counts cover that window and its
+        oldest day is usually partial.
+        """
+        with context.scope():
+            await self._permissions.require(context.effective, DIAGNOSTICS_ERROR_READ)
+            async with self._uow_factory() as uow:
+                return await uow.error_reports.daily_counts(now=self._now())
 
     async def purge_expired(self, *, context: ActingContext) -> int:
         """Delete reports past their retention window."""

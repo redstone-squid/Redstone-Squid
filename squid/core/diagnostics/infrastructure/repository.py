@@ -4,12 +4,13 @@ from collections.abc import Callable, Sequence
 from typing import Any, cast, override
 from uuid import UUID
 
-from sqlalchemy import Select, delete, func, or_, select, true
+from sqlalchemy import Select, delete, func, or_, select
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
-from whenever import Instant
+from whenever import Date, Instant
 
 from squid.core.diagnostics.application import ErrorReportRepository
+from squid.core.diagnostics.domain import EVERY_REPORT, ErrorReportDayCount, ErrorReportFilters
 from squid.core.diagnostics.models import ErrorReport
 from squid.core.pagination import PageSelector
 from squid.core.persistence.paging import KeysetOrder
@@ -51,19 +52,33 @@ class PostgresErrorReportRepository(ErrorReportRepository):
 
     @override
     async def list_recent(
-        self, *, selector: PageSelector[UUID], limit: int, now: Instant, work_lost_only: bool = False
+        self, *, selector: PageSelector[UUID], limit: int, now: Instant, filters: ErrorReportFilters = EVERY_REPORT
     ) -> Sequence[ErrorReport]:
         """Read reports newest first; a `before_id` page is read in reverse and restored to that order."""
         session = self._session()
         order = KeysetOrder(ErrorReport.occurred_at, ErrorReport.id, descending=True)
-        listing = _unexpired(select(ErrorReport), now, work_lost_only=work_lost_only)
+        listing = _unexpired(select(ErrorReport), now, filters)
         rows = (await session.scalars((await order.apply(session, listing, selector)).limit(limit))).all()
         return rows[::-1] if selector.before_id is not None else rows
 
     @override
-    async def count_recent(self, *, now: Instant, work_lost_only: bool = False) -> int:
-        statement = _unexpired(select(func.count()).select_from(ErrorReport), now, work_lost_only=work_lost_only)
+    async def count_recent(self, *, now: Instant, filters: ErrorReportFilters = EVERY_REPORT) -> int:
+        statement = _unexpired(select(func.count()).select_from(ErrorReport), now, filters)
         return await self._session().scalar(statement) or 0
+
+    @override
+    async def daily_counts(self, *, now: Instant) -> Sequence[ErrorReportDayCount]:
+        day = func.date(func.timezone("UTC", ErrorReport.occurred_at)).label("day")
+        statement = (
+            select(day, ErrorReport.surface, func.count())
+            .where(ErrorReport.expires_at > now)
+            .group_by(day, ErrorReport.surface)
+            .order_by(day, ErrorReport.surface)
+        )
+        rows = (await self._session().execute(statement)).all()
+        return [
+            ErrorReportDayCount(day=Date(day_value), surface=surface, count=count) for day_value, surface, count in rows
+        ]
 
     @override
     async def purge_expired(self, *, now: Instant) -> int:
@@ -87,6 +102,17 @@ def _matches(reference: str, *, prefix: bool):
     return or_(ErrorReport.reference == reference, correlation_match)
 
 
-def _unexpired[S: Select[Any]](statement: S, now: Instant, *, work_lost_only: bool) -> S:
-    """Keep reports still retained at `now`, optionally only those that abandoned work."""
-    return statement.where(ErrorReport.expires_at > now, ErrorReport.work_lost if work_lost_only else true())
+def _unexpired[S: Select[Any]](statement: S, now: Instant, filters: ErrorReportFilters) -> S:
+    """Keep reports still retained at `now` that match every supplied filter."""
+    statement = statement.where(ErrorReport.expires_at > now)
+    if filters.surface is not None:
+        statement = statement.where(ErrorReport.surface == filters.surface)
+    if filters.error_code is not None:
+        statement = statement.where(ErrorReport.error_code == filters.error_code)
+    if filters.occurred_after is not None:
+        statement = statement.where(ErrorReport.occurred_at >= filters.occurred_after)
+    if filters.occurred_before is not None:
+        statement = statement.where(ErrorReport.occurred_at < filters.occurred_before)
+    if filters.work_lost_only:
+        statement = statement.where(ErrorReport.work_lost)
+    return statement

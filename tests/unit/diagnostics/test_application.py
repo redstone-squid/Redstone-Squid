@@ -13,7 +13,12 @@ from whenever import Instant
 
 from squid.core.actors import ActingContext, UserActor
 from squid.core.diagnostics.application import ErrorReportService
-from squid.core.diagnostics.domain import ErrorReportNotFoundError
+from squid.core.diagnostics.domain import (
+    EVERY_REPORT,
+    ErrorReportDayCount,
+    ErrorReportFilters,
+    ErrorReportNotFoundError,
+)
 from squid.core.diagnostics.models import ErrorReport
 from squid.core.errors import AuthorizationError, ErrorCode, InvalidStateError
 from squid.core.pagination import PageSelector
@@ -47,16 +52,23 @@ class FakeRepository:
         return len(self._matching(reference, now, prefix=prefix))
 
     async def list_recent(
-        self, *, selector: PageSelector[UUID], limit: int, now: Instant, work_lost_only: bool = False
+        self, *, selector: PageSelector[UUID], limit: int, now: Instant, filters: ErrorReportFilters = EVERY_REPORT
     ) -> Sequence[ErrorReport]:
-        newest_first = sorted(self._unexpired(now, work_lost_only), key=lambda report: report.occurred_at, reverse=True)
+        newest_first = sorted(self._unexpired(now, filters), key=lambda report: report.occurred_at, reverse=True)
         return newest_first[selector.offset : selector.offset + limit]
 
-    async def count_recent(self, *, now: Instant, work_lost_only: bool = False) -> int:
-        return len(self._unexpired(now, work_lost_only))
+    async def count_recent(self, *, now: Instant, filters: ErrorReportFilters = EVERY_REPORT) -> int:
+        return len(self._unexpired(now, filters))
 
-    def _unexpired(self, now: Instant, work_lost_only: bool) -> list[ErrorReport]:
-        return [report for report in self.saved if report.expires_at > now and (report.work_lost or not work_lost_only)]
+    async def daily_counts(self, *, now: Instant) -> Sequence[ErrorReportDayCount]:
+        return ()
+
+    def _unexpired(self, now: Instant, filters: ErrorReportFilters) -> list[ErrorReport]:
+        return [
+            report
+            for report in self.saved
+            if report.expires_at > now and (report.work_lost or not filters.work_lost_only)
+        ]
 
     async def purge_expired(self, *, now: Instant) -> int:
         expired = [report for report in self.saved if report.expires_at <= now]

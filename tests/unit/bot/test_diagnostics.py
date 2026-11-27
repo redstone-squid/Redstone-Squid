@@ -15,6 +15,7 @@ import squid_ui_widgets as sp
 from squid.bot.diagnostics.screen import ERROR_CHROME, ErrorReportScreen, report_attachment
 from squid.core.actors import ActingContext, UserActor
 from squid.core.diagnostics.application import ErrorReportService
+from squid.core.diagnostics.domain import EVERY_REPORT, ErrorReportFilters
 from squid.core.diagnostics.models import ErrorReport
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, offset_page
 from squid_ui.ext.discord import (
@@ -113,9 +114,9 @@ class ErrorReportRecorder(ErrorReportService):
         context: ActingContext,
         selector: PageSelector[UUID] = FIRST_PAGE,
         page_size: int = 20,
-        work_lost_only: bool = False,
+        filters: ErrorReportFilters = EVERY_REPORT,
     ) -> Page[ErrorReport, UUID]:
-        self.recent_calls.append((page_size, work_lost_only))
+        self.recent_calls.append((page_size, filters.work_lost_only))
         return offset_page(self.reports, offset=selector.offset, page_size=page_size)
 
     @override
@@ -516,14 +517,14 @@ async def test_report_monitor_cancels_initial_check_and_remounts_with_a_new_run(
         context: ActingContext,
         selector: PageSelector[UUID] = FIRST_PAGE,
         page_size: int = 20,
-        work_lost_only: bool = False,
+        filters: ErrorReportFilters = EVERY_REPORT,
     ) -> Page[ErrorReport, UUID]:
         nonlocal calls
         calls += 1
         if calls > 1:
             entered.set()
             await release.wait()
-        return await original(context=context, selector=selector, page_size=page_size, work_lost_only=work_lost_only)
+        return await original(context=context, selector=selector, page_size=page_size, filters=filters)
 
     screen._operations.recent = AsyncCallRecorder(callback=recent)
     async with running_execution_host() as host:

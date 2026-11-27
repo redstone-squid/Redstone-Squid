@@ -1,13 +1,15 @@
 """Stored error report lookup, for whoever is allowed to read internals."""
 
+from datetime import UTC, datetime
 from typing import Annotated
 
 from litestar import Response, Router, delete, get
 from litestar import status_codes as status
 from litestar.di import NamedDependency, Provide
 from litestar.params import PathParameter, QueryParameter, SkipValidation
+from whenever import Instant
 
-from squid.api.contract import ANONYMOUS, cli_command, contract
+from squid.api.contract import ANONYMOUS, cli_command, contract, transport_only
 from squid.api.dependencies import CurrentCaller, ErrorReports, get_error_reports
 from squid.api.errors import responses
 from squid.api.idempotency import reserve_idempotent_request
@@ -20,8 +22,9 @@ from squid.api.pagination import (
     resolve_selector,
 )
 from squid.api.security import requires
-from squid.api.v1.schemas.diagnostics import ErrorReportDetail, ErrorReportSummary
-from squid.core.diagnostics.domain import MAX_REFERENCE_LENGTH
+from squid.api.v1.schemas.diagnostics import ErrorReportDetail, ErrorReportStats, ErrorReportSummary
+from squid.core.diagnostics.domain import MAX_REFERENCE_LENGTH, ErrorReportFilters
+from squid.core.errors import ErrorCode
 from squid.core.permissions.domain.catalogue import DIAGNOSTICS_ERROR_CLEAR, DIAGNOSTICS_ERROR_READ
 
 # Reading and clearing reports require different permissions, declared per route.
@@ -29,6 +32,26 @@ from squid.core.permissions.domain.catalogue import DIAGNOSTICS_ERROR_CLEAR, DIA
 WorkLostParam = Annotated[
     bool,
     QueryParameter(description="Return only failures that permanently abandoned work, such as a dead-lettered job."),
+]
+
+SurfaceParam = Annotated[
+    str | None,
+    QueryParameter(
+        min_length=1,
+        description="Only failures from this surface, such as `application_command` or `route`.",
+    ),
+]
+ErrorCodeParam = Annotated[
+    ErrorCode | None,
+    QueryParameter(description="Only failures that carried this application error code."),
+]
+OccurredAfterParam = Annotated[
+    datetime | None,
+    QueryParameter(description="Only failures at or after this time. A time without an offset is UTC."),
+]
+OccurredBeforeParam = Annotated[
+    datetime | None,
+    QueryParameter(description="Only failures before this time. A time without an offset is UTC."),
 ]
 
 ReferenceParam = Annotated[
@@ -58,19 +81,50 @@ async def list_error_reports(
     after_id: UuidAfterIdParam = None,
     before_id: UuidBeforeIdParam = None,
     work_lost: WorkLostParam = False,
+    surface: SurfaceParam = None,
+    error_code: ErrorCodeParam = None,
+    occurred_after: OccurredAfterParam = None,
+    occurred_before: OccurredBeforeParam = None,
 ) -> Page[ErrorReportSummary]:
-    """List the most recent unexpired error reports, newest first.
+    """List unexpired error reports that match every filter, newest first.
 
-    Reports include failures that were caught and logged. Set work_lost to include
-    only failures that permanently abandoned work, such as a dead-lettered job.
+    Reports include failures that were caught and logged. Anchors seek on the
+    report's occurrence time and ID, so a reader keeps their place while new
+    failures arrive.
     """
+    filters = ErrorReportFilters(
+        surface=surface,
+        error_code=error_code,
+        occurred_after=None if occurred_after is None else _instant(occurred_after),
+        occurred_before=None if occurred_before is None else _instant(occurred_before),
+        work_lost_only=work_lost,
+    )
     page = await error_reports.recent(
         context=caller.context(),
         selector=resolve_selector(offset=offset, after_id=after_id, before_id=before_id),
         page_size=page_size,
-        work_lost_only=work_lost,
+        filters=filters,
     )
     return Page[ErrorReportSummary].from_domain(page, ErrorReportSummary.from_domain)
+
+
+def _instant(value: datetime) -> Instant:
+    return Instant(value if value.tzinfo is not None else value.replace(tzinfo=UTC))
+
+
+@get(
+    "/stats",
+    responses=responses(401, 403, 422),
+    operation_id="diagnostics_errors_stats",
+    security=[ANONYMOUS],
+    opt=contract(cli=transport_only(), scopes=("diagnostics.error.read",)),
+    status_code=200,
+    guards=[requires(DIAGNOSTICS_ERROR_READ)],
+)
+async def error_report_stats(caller: CurrentCaller, error_reports: ErrorReports) -> ErrorReportStats:
+    """Count unexpired reports per UTC day and surface, for charting failures over the retention window."""
+    counts = await error_reports.daily_counts(context=caller.context())
+    return ErrorReportStats.of(counts, retention_hours=error_reports.retention_hours)
 
 
 @get(
@@ -129,5 +183,5 @@ router = Router(
     dependencies={"error_reports": Provide(get_error_reports, sync_to_thread=False)},
     path="/diagnostics/errors",
     tags=["diagnostics"],
-    route_handlers=[list_error_reports, get_error_report, clear_error_reports],
+    route_handlers=[list_error_reports, error_report_stats, get_error_report, clear_error_reports],
 )

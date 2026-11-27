@@ -18,6 +18,7 @@ import squid_ui_widgets as sp
 from squid.bot.diagnostics.refresh import ErrorReportRefresh
 from squid.bot.ui import CHROME, tr
 from squid.core.actors import ActingContext
+from squid.core.diagnostics.domain import EVERY_REPORT, ErrorReportFilters
 from squid.core.diagnostics.models import ErrorReport
 from squid.core.pagination import Page
 from squid_i18n import md_tr
@@ -36,7 +37,7 @@ class ErrorReportOperations(Protocol):
     ) -> tuple[ErrorReport, int]: ...
 
     async def recent(
-        self, *, context: ActingContext, page_size: int = 20, work_lost_only: bool = False
+        self, *, context: ActingContext, page_size: int = 20, filters: ErrorReportFilters = EVERY_REPORT
     ) -> Page[ErrorReport, UUID]: ...
 
     async def clear_all(self, *, context: ActingContext) -> int: ...
@@ -89,7 +90,9 @@ class _ReportUpdates(sl.Component[ComponentsV2Target, sd.Request]):
 
     async def _check(self) -> bool:
         page = await self._operations.recent(
-            context=await self._context(), page_size=RECENT_LIMIT, work_lost_only=self._work_lost_only
+            context=await self._context(),
+            page_size=RECENT_LIMIT,
+            filters=ErrorReportFilters(work_lost_only=self._work_lost_only),
         )
         return tuple(report.id for report in page.items) != self._shown
 
@@ -226,7 +229,9 @@ class ErrorReportScreen(sd.Screen[int]):
 
     async def _load_recent(self) -> None:
         page = await self._operations.recent(
-            context=await self._context(), page_size=RECENT_LIMIT, work_lost_only=self.work_lost_only
+            context=await self._context(),
+            page_size=RECENT_LIMIT,
+            filters=ErrorReportFilters(work_lost_only=self.work_lost_only),
         )
         self._reports = page.items
         self._updates = _ReportUpdates(

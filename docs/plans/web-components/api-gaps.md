@@ -106,9 +106,9 @@ Items 12, 13, 15 and 17 share one **record holder summary**: `{build_id, title, 
     - `GET /v1/settings/runtime` resolves each snowflake to `{id, name} | null`, with null when Discord no longer knows it.
     - `PATCH` rejects an ID of the wrong kind, such as a role ID in a channel field, with a field error (item 50).
     - Pickers need the channels and roles of the guild these IDs belong to. Nothing records that guild yet. Decide whether to add a `home_guild_id` setting or derive it from the configured channels, then add `GET /v1/discord/home/channels` and `/roles`.
-44. **Diagnostics.** Needed by X2.
-    - The list ignores everything but `page_size` and `work_lost`. Add `surface`, `error_code` and an `occurred_at` range, and page it with item 55 anchors on `(occurred_at, id)`.
-    - `GET /v1/diagnostics/errors/stats` returns `[{day, surface, count}]` for chart 7. Reports expire after 7 days, so the chart covers that window.
+44. **Diagnostics (implemented).** Needed by X2.
+    - The list filters by `surface`, `error_code`, `work_lost` and an `occurred_after`/`occurred_before` range (a time without an offset is UTC). Anchors already seek on `(occurred_at, id)`.
+    - `GET /v1/diagnostics/errors/stats` returns `{retention_hours, days: [{day, surface, count}]}` for chart 7, counting unexpired reports per UTC day. Retention is configurable, so the chart takes its window from `retention_hours`.
     - No per-report delete. Reports expire anyway, and deleting one just destroys evidence.
 45. **Permissions.** `PermissionAdministrationService` already implements all of this, so the work is mostly routing. Every route takes an optional `guild_id` scope, and subjects are accounts or Discord roles. Needed by X6.
     - `GET /v1/permissions/nodes` lists the catalogue by domain.

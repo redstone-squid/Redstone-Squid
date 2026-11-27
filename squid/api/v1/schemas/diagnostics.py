@@ -1,9 +1,12 @@
 """Stored error report representations."""
 
-from datetime import datetime
+from collections.abc import Sequence
+from datetime import date, datetime
+from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from squid.core.diagnostics.domain import ErrorReportDayCount
 from squid.core.diagnostics.models import ErrorReport
 from squid.core.errors import ErrorCode, JSONValue
 
@@ -70,4 +73,35 @@ class ErrorReportDetail(ErrorReportSummary):
             context=dict(report.context),
             log_tail=list(report.log_tail),
             matching_references=matches,
+        )
+
+
+class ErrorReportDayDetail(BaseModel):
+    """How many reports one surface stored on one UTC day."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    day: date
+    surface: str
+    count: int
+
+
+class ErrorReportStats(BaseModel):
+    """Report counts per UTC day and surface, over every report not yet expired."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    retention_hours: int
+    """How far back the counts reach. The oldest day is usually partial."""
+    days: list[ErrorReportDayDetail]
+    """Oldest day first. Days and surfaces without reports are omitted."""
+
+    @classmethod
+    def of(cls, counts: Sequence[ErrorReportDayCount], *, retention_hours: int) -> Self:
+        return cls(
+            retention_hours=retention_hours,
+            days=[
+                ErrorReportDayDetail(day=count.day.to_stdlib(), surface=count.surface, count=count.count)
+                for count in counts
+            ],
         )

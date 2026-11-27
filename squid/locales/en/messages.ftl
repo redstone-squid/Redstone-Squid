@@ -2984,103 +2984,103 @@ credits-role = Contribution
 # squid/bot/submission/ui/credits.py:42
 credits-title = Credits
 
-# squid/bot/diagnostics/screen.py:398
+# squid/bot/diagnostics/screen.py:403
 diagnostics-abandoned-job-note = This job was abandoned; nothing will retry it.
 
-# squid/bot/diagnostics/screen.py:51
+# squid/bot/diagnostics/screen.py:52
 diagnostics-attachment-page-hint = { $section } — page { $page } of { $pages }
 
-# squid/bot/diagnostics/screen.py:339
+# squid/bot/diagnostics/screen.py:344
 diagnostics-clear-forbidden = You are no longer allowed to clear error reports.
 
-# squid/bot/diagnostics/screen.py:59
+# squid/bot/diagnostics/screen.py:60
 diagnostics-controls-not-owner = These error controls belong to someone else.
 
-# squid/bot/diagnostics/screen.py:208
+# squid/bot/diagnostics/screen.py:211
 diagnostics-delete-warning = This permanently deletes reports that have not expired yet.
 
-# squid/core/diagnostics/domain.py:23
+# squid/core/diagnostics/domain.py:27
 diagnostics-error-report-not-found = Error report not found
 
-# squid/core/diagnostics/application.py:72
+# squid/core/diagnostics/application.py:82
 diagnostics-error-report-retention = Error report retention must be at least one hour.
 
-# squid/bot/diagnostics/screen.py:249
+# squid/bot/diagnostics/screen.py:254
 diagnostics-no-recent-errors = Nothing has failed within the retention window.
 
-# squid/core/diagnostics/domain.py:22
+# squid/core/diagnostics/domain.py:26
 diagnostics-no-stored-error = No stored error matches that reference.
 
-# squid/bot/diagnostics/screen.py:170
+# squid/bot/diagnostics/screen.py:173
 diagnostics-path-privacy-warning = An error report names internal paths, so it is never posted in a channel.
 
-# squid/bot/diagnostics/screen.py:125
+# squid/bot/diagnostics/screen.py:128
 diagnostics-report-list-stale = The report list has changed. Refresh when you are ready.
 
-# squid/bot/diagnostics/screen.py:406
+# squid/bot/diagnostics/screen.py:411
 diagnostics-shared-reference-note = { $count } reports match this reference; this is the newest.
 
-# squid/bot/diagnostics/screen.py:120
+# squid/bot/diagnostics/screen.py:123
 diagnostics-update-check-failed = Could not check for updates. You can still refresh reports.
 
-# squid/bot/diagnostics/screen.py:405
+# squid/bot/diagnostics/screen.py:410
 diagnostics-view-ambiguous = Ambiguous
 
-# squid/bot/diagnostics/screen.py:295
+# squid/bot/diagnostics/screen.py:300
 diagnostics-view-clear-all = Clear all
 
-# squid/bot/diagnostics/screen.py:206
+# squid/bot/diagnostics/screen.py:209
 diagnostics-view-clear-every-error-report = Clear every error report?
 
-# squid/bot/diagnostics/screen.py:214
+# squid/bot/diagnostics/screen.py:217
 diagnostics-view-delete-reports = Delete reports
 
-# squid/bot/diagnostics/screen.py:267
+# squid/bot/diagnostics/screen.py:272
 diagnostics-view-deleted-stored-error-reports = Deleted { $count } stored error reports.
 
-# squid/bot/diagnostics/screen.py:60
+# squid/bot/diagnostics/screen.py:61
 diagnostics-view-earlier = Earlier
 
-# squid/bot/diagnostics/screen.py:305
+# squid/bot/diagnostics/screen.py:310
 diagnostics-view-error = Error { $identifier }
 
-# squid/bot/diagnostics/screen.py:265
+# squid/bot/diagnostics/screen.py:270
 diagnostics-view-errors-cleared = Errors cleared
 
-# squid/bot/diagnostics/screen.py:392
+# squid/bot/diagnostics/screen.py:397
 diagnostics-view-exception = Exception
 
-# squid/bot/diagnostics/screen.py:61
+# squid/bot/diagnostics/screen.py:62
 diagnostics-view-later = Later
 
-# squid/bot/diagnostics/screen.py:279
+# squid/bot/diagnostics/screen.py:284
 diagnostics-view-loading-error-reports = Loading error reports.
 
-# squid/bot/diagnostics/screen.py:315
+# squid/bot/diagnostics/screen.py:320
 diagnostics-view-log-tail = Log tail
 
-# squid/bot/diagnostics/screen.py:301
+# squid/bot/diagnostics/screen.py:306
 diagnostics-view-no-traceback-was-recorded = No traceback was recorded.
 
-# squid/bot/diagnostics/screen.py:248
+# squid/bot/diagnostics/screen.py:253
 diagnostics-view-recent-errors = Recent errors
 
-# squid/bot/diagnostics/screen.py:153
+# squid/bot/diagnostics/screen.py:156
 diagnostics-view-refresh-reports = Refresh reports
 
-# squid/bot/diagnostics/screen.py:50
+# squid/bot/diagnostics/screen.py:51
 diagnostics-view-traceback = Traceback
 
-# squid/bot/diagnostics/screen.py:388
+# squid/bot/diagnostics/screen.py:393
 diagnostics-view-when = When
 
-# squid/bot/diagnostics/screen.py:391
+# squid/bot/diagnostics/screen.py:396
 diagnostics-view-where = Where
 
-# squid/bot/diagnostics/screen.py:397
+# squid/bot/diagnostics/screen.py:402
 diagnostics-view-work-lost = Work lost
 
-# squid/bot/diagnostics/screen.py:285
+# squid/bot/diagnostics/screen.py:290
 diagnostics-view-work-lost-only = Work lost only
 
 # squid/bot/submission/ui/drafts.py:1055, squid/bot/submission/ui/drafts.py:607, squid/bot/submission/ui/drafts.py:804

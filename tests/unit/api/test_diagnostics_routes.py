@@ -5,10 +5,15 @@ from uuid import UUID, uuid4
 
 import pytest
 from litestar.testing import TestClient
-from whenever import Instant
+from whenever import Date, Instant
 
 from squid.core.actors import ActingContext
-from squid.core.diagnostics.domain import ErrorReportNotFoundError
+from squid.core.diagnostics.domain import (
+    EVERY_REPORT,
+    ErrorReportDayCount,
+    ErrorReportFilters,
+    ErrorReportNotFoundError,
+)
 from squid.core.diagnostics.models import ErrorReport
 from squid.core.errors import ErrorCode
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, offset_page
@@ -39,6 +44,8 @@ class StubErrorReports:
     def __init__(self, report: ErrorReport | None = None, *, matches: int = 1) -> None:
         self._report = report
         self._matches = matches
+        self.filters: list[ErrorReportFilters] = []
+        self.retention_hours = 168
 
     async def lookup(self, reference: str, *, context: ActingContext) -> tuple[ErrorReport, int]:
         if self._report is None:
@@ -51,10 +58,14 @@ class StubErrorReports:
         context: ActingContext,
         selector: PageSelector[UUID] = FIRST_PAGE,
         page_size: int = 20,
-        work_lost_only: bool = False,
+        filters: ErrorReportFilters = EVERY_REPORT,
     ) -> Page[ErrorReport, UUID]:
-        shown = self._report is not None and (self._report.work_lost or not work_lost_only)
+        self.filters.append(filters)
+        shown = self._report is not None and (self._report.work_lost or not filters.work_lost_only)
         return offset_page([self._report] if shown else [], offset=selector.offset, page_size=page_size)
+
+    async def daily_counts(self, *, context: ActingContext) -> list[ErrorReportDayCount]:
+        return [ErrorReportDayCount(day=Date(2026, 8, 17), surface="route", count=3)]
 
 
 # The bootstrap secret carries only the nodes a deployment names, so reading reports has to be
@@ -137,3 +148,37 @@ def test_an_over_long_reference_is_rejected_before_the_service(client_for: Any) 
         response = client.get(f"/v1/diagnostics/errors/{'a' * 200}", headers=AUTHORIZED)
 
     assert response.status_code == 422
+
+
+def test_list_filters_reach_the_service_and_offsetless_times_are_utc(client_for: Any) -> None:
+    reports = StubErrorReports(make_report())
+    query = {
+        "surface": "route",
+        "error_code": "INTERNAL_ERROR",
+        "occurred_after": "2026-08-17T00:00:00",
+        "occurred_before": "2026-08-17T12:00:00+08:00",
+    }
+
+    with client_for(reports) as client:
+        response = client.get("/v1/diagnostics/errors", params=query, headers=AUTHORIZED)
+
+    assert response.status_code == 200
+    assert reports.filters == [
+        ErrorReportFilters(
+            surface="route",
+            error_code=ErrorCode.INTERNAL_ERROR,
+            occurred_after=Instant.from_utc(2026, 8, 17),
+            occurred_before=Instant.from_utc(2026, 8, 17, 4),
+        )
+    ]
+
+
+def test_stats_report_their_window(client_for: Any) -> None:
+    with client_for(StubErrorReports()) as client:
+        response = client.get("/v1/diagnostics/errors/stats", headers=AUTHORIZED)
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "retention_hours": 168,
+        "days": [{"day": "2026-08-17", "surface": "route", "count": 3}],
+    }

@@ -5,8 +5,9 @@ from uuid import uuid4
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
-from whenever import Instant
+from whenever import Date, Instant
 
+from squid.core.diagnostics.domain import ErrorReportDayCount, ErrorReportFilters
 from squid.core.diagnostics.infrastructure.repository import PostgresErrorReportRepository
 from squid.core.diagnostics.models import ErrorReport
 from squid.core.errors import ErrorCode
@@ -45,6 +46,7 @@ def make_report(
     occurred_at: Instant = NOW,
     expires_at: Instant | None = None,
     error_code: ErrorCode | None = ErrorCode.INTERNAL_ERROR,
+    surface: str = "application_command",
 ) -> ErrorReport:
     return ErrorReport(
         id=uuid4(),
@@ -52,7 +54,7 @@ def make_report(
         reference=correlation_id[:12],
         occurred_at=occurred_at,
         expires_at=expires_at if expires_at is not None else occurred_at.add(hours=168),
-        surface="application_command",
+        surface=surface,
         origin="records lookup",
         exception_type="RuntimeError",
         message="boom",
@@ -155,6 +157,35 @@ async def test_list_recent_is_newest_first_and_bounded(repository: PostgresError
     assert [report.correlation_id for report in recent] == ["0" * 32, "1" * 32]
     assert [report.correlation_id for report in rest] == ["2" * 32]
     assert await repository.count_recent(now=NOW) == 3
+
+
+async def test_filters_narrow_the_listing_and_its_total(repository: PostgresErrorReportRepository) -> None:
+    await repository.save(make_report(correlation_id="a" * 32, surface="route", occurred_at=NOW.subtract(hours=1)))
+    await repository.save(make_report(correlation_id="b" * 32, surface="route", error_code=None))
+    await repository.save(make_report(correlation_id="c" * 32, occurred_at=NOW.subtract(hours=30)))
+    window = ErrorReportFilters(occurred_after=NOW.subtract(hours=2), occurred_before=NOW)
+
+    route = ErrorReportFilters(surface="route", error_code=ErrorCode.INTERNAL_ERROR)
+    listed = await repository.list_recent(selector=FIRST_PAGE, limit=5, now=NOW, filters=route)
+
+    assert [report.correlation_id for report in listed] == ["a" * 32]
+    assert await repository.count_recent(now=NOW, filters=route) == 1
+    # The upper bound is exclusive, so a report at exactly NOW falls outside the window.
+    assert await repository.count_recent(now=NOW, filters=window) == 1
+
+
+async def test_daily_counts_group_unexpired_reports_by_utc_day_and_surface(
+    repository: PostgresErrorReportRepository,
+) -> None:
+    await repository.save(make_report(correlation_id="a" * 32, surface="route"))
+    await repository.save(make_report(correlation_id="b" * 32, surface="route", occurred_at=NOW.subtract(hours=1)))
+    await repository.save(make_report(correlation_id="c" * 32, occurred_at=NOW.subtract(hours=13)))
+    await repository.save(make_report(correlation_id="d" * 32, expires_at=NOW))
+
+    assert await repository.daily_counts(now=NOW) == [
+        ErrorReportDayCount(day=Date(2026, 8, 16), surface="application_command", count=1),
+        ErrorReportDayCount(day=Date(2026, 8, 17), surface="route", count=2),
+    ]
 
 
 async def test_report_anchors_walk_through_reports_that_share_a_time(

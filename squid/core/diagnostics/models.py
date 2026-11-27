@@ -17,6 +17,8 @@ from squid.core.persistence.types import InstantUTC, StrEnumText
 class ErrorCodeText(StrEnumText[ErrorCode]):
     """Read unknown codes from older deployments as unclassified errors."""
 
+    cache_ok = True
+
     @override
     def process_result_value(self, value: str | None, dialect: Dialect) -> ErrorCode | None:
         try:

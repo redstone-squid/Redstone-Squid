@@ -963,6 +963,15 @@ export type EmptyParams = {
 export type ErrorCode = 'ACCOUNT_ALREADY_LINKED' | 'ACCOUNT_IDENTITY_NOT_FOUND' | 'ACCOUNT_NOT_FOUND' | 'ALIAS_ALREADY_ADDED' | 'ALIAS_ALREADY_CLAIMED' | 'ALIAS_IN_USE' | 'BUILD_BUSY' | 'BUILD_NOT_FOUND' | 'BUILD_REVISION_MISMATCH' | 'BUILD_REVISION_REQUIRED' | 'CLAIM_NOT_FOUND' | 'CREATOR_ALIAS_NOT_FOUND' | 'CONFIGURATION_ERROR' | 'CONSENT_REQUIRED' | 'CONSENT_VERSION_STALE' | 'DATA_INTEGRITY_ERROR' | 'DOMAIN_ERROR' | 'INFRASTRUCTURE_ERROR' | 'IDEMPOTENCY_CONFLICT' | 'IDEMPOTENCY_IN_PROGRESS' | 'INTERNAL_ERROR' | 'INVALID_BUILD' | 'INVALID_MESSAGE' | 'INVALID_QUERY' | 'INVALID_REQUEST' | 'INVALID_STATE' | 'INVALID_ACCOUNT' | 'INVALID_MERGE_CODE' | 'INVALID_PROFILE' | 'INVALID_VERIFICATION_CODE' | 'INVALID_VERSION' | 'LAST_IDENTITY' | 'LINK_RESERVATION_EXPIRED' | 'INVALID_VOTE_CONFIGURATION' | 'MESSAGE_NOT_FOUND' | 'MINECRAFT_ACCOUNT_NOT_FOUND' | 'MINECRAFT_SERVICE_UNAVAILABLE' | 'NOT_FOUND' | 'PAGE_ANCHOR_NOT_FOUND' | 'PERSISTENCE_ERROR' | 'RATE_LIMITED' | 'RECORD_NOT_FOUND' | 'RESTRICTION_NOT_FOUND' | 'SCHEMATIC_INVALID' | 'SCHEMATIC_NOT_FOUND' | 'SCHEMATIC_RENDER_REFUSED' | 'SCHEMATIC_RENDER_UNAVAILABLE' | 'SCHEMATIC_SUPPORT_UNAVAILABLE' | 'SCHEMATIC_TIMEOUT' | 'SCHEMATIC_TOO_LARGE' | 'SCHEMATIC_WORKER_CRASHED' | 'TAG_NOT_FOUND' | 'UNAUTHORIZED' | 'VALIDATION_ERROR' | 'VERIFICATION_ATTEMPTS_EXHAUSTED' | 'VERSION_CATALOG_UNAVAILABLE' | 'VERSION_EXISTS' | 'VERSION_IN_USE' | 'VERSION_NOT_FOUND' | 'VOTE_SESSION_NOT_FOUND';
 
 /**
+ * ErrorReportDayDetail
+ */
+export type ErrorReportDayDetail = {
+    day: string;
+    surface: string;
+    count: number;
+};
+
+/**
  * ErrorReportDetail
  */
 export type ErrorReportDetail = {
@@ -981,6 +990,14 @@ export type ErrorReportDetail = {
     };
     log_tail?: Array<string>;
     matching_references?: number;
+};
+
+/**
+ * ErrorReportStats
+ */
+export type ErrorReportStats = {
+    retention_hours: number;
+    days: Array<ErrorReportDayDetail>;
 };
 
 /**
@@ -5445,6 +5462,22 @@ export type DiagnosticsErrorsListData = {
          * Return only failures that permanently abandoned work, such as a dead-lettered job.
          */
         work_lost?: boolean;
+        /**
+         * Only failures from this surface, such as `application_command` or `route`.
+         */
+        surface?: string | null;
+        /**
+         * Only failures that carried this application error code.
+         */
+        error_code?: ErrorCode | null;
+        /**
+         * Only failures at or after this time. A time without an offset is UTC.
+         */
+        occurred_after?: string | null;
+        /**
+         * Only failures before this time. A time without an offset is UTC.
+         */
+        occurred_before?: string | null;
     };
     url: '/v1/diagnostics/errors';
 };
@@ -5478,6 +5511,43 @@ export type DiagnosticsErrorsListResponses = {
 };
 
 export type DiagnosticsErrorsListResponse = DiagnosticsErrorsListResponses[keyof DiagnosticsErrorsListResponses];
+
+export type DiagnosticsErrorsStatsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/diagnostics/errors/stats';
+};
+
+export type DiagnosticsErrorsStatsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type DiagnosticsErrorsStatsError = DiagnosticsErrorsStatsErrors[keyof DiagnosticsErrorsStatsErrors];
+
+export type DiagnosticsErrorsStatsResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: ErrorReportStats;
+};
+
+export type DiagnosticsErrorsStatsResponse = DiagnosticsErrorsStatsResponses[keyof DiagnosticsErrorsStatsResponses];
 
 export type DiagnosticsErrorGetData = {
     body?: never;

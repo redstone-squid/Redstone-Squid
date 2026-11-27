@@ -6060,7 +6060,7 @@
           "diagnostics"
         ],
         "summary": "ListErrorReports",
-        "description": "List the most recent unexpired error reports, newest first.\n\nReports include failures that were caught and logged. Set work_lost to include\nonly failures that permanently abandoned work, such as a dead-lettered job.",
+        "description": "List unexpired error reports that match every filter, newest first.\n\nReports include failures that were caught and logged. Anchors seek on the\nreport's occurrence time and ID, so a reader keeps their place while new\nfailures arrive.",
         "operationId": "diagnostics_errors_list",
         "parameters": [
           {
@@ -6151,6 +6151,89 @@
               "default": false
             },
             "description": "Return only failures that permanently abandoned work, such as a dead-lettered job.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "surface",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "minLength": 1,
+              "description": "Only failures from this surface, such as `application_command` or `route`."
+            },
+            "description": "Only failures from this surface, such as `application_command` or `route`.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "error_code",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/ErrorCode"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only failures that carried this application error code."
+            },
+            "description": "Only failures that carried this application error code.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "occurred_after",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only failures at or after this time. A time without an offset is UTC."
+            },
+            "description": "Only failures at or after this time. A time without an offset is UTC.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "occurred_before",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "format": "date-time"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only failures before this time. A time without an offset is UTC."
+            },
+            "description": "Only failures before this time. A time without an offset is UTC.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -6367,6 +6450,103 @@
         },
         "x-required-api-scopes": [
           "diagnostics.error.clear"
+        ]
+      }
+    },
+    "/v1/diagnostics/errors/stats": {
+      "get": {
+        "tags": [
+          "diagnostics"
+        ],
+        "summary": "ErrorReportStats",
+        "description": "Count unexpired reports per UTC day and surface, for charting failures over the retention window.",
+        "operationId": "diagnostics_errors_stats",
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorReportStats"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {}
+        ],
+        "x-squid-cli": {
+          "classification": "transport-only"
+        },
+        "x-required-api-scopes": [
+          "diagnostics.error.read"
         ]
       }
     },
@@ -24782,6 +24962,27 @@
         "title": "ErrorCode",
         "description": "Stable machine-readable application error codes."
       },
+      "ErrorReportDayDetail": {
+        "properties": {
+          "day": {
+            "type": "string",
+            "format": "date"
+          },
+          "surface": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "count",
+          "day",
+          "surface"
+        ],
+        "title": "ErrorReportDayDetail"
+      },
       "ErrorReportDetail": {
         "properties": {
           "reference": {
@@ -24862,6 +25063,25 @@
           "traceback"
         ],
         "title": "ErrorReportDetail"
+      },
+      "ErrorReportStats": {
+        "properties": {
+          "retention_hours": {
+            "type": "integer"
+          },
+          "days": {
+            "items": {
+              "$ref": "#/components/schemas/ErrorReportDayDetail"
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "required": [
+          "days",
+          "retention_hours"
+        ],
+        "title": "ErrorReportStats"
       },
       "ErrorReportSummary": {
         "properties": {
