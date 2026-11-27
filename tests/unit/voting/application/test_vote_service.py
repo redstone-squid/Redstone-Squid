@@ -16,6 +16,7 @@ from squid.core.voting.domain import (
     BallotChange,
     DeleteLogVoteTarget,
     EmojiPreset,
+    GuildMember,
     PollScope,
     ReviewFilters,
     ReviewKind,
@@ -100,6 +101,9 @@ class FakeVoteRepository:
         self.session = session
         self.cast_calls: list[CastVoteCall] = []
         self.clear_calls: list[tuple[int, int, BallotChange]] = []
+        self.members: dict[tuple[int, int], GuildMember] = {}
+        """Stored memberships by guild and account."""
+        self.member_lookups: list[tuple[int, int]] = []
         self.mutation: StoredVoteMutation | None = None
         self.role_weights: dict[tuple[int, VoteKind], list[RoleWeight]] = {}
         self.role_weight_lookups: list[tuple[int, VoteKind]] = []
@@ -282,29 +286,15 @@ class FakeVoteRepository:
     async def reset_configuration(self, guild_id: int, kind: VoteKind | None = None) -> None:
         pass
 
+    async def get_member(self, guild_id: int, account_id: int) -> GuildMember | None:
+        self.member_lookups.append((guild_id, account_id))
+        return self.members.get((guild_id, account_id))
 
-class MissingActorResolver:
-    """Return an unresolved lookup, as for an owner guild Discord cannot reach."""
+    async def record_members(self, guild_id: int, members: Sequence[GuildMember], *, complete: bool) -> None:
+        pass
 
-    async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> None:
-        del account_id, guild_id, kind
-        return
-
-
-class RecordingActorResolver:
-    """Resolve members from a fixed roster, recording which guild was asked."""
-
-    def __init__(self, members: dict[tuple[int, int], UserActor] | None = None):
-        self.members = members or {}
-        self.calls: list[tuple[int, int]] = []
-
-    async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> UserActor | None:
-        del kind
-        self.calls.append((account_id, guild_id))
-        if (account_id, guild_id) in self.members:
-            return self.members[(account_id, guild_id)]
-        # Definitely not a member, as opposed to a guild we could not reach.
-        return UserActor(account_id=account_id, discord_user_id=account_id * 10, guild_id=guild_id)
+    async def forget_member(self, guild_id: int, discord_user_id: int) -> None:
+        pass
 
 
 def vote_grants(*nodes: str, account_id: int = 7) -> tuple[PermissionGrant, ...]:
@@ -806,50 +796,39 @@ async def test_build_vote_weighs_by_the_owner_guild_not_the_voting_guild() -> No
         # A guild hosting a card must not be able to weight the shared outcome.
         (VOTING_GUILD_ID, VoteKind.BUILD): [RoleWeight(VOTING_GUILD_ID, VoteKind.BUILD, 77, 100.0)],
     }
+    repository.members = {(OWNER_GUILD_ID, 7): GuildMember(70, frozenset({55}))}
     repository.mutation = StoredVoteMutation(initial, None, 4.0, just_closed=False)
-    resolver = RecordingActorResolver(
-        {
-            (7, OWNER_GUILD_ID): UserActor(
-                account_id=7, discord_user_id=70, guild_id=OWNER_GUILD_ID, discord_role_ids=frozenset({55})
-            )
-        }
-    )
-    service = VoteService(
-        actor_resolver=resolver, build_owner_guild_id=OWNER_GUILD_ID, uow_factory=lambda: VoteUnitOfWork(repository)
-    )
+    service = VoteService(build_owner_guild_id=OWNER_GUILD_ID, uow_factory=lambda: VoteUnitOfWork(repository))
 
     result = await service.cast_vote(
         12,
         "approve",
-        emoji="👍",
+        emoji="✅",
         context=ActingContext.for_actor(
             UserActor(account_id=7, discord_user_id=70, guild_id=VOTING_GUILD_ID, discord_role_ids=frozenset({77}))
         ),
     )
 
     assert result.accepted
-    assert resolver.calls == [(7, OWNER_GUILD_ID)]
+    assert repository.member_lookups == [(OWNER_GUILD_ID, 7)]
     assert repository.role_weight_lookups == [(OWNER_GUILD_ID, VoteKind.BUILD)]
     assert repository.cast_calls[0].desired_weight == 4.0
 
 
-async def test_a_voter_outside_the_owner_guild_keeps_the_default_weight() -> None:
+async def test_the_live_actor_lends_no_authority_to_the_weight() -> None:
+    """A voter the owner guild does not list weighs as a member without roles, whatever the card guild says."""
     initial = shared_snapshot()
     repository = FakeVoteRepository(initial)
     repository.role_weights = {
         (VOTING_GUILD_ID, VoteKind.BUILD): [RoleWeight(VOTING_GUILD_ID, VoteKind.BUILD, 77, 100.0)]
     }
     repository.mutation = StoredVoteMutation(initial, None, 1.0, just_closed=False)
-    service = VoteService(
-        actor_resolver=RecordingActorResolver(),
-        build_owner_guild_id=OWNER_GUILD_ID,
-        uow_factory=lambda: VoteUnitOfWork(repository),
-    )
+    service = VoteService(build_owner_guild_id=OWNER_GUILD_ID, uow_factory=lambda: VoteUnitOfWork(repository))
 
     result = await service.cast_vote(
         12,
         "approve",
-        emoji="👍",
+        emoji="✅",
         context=ActingContext.for_actor(
             UserActor(
                 account_id=7,
@@ -857,30 +836,9 @@ async def test_a_voter_outside_the_owner_guild_keeps_the_default_weight() -> Non
                 guild_id=VOTING_GUILD_ID,
                 discord_role_ids=frozenset({77}),
                 capabilities=STAFF,
+                is_bot_owner=True,
+                discord_guild_admin=True,
             )
-        ),
-    )
-
-    assert result.accepted
-    assert repository.cast_calls[0].desired_weight == 1.0
-
-
-async def test_an_unreachable_owner_guild_lands_the_ballot_at_the_default_weight() -> None:
-    initial = shared_snapshot()
-    repository = FakeVoteRepository(initial)
-    repository.mutation = StoredVoteMutation(initial, None, 1.0, just_closed=False)
-    service = VoteService(
-        actor_resolver=MissingActorResolver(),
-        build_owner_guild_id=OWNER_GUILD_ID,
-        uow_factory=lambda: VoteUnitOfWork(repository),
-    )
-
-    result = await service.cast_vote(
-        12,
-        "approve",
-        emoji="👍",
-        context=ActingContext.for_actor(
-            UserActor(account_id=7, discord_user_id=70, guild_id=VOTING_GUILD_ID, capabilities=STAFF)
         ),
     )
 
@@ -891,8 +849,9 @@ async def test_an_unreachable_owner_guild_lands_the_ballot_at_the_default_weight
 async def test_without_an_owner_guild_no_role_table_may_weight_a_build_vote() -> None:
     initial = snapshot()
     repository = FakeVoteRepository(initial)
+    repository.members = {(OWNER_GUILD_ID, 7): GuildMember(70, frozenset({55}), manage_server=True)}
     repository.mutation = StoredVoteMutation(initial, None, 1.0, just_closed=False)
-    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
+    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository, grants=vote_grants("vote.weight.staff")))
 
     result = await service.cast_vote(
         12,
@@ -905,6 +864,40 @@ async def test_without_an_owner_guild_no_role_table_may_weight_a_build_vote() ->
 
     assert result.accepted
     assert repository.cast_calls[0].desired_weight == 1.0
+    assert repository.member_lookups == []
+
+
+async def test_a_web_ballot_selects_the_option_without_a_card() -> None:
+    initial = snapshot()
+    repository = FakeVoteRepository(initial)
+    repository.members = {(OWNER_GUILD_ID, 7): GuildMember(70)}
+    repository.mutation = StoredVoteMutation(initial, None, 3.0, just_closed=False)
+    service = VoteService(
+        build_owner_guild_id=OWNER_GUILD_ID,
+        uow_factory=lambda: VoteUnitOfWork(repository, grants=vote_grants("vote.weight.staff")),
+    )
+
+    result = await service.cast_vote(12, "deny", context=ActingContext.for_actor(UserActor(account_id=7)))
+
+    assert result.accepted
+    assert repository.cast_calls == [CastVoteCall(12, 7, None, "deny", None, 3.0)]
+
+
+@pytest.mark.parametrize(("member", "accepted"), [(True, True), (False, False)])
+async def test_a_guild_poll_admits_only_its_guilds_members(member: bool, accepted: bool) -> None:
+    poll = poll_snapshot(guild_id=OWNER_GUILD_ID, messages=(VoteMessage(100, 200, OWNER_GUILD_ID),))
+    repository = FakeVoteRepository(poll)
+    if member:
+        repository.members = {(OWNER_GUILD_ID, 7): GuildMember(70)}
+    repository.mutation = StoredVoteMutation(poll, None, 1.0, just_closed=False)
+    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
+    web_voter = ActingContext.for_actor(UserActor(account_id=7))
+
+    result = await service.cast_vote(poll.id, "one", context=web_voter)
+    weight = await service.base_weight(poll.id, context=web_voter)
+
+    assert result.accepted is accepted
+    assert weight == (1.0 if accepted else VoteRejection.NOT_ELIGIBLE)
 
 
 async def test_casting_weighs_only_the_new_ballot() -> None:
@@ -913,20 +906,17 @@ async def test_casting_weighs_only_the_new_ballot() -> None:
     initial = replace(shared_snapshot(), selections=selections, votes={8: 4.0})
     repository = FakeVoteRepository(initial)
     repository.mutation = StoredVoteMutation(initial, None, 1.0, just_closed=False)
-    resolver = RecordingActorResolver()
-    service = VoteService(
-        actor_resolver=resolver, build_owner_guild_id=OWNER_GUILD_ID, uow_factory=lambda: VoteUnitOfWork(repository)
-    )
+    service = VoteService(build_owner_guild_id=OWNER_GUILD_ID, uow_factory=lambda: VoteUnitOfWork(repository))
 
     result = await service.cast_vote(
         12,
         "approve",
-        emoji="👍",
+        emoji="✅",
         context=ActingContext.for_actor(UserActor(account_id=7, discord_user_id=70, guild_id=VOTING_GUILD_ID)),
     )
 
     assert result.accepted
-    assert resolver.calls == [(7, OWNER_GUILD_ID)]
+    assert repository.member_lookups == [(OWNER_GUILD_ID, 7)]
 
 
 @pytest.mark.parametrize(("guild_id", "voided"), [(OWNER_GUILD_ID, True), (VOTING_GUILD_ID, False)])
@@ -1044,23 +1034,6 @@ async def test_an_unlinked_discord_actor_cannot_cast_or_close_a_vote() -> None:
     with pytest.raises(AuthenticationError):
         await service.close(12, context=ActingContext.for_actor(actor))
     assert repository.cast_calls == []
-
-
-async def test_owner_guild_fallback_clears_all_membership_authority() -> None:
-    repository = FakeVoteRepository(shared_snapshot())
-    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
-    actor = UserActor(
-        account_id=7,
-        discord_user_id=70,
-        guild_id=VOTING_GUILD_ID,
-        discord_role_ids=frozenset({77}),
-        capabilities=STAFF,
-        is_bot_owner=True,
-        discord_guild_admin=True,
-        highest_permission_rank=999,
-    )
-    weighted = await service._weight_actor(actor, shared_snapshot(), OWNER_GUILD_ID)
-    assert weighted == UserActor(account_id=7, discord_user_id=70, guild_id=OWNER_GUILD_ID)
 
 
 async def test_failed_final_counts_pause_for_review_and_finalize_uses_collected_ballots() -> None:

@@ -227,6 +227,7 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/TABLES/vote_session_options.sql
 \ir public/TABLES/vote_sessions.sql
 \ir public/SEQUENCES/vote_sessions_id_seq.sql
+\ir public/TABLES/voter_guild_members.sql
 \ir public/TABLES/votes.sql
 \ir public/TABLES/web_sessions.sql
 \ir public/SEQUENCES/work_activity_id_seq.sql

@@ -7,7 +7,7 @@ import sys
 from collections.abc import AsyncIterator, Sequence
 from contextlib import asynccontextmanager
 from functools import partial
-from typing import Any, override
+from typing import Any
 
 import discord
 import pytest_asyncio
@@ -18,7 +18,6 @@ from squid.bot.extensions import Extension, ExtensionManager
 from squid.bot.help_cog import DIRECTORY_CATEGORIES
 from squid.bot.submission.cog import BuildCommands
 from squid.core.voting.application import VoteService
-from squid.core.voting.application.ports import VoteActorResolver
 from squid_i18n import Text, source_text
 from tests.support.runtime import SchedulingRecorder
 from tests.support.services import bot_services
@@ -34,11 +33,7 @@ party and need not be installed for these tests to mean anything.
 
 class RegistrationVotes(VoteService):
     def __init__(self) -> None:
-        self.resolver: VoteActorResolver | None = None
-
-    @override
-    def set_actor_resolver(self, resolver: VoteActorResolver) -> None:
-        self.resolver = resolver
+        pass
 
 
 @asynccontextmanager

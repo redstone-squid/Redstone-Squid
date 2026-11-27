@@ -6,12 +6,11 @@ from typing import override
 
 import pytest
 
-from squid.core.actors import ActingContext, Actor, UserActor, WorkerActor
+from squid.core.actors import ActingContext, Actor, WorkerActor
 from squid.core.voting.application import VoteService
 from squid.core.voting.application.recount import BallotRecounter, CardReactions
 from squid.core.voting.domain import (
     CastVoteResult,
-    VoteKind,
     VoteMessage,
     VoteRejection,
     VoteSelection,
@@ -75,23 +74,13 @@ class Voters:
         return None if discord_id == 99 else discord_id + 1000
 
 
-@dataclass
-class Actors:
-    unreachable: frozenset[int] = frozenset()
-
-    async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> UserActor | None:
-        if account_id in self.unreachable:
-            return None
-        return UserActor(account_id=account_id, discord_user_id=account_id - 1000, guild_id=guild_id)
-
-
 def _snapshot(*, anonymous: bool = False, selections: tuple[VoteSelection, ...] = ()) -> VoteSessionSnapshot:
     visibility = VoteVisibility.ANONYMOUS_LIVE if anonymous else VoteVisibility.VISIBLE_LIVE
     return poll_snapshot(visibility=visibility, messages=(CARD,), selections=selections)
 
 
-def _recounter(votes: Votes, cards: Cards, actors: Actors | None = None) -> BallotRecounter:
-    return BallotRecounter(votes, cards, Voters(), actors or Actors())
+def _recounter(votes: Votes, cards: Cards) -> BallotRecounter:
+    return BallotRecounter(votes, cards, Voters())
 
 
 async def test_a_reaction_missed_while_offline_becomes_a_ballot() -> None:
@@ -133,17 +122,6 @@ async def test_anonymous_reactions_are_removed_after_casting_and_unconsented_one
 
     assert votes.casts == [(1001, "one", "1️⃣", False)]
     assert sorted(cards.removed) == [("1️⃣", 1), ("1️⃣", 99)]
-
-
-async def test_a_voter_whose_membership_cannot_be_checked_keeps_their_reactions() -> None:
-    votes = Votes(_snapshot(anonymous=True))
-    cards = Cards({100: CardReactions({"1️⃣": [1]}, own=frozenset({"1️⃣", "2️⃣"}))})
-
-    assert not await _recounter(votes, cards, Actors(frozenset({1001}))).recount(
-        1, context=ActingContext.worker("recount")
-    )
-
-    assert (votes.casts, cards.removed) == ([], [])
 
 
 async def test_a_refused_ballot_keeps_only_the_reaction_for_the_stored_option() -> None:

@@ -6,20 +6,12 @@ from litestar.params import FromPath, FromQuery, JSONBody
 from pydantic import BaseModel, ConfigDict, Field
 
 from squid.api.contract import ANONYMOUS, DEVICE, SERVICE, WEB, WEB_WRITE, browser_only, contract, transport_only
-from squid.api.dependencies import (
-    BuildQueries,
-    CurrentCaller,
-    VoteMembers,
-    Votes,
-    get_build_queries,
-    get_vote_members,
-    get_votes,
-)
+from squid.api.dependencies import BuildQueries, CurrentCaller, Votes, get_build_queries, get_votes
 from squid.api.errors import responses
 from squid.api.idempotency import reserve_idempotent_before_request
 from squid.api.pagination import CursorParam, OffsetParam, Page, PageSizeParam, resolve_selector
 from squid.api.security import requires
-from squid.api.v1.schemas.votes import ReviewVoteSummary, VoteSessionDetail
+from squid.api.v1.schemas.votes import ReviewVoteSummary, VoteSessionDetail, VoteViewer
 from squid.core.builds.application.queries import PublicBuildSummary
 from squid.core.errors import AuthorizationError, ConflictError, ValidationError
 from squid.core.permissions.domain.catalogue import VOTE_POLL_CAST
@@ -40,11 +32,10 @@ UserVoter = CurrentCaller
 
 
 class VoteInput(BaseModel):
-    """A stable option selection in one Discord guild."""
+    """A stable option selection."""
 
     model_config = ConfigDict(extra="forbid")
 
-    guild_id: int = Field(gt=0)
     option_id: str = Field(min_length=1, max_length=200)
 
 
@@ -110,11 +101,25 @@ async def get_vote_session(
     votes: Votes,
     caller: CurrentCaller,
 ) -> VoteSessionDetail:
-    """Return aggregate vote state without exposing ballot identities."""
+    """Return aggregate vote state without exposing ballot identities.
+
+    A signed-in caller with a consented account also sees whether they may vote and their weight.
+    """
     session = await votes.get_session(vote_session_id, context=caller.context())
     if session is None:
         raise VoteSessionNotFoundError(vote_session_id)
-    return VoteSessionDetail.from_domain(session, caller_account_id=caller.account_id)
+    detail = VoteSessionDetail.from_domain(session, caller_account_id=caller.account_id)
+    if caller.kind != "account" or caller.account_id is None or caller.consent_pending or not session.is_open:
+        return detail
+    weight = await votes.base_weight(vote_session_id, context=caller.context())
+    match weight:
+        case VoteRejection.NOT_ELIGIBLE:
+            viewer = VoteViewer(eligible=False, weight=None)
+        case float():
+            viewer = VoteViewer(eligible=True, weight=weight)
+        case _:
+            viewer = None
+    return detail.model_copy(update={"viewer": viewer})
 
 
 @post(
@@ -131,22 +136,14 @@ async def cast_vote(
     vote_session_id: FromPath[int],
     data: JSONBody[VoteInput],
     votes: Votes,
-    vote_members: VoteMembers,
     caller: UserVoter,
 ) -> VoteSessionDetail:
-    """Cast the authenticated Discord member's weighted vote."""
+    """Cast the caller's vote, weighed from their roles in the session's owner guild.
+
+    Repeating the call with the same option keeps the ballot.
+    """
     account_id = caller.require_consented_account()
-    session = await votes.get_session(vote_session_id, context=caller.context())
-    if session is None:
-        raise VoteSessionNotFoundError(vote_session_id)
-    if vote_members is None:
-        raise AuthorizationError
-    actor = await vote_members.member(account_id, data.guild_id, session.kind)
-    if actor is None:
-        raise AuthorizationError
-    result = await votes.cast_vote(
-        vote_session_id, data.option_id, toggle=False, context=caller.context().with_actor(actor)
-    )
+    result = await votes.cast_vote(vote_session_id, data.option_id, toggle=False, context=caller.context())
     _raise_vote_rejection(vote_session_id, result)
     assert result.session is not None
     return VoteSessionDetail.from_domain(result.session, caller_account_id=account_id)
@@ -164,22 +161,12 @@ async def cast_vote(
 )
 async def clear_vote(
     vote_session_id: FromPath[int],
-    guild_id: FromQuery[int],
     votes: Votes,
-    vote_members: VoteMembers,
     caller: UserVoter,
 ) -> VoteSessionDetail:
-    """Remove the authenticated member's ballot; repeating this keeps it absent."""
+    """Remove the caller's ballot; repeating this keeps it absent."""
     account_id = caller.require_consented_account()
-    session = await votes.get_session(vote_session_id, context=caller.context())
-    if session is None:
-        raise VoteSessionNotFoundError(vote_session_id)
-    if vote_members is None:
-        raise AuthorizationError
-    actor = await vote_members.member(account_id, guild_id, session.kind)
-    if actor is None:
-        raise AuthorizationError
-    result = await votes.clear_vote(vote_session_id, context=caller.context().with_actor(actor))
+    result = await votes.clear_vote(vote_session_id, context=caller.context())
     _raise_vote_rejection(vote_session_id, result)
     assert result.session is not None
     return VoteSessionDetail.from_domain(result.session, caller_account_id=account_id)
@@ -195,7 +182,7 @@ def _raise_vote_rejection(vote_session_id: int, result: CastVoteResult) -> None:
             msg = "The vote session is closed."
             raise ConflictError(msg, resource="vote_session")
         case VoteRejection.INVALID_OPTION:
-            msg = "The option is not available in this guild."
+            msg = "The option is not one of this session's options."
             raise ValidationError(msg, resource="vote")
         case VoteRejection.WRONG_GUILD | VoteRejection.NOT_ELIGIBLE | VoteRejection.NOT_AUTHORIZED:
             raise AuthorizationError
@@ -205,7 +192,6 @@ router = Router(
     opt={"x-squid-private-response": True},
     dependencies={
         "build_queries": Provide(get_build_queries, sync_to_thread=False),
-        "vote_members": Provide(get_vote_members, sync_to_thread=False),
         "votes": Provide(get_votes, sync_to_thread=False),
     },
     path="/vote-sessions",

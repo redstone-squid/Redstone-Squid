@@ -27,7 +27,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from whenever import Instant
 
@@ -380,6 +380,27 @@ class VoteBallotEvent(Base, kw_only=True):
     recorded_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
+
+
+class VoterGuildMember(Base, kw_only=True):
+    """A consented voter's roles in one guild, as the bot last saw them."""
+
+    __tablename__ = "voter_guild_members"
+    __table_args__ = (Index("voter_guild_members_discord_user_idx", "guild_id", "discord_user_id"),)
+
+    guild_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("accounts.id", name="voter_guild_members_account_id_fkey", ondelete="CASCADE"), primary_key=True
+    )
+    discord_user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    role_ids: Mapped[list[int]] = mapped_column(
+        ARRAY(BigInteger), nullable=False, server_default=text("'{}'"), default_factory=list
+    )
+    manage_server: Mapped[bool] = mapped_column(Boolean, nullable=False, server_default=text("false"), default=False)
+    synced_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+    )
+    """When the bot last saw this membership; a complete guild sync forgets older rows."""
 
 
 class GuildVoteEmoji(Base, kw_only=True):

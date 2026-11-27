@@ -25224,7 +25224,7 @@
           "vote sessions"
         ],
         "summary": "GetVoteSession",
-        "description": "Return aggregate vote state without exposing ballot identities.",
+        "description": "Return aggregate vote state without exposing ballot identities.\n\nA signed-in caller with a consented account also sees whether they may vote and their weight.",
         "operationId": "vote_session_get",
         "parameters": [
           {
@@ -25339,7 +25339,7 @@
           "vote sessions"
         ],
         "summary": "CastVote",
-        "description": "Cast the authenticated Discord member's weighted vote.",
+        "description": "Cast the caller's vote, weighed from their roles in the session's owner guild.\n\nRepeating the call with the same option keeps the ballot.",
         "operationId": "vote_cast",
         "parameters": [
           {
@@ -25531,7 +25531,7 @@
           "vote sessions"
         ],
         "summary": "ClearVote",
-        "description": "Remove the authenticated member's ballot; repeating this keeps it absent.",
+        "description": "Remove the caller's ballot; repeating this keeps it absent.",
         "operationId": "vote_clear",
         "parameters": [
           {
@@ -25542,17 +25542,6 @@
             },
             "required": true,
             "deprecated": false
-          },
-          {
-            "name": "guild_id",
-            "in": "query",
-            "schema": {
-              "type": "integer"
-            },
-            "required": true,
-            "deprecated": false,
-            "allowEmptyValue": false,
-            "allowReserved": false
           },
           {
             "name": "Idempotency-Key",
@@ -35790,6 +35779,16 @@
               }
             ]
           },
+          "viewer": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/VoteViewer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "build": {
             "oneOf": [
               {
@@ -39197,10 +39196,6 @@
       },
       "VoteInput": {
         "properties": {
-          "guild_id": {
-            "type": "integer",
-            "exclusiveMinimum": 0.0
-          },
           "option_id": {
             "type": "string",
             "maxLength": 200,
@@ -39209,7 +39204,6 @@
         },
         "type": "object",
         "required": [
-          "guild_id",
           "option_id"
         ],
         "title": "VoteInput"
@@ -39389,6 +39383,16 @@
                 "type": "null"
               }
             ]
+          },
+          "viewer": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/VoteViewer"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -39464,6 +39468,29 @@
           "weighted"
         ],
         "title": "VoteTallies"
+      },
+      "VoteViewer": {
+        "properties": {
+          "eligible": {
+            "type": "boolean"
+          },
+          "weight": {
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "eligible",
+          "weight"
+        ],
+        "title": "VoteViewer"
       },
       "VoteVisibility": {
         "type": "string",

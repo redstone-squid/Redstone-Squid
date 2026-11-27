@@ -2782,6 +2782,7 @@ export type ReviewVoteSummary = {
     poll: VotePollSummary | null;
     own_selection: OwnVoteSelection | null;
     voters: Array<VoteVoter> | null;
+    viewer?: VoteViewer | null;
     build: PublicBuildSummary | null;
     submitted_by: HistoryActor | null;
 };
@@ -3846,7 +3847,6 @@ export type VisibilityRuleResponse = {
  * VoteInput
  */
 export type VoteInput = {
-    guild_id: number;
     option_id: string;
 };
 
@@ -3895,6 +3895,7 @@ export type VoteSessionDetail = {
     poll: VotePollSummary | null;
     own_selection: OwnVoteSelection | null;
     voters: Array<VoteVoter> | null;
+    viewer?: VoteViewer | null;
 };
 
 /**
@@ -3924,6 +3925,14 @@ export type VoteTallies = {
     upvotes: number;
     downvotes: number;
     net: number;
+};
+
+/**
+ * VoteViewer
+ */
+export type VoteViewer = {
+    eligible: boolean;
+    weight: number | null;
 };
 
 /**
@@ -11890,9 +11899,7 @@ export type VoteClearData = {
     path: {
         vote_session_id: number;
     };
-    query: {
-        guild_id: number;
-    };
+    query?: never;
     url: '/v1/vote-sessions/{vote_session_id}/votes';
 };
 

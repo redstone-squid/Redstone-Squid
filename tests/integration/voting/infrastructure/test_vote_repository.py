@@ -11,7 +11,8 @@ from sqlalchemy.exc import IntegrityError, StatementError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.core.accounts.models import Account, AccountProfile
+from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
+from squid.core.accounts.models import Account, AccountIdentity, AccountProfile
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build
 from squid.core.errors import DataIntegrityError
@@ -27,6 +28,7 @@ from squid.core.voting.domain import (
     DEFAULT_VOTE_MENU,
     BallotChange,
     DeleteLogVoteTarget,
+    GuildMember,
     ReviewFilters,
     ReviewKind,
     ReviewSort,
@@ -46,6 +48,7 @@ from squid.core.voting.models import (
     GenericVoteSession,
     Vote,
     VoteBallotEvent,
+    VoterGuildMember,
     VoteSession,
     VoteSessionOption,
     VoteSessionOptionAlias,
@@ -71,6 +74,8 @@ _TABLES: tuple[Table, ...] = with_foreign_key_targets(
         VoteSessionOption,
         VoteSessionOptionAlias,
         VoteBallotEvent,
+        VoterGuildMember,
+        AccountIdentity,
         BuildVoteSession,
         DeleteLogVoteSession,
         GenericVoteSession,
@@ -875,6 +880,34 @@ async def test_every_ballot_change_is_kept_as_an_event(
         (8, BallotChange.CAST, "approve", 1.0, "👍"),
         (8, BallotChange.VOID, None, None, None),
     ]
+
+
+async def test_only_consented_accounts_have_their_guild_roles_stored(
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    consented, pending = VOTER_ACCOUNT_IDS
+    async with async_session_factory.begin() as session:
+        await session.execute(
+            update(Account)
+            .where(Account.id == consented)
+            .values(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now())
+        )
+        await session.execute(update(Account).where(Account.id == pending).values(created_at=Instant.now()))
+        for account_id in (consented, pending):
+            session.add(
+                AccountIdentity(account_id=account_id, provider=IdentityProvider.DISCORD, subject=str(account_id * 10))
+            )
+    members = (GuildMember(70, frozenset({5}), manage_server=True), GuildMember(80, frozenset({6})), GuildMember(90))
+
+    await transact(repository, lambda uow: uow.votes.record_members(GUILD_ID, members, complete=False), commit=True)
+
+    assert await transact(repository, lambda uow: uow.votes.get_member(GUILD_ID, consented)) == members[0]
+    assert await transact(repository, lambda uow: uow.votes.get_member(GUILD_ID, pending)) is None
+
+    # A complete sync without the member forgets them.
+    await transact(repository, lambda uow: uow.votes.record_members(GUILD_ID, (), complete=True), commit=True)
+    assert await transact(repository, lambda uow: uow.votes.get_member(GUILD_ID, consented)) is None
 
 
 async def test_clearing_a_ballot_twice_keeps_it_absent(

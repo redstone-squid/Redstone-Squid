@@ -478,6 +478,11 @@ class VoteSessionSnapshot:
         return self.poll.visibility if self.poll is not None else None
 
     @property
+    def members_only(self) -> bool:
+        """Whether only members of the owning guild may vote, as in a poll kept to its guild."""
+        return self.poll is not None and self.poll.scope is PollScope.GUILD and self.poll.guild_id is not None
+
+    @property
     def is_anonymous(self) -> bool:
         """Whether voter identities are hidden; only visible live polls expose them."""
         return self.visibility is not VoteVisibility.VISIBLE_LIVE
@@ -571,6 +576,15 @@ class EmojiPreset:
     guild_id: int
     kind: VoteKind
     menu: VoteMenu
+
+
+@dataclass(frozen=True, slots=True)
+class GuildMember:
+    """A voter's roles in one guild, as a frontend last saw them."""
+
+    discord_user_id: int
+    role_ids: frozenset[int] = frozenset()
+    manage_server: bool = False
 
 
 @dataclass(frozen=True, slots=True)

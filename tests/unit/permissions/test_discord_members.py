@@ -15,12 +15,9 @@ from aiohttp import ClientResponse
 from discord.errors import DiscordServerError, Forbidden, HTTPException, NotFound, RateLimited
 from discord.http import HTTPClient, Route
 
-from squid.core.actors import Actor, UserActor
-from squid.core.permissions.domain import Decision, PermissionCheck, Reason
-from squid.core.voting.domain import VoteKind
-from squid.core.voting.errors import DiscordMemberServiceUnavailableError
-from squid.core.voting.infrastructure.discord_rest import (
-    DiscordRestActorResolver,
+from squid.core.permissions.errors import DiscordMemberServiceUnavailableError
+from squid.core.permissions.infrastructure.discord_members import (
+    DiscordRestGuildMembers,
 )
 from squid.discord_rest import RestOnlyClient, rebased_url, rest_client
 
@@ -56,23 +53,8 @@ class StubHTTPClient:
         self.closes += 1
 
 
-class FakePermissions:
-    """Grants the delete-log node to holders of role 11, as a role grant would."""
-
-    def __init__(self) -> None:
-        self.allowed = True
-
-    async def check(self, actor: Actor, *nodes: str) -> PermissionCheck:
-        held = (
-            "vote.log_delete.cast"
-            if self.allowed and isinstance(actor, UserActor) and 11 in actor.discord_role_ids
-            else ""
-        )
-        return PermissionCheck(tuple(Decision(node, allowed=node == held, reason=Reason.DEFAULT) for node in nodes))
-
-
 class FakeDiscordIds:
-    """Maps every voting account to `account_id * 7`, so the two ids stay distinguishable."""
+    """Maps every account to `account_id * 7`, so the two ids stay distinguishable."""
 
     def __init__(self, *, known: bool = True) -> None:
         self._known = known
@@ -81,24 +63,22 @@ class FakeDiscordIds:
         return account_id * 7 if self._known else None
 
 
-def resolver_for(http: StubHTTPClient, **kwargs: Any) -> DiscordRestActorResolver:
+def resolver_for(http: StubHTTPClient, **kwargs: Any) -> DiscordRestGuildMembers:
     kwargs.setdefault("discord_ids", FakeDiscordIds())
-    return DiscordRestActorResolver(RestOnlyClient(cast(HTTPClient, http)), **kwargs)
+    return DiscordRestGuildMembers(RestOnlyClient(cast(HTTPClient, http)), **kwargs)
 
 
-async def test_member_resolves_capabilities_from_the_payload_role_ids() -> None:
-    """Resolve capabilities from the returned roles as well as retaining the raw role IDs."""
+async def test_member_reads_the_payload_role_ids() -> None:
     http = StubHTTPClient({"roles": ["11", "22"]})
-    resolver = resolver_for(http, permissions=FakePermissions())
+    resolver = resolver_for(http)
 
-    actor = await resolver.member(1, 10, VoteKind.BUILD)
+    actor = await resolver.actor(1, 10)
 
     assert actor is not None
     assert actor.account_id == 1
     assert actor.discord_user_id == 7
     assert actor.guild_id == 10
     assert actor.discord_role_ids == frozenset({11, 22})
-    assert actor.capabilities == frozenset({"vote.log_delete.cast"})
     assert http.calls == [(10, 7)]
 
 
@@ -107,7 +87,7 @@ async def test_an_account_without_a_discord_identity_is_not_a_member() -> None:
     http = StubHTTPClient({"roles": ["11"]})
     resolver = resolver_for(http, discord_ids=FakeDiscordIds(known=False))
 
-    assert await resolver.member(1, 10, VoteKind.BUILD) is None
+    assert await resolver.actor(1, 10) is None
     assert http.calls == []
 
 
@@ -117,15 +97,15 @@ async def test_member_returns_none_when_member_is_not_accessible(kind: type[HTTP
     http = StubHTTPClient(discord_error(kind, status))
     resolver = resolver_for(http)
 
-    assert await resolver.member(1, 10, VoteKind.GENERIC) is None
+    assert await resolver.actor(1, 10) is None
 
 
 async def test_a_negative_result_is_cached_like_a_positive_one() -> None:
     http = StubHTTPClient(discord_error(NotFound, 404))
     resolver = resolver_for(http, clock=lambda: 100.0)
 
-    assert await resolver.member(1, 10, VoteKind.GENERIC) is None
-    assert await resolver.member(1, 10, VoteKind.GENERIC) is None
+    assert await resolver.actor(1, 10) is None
+    assert await resolver.actor(1, 10) is None
     assert len(http.calls) == 1
 
 
@@ -134,11 +114,11 @@ async def test_member_caches_successful_lookup_for_five_minutes() -> None:
     http = StubHTTPClient({"roles": ["1"]}, {"roles": ["2"]})
     resolver = resolver_for(http, clock=lambda: now[0])
 
-    first = await resolver.member(1, 10, VoteKind.BUILD)
+    first = await resolver.actor(1, 10)
     now[0] = 399.9
-    cached = await resolver.member(1, 10, VoteKind.GENERIC)
+    cached = await resolver.actor(1, 10)
     now[0] = 400.0
-    refreshed = await resolver.member(1, 10, VoteKind.BUILD)
+    refreshed = await resolver.actor(1, 10)
 
     assert first is not None
     assert first.discord_role_ids == frozenset({1})
@@ -163,14 +143,7 @@ async def test_member_raises_typed_unavailable_error(error: Exception) -> None:
     resolver = resolver_for(StubHTTPClient(error))
 
     with pytest.raises(DiscordMemberServiceUnavailableError, match="Discord member lookup failed"):
-        await resolver.member(1, 10, VoteKind.BUILD)
-
-
-async def test_resolve_swallows_discord_failure_for_background_refresh() -> None:
-    """An unresolved refresh returns None so the service can retain the recorded vote weight."""
-    resolver = resolver_for(StubHTTPClient(discord_error(HTTPException, 500)))
-
-    assert await resolver.resolve(1, 10, VoteKind.BUILD) is None
+        await resolver.actor(1, 10)
 
 
 @pytest.mark.parametrize("payload", [{"roles": "11"}, {"roles": ["not-a-snowflake"]}, {}, "not-a-member"])
@@ -178,7 +151,7 @@ async def test_member_rejects_malformed_payload(payload: Any) -> None:
     resolver = resolver_for(StubHTTPClient(payload))
 
     with pytest.raises(DiscordMemberServiceUnavailableError, match="malformed"):
-        await resolver.member(1, 10, VoteKind.BUILD)
+        await resolver.actor(1, 10)
 
 
 class RecordedRequests:
@@ -202,10 +175,10 @@ async def test_the_client_logs_in_once_on_its_first_request(monkeypatch: pytest.
     requests = RecordedRequests()
     monkeypatch.setattr(HTTPClient, "request", requests.request)
     client = rest_client("token", api_url="http://127.0.0.1:8102/discord/api")
-    resolver = DiscordRestActorResolver(client, discord_ids=FakeDiscordIds(), cache_ttl_seconds=0)
+    resolver = DiscordRestGuildMembers(client, discord_ids=FakeDiscordIds(), cache_ttl_seconds=0)
 
-    await resolver.member(1, 10, VoteKind.BUILD)
-    await resolver.member(1, 10, VoteKind.BUILD)
+    await resolver.actor(1, 10)
+    await resolver.actor(1, 10)
     await client.close()
 
     assert requests.routes == [
@@ -219,11 +192,11 @@ async def test_a_failed_login_is_retried_by_the_next_request(monkeypatch: pytest
     requests = RecordedRequests(discord_error(DiscordServerError, 503))
     monkeypatch.setattr(HTTPClient, "request", requests.request)
     client = rest_client("token")
-    resolver = DiscordRestActorResolver(client, discord_ids=FakeDiscordIds())
+    resolver = DiscordRestGuildMembers(client, discord_ids=FakeDiscordIds())
 
     with pytest.raises(DiscordMemberServiceUnavailableError, match="lookup failed"):
-        await resolver.member(1, 10, VoteKind.BUILD)
-    actor = await resolver.member(2, 10, VoteKind.BUILD)
+        await resolver.actor(1, 10)
+    actor = await resolver.actor(2, 10)
     await client.close()
 
     assert actor is not None
@@ -236,12 +209,12 @@ async def test_a_failed_login_is_retried_by_the_next_request(monkeypatch: pytest
 
 async def test_a_closed_client_refuses_requests_instead_of_logging_in_again() -> None:
     client = rest_client("token")
-    resolver = DiscordRestActorResolver(client, discord_ids=FakeDiscordIds())
+    resolver = DiscordRestGuildMembers(client, discord_ids=FakeDiscordIds())
 
     await client.close()
 
     with pytest.raises(DiscordMemberServiceUnavailableError, match="shut down"):
-        await resolver.member(1, 10, VoteKind.BUILD)
+        await resolver.actor(1, 10)
 
 
 class TestConfiguredBase:
@@ -272,37 +245,11 @@ class TestConfiguredBase:
         assert route.key == "GET /guilds/{guild_id}/members/{member_id}"
 
 
-async def test_resolve_reports_a_proven_absence_as_a_weightless_member() -> None:
-    """A 404 supplies an actor with no roles or capabilities for recalculating the vote weight."""
-    http = StubHTTPClient(discord_error(NotFound, 404))
-    resolver = resolver_for(http)
-
-    actor = await resolver.resolve(1, 10, VoteKind.BUILD)
-
-    assert actor is not None
-    assert actor.discord_role_ids == frozenset()
-    assert actor.capabilities == frozenset()
-    assert actor.guild_id == 10
-
-
-async def test_resolve_keeps_the_cached_weight_when_the_guild_is_unreadable() -> None:
-    """A 403 leaves membership unresolved, so refresh must not infer an empty role set."""
+async def test_an_unreadable_guild_proves_no_membership() -> None:
     http = StubHTTPClient(discord_error(Forbidden, 403))
     resolver = resolver_for(http)
 
-    assert await resolver.resolve(1, 10, VoteKind.BUILD) is None
-    # The gate still denies, because it cannot prove membership either.
-    assert await resolver.member(1, 10, VoteKind.BUILD) is None
-
-
-async def test_resolve_reports_an_account_without_discord_as_weightless() -> None:
-    http = StubHTTPClient({"roles": ["11"]})
-    resolver = resolver_for(http, discord_ids=FakeDiscordIds(known=False))
-
-    actor = await resolver.resolve(1, 10, VoteKind.BUILD)
-
-    assert actor is not None
-    assert actor.discord_role_ids == frozenset()
+    assert await resolver.actor(1, 10) is None
 
 
 async def test_concurrent_first_requests_wait_for_completed_login(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -356,19 +303,15 @@ async def test_cancelled_login_can_be_retried(monkeypatch: pytest.MonkeyPatch) -
         await client.close()
 
 
-async def test_cached_membership_does_not_cache_account_or_permission_decisions() -> None:
+async def test_cached_membership_does_not_cache_the_account() -> None:
     http = StubHTTPClient({"roles": ["11"]})
-    permissions = FakePermissions()
     identities = FakeDiscordIds()
     identities.discord_id_for = AsyncMock(return_value=7)
-    resolver = resolver_for(http, permissions=permissions, discord_ids=identities)
-    first = await resolver.member(1, 10, VoteKind.BUILD)
-    permissions.allowed = False
-    second = await resolver.member(2, 10, VoteKind.BUILD)
+    resolver = resolver_for(http, discord_ids=identities)
+    first = await resolver.actor(1, 10)
+    second = await resolver.actor(2, 10)
     assert first is not None
     assert first.account_id == 1
-    assert first.capabilities
     assert second is not None
     assert second.account_id == 2
-    assert not second.capabilities
     assert http.calls == [(10, 7)]

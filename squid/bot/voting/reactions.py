@@ -25,10 +25,10 @@ from squid.bot.reactions import (
 )
 from squid.bot.ui import render_payload, text_node
 from squid.bot.voting.actors import describe_rejection, resolve_actor
+from squid.bot.voting.members import VoterMemberSync
 from squid.core.actors import ActingContext, UserActor
 from squid.core.locks import KeyedLock
 from squid.core.voting.application.accounts import AccountConsentedVoterLookup
-from squid.core.voting.application.ports import VoteActorResolver
 from squid.core.voting.application.recount import BallotRecounter
 from squid.core.voting.domain import CastVoteResult, VoteRejection, VoteSessionSnapshot
 from squid.runtime import JobHandle
@@ -61,11 +61,12 @@ class VoteReactionHandler:
 
     reaction_filter: ClassVar[ReactionFilter] = ReactionFilter(guild_only=True)
 
-    def __init__(self, bot: squid.bot.app.RedstoneSquid, actors: VoteActorResolver) -> None:
+    def __init__(self, bot: squid.bot.app.RedstoneSquid, members: VoterMemberSync) -> None:
         self.bot = bot
         self.vote_service = bot.services.votes
+        self._members = members
         self._voters = AccountConsentedVoterLookup(bot.services.accounts)
-        self._recounter = BallotRecounter(self.vote_service, bot.services.vote_cards(bot), self._voters, actors)
+        self._recounter = BallotRecounter(self.vote_service, bot.services.vote_cards(bot), self._voters)
         self._background_tasks: set[JobHandle] = set()
         self._session_locks: KeyedLock[int] = KeyedLock()
         self._recounting: dict[int, int] = {}
@@ -135,6 +136,8 @@ class VoteReactionHandler:
             if not recovering:
                 await self._decline_unconsented_vote(message, member, payload.emoji)
             return
+        # The ballot is weighed from stored roles, so store the ones this reaction shows.
+        await self._members.record((member,))
         actor = await resolve_actor(self.bot, member, account_id=account_id)
         previous = snapshot.selection_for(actor.require_account_id())
         if (

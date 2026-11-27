@@ -19,8 +19,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Protocol
 
-from squid.core.actors import ActingContext, application_operation
-from squid.core.voting.application.ports import VoteActorResolver
+from squid.core.actors import ActingContext, UserActor, application_operation
 from squid.core.voting.application.services import VoteService
 from squid.core.voting.domain import VoteMessage, VoteRejection, VoteSessionSnapshot, VoteStatus
 
@@ -104,12 +103,10 @@ class BallotRecounter:
         votes: VoteService,
         cards: VoteCardReactions,
         voters: ConsentedVoterLookup,
-        actors: VoteActorResolver,
     ) -> None:
         self._votes = votes
         self._cards = cards
         self._voters = voters
-        self._actors = actors
 
     @application_operation
     async def recount(self, vote_session_id: int, *, context: ActingContext) -> bool:
@@ -211,11 +208,8 @@ class BallotRecounter:
         if len({reaction.option_id for reaction in reactions}) > 1:
             return _Ballot(stored, unresolved=stored is None)
         desired = reactions[0]
-        actor = await self._actors.resolve(account_id, desired.card.guild_id, snapshot.kind)
-        if actor is None:
-            # Discord could not confirm the voter's membership, so eligibility is unknown.
-            # Keep the reactions: in an anonymous poll they are the only record of the vote.
-            return _Ballot(stored, unresolved=True)
+        # The card's guild picks the alias; the service weighs the ballot from stored membership.
+        actor = UserActor(account_id=account_id, discord_user_id=desired.user_id, guild_id=desired.card.guild_id)
         result = await self._votes._record_observed_reaction(
             actor,
             snapshot.id,

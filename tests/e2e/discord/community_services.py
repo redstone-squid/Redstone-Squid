@@ -20,10 +20,10 @@ from squid.core.tags.application import TagService
 from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.core.tags.models import TagDefinition
 from squid.core.voting.application import VoteService
-from squid.core.voting.application.ports import VoteActorResolver
 from squid.core.voting.domain import (
     DEFAULT_VOTE_MENU,
     EmojiPreset,
+    GuildMember,
     PollScope,
     VoteKind,
     VoteMenu,
@@ -85,8 +85,10 @@ class CommunityVotes(VoteService):
         await self.poll_attachments(vote_session_id, message_id)
 
     @override
-    def set_actor_resolver(self, resolver: VoteActorResolver) -> None:
-        self.resolver = resolver
+    async def record_members(
+        self, guild_id: int, members: Sequence[GuildMember], *, complete: bool = False, context: ActingContext
+    ) -> None:
+        del guild_id, members, complete, context
 
     @override
     async def get_session_for_message(self, message_id: int, *, context: ActingContext) -> VoteSessionSnapshot | None:

@@ -1,4 +1,4 @@
-"""Voting commands and current actor resolution for persisted ballot weights."""
+"""Voting commands, and the gateway listeners that keep voter memberships current."""
 
 import contextlib
 from collections.abc import Awaitable, Callable
@@ -12,12 +12,14 @@ from whenever import Instant
 import squid_ui.ext.discord as sd
 from squid.bot._types import GuildMessageable
 from squid.bot.accounts.consent import ensure_consented_account
+from squid.bot.actors import has_manage_server
 from squid.bot.events.spec import DomainEventSubscriptions
 from squid.bot.events.spec import extension as domain_events_extension
 from squid.bot.ui import error_node, info_node, text_node
 from squid.bot.voting.actors import resolve_actor
 from squid.bot.voting.controls import close_poll
 from squid.bot.voting.event_handlers import DeleteVotedMessageHandler, PostSubmittedBuildHandler
+from squid.bot.voting.members import VoterMemberSync
 from squid.bot.voting.poll_wizard import (
     DEFAULT_POLL_CHOICES,
     SCOPE_CHOICES,
@@ -31,10 +33,10 @@ from squid.bot.voting.reactions import VoteReactionHandler
 from squid.bot.voting.sessions import start_delete_log_vote
 from squid.bot.voting.spec import VotingExports, extension
 from squid.core.accounts.domain import IdentityProvider
-from squid.core.actors import ActingContext, UserActor
+from squid.core.actors import ActingContext
 from squid.core.i18n import tr
 from squid.core.permissions.domain.catalogue import VOTE_POLL_CLOSE_ANY, VOTE_POLL_NETWORK_CREATE, VOTE_POLL_RECOUNT
-from squid.core.voting.domain import PollScope, VoteKind, VoteMenu, VoteStatus, VoteVisibility
+from squid.core.voting.domain import PollScope, VoteMenu, VoteStatus, VoteVisibility
 from squid.core.voting.errors import InvalidVoteConfigurationError
 from squid_i18n import md_tr
 from squid_ui.ext.discord.i18n import to_locale_str
@@ -52,8 +54,8 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         self._detach_domain_events: Callable[[], Awaitable[None]] | None = None
         self.vote_service = bot.services.votes
         self.publisher = DiscordPollPublisher(bot)
-        self.reactions = VoteReactionHandler(bot, self)
-        self.vote_service.set_actor_resolver(self)
+        self.members = VoterMemberSync(bot)
+        self.reactions = VoteReactionHandler(bot, self.members)
 
     @override
     async def cog_load(self) -> None:
@@ -71,6 +73,23 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             await self._detach_domain_events()
             self._detach_domain_events = None
         await self.reactions.close()
+
+    @sd.Cog.listener()
+    async def on_guild_available(self, guild: discord.Guild) -> None:
+        await self.members.reconcile(guild)
+
+    @sd.Cog.listener()
+    async def on_member_join(self, member: discord.Member) -> None:
+        await self.members.record((member,))
+
+    @sd.Cog.listener()
+    async def on_member_update(self, before: discord.Member, after: discord.Member) -> None:
+        if before.roles != after.roles or has_manage_server(before) != has_manage_server(after):
+            await self.members.record((after,))
+
+    @sd.Cog.listener()
+    async def on_raw_member_remove(self, payload: discord.RawMemberRemoveEvent) -> None:
+        await self.members.forget(payload.guild_id, payload.user.id)
 
     @sd.Cog.listener()
     async def on_member_ban(self, guild: discord.Guild, user: discord.User | discord.Member) -> None:
@@ -362,26 +381,6 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
                 await published.delete()
             raise
         return await request.respond(text_node(tr(t"bot-voting-vote-deletion-vote-opened = Deletion vote opened.")))
-
-    async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> UserActor | None:
-        """Resolve an account's member roles and capabilities in `guild_id`.
-
-        No linked Discord identity or a confirmed missing member produces an actor
-        with no roles. An unavailable guild or failed member lookup returns `None`.
-        """
-        del kind
-        account = await self.bot.services.accounts.get_account_by_id(account_id)
-        identity = None if account is None else account.most_recent_identity_for(IdentityProvider.DISCORD)
-        if identity is None or identity.discord_id is None:
-            return UserActor(account_id=account_id, guild_id=guild_id)
-        discord_id = identity.discord_id
-        guild = self.bot.get_guild(guild_id)
-        members = await self.bot.members.resolve(guild, (discord_id,)) if guild is not None else {}
-        if discord_id not in members:
-            return None
-        if (member := members[discord_id]) is None:
-            return UserActor(account_id=account_id, discord_user_id=discord_id, guild_id=guild_id)
-        return await resolve_actor(self.bot, member, account_id=account_id)
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:

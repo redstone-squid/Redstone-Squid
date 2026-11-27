@@ -26,7 +26,6 @@ from squid.core.suggestions.application import SuggestionService
 from squid.core.tags.application import TagService
 from squid.core.versions.application.services import VersionService
 from squid.core.voting.application import VoteService
-from squid.core.voting.application.ports import InteractiveVoteActorResolver
 from squid.runtime import ApiServices, ApplicationRuntime
 
 
@@ -103,10 +102,6 @@ def get_votes(services: Services) -> VoteService:
     return services.votes
 
 
-def get_vote_members(services: Services) -> InteractiveVoteActorResolver | None:
-    return services.vote_members
-
-
 def get_web_auth(services: Services) -> WebSessionService | None:
     return services.web_auth
 
@@ -160,7 +155,6 @@ Suggestions = NamedDependency[SkipValidation[SuggestionService]]
 Tags = NamedDependency[SkipValidation[TagService]]
 Accounts = NamedDependency[SkipValidation[AccountService]]
 Versions = NamedDependency[SkipValidation[VersionService]]
-VoteMembers = NamedDependency[SkipValidation[InteractiveVoteActorResolver | None]]
 Votes = NamedDependency[SkipValidation[VoteService]]
 WebAuth = NamedDependency[SkipValidation[WebSessionService | None]]
 MinecraftInstallations = NamedDependency[SkipValidation[InstallationCredentialService]]

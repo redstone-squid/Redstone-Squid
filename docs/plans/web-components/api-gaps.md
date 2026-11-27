@@ -46,10 +46,6 @@ Unfinished items come first, then finished ones, each grouped by area. Numbers a
 38. **Draft sharing.** `submission_draft_access` already exists. Add `GET/POST/DELETE /v1/submissions/drafts/{id}/editors`, needed if S2 adds collaborators (todo.md). This is a product decision, so leave it as an optional phase.
 60. **Record preview.** `GET /v1/submissions/drafts/{id}/record-preview` turns the draft into a record candidate and runs record publication against current approved builds without publishing. It returns each category the build would enter: the record (`record_id` null for a new one), an `outcome` of `holds`, `shares`, `ties_later`, `loses` or `undecided`, the missing facts and their fields when undecided, current holder summaries, and per-metric deltas. Other pending builds, approvals and rule changes can change the outcome, so the screen calls it a prediction. Phase 1 serves pending builds (`GET /v1/builds/{id}/record-preview`), which already load as candidates, for S3 and M2. Phase 2 needs a draft-to-candidate mapping. Needed by S2's submit panel, S3 and M2.
 
-### Voting and review
-
-40. **Web voting (blocked on a voting redesign).** `POST /v1/vote-sessions/{id}/votes` takes a `guild_id`, because weight comes from the guild: options have guild aliases with their own multipliers, role weights are stored per guild and vote kind, and every ballot stores the guild its weight is refreshed against. A website voter has no natural guild. Before an API change, decide where weight comes from (one network weight, a guild the voter picks, or the best of their guilds, which means looking up every membership on each vote), whether voters without a Discord membership can vote, and what a refresh recomputes. Then the session's `viewer` exposes eligibility and weight. Needed by M2.
-
 ### Cross-cutting
 
 51. **ETags.** `ETag` is already exposed through CORS, and accounts, drafts, builds, settings and notification preferences send it. Include `revision` in every editable body, as builds already do, and send `ETag` from the remaining editors.
@@ -127,6 +123,7 @@ Records, search and ranges share one **record holder summary**, `{build_id, titl
 ### Voting and review
 
 39. **Review queue.** `GET /v1/vote-sessions` pages build submission and edit votes for callers who can see pending builds. Repeated `kind` and `status` filter it, and `sort` is `newest` or `oldest`, so `status=open&sort=oldest` is the queue. Each item is a `VoteSessionDetail` with the caller's `own_selection`, plus the build summary and `submitted_by`. Tab badges come from each list's `total` (correction proposals are item 37). Build votes have no deadline. Needed by M1.
+40. **Web voting.** `POST /v1/vote-sessions/{id}/votes` takes only an `option_id`, and `DELETE` takes nothing. A ballot is weighed from the voter's stored roles in the session's owner guild, the same way on every frontend, and keeps that weight. Polls kept to one guild only admit its members. `VoteSessionDetail.viewer` is `{eligible, weight}` for signed-in callers while the session is open, and each option carries its `multiplier`. See [the voting redesign](../voting-redesign.md). Needed by M2.
 41. **Visible poll voters.** `VoteSessionDetail.voters` lists `{display_name, option_id}` for `visible_live` polls, the only kind that shows ballots in Discord, and is null otherwise. Anonymous readers see it too. A hidden profile shows a null name. Build reviews need nothing more: M2 already loads the build, and polls carry `poll.deadline`.
 
 ### Schematics and media

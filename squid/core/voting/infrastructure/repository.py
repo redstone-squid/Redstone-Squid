@@ -2,6 +2,7 @@
 
 from collections.abc import Callable, Sequence
 from dataclasses import replace
+from itertools import batched
 from typing import Any
 
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository
@@ -12,7 +13,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from whenever import Instant
 
-from squid.core.accounts.models import AccountProfile
+from squid.core.accounts.domain import IdentityProvider
+from squid.core.accounts.infrastructure.consent import account_consent_current
+from squid.core.accounts.models import Account, AccountIdentity, AccountProfile
 from squid.core.errors import DataIntegrityError
 from squid.core.messages.errors import MessageNotFoundError
 from squid.core.messages.models import Message
@@ -30,6 +33,7 @@ from squid.core.voting.domain import (
     DeleteLogVoteTarget,
     EmojiPreset,
     GenericPoll,
+    GuildMember,
     PollScope,
     ReviewFilters,
     ReviewSort,
@@ -58,6 +62,7 @@ from squid.core.voting.models import (
     GuildVoteRoleWeight,
     Vote,
     VoteBallotEvent,
+    VoterGuildMember,
     VoteSession,
     VoteSessionOption,
     VoteSessionOptionAlias,
@@ -610,6 +615,61 @@ class VoteRepository:
         row.status = VoteStatus.CLOSED
         row.result = result
         return True
+
+    async def get_member(self, guild_id: int, account_id: int) -> GuildMember | None:
+        row = await self._session().get(VoterGuildMember, (guild_id, account_id))
+        return None if row is None else GuildMember(row.discord_user_id, frozenset(row.role_ids), row.manage_server)
+
+    async def record_members(self, guild_id: int, members: Sequence[GuildMember], *, complete: bool) -> None:
+        """Upsert the members that belong to consented accounts; others are not stored."""
+        session = self._session()
+        synced_at = Instant.now().round("microsecond", mode="floor")
+        by_discord_id = {member.discord_user_id: member for member in members}
+        for batch in batched(by_discord_id, 5000, strict=False):
+            accounts = await session.execute(
+                select(AccountIdentity.subject, Account.id)
+                .join(Account, Account.id == AccountIdentity.account_id)
+                .where(
+                    AccountIdentity.provider == IdentityProvider.DISCORD,
+                    AccountIdentity.subject.in_([str(discord_id) for discord_id in batch]),
+                    account_consent_current(),
+                )
+            )
+            rows = {
+                account_id: {
+                    "guild_id": guild_id,
+                    "account_id": account_id,
+                    "discord_user_id": int(subject),
+                    "role_ids": sorted(by_discord_id[int(subject)].role_ids),
+                    "manage_server": by_discord_id[int(subject)].manage_server,
+                    "synced_at": synced_at,
+                }
+                for subject, account_id in accounts
+            }
+            if rows:
+                statement = pg_insert(VoterGuildMember).values(list(rows.values()))
+                await session.execute(
+                    statement.on_conflict_do_update(
+                        index_elements=[VoterGuildMember.guild_id, VoterGuildMember.account_id],
+                        set_={
+                            column: statement.excluded[column]
+                            for column in ("discord_user_id", "role_ids", "manage_server", "synced_at")
+                        },
+                    )
+                )
+        if complete:
+            await session.execute(
+                delete(VoterGuildMember).where(
+                    VoterGuildMember.guild_id == guild_id, VoterGuildMember.synced_at < synced_at
+                )
+            )
+
+    async def forget_member(self, guild_id: int, discord_user_id: int) -> None:
+        await self._session().execute(
+            delete(VoterGuildMember).where(
+                VoterGuildMember.guild_id == guild_id, VoterGuildMember.discord_user_id == discord_user_id
+            )
+        )
 
     async def lock_configuration(self, guild_id: int) -> None:
         session = self._session()

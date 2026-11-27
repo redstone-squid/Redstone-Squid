@@ -1,6 +1,6 @@
 """Shared ACL enforcement and public explanations, without rule subjects."""
 
-from squid.core.errors import AuthorizationError, JSONValue
+from squid.core.errors import AuthorizationError, JSONValue, ServiceUnavailableError
 from squid.core.i18n import tr
 from squid.core.permissions.domain import CheckMode, Decision, PermissionCheck, Reason
 from squid_i18n import Text
@@ -93,3 +93,12 @@ def require_check(result: PermissionCheck, *, error_type: type[PermissionDeniedE
     if not result.allowed:
         denied = tuple(item for item in result.decisions if not item.allowed)
         raise error_type(denied[0], *denied[1:], mode=result.mode)
+
+
+class DiscordMemberServiceUnavailableError(ServiceUnavailableError):
+    """Discord could not provide current guild membership facts."""
+
+    default_message = tr(
+        t"permissions-discord-membership-information = Discord membership information is temporarily unavailable."
+    )
+    default_resource = "discord"

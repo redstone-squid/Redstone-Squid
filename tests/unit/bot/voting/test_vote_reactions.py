@@ -26,9 +26,9 @@ from squid.core.permissions.domain import CheckMode, Decision, PermissionCheck, 
 from squid.core.permissions.domain.models import RolePermissionSubject
 from squid.core.settings.application import SettingsService
 from squid.core.voting.application import VoteService
-from squid.core.voting.application.ports import VoteActorResolver
 from squid.core.voting.domain import (
     CastVoteResult,
+    GuildMember,
     VoteKind,
     VoteMessage,
     VoteRejection,
@@ -196,11 +196,13 @@ class Votes(VoteService):
     casts: list[tuple[Actor, str, str | None]] = field(default_factory=list)
     failure: Exception | None = None
     rejection: VoteRejection | None = None
-    resolver: VoteActorResolver | None = None
+    recorded_members: list[tuple[int, GuildMember]] = field(default_factory=list)
 
     @override
-    def set_actor_resolver(self, resolver: VoteActorResolver) -> None:
-        self.resolver = resolver
+    async def record_members(
+        self, guild_id: int, members: Sequence[GuildMember], *, complete: bool = False, context: ActingContext
+    ) -> None:
+        self.recorded_members.extend((guild_id, member) for member in members)
 
     @override
     async def get_session(self, vote_session_id: int, *, context: ActingContext) -> VoteSessionSnapshot | None:
@@ -362,7 +364,6 @@ async def test_loading_subscribes_without_starting_a_periodic_recount(reactions:
     """Recounts fan out Discord requests, so nothing runs them on a timer."""
     async with reactions.running():
         await reactions.cog.cog_load()
-        assert reactions.votes.resolver is reactions.cog
         assert reactions.cog.reactions._background_tasks == set()
         assert reactions.messages[100].added == []
         await reactions.cog.cog_unload()

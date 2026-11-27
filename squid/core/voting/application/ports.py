@@ -11,6 +11,7 @@ from squid.core.permissions.application.ports import PermissionUnitOfWork
 from squid.core.voting.domain import (
     BallotChange,
     EmojiPreset,
+    GuildMember,
     PollScope,
     ReviewFilters,
     ReviewSort,
@@ -33,26 +34,6 @@ class VoteWeightPolicy(Protocol):
     """
 
     async def calculate(self, actor: UserActor, session: VoteSessionSnapshot) -> float | None: ...
-
-
-class VoteActorResolver(Protocol):
-    """Resolve membership in the guild whose roles determine ballot weight."""
-
-    async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> UserActor | None:
-        """Return the account's membership facts in `guild_id`.
-
-        An account that is definitely not a member resolves to a `UserActor` with
-        no roles or capabilities. The policy then determines whether the account is
-        still eligible and what weight it receives. `None` means membership could
-        not be established.
-        """
-        ...
-
-
-class InteractiveVoteActorResolver(VoteActorResolver, Protocol):
-    """Resolve membership for an interactive transport and surface dependency failure."""
-
-    async def member(self, account_id: int, guild_id: int, kind: VoteKind) -> UserActor | None: ...
 
 
 class VoteRepository(Protocol):
@@ -181,6 +162,16 @@ class VoteRepository(Protocol):
     async def pending_reviews(self, guild_id: int) -> Sequence[int]: ...
 
     async def list_due(self, now: Instant) -> Sequence[VoteSessionSnapshot]: ...
+
+    async def get_member(self, guild_id: int, account_id: int) -> GuildMember | None:
+        """Return the account's stored membership in a guild, or None if none is stored."""
+        ...
+
+    async def record_members(self, guild_id: int, members: Sequence[GuildMember], *, complete: bool) -> None:
+        """Store memberships of consented accounts; with `complete`, forget the guild's other members."""
+        ...
+
+    async def forget_member(self, guild_id: int, discord_user_id: int) -> None: ...
 
     async def lock_configuration(self, guild_id: int) -> None: ...
 

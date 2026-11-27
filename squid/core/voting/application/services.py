@@ -24,7 +24,7 @@ from squid.core.permissions.domain.catalogue import (
 )
 from squid.core.unit_of_work import UnitOfWorkFactory
 from squid.core.voting.application.policies import RoleVoteWeightPolicy
-from squid.core.voting.application.ports import VoteActorResolver, VoteUnitOfWork, VoteWeightPolicy
+from squid.core.voting.application.ports import VoteUnitOfWork, VoteWeightPolicy
 from squid.core.voting.domain import (
     DEFAULT_GENERIC_EMOJIS,
     DEFAULT_VOTE_MENU,
@@ -34,6 +34,7 @@ from squid.core.voting.domain import (
     CastVoteResult,
     DeleteLogVoteTarget,
     EmojiPreset,
+    GuildMember,
     PollScope,
     ReviewFilters,
     ReviewSort,
@@ -62,10 +63,12 @@ type FinalRecount = Callable[[int, int], Awaitable[tuple[bool, tuple[int, ...]]]
 class VoteService:
     """Check voter eligibility and manage voting sessions through the repository.
 
-    A ballot is weighed once, when it is cast, from the voter's membership in the
-    session's owner guild. Role changes afterwards do not move it, so a result can
-    be explained from the ballots alone. The repository stores a ballot and any
-    threshold closure together; this service commits the transaction.
+    A ballot is weighed once, when it is cast, from the voter's stored membership in
+    the session's owner guild, so every frontend weighs it the same way and nothing
+    asks Discord. Role changes afterwards do not move it, so a result can be
+    explained from the ballots alone. Adapters keep memberships current with
+    `record_members`. The repository stores a ballot and any threshold closure
+    together; this service commits the transaction.
 
     Results describe the resulting voting session. Publishing its Discord messages
     and acting on an approved build or deletion vote happen outside this service.
@@ -74,7 +77,6 @@ class VoteService:
     def __init__(
         self,
         policy: VoteWeightPolicy | None = None,
-        actor_resolver: VoteActorResolver | None = None,
         *,
         uow_factory: UnitOfWorkFactory[VoteUnitOfWork],
         build_owner_guild_id: int | None = None,
@@ -84,12 +86,7 @@ class VoteService:
         self._policy = policy or RoleVoteWeightPolicy(
             lambda guild, kind: self.get_role_weights(guild, kind, context=ActingContext.current())
         )
-        self._actor_resolver = actor_resolver
         self._build_owner_guild_id = build_owner_guild_id
-
-    def set_actor_resolver(self, resolver: VoteActorResolver) -> None:
-        """Attach the presentation adapter that can resolve current guild-member facts."""
-        self._actor_resolver = resolver
 
     def _owner_guild_id(self, snapshot: VoteSessionSnapshot) -> int | None:
         """Return the guild whose role weights govern this session.
@@ -106,22 +103,74 @@ class VoteService:
             case VoteKind.GENERIC:
                 return snapshot.poll.guild_id if snapshot.poll is not None else None
 
-    async def _weight_actor(
-        self, actor: UserActor, snapshot: VoteSessionSnapshot, owner_guild_id: int | None
-    ) -> UserActor | None:
-        """Resolve the voter in the guild whose role weights govern the session.
+    async def _weigh(
+        self, uow: VoteUnitOfWork, actor: UserActor, snapshot: VoteSessionSnapshot
+    ) -> float | VoteRejection:
+        """Return the actor's base weight in a session, before the option multiplier.
 
-        With no owner guild, retain the supplied actor for eligibility checks. With no
-        resolver, use an actor without roles or capabilities for a different owner
-        guild. A failed lookup returns None.
+        Weight comes from the voter's stored membership in the owner guild; a voter
+        it does not list is weighed as a member without roles. A poll limited to its
+        guild only admits that guild's members. With no owner guild, every eligible
+        voter weighs 1.
         """
-        if owner_guild_id is None or actor.guild_id == owner_guild_id:
-            return actor
-        if self._actor_resolver is None:
-            return UserActor(
-                account_id=actor.require_account_id(), discord_user_id=actor.discord_user_id, guild_id=owner_guild_id
-            )
-        return await self._actor_resolver.resolve(actor.require_account_id(), owner_guild_id, snapshot.kind)
+        if not (await self._permissions.check(actor, VOTE_POLL_CAST, uow=uow)).allowed:
+            return VoteRejection.NOT_ELIGIBLE
+        owner_guild_id = self._owner_guild_id(snapshot)
+        if owner_guild_id is None:
+            # Without a designated authority no guild's role table may speak for the session.
+            return 1.0
+        member = await uow.votes.get_member(owner_guild_id, actor.require_account_id())
+        if member is None and snapshot.members_only:
+            return VoteRejection.NOT_ELIGIBLE
+        weight_actor = UserActor(
+            account_id=actor.account_id,
+            discord_user_id=None if member is None else member.discord_user_id,
+            guild_id=owner_guild_id,
+            discord_role_ids=frozenset() if member is None else member.role_ids,
+            discord_guild_admin=member is not None and member.manage_server,
+            credential_scopes=actor.credential_scopes,
+        )
+        privileges = await self._permissions.check(weight_actor, VOTE_LOG_DELETE_CAST, VOTE_WEIGHT_STAFF, uow=uow)
+        calculated = await self._policy.calculate(
+            replace(weight_actor, capabilities=privileges.allowed_nodes), snapshot
+        )
+        if calculated is None:
+            return VoteRejection.NOT_ELIGIBLE
+        if not isfinite(calculated) or calculated <= 0:
+            msg = "Vote policies must return a positive finite weight."
+            raise InvalidVoteConfigurationError(msg)
+        return calculated
+
+    @application_operation
+    async def base_weight(self, vote_session_id: int, *, context: ActingContext) -> float | VoteRejection:
+        """Return the weight a ballot from the actor would get now, or why they cannot vote."""
+        snapshot = await self.get_session(vote_session_id, context=context)
+        if snapshot is None:
+            return VoteRejection.NOT_FOUND
+        if not snapshot.is_open:
+            return VoteRejection.CLOSED
+        async with self._uow_factory() as uow:
+            return await self._weigh(uow, context.effective.require_user(), snapshot)
+
+    @application_operation
+    async def record_members(
+        self, guild_id: int, members: Sequence[GuildMember], *, complete: bool = False, context: ActingContext
+    ) -> None:
+        """Store what an adapter saw of guild members' roles, for weighing their ballots.
+
+        Only members with a consented account are kept. With `complete`, `members`
+        is the whole guild and stored members missing from it are forgotten.
+        """
+        async with self._uow_factory() as uow:
+            await uow.votes.record_members(guild_id, members, complete=complete)
+            await uow.commit()
+
+    @application_operation
+    async def forget_member(self, guild_id: int, discord_user_id: int, *, context: ActingContext) -> None:
+        """Forget a member who left a guild; their later ballots weigh as a non-member's."""
+        async with self._uow_factory() as uow:
+            await uow.votes.forget_member(guild_id, discord_user_id)
+            await uow.commit()
 
     @application_operation
     async def start_build_vote(
@@ -316,16 +365,16 @@ class VoteService:
     ) -> CastVoteResult:
         """Validate eligibility, weigh the ballot, and toggle or replace the actor's ballot.
 
-        The ballot is cast in `actor.guild_id`, which must be a guild the session is
-        published in; that guild's aliases decide which emoji the option goes by.
-        `emoji` picks one alias when the caller knows it, as a reaction does;
-        otherwise the guild's first alias for the option is used.
+        A ballot cast from Discord comes with `actor.guild_id`, which must be a guild the
+        session is published in; that guild's aliases decide which emoji the option
+        goes by. `emoji` picks one alias when the caller knows it, as a reaction does;
+        otherwise the guild's first alias for the option is used. A ballot cast from
+        the web has no guild and no alias.
 
         Selecting the same option again removes the ballot, even with another alias.
         Pass `toggle=False` to select instead: the ballot then stays on that option, which
         makes repeating the call safe when the caller only knows the desired selection.
-        The repository serializes the mutation and any threshold closure. An unresolved
-        owner-guild lookup uses base weight 1, before the option multiplier.
+        The repository serializes the mutation and any threshold closure.
         """
         return await self._apply_ballot(
             context.effective.require_user(),
@@ -381,56 +430,27 @@ class VoteService:
             and snapshot.status is VoteStatus.COUNTING
         ):
             return CastVoteResult(session=snapshot, rejection=VoteRejection.CLOSED)
-        if actor.guild_id is None or actor.guild_id not in {message.guild_id for message in snapshot.messages}:
+        # A Discord card's guild decides the emoji alias. A cast without a guild comes
+        # from a frontend without cards and selects the option directly.
+        if actor.guild_id is not None and actor.guild_id not in {message.guild_id for message in snapshot.messages}:
             return CastVoteResult(session=snapshot, rejection=VoteRejection.WRONG_GUILD)
         option = snapshot.menu.option(option_id)
-        alias = snapshot.menu.alias_for(option_id, actor.guild_id, emoji=emoji)
-        if option is None or alias is None:
+        alias = None if actor.guild_id is None else snapshot.menu.alias_for(option_id, actor.guild_id, emoji=emoji)
+        if option is None or (actor.guild_id is not None and alias is None):
             return CastVoteResult(session=snapshot, rejection=VoteRejection.INVALID_OPTION)
 
-        # The option's alias comes from where the ballot was cast; role weights come from the owner guild.
-        owner_guild_id = self._owner_guild_id(snapshot)
-        weight_actor = await self._weight_actor(actor, snapshot, owner_guild_id)
         async with self._uow_factory() as uow:
-            if not (await self._permissions.check(actor, VOTE_POLL_CAST, uow=uow)).allowed:
-                return CastVoteResult(snapshot, VoteRejection.NOT_ELIGIBLE)
-            if weight_actor is None:
-                if snapshot.kind is VoteKind.DELETE_LOG:
-                    return CastVoteResult(snapshot, VoteRejection.NOT_ELIGIBLE)
-                # The owner guild is unreachable right now. Land the ballot at the
-                # default weight rather than letting a Discord blip veto the vote.
-                logger.warning(
-                    "Vote session %s could not resolve account %s in owner guild %s; weighting at 1.0",
-                    snapshot.id,
-                    actor.account_id,
-                    owner_guild_id,
-                    extra={"squid.vote.session_id": snapshot.id},
-                )
-                weight = 1.0
-            else:
-                weight_actor = replace(weight_actor, credential_scopes=actor.credential_scopes)
-                privileges = await self._permissions.check(
-                    weight_actor, VOTE_LOG_DELETE_CAST, VOTE_WEIGHT_STAFF, uow=uow
-                )
-                weight_actor = replace(weight_actor, capabilities=privileges.allowed_nodes)
-                calculated = await self._policy.calculate(weight_actor, snapshot)
-                if calculated is None:
-                    return CastVoteResult(session=snapshot, rejection=VoteRejection.NOT_ELIGIBLE)
-                # Without a designated authority no guild's role table may speak for the
-                # session, but eligibility still had to be judged.
-                weight = calculated if owner_guild_id is not None else 1.0
-            if not isfinite(weight) or weight <= 0:
-                msg = "Vote policies must return a positive finite weight."
-                raise InvalidVoteConfigurationError(msg)
+            weight = await self._weigh(uow, actor, snapshot)
+            if isinstance(weight, VoteRejection):
+                return CastVoteResult(snapshot, weight)
             weight *= option.multiplier
-
             mutation = await uow.votes.cast_vote(
                 vote_session_id,
                 account_id,
                 option,
                 weight,
                 guild_id=actor.guild_id,
-                emoji=alias.emoji,
+                emoji=None if alias is None else alias.emoji,
                 toggle=toggle,
                 count_revision=count_revision,
             )
@@ -457,7 +477,7 @@ class VoteService:
             return CastVoteResult(session=None, rejection=VoteRejection.NOT_FOUND)
         if not snapshot.is_open:
             return CastVoteResult(session=snapshot, rejection=VoteRejection.CLOSED)
-        if actor.guild_id is None or actor.guild_id not in {message.guild_id for message in snapshot.messages}:
+        if actor.guild_id is not None and actor.guild_id not in {message.guild_id for message in snapshot.messages}:
             return CastVoteResult(session=snapshot, rejection=VoteRejection.WRONG_GUILD)
         async with self._uow_factory() as uow:
             if not (await self._permissions.check(actor, VOTE_POLL_CAST, uow=uow)).allowed:

@@ -36,6 +36,8 @@ def test_every_account_foreign_key_has_an_explicit_merge_disposition() -> None:
         AccountReference("catalogue_preferences", "account_id"),
         AccountReference("account_profiles", "account_id"),
         AccountReference("account_merge_tickets", "account_id"),
+        # Stored guild roles are a cache the bot resyncs for the survivor.
+        AccountReference("voter_guild_members", "account_id"),
     )
     # Preserve the existing deletion policy for optional historical attribution.
     cleared = (

@@ -86,7 +86,6 @@ from squid.core.sync import DiscordReconciliationService
 from squid.core.tags.application import TagService
 from squid.core.versions.application.services import VersionService
 from squid.core.voting.application import VoteService
-from squid.core.voting.application.ports import InteractiveVoteActorResolver
 from squid.core.voting.application.recount import BallotRecounter, VoteCardReactions
 from squid.core.worker_context import WorkerOperation, worker_execution
 from squid_reactivity import TopicBus
@@ -152,7 +151,6 @@ class ApiServices:
     accounts: AccountService
     versions: VersionService
     votes: VoteService
-    vote_members: InteractiveVoteActorResolver | None
     impersonation: ImpersonationService
     viewer_queries: ViewerQueries
     published_build_media: PublishedBuildMedia | None = None

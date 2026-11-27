@@ -7,14 +7,13 @@ import pytest
 
 from squid.api.security import Caller
 from squid.api.v1.votes import VoteInput, cast_vote, clear_vote
-from squid.core.actors import ActingContext, Actor, UserActor
+from squid.core.actors import ActingContext, Actor
 from squid.core.errors import AuthenticationError, AuthorizationError, ConflictError, ValidationError
 from squid.core.voting.application import VoteService
 from squid.core.voting.domain import (
     DEFAULT_VOTE_MENU,
     CastVoteResult,
     VoteAlias,
-    VoteKind,
     VoteMenu,
     VoteMessage,
     VoteRejection,
@@ -91,61 +90,26 @@ class VoteRecorder(VoteService):
         return CastVoteResult(self.session, rejection=self.rejection)
 
 
-class MemberRecorder:
-    def __init__(self, actor: Actor) -> None:
-        self.actor = actor
-        self.calls: list[tuple[int, int, VoteKind]] = []
-
-    async def member(self, account_id: int, guild_id: int, kind: VoteKind) -> Actor | None:
-        self.calls.append((account_id, guild_id, kind))
-        return self.actor
-
-    async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> Actor | None:
-        return await self.member(account_id, guild_id, kind)
-
-    async def aclose(self) -> None:
-        pass
-
-
-@pytest.mark.parametrize("guild_id", [10, 999])
 @pytest.mark.asyncio
-async def test_vote_keeps_the_option_id_stable_across_guild_aliases(guild_id: int) -> None:
-    session = snapshot()
-    actor = UserActor(account_id=1, discord_user_id=7, guild_id=guild_id, discord_role_ids=frozenset({99}))
-    votes = VoteRecorder(session)
-    members = MemberRecorder(actor)
+async def test_a_web_vote_names_only_the_option() -> None:
+    """No guild is involved: the service weighs the ballot from the owner guild's stored roles."""
+    votes = VoteRecorder(snapshot())
 
-    response = await cast_vote.fn(
-        12,
-        VoteInput(guild_id=guild_id, option_id="approve"),
-        votes,
-        members,
-        account(),
-    )
+    response = await cast_vote.fn(12, VoteInput(option_id="approve"), votes, account())
 
-    assert members.calls == [(1, guild_id, VoteKind.BUILD)]
-    assert votes.cast_calls == [CastCall(12, account().context().with_actor(actor).effective, "approve")]
+    assert votes.cast_calls == [CastCall(12, account().context().effective, "approve")]
     assert response.id == 12
 
 
 @pytest.mark.asyncio
 async def test_a_cli_caller_with_no_discord_identity_can_vote() -> None:
-    """The route resolves guild membership from the account-backed CLI caller."""
-    session = snapshot()
-    actor = UserActor(account_id=1, discord_user_id=7, guild_id=10, discord_role_ids=frozenset({99}))
-    votes = VoteRecorder(session)
-    members = MemberRecorder(actor)
-    cli = Caller(
-        kind="cli",
-        subject="account:1",
-        nodes=credential_nodes("vote.poll.cast"),
-        account_id=1,
-    )
+    votes = VoteRecorder(snapshot())
+    cli = Caller(kind="cli", subject="account:1", nodes=credential_nodes("vote.poll.cast"), account_id=1)
 
-    response = await cast_vote.fn(12, VoteInput(guild_id=10, option_id="approve"), votes, members, cli)
+    response = await cast_vote.fn(12, VoteInput(option_id="approve"), votes, cli)
 
     assert response.id == 12
-    assert votes.cast_calls == [CastCall(12, cli.context().with_actor(actor).effective, "approve")]
+    assert votes.cast_calls == [CastCall(12, cli.context().effective, "approve")]
 
 
 @pytest.mark.asyncio
@@ -153,7 +117,7 @@ async def test_service_credentials_cannot_cast_ballots() -> None:
     service = Caller(kind="service", subject="api-key:test", nodes=credential_nodes("vote.poll.cast"))
 
     with pytest.raises(AuthenticationError):
-        await cast_vote.fn(12, VoteInput(guild_id=10, option_id="approve"), VoteRecorder(snapshot()), None, service)
+        await cast_vote.fn(12, VoteInput(option_id="approve"), VoteRecorder(snapshot()), service)
 
 
 _REJECTION_ERRORS: dict[VoteRejection, type[Exception]] = {
@@ -175,22 +139,12 @@ async def test_every_vote_rejection_maps_to_a_typed_api_error(
 ) -> None:
     session = snapshot()
     votes = VoteRecorder(session, rejection=rejection)
-    members = MemberRecorder(UserActor(account_id=1, discord_user_id=7, guild_id=10))
 
     with pytest.raises(error_type):
-        await cast_vote.fn(
-            12,
-            VoteInput(guild_id=10, option_id="approve"),
-            votes,
-            members,
-            account(f"account:{rejection.value}"),
-        )
+        await cast_vote.fn(12, VoteInput(option_id="approve"), votes, account(f"account:{rejection.value}"))
 
 
-async def test_clear_resolves_the_authenticated_member() -> None:
-    actor = UserActor(account_id=1, discord_user_id=7, guild_id=10)
+async def test_clear_acts_as_the_authenticated_caller() -> None:
     votes = VoteRecorder(snapshot())
-    members = MemberRecorder(actor)
-    await clear_vote.fn(12, 10, votes, members, account())
-    assert votes.cast_calls == [CastCall(12, account().context().with_actor(actor).effective, "clear")]
-    assert members.calls == [(1, 10, VoteKind.BUILD)]
+    await clear_vote.fn(12, votes, account())
+    assert votes.cast_calls == [CastCall(12, account().context().effective, "clear")]

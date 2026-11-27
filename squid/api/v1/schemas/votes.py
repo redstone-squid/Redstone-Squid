@@ -80,6 +80,16 @@ class OwnVoteSelection(BaseModel):
         return cls(option_id=selection.option_id)
 
 
+class VoteViewer(BaseModel):
+    """Whether the caller may vote in the session, and the weight a ballot would get now."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    eligible: bool
+    weight: float | None
+    """Weight before the chosen option's multiplier; null when not eligible."""
+
+
 class VoteVoter(BaseModel):
     """A ballot on a poll that shows who voted."""
 
@@ -111,6 +121,8 @@ class VoteSessionDetail(BaseModel):
     poll: VotePollSummary | None
     own_selection: OwnVoteSelection | None
     voters: list[VoteVoter] | None
+    viewer: VoteViewer | None = None
+    """Null for anonymous callers and sessions that no longer accept ballots."""
 
     @classmethod
     def from_domain(cls, session: VoteSessionSnapshot, *, caller_account_id: int | None = None) -> VoteSessionDetail:

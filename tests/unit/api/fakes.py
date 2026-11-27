@@ -881,7 +881,6 @@ def build_services(
         versions=versions or MockVersions(),
         schematics=MockSchematics(),
         votes=MockVotes(),
-        vote_members=None,
         records=MockRecords(),
         record_administration=MockRecordAdministration(),
         public_records=MockPublicRecords(),

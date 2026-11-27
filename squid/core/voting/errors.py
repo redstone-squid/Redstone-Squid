@@ -1,6 +1,6 @@
 """Voting context errors."""
 
-from squid.core.errors import ConfigurationError, ErrorCode, NotFoundError, ServiceUnavailableError
+from squid.core.errors import ConfigurationError, ErrorCode, NotFoundError
 from squid.core.i18n import tr
 
 
@@ -26,12 +26,3 @@ class InvalidVoteConfigurationError(ConfigurationError):
     default_message = tr(t"voting-vote-configuration-invalid = Vote configuration is invalid.")
     default_code = ErrorCode.INVALID_VOTE_CONFIGURATION
     default_resource = "vote"
-
-
-class DiscordMemberServiceUnavailableError(ServiceUnavailableError):
-    """Discord could not provide current guild membership facts."""
-
-    default_message = tr(
-        t"voting-discord-membership-information = Discord membership information is temporarily unavailable."
-    )
-    default_resource = "discord"

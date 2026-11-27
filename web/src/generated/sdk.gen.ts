@@ -3172,6 +3172,8 @@ export const voteSessionList = <ThrowOnError extends boolean = false>(options?: 
  * GetVoteSession
  *
  * Return aggregate vote state without exposing ballot identities.
+ *
+ * A signed-in caller with a consented account also sees whether they may vote and their weight.
  */
 export const voteSessionGet = <ThrowOnError extends boolean = false>(options: Options<VoteSessionGetData, ThrowOnError>): RequestResult<VoteSessionGetResponses, VoteSessionGetErrors, ThrowOnError> => (options.client ?? client).get<VoteSessionGetResponses, VoteSessionGetErrors, ThrowOnError>({
     security: [
@@ -3194,7 +3196,7 @@ export const voteSessionGet = <ThrowOnError extends boolean = false>(options: Op
 /**
  * ClearVote
  *
- * Remove the authenticated member's ballot; repeating this keeps it absent.
+ * Remove the caller's ballot; repeating this keeps it absent.
  */
 export const voteClear = <ThrowOnError extends boolean = false>(options: Options<VoteClearData, ThrowOnError>): RequestResult<VoteClearResponses, VoteClearErrors, ThrowOnError> => (options.client ?? client).delete<VoteClearResponses, VoteClearErrors, ThrowOnError>({
     security: [{
@@ -3209,7 +3211,9 @@ export const voteClear = <ThrowOnError extends boolean = false>(options: Options
 /**
  * CastVote
  *
- * Cast the authenticated Discord member's weighted vote.
+ * Cast the caller's vote, weighed from their roles in the session's owner guild.
+ *
+ * Repeating the call with the same option keeps the ballot.
  */
 export const voteCast = <ThrowOnError extends boolean = false>(options: Options<VoteCastData, ThrowOnError>): RequestResult<VoteCastResponses, VoteCastErrors, ThrowOnError> => (options.client ?? client).post<VoteCastResponses, VoteCastErrors, ThrowOnError>({
     security: [{

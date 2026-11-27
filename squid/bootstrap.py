@@ -105,6 +105,7 @@ from squid.core.permissions.application.edits import (
     PermissionRoleCreation,
     PermissionRoleDeletion,
 )
+from squid.core.permissions.infrastructure.discord_members import AccountDiscordIds, DiscordRestGuildMembers
 from squid.core.permissions.infrastructure.repository import (
     EPOCH_CHANNEL,
 )
@@ -158,10 +159,9 @@ from squid.core.tags.application.edits import (
 from squid.core.unit_of_work import UnitOfWorkFactory
 from squid.core.versions.application.services import VersionService
 from squid.core.voting.application import VoteService
-from squid.core.voting.application.accounts import AccountConsentedVoterLookup, AccountVoterDiscordIdLookup
+from squid.core.voting.application.accounts import AccountConsentedVoterLookup
 from squid.core.voting.application.recount import BallotRecounter
 from squid.core.voting.infrastructure.discord_cards import DiscordVoteCards
-from squid.core.voting.infrastructure.discord_rest import DiscordRestActorResolver
 from squid.discord_rest import RestOnlyClient, rest_client
 from squid.runtime import ApiServices, ApplicationRuntime, BotServices, WorkerServices
 from squid.worker.queue_health import PostgresQueueHealthMonitor
@@ -221,7 +221,7 @@ class _ServiceGraph:
     @cached_property
     def permission_admin(self) -> PermissionAdministrationService:
         return PermissionAdministrationService(
-            self.permissions, uow_factory=self.uow_factory, members=self.vote_members
+            self.permissions, uow_factory=self.uow_factory, members=self.discord_guild_members
         )
 
     @cached_property
@@ -555,27 +555,20 @@ class _ServiceGraph:
         return client
 
     @cached_property
-    def vote_members(self) -> DiscordRestActorResolver | None:
+    def discord_guild_members(self) -> DiscordRestGuildMembers | None:
+        """Live guild roles over REST, for explaining an account's permissions in a guild."""
         client = self.discord_rest_client
         if client is None:
             return None
-        resolver = DiscordRestActorResolver(
-            client,
-            permissions=self.permissions,
-            discord_ids=AccountVoterDiscordIdLookup(self.accounts),
-        )
-        self.votes.set_actor_resolver(resolver)
-        return resolver
+        return DiscordRestGuildMembers(client, discord_ids=AccountDiscordIds(self.accounts))
 
     @cached_property
     def rest_ballot_recounter(self) -> BallotRecounter | None:
         """Recount ballots through Discord's REST API, for processes without a gateway."""
-        resolver = self.vote_members
         client = self.discord_rest_client
-        if resolver is None or client is None:
+        if client is None:
             return None
-        cards = DiscordVoteCards(client)
-        return BallotRecounter(self.votes, cards, AccountConsentedVoterLookup(self.accounts), resolver)
+        return BallotRecounter(self.votes, DiscordVoteCards(client), AccountConsentedVoterLookup(self.accounts))
 
     @cached_property
     def accounts(self) -> AccountService:
@@ -713,7 +706,6 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         accounts=graph.accounts,
         versions=graph.version_service,
         votes=graph.votes,
-        vote_members=graph.vote_members,
     )
 
 
