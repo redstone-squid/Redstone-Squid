@@ -322,6 +322,7 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
             )
         nodes: list[sl.LayoutNode[ComponentsV2Target, AppRequest]] = [
             header,
+            sl.action_controls(*controls, key="identity-tools", display=sl.semantic.ControlDisplay.INDIVIDUAL),
             sl.action_controls(
                 sl.routed_action_control(
                     tr(t"discord-indexing-manage = Manage automatic indexing"),
@@ -330,7 +331,6 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
                 ),
                 key="indexing-settings",
             ),
-            sl.action_controls(*controls, key="identity-tools", display=sl.semantic.ControlDisplay.INDIVIDUAL),
         ]
         if account is not None and account.id is not None:  # pyright: ignore[reportUnnecessaryComparison]
             nodes.extend(self._merge_nodes())

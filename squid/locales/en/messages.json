@@ -10042,7 +10042,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/accounts/workspace.py:327",
+      "squid/bot/accounts/workspace.py:328",
       "squid/bot/submission/indexing.py:70"
     ]
   },

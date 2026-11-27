@@ -3071,7 +3071,7 @@ discord-indexing-enable = Turn on automatic indexing
 # squid/bot/submission/indexing.py:65
 discord-indexing-heading = Automatically index my Discord builds
 
-# squid/bot/accounts/workspace.py:327, squid/bot/submission/indexing.py:70
+# squid/bot/accounts/workspace.py:328, squid/bot/submission/indexing.py:70
 discord-indexing-manage = Manage automatic indexing
 
 # squid/bot/submission/indexing.py:32
