@@ -10006,7 +10006,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/indexing.py:17"
+      "squid/bot/submission/indexing.py:18"
     ]
   },
   "discord-indexing-disable": {
@@ -10015,7 +10015,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/indexing.py:46"
+      "squid/bot/submission/indexing.py:49"
     ]
   },
   "discord-indexing-enable": {
@@ -10024,7 +10024,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/indexing.py:48"
+      "squid/bot/submission/indexing.py:51"
     ]
   },
   "discord-indexing-heading": {
@@ -10033,7 +10033,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/indexing.py:65"
+      "squid/bot/submission/indexing.py:68"
     ]
   },
   "discord-indexing-manage": {
@@ -10043,7 +10043,7 @@
     "arguments": [],
     "locations": [
       "squid/bot/accounts/workspace.py:328",
-      "squid/bot/submission/indexing.py:70"
+      "squid/bot/submission/indexing.py:73"
     ]
   },
   "discord-indexing-off": {
@@ -10052,7 +10052,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/indexing.py:32"
+      "squid/bot/submission/indexing.py:35"
     ]
   },
   "discord-indexing-on": {
@@ -10061,7 +10061,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/submission/indexing.py:26"
+      "squid/bot/submission/indexing.py:28"
     ]
   },
   "draft-editor-add-files": {

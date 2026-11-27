@@ -72,9 +72,9 @@ async def test_indexing_is_independent_of_old_receipts_and_shared_across_setting
     account = repository.seed_account(123, consent=CONSENT)
     service = InMemoryAccountService(repository)
     assert not account.discord_build_indexing_enabled
-    await service.set_discord_build_indexing(123, enabled=True)
+    await service.set_discord_build_indexing(enabled=True, context=ActingContext.direct(UserActor(discord_user_id=123)))
     assert repository.accounts[account.id].discord_build_indexing_enabled
-    await service.set_account_build_indexing(
+    await service.set_discord_build_indexing(
         enabled=False, context=ActingContext.direct(UserActor(account_id=account.id))
     )
     assert not repository.accounts[account.id].discord_build_indexing_enabled

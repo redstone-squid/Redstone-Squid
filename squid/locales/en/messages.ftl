@@ -3059,25 +3059,25 @@ diagnostics-view-work-lost = Work lost
 # squid/bot/diagnostics/screen.py:289
 diagnostics-view-work-lost-only = Work lost only
 
-# squid/bot/submission/indexing.py:17
+# squid/bot/submission/indexing.py:18
 discord-indexing-description = Automatic indexing adds your builds from all participating Discord channels to the catalogue and copies their attachments. Turning it off stops future indexing. Builds already in the catalogue stay there.
 
-# squid/bot/submission/indexing.py:46
+# squid/bot/submission/indexing.py:49
 discord-indexing-disable = Turn off automatic indexing
 
-# squid/bot/submission/indexing.py:48
+# squid/bot/submission/indexing.py:51
 discord-indexing-enable = Turn on automatic indexing
 
-# squid/bot/submission/indexing.py:65
+# squid/bot/submission/indexing.py:68
 discord-indexing-heading = Automatically index my Discord builds
 
-# squid/bot/accounts/workspace.py:328, squid/bot/submission/indexing.py:70
+# squid/bot/accounts/workspace.py:328, squid/bot/submission/indexing.py:73
 discord-indexing-manage = Manage automatic indexing
 
-# squid/bot/submission/indexing.py:32
+# squid/bot/submission/indexing.py:35
 discord-indexing-off = Automatic indexing is off.
 
-# squid/bot/submission/indexing.py:26
+# squid/bot/submission/indexing.py:28
 discord-indexing-on = Automatic indexing is on.
 
 # squid/bot/submission/ui/drafts.py:1054, squid/bot/submission/ui/drafts.py:606, squid/bot/submission/ui/drafts.py:803

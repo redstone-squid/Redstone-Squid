@@ -190,7 +190,7 @@ async def set_build_indexing(
     _reservation: NamedDependency[SkipValidation[None]],
 ) -> AccountDetail:
     """Set automatic indexing for the caller's builds in participating Discord channels."""
-    await accounts.set_account_build_indexing(data.enabled, context=caller.context())
+    await accounts.set_discord_build_indexing(enabled=data.enabled, context=caller.context())
     return await _render_me(accounts, caller)
 
 

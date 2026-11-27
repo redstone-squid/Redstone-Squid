@@ -60,8 +60,8 @@ class AccountRecorder(AccountService):
         return self.account
 
     @override
-    async def set_discord_build_indexing(self, discord_user_id: int, *, enabled: bool) -> None:
-        assert discord_user_id == USER_ID
+    async def set_discord_build_indexing(self, *, enabled: bool, context: ActingContext) -> None:
+        assert context.effective.require_discord_user_id() == USER_ID
         self.account = _discord_account(consented=enabled)
 
 

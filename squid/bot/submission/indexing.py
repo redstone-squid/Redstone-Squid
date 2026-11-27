@@ -10,6 +10,7 @@ from squid.bot.routes import AppRequest, AppRoutes
 from squid.bot.ui import render_payload, text_node, tr
 from squid.bot.utils.sticky_message import StickyMessage
 from squid.core.accounts.domain import IdentityProvider
+from squid.core.actors import ActingContext, UserActor
 
 router = AppRoutes()
 indexing = router.group("/build-indexing")
@@ -22,13 +23,15 @@ _DESCRIPTION = tr(
 
 @indexing.route("/enable")
 async def enable_indexing(request: AppRequest) -> None:
-    await request.client.services.accounts.set_discord_build_indexing(request.user.id, enabled=True)
+    context = ActingContext.for_actor(UserActor(discord_user_id=request.user.id))
+    await request.client.services.accounts.set_discord_build_indexing(context=context, enabled=True)
     await request.respond(text_node(tr(t"discord-indexing-on = Automatic indexing is on.")), audience="personal")
 
 
 @indexing.route("/disable")
 async def disable_indexing(request: AppRequest) -> None:
-    await request.client.services.accounts.set_discord_build_indexing(request.user.id, enabled=False)
+    context = ActingContext.for_actor(UserActor(discord_user_id=request.user.id))
+    await request.client.services.accounts.set_discord_build_indexing(context=context, enabled=False)
     await request.respond(text_node(tr(t"discord-indexing-off = Automatic indexing is off.")), audience="personal")
 
 

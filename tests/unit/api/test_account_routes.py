@@ -66,7 +66,7 @@ class AccountRecorder(InMemoryAccountService):
         self.refreshes: list[tuple[int, UUID | None]] = []
 
     @override
-    async def set_account_build_indexing(self, enabled: bool, *, context: ActingContext) -> None:
+    async def set_discord_build_indexing(self, *, enabled: bool, context: ActingContext) -> None:
         assert context.effective.require_account_id() == self.account.id
         self.account.discord_build_indexing_enabled = enabled
 

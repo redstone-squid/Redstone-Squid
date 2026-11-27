@@ -4,6 +4,7 @@ import base64
 import logging
 import secrets
 from collections.abc import Awaitable, Callable, Collection, Sequence
+from dataclasses import replace
 from uuid import UUID
 
 from whenever import Instant
@@ -163,18 +164,19 @@ class AccountService:
             await uow.commit()
             return result
 
-    async def set_discord_build_indexing(self, discord_user_id: int, *, enabled: bool) -> None:
-        """Set the preference for the Discord user who pressed the indexing control."""
+    @application_operation
+    async def set_discord_build_indexing(self, *, enabled: bool, context: ActingContext) -> None:
+        """Save an explicit indexing choice for the acting account or verified Discord user."""
+        actor = context.effective.require_user()
         async with self._uow_factory() as uow:
-            account = await uow.accounts.get_or_create_identity(IdentityProvider.DISCORD, str(discord_user_id))
-            account.discord_build_indexing_enabled = enabled
-            await uow.commit()
-
-    async def set_account_build_indexing(self, enabled: bool, *, context: ActingContext) -> None:
-        account_id = context.effective.require_account_id()
-        async with self._uow_factory() as uow:
-            await self._permissions.require(context.effective, ACCOUNT_SELF_MANAGE, uow=uow)
-            account = await uow.accounts.lock_for_edit(account_id)
+            if actor.account_id is None:
+                account = await uow.accounts.get_or_create_identity(
+                    IdentityProvider.DISCORD, str(actor.require_discord_user_id())
+                )
+                actor = replace(actor, account_id=account.id)
+            else:
+                account = await uow.accounts.lock_for_edit(actor.account_id)
+            await self._permissions.require(actor, ACCOUNT_SELF_MANAGE, uow=uow)
             account.discord_build_indexing_enabled = enabled
             await uow.commit()
 
