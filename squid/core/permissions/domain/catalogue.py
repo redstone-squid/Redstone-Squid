@@ -267,6 +267,17 @@ VERSION_ENTRY_CREATE = _b.node(
     NodeScope.GLOBAL,
     tr(t"permissions-register-minecraft-version = Register a new Minecraft version."),
 )
+VERSION_ENTRY_EDIT = _b.node(
+    "version.entry.edit",
+    NodeScope.GLOBAL,
+    tr(t"permissions-correct-minecraft-version = Correct a registered Minecraft version."),
+)
+# Not @destructive: only an entry nothing refers to can be deleted, and it can be added again.
+VERSION_ENTRY_DELETE = _b.node(
+    "version.entry.delete",
+    NodeScope.GLOBAL,
+    tr(t"permissions-delete-minecraft-version = Delete an unused Minecraft version."),
+)
 
 ACCOUNT_CLAIM_LIST = _b.node(
     "account.claim.list",

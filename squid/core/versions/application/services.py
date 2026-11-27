@@ -1,14 +1,21 @@
 """Minecraft version application services."""
 
 import re
+from contextlib import AbstractAsyncContextManager
 
 from squid.core.actors import ActingContext, WorkerActor, application_operation
 from squid.core.permissions.application import PermissionService
-from squid.core.permissions.domain.catalogue import VERSION_ENTRY_CREATE
+from squid.core.permissions.domain.catalogue import VERSION_ENTRY_CREATE, VERSION_ENTRY_DELETE, VERSION_ENTRY_EDIT
 from squid.core.unit_of_work import UnitOfWorkFactory
 from squid.core.versions.application.ports import VersionUnitOfWork
-from squid.core.versions.domain import Edition, MinecraftVersion, parse_version_string
-from squid.core.versions.errors import InvalidVersionError, VersionCatalogUnavailableError
+from squid.core.versions.domain import (
+    Edition,
+    MinecraftVersion,
+    VersionCorrection,
+    VersionEntry,
+    parse_version_string,
+)
+from squid.core.versions.errors import InvalidVersionError, VersionCatalogUnavailableError, VersionNotFoundError
 
 
 class VersionService:
@@ -19,10 +26,11 @@ class VersionService:
         self._permissions = PermissionService(uow_factory=uow_factory)
 
     @application_operation
-    async def add(
-        self, version_string: str, *, edition: Edition | None = None, context: ActingContext
-    ) -> MinecraftVersion:
-        """Parse and store a version, using `edition` to override the parsed edition."""
+    async def add(self, version_string: str, *, edition: Edition | None = None, context: ActingContext) -> VersionEntry:
+        """Parse and store a version, using `edition` to override the parsed edition.
+
+        Raises VersionExistsError when the catalogue already has the release.
+        """
         parsed_edition, major, minor, patch = parse_version_string(version_string)
         version = MinecraftVersion(edition or parsed_edition, major, minor, patch)
         async with self._uow_factory() as uow:
@@ -34,6 +42,49 @@ class VersionService:
             stored = await uow.versions.add(version)
             await uow.commit()
             return stored
+
+    @application_operation
+    async def correct(self, version_id: int, correction: VersionCorrection, *, context: ActingContext) -> VersionEntry:
+        """Fix a mistaken entry in place. Builds and records that use it show the corrected release.
+
+        Raises VersionNotFoundError for an unknown ID, InvalidVersionError for a
+        negative release number, and VersionExistsError when the result duplicates
+        another entry.
+        """
+        async with self._uow_factory() as uow, self._editing_builds(uow, context, "version_correction"):
+            await self._permissions.require(context.effective, VERSION_ENTRY_EDIT, uow=uow)
+            entry = await uow.versions.get(version_id)
+            if entry is None:
+                raise VersionNotFoundError(version_id)
+            stored = await uow.versions.update(correction.apply(entry))
+            if stored is None:
+                raise VersionNotFoundError(version_id)
+            await uow.commit()
+            return stored
+
+    @application_operation
+    async def delete(self, version_id: int, *, context: ActingContext) -> None:
+        """Delete an entry nothing uses yet, such as one added by mistake.
+
+        Raises VersionNotFoundError for an unknown ID and VersionInUseError when
+        builds or records refer to it; correct those entries instead.
+        """
+        async with self._uow_factory() as uow, self._editing_builds(uow, context, "version_delete"):
+            await self._permissions.require(context.effective, VERSION_ENTRY_DELETE, uow=uow)
+            if not await uow.versions.delete(version_id):
+                raise VersionNotFoundError(version_id)
+            await uow.commit()
+
+    @staticmethod
+    def _editing_builds(
+        uow: VersionUnitOfWork, context: ActingContext, source: str
+    ) -> AbstractAsyncContextManager[None]:
+        # A build's history snapshot includes its version labels, so PostgreSQL records
+        # changes to a version that builds use as edits of those builds.
+        actor = context.effective
+        return uow.builds.editing(
+            actor=actor.linked_account_id if actor.linked_account_id is not None else actor.reference, source=source
+        )
 
     @application_operation
     async def data_version_for(self, version_label: str, *, context: ActingContext) -> int | None:
@@ -48,13 +99,13 @@ class VersionService:
             return await uow.versions.label_for_data_version(data_version)
 
     @application_operation
-    async def list_versions(self, edition: Edition, *, context: ActingContext) -> list[MinecraftVersion]:
+    async def list_versions(self, edition: Edition, *, context: ActingContext) -> list[VersionEntry]:
         """Return catalog versions for one edition, from oldest to newest."""
         async with self._uow_factory() as uow:
             return await uow.versions.list(edition)
 
     @application_operation
-    async def list_all(self, *, context: ActingContext) -> list[MinecraftVersion]:
+    async def list_all(self, *, context: ActingContext) -> list[VersionEntry]:
         """List Java versions followed by Bedrock versions, oldest first within each edition."""
         async with self._uow_factory() as uow:
             java = await uow.versions.list("Java")
@@ -103,7 +154,7 @@ class VersionService:
             return []
         normalized_spec = re.sub(r"(?<=\d)\s*[~\uff5e\u2013\u2014]\s*(?=\d)", " - ", normalized_spec)
         versions = await self.list_versions(edition, context=context)
-        available = [(version.major, version.minor, version.patch) for version in versions]
+        available = [(entry.version.major, entry.version.minor, entry.version.patch) for entry in versions]
         resolved: list[tuple[int, int, int]] = []
         excluded: list[tuple[int, int, int]] = []
 

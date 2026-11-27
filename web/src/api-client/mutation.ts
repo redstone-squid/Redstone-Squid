@@ -122,6 +122,9 @@ const errorMessages = {
   VALIDATION_ERROR: null,
   VERIFICATION_ATTEMPTS_EXHAUSTED: null,
   VERSION_CATALOG_UNAVAILABLE: m.errorUnavailable,
+  VERSION_EXISTS: null,
+  VERSION_IN_USE: null,
+  VERSION_NOT_FOUND: m.errorGone,
   VOTE_SESSION_NOT_FOUND: m.errorGone,
 } satisfies Record<ErrorCode, (() => string) | null>;
 

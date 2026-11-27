@@ -1,9 +1,10 @@
 """Minecraft version domain values."""
 
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Literal, override
 
+from squid.core.sentinel import UNSET
 from squid.core.versions.errors import InvalidVersionError
 
 Edition = Literal["Java", "Bedrock"]
@@ -19,9 +20,51 @@ class MinecraftVersion:
     minor: int
     patch: int
 
+    def __post_init__(self) -> None:
+        if min(self.major, self.minor, self.patch) < 0:
+            msg = "Release numbers cannot be negative."
+            raise InvalidVersionError(msg, context={"version": str(self)})
+
     @override
     def __str__(self) -> str:
         return f"{self.edition} {self.major}.{self.minor}.{self.patch}"
+
+
+@dataclass(frozen=True, slots=True)
+class VersionEntry:
+    """A release in the catalogue, with the world-format number it writes, if known."""
+
+    id: int
+    version: MinecraftVersion
+    data_version: int | None = None
+
+    @override
+    def __str__(self) -> str:
+        return str(self.version)
+
+
+type Patch[T] = T | UNSET
+
+
+@dataclass(frozen=True, slots=True)
+class VersionCorrection:
+    """Fields to change on a catalogue entry. Clearing `data_version` and omitting it differ."""
+
+    edition: Patch[Edition] = UNSET
+    major: Patch[int] = UNSET
+    minor: Patch[int] = UNSET
+    patch: Patch[int] = UNSET
+    data_version: Patch[int | None] = UNSET
+
+    def apply(self, entry: VersionEntry) -> VersionEntry:
+        """Return `entry` with the supplied fields replaced."""
+        changes = {
+            name: value
+            for name in ("edition", "major", "minor", "patch")
+            if (value := getattr(self, name)) is not UNSET
+        }
+        data_version = entry.data_version if self.data_version is UNSET else self.data_version
+        return replace(entry, version=replace(entry.version, **changes), data_version=data_version)
 
 
 def parse_version_string(version_string: str) -> tuple[Edition, int, int, int]:

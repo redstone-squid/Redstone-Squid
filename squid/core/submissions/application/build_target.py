@@ -32,7 +32,7 @@ from squid.core.submissions.domain.finalization import (
 from squid.core.submissions.domain.links import LINK_FIELDS
 from squid.core.tags.domain import TagModerationStatus, TagSemanticKind, coerce_assignment_value
 from squid.core.tags.models import TagAssignment, TagDefinition
-from squid.core.versions.domain import MinecraftVersion
+from squid.core.versions.domain import VersionEntry
 from squid.core.versions.errors import InvalidVersionError
 
 _CATEGORY_MAP = {
@@ -81,7 +81,7 @@ class ApprovedSubmissionTags(Protocol):
 class CanonicalSubmissionVersions(Protocol):
     """Resolve compatibility claims and read canonical version names."""
 
-    async def list_all(self, *, context: ActingContext) -> Sequence[MinecraftVersion]: ...
+    async def list_all(self, *, context: ActingContext) -> Sequence[VersionEntry]: ...
 
     async def resolve_spec(self, version_spec: str, *, context: ActingContext) -> list[str]: ...
 

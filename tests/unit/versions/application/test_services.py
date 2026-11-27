@@ -7,8 +7,8 @@ import pytest
 from squid.core.actors import ActingContext, AnonymousActor, UserActor
 from squid.core.errors import AuthorizationError
 from squid.core.versions.application.services import VersionService
-from squid.core.versions.domain import Edition, MinecraftVersion
-from squid.core.versions.errors import VersionCatalogUnavailableError
+from squid.core.versions.domain import Edition, MinecraftVersion, VersionCorrection, VersionEntry
+from squid.core.versions.errors import VersionCatalogUnavailableError, VersionNotFoundError
 from tests.support.unit_of_work import CommittedState, FakeUnitOfWork
 from tests.unit.api.fakes import EmptyPermissionStore
 
@@ -17,12 +17,26 @@ class FakeVersionRepository:
     def __init__(self) -> None:
         self.versions: list[MinecraftVersion] = []
 
-    async def add(self, version: MinecraftVersion) -> MinecraftVersion:
+    async def add(self, version: MinecraftVersion) -> VersionEntry:
         self.versions.append(version)
-        return version
+        return VersionEntry(len(self.versions), version)
 
-    async def list(self, edition: Edition) -> list[MinecraftVersion]:
-        return [version for version in self.versions if version.edition == edition]
+    async def get(self, version_id: int) -> VersionEntry | None:
+        return VersionEntry(version_id, self.versions[version_id - 1]) if 0 < version_id <= len(self.versions) else None
+
+    async def update(self, entry: VersionEntry) -> VersionEntry | None:
+        self.versions[entry.id - 1] = entry.version
+        return entry
+
+    async def delete(self, version_id: int) -> bool:
+        return False
+
+    async def list(self, edition: Edition) -> list[VersionEntry]:
+        return [
+            VersionEntry(index, version)
+            for index, version in enumerate(self.versions, start=1)
+            if version.edition == edition
+        ]
 
     async def data_version_for(self, version_label: str) -> int | None:
         return None
@@ -47,9 +61,8 @@ async def test_manual_version_add_checks_authority_and_named_announcement_worker
     for context in (ActingContext.direct(UserActor(account_id=55)), ActingContext.worker("unrelated")):
         with pytest.raises(AuthorizationError):
             await service.add("1.21.4", context=context)
-    assert await service.add(
-        "1.21.4", context=ActingContext.worker("discord.version-announcement")
-    ) == MinecraftVersion("Java", 1, 21, 4)
+    entry = await service.add("1.21.4", context=ActingContext.worker("discord.version-announcement"))
+    assert entry.version == MinecraftVersion("Java", 1, 21, 4)
 
 
 async def test_version_service_honors_explicit_edition() -> None:
@@ -60,20 +73,34 @@ async def test_version_service_honors_explicit_edition() -> None:
         "1.21.4", edition="Bedrock", context=ActingContext.direct(UserActor(account_id=1, is_bot_owner=True))
     )
 
-    assert version == MinecraftVersion("Bedrock", 1, 21, 4)
-    assert committed.value.versions == [version]
+    assert version.version == MinecraftVersion("Bedrock", 1, 21, 4)
+    assert committed.value.versions == [version.version]
 
 
 async def test_version_service_lists_both_editions() -> None:
     committed = CommittedState(FakeVersionRepository())
     committed.value.versions = [MinecraftVersion("Java", 1, 21, 5), MinecraftVersion("Bedrock", 1, 21, 50)]
 
-    assert (
-        await VersionService(uow_factory=partial(FakeVersionUnitOfWork, committed)).list_all(
-            context=ActingContext.direct(AnonymousActor())
-        )
-        == committed.value.versions
+    entries = await VersionService(uow_factory=partial(FakeVersionUnitOfWork, committed)).list_all(
+        context=ActingContext.direct(AnonymousActor())
     )
+    assert [entry.version for entry in entries] == committed.value.versions
+
+
+async def test_correction_changes_only_supplied_fields_and_requires_authority() -> None:
+    committed = CommittedState(FakeVersionRepository())
+    committed.value.versions = [MinecraftVersion("Java", 1, 21, 40)]
+    service = VersionService(uow_factory=partial(FakeVersionUnitOfWork, committed))
+    correction = VersionCorrection(edition="Bedrock")
+
+    with pytest.raises(AuthorizationError):
+        await service.correct(1, correction, context=ActingContext.direct(UserActor(account_id=55)))
+    owner = ActingContext.direct(UserActor(account_id=1, is_bot_owner=True))
+    corrected = await service.correct(1, correction, context=owner)
+
+    assert corrected == VersionEntry(1, MinecraftVersion("Bedrock", 1, 21, 40))
+    with pytest.raises(VersionNotFoundError):
+        await service.correct(2, correction, context=owner)
 
 
 async def test_version_service_resolves_ranges_and_newest_version() -> None:

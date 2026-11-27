@@ -20423,6 +20423,552 @@
         "x-squid-cli": {
           "classification": "transport-only"
         }
+      },
+      "post": {
+        "tags": [
+          "versions"
+        ],
+        "summary": "CreateVersion",
+        "description": "Add a release the announcement channel missed.",
+        "operationId": "minecraft_versions_create",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Document created, URL follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "ApiCredential": []
+          },
+          {
+            "WebSession": [],
+            "CsrfToken": []
+          },
+          {
+            "DeviceSession": []
+          }
+        ],
+        "x-squid-cli": {
+          "classification": "transport-only"
+        },
+        "x-required-api-scopes": [
+          "version.entry.create"
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1,
+              "maxLength": 255,
+              "pattern": "^[\\x21-\\x7e]+$"
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+          }
+        ]
+      }
+    },
+    "/v1/versions/{version_id}": {
+      "delete": {
+        "tags": [
+          "versions"
+        ],
+        "summary": "DeleteVersion",
+        "description": "Delete a release nothing uses yet. A release that builds or records use answers 409; correct it instead.",
+        "operationId": "minecraft_versions_delete",
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "schema": {
+              "type": "integer"
+            },
+            "required": true,
+            "deprecated": false
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1,
+              "maxLength": 255,
+              "pattern": "^[\\x21-\\x7e]+$"
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Request fulfilled, nothing follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "ApiCredential": []
+          },
+          {
+            "WebSession": [],
+            "CsrfToken": []
+          },
+          {
+            "DeviceSession": []
+          }
+        ],
+        "x-squid-cli": {
+          "classification": "transport-only"
+        },
+        "x-required-api-scopes": [
+          "version.entry.delete"
+        ]
+      },
+      "patch": {
+        "tags": [
+          "versions"
+        ],
+        "summary": "CorrectVersion",
+        "description": "Fix a mistaken release in place. Builds and records that use it follow the correction.",
+        "operationId": "minecraft_versions_correct",
+        "parameters": [
+          {
+            "name": "version_id",
+            "in": "path",
+            "schema": {
+              "type": "integer"
+            },
+            "required": true,
+            "deprecated": false
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1,
+              "maxLength": 255,
+              "pattern": "^[\\x21-\\x7e]+$"
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VersionCorrectionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VersionDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "ApiCredential": []
+          },
+          {
+            "WebSession": [],
+            "CsrfToken": []
+          },
+          {
+            "DeviceSession": []
+          }
+        ],
+        "x-squid-cli": {
+          "classification": "transport-only"
+        },
+        "x-required-api-scopes": [
+          "version.entry.edit"
+        ]
       }
     },
     "/v1/vote-sessions/{vote_session_id}": {
@@ -24228,6 +24774,9 @@
           "VALIDATION_ERROR",
           "VERIFICATION_ATTEMPTS_EXHAUSTED",
           "VERSION_CATALOG_UNAVAILABLE",
+          "VERSION_EXISTS",
+          "VERSION_IN_USE",
+          "VERSION_NOT_FOUND",
           "VOTE_SESSION_NOT_FOUND"
         ],
         "title": "ErrorCode",
@@ -32083,10 +32632,104 @@
         "title": "ValueType",
         "description": "The scalar type a suggestion's value carries."
       },
-      "VersionDetail": {
+      "VersionCorrectionRequest": {
         "properties": {
           "edition": {
-            "type": "string"
+            "type": [
+              "null",
+              "string"
+            ],
+            "enum": [
+              "Java",
+              "Bedrock",
+              null
+            ]
+          },
+          "major": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "maximum": 32767
+          },
+          "minor": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "maximum": 32767
+          },
+          "patch": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "maximum": 32767
+          },
+          "data_version": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "maximum": 2147483647
+          }
+        },
+        "type": "object",
+        "required": [],
+        "title": "VersionCorrectionRequest"
+      },
+      "VersionCreateRequest": {
+        "properties": {
+          "version": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1
+          },
+          "edition": {
+            "type": [
+              "null",
+              "string"
+            ],
+            "enum": [
+              "Java",
+              "Bedrock",
+              null
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "version"
+        ],
+        "title": "VersionCreateRequest"
+      },
+      "VersionDetail": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "edition": {
+            "type": "string",
+            "enum": [
+              "Java",
+              "Bedrock"
+            ]
           },
           "major": {
             "type": "integer"
@@ -32099,12 +32742,24 @@
           },
           "display_name": {
             "type": "string"
+          },
+          "data_version": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
         "required": [
+          "data_version",
           "display_name",
           "edition",
+          "id",
           "major",
           "minor",
           "patch"

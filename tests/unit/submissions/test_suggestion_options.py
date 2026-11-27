@@ -17,7 +17,7 @@ from squid.core.suggestions.infrastructure.catalogue import build_registry
 from squid.core.suggestions.infrastructure.repository import TagEntry
 from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.core.tags.models import TagDefinition
-from squid.core.versions.domain import MinecraftVersion
+from squid.core.versions.domain import MinecraftVersion, VersionEntry
 
 TAGS = (
     ("seamless", "Seamless", TagSemanticKind.PATTERN, TagValueType.NONE),
@@ -56,8 +56,8 @@ class FakeTags:
 
 
 class FakeVersions:
-    async def list_all(self, *, context: ActingContext) -> tuple[MinecraftVersion, ...]:
-        return VERSIONS
+    async def list_all(self, *, context: ActingContext) -> tuple[VersionEntry, ...]:
+        return tuple(VersionEntry(index, version) for index, version in enumerate(VERSIONS))
 
 
 class FakeSuggestionRepository:

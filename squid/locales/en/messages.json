@@ -9257,7 +9257,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:269"
+      "squid/core/errors.py:272"
     ]
   },
   "core-configuration-invalid": {
@@ -9266,7 +9266,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:306"
+      "squid/core/errors.py:309"
     ]
   },
   "core-dependency-failed": {
@@ -9275,7 +9275,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:320"
+      "squid/core/errors.py:323"
     ]
   },
   "core-errors-an-application-error-occurred": {
@@ -9284,7 +9284,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:87"
+      "squid/core/errors.py:90"
     ]
   },
   "core-errors-an-internal-application-error-occurred": {
@@ -9293,7 +9293,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:295"
+      "squid/core/errors.py:298"
     ]
   },
   "core-errors-application-error": {
@@ -9302,7 +9302,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:90"
+      "squid/core/errors.py:93"
     ]
   },
   "core-errors-forbidden": {
@@ -9311,7 +9311,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:265"
+      "squid/core/errors.py:268"
     ]
   },
   "core-errors-internal-error": {
@@ -9320,7 +9320,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:298"
+      "squid/core/errors.py:301"
     ]
   },
   "core-errors-invalid-value": {
@@ -9329,7 +9329,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:226"
+      "squid/core/errors.py:229"
     ]
   },
   "core-errors-operation-conflict": {
@@ -9338,7 +9338,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:242"
+      "squid/core/errors.py:245"
     ]
   },
   "core-errors-page-anchor-not-found": {
@@ -9356,7 +9356,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:178"
+      "squid/core/errors.py:181"
     ]
   },
   "core-errors-resource-not-found": {
@@ -9365,7 +9365,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:234"
+      "squid/core/errors.py:237"
     ]
   },
   "core-errors-service-unavailable": {
@@ -9374,7 +9374,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:345"
+      "squid/core/errors.py:348"
     ]
   },
   "core-errors-too-many-requests": {
@@ -9383,7 +9383,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:284"
+      "squid/core/errors.py:287"
     ]
   },
   "core-errors-unauthorized": {
@@ -9392,7 +9392,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:248"
+      "squid/core/errors.py:251"
     ]
   },
   "core-errors-unauthorized-2": {
@@ -9401,7 +9401,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:249"
+      "squid/core/errors.py:252"
     ]
   },
   "core-errors-you-do-not-have-permission-to-perform": {
@@ -9410,7 +9410,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:262"
+      "squid/core/errors.py:265"
     ]
   },
   "core-guild-required-action": {
@@ -9419,7 +9419,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:277"
+      "squid/core/errors.py:280"
     ]
   },
   "core-operation-conflict": {
@@ -9428,7 +9428,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:241"
+      "squid/core/errors.py:244"
     ]
   },
   "core-operation-failed": {
@@ -9437,7 +9437,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:177"
+      "squid/core/errors.py:180"
     ]
   },
   "core-owner-required-action": {
@@ -9446,7 +9446,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:273"
+      "squid/core/errors.py:276"
     ]
   },
   "core-page-anchor-not-found": {
@@ -9473,7 +9473,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:335"
+      "squid/core/errors.py:338"
     ]
   },
   "core-persistence-operation-failed": {
@@ -9482,7 +9482,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:327"
+      "squid/core/errors.py:330"
     ]
   },
   "core-rate-limited": {
@@ -9491,7 +9491,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:283"
+      "squid/core/errors.py:286"
     ]
   },
   "core-requested-resource-not-found": {
@@ -9500,7 +9500,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:233"
+      "squid/core/errors.py:236"
     ]
   },
   "core-required-service-temporarily": {
@@ -9509,7 +9509,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:344"
+      "squid/core/errors.py:347"
     ]
   },
   "core-retry-later": {
@@ -9518,7 +9518,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:300"
+      "squid/core/errors.py:303"
     ]
   },
   "core-state-invalid-operation": {
@@ -9527,7 +9527,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:313"
+      "squid/core/errors.py:316"
     ]
   },
   "core-supplied-value-invalid": {
@@ -9536,7 +9536,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/errors.py:225"
+      "squid/core/errors.py:228"
     ]
   },
   "creator-page-build-count": {
@@ -15514,7 +15514,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:280"
+      "squid/core/permissions/domain/catalogue.py:291"
     ]
   },
   "permissions-approve-pending-build": {
@@ -15541,7 +15541,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:451"
+      "squid/core/permissions/domain/catalogue.py:462"
     ]
   },
   "permissions-archive-tag": {
@@ -15559,7 +15559,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:505"
+      "squid/core/permissions/domain/catalogue.py:516"
     ]
   },
   "permissions-built-role": {
@@ -15577,7 +15577,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:399"
+      "squid/core/permissions/domain/catalogue.py:410"
     ]
   },
   "permissions-change-server-voting": {
@@ -15586,7 +15586,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:404"
+      "squid/core/permissions/domain/catalogue.py:415"
     ]
   },
   "permissions-change-starboard-configuration": {
@@ -15595,7 +15595,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:421"
+      "squid/core/permissions/domain/catalogue.py:432"
     ]
   },
   "permissions-change-starboard-per": {
@@ -15604,7 +15604,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:445"
+      "squid/core/permissions/domain/catalogue.py:456"
     ]
   },
   "permissions-change-which-emojis": {
@@ -15613,7 +15613,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:440"
+      "squid/core/permissions/domain/catalogue.py:451"
     ]
   },
   "permissions-change-wide-settings": {
@@ -15622,7 +15622,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:380"
+      "squid/core/permissions/domain/catalogue.py:391"
     ]
   },
   "permissions-clear-user-public": {
@@ -15631,7 +15631,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:328"
+      "squid/core/permissions/domain/catalogue.py:339"
     ]
   },
   "permissions-close-refresh-poll": {
@@ -15640,7 +15640,16 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:489"
+      "squid/core/permissions/domain/catalogue.py:500"
+    ]
+  },
+  "permissions-correct-minecraft-version": {
+    "fingerprint": "67afcb1975aaae845006240d1a0b6719570cae818391ecedfed8e858effbb0c2",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/core/permissions/domain/catalogue.py:273"
     ]
   },
   "permissions-create-edit-global": {
@@ -15649,7 +15658,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:340"
+      "squid/core/permissions/domain/catalogue.py:351"
     ]
   },
   "permissions-create-edit-server": {
@@ -15658,7 +15667,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:529"
+      "squid/core/permissions/domain/catalogue.py:540"
     ]
   },
   "permissions-create-poll": {
@@ -15667,7 +15676,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:474"
+      "squid/core/permissions/domain/catalogue.py:485"
     ]
   },
   "permissions-create-poll-carded": {
@@ -15676,7 +15685,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:479"
+      "squid/core/permissions/domain/catalogue.py:490"
     ]
   },
   "permissions-create-starboard": {
@@ -15685,7 +15694,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:416"
+      "squid/core/permissions/domain/catalogue.py:427"
     ]
   },
   "permissions-credential-scope": {
@@ -15709,7 +15718,16 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:352"
+      "squid/core/permissions/domain/catalogue.py:363"
+    ]
+  },
+  "permissions-delete-minecraft-version": {
+    "fingerprint": "b6237e3ead9132f60f3059078a2995a6478bc42a5f1bb70936dd33d84eed8bb2",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/core/permissions/domain/catalogue.py:279"
     ]
   },
   "permissions-delete-starboard-recorded": {
@@ -15718,7 +15736,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:426"
+      "squid/core/permissions/domain/catalogue.py:437"
     ]
   },
   "permissions-deny-reason": {
@@ -15745,7 +15763,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:322"
+      "squid/core/permissions/domain/catalogue.py:333"
     ]
   },
   "permissions-edit-unsubmitted-builds": {
@@ -15790,7 +15808,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:335"
+      "squid/core/permissions/domain/catalogue.py:346"
     ]
   },
   "permissions-grant-revoke-server": {
@@ -15799,7 +15817,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:524"
+      "squid/core/permissions/domain/catalogue.py:535"
     ]
   },
   "permissions-impersonate-account": {
@@ -15808,7 +15826,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:316"
+      "squid/core/permissions/domain/catalogue.py:327"
     ]
   },
   "permissions-inspect-explain-user": {
@@ -15817,7 +15835,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:512"
+      "squid/core/permissions/domain/catalogue.py:523"
     ]
   },
   "permissions-inspect-nonpublic-schematics": {
@@ -15853,7 +15871,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:274"
+      "squid/core/permissions/domain/catalogue.py:285"
     ]
   },
   "permissions-list-pending-tag": {
@@ -15898,7 +15916,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:457"
+      "squid/core/permissions/domain/catalogue.py:468"
     ]
   },
   "permissions-re-read-linked": {
@@ -15907,7 +15925,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:304"
+      "squid/core/permissions/domain/catalogue.py:315"
     ]
   },
   "permissions-re-read-user": {
@@ -15916,7 +15934,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:310"
+      "squid/core/permissions/domain/catalogue.py:321"
     ]
   },
   "permissions-read-account-notifications": {
@@ -15925,7 +15943,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:297"
+      "squid/core/permissions/domain/catalogue.py:308"
     ]
   },
   "permissions-read-permission-audit": {
@@ -15934,7 +15952,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:518"
+      "squid/core/permissions/domain/catalogue.py:529"
     ]
   },
   "permissions-read-stored-error": {
@@ -15943,7 +15961,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:346"
+      "squid/core/permissions/domain/catalogue.py:357"
     ]
   },
   "permissions-rebuild-record-table": {
@@ -15979,7 +15997,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:435"
+      "squid/core/permissions/domain/catalogue.py:446"
     ]
   },
   "permissions-register-minecraft-version": {
@@ -15997,7 +16015,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:286"
+      "squid/core/permissions/domain/catalogue.py:297"
     ]
   },
   "permissions-reject-pending-build": {
@@ -16024,7 +16042,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:292"
+      "squid/core/permissions/domain/catalogue.py:303"
     ]
   },
   "permissions-require-all": {
@@ -16051,7 +16069,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:462"
+      "squid/core/permissions/domain/catalogue.py:473"
     ]
   },
   "permissions-review-poll-recount": {
@@ -16060,7 +16078,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:484"
+      "squid/core/permissions/domain/catalogue.py:495"
     ]
   },
   "permissions-role-not-yours": {
@@ -16078,7 +16096,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:367"
+      "squid/core/permissions/domain/catalogue.py:378"
     ]
   },
   "permissions-scope-reason": {
@@ -16105,7 +16123,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:362"
+      "squid/core/permissions/domain/catalogue.py:373"
     ]
   },
   "permissions-view-published-builds": {
@@ -16123,7 +16141,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:393"
+      "squid/core/permissions/domain/catalogue.py:404"
     ]
   },
   "permissions-view-server-starboards": {
@@ -16132,7 +16150,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:410"
+      "squid/core/permissions/domain/catalogue.py:421"
     ]
   },
   "permissions-view-unreviewed-builds": {
@@ -16150,7 +16168,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:374"
+      "squid/core/permissions/domain/catalogue.py:385"
     ]
   },
   "permissions-vote-build-log": {
@@ -16159,7 +16177,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:494"
+      "squid/core/permissions/domain/catalogue.py:505"
     ]
   },
   "permissions-vote-polls": {
@@ -16168,7 +16186,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:468"
+      "squid/core/permissions/domain/catalogue.py:479"
     ]
   },
   "permissions-votes-counted-staff": {
@@ -16177,7 +16195,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/permissions/domain/catalogue.py:499"
+      "squid/core/permissions/domain/catalogue.py:510"
     ]
   },
   "poll-account-changed": {
@@ -22542,6 +22560,51 @@
     "arguments": [],
     "locations": [
       "squid/bot/version_tracking_cog.py:108"
+    ]
+  },
+  "versions-entry-exists": {
+    "fingerprint": "799af2ab2b7b71f518317c536dbb5dd1f0af509a1247092c9857d5206a63b1c1",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/core/versions/errors.py:45"
+    ]
+  },
+  "versions-entry-in-use": {
+    "fingerprint": "fbc888987d5e473fc744b04647a67260a0777ee99aabd4a9a818d5e5c55a1968",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/core/versions/errors.py:57"
+    ]
+  },
+  "versions-entry-not-found": {
+    "fingerprint": "a0f22a636ab99558cfeebc5fe259f901480f40d1e52fd7df004d1e7e98128efb",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/core/versions/errors.py:34"
+    ]
+  },
+  "versions-errors-entry-exists": {
+    "fingerprint": "7d27089cea5a0e1a31b82b90e98adf20fb1254571353b6ea9a9ee47747ed8329",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/core/versions/errors.py:46"
+    ]
+  },
+  "versions-errors-entry-in-use": {
+    "fingerprint": "8dfbc041e4fec91d5a8d9bf0a5abe6b737f70798f7b6280def5ededd7a0aa5b2",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/core/versions/errors.py:60"
     ]
   },
   "versions-minecraft-version-catalog": {

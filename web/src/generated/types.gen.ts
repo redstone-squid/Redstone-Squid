@@ -960,7 +960,7 @@ export type EmptyParams = {
  *
  * Stable machine-readable application error codes.
  */
-export type ErrorCode = 'ACCOUNT_ALREADY_LINKED' | 'ACCOUNT_IDENTITY_NOT_FOUND' | 'ACCOUNT_NOT_FOUND' | 'ALIAS_ALREADY_ADDED' | 'ALIAS_ALREADY_CLAIMED' | 'ALIAS_IN_USE' | 'BUILD_BUSY' | 'BUILD_NOT_FOUND' | 'BUILD_REVISION_MISMATCH' | 'BUILD_REVISION_REQUIRED' | 'CLAIM_NOT_FOUND' | 'CREATOR_ALIAS_NOT_FOUND' | 'CONFIGURATION_ERROR' | 'CONSENT_REQUIRED' | 'CONSENT_VERSION_STALE' | 'DATA_INTEGRITY_ERROR' | 'DOMAIN_ERROR' | 'INFRASTRUCTURE_ERROR' | 'IDEMPOTENCY_CONFLICT' | 'IDEMPOTENCY_IN_PROGRESS' | 'INTERNAL_ERROR' | 'INVALID_BUILD' | 'INVALID_MESSAGE' | 'INVALID_QUERY' | 'INVALID_REQUEST' | 'INVALID_STATE' | 'INVALID_ACCOUNT' | 'INVALID_MERGE_CODE' | 'INVALID_PROFILE' | 'INVALID_VERIFICATION_CODE' | 'INVALID_VERSION' | 'LAST_IDENTITY' | 'LINK_RESERVATION_EXPIRED' | 'INVALID_VOTE_CONFIGURATION' | 'MESSAGE_NOT_FOUND' | 'MINECRAFT_ACCOUNT_NOT_FOUND' | 'MINECRAFT_SERVICE_UNAVAILABLE' | 'NOT_FOUND' | 'PAGE_ANCHOR_NOT_FOUND' | 'PERSISTENCE_ERROR' | 'RATE_LIMITED' | 'RECORD_NOT_FOUND' | 'RESTRICTION_NOT_FOUND' | 'SCHEMATIC_INVALID' | 'SCHEMATIC_NOT_FOUND' | 'SCHEMATIC_RENDER_REFUSED' | 'SCHEMATIC_RENDER_UNAVAILABLE' | 'SCHEMATIC_SUPPORT_UNAVAILABLE' | 'SCHEMATIC_TIMEOUT' | 'SCHEMATIC_TOO_LARGE' | 'SCHEMATIC_WORKER_CRASHED' | 'TAG_NOT_FOUND' | 'UNAUTHORIZED' | 'VALIDATION_ERROR' | 'VERIFICATION_ATTEMPTS_EXHAUSTED' | 'VERSION_CATALOG_UNAVAILABLE' | 'VOTE_SESSION_NOT_FOUND';
+export type ErrorCode = 'ACCOUNT_ALREADY_LINKED' | 'ACCOUNT_IDENTITY_NOT_FOUND' | 'ACCOUNT_NOT_FOUND' | 'ALIAS_ALREADY_ADDED' | 'ALIAS_ALREADY_CLAIMED' | 'ALIAS_IN_USE' | 'BUILD_BUSY' | 'BUILD_NOT_FOUND' | 'BUILD_REVISION_MISMATCH' | 'BUILD_REVISION_REQUIRED' | 'CLAIM_NOT_FOUND' | 'CREATOR_ALIAS_NOT_FOUND' | 'CONFIGURATION_ERROR' | 'CONSENT_REQUIRED' | 'CONSENT_VERSION_STALE' | 'DATA_INTEGRITY_ERROR' | 'DOMAIN_ERROR' | 'INFRASTRUCTURE_ERROR' | 'IDEMPOTENCY_CONFLICT' | 'IDEMPOTENCY_IN_PROGRESS' | 'INTERNAL_ERROR' | 'INVALID_BUILD' | 'INVALID_MESSAGE' | 'INVALID_QUERY' | 'INVALID_REQUEST' | 'INVALID_STATE' | 'INVALID_ACCOUNT' | 'INVALID_MERGE_CODE' | 'INVALID_PROFILE' | 'INVALID_VERIFICATION_CODE' | 'INVALID_VERSION' | 'LAST_IDENTITY' | 'LINK_RESERVATION_EXPIRED' | 'INVALID_VOTE_CONFIGURATION' | 'MESSAGE_NOT_FOUND' | 'MINECRAFT_ACCOUNT_NOT_FOUND' | 'MINECRAFT_SERVICE_UNAVAILABLE' | 'NOT_FOUND' | 'PAGE_ANCHOR_NOT_FOUND' | 'PERSISTENCE_ERROR' | 'RATE_LIMITED' | 'RECORD_NOT_FOUND' | 'RESTRICTION_NOT_FOUND' | 'SCHEMATIC_INVALID' | 'SCHEMATIC_NOT_FOUND' | 'SCHEMATIC_RENDER_REFUSED' | 'SCHEMATIC_RENDER_UNAVAILABLE' | 'SCHEMATIC_SUPPORT_UNAVAILABLE' | 'SCHEMATIC_TIMEOUT' | 'SCHEMATIC_TOO_LARGE' | 'SCHEMATIC_WORKER_CRASHED' | 'TAG_NOT_FOUND' | 'UNAUTHORIZED' | 'VALIDATION_ERROR' | 'VERIFICATION_ATTEMPTS_EXHAUSTED' | 'VERSION_CATALOG_UNAVAILABLE' | 'VERSION_EXISTS' | 'VERSION_IN_USE' | 'VERSION_NOT_FOUND' | 'VOTE_SESSION_NOT_FOUND';
 
 /**
  * ErrorReportDetail
@@ -3216,14 +3216,35 @@ export type ValueKind = 'string' | 'integer' | 'number' | 'boolean' | 'string_li
 export type ValueType = 'string' | 'integer';
 
 /**
+ * VersionCorrectionRequest
+ */
+export type VersionCorrectionRequest = {
+    edition?: 'Java' | 'Bedrock' | null;
+    major?: number | null;
+    minor?: number | null;
+    patch?: number | null;
+    data_version?: number | null;
+};
+
+/**
+ * VersionCreateRequest
+ */
+export type VersionCreateRequest = {
+    version: string;
+    edition?: 'Java' | 'Bedrock' | null;
+};
+
+/**
  * VersionDetail
  */
 export type VersionDetail = {
-    edition: string;
+    id: number;
+    edition: 'Java' | 'Bedrock';
     major: number;
     minor: number;
     patch: number;
     display_name: string;
+    data_version: number | null;
 };
 
 /**
@@ -9853,6 +9874,179 @@ export type MinecraftVersionsListResponses = {
 };
 
 export type MinecraftVersionsListResponse = MinecraftVersionsListResponses[keyof MinecraftVersionsListResponses];
+
+export type MinecraftVersionsCreateData = {
+    body: VersionCreateRequest;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/versions';
+};
+
+export type MinecraftVersionsCreateErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type MinecraftVersionsCreateError = MinecraftVersionsCreateErrors[keyof MinecraftVersionsCreateErrors];
+
+export type MinecraftVersionsCreateResponses = {
+    /**
+     * Document created, URL follows
+     */
+    201: VersionDetail;
+};
+
+export type MinecraftVersionsCreateResponse = MinecraftVersionsCreateResponses[keyof MinecraftVersionsCreateResponses];
+
+export type MinecraftVersionsDeleteData = {
+    body?: never;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        version_id: number;
+    };
+    query?: never;
+    url: '/v1/versions/{version_id}';
+};
+
+export type MinecraftVersionsDeleteErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type MinecraftVersionsDeleteError = MinecraftVersionsDeleteErrors[keyof MinecraftVersionsDeleteErrors];
+
+export type MinecraftVersionsDeleteResponses = {
+    /**
+     * Request fulfilled, nothing follows
+     */
+    204: void;
+};
+
+export type MinecraftVersionsDeleteResponse = MinecraftVersionsDeleteResponses[keyof MinecraftVersionsDeleteResponses];
+
+export type MinecraftVersionsCorrectData = {
+    body: VersionCorrectionRequest;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        version_id: number;
+    };
+    query?: never;
+    url: '/v1/versions/{version_id}';
+};
+
+export type MinecraftVersionsCorrectErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type MinecraftVersionsCorrectError = MinecraftVersionsCorrectErrors[keyof MinecraftVersionsCorrectErrors];
+
+export type MinecraftVersionsCorrectResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: VersionDetail;
+};
+
+export type MinecraftVersionsCorrectResponse = MinecraftVersionsCorrectResponses[keyof MinecraftVersionsCorrectResponses];
 
 export type VoteSessionGetData = {
     body?: never;

@@ -10,7 +10,7 @@ from squid.core.submissions.application import FormOptionCatalog, FormOptionSet
 from squid.core.submissions.domain import ChoiceOption
 from squid.core.tags.domain import TagSemanticKind, TagValueType
 from squid.core.tags.models import TagDefinition
-from squid.core.versions.domain import MinecraftVersion
+from squid.core.versions.domain import VersionEntry
 
 _SOURCES = {
     "approved_restrictions": TagSemanticKind.RESTRICTION,
@@ -28,7 +28,7 @@ class ApprovedTagDefinitions(Protocol):
 class CanonicalMinecraftVersions(Protocol):
     """Read canonical versions recognized by build persistence."""
 
-    async def list_all(self, *, context: ActingContext) -> Sequence[MinecraftVersion]: ...
+    async def list_all(self, *, context: ActingContext) -> Sequence[VersionEntry]: ...
 
 
 class ApprovedSubmissionOptionCatalog(FormOptionCatalog):

@@ -822,6 +822,7 @@ def build_services(
     accounts: AccountService | None = None,
     error_reports: ErrorReportService | None = None,
     range_publication: RangePublicationService | None = None,
+    versions: VersionService | None = None,
 ) -> ApiServices:
     """Build the complete API graph with empty stores and injectable service replacements.
 
@@ -850,7 +851,7 @@ def build_services(
         # An empty registry preserves the service's unknown-source error.
         suggestions=SuggestionService(SuggestionRegistry.of(())),
         tags=MockTags(),
-        versions=MockVersions(),
+        versions=versions or MockVersions(),
         schematics=MockSchematics(),
         votes=MockVotes(),
         vote_members=None,
@@ -878,6 +879,7 @@ def build_app(
     accounts: AccountService | None = None,
     error_reports: ErrorReportService | None = None,
     range_publication: RangePublicationService | None = None,
+    versions: VersionService | None = None,
     config: ApiProcessConfig = TEST_CONFIG,
 ) -> tuple[Litestar, MockDatabaseManager]:
     """Build the API app wired to in-memory fakes instead of real infrastructure."""
@@ -889,6 +891,7 @@ def build_app(
         accounts=accounts,
         error_reports=error_reports,
         range_publication=range_publication,
+        versions=versions,
     )
     runtime = ApplicationRuntime(services, database.close, keep_database_active)
     return create_api_app(lambda _config: runtime, config=config), database

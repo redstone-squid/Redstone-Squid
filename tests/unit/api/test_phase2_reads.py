@@ -34,7 +34,7 @@ from squid.core.tags.application import TagService
 from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.core.tags.models import TagDefinition
 from squid.core.versions.application.services import VersionService
-from squid.core.versions.domain import MinecraftVersion
+from squid.core.versions.domain import MinecraftVersion, VersionEntry
 from squid.core.voting.application import VoteService
 from squid.core.voting.domain import (
     VoteChoice,
@@ -73,8 +73,11 @@ class VersionFake(VersionService):
         pass
 
     @override
-    async def list_all(self, *, context: ActingContext) -> list[MinecraftVersion]:
-        return [MinecraftVersion("Java", 1, 21, 5), MinecraftVersion("Bedrock", 1, 21, 50)]
+    async def list_all(self, *, context: ActingContext) -> list[VersionEntry]:
+        return [
+            VersionEntry(1, MinecraftVersion("Java", 1, 21, 5), data_version=4325),
+            VersionEntry(2, MinecraftVersion("Bedrock", 1, 21, 50)),
+        ]
 
 
 class AccountFake(AccountService):

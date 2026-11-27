@@ -2815,70 +2815,70 @@ contextual-search-pick = Select a match to add it
 # squid/bot/catalogue/search/contextual.py:88
 contextual-search-prompt = Use { $command } here within two minutes. Leave { $scope } empty.
 
-# squid/core/errors.py:269
+# squid/core/errors.py:272
 core-account-required-action = A linked account is required for this action.
 
-# squid/core/errors.py:306
+# squid/core/errors.py:309
 core-configuration-invalid = Application configuration is invalid.
 
-# squid/core/errors.py:320
+# squid/core/errors.py:323
 core-dependency-failed = An infrastructure dependency failed.
 
-# squid/core/errors.py:87
+# squid/core/errors.py:90
 core-errors-an-application-error-occurred = An application error occurred.
 
-# squid/core/errors.py:295
+# squid/core/errors.py:298
 core-errors-an-internal-application-error-occurred = An internal application error occurred.
 
-# squid/core/errors.py:90
+# squid/core/errors.py:93
 core-errors-application-error = Application error
 
-# squid/core/errors.py:265
+# squid/core/errors.py:268
 core-errors-forbidden = Forbidden
 
-# squid/core/errors.py:298
+# squid/core/errors.py:301
 core-errors-internal-error = Internal error
 
-# squid/core/errors.py:226
+# squid/core/errors.py:229
 core-errors-invalid-value = Invalid value
 
-# squid/core/errors.py:242
+# squid/core/errors.py:245
 core-errors-operation-conflict = Operation conflict
 
 # squid/core/pagination.py:67
 core-errors-page-anchor-not-found = Page anchor not found
 
-# squid/core/errors.py:178
+# squid/core/errors.py:181
 core-errors-request-failed = Request failed
 
-# squid/core/errors.py:234
+# squid/core/errors.py:237
 core-errors-resource-not-found = Resource not found
 
-# squid/core/errors.py:345
+# squid/core/errors.py:348
 core-errors-service-unavailable = Service unavailable
 
-# squid/core/errors.py:284
+# squid/core/errors.py:287
 core-errors-too-many-requests = Too many requests
 
-# squid/core/errors.py:248
+# squid/core/errors.py:251
 core-errors-unauthorized = Unauthorized.
 
-# squid/core/errors.py:249
+# squid/core/errors.py:252
 core-errors-unauthorized-2 = Unauthorized
 
-# squid/core/errors.py:262
+# squid/core/errors.py:265
 core-errors-you-do-not-have-permission-to-perform = You do not have permission to perform this action.
 
-# squid/core/errors.py:277
+# squid/core/errors.py:280
 core-guild-required-action = This action must be performed in the server it belongs to.
 
-# squid/core/errors.py:241
+# squid/core/errors.py:244
 core-operation-conflict = The operation conflicts with the current state.
 
-# squid/core/errors.py:177
+# squid/core/errors.py:180
 core-operation-failed = The requested operation could not be completed.
 
-# squid/core/errors.py:273
+# squid/core/errors.py:276
 core-owner-required-action = Only the owner can perform this action.
 
 # squid/core/pagination.py:66
@@ -2887,28 +2887,28 @@ core-page-anchor-not-found = The page anchor is no longer in this list.
 # squid/core/pagination.py:69
 core-page-anchor-not-found-action = Go back to the first page.
 
-# squid/core/errors.py:335
+# squid/core/errors.py:338
 core-persisted-data-inconsistent = Persisted data is inconsistent with application expectations.
 
-# squid/core/errors.py:327
+# squid/core/errors.py:330
 core-persistence-operation-failed = A persistence operation failed.
 
-# squid/core/errors.py:283
+# squid/core/errors.py:286
 core-rate-limited = Too many requests. Please try again later.
 
-# squid/core/errors.py:233
+# squid/core/errors.py:236
 core-requested-resource-not-found = The requested resource was not found.
 
-# squid/core/errors.py:344
+# squid/core/errors.py:347
 core-required-service-temporarily = A required service is temporarily unavailable.
 
-# squid/core/errors.py:300
+# squid/core/errors.py:303
 core-retry-later = Please try again later.
 
-# squid/core/errors.py:313
+# squid/core/errors.py:316
 core-state-invalid-operation = Application state is invalid for this operation.
 
-# squid/core/errors.py:225
+# squid/core/errors.py:228
 core-supplied-value-invalid = The supplied value is invalid.
 
 # squid/bot/accounts/creator_page.py:121
@@ -4730,7 +4730,7 @@ permissions-action-requirement = This action requires { $node }, but { $detail }
 # squid/core/permissions/domain/catalogue.py:261
 permissions-add-alias-restriction = Add an alias for a restriction.
 
-# squid/core/permissions/domain/catalogue.py:280
+# squid/core/permissions/domain/catalogue.py:291
 permissions-approve-creator-alias = Approve a creator alias claim.
 
 # squid/core/permissions/domain/catalogue.py:179
@@ -4739,64 +4739,70 @@ permissions-approve-pending-build = Approve pending build submissions.
 # squid/core/permissions/domain/catalogue.py:242
 permissions-approve-tag-proposal = Approve a tag proposal.
 
-# squid/core/permissions/domain/catalogue.py:451
+# squid/core/permissions/domain/catalogue.py:462
 permissions-archive-channel-messages = Archive a channel's messages.
 
 # squid/core/permissions/domain/catalogue.py:254
 permissions-archive-tag = Archive a tag.
 
-# squid/core/permissions/domain/catalogue.py:505
+# squid/core/permissions/domain/catalogue.py:516
 permissions-browse-permission = Browse the permission catalogue and your own permissions.
 
 # squid/core/permissions/application/administration.py:84
 permissions-built-role = Built-in role
 
-# squid/core/permissions/domain/catalogue.py:399
+# squid/core/permissions/domain/catalogue.py:410
 permissions-change-server-bot = Change this server's bot settings.
 
-# squid/core/permissions/domain/catalogue.py:404
+# squid/core/permissions/domain/catalogue.py:415
 permissions-change-server-voting = Change this server's voting emojis and role weights.
 
-# squid/core/permissions/domain/catalogue.py:421
+# squid/core/permissions/domain/catalogue.py:432
 permissions-change-starboard-configuration = Change a starboard's configuration.
 
-# squid/core/permissions/domain/catalogue.py:445
+# squid/core/permissions/domain/catalogue.py:456
 permissions-change-starboard-per = Change a starboard's per-role vote weights.
 
-# squid/core/permissions/domain/catalogue.py:440
+# squid/core/permissions/domain/catalogue.py:451
 permissions-change-which-emojis = Change which emojis count towards a starboard.
 
-# squid/core/permissions/domain/catalogue.py:380
+# squid/core/permissions/domain/catalogue.py:391
 permissions-change-wide-settings = Change application-wide runtime settings.
 
-# squid/core/permissions/domain/catalogue.py:328
+# squid/core/permissions/domain/catalogue.py:339
 permissions-clear-user-public = Clear another user's public profile.
 
-# squid/core/permissions/domain/catalogue.py:489
+# squid/core/permissions/domain/catalogue.py:500
 permissions-close-refresh-poll = Close or refresh a poll you did not create.
 
-# squid/core/permissions/domain/catalogue.py:340
+# squid/core/permissions/domain/catalogue.py:273
+permissions-correct-minecraft-version = Correct a registered Minecraft version.
+
+# squid/core/permissions/domain/catalogue.py:351
 permissions-create-edit-global = Create and edit global permission roles.
 
-# squid/core/permissions/domain/catalogue.py:529
+# squid/core/permissions/domain/catalogue.py:540
 permissions-create-edit-server = Create and edit this server's permission roles.
 
-# squid/core/permissions/domain/catalogue.py:474
+# squid/core/permissions/domain/catalogue.py:485
 permissions-create-poll = Create a poll.
 
-# squid/core/permissions/domain/catalogue.py:479
+# squid/core/permissions/domain/catalogue.py:490
 permissions-create-poll-carded = Create a poll carded in every server's vote channel.
 
-# squid/core/permissions/domain/catalogue.py:416
+# squid/core/permissions/domain/catalogue.py:427
 permissions-create-starboard = Create a starboard.
 
 # squid/core/permissions/errors.py:81
 permissions-credential-scope = This action requires { $node }, but your credential does not include that permission.
 
-# squid/core/permissions/domain/catalogue.py:352
+# squid/core/permissions/domain/catalogue.py:363
 permissions-delete-every-stored = Delete every stored error report.
 
-# squid/core/permissions/domain/catalogue.py:426
+# squid/core/permissions/domain/catalogue.py:279
+permissions-delete-minecraft-version = Delete an unused Minecraft version.
+
+# squid/core/permissions/domain/catalogue.py:437
 permissions-delete-starboard-recorded = Delete a starboard and its recorded stars.
 
 # squid/core/permissions/errors.py:15
@@ -4805,7 +4811,7 @@ permissions-deny-reason = an explicit deny rule blocks that permission
 # squid/core/permissions/domain/catalogue.py:202
 permissions-download-convert-schematics = Download or convert non-public schematics you did not upload.
 
-# squid/core/permissions/domain/catalogue.py:322
+# squid/core/permissions/domain/catalogue.py:333
 permissions-edit-profile-visibility = Edit your own profile, visibility, linked identities, and merges.
 
 # squid/core/permissions/domain/catalogue.py:168
@@ -4820,16 +4826,16 @@ permissions-forbid-reason = an explicit forbid rule blocks that permission
 # squid/core/permissions/errors.py:16
 permissions-grant-reason = your current permissions do not grant it
 
-# squid/core/permissions/domain/catalogue.py:335
+# squid/core/permissions/domain/catalogue.py:346
 permissions-grant-revoke-permissions = Grant or revoke permissions anywhere, including global ones.
 
-# squid/core/permissions/domain/catalogue.py:524
+# squid/core/permissions/domain/catalogue.py:535
 permissions-grant-revoke-server = Grant or revoke this server's permissions.
 
-# squid/core/permissions/domain/catalogue.py:316
+# squid/core/permissions/domain/catalogue.py:327
 permissions-impersonate-account = Act as another account during a debugging session.
 
-# squid/core/permissions/domain/catalogue.py:512
+# squid/core/permissions/domain/catalogue.py:523
 permissions-inspect-explain-user = Inspect and explain another user's permissions.
 
 # squid/core/permissions/domain/catalogue.py:207
@@ -4841,7 +4847,7 @@ permissions-inspect-record-gaps = Inspect record gaps, lookups and title issues.
 # squid/core/permissions/domain/models.py:96
 permissions-invalid-permission-pattern = Invalid permission pattern
 
-# squid/core/permissions/domain/catalogue.py:274
+# squid/core/permissions/domain/catalogue.py:285
 permissions-list-pending-creator = List pending creator alias claims.
 
 # squid/core/permissions/domain/catalogue.py:236
@@ -4856,22 +4862,22 @@ permissions-not-valid-permission = That is not a valid permission pattern.
 # squid/core/permissions/application/administration.py:72
 permissions-outside-authority = Outside your authority
 
-# squid/core/permissions/domain/catalogue.py:457
+# squid/core/permissions/domain/catalogue.py:468
 permissions-post-manage-redstoner = Post and manage the Redstoner self-assign panel.
 
-# squid/core/permissions/domain/catalogue.py:304
+# squid/core/permissions/domain/catalogue.py:315
 permissions-re-read-linked = Re-read your linked Minecraft name after a rename.
 
-# squid/core/permissions/domain/catalogue.py:310
+# squid/core/permissions/domain/catalogue.py:321
 permissions-re-read-user = Re-read another user's linked Minecraft name.
 
-# squid/core/permissions/domain/catalogue.py:297
+# squid/core/permissions/domain/catalogue.py:308
 permissions-read-account-notifications = Read your own account and notifications.
 
-# squid/core/permissions/domain/catalogue.py:518
+# squid/core/permissions/domain/catalogue.py:529
 permissions-read-permission-audit = Read the permission audit log.
 
-# squid/core/permissions/domain/catalogue.py:346
+# squid/core/permissions/domain/catalogue.py:357
 permissions-read-stored-error = Read a stored error report by the reference its user was shown.
 
 # squid/core/permissions/domain/catalogue.py:229
@@ -4883,13 +4889,13 @@ permissions-reclassify-build = Change a saved build's category.
 # squid/core/permissions/domain/catalogue.py:197
 permissions-recompute-build-derived = Recompute a build's derived attributes.
 
-# squid/core/permissions/domain/catalogue.py:435
+# squid/core/permissions/domain/catalogue.py:446
 permissions-recount-starboard-reactions = Recount a starboard's reactions.
 
 # squid/core/permissions/domain/catalogue.py:268
 permissions-register-minecraft-version = Register a new Minecraft version.
 
-# squid/core/permissions/domain/catalogue.py:286
+# squid/core/permissions/domain/catalogue.py:297
 permissions-reject-creator-alias = Reject a creator alias claim.
 
 # squid/core/permissions/domain/catalogue.py:185
@@ -4898,7 +4904,7 @@ permissions-reject-pending-build = Reject pending build submissions.
 # squid/core/permissions/domain/catalogue.py:248
 permissions-reject-tag-proposal = Reject a tag proposal.
 
-# squid/core/permissions/domain/catalogue.py:292
+# squid/core/permissions/domain/catalogue.py:303
 permissions-relay-account-verification = Relay account verification on another user's behalf.
 
 # squid/core/permissions/errors.py:43
@@ -4907,16 +4913,16 @@ permissions-require-all = This action requires all of these permissions:
 # squid/core/permissions/errors.py:41
 permissions-require-any = This action requires at least one of these permissions:
 
-# squid/core/permissions/domain/catalogue.py:462
+# squid/core/permissions/domain/catalogue.py:473
 permissions-resynchronise-redstoner-role = Resynchronise Redstoner role membership.
 
-# squid/core/permissions/domain/catalogue.py:484
+# squid/core/permissions/domain/catalogue.py:495
 permissions-review-poll-recount = Inspect and retry an incomplete final poll count.
 
 # squid/core/permissions/application/administration.py:78
 permissions-role-not-yours = Role is not yours to manage
 
-# squid/core/permissions/domain/catalogue.py:367
+# squid/core/permissions/domain/catalogue.py:378
 permissions-run-raw-database = Run raw database and error-handling diagnostics against the live bot.
 
 # squid/core/permissions/errors.py:11
@@ -4925,31 +4931,31 @@ permissions-scope-reason = your credential excludes that permission
 # squid/core/permissions/domain/catalogue.py:162
 permissions-submit-build-review = Submit a build for review.
 
-# squid/core/permissions/domain/catalogue.py:362
+# squid/core/permissions/domain/catalogue.py:373
 permissions-synchronise-command-tree = Synchronise the application command tree with Discord.
 
 # squid/core/permissions/domain/catalogue.py:155
 permissions-view-published-builds = View published builds.
 
-# squid/core/permissions/domain/catalogue.py:393
+# squid/core/permissions/domain/catalogue.py:404
 permissions-view-server-bot = View this server's bot settings.
 
-# squid/core/permissions/domain/catalogue.py:410
+# squid/core/permissions/domain/catalogue.py:421
 permissions-view-server-starboards = View this server's starboards.
 
 # squid/core/permissions/domain/catalogue.py:191
 permissions-view-unreviewed-builds = View builds that have not been reviewed yet.
 
-# squid/core/permissions/domain/catalogue.py:374
+# squid/core/permissions/domain/catalogue.py:385
 permissions-view-wide-settings = View application-wide runtime settings.
 
-# squid/core/permissions/domain/catalogue.py:494
+# squid/core/permissions/domain/catalogue.py:505
 permissions-vote-build-log = Vote in build log deletion votes.
 
-# squid/core/permissions/domain/catalogue.py:468
+# squid/core/permissions/domain/catalogue.py:479
 permissions-vote-polls = Vote in polls.
 
-# squid/core/permissions/domain/catalogue.py:499
+# squid/core/permissions/domain/catalogue.py:510
 permissions-votes-counted-staff = Have your votes counted at the staff weight.
 
 # squid/bot/voting/cog.py:154
@@ -6737,6 +6743,21 @@ verify-creator-page-hidden = This creator has hidden their page. Their build cre
 
 # squid/bot/version_tracking_cog.py:108
 versions-add-permission-denied = You are no longer allowed to add versions.
+
+# squid/core/versions/errors.py:45
+versions-entry-exists = That Minecraft version is already in the catalogue.
+
+# squid/core/versions/errors.py:57
+versions-entry-in-use = Builds or records still use that Minecraft version. Correct it instead of deleting it.
+
+# squid/core/versions/errors.py:34
+versions-entry-not-found = That Minecraft version is not in the catalogue.
+
+# squid/core/versions/errors.py:46
+versions-errors-entry-exists = Version already exists
+
+# squid/core/versions/errors.py:60
+versions-errors-entry-in-use = Version in use
 
 # squid/core/versions/errors.py:21
 versions-minecraft-version-catalog = The Minecraft version catalog is empty.

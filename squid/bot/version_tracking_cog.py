@@ -14,7 +14,7 @@ from squid.bot.ui import render_payload, text_node, tr
 from squid.bot.utils.permissions import Grants, requires_grant
 from squid.core.actors import ActingContext
 from squid.core.permissions.domain.catalogue import VERSION_ENTRY_CREATE
-from squid.core.versions.domain import Edition, MinecraftVersion
+from squid.core.versions.domain import Edition, VersionEntry
 from squid.core.versions.errors import InvalidVersionError
 from squid_i18n import md_tr
 from squid_ui.content.text import localization_scope
@@ -35,7 +35,7 @@ class VersionOperations(Protocol):
 
     async def add(
         self, version_string: str, *, edition: Edition | None = None, context: ActingContext
-    ) -> MinecraftVersion: ...
+    ) -> VersionEntry: ...
 
 
 @dataclass(frozen=True, slots=True)

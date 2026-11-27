@@ -9,13 +9,13 @@ from squid.core.suggestions.application.queries import SuggestionRepository
 from squid.core.suggestions.application.registry import SuggestionSource
 from squid.core.suggestions.domain import SourceKind, SuggestionRequest, ValueType
 from squid.core.suggestions.infrastructure.cache import TtlCache
-from squid.core.versions.domain import MinecraftVersion
+from squid.core.versions.domain import VersionEntry
 
 
 class CanonicalMinecraftVersions(Protocol):
     """Read canonical versions recognized by build persistence."""
 
-    async def list_all(self, *, context: ActingContext) -> Sequence[MinecraftVersion]: ...
+    async def list_all(self, *, context: ActingContext) -> Sequence[VersionEntry]: ...
 
 
 class VersionProvider:

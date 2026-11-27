@@ -118,7 +118,7 @@ Items 12, 13, 15 and 17 share one **record holder summary**: `{build_id, title, 
     - `GET /v1/permissions/explain?subject&node` returns the resolver's `Decision` (reason, trace, and each rule's source and the role it came through) for one node, or for every node when `node` is omitted.
     - `GET /v1/permissions/audit` pages with item 55 anchors. It only takes `limit` today.
 46. **Record operations (implemented).** `POST /v1/records/{id}/recompute`, `GET /v1/records/{id}/inspection`, `POST /v1/records/recomputes`, `GET /v1/records/recompute-queue` and `GET /v1/records/drift`; see [Admin operations](../completed/incremental-records.md#admin-operations). Needed by X7.
-47. **Version corrections.** `POST /v1/versions` wraps `VersionService.add`, including its edition override. The version announcement worker adds most versions, so X8 exists to fix mistakes and also needs `DELETE /v1/versions/{id}`, which core lacks. Needed by X8.
+47. **Version corrections (implemented).** `POST /v1/versions` adds a release the announcement channel missed. `PATCH /v1/versions/{id}` corrects edition, release numbers or `data_version` in place, so builds and records that use the entry follow it; the change is recorded as a build edit of every build that uses it. `DELETE` only removes an entry nothing refers to and answers 409 `VERSION_IN_USE` otherwise. Needed by X8.
 
 ## Home and sponsors
 

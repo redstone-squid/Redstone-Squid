@@ -49,7 +49,7 @@ from squid.core.submissions.domain.normalization import normalize_submission
 from squid.core.submissions.infrastructure.finalization_payloads import decode_submission, encode_submission
 from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.core.tags.models import TagDefinition
-from squid.core.versions.domain import MinecraftVersion
+from squid.core.versions.domain import MinecraftVersion, VersionEntry
 from squid.core.versions.errors import InvalidVersionError
 from tests.support.expansion import expansion_document
 
@@ -112,8 +112,8 @@ class FakeVersions:
     def __init__(self, versions: tuple[MinecraftVersion, ...] | None = None) -> None:
         self.versions = versions or (MinecraftVersion("Java", 26, 1, 2),)
 
-    async def list_all(self, *, context: ActingContext) -> tuple[MinecraftVersion, ...]:
-        return self.versions
+    async def list_all(self, *, context: ActingContext) -> tuple[VersionEntry, ...]:
+        return tuple(VersionEntry(index, version) for index, version in enumerate(self.versions))
 
     async def resolve_spec(self, version_spec: str, *, context: ActingContext) -> list[str]:
         raise ValueError("No compatibility resolution configured")

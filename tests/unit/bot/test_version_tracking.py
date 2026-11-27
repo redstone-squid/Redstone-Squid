@@ -11,7 +11,7 @@ from squid.bot.version_tracking_cog import VersionTracker
 from squid.core.actors import ActingContext, UserActor
 from squid.core.settings.domain.runtime import RuntimeSettings
 from squid.core.versions.application import VersionService
-from squid.core.versions.domain import Edition, MinecraftVersion, parse_version_string
+from squid.core.versions.domain import Edition, MinecraftVersion, VersionEntry, parse_version_string
 from tests.support.discord import make_layout_bot
 from tests.support.services import bot_services
 from tests.support.settings import RuntimeSettingsStub
@@ -23,13 +23,11 @@ class VersionRecorder(VersionService):
         self.failure: Exception | None = None
 
     @override
-    async def add(
-        self, version_string: str, *, edition: Edition | None = None, context: ActingContext
-    ) -> MinecraftVersion:
+    async def add(self, version_string: str, *, edition: Edition | None = None, context: ActingContext) -> VersionEntry:
         self.calls.append(version_string)
         if self.failure is not None:
             raise self.failure
-        return MinecraftVersion(*parse_version_string(version_string))
+        return VersionEntry(1, MinecraftVersion(*parse_version_string(version_string)))
 
 
 @pytest.mark.parametrize(

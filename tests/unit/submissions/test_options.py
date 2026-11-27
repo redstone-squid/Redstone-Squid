@@ -8,7 +8,7 @@ from squid.core.submissions.domain import ChoiceOption
 from squid.core.submissions.infrastructure.options import ApprovedSubmissionOptionCatalog, _content_revision
 from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.core.tags.models import TagDefinition
-from squid.core.versions.domain import MinecraftVersion
+from squid.core.versions.domain import MinecraftVersion, VersionEntry
 
 
 class FakeTags:
@@ -29,8 +29,8 @@ class FakeVersions:
             MinecraftVersion("Bedrock", 1, 21, 50),
         )
 
-    async def list_all(self, *, context: ActingContext) -> tuple[MinecraftVersion, ...]:
-        return self.versions
+    async def list_all(self, *, context: ActingContext) -> tuple[VersionEntry, ...]:
+        return tuple(VersionEntry(index, version) for index, version in enumerate(self.versions))
 
 
 def _tag(

@@ -11,7 +11,7 @@ from squid.core.actors import ActingContext
 from squid.core.permissions.domain import PermissionNode
 from squid.core.permissions.domain.catalogue import VERSION_ENTRY_CREATE
 from squid.core.versions.application import VersionService
-from squid.core.versions.domain import Edition, MinecraftVersion
+from squid.core.versions.domain import Edition, MinecraftVersion, VersionEntry
 from squid_ui.testing import RecordingResponder, labels, submit, submit_event
 
 pytestmark = pytest.mark.usefixtures("discord_screen_context")
@@ -28,11 +28,9 @@ class VersionRecorder(VersionService):
         return ["1.21", "1.20"] if edition == "Java" else ["1.21.90"]
 
     @override
-    async def add(
-        self, version_string: str, *, edition: Edition | None = None, context: ActingContext
-    ) -> MinecraftVersion:
+    async def add(self, version_string: str, *, edition: Edition | None = None, context: ActingContext) -> VersionEntry:
         self.add_calls.append((version_string, edition))
-        return MinecraftVersion("Java", 1, 22, 0)
+        return VersionEntry(1, MinecraftVersion("Java", 1, 22, 0))
 
 
 class Authorizer:

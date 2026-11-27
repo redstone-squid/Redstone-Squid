@@ -6,12 +6,19 @@ import pytest
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from squid.core.accounts.models import Account
 from squid.core.actors import ActingContext, AnonymousActor, UserActor
+from squid.core.builds.domain import BuildStatus
+from squid.core.builds.models import BuildVersion, DoorBuild
 from squid.core.errors import InvalidStateError
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.versions.application.services import VersionService
-from squid.core.versions.domain import MinecraftVersion
+from squid.core.versions.domain import MinecraftVersion, VersionCorrection
+from squid.core.versions.errors import VersionExistsError, VersionInUseError, VersionNotFoundError
 from squid.core.versions.models import Version
+from tests.support.build_edits import build_edit_session
+
+OWNER = ActingContext.direct(UserActor(account_id=1, is_bot_owner=True))
 
 
 async def test_version_service_commits_and_lists_versions_in_numeric_order(
@@ -48,10 +55,10 @@ async def test_uncommitted_versions_roll_back_after_autoflush(
     async with factory() as uow:
         repository = uow.versions
         await repository.add(version)
-        assert version in await repository.list("Java")
+        assert version in [entry.version for entry in await repository.list("Java")]
 
     async with factory() as uow:
-        assert version not in await uow.versions.list("Java")
+        assert version not in [entry.version for entry in await uow.versions.list("Java")]
     with pytest.raises(InvalidStateError):
         await repository.add(version)
 
@@ -76,3 +83,56 @@ async def test_data_version_lookups_use_shared_catalogue(
     assert await service.data_version_for("Java 99.99.0", context=ActingContext.direct(AnonymousActor())) is None
     assert await service.data_version_for("not a version", context=ActingContext.direct(AnonymousActor())) is None
     assert await service.label_for_data_version(99999, context=ActingContext.direct(AnonymousActor())) is None
+
+
+async def test_a_correction_keeps_the_entry_that_builds_refer_to(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    service = VersionService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
+    mistaken = await service.add("99.21.40", context=OWNER)
+    await service.add("99.21.41", context=OWNER)
+    async with build_edit_session(migrated_session_factory) as session:
+        account = Account()
+        session.add(account)
+        await session.flush()
+        session.add(
+            DoorBuild(
+                submitter_account_id=account.id,
+                submission_status=BuildStatus.APPROVED,
+                orientation="Door",
+                door_width=2,
+                door_height=2,
+                width=4,
+                height=4,
+                depth=2,
+                build_versions=[BuildVersion(version_id=mistaken.id)],
+            )
+        )
+
+    with pytest.raises(VersionInUseError):
+        await service.delete(mistaken.id, context=OWNER)
+    with pytest.raises(VersionExistsError):
+        await service.correct(mistaken.id, VersionCorrection(patch=41), context=OWNER)
+
+    corrected = await service.correct(mistaken.id, VersionCorrection(edition="Bedrock", data_version=99), context=OWNER)
+
+    assert corrected.id == mistaken.id
+    assert str(corrected) == "Bedrock 99.21.40"
+    assert corrected.data_version == 99
+    assert corrected in await service.list_versions("Bedrock", context=OWNER)
+
+
+async def test_an_unused_entry_can_be_deleted_once(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    service = VersionService(uow_factory=partial(SqlAlchemyUnitOfWork, migrated_session_factory))
+    entry = await service.add("99.30.0", context=OWNER)
+
+    await service.delete(entry.id, context=OWNER)
+
+    assert entry not in await service.list_versions("Java", context=OWNER)
+    with pytest.raises(VersionNotFoundError):
+        await service.delete(entry.id, context=OWNER)
+    await service.add("99.31.0", context=OWNER)
+    with pytest.raises(VersionExistsError):
+        await service.add("99.31.0", context=OWNER)
