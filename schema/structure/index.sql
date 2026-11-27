@@ -6,6 +6,7 @@ SET check_function_bodies = false;
 
 SELECT pg_catalog.set_config('search_path', '', false);
 
+\ir EXTENSIONS/fuzzystrmatch.sql
 \ir EXTENSIONS/pg_trgm.sql
 \ir EXTENSIONS/unaccent.sql
 \ir EXTENSIONS/vector.sql
@@ -23,9 +24,10 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/TRIGGER_FUNCTIONS/enforce_vote_session_kind_subtype.sql
 \ir public/TRIGGER_FUNCTIONS/enqueue_build_change.sql
 \ir public/TRIGGER_FUNCTIONS/enqueue_build_source_preview_sync.sql
-\ir public/TRIGGER_FUNCTIONS/enqueue_computed_record_search_projection.sql
+\ir public/TRIGGER_FUNCTIONS/enqueue_dependent_record_search.sql
 \ir public/TRIGGER_FUNCTIONS/enqueue_identity_credited_builds.sql
 \ir public/TRIGGER_FUNCTIONS/enqueue_metadata_search_projection.sql
+\ir public/TRIGGER_FUNCTIONS/enqueue_record_search_projection.sql
 \ir public/TRIGGER_FUNCTIONS/enqueue_record_tag_change.sql
 \ir public/TRIGGER_FUNCTIONS/enqueue_registered_door_ranges.sql
 \ir public/TRIGGER_FUNCTIONS/enqueue_starboard_sync.sql
@@ -43,6 +45,7 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/FUNCTIONS/trace_work_activity.sql
 \ir public/FUNCTIONS/upsert_discord_sync_request.sql
 \ir public/FUNCTIONS/upsert_search_projection_request.sql
+\ir public/FUNCTIONS/upsert_search_projection_requests.sql
 \ir public/TABLES/account_identities.sql
 \ir public/SEQUENCES/account_identities_id_seq.sql
 \ir public/TABLES/account_merge_tickets.sql
@@ -139,7 +142,7 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/TABLES/permission_roles.sql
 \ir public/SEQUENCES/permission_roles_id_seq.sql
 \ir public/TABLES/profile_clear_audit.sql
-\ir public/TABLES/public_creator_redirects.sql
+\ir public/TABLES/public_account_redirects.sql
 \ir public/TABLES/record_computation_runs.sql
 \ir public/SEQUENCES/record_computation_runs_id_seq.sql
 \ir public/TABLES/record_drift.sql
@@ -162,13 +165,14 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/TABLES/schematic_render_queue.sql
 \ir public/TABLES/schematic_renders.sql
 \ir public/SEQUENCES/schematic_renders_id_seq.sql
-\ir public/TABLES/search_document_filters.sql
-\ir public/SEQUENCES/search_document_filters_id_seq.sql
 \ir public/TABLES/search_documents.sql
 \ir public/SEQUENCES/search_documents_id_seq.sql
 \ir public/TABLES/search_embedding_queue.sql
 \ir public/TABLES/search_projection_queue.sql
 \ir public/SEQUENCES/search_projection_queue_id_seq.sql
+\ir public/TABLES/search_terms.sql
+\ir public/TABLES/search_values.sql
+\ir public/SEQUENCES/search_values_id_seq.sql
 \ir public/TABLES/server_settings.sql
 \ir public/TABLES/starboard_emojis.sql
 \ir public/TABLES/starboard_entries.sql

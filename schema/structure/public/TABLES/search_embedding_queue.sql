@@ -12,7 +12,7 @@ CREATE TABLE public.search_embedding_queue (
     CONSTRAINT search_embedding_queue_claim_complete CHECK (((claimed_at IS NULL) = (claim_token IS NULL)))
 );
 
-COMMENT ON TABLE public.search_embedding_queue IS 'A durable request to embed a search document whose source hash changed.';
+COMMENT ON TABLE public.search_embedding_queue IS 'A durable request to embed a search document whose embedding text changed.';
 
 COMMENT ON COLUMN public.search_embedding_queue.available_at IS 'Earliest time a worker may claim this item; retries move it into the future.';
 

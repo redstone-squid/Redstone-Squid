@@ -16,7 +16,11 @@ ALTER TABLE ONLY public.title_holders
 
 CREATE INDEX title_holders_build_idx ON public.title_holders USING btree (build_id);
 
-CREATE TRIGGER title_holders_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.title_holders FOR EACH ROW EXECUTE FUNCTION public.enqueue_computed_record_search_projection();
+CREATE TRIGGER title_holders_enqueue_search_delete AFTER DELETE ON public.title_holders REFERENCING OLD TABLE AS old_rows FOR EACH STATEMENT EXECUTE FUNCTION public.enqueue_record_search_projection();
+
+CREATE TRIGGER title_holders_enqueue_search_insert AFTER INSERT ON public.title_holders REFERENCING NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION public.enqueue_record_search_projection();
+
+CREATE TRIGGER title_holders_enqueue_search_update AFTER UPDATE ON public.title_holders REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION public.enqueue_record_search_projection();
 
 ALTER TABLE ONLY public.title_holders
     ADD CONSTRAINT title_holders_build_id_fkey FOREIGN KEY (build_id) REFERENCES public.builds(id) ON DELETE RESTRICT;

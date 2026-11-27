@@ -27,6 +27,10 @@ ALTER TABLE ONLY public.record_titles
 
 CREATE INDEX record_titles_category_idx ON public.record_titles USING btree (build_kind, base_title, category_key);
 
+CREATE TRIGGER record_titles_enqueue_search_delete AFTER DELETE ON public.record_titles REFERENCING OLD TABLE AS old_rows FOR EACH STATEMENT EXECUTE FUNCTION public.enqueue_record_search_projection();
+
+CREATE TRIGGER record_titles_enqueue_search_update AFTER UPDATE ON public.record_titles REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION public.enqueue_record_search_projection();
+
 ALTER TABLE ONLY public.record_titles
     ADD CONSTRAINT record_titles_version_id_fkey FOREIGN KEY (version_id) REFERENCES public.versions(id) ON DELETE RESTRICT;
 

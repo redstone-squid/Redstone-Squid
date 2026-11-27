@@ -28,7 +28,11 @@ CREATE INDEX title_results_definition_idx ON public.title_results USING btree (d
 
 CREATE INDEX title_results_run_idx ON public.title_results USING btree (run_id);
 
-CREATE TRIGGER title_results_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.title_results FOR EACH ROW EXECUTE FUNCTION public.enqueue_computed_record_search_projection();
+CREATE TRIGGER title_results_enqueue_search_delete AFTER DELETE ON public.title_results REFERENCING OLD TABLE AS old_rows FOR EACH STATEMENT EXECUTE FUNCTION public.enqueue_record_search_projection();
+
+CREATE TRIGGER title_results_enqueue_search_insert AFTER INSERT ON public.title_results REFERENCING NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION public.enqueue_record_search_projection();
+
+CREATE TRIGGER title_results_enqueue_search_update AFTER UPDATE ON public.title_results REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION public.enqueue_record_search_projection();
 
 ALTER TABLE ONLY public.title_results
     ADD CONSTRAINT title_results_definition_id_fkey FOREIGN KEY (definition_id) REFERENCES public.title_definitions(id) ON DELETE RESTRICT;

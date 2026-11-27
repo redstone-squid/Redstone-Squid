@@ -20,6 +20,20 @@ SET client_min_messages = warning;
 SET row_security = off;
 
 --
+-- Name: fuzzystrmatch; Type: EXTENSION; Schema: -; Owner: -
+--
+
+CREATE EXTENSION IF NOT EXISTS fuzzystrmatch WITH SCHEMA public;
+
+
+--
+-- Name: EXTENSION fuzzystrmatch; Type: COMMENT; Schema: -; Owner: -
+--
+
+COMMENT ON EXTENSION fuzzystrmatch IS 'determine similarities and distance between strings';
+
+
+--
 -- Name: pg_trgm; Type: EXTENSION; Schema: -; Owner: -
 --
 
@@ -676,29 +690,53 @@ $$;
 
 
 --
--- Name: enqueue_computed_record_search_projection(); Type: FUNCTION; Schema: public; Owner: -
+-- Name: enqueue_dependent_record_search(); Type: FUNCTION; Schema: public; Owner: -
 --
 
-CREATE FUNCTION public.enqueue_computed_record_search_projection() RETURNS trigger
+CREATE FUNCTION public.enqueue_dependent_record_search() RETURNS trigger
     LANGUAGE plpgsql
-    AS $$
+    AS $_$
+DECLARE
+    kinds text[];
+    keys text[];
 BEGIN
-    IF TG_TABLE_NAME = 'title_results' THEN
-        PERFORM public.upsert_search_projection_request(
-            'record',
-            'result:' || (CASE WHEN TG_OP = 'DELETE' THEN OLD.id ELSE NEW.id END)::text,
-            CASE WHEN TG_OP = 'DELETE' THEN 'delete' ELSE 'upsert' END
-        );
+    IF TG_OP = 'INSERT' THEN
+        SELECT array_agg(resource_kind), array_agg(source_key) INTO kinds, keys FROM new_rows;
+    ELSIF TG_OP = 'DELETE' THEN
+        SELECT array_agg(resource_kind), array_agg(source_key) INTO kinds, keys FROM old_rows;
     ELSE
-        PERFORM public.upsert_search_projection_request(
-            'record',
-            'result:' || (CASE WHEN TG_OP = 'DELETE' THEN OLD.result_id ELSE NEW.result_id END)::text,
-            'upsert'
-        );
+        SELECT array_agg(n.resource_kind), array_agg(n.source_key) INTO kinds, keys
+        FROM new_rows n JOIN old_rows o ON o.id = n.id
+        WHERE (n.title, n.status, n.document_data) IS DISTINCT FROM (o.title, o.status, o.document_data);
     END IF;
+    IF kinds IS NULL THEN
+        RETURN NULL;
+    END IF;
+    -- CASE keeps the casts away from keys of other kinds.
+    PERFORM public.upsert_search_projection_requests(
+        'record',
+        ARRAY(
+            SELECT 'record:' || r.title_id::text
+            FROM unnest(kinds, keys) AS changed(kind, key)
+            JOIN public.title_holders h
+                ON h.build_id = CASE WHEN changed.kind = 'build' AND changed.key ~ '^[0-9]+$' THEN changed.key::bigint END
+            JOIN public.title_results r ON r.id = h.result_id
+            UNION
+            SELECT d.source_key
+            FROM unnest(kinds, keys) AS changed(kind, key)
+            JOIN public.search_values v
+                ON v.field_name = 'category_tag_id'
+                AND v.numeric_value = CASE
+                    WHEN changed.kind = 'metadata' AND changed.key ~ '^tag:[0-9]+$'
+                    THEN split_part(changed.key, ':', 2)::numeric
+                END
+            JOIN public.search_documents d ON d.id = v.document_id AND d.resource_kind = 'record'
+        ),
+        'upsert'
+    );
     RETURN NULL;
 END;
-$$;
+$_$;
 
 
 --
@@ -774,6 +812,59 @@ BEGIN
         FROM public.build_versions bv
         WHERE bv.version_id = target_id;
     END IF;
+    RETURN NULL;
+END;
+$$;
+
+
+--
+-- Name: enqueue_record_search_projection(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.enqueue_record_search_projection() RETURNS trigger
+    LANGUAGE plpgsql
+    AS $$
+DECLARE
+    record_ids uuid[];
+BEGIN
+    IF TG_TABLE_NAME IN ('title_results', 'title_holder_history') THEN
+        IF TG_OP = 'INSERT' THEN
+            record_ids := ARRAY(SELECT title_id FROM new_rows);
+        ELSIF TG_OP = 'DELETE' THEN
+            record_ids := ARRAY(SELECT title_id FROM old_rows);
+        ELSE
+            record_ids := ARRAY(SELECT title_id FROM new_rows UNION SELECT title_id FROM old_rows);
+        END IF;
+    ELSIF TG_TABLE_NAME IN ('title_holders', 'title_tied_builds') THEN
+        -- Rows deleted with their result find no result here; the result's own trigger queues the record.
+        IF TG_OP = 'INSERT' THEN
+            record_ids := ARRAY(
+                SELECT r.title_id FROM new_rows c JOIN public.title_results r ON r.id = c.result_id
+            );
+        ELSIF TG_OP = 'DELETE' THEN
+            record_ids := ARRAY(
+                SELECT r.title_id FROM old_rows c JOIN public.title_results r ON r.id = c.result_id
+            );
+        ELSE
+            record_ids := ARRAY(
+                SELECT r.title_id
+                FROM (SELECT result_id FROM new_rows UNION SELECT result_id FROM old_rows) c
+                JOIN public.title_results r ON r.id = c.result_id
+            );
+        END IF;
+    ELSIF TG_OP = 'DELETE' THEN
+        record_ids := ARRAY(SELECT public_id FROM old_rows);
+    ELSE
+        -- Records are updated by every recompute; only retirement and revival change their documents.
+        record_ids := ARRAY(
+            SELECT n.public_id
+            FROM new_rows n JOIN old_rows o ON o.public_id = n.public_id
+            WHERE n.retired_at IS DISTINCT FROM o.retired_at
+        );
+    END IF;
+    PERFORM public.upsert_search_projection_requests(
+        'record', ARRAY(SELECT 'record:' || id::text FROM unnest(record_ids) AS ids(id)), 'upsert'
+    );
     RETURN NULL;
 END;
 $$;
@@ -1292,6 +1383,30 @@ $$;
 
 
 --
+-- Name: upsert_search_projection_requests(text, text[], text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.upsert_search_projection_requests(resource_kind_input text, source_keys text[], action_input text) RETURNS void
+    LANGUAGE sql
+    AS $$
+    INSERT INTO public.search_projection_queue (resource_kind, source_key, action, enqueued_at, available_at)
+    SELECT resource_kind_input, keys.source_key, action_input, now(), now()
+    FROM (SELECT DISTINCT unnest(source_keys) AS source_key) AS keys
+    WHERE keys.source_key IS NOT NULL
+    ORDER BY keys.source_key
+    ON CONFLICT (resource_kind, source_key) DO UPDATE
+    SET action = EXCLUDED.action,
+        enqueued_at = EXCLUDED.enqueued_at,
+        available_at = EXCLUDED.available_at,
+        attempts = 0,
+        claimed_at = NULL,
+        claim_token = NULL,
+        dead_at = NULL,
+        last_error = NULL;
+$$;
+
+
+--
 -- Name: account_identities; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1445,7 +1560,7 @@ CREATE TABLE public.accounts (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     consent_version text,
     consented_at timestamp with time zone,
-    public_creator_id uuid DEFAULT gen_random_uuid() NOT NULL,
+    public_account_id uuid DEFAULT gen_random_uuid() NOT NULL,
     revision bigint DEFAULT 1 NOT NULL,
     CONSTRAINT accounts_consent_receipt_complete CHECK (((consent_version IS NULL) = (consented_at IS NULL))),
     CONSTRAINT accounts_revision_positive CHECK ((revision > 0))
@@ -4309,21 +4424,21 @@ COMMENT ON TABLE public.profile_clear_audit IS 'Retain staff attribution without
 
 
 --
--- Name: public_creator_redirects; Type: TABLE; Schema: public; Owner: -
+-- Name: public_account_redirects; Type: TABLE; Schema: public; Owner: -
 --
 
-CREATE TABLE public.public_creator_redirects (
-    retired_public_creator_id uuid NOT NULL,
+CREATE TABLE public.public_account_redirects (
+    retired_public_account_id uuid NOT NULL,
     target_account_id integer NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
 --
--- Name: TABLE public_creator_redirects; Type: COMMENT; Schema: public; Owner: -
+-- Name: TABLE public_account_redirects; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.public_creator_redirects IS 'Permanent redirect from a merged public creator identifier.';
+COMMENT ON TABLE public.public_account_redirects IS 'Permanent redirect from a merged public creator identifier.';
 
 
 --
@@ -4945,45 +5060,6 @@ ALTER SEQUENCE public.schematic_renders_id_seq OWNED BY public.schematic_renders
 
 
 --
--- Name: search_document_filters; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.search_document_filters (
-    id bigint NOT NULL,
-    document_id bigint NOT NULL,
-    field_name text NOT NULL,
-    ordinal smallint DEFAULT 0 NOT NULL,
-    text_value text,
-    numeric_value numeric,
-    timestamp_value timestamp with time zone,
-    boolean_value boolean,
-    holder_build_id bigint,
-    CONSTRAINT search_document_filters_one_value_check CHECK ((num_nonnulls(text_value, numeric_value, timestamp_value, boolean_value) = 1))
-);
-
-
---
--- Name: TABLE search_document_filters; Type: COMMENT; Schema: public; Owner: -
---
-
-COMMENT ON TABLE public.search_document_filters IS 'A typed, indexed field value belonging to a search document.';
-
-
---
--- Name: search_document_filters_id_seq; Type: SEQUENCE; Schema: public; Owner: -
---
-
-ALTER TABLE public.search_document_filters ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
-    SEQUENCE NAME public.search_document_filters_id_seq
-    START WITH 1
-    INCREMENT BY 1
-    NO MINVALUE
-    NO MAXVALUE
-    CACHE 1
-);
-
-
---
 -- Name: search_documents; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -4996,16 +5072,15 @@ CREATE TABLE public.search_documents (
     description text,
     status text,
     normalized_title text NOT NULL,
-    fuzzy_text text NOT NULL,
-    tags text[] DEFAULT '{}'::text[] NOT NULL,
-    title_vector tsvector,
-    description_vector tsvector,
-    combined_vector tsvector,
     document_data jsonb DEFAULT '{}'::jsonb NOT NULL,
     source_hash text NOT NULL,
     embedding public.vector(1536),
     embedding_model text,
-    refreshed_at timestamp with time zone DEFAULT now() NOT NULL
+    refreshed_at timestamp with time zone DEFAULT now() NOT NULL,
+    heading_terms text[] DEFAULT '{}'::text[] NOT NULL,
+    search_vector tsvector NOT NULL,
+    embedding_text text DEFAULT ''::text NOT NULL,
+    embedding_hash text NOT NULL
 );
 
 
@@ -5013,7 +5088,39 @@ CREATE TABLE public.search_documents (
 -- Name: TABLE search_documents; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.search_documents IS 'An indexed projection of a searchable application resource.';
+COMMENT ON TABLE public.search_documents IS 'A searchable resource: what one search result shows, and the vector that finds it.
+
+Display columns and `document_data` render the hit. Every searchable fact is
+a SearchValue row; `search_vector` and `heading_terms` are derived from those
+rows when the document is written, for fast recall and ranking.';
+
+
+--
+-- Name: COLUMN search_documents.normalized_title; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.search_documents.normalized_title IS 'Normalized title and subtitle, for title order and suggestions.';
+
+
+--
+-- Name: COLUMN search_documents.source_hash; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.search_documents.source_hash IS 'Digest of the whole document, to skip rewriting it unchanged.';
+
+
+--
+-- Name: COLUMN search_documents.heading_terms; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.search_documents.heading_terms IS 'Distinct sorted terms of the title and subtitle, to recognize a query that names the heading.';
+
+
+--
+-- Name: COLUMN search_documents.embedding_hash; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.search_documents.embedding_hash IS 'Digest of embedding_text; the embedding is kept while it matches.';
 
 
 --
@@ -5053,7 +5160,7 @@ CREATE TABLE public.search_embedding_queue (
 -- Name: TABLE search_embedding_queue; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON TABLE public.search_embedding_queue IS 'A durable request to embed a search document whose source hash changed.';
+COMMENT ON TABLE public.search_embedding_queue IS 'A durable request to embed a search document whose embedding text changed.';
 
 
 --
@@ -5119,6 +5226,72 @@ COMMENT ON COLUMN public.search_projection_queue.claim_token IS 'Token generated
 
 ALTER TABLE public.search_projection_queue ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
     SEQUENCE NAME public.search_projection_queue_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+--
+-- Name: search_terms; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.search_terms (
+    term text NOT NULL
+);
+
+
+--
+-- Name: TABLE search_terms; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.search_terms IS 'A term that some document has contained, so queries can find close spellings of a word.
+
+Rows are only added. A term no document still contains matches nothing, so it costs
+nothing but a row.';
+
+
+--
+-- Name: search_values; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.search_values (
+    id bigint NOT NULL,
+    document_id bigint NOT NULL,
+    field_name text NOT NULL,
+    ordinal smallint DEFAULT 0 NOT NULL,
+    holder_build_id bigint,
+    text_value text,
+    normalized_text text,
+    term_vector tsvector,
+    numeric_value numeric,
+    timestamp_value timestamp with time zone,
+    boolean_value boolean,
+    CONSTRAINT search_values_one_value_check CHECK ((num_nonnulls(text_value, numeric_value, timestamp_value, boolean_value) = 1)),
+    CONSTRAINT search_values_text_forms_check CHECK ((((text_value IS NULL) = (normalized_text IS NULL)) AND ((text_value IS NULL) = (term_vector IS NULL))))
+);
+
+
+--
+-- Name: TABLE search_values; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.search_values IS 'One typed value of a document''s field, such as one of a build''s creators.
+
+Text values keep their original text for display and highlighting, a
+normalized form for keyword comparisons, and a vector of their terms for
+word and phrase matches scoped to the field. Record holder values carry the
+holder''s build ID, so a clause can be matched against a single holder.';
+
+
+--
+-- Name: search_values_id_seq; Type: SEQUENCE; Schema: public; Owner: -
+--
+
+ALTER TABLE public.search_values ALTER COLUMN id ADD GENERATED BY DEFAULT AS IDENTITY (
+    SEQUENCE NAME public.search_values_id_seq
     START WITH 1
     INCREMENT BY 1
     NO MINVALUE
@@ -6591,11 +6764,11 @@ ALTER TABLE ONLY public.accounts
 
 
 --
--- Name: accounts accounts_public_creator_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: accounts accounts_public_account_id_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.accounts
-    ADD CONSTRAINT accounts_public_creator_id_key UNIQUE (public_creator_id);
+    ADD CONSTRAINT accounts_public_account_id_key UNIQUE (public_account_id);
 
 
 --
@@ -7359,11 +7532,11 @@ ALTER TABLE ONLY public.profile_clear_audit
 
 
 --
--- Name: public_creator_redirects public_creator_redirects_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: public_account_redirects public_account_redirects_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.public_creator_redirects
-    ADD CONSTRAINT public_creator_redirects_pkey PRIMARY KEY (retired_public_creator_id);
+ALTER TABLE ONLY public.public_account_redirects
+    ADD CONSTRAINT public_account_redirects_pkey PRIMARY KEY (retired_public_account_id);
 
 
 --
@@ -7519,22 +7692,6 @@ ALTER TABLE ONLY public.schematic_renders
 
 
 --
--- Name: search_document_filters search_document_filters_identity_key; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.search_document_filters
-    ADD CONSTRAINT search_document_filters_identity_key UNIQUE (document_id, field_name, ordinal);
-
-
---
--- Name: search_document_filters search_document_filters_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.search_document_filters
-    ADD CONSTRAINT search_document_filters_pkey PRIMARY KEY (id);
-
-
---
 -- Name: search_documents search_documents_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -7572,6 +7729,30 @@ ALTER TABLE ONLY public.search_projection_queue
 
 ALTER TABLE ONLY public.search_projection_queue
     ADD CONSTRAINT search_projection_queue_resource_key UNIQUE (resource_kind, source_key);
+
+
+--
+-- Name: search_terms search_terms_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.search_terms
+    ADD CONSTRAINT search_terms_pkey PRIMARY KEY (term);
+
+
+--
+-- Name: search_values search_values_identity_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.search_values
+    ADD CONSTRAINT search_values_identity_key UNIQUE (document_id, field_name, ordinal);
+
+
+--
+-- Name: search_values search_values_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.search_values
+    ADD CONSTRAINT search_values_pkey PRIMARY KEY (id);
 
 
 --
@@ -8799,10 +8980,10 @@ CREATE INDEX permission_roles_created_by_idx ON public.permission_roles USING bt
 
 
 --
--- Name: public_creator_redirects_target_idx; Type: INDEX; Schema: public; Owner: -
+-- Name: public_account_redirects_target_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX public_creator_redirects_target_idx ON public.public_creator_redirects USING btree (target_account_id);
+CREATE INDEX public_account_redirects_target_idx ON public.public_account_redirects USING btree (target_account_id);
 
 
 --
@@ -8897,73 +9078,10 @@ CREATE INDEX schematic_render_queue_ready_idx ON public.schematic_render_queue U
 
 
 --
--- Name: search_document_filters_boolean_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX search_document_filters_boolean_idx ON public.search_document_filters USING btree (field_name, boolean_value) WHERE (boolean_value IS NOT NULL);
-
-
---
--- Name: search_document_filters_holder_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE UNIQUE INDEX search_document_filters_holder_idx ON public.search_document_filters USING btree (document_id, holder_build_id, field_name) WHERE (holder_build_id IS NOT NULL);
-
-
---
--- Name: search_document_filters_numeric_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX search_document_filters_numeric_idx ON public.search_document_filters USING btree (field_name, numeric_value) WHERE (numeric_value IS NOT NULL);
-
-
---
--- Name: search_document_filters_text_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX search_document_filters_text_idx ON public.search_document_filters USING btree (field_name, text_value) WHERE (text_value IS NOT NULL);
-
-
---
--- Name: search_document_filters_text_prefix_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX search_document_filters_text_prefix_idx ON public.search_document_filters USING btree (field_name, lower(text_value) text_pattern_ops) WHERE (text_value IS NOT NULL);
-
-
---
--- Name: search_document_filters_timestamp_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX search_document_filters_timestamp_idx ON public.search_document_filters USING btree (field_name, timestamp_value) WHERE (timestamp_value IS NOT NULL);
-
-
---
--- Name: search_documents_combined_fts_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX search_documents_combined_fts_idx ON public.search_documents USING gin (combined_vector);
-
-
---
--- Name: search_documents_description_fts_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX search_documents_description_fts_idx ON public.search_documents USING gin (description_vector);
-
-
---
 -- Name: search_documents_embedding_hnsw_idx; Type: INDEX; Schema: public; Owner: -
 --
 
 CREATE INDEX search_documents_embedding_hnsw_idx ON public.search_documents USING hnsw (embedding public.vector_cosine_ops) WHERE (embedding IS NOT NULL);
-
-
---
--- Name: search_documents_fuzzy_trgm_idx; Type: INDEX; Schema: public; Owner: -
---
-
-CREATE INDEX search_documents_fuzzy_trgm_idx ON public.search_documents USING gin (fuzzy_text public.gin_trgm_ops);
 
 
 --
@@ -8974,17 +9092,17 @@ CREATE INDEX search_documents_scope_idx ON public.search_documents USING btree (
 
 
 --
--- Name: search_documents_tags_idx; Type: INDEX; Schema: public; Owner: -
+-- Name: search_documents_search_vector_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX search_documents_tags_idx ON public.search_documents USING gin (tags);
+CREATE INDEX search_documents_search_vector_idx ON public.search_documents USING gin (search_vector);
 
 
 --
--- Name: search_documents_title_fts_idx; Type: INDEX; Schema: public; Owner: -
+-- Name: search_documents_title_trgm_idx; Type: INDEX; Schema: public; Owner: -
 --
 
-CREATE INDEX search_documents_title_fts_idx ON public.search_documents USING gin (title_vector);
+CREATE INDEX search_documents_title_trgm_idx ON public.search_documents USING gin (normalized_title public.gin_trgm_ops);
 
 
 --
@@ -8999,6 +9117,55 @@ CREATE INDEX search_embedding_queue_ready_idx ON public.search_embedding_queue U
 --
 
 CREATE INDEX search_projection_queue_ready_idx ON public.search_projection_queue USING btree (available_at) WHERE ((claimed_at IS NULL) AND (dead_at IS NULL));
+
+
+--
+-- Name: search_values_boolean_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX search_values_boolean_idx ON public.search_values USING btree (field_name, boolean_value) WHERE (boolean_value IS NOT NULL);
+
+
+--
+-- Name: search_values_holder_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX search_values_holder_idx ON public.search_values USING btree (document_id, holder_build_id, field_name) WHERE (holder_build_id IS NOT NULL);
+
+
+--
+-- Name: search_values_keyword_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX search_values_keyword_idx ON public.search_values USING btree (field_name, normalized_text) WHERE (normalized_text IS NOT NULL);
+
+
+--
+-- Name: search_values_numeric_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX search_values_numeric_idx ON public.search_values USING btree (field_name, numeric_value) WHERE (numeric_value IS NOT NULL);
+
+
+--
+-- Name: search_values_term_vector_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX search_values_term_vector_idx ON public.search_values USING gin (term_vector);
+
+
+--
+-- Name: search_values_text_prefix_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX search_values_text_prefix_idx ON public.search_values USING btree (field_name, lower(text_value) text_pattern_ops) WHERE (text_value IS NOT NULL);
+
+
+--
+-- Name: search_values_timestamp_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX search_values_timestamp_idx ON public.search_values USING btree (field_name, timestamp_value) WHERE (timestamp_value IS NOT NULL);
 
 
 --
@@ -9870,6 +10037,20 @@ CREATE TRIGGER record_recompute_queue_work_activity AFTER INSERT OR DELETE OR UP
 
 
 --
+-- Name: record_titles record_titles_enqueue_search_delete; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER record_titles_enqueue_search_delete AFTER DELETE ON public.record_titles REFERENCING OLD TABLE AS old_rows FOR EACH STATEMENT EXECUTE FUNCTION public.enqueue_record_search_projection();
+
+
+--
+-- Name: record_titles record_titles_enqueue_search_update; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER record_titles_enqueue_search_update AFTER UPDATE ON public.record_titles REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION public.enqueue_record_search_projection();
+
+
+--
 -- Name: schematic_jobs schematic_jobs_work_activity; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -9881,6 +10062,27 @@ CREATE TRIGGER schematic_jobs_work_activity AFTER INSERT OR DELETE OR UPDATE ON 
 --
 
 CREATE TRIGGER schematic_render_queue_work_activity AFTER INSERT OR DELETE OR UPDATE ON public.schematic_render_queue FOR EACH ROW EXECUTE FUNCTION public.record_work_activity('queue', 'build_id');
+
+
+--
+-- Name: search_documents search_documents_enqueue_dependents_delete; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER search_documents_enqueue_dependents_delete AFTER DELETE ON public.search_documents REFERENCING OLD TABLE AS old_rows FOR EACH STATEMENT EXECUTE FUNCTION public.enqueue_dependent_record_search();
+
+
+--
+-- Name: search_documents search_documents_enqueue_dependents_insert; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER search_documents_enqueue_dependents_insert AFTER INSERT ON public.search_documents REFERENCING NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION public.enqueue_dependent_record_search();
+
+
+--
+-- Name: search_documents search_documents_enqueue_dependents_update; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER search_documents_enqueue_dependents_update AFTER UPDATE ON public.search_documents REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION public.enqueue_dependent_record_search();
 
 
 --
@@ -9996,17 +10198,87 @@ CREATE TRIGGER tag_units_enqueue_records AFTER INSERT OR DELETE OR UPDATE ON pub
 
 
 --
--- Name: title_holders title_holders_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
+-- Name: title_holder_history title_holder_history_enqueue_search_delete; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER title_holders_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.title_holders FOR EACH ROW EXECUTE FUNCTION public.enqueue_computed_record_search_projection();
+CREATE TRIGGER title_holder_history_enqueue_search_delete AFTER DELETE ON public.title_holder_history REFERENCING OLD TABLE AS old_rows FOR EACH STATEMENT EXECUTE FUNCTION public.enqueue_record_search_projection();
 
 
 --
--- Name: title_results title_results_enqueue_search; Type: TRIGGER; Schema: public; Owner: -
+-- Name: title_holder_history title_holder_history_enqueue_search_insert; Type: TRIGGER; Schema: public; Owner: -
 --
 
-CREATE TRIGGER title_results_enqueue_search AFTER INSERT OR DELETE OR UPDATE ON public.title_results FOR EACH ROW EXECUTE FUNCTION public.enqueue_computed_record_search_projection();
+CREATE TRIGGER title_holder_history_enqueue_search_insert AFTER INSERT ON public.title_holder_history REFERENCING NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION public.enqueue_record_search_projection();
+
+
+--
+-- Name: title_holder_history title_holder_history_enqueue_search_update; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER title_holder_history_enqueue_search_update AFTER UPDATE ON public.title_holder_history REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION public.enqueue_record_search_projection();
+
+
+--
+-- Name: title_holders title_holders_enqueue_search_delete; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER title_holders_enqueue_search_delete AFTER DELETE ON public.title_holders REFERENCING OLD TABLE AS old_rows FOR EACH STATEMENT EXECUTE FUNCTION public.enqueue_record_search_projection();
+
+
+--
+-- Name: title_holders title_holders_enqueue_search_insert; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER title_holders_enqueue_search_insert AFTER INSERT ON public.title_holders REFERENCING NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION public.enqueue_record_search_projection();
+
+
+--
+-- Name: title_holders title_holders_enqueue_search_update; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER title_holders_enqueue_search_update AFTER UPDATE ON public.title_holders REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION public.enqueue_record_search_projection();
+
+
+--
+-- Name: title_results title_results_enqueue_search_delete; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER title_results_enqueue_search_delete AFTER DELETE ON public.title_results REFERENCING OLD TABLE AS old_rows FOR EACH STATEMENT EXECUTE FUNCTION public.enqueue_record_search_projection();
+
+
+--
+-- Name: title_results title_results_enqueue_search_insert; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER title_results_enqueue_search_insert AFTER INSERT ON public.title_results REFERENCING NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION public.enqueue_record_search_projection();
+
+
+--
+-- Name: title_results title_results_enqueue_search_update; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER title_results_enqueue_search_update AFTER UPDATE ON public.title_results REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION public.enqueue_record_search_projection();
+
+
+--
+-- Name: title_tied_builds title_tied_builds_enqueue_search_delete; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER title_tied_builds_enqueue_search_delete AFTER DELETE ON public.title_tied_builds REFERENCING OLD TABLE AS old_rows FOR EACH STATEMENT EXECUTE FUNCTION public.enqueue_record_search_projection();
+
+
+--
+-- Name: title_tied_builds title_tied_builds_enqueue_search_insert; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER title_tied_builds_enqueue_search_insert AFTER INSERT ON public.title_tied_builds REFERENCING NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION public.enqueue_record_search_projection();
+
+
+--
+-- Name: title_tied_builds title_tied_builds_enqueue_search_update; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER title_tied_builds_enqueue_search_update AFTER UPDATE ON public.title_tied_builds REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION public.enqueue_record_search_projection();
 
 
 --
@@ -10768,11 +11040,11 @@ ALTER TABLE ONLY public.permission_roles
 
 
 --
--- Name: public_creator_redirects public_creator_redirects_target_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+-- Name: public_account_redirects public_account_redirects_target_account_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
-ALTER TABLE ONLY public.public_creator_redirects
-    ADD CONSTRAINT public_creator_redirects_target_account_id_fkey FOREIGN KEY (target_account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
+ALTER TABLE ONLY public.public_account_redirects
+    ADD CONSTRAINT public_account_redirects_target_account_id_fkey FOREIGN KEY (target_account_id) REFERENCES public.accounts(id) ON DELETE CASCADE;
 
 
 --
@@ -10872,19 +11144,19 @@ ALTER TABLE ONLY public.schematic_renders
 
 
 --
--- Name: search_document_filters search_document_filters_document_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.search_document_filters
-    ADD CONSTRAINT search_document_filters_document_id_fkey FOREIGN KEY (document_id) REFERENCES public.search_documents(id) ON DELETE CASCADE;
-
-
---
 -- Name: search_embedding_queue search_embedding_queue_document_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.search_embedding_queue
     ADD CONSTRAINT search_embedding_queue_document_id_fkey FOREIGN KEY (document_id) REFERENCES public.search_documents(id) ON DELETE CASCADE;
+
+
+--
+-- Name: search_values search_values_document_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.search_values
+    ADD CONSTRAINT search_values_document_id_fkey FOREIGN KEY (document_id) REFERENCES public.search_documents(id) ON DELETE CASCADE;
 
 
 --

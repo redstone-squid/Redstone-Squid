@@ -25,6 +25,12 @@ CREATE INDEX title_holder_history_build_idx ON public.title_holder_history USING
 
 CREATE INDEX title_holder_history_definition_idx ON public.title_holder_history USING btree (definition_id);
 
+CREATE TRIGGER title_holder_history_enqueue_search_delete AFTER DELETE ON public.title_holder_history REFERENCING OLD TABLE AS old_rows FOR EACH STATEMENT EXECUTE FUNCTION public.enqueue_record_search_projection();
+
+CREATE TRIGGER title_holder_history_enqueue_search_insert AFTER INSERT ON public.title_holder_history REFERENCING NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION public.enqueue_record_search_projection();
+
+CREATE TRIGGER title_holder_history_enqueue_search_update AFTER UPDATE ON public.title_holder_history REFERENCING OLD TABLE AS old_rows NEW TABLE AS new_rows FOR EACH STATEMENT EXECUTE FUNCTION public.enqueue_record_search_projection();
+
 ALTER TABLE ONLY public.title_holder_history
     ADD CONSTRAINT title_holder_history_build_id_fkey FOREIGN KEY (build_id) REFERENCES public.builds(id) ON DELETE RESTRICT;
 

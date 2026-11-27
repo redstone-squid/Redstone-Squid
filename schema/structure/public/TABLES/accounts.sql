@@ -3,7 +3,7 @@ CREATE TABLE public.accounts (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     consent_version text,
     consented_at timestamp with time zone,
-    public_creator_id uuid DEFAULT gen_random_uuid() NOT NULL,
+    public_account_id uuid DEFAULT gen_random_uuid() NOT NULL,
     revision bigint DEFAULT 1 NOT NULL,
     CONSTRAINT accounts_consent_receipt_complete CHECK (((consent_version IS NULL) = (consented_at IS NULL))),
     CONSTRAINT accounts_revision_positive CHECK ((revision > 0))
@@ -19,5 +19,5 @@ ALTER TABLE ONLY public.accounts
     ADD CONSTRAINT accounts_pkey PRIMARY KEY (id);
 
 ALTER TABLE ONLY public.accounts
-    ADD CONSTRAINT accounts_public_creator_id_key UNIQUE (public_creator_id);
+    ADD CONSTRAINT accounts_public_account_id_key UNIQUE (public_account_id);
 
