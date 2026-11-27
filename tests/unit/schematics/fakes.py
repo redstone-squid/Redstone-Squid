@@ -36,6 +36,7 @@ def make_analysis(
     analyzer_version: str = "nucleation-test",
     lattice: AutostackLattice | None = None,
     signs: tuple[SchematicSign, ...] = (),
+    block_counts: dict[str, int] | None = None,
 ) -> SchematicAnalysis:
     """Build a plausible analysis without going anywhere near the engine."""
     width, height, length = dimensions
@@ -52,6 +53,7 @@ def make_analysis(
             palette_size=3,
             region_names=("Main",),
             signs=signs,
+            block_counts=block_counts,
         ),
         fingerprints=SchematicFingerprints(structural=structural, shape=shape, exact=exact),
         analyzer_version=analyzer_version,
@@ -207,6 +209,7 @@ class FakeSchematicStore:
                     publication=stored.publication,
                     simulation_evidence=stored.simulation_evidence,
                     uploaded_by_account_id=stored.uploaded_by_account_id,
+                    attached_at=stored.attached_at,
                 )
                 if stored.build_id == build_id
                 else stored
@@ -221,6 +224,7 @@ class FakeSchematicStore:
             analysis=analysis,
             publication=publication or SchematicPublication(),
             uploaded_by_account_id=context.effective.linked_account_id,
+            attached_at=Instant.now(),
         )
         self.stored.append(stored)
         return stored.id

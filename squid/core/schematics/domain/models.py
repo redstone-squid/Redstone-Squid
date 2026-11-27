@@ -175,6 +175,20 @@ class SchematicMetrics:
     declared_author: str | None = None
     signs: tuple[SchematicSign, ...] = ()
     block_counts: dict[str, int] | None = None
+    """Non-air blocks per block state; they sum to block_count."""
+
+    def blocks_by_name(self) -> tuple[tuple[str, int], ...] | None:
+        """Total block_counts by block name, ignoring states, most common first.
+
+        Return None when the analysis did not record block counts.
+        """
+        if self.block_counts is None:
+            return None
+        totals: dict[str, int] = {}
+        for state, count in self.block_counts.items():
+            name = state.partition("[")[0]
+            totals[name] = totals.get(name, 0) + count
+        return tuple(sorted(totals.items(), key=lambda item: (-item[1], item[0])))
 
 
 @dataclass(frozen=True, slots=True)

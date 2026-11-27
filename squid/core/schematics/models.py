@@ -191,6 +191,8 @@ class BuildSchematic(Base, kw_only=True):
     """Material- and orientation-sensitive identity, the strict tier."""
     signature_structural: Mapped[str | None] = mapped_column(Text, default=None)
     """The engine's structural signature document, kept for pre-filter experiments."""
+    block_counts: Mapped[dict[str, int] | None] = mapped_column(JSONB(none_as_null=True), default=None)
+    """Non-air blocks per block state, or None for attachments analyzed before counts were stored."""
     analyzer_version: Mapped[str] = mapped_column(Text, nullable=False)
     """Engine version that produced these fingerprints; comparisons must use the same version."""
     analysis_schema_version: Mapped[int] = mapped_column(SmallInteger, nullable=False)
@@ -232,9 +234,10 @@ class BuildSchematic(Base, kw_only=True):
         default=None,
     )
     """Account that supplied the file, which can differ from the account attesting publication rights."""
-    analyzed_at: Mapped[Instant] = mapped_column(
+    attached_at: Mapped[Instant] = mapped_column(
         InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
     )
+    """When the file was first attached to this build; reanalysis leaves it unchanged."""
 
 
 class SchematicPreviewObject(Base, kw_only=True):

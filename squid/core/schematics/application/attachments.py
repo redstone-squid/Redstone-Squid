@@ -66,6 +66,8 @@ class StoredSchematic:
     simulation_evidence: SimulationResult | None = None
     uploaded_by_account_id: int | None = None
     """Account that supplied the file, or None for legacy rows and deleted accounts."""
+    attached_at: Instant | None = None
+    """When the file was attached to the build, or None before the attachment is stored."""
 
 
 @dataclass(frozen=True, slots=True)

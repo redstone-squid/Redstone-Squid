@@ -44,6 +44,7 @@ def to_row_values(analysis: SchematicAnalysis) -> dict[str, Any]:
         "declared_name": metrics.declared_name,
         "declared_author": metrics.declared_author,
         "signs": [{"x": sign.x, "y": sign.y, "z": sign.z, "text": sign.text} for sign in metrics.signs],
+        "block_counts": metrics.block_counts,
         "fingerprint_structural": fingerprints.structural,
         "fingerprint_shape": fingerprints.shape,
         "fingerprint_exact": fingerprints.exact,
@@ -80,6 +81,7 @@ def _to_stored_schematic(row: BuildSchematic, *, source_format: str, byte_size: 
         is_primary=row.is_primary,
         original_filename=row.original_filename,
         uploaded_by_account_id=row.uploaded_by_account_id,
+        attached_at=row.attached_at,
         publication=SchematicPublication(
             visibility=SchematicVisibility(row.visibility),
             license=SchematicLicense(row.license_code) if row.license_code is not None else None,
@@ -109,6 +111,7 @@ def _to_stored_schematic(row: BuildSchematic, *, source_format: str, byte_size: 
                 declared_name=row.declared_name,
                 declared_author=row.declared_author,
                 signs=_signs_from_json(row.signs),
+                block_counts=row.block_counts,
             ),
             fingerprints=SchematicFingerprints(
                 structural=row.fingerprint_structural or "",
