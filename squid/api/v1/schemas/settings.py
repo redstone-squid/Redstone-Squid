@@ -62,8 +62,8 @@ class RuntimeSettingsDetail(BaseModel):
     def from_domain(cls, settings: RuntimeSettings, *, revision: int, names: Mapping[int, str] | None) -> Self:
         known = names or {}
 
-        def reference(discord_id: int) -> DiscordReference:
-            return DiscordReference(id=str(discord_id), name=known.get(discord_id))
+        def reference(snowflake: int) -> DiscordReference:
+            return DiscordReference(id=str(snowflake), name=known.get(snowflake))
 
         values: dict[str, Any] = settings.model_dump() | {"revision": revision, "names_resolved": names is not None}
         for name, field in RUNTIME_FIELDS.items():
