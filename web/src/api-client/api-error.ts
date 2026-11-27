@@ -64,15 +64,11 @@ export class ApiError extends Error {
   }
 
   /**
-   * The resource changed since the caller read it. Revision preconditions answer 412; a draft
-   * whose stored revision moved under a change answers 409 with `actual_revision`. Neither has
-   * its own code yet (api-gaps.md item 54).
+   * The resource changed since the caller read it. Context carries the caller's `expected`
+   * revision and the stored `current` one when the server knows them.
    */
   get conflict(): boolean {
-    return (
-      this.status === 412 ||
-      (this.status === 409 && typeof this.problem?.context?.actual_revision === "number")
-    );
+    return this.problem?.code === "REVISION_CONFLICT";
   }
 
   /**

@@ -74,7 +74,6 @@ const errorMessages = {
   ALIAS_IN_USE: null,
   BUILD_BUSY: m.errorBusy,
   BUILD_NOT_FOUND: m.errorGone,
-  BUILD_REVISION_MISMATCH: m.errorConflict,
   BUILD_REVISION_REQUIRED: m.errorConflict,
   CLAIM_NOT_FOUND: m.errorGone,
   CREATOR_ALIAS_NOT_FOUND: m.errorGone,
@@ -109,6 +108,7 @@ const errorMessages = {
   RATE_LIMITED: m.errorRateLimited,
   RECORD_NOT_FOUND: m.errorGone,
   RESTRICTION_NOT_FOUND: m.errorGone,
+  REVISION_CONFLICT: m.errorConflict,
   SCHEMATIC_INVALID: null,
   SCHEMATIC_NOT_FOUND: m.errorGone,
   SCHEMATIC_RENDER_REFUSED: null,
@@ -129,13 +129,12 @@ const errorMessages = {
 } satisfies Record<ErrorCode, (() => string) | null>;
 
 /**
- * The sentence to show beside a failed action. Conflicts and lost connections are recognized
- * by status, since they have no code yet; codes this build does not know fall back to the
- * problem's detail, then to the generic message.
+ * The sentence to show beside a failed action. Lost connections have no problem, so they are
+ * recognized first; codes this build does not know fall back to the problem's detail, then to
+ * the generic message.
  */
 export function errorMessage(error: ApiError): string {
   if (error.offline) return m.errorOffline();
-  if (error.conflict) return m.errorConflict();
   const code = error.problem?.code;
   const message =
     code != null && Object.hasOwn(errorMessages, code) ? errorMessages[code as ErrorCode] : null;

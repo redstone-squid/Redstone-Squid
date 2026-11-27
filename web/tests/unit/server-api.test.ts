@@ -150,11 +150,11 @@ describe("API errors", () => {
   });
 
   it.each([
-    [412, undefined, true],
-    [409, { actual_revision: 4 }, true],
-    [409, { expected: 3 }, false],
-  ])("treats %i with context %j as a revision conflict: %s", (status, context, conflict) => {
-    expect(new ApiError(status, { title: "x", status, context }).conflict).toBe(conflict);
+    ["REVISION_CONFLICT", true],
+    ["DOMAIN_ERROR", false],
+    [undefined, false],
+  ])("treats code %s as a revision conflict: %s", (code, conflict) => {
+    expect(new ApiError(412, { title: "x", status: 412, code }).conflict).toBe(conflict);
   });
 
   it("wraps unknown failures as a service error and keeps known failures", () => {

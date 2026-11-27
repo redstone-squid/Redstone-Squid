@@ -29,7 +29,8 @@ function draft(revision: number, answers: StoredDraftResponse["answers"]): Store
 }
 
 const offline = () => new ApiError(503, undefined, { offline: true });
-const conflict = () => new ApiError(412, { title: "Changed", status: 412 });
+const conflict = () =>
+  new ApiError(412, { title: "Changed", status: 412, code: "REVISION_CONFLICT" });
 
 /** A server holding one draft that applies changes against its current revision. */
 function fakeServer(initial: StoredDraftResponse) {

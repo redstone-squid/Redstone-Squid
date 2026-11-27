@@ -93,8 +93,8 @@ describe("error messages", () => {
     ["no code or detail", problem(null), m.errorGeneric],
     ["a lost connection", new ApiError(503, undefined, { offline: true }), m.errorOffline],
     [
-      "an uncoded revision conflict",
-      new ApiError(412, { title: "x", status: 412, code: "DOMAIN_ERROR" }),
+      "a revision conflict",
+      new ApiError(412, { title: "x", status: 412, code: "REVISION_CONFLICT" }),
       m.errorConflict,
     ],
     // Messages are read inside the test, once the page locale is set.
