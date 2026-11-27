@@ -28,7 +28,8 @@ test("pages forbid framing and scripts that Astro did not emit", async ({ reques
   const headers = response.headers();
   const policy = headers["content-security-policy"] ?? "";
   expect(policy).toContain("frame-ancestors 'none'");
-  expect(policy).toMatch(/script-src 'self'( 'sha256-[^']+')*;/);
+  // The schematic viewer compiles WebAssembly; nothing else may relax script-src.
+  expect(policy).toMatch(/script-src 'self' 'wasm-unsafe-eval'( 'sha256-[^']+')*;/);
   expect(policy).toContain("report-to csp");
   expect(headers["reporting-endpoints"]).toBe('csp="/telemetry/csp"');
   expect(headers["x-content-type-options"]).toBe("nosniff");

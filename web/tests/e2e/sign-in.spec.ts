@@ -9,6 +9,12 @@ test.use({ reducedMotion: "reduce" });
 
 /** Sign the browser in as one of the fixture API's named sessions. */
 async function signInAs(context: BrowserContext, session: "member" | "pending" | "stale") {
+  // Playwright's Linux WebKit never sends Secure cookies over HTTP, even to 127.0.0.1, so the
+  // session can't reach the test servers. Production is HTTPS.
+  test.skip(
+    context.browser()?.browserType().name() === "webkit",
+    "WebKit drops Secure cookies over HTTP",
+  );
   await context.addCookies([
     {
       name: "__Host-squid_session",
