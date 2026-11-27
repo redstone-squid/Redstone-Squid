@@ -1,4 +1,8 @@
-"""Read an account's guild roles over Discord's REST API, for explaining its permissions."""
+"""Read guild roles over Discord's REST API, for processes without a gateway.
+
+Permission explanations use it for an account's roles, and worker recounts for the
+roles a reacting user voted with.
+"""
 
 import enum
 from collections.abc import Callable
@@ -14,6 +18,7 @@ from squid.core.accounts.application import AccountService
 from squid.core.accounts.domain import IdentityProvider
 from squid.core.actors import UserActor
 from squid.core.permissions.errors import DiscordMemberServiceUnavailableError
+from squid.core.voting.domain import GuildMember
 from squid.discord_rest import DiscordRestClosedError
 
 
@@ -83,12 +88,24 @@ class DiscordRestGuildMembers:
         membership = await self._membership(account_id, discord_id, guild_id)
         return membership if isinstance(membership, UserActor) else None
 
+    async def member(self, guild_id: int, discord_user_id: int) -> GuildMember | None:
+        """Return a Discord user's roles in a guild, or None when they are not a member.
+
+        An unreadable guild also returns None. The REST payload cannot show Manage
+        Server, so `manage_server` is always false. Other lookup failures raise
+        `DiscordMemberServiceUnavailableError`.
+        """
+        membership = await self._membership(None, discord_user_id, guild_id)
+        if not isinstance(membership, UserActor):
+            return None
+        return GuildMember(discord_user_id, membership.discord_role_ids)
+
     async def _discord_id(self, account_id: int) -> int | None:
         if self._discord_ids is None:
             return None
         return await self._discord_ids.discord_id_for(account_id)
 
-    async def _membership(self, account_id: int, discord_id: int, guild_id: int) -> _Membership:
+    async def _membership(self, account_id: int | None, discord_id: int, guild_id: int) -> _Membership:
         """Return the cached lookup for this guild member, or fetch and cache a fresh one."""
         cache_key = (guild_id, discord_id)
         now = self._clock()
@@ -103,7 +120,7 @@ class DiscordRestGuildMembers:
         # Cache Discord facts, not account ownership: a merge can move an identity.
         return replace(membership, account_id=account_id)
 
-    async def _fetch_membership(self, account_id: int, discord_id: int, guild_id: int) -> _Membership:
+    async def _fetch_membership(self, account_id: int | None, discord_id: int, guild_id: int) -> _Membership:
         try:
             # The raw payload is enough: only the role IDs matter, and parsing a Member
             # would need a Guild object, which a gateway-less client does not have.
@@ -124,7 +141,9 @@ class DiscordRestGuildMembers:
             ) from error
         return await self._actor_from_payload(payload, account_id, discord_id, guild_id)
 
-    async def _actor_from_payload(self, payload: object, account_id: int, discord_id: int, guild_id: int) -> UserActor:
+    async def _actor_from_payload(
+        self, payload: object, account_id: int | None, discord_id: int, guild_id: int
+    ) -> UserActor:
         """Validate the member payload's roles.
 
         The member payload does not establish Manage Server or bot-owner status, so

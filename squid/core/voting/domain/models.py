@@ -520,9 +520,18 @@ class VoteSessionSnapshot:
         return self.poll.visibility if self.poll is not None else None
 
     @property
-    def members_only(self) -> bool:
-        """Whether only members of the owning guild may vote, as in a poll kept to its guild."""
-        return self.poll is not None and self.poll.scope is PollScope.GUILD and self.poll.guild_id is not None
+    def home_guild_id(self) -> int | None:
+        """The guild a Discord-only session belongs to, or None for a network session.
+
+        Log deletion votes and server polls are voted on that guild's cards alone,
+        and weighed by the roles a voter reacts with there. Network sessions, such as
+        build reviews and network polls, can be voted on from any frontend.
+        """
+        if isinstance(self.target, DeleteLogVoteTarget):
+            return self.target.server_id
+        if self.poll is not None and self.poll.scope is PollScope.GUILD:
+            return self.poll.guild_id
+        return None
 
     @property
     def is_anonymous(self) -> bool:

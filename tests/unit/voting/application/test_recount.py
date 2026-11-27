@@ -11,6 +11,7 @@ from squid.core.voting.application import VoteService
 from squid.core.voting.application.recount import BallotRecounter, CardReactions
 from squid.core.voting.domain import (
     CastVoteResult,
+    GuildMember,
     VoteMessage,
     Voter,
     VoteRejection,
@@ -80,8 +81,18 @@ def _snapshot(*, anonymous: bool = False, selections: tuple[VoteSelection, ...] 
     return poll_snapshot(visibility=visibility, messages=(CARD,), selections=selections)
 
 
-def _recounter(votes: Votes, cards: Cards) -> BallotRecounter:
-    return BallotRecounter(votes, cards, Voters())
+class Members:
+    """Every reacting user is a member without roles, except those listed as unreadable."""
+
+    def __init__(self, unreadable: frozenset[int] = frozenset()) -> None:
+        self.unreadable = unreadable
+
+    async def member(self, guild_id: int, discord_user_id: int) -> GuildMember | None:
+        return None if discord_user_id in self.unreadable else GuildMember(discord_user_id)
+
+
+def _recounter(votes: Votes, cards: Cards, members: Members | None = None) -> BallotRecounter:
+    return BallotRecounter(votes, cards, Voters(), members or Members())
 
 
 async def test_a_reaction_missed_while_offline_becomes_a_ballot() -> None:
@@ -123,6 +134,18 @@ async def test_anonymous_reactions_are_removed_after_casting_even_without_an_acc
 
     assert votes.casts == [(Voter.account(1001), "one", "1️⃣", False), (Voter.discord(99), "one", "1️⃣", False)]
     assert sorted(cards.removed) == [("1️⃣", 1), ("1️⃣", 99)]
+
+
+async def test_a_voter_whose_roles_cannot_be_read_keeps_their_reactions() -> None:
+    """A server poll is weighed by the reacting member's roles, so an unreadable member stays uncounted."""
+    votes = Votes(_snapshot(anonymous=True))
+    cards = Cards({100: CardReactions({"1️⃣": [1]}, own=frozenset({"1️⃣", "2️⃣"}))})
+
+    assert not await _recounter(votes, cards, Members(frozenset({1}))).recount(
+        1, context=ActingContext.worker("recount")
+    )
+
+    assert (votes.casts, cards.removed) == ([], [])
 
 
 async def test_a_refused_ballot_keeps_only_the_reaction_for_the_stored_option() -> None:

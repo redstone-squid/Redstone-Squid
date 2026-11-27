@@ -25,7 +25,7 @@ from squid.bot.reactions import (
 )
 from squid.bot.ui import render_payload, text_node
 from squid.bot.voting.actors import describe_rejection, resolve_actor
-from squid.bot.voting.members import VoterMemberSync
+from squid.bot.voting.members import ReactingMembers, VoterMemberSync
 from squid.core.actors import ActingContext, UserActor
 from squid.core.locks import KeyedLock
 from squid.core.voting.application.accounts import AccountConsentedVoterLookup
@@ -65,7 +65,9 @@ class VoteReactionHandler:
         self.vote_service = bot.services.votes
         self._members = members
         self._voters = AccountConsentedVoterLookup(bot.services.accounts)
-        self._recounter = BallotRecounter(self.vote_service, bot.services.vote_cards(bot), self._voters)
+        self._recounter = BallotRecounter(
+            self.vote_service, bot.services.vote_cards(bot), self._voters, ReactingMembers(bot)
+        )
         self._background_tasks: set[JobHandle] = set()
         self._session_locks: KeyedLock[int] = KeyedLock()
         self._recounting: dict[int, int] = {}
@@ -132,7 +134,7 @@ class VoteReactionHandler:
             return
         # Without a consented account the member votes under their Discord ID.
         account_id = await self._voters.consented_account_id(member.id)
-        # The ballot is weighed from stored roles, so store the ones this reaction shows.
+        # Build reviews are weighed from stored owner-guild roles; keep this member's current.
         await self._members.record((member,))
         actor = await resolve_actor(self.bot, member, account_id=account_id)
         previous = snapshot.selection_for(Voter.of(actor))

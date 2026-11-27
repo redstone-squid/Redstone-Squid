@@ -286,6 +286,7 @@ class ReactionHarness:
         self.supervisor = BackgroundTaskSupervisor()
         self.bot: RedstoneSquid = make_layout_bot(
             user=discord.Object(999),
+            owner_server_id=10,
             tree=Mock(spec=discord.app_commands.CommandTree),
             services=self.services,
             account_ids=AccountIdCache(),

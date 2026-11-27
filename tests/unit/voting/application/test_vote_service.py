@@ -889,21 +889,27 @@ async def test_a_web_ballot_selects_the_option_without_a_card() -> None:
     assert repository.cast_calls == [CastVoteCall(12, 7, None, "deny", None, 3.0)]
 
 
-@pytest.mark.parametrize(("member", "accepted"), [(True, True), (False, False)])
-async def test_a_guild_poll_admits_only_its_guilds_members(member: bool, accepted: bool) -> None:
+async def test_a_server_poll_is_voted_on_its_own_cards_by_the_roles_reacted_with() -> None:
     poll = poll_snapshot(guild_id=OWNER_GUILD_ID, messages=(VoteMessage(100, 200, OWNER_GUILD_ID),))
     repository = FakeVoteRepository(poll)
-    if member:
-        repository.members = {(OWNER_GUILD_ID, 7): GuildMember(70)}
-    repository.mutation = StoredVoteMutation(poll, None, 1.0, just_closed=False)
+    repository.role_weights = {
+        (OWNER_GUILD_ID, VoteKind.GENERIC): [RoleWeight(OWNER_GUILD_ID, VoteKind.GENERIC, 55, 2.0)]
+    }
+    repository.mutation = StoredVoteMutation(poll, None, 2.0, just_closed=False)
     service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
+    reactor = ActingContext.for_actor(
+        UserActor(account_id=7, discord_user_id=70, guild_id=OWNER_GUILD_ID, discord_role_ids=frozenset({55}))
+    )
     web_voter = ActingContext.for_actor(UserActor(account_id=7))
 
-    result = await service.cast_vote(poll.id, "one", context=web_voter)
-    weight = await service.base_weight(poll.id, context=web_voter)
+    accepted = await service.cast_vote(poll.id, "one", emoji="1️⃣", context=reactor)
+    refused = await service.cast_vote(poll.id, "one", context=web_voter)
 
-    assert result.accepted is accepted
-    assert weight == (1.0 if accepted else VoteRejection.NOT_ELIGIBLE)
+    assert accepted.accepted
+    assert repository.cast_calls[0].desired_weight == 2.0
+    assert repository.member_lookups == []
+    assert refused.rejection is VoteRejection.WRONG_GUILD
+    assert await service.base_weight(poll.id, context=web_voter) is VoteRejection.WRONG_GUILD
 
 
 async def test_casting_weighs_only_the_new_ballot() -> None:

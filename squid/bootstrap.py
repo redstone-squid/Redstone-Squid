@@ -556,7 +556,7 @@ class _ServiceGraph:
 
     @cached_property
     def discord_guild_members(self) -> DiscordRestGuildMembers | None:
-        """Live guild roles over REST, for explaining an account's permissions in a guild."""
+        """Live guild roles over REST, for permission explanations and worker recounts."""
         client = self.discord_rest_client
         if client is None:
             return None
@@ -566,9 +566,12 @@ class _ServiceGraph:
     def rest_ballot_recounter(self) -> BallotRecounter | None:
         """Recount ballots through Discord's REST API, for processes without a gateway."""
         client = self.discord_rest_client
-        if client is None:
+        members = self.discord_guild_members
+        if client is None or members is None:
             return None
-        return BallotRecounter(self.votes, DiscordVoteCards(client), AccountConsentedVoterLookup(self.accounts))
+        return BallotRecounter(
+            self.votes, DiscordVoteCards(client), AccountConsentedVoterLookup(self.accounts), members
+        )
 
     @cached_property
     def accounts(self) -> AccountService:

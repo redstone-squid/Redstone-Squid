@@ -16,12 +16,12 @@ poll may have removed the reaction on purpose after storing the ballot.
 
 import logging
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Protocol
 
 from squid.core.actors import ActingContext, UserActor, application_operation
 from squid.core.voting.application.services import VoteService
-from squid.core.voting.domain import VoteMessage, Voter, VoteRejection, VoteSessionSnapshot, VoteStatus
+from squid.core.voting.domain import GuildMember, VoteMessage, Voter, VoteRejection, VoteSessionSnapshot, VoteStatus
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +55,14 @@ class VoteCardReactions(Protocol):
 
     async def add_own(self, card: VoteMessage, emoji: str) -> None:
         """React with an option's emoji as the bot, ignoring a card that is gone or locked."""
+        ...
+
+
+class ReactingMembers(Protocol):
+    """Look up the roles a reacting Discord user holds in a card's guild."""
+
+    async def member(self, guild_id: int, discord_user_id: int) -> GuildMember | None:
+        """Return the member, or None when they are not one or Discord cannot say."""
         ...
 
 
@@ -103,10 +111,12 @@ class BallotRecounter:
         votes: VoteService,
         cards: VoteCardReactions,
         voters: ConsentedVoterLookup,
+        members: ReactingMembers,
     ) -> None:
         self._votes = votes
         self._cards = cards
         self._voters = voters
+        self._members = members
 
     @application_operation
     async def recount(self, vote_session_id: int, *, context: ActingContext) -> bool:
@@ -206,8 +216,20 @@ class BallotRecounter:
         if len({reaction.option_id for reaction in reactions}) > 1:
             return _Ballot(stored, unresolved=stored is None)
         desired = reactions[0]
-        # The card's guild picks the alias; the service weighs the ballot from stored membership.
         actor = UserActor(account_id=voter.account_id, discord_user_id=desired.user_id, guild_id=desired.card.guild_id)
+        # Discord-only sessions, and voters with no stored roles, are weighed by the roles
+        # they reacted with, so those are looked up; other ballots use stored roles.
+        if snapshot.home_guild_id is not None or voter.account_id is None:
+            try:
+                member = await self._members.member(desired.card.guild_id, desired.user_id)
+            except Exception:
+                logging.getLogger(__name__).warning("Could not read a reacting voter's roles", exc_info=True)
+                member = None
+            if member is None:
+                # Eligibility is unknown. Keep the reactions: in an anonymous poll they are
+                # the only record of the vote.
+                return _Ballot(stored, unresolved=True)
+            actor = replace(actor, discord_role_ids=member.role_ids, discord_guild_admin=member.manage_server)
         result = await self._votes._record_observed_reaction(
             actor,
             snapshot.id,

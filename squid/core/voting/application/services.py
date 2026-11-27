@@ -34,7 +34,6 @@ from squid.core.voting.domain import (
     MIN_POLL_DURATION_SECONDS,
     BallotChange,
     CastVoteResult,
-    DeleteLogVoteTarget,
     EmojiPreset,
     GuildMember,
     PollScope,
@@ -69,11 +68,11 @@ type FinalRecount = Callable[[int, int], Awaitable[tuple[bool, tuple[int, ...]]]
 class VoteService:
     """Check voter eligibility and manage voting sessions through the repository.
 
-    A ballot is weighed once, when it is cast, from the voter's stored membership in
-    the session's owner guild, so every frontend weighs it the same way and nothing
-    asks Discord. Role changes afterwards do not move it, so a result can be
-    explained from the ballots alone. Adapters keep memberships current with
-    `record_members`. The repository stores a ballot and any threshold closure
+    A ballot is weighed once, when it is cast. Discord-only sessions use the roles
+    the voter reacts with; build reviews use stored roles in the network's owner
+    guild, which adapters keep current with `record_members`, so every frontend
+    weighs them alike. Role changes afterwards do not move a ballot, so a result
+    can be explained from the ballots alone. The repository stores a ballot and any threshold closure
     together; this service commits the transaction.
 
     Results describe the resulting voting session. Publishing its Discord messages
@@ -99,41 +98,42 @@ class VoteService:
 
         Role ids only mean anything inside one guild, so a session shared across
         guilds has to pick one authority; otherwise any guild hosting a card could
-        set its own multipliers and decide the shared outcome.
+        set its own multipliers and decide the shared outcome. Build reviews use the
+        network's owner guild, and network polls have no authority at all.
         """
-        match snapshot.kind:
-            case VoteKind.BUILD | VoteKind.BUILD_EDIT:
-                return self._build_owner_guild_id
-            case VoteKind.DELETE_LOG:
-                return snapshot.target.server_id if isinstance(snapshot.target, DeleteLogVoteTarget) else None
-            case VoteKind.GENERIC:
-                return snapshot.poll.guild_id if snapshot.poll is not None else None
+        if snapshot.kind in (VoteKind.BUILD, VoteKind.BUILD_EDIT):
+            return self._build_owner_guild_id
+        return snapshot.home_guild_id
 
     async def _weigh(
         self, uow: VoteUnitOfWork, actor: UserActor, snapshot: VoteSessionSnapshot
     ) -> float | VoteRejection:
         """Return the actor's base weight in a session, before the option multiplier.
 
-        Weight comes from the voter's stored membership in the owner guild; a voter
-        it does not list is weighed as a member without roles. A voter without an
-        account has no stored membership, so only the roles they react with in the
-        owner guild count. A poll limited to its guild only admits that guild's
-        members. With no owner guild, every eligible voter weighs 1.
+        A Discord-only session is weighed by the roles the voter reacts with in its
+        guild, so it refuses votes from anywhere else. A build review is weighed by
+        the voter's stored roles in the network's owner guild; a voter without an
+        account has none stored, so only the roles they react with there count. With
+        no owner guild, as for network polls, every eligible voter weighs 1.
         """
         if not (await self._permissions.check(actor, VOTE_POLL_CAST, uow=uow)).allowed:
             return VoteRejection.NOT_ELIGIBLE
         owner_guild_id = self._owner_guild_id(snapshot)
         if owner_guild_id is None:
-            # Without a designated authority no guild's role table may speak for the session.
             return 1.0
-        if actor.account_id is not None:
+        live = (
+            GuildMember(actor.discord_user_id, actor.discord_role_ids, actor.discord_guild_admin)
+            if actor.guild_id == owner_guild_id and actor.discord_user_id is not None
+            else None
+        )
+        if snapshot.home_guild_id is not None:
+            if live is None:
+                return VoteRejection.WRONG_GUILD
+            member = live
+        elif actor.account_id is not None:
             member = await uow.votes.get_member(owner_guild_id, actor.account_id)
-        elif actor.guild_id == owner_guild_id and actor.discord_user_id is not None:
-            member = GuildMember(actor.discord_user_id, actor.discord_role_ids, actor.discord_guild_admin)
         else:
-            member = None
-        if member is None and snapshot.members_only:
-            return VoteRejection.NOT_ELIGIBLE
+            member = live
         weight_actor = UserActor(
             account_id=actor.account_id,
             discord_user_id=None if member is None else member.discord_user_id,

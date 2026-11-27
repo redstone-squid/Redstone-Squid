@@ -17,20 +17,17 @@ def member(user_id: int, guild: discord.Guild, *roles: int, bot: bool = False) -
 
 def sync() -> tuple[VoterMemberSync, AsyncMock]:
     votes = Mock(record_members=AsyncMock(), forget_member=AsyncMock())
-    return VoterMemberSync(Mock(services=Mock(votes=votes))), votes.record_members
+    return VoterMemberSync(Mock(services=Mock(votes=votes), owner_server_id=1)), votes.record_members
 
 
-async def test_members_are_recorded_per_guild_without_bots() -> None:
+async def test_only_the_owner_guilds_members_are_recorded_and_never_bots() -> None:
     first, second = Mock(spec=discord.Guild, id=1), Mock(spec=discord.Guild, id=2)
     members, record = sync()
 
     with ActingContext.worker("discord.gateway").scope():
         await members.record((member(10, first, 5), member(11, first, bot=True), member(12, second)))
 
-    assert [call.args for call in record.await_args_list] == [
-        (1, [GuildMember(10, frozenset({5}))]),
-        (2, [GuildMember(12)]),
-    ]
+    assert [call.args for call in record.await_args_list] == [(1, [GuildMember(10, frozenset({5}))])]
 
 
 async def test_reconcile_waits_for_a_complete_member_cache() -> None:

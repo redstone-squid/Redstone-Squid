@@ -113,7 +113,7 @@ async def get_vote_session(
         return detail
     weight = await votes.base_weight(vote_session_id, context=caller.context())
     match weight:
-        case VoteRejection.NOT_ELIGIBLE:
+        case VoteRejection.NOT_ELIGIBLE | VoteRejection.WRONG_GUILD:
             viewer = VoteViewer(eligible=False, weight=None)
         case float():
             viewer = VoteViewer(eligible=True, weight=weight)
