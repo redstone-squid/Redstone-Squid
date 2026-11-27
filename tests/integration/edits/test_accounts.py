@@ -19,8 +19,8 @@ from squid.core.accounts.application.edits import (
     AccountVisibilityEdit,
     account_target,
 )
-from squid.core.accounts.domain import AccountConsent, ProfileUpdate
-from squid.core.accounts.errors import ConsentRequiredError, LastIdentityError
+from squid.core.accounts.domain import PrivacyNoticeReceipt, ProfileUpdate
+from squid.core.accounts.errors import LastIdentityError
 from squid.core.accounts.models import AccountIdentity, ProfileClearAudit
 from squid.core.actors import ActingContext, UserActor
 from squid.core.edits.application import EditExecutor
@@ -40,7 +40,7 @@ async def test_profile_and_identity_compete_on_one_revision_and_undo_checks_curr
     )
     async with factory() as uow:
         account = await uow.accounts.create(
-            consent=AccountConsent.grant_current(), identities=(AccountIdentity.discord(999),)
+            consent=PrivacyNoticeReceipt.grant_current(), identities=(AccountIdentity.discord(999),)
         )
         await uow.commit()
     actor = UserActor(account_id=account.id)
@@ -81,18 +81,17 @@ async def test_profile_and_identity_compete_on_one_revision_and_undo_checks_curr
         await executor.execute(saved.receipt.redo(undone.outcome.revisions), context=ActingContext.direct(actor))
     async with factory() as uow:
         current = await uow.accounts.lock_for_edit(account.id)
-        current.consent_version = None
-        current.consented_at = None
+        current.privacy_notice_version = None
+        current.privacy_notice_acknowledged_at = None
         await uow.commit()
-    with pytest.raises(ConsentRequiredError):
-        await executor.execute(
-            EditCommand(
-                PROFILE_EDIT,
-                (Revision(account_target(account.id), current.revision),),
-                EditValues.of({"bio": "New"}),
-            ),
-            context=ActingContext.direct(actor),
-        )
+    await executor.execute(
+        EditCommand(
+            PROFILE_EDIT,
+            (Revision(account_target(account.id), current.revision),),
+            EditValues.of({"bio": "New"}),
+        ),
+        context=ActingContext.direct(actor),
+    )
 
 
 async def test_final_unlink_retains_profile_and_last_identity_guard(
@@ -102,7 +101,7 @@ async def test_final_unlink_retains_profile_and_last_identity_guard(
     executor = EditExecutor(factory, {UNLINK_EDIT: AccountUnlinkEdit(PermissionService(uow_factory=factory))})
     async with factory() as uow:
         account = await uow.accounts.create(
-            consent=AccountConsent.grant_current(),
+            consent=PrivacyNoticeReceipt.grant_current(),
             identities=(AccountIdentity.discord(999), AccountIdentity.discord(1000)),
         )
         identity_id = account.identities[0].id
@@ -143,10 +142,10 @@ async def test_staff_clear_is_final_revision_checked_and_permanently_attributed(
     executor = EditExecutor(factory, {PROFILE_CLEAR: AccountProfileClear(permissions)})
     async with factory() as uow:
         account = await uow.accounts.create(
-            consent=AccountConsent.grant_current(), identities=(AccountIdentity.discord(991),)
+            consent=PrivacyNoticeReceipt.grant_current(), identities=(AccountIdentity.discord(991),)
         )
         staff = await uow.accounts.create(
-            consent=AccountConsent.grant_current(), identities=(AccountIdentity.discord(992),)
+            consent=PrivacyNoticeReceipt.grant_current(), identities=(AccountIdentity.discord(992),)
         )
         await uow.accounts.upsert_profile(account.id, ProfileUpdate(bio="remove me", hidden=True))
         await uow.commit()

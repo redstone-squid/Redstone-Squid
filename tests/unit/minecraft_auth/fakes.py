@@ -25,7 +25,7 @@ class FakeAccounts:
         self.consented: set[int] = set()
         self.java_identities: dict[int, set[UUID]] = {}
 
-    async def has_current_consent(self, account_id: int) -> bool:
+    async def account_exists(self, account_id: int) -> bool:
         return account_id in self.consented
 
     async def can_approve_minecraft_identity(self, *, account_id: int, java_uuid: UUID) -> bool:

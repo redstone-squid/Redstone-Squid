@@ -17,7 +17,7 @@ from squid.bot.events.cog import DomainEventCog
 from squid.bot.reactions import ReactionClearEvent, ReactionEvent, ReactionResolver, ReactionRouter
 from squid.bot.voting.cog import VoteCog
 from squid.core.accounts.application import AccountService
-from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, IdentityProvider
+from squid.core.accounts.domain import PRIVACY_NOTICE_VERSION, IdentityProvider, PrivacyNoticeReceipt
 from squid.core.accounts.models import Account, AccountIdentity
 from squid.core.actors import ActingContext, Actor, UserActor
 from squid.core.permissions.application import PermissionService
@@ -149,7 +149,7 @@ class Accounts(AccountService):
         default_factory=lambda: Account(
             id=7,
             identities=(AccountIdentity.discord(70),),
-            consent=AccountConsent(CURRENT_CONSENT_VERSION, Instant.now()),
+            consent=PrivacyNoticeReceipt(PRIVACY_NOTICE_VERSION, Instant.now()),
         )
     )
 
@@ -500,13 +500,13 @@ async def test_clear_and_recovery_restore_options_without_toggling_ballots(react
     assert message.added == ["1️⃣", "2️⃣"] * 3
 
 
-async def test_a_member_without_a_consented_account_votes_under_their_discord_id(reactions: ReactionHarness) -> None:
+async def test_a_member_without_a_privacy_receipt_votes_under_their_account(reactions: ReactionHarness) -> None:
     reactions.accounts.account = replace(reactions.accounts.account, consent=None)
     message = reactions.messages[100]
     async with reactions.running():
         await reactions.cog.reactions.on_reaction_add(reactions.event())
 
-    assert reactions.votes.casts == [(UserActor(discord_user_id=70, guild_id=10), "one", "1️⃣")]
+    assert reactions.votes.casts == [(UserActor(account_id=7, discord_user_id=70, guild_id=10), "one", "1️⃣")]
     assert message.sent == []
 
 

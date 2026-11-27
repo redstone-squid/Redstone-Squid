@@ -43,8 +43,8 @@ from squid.core.accounts.domain import (
     IdentityProvider,
     fold_creator_name,
 )
-from squid.core.accounts.domain.consent import AccountConsent, consent_refresh_required
 from squid.core.accounts.domain.models import _POSITIVE_DECIMAL, _identity_order
+from squid.core.accounts.domain.privacy import PrivacyNoticeReceipt
 from squid.core.accounts.domain.profiles import ProfileLink
 from squid.core.errors import ValidationError
 from squid.core.persistence.base import Base
@@ -101,8 +101,8 @@ class Account(CreatedAtMixin, Revisioned, Base, kw_only=True):
         UniqueConstraint("public_account_id", name="accounts_public_account_id_key"),
         CheckConstraint("revision > 0", name="accounts_revision_positive"),
         CheckConstraint(
-            "(consent_version IS NULL) = (consented_at IS NULL)",
-            name="accounts_consent_receipt_complete",
+            "(privacy_notice_version IS NULL) = (privacy_notice_acknowledged_at IS NULL)",
+            name="accounts_privacy_notice_receipt_complete",
         ),
     )
     id: Mapped[int] = mapped_column(primary_key=True, default=None)
@@ -111,13 +111,13 @@ class Account(CreatedAtMixin, Revisioned, Base, kw_only=True):
         UUID(as_uuid=True), nullable=False, server_default=text("gen_random_uuid()"), default_factory=uuid.uuid4
     )
     discord_build_indexing_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
-    consent_version: Mapped[str | None] = mapped_column(Text, default=None)
-    consented_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
+    privacy_notice_version: Mapped[str | None] = mapped_column(Text, default=None)
+    privacy_notice_acknowledged_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
 
     identities: tuple[AccountIdentity, ...] = ()
     """Linked identities, populated together by the repository."""
 
-    consent: AccountConsent | None = None
+    consent: PrivacyNoticeReceipt | None = None
 
     def identities_for(self, provider: IdentityProvider) -> tuple[AccountIdentity, ...]:
         """Return every identity for *provider* in persistence order."""
@@ -147,14 +147,6 @@ class Account(CreatedAtMixin, Revisioned, Base, kw_only=True):
             ):
                 selected = identity
         return selected
-
-    @property
-    def needs_consent_refresh(self) -> bool:
-        """Whether the current privacy notice must be accepted before storing more identity data."""
-        return consent_refresh_required(
-            self.created_at,
-            None if self.consent is None else self.consent.version,
-        )
 
 
 class AccountIdentity(CreatedAtMixin, Base, kw_only=True):

@@ -88,7 +88,7 @@ async def edit_build(
     if_match: Annotated[str | None, HeaderParameter(name="If-Match")] = None,
 ) -> Response[BuildDetail]:
     """Apply a permitted build edit or submit it for review."""
-    caller.require_consented_account()
+    caller.require_account_id()
     context = caller.context()
     result = await services.edits.execute(
         EditCommand(
@@ -250,7 +250,7 @@ async def list_builds(
     other unpublished listings require build.submission.view_pending permission. Text search
     lives at /v1/search.
     """
-    submitter_id = caller.require_consented_account() if submitted_by is not None else None
+    submitter_id = caller.require_account_id() if submitted_by is not None else None
     if status is not None:
         statuses = frozenset({status.to_domain()})
     else:

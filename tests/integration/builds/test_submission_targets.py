@@ -13,7 +13,7 @@ from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
+from squid.core.accounts.domain import PRIVACY_NOTICE_VERSION, IdentityProvider
 from squid.core.accounts.models import Account, AccountIdentity
 from squid.core.accounts.models import AccountIdentity as AccountIdentityValue
 from squid.core.actors import ActingContext, UserActor
@@ -377,7 +377,7 @@ async def test_concurrent_source_draft_writes_publish_and_materialize_one_submis
     assert isinstance(result, FinalizedBuild)
 
     async with build_edit_session(migrated_session_factory) as session:
-        staff = Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now())
+        staff = Account(privacy_notice_version=PRIVACY_NOTICE_VERSION, privacy_notice_acknowledged_at=Instant.now())
         session.add(staff)
         await session.flush()
         role_id = await session.scalar(
@@ -445,8 +445,8 @@ async def test_notification_materialize_merge_and_replay_coalesces_recipient_sta
     assert build.id is not None
 
     async with build_edit_session(migrated_session_factory) as session:
-        survivor = Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now())
-        absorbed = Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now())
+        survivor = Account(privacy_notice_version=PRIVACY_NOTICE_VERSION, privacy_notice_acknowledged_at=Instant.now())
+        absorbed = Account(privacy_notice_version=PRIVACY_NOTICE_VERSION, privacy_notice_acknowledged_at=Instant.now())
         session.add_all([survivor, absorbed])
         await session.flush()
         role_id = await session.scalar(

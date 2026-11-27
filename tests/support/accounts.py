@@ -15,7 +15,6 @@ from whenever import Instant
 from squid.core.accounts.application import AccountService
 from squid.core.accounts.application.ports import VerificationLinkResult
 from squid.core.accounts.domain import (
-    AccountConsent,
     AccountMerge,
     ClaimMethod,
     ClaimStatus,
@@ -26,6 +25,7 @@ from squid.core.accounts.domain import (
     IdentityRefresh,
     LinkPreview,
     LinkReservation,
+    PrivacyNoticeReceipt,
     ProfileUpdate,
     fold_creator_name,
 )
@@ -75,7 +75,7 @@ class FakeAccountRepository:
         subject: int,
         *,
         provider: IdentityProvider = IdentityProvider.DISCORD,
-        consent: AccountConsent | None = None,
+        consent: PrivacyNoticeReceipt | None = None,
         java_uuid: UUID | None = None,
         account_id: int | None = None,
     ) -> Account:
@@ -98,7 +98,7 @@ class FakeAccountRepository:
         return alias
 
     def _store(
-        self, identities: Sequence[AccountIdentity], consent: AccountConsent | None, account_id: int | None = None
+        self, identities: Sequence[AccountIdentity], consent: PrivacyNoticeReceipt | None, account_id: int | None = None
     ) -> Account:
         if account_id is None:
             account_id = self.next_id
@@ -116,7 +116,7 @@ class FakeAccountRepository:
     async def create(
         self,
         *,
-        consent: AccountConsent | None = None,
+        consent: PrivacyNoticeReceipt | None = None,
         identities: Sequence[AccountIdentity] = (),
     ) -> Account:
         return self._store(identities, consent)
@@ -272,14 +272,14 @@ class FakeAccountRepository:
         }
 
     async def get_or_create_identity(
-        self, provider: IdentityProvider, subject: str, *, consent: AccountConsent | None = None
+        self, provider: IdentityProvider, subject: str, *, consent: PrivacyNoticeReceipt | None = None
     ) -> Account:
         # Consent applies only when creating an account.
         return await self.get_by_identity(provider, subject) or self.seed_account(
             int(subject), provider=provider, consent=consent
         )
 
-    async def update_consent(self, account_id: int, consent: AccountConsent) -> Account:
+    async def update_consent(self, account_id: int, consent: PrivacyNoticeReceipt) -> Account:
         account = self.accounts[account_id]
         # The database's version column advances on every row update.
         updated = _changed(account, consent=consent)
@@ -288,7 +288,7 @@ class FakeAccountRepository:
         return updated
 
     async def consume_code_and_link_account(
-        self, *, account_id: int, code: str, consent: AccountConsent, reservation_token: str | None = None
+        self, *, account_id: int, code: str, consent: PrivacyNoticeReceipt, reservation_token: str | None = None
     ) -> VerificationLinkResult:
         if account_id not in self.accounts:
             raise AccountNotFoundError(account_id)

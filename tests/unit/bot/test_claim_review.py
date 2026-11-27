@@ -1,6 +1,6 @@
 """Semantic creator-credit review workspace tests."""
 
-from collections.abc import Sequence
+from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from typing import override
 from unittest.mock import AsyncMock
@@ -13,7 +13,6 @@ import squid.bot.accounts.claims as claims_view
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.accounts.claims import ClaimReviewComponent
-from squid.bot.accounts.consent import ConsentedAccountWork
 from squid.core.accounts.application import AccountService
 from squid.core.accounts.domain import ClaimStatus
 from squid.core.accounts.errors import AliasAlreadyClaimedError
@@ -170,11 +169,13 @@ async def test_approving_after_an_undelivered_conflict_render_does_not_take_the_
 ) -> None:
     """The reader never saw "Take the name", so their next Approve must not reassign it."""
 
-    async def consented(event: sd.ActionEvent, accounts: AccountService, work: ConsentedAccountWork) -> None:
+    async def consented(
+        event: sd.ActionEvent, accounts: AccountService, work: Callable[[sd.ActionEvent, int], Awaitable[None]]
+    ) -> None:
         del accounts
         await work(event, AUTHOR_ID)
 
-    monkeypatch.setattr(claims_view, "with_consented_account", consented)
+    monkeypatch.setattr(claims_view, "with_account", consented)
     harness = make_component((make_claim(7),), conflict=True)
     message_root = make_layout_bot().ui.mount(harness.component, access=sd.Owner(AUTHOR_ID), timeout=300)
     with sl.runtime.transaction():
@@ -198,11 +199,13 @@ async def test_approving_after_an_undelivered_conflict_render_does_not_take_the_
 
 
 async def test_approving_through_the_panel_removes_the_claim(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def consented(event: sd.ActionEvent, accounts: AccountService, work: ConsentedAccountWork) -> None:
+    async def consented(
+        event: sd.ActionEvent, accounts: AccountService, work: Callable[[sd.ActionEvent, int], Awaitable[None]]
+    ) -> None:
         del accounts
         await work(event, AUTHOR_ID)
 
-    monkeypatch.setattr(claims_view, "with_consented_account", consented)
+    monkeypatch.setattr(claims_view, "with_account", consented)
     harness = make_component((make_claim(7),))
     on_error = AsyncCallRecorder()
     message_root = make_layout_bot().ui.mount(

@@ -29,33 +29,33 @@ from squid.core.accounts.application.edits import (
     account_target,
 )
 from squid.core.accounts.domain import (
-    AccountConsent,
     IdentityProvider,
     LinkPreview,
+    PrivacyNoticeReceipt,
     ProfileUpdate,
 )
 from squid.core.accounts.models import AccountIdentity, AccountProfile
 from squid.core.actors import ActingContext, Actor
 from squid.core.edits.application import EditRunner
-from squid.core.edits.domain import EditValues, Revision, RevisionConflictError
+from squid.core.edits.domain import EditValues
 from squid_i18n import md_tr
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 MAX_LISTED = 25
 """Maximum identities offered by one Discord select."""
 
-type ConsentAnswer = Callable[[sd.ActionEvent, AccountConsent | None], Awaitable[None]]
+type LinkConfirmationAnswer = Callable[[sd.ActionEvent, PrivacyNoticeReceipt | None], Awaitable[None]]
 
 
-class ConsentRequest(Protocol):
+class LinkConfirmationRequest(Protocol):
     """Open a consent prompt whose mount owns any unanswered cleanup."""
 
     def __call__(
         self,
         event: sd.ActionEvent,
-        answered: ConsentAnswer,
+        answered: LinkConfirmationAnswer,
         *,
-        preview: LinkPreview | None = None,
+        preview: LinkPreview,
         on_abandon: Callable[[], Awaitable[None]] | None = None,
         timeout: float = 120.0,
     ) -> Awaitable[bool]: ...
@@ -72,7 +72,6 @@ class AccountOverview(sl.Component[ComponentsV2Target, sd.Request]):
     _revision: int = sl.state(1)
     # Reload these values on mount instead of restoring stale service data from a snapshot.
     _identities: tuple[AccountIdentity, ...] = sl.state(())
-    _needs_consent: bool = sl.state(False)
     # No default: the empty profile needs this instance's account id.
     _profile: AccountProfile = sl.state()
     _public_id: UUID | None = sl.state(None)
@@ -86,7 +85,6 @@ class AccountOverview(sl.Component[ComponentsV2Target, sd.Request]):
         actor: Callable[[], Awaitable[Actor]],
         account_id: int,
         actor_id: int,
-        request_consent: ConsentRequest,
         discord_username: str | None = None,
         on_access_changed: Callable[[], Awaitable[None]] | None = None,
     ) -> None:
@@ -95,7 +93,6 @@ class AccountOverview(sl.Component[ComponentsV2Target, sd.Request]):
         self._actor_id = actor_id
         self._discord_username = discord_username
         self._on_access_changed = on_access_changed
-        self._request_consent = request_consent
         self._profile = AccountProfile.empty(account_id)
         self._profile_editor = None
         self._edit_actor = actor
@@ -112,7 +109,6 @@ class AccountOverview(sl.Component[ComponentsV2Target, sd.Request]):
         )
         self._revision = snapshot.account.revision
         self._identities = snapshot.account.identities
-        self._needs_consent = snapshot.account.needs_consent_refresh
         self._profile = snapshot.profile
         self._public_id = snapshot.account.public_account_id
         if self.selected is None:
@@ -238,7 +234,7 @@ class AccountOverview(sl.Component[ComponentsV2Target, sd.Request]):
                 tr(t"account-history-visibility = Change identity visibility"),
             )
 
-        await self._with_consent(event, apply)
+        await apply()
 
     async def _toggle_page(self, event: sd.ToggleEvent) -> None:
         hidden = not event.value
@@ -246,7 +242,7 @@ class AccountOverview(sl.Component[ComponentsV2Target, sd.Request]):
         async def apply() -> None:
             await self._save_profile(ProfileUpdate(hidden=hidden))
 
-        await self._with_consent(event, apply)
+        await apply()
 
     async def _unlink(self, event: sd.PressEvent) -> None:
         """Remove the selected identity. The reader has already agreed to this."""
@@ -276,7 +272,7 @@ class AccountOverview(sl.Component[ComponentsV2Target, sd.Request]):
                 close=self._close_profile_editor,
             )
 
-        await self._with_consent(event, apply)
+        await apply()
 
     def _close_profile_editor(self) -> None:
         self._profile_editor = None
@@ -285,41 +281,6 @@ class AccountOverview(sl.Component[ComponentsV2Target, sd.Request]):
         await self.edits.bind(PROFILE_EDIT, account_target(self._account_id), self._revision).save(
             ProfileValues.patch(update), tr(t"account-history-profile = Edit profile")
         )
-
-    async def _with_consent(self, event: sd.ActionEvent, work: Callable[[], Awaitable[None]]) -> None:
-        """Run the change immediately or after acceptance in a separate consent prompt.
-
-        The prompt is opened without waiting for its answer, releasing this panel's
-        action transaction and dispatch lock. On acceptance, record consent and run
-        the change in a fresh parent action. The injected consent requester arranges
-        for the parent panel to redraw.
-        """
-        if not self._needs_consent:
-            await work()
-            return
-
-        async def answered(_prompt: sd.ActionEvent, consent: AccountConsent | None) -> None:
-            if consent is None:
-                # Cancelling leaves the account and the displayed panel unchanged.
-                return
-            granted = await self._accounts.grant_current_consent(
-                context=ActingContext.for_actor(await self._edit_actor())
-            )
-            # Consent is saved outside session history, so its entries for this account
-            # now expect an old revision and could only fail. Drop them.
-            self.edits.forget({account_target(self._account_id).identity})
-            # Saving consent advances the revision by exactly one. A larger step means the
-            # account also changed elsewhere since this panel loaded, so `work` may be stale.
-            expected = Revision(account_target(self._account_id), self._revision + 1)
-            if granted.revision != expected.value:
-                raise RevisionConflictError(expected, granted.revision)
-            self._revision = granted.revision
-            self._needs_consent = False
-            if self._on_access_changed is not None:
-                await self._on_access_changed()
-            await work()
-
-        await self._request_consent(event, answered)
 
     async def _reload(self) -> None:
         await self._refresh()

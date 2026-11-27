@@ -31,7 +31,6 @@ from squid.api.v1.submissions import (
     get_submission_forms,
     router,
 )
-from squid.core.accounts.errors import ConsentRequiredError
 from squid.core.actors import ActingContext, Actor, UserActor
 from squid.core.errors import AuthenticationError
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, offset_page
@@ -501,19 +500,14 @@ async def test_draft_authentication_requires_a_human_account() -> None:
         await authenticated_submission_context(ANONYMOUS)
 
 
-async def test_draft_authentication_requires_current_privacy_consent() -> None:
+async def test_draft_authentication_accepts_the_signed_in_account() -> None:
     caller = Caller(
         kind="account",
         subject="account:42",
         account_id=42,
-        consent_pending=True,
     )
 
-    with pytest.raises(ConsentRequiredError) as error:
-        await authenticated_submission_context(caller)
-
-    # Consent failures identify the account without assuming a Discord identity.
-    assert error.value.context == {"account_id": 42}
+    assert (await authenticated_submission_context(caller)).effective.require_account_id() == 42
 
 
 async def test_player_grant_derives_minecraft_origin() -> None:

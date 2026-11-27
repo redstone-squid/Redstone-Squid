@@ -11,7 +11,7 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, ClaimMethod, ClaimStatus
+from squid.core.accounts.domain import PRIVACY_NOTICE_VERSION, ClaimMethod, ClaimStatus, PrivacyNoticeReceipt
 from squid.core.accounts.models import AccountIdentity as AccountIdentityValue
 from squid.core.accounts.models import CreatorAlias
 from squid.core.persistence.base import Base
@@ -20,7 +20,7 @@ from squid.core.unit_of_work import UnitOfWorkFactory
 from tests.support.database import assert_loaded_detached, record_queries
 from tests.support.unit_of_work import transact
 
-CONSENT = AccountConsent(CURRENT_CONSENT_VERSION, Instant.from_utc(2026, 8, 4))
+CONSENT = PrivacyNoticeReceipt(PRIVACY_NOTICE_VERSION, Instant.from_utc(2026, 8, 4))
 
 _TABLES = [
     Base.metadata.tables["accounts"],

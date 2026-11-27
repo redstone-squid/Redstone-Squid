@@ -8,12 +8,12 @@ from uuid import UUID
 import pytest
 from whenever import Instant
 
+from squid.core.accounts.errors import AccountNotFoundError
 from squid.core.actors import ActingContext, AnonymousActor, UserActor
 from squid.core.minecraft_auth.application.crypto import MinecraftSecretCodec
 from squid.core.minecraft_auth.application.services import InstallationCredentialService, PlayerAuthorizationService
 from squid.core.minecraft_auth.domain import MinecraftClientOrigin, PublicServerProfile
 from squid.core.minecraft_auth.errors import (
-    AccountConsentRequiredError,
     AuthorizationPendingError,
     ChallengeAlreadyExchangedError,
     ChallengeApprovalDeniedError,
@@ -135,11 +135,11 @@ async def test_installation_headers_are_parsed_and_failed_indistinguishably_by_t
             await installations.authenticate_headers(*invalid)
 
 
-async def test_registration_requires_current_consent_and_profile_is_explicit_opt_in() -> None:
+async def test_registration_requires_existing_account_and_profile_is_explicit_opt_in() -> None:
     _, accounts, _, installations, _ = services()
     accounts.consented.clear()
 
-    with pytest.raises(AccountConsentRequiredError):
+    with pytest.raises(AccountNotFoundError):
         await installations.register(label="Server", context=ActingContext.direct(UserActor(account_id=ACCOUNT_ID)))
     with pytest.raises(ValueError, match="Sponsor opt-in"):
         PublicServerProfile(sponsor_opt_in=True)

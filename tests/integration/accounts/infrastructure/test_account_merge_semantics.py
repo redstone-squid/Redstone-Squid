@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, ClaimStatus, IdentityProvider
+from squid.core.accounts.domain import PRIVACY_NOTICE_VERSION, ClaimStatus, IdentityProvider
 from squid.core.accounts.errors import AccountNotFoundError
 from squid.core.accounts.models import Account, AccountIdentity, AliasClaim, CreatorAlias
 from squid.core.errors import DataIntegrityError
@@ -219,8 +219,8 @@ async def test_record_key_merge_replay_and_stale_delivery_completion_are_idempot
             (await session.scalars(select(Account).where(Account.id.in_((survivor.id, absorbed.id))))).all()
         )
         for account in account_rows:
-            account.consent_version = CURRENT_CONSENT_VERSION
-            account.consented_at = Instant.now()
+            account.privacy_notice_version = PRIVACY_NOTICE_VERSION
+            account.privacy_notice_acknowledged_at = Instant.now()
         session.add(
             AccountIdentity(
                 account_id=absorbed.id,

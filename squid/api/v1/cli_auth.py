@@ -122,7 +122,6 @@ async def current_cli_identity(caller: NamedDependency[SkipValidation[Caller]]) 
         account_id=caller.account_id,
         device_id=caller.cli_device_id,
         session_id=caller.cli_session_id,
-        consent_pending=caller.consent_pending,
     )
 
 

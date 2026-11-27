@@ -24,7 +24,7 @@ async def test_video_http_flow_keeps_results_private_and_uses_mounted_links() ->
     schematics = create_autospec(SchematicService, instance=True)
     schematics.videos = videos
     caller = create_autospec(Caller, instance=True)
-    caller.require_consented_account.return_value = 42
+    caller.require_account_id.return_value = 42
     caller.allows.return_value = False
     permissions = create_autospec(PermissionService, instance=True)
     app = Litestar(

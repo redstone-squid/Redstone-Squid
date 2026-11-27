@@ -8,7 +8,7 @@ from sqlalchemy import insert, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, ClaimMethod
+from squid.core.accounts.domain import PRIVACY_NOTICE_VERSION, ClaimMethod, PrivacyNoticeReceipt
 from squid.core.accounts.models import AccountIdentity, CreatorAlias
 from squid.core.actors import ActingContext, AnonymousActor
 from squid.core.builds.domain import BuildListFilters, BuildStatus
@@ -22,7 +22,7 @@ from tests.support.build_edits import transact_build_edit as transact
 from tests.support.public_builds import public_builds
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
-CONSENT = AccountConsent(CURRENT_CONSENT_VERSION, Instant.from_utc(2026, 8, 4))
+CONSENT = PrivacyNoticeReceipt(PRIVACY_NOTICE_VERSION, Instant.from_utc(2026, 8, 4))
 
 
 async def _credited_build(

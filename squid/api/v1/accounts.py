@@ -29,6 +29,7 @@ from squid.api.security import Caller, requires
 from squid.api.v1.browser_views import BrowserViews
 from squid.api.v1.schemas.accounts import (
     AccountDetail,
+    BuildIndexingRequest,
     IdentityVisibilityRequest,
     MergeCodeDetail,
     MergeRequest,
@@ -36,7 +37,6 @@ from squid.api.v1.schemas.accounts import (
     ProfileDetail,
     ProfileUpdateRequest,
 )
-from squid.api.v1.schemas.consent import ConsentGrantRequest
 from squid.core.accounts.application import AccountService
 from squid.core.accounts.application.edits import (
     PROFILE_CLEAR,
@@ -46,8 +46,8 @@ from squid.core.accounts.application.edits import (
     ProfileValues,
     account_target,
 )
-from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, AccountMerge, MergePreview, PublicCreatorProfile
-from squid.core.accounts.errors import AccountIdentityNotFoundError, AccountNotFoundError, StaleConsentNoticeError
+from squid.core.accounts.domain import AccountMerge, MergePreview, PublicCreatorProfile
+from squid.core.accounts.errors import AccountIdentityNotFoundError, AccountNotFoundError
 from squid.core.accounts.models import AccountIdentity
 from squid.core.edits.domain import EditCommand, EditValues, Revision
 from squid.core.errors import AuthenticationError
@@ -160,46 +160,38 @@ async def get_me(accounts: Accounts, caller: UserCaller) -> Response[AccountDeta
     response_headers: dict[str, str] = {}
     if caller.account_id is None:
         raise AuthenticationError
-    result = await _render_me(accounts, caller, consent_pending=caller.consent_pending)
+    result = await _render_me(accounts, caller)
     response_headers["ETag"] = revision_etag(Revision(account_target(caller.account_id), result.revision))
     return Response(content=result, headers=response_headers, status_code=200)
 
 
-async def _render_me(accounts: AccountService, caller: Caller, *, consent_pending: bool) -> AccountDetail:
+async def _render_me(accounts: AccountService, caller: Caller) -> AccountDetail:
     """Compose the self view from the account and its profile."""
     account_id = caller.to_actor().require_account_id()
     snapshot = await accounts.editor_snapshot(account_id, context=caller.context())
-    return AccountDetail.from_domain(snapshot.account, snapshot.profile, consent_pending=consent_pending)
+    return AccountDetail.from_domain(snapshot.account, snapshot.profile)
 
 
-@post(
-    "/me/consent",
-    responses=responses(401, 403, 404, 409, 503),
-    operation_id="account_consent_grant",
+@put(
+    "/me/discord-build-indexing",
+    responses=responses(401, 403, 404, 503),
+    operation_id="account_build_indexing_set",
     security=[WEB_WRITE],
     opt=contract(cli=browser_only()),
     status_code=200,
-    guards=[requires(ACCOUNT_SELF_READ)],
+    guards=[requires(ACCOUNT_SELF_MANAGE)],
     dependencies={"_reservation": Provide(reserve_idempotent_request)},
 )
-async def grant_consent(
+async def set_build_indexing(
     accounts: Accounts,
     caller: UserCaller,
-    data: JSONBody[ConsentGrantRequest | None] = None,
+    data: JSONBody[BuildIndexingRequest],
     *,
     _reservation: NamedDependency[SkipValidation[None]],
 ) -> AccountDetail:
-    """Accept the current privacy notice for future writes.
-
-    If a notice version is supplied, it must match the current version. This lets
-    clients detect that the displayed notice has become outdated.
-    """
-    if caller.account_id is None:
-        raise AuthenticationError
-    if data is not None and data.version is not None and (data.version != CURRENT_CONSENT_VERSION):
-        raise StaleConsentNoticeError(offered=data.version, current=CURRENT_CONSENT_VERSION)
-    await accounts.grant_current_consent(context=caller.context())
-    return await _render_me(accounts, caller, consent_pending=False)
+    """Set automatic indexing for the caller's builds in participating Discord channels."""
+    await accounts.set_account_build_indexing(data.enabled, context=caller.context())
+    return await _render_me(accounts, caller)
 
 
 @patch(
@@ -562,7 +554,7 @@ router = Router(
     tags=["accounts"],
     route_handlers=[
         get_me,
-        grant_consent,
+        set_build_indexing,
         update_profile,
         list_identities,
         set_identity_visibility,

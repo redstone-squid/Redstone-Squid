@@ -7,7 +7,7 @@ import discord
 import simcord
 from whenever import Instant
 
-from squid.core.accounts.domain import AccountConsent
+from squid.core.accounts.domain import PrivacyNoticeReceipt
 from squid.core.actors import ActingContext, UserActor
 from squid.core.diagnostics.application import ErrorReportService
 from squid.core.diagnostics.domain import EVERY_REPORT, ErrorReportFilters
@@ -34,7 +34,7 @@ from tests.support.permissions import permission_uow_factory
 def staff_member(env: simcord.Env, accounts: FakeAccountRepository) -> simcord.MemberActor:
     role = env.guild.create_role("Staff", permissions=discord.Permissions(manage_guild=True))
     staff = env.guild.add_member(env.create_user("staff"), roles=[role])
-    accounts.seed_account(staff.id, account_id=27, consent=AccountConsent.grant_current())
+    accounts.seed_account(staff.id, account_id=27, consent=PrivacyNoticeReceipt.grant_current())
     return staff
 
 
@@ -88,7 +88,7 @@ class WorkspaceInbox(NotificationService):
     async def editor_snapshot(self, *, context: ActingContext) -> NotificationEditorSnapshot:
         account_id = context.effective.require_account_id()
         assert account_id == self.account_id
-        return NotificationEditorSnapshot(NotificationPreferences(account_id, consent_pending=False), ())
+        return NotificationEditorSnapshot(NotificationPreferences(account_id), ())
 
     @override
     async def inbox(

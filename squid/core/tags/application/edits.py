@@ -7,7 +7,6 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from squid.core.accounts.application.edits import AccountEditUnitOfWork
-from squid.core.accounts.errors import ConsentRequiredError
 from squid.core.actors import Actor
 from squid.core.builds.application.restrictions import RestrictionUnitOfWork
 from squid.core.edits.application import EditUnitOfWork
@@ -159,8 +158,6 @@ class TagProposalEdit(FieldCommand[TagEditUnitOfWork, ProposalRoot, ProposalValu
             account_id = actor.require_account_id()
             if root.definition is not None and root.definition.created_by_account_id != account_id:
                 raise OwnershipRequiredError
-            if not await uow.accounts.has_current_consent(account_id):
-                raise ConsentRequiredError(account_id=account_id)
             root.actor_id = account_id
 
         async def flush(uow: TagEditUnitOfWork, root: ProposalRoot, expected: Revision) -> Revision:

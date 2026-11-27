@@ -5,7 +5,7 @@ from functools import partial
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from squid.core.accounts.domain import AccountConsent
+from squid.core.accounts.domain import PrivacyNoticeReceipt
 from squid.core.actors import ActingContext, AnonymousActor, UserActor
 from squid.core.builds.application.restrictions import RestrictionService
 from squid.core.edits.application import EditExecutor
@@ -79,7 +79,7 @@ async def test_proposals_keep_identity_through_undo_and_moderation_is_final(
 ) -> None:
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory, verification_code_pepper="test-pepper")
     async with factory() as uow:
-        account = await uow.accounts.create(consent=AccountConsent.grant_current())
+        account = await uow.accounts.create(consent=PrivacyNoticeReceipt.grant_current())
         await uow.commit()
     tags = TagService(uow_factory=factory)
     identity = await tags.reserve_identity(context=ActingContext.direct(AnonymousActor()))
@@ -145,7 +145,7 @@ async def test_proposal_undo_refuses_a_definition_already_in_use(
 ) -> None:
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory, verification_code_pepper="test-pepper")
     async with factory() as uow:
-        account = await uow.accounts.create(consent=AccountConsent.grant_current())
+        account = await uow.accounts.create(consent=PrivacyNoticeReceipt.grant_current())
         await uow.commit()
     tags = TagService(uow_factory=factory)
     identity = await tags.reserve_identity(context=ActingContext.direct(AnonymousActor()))

@@ -206,7 +206,7 @@ def app_with_fake(cli: FakeCliAuthorization, *, idempotency: RecordingIdempotenc
         return ACCOUNT_ID
 
     async def identity_dependency() -> CliIdentity:
-        return CliIdentity(account_id=ACCOUNT_ID, device_id=DEVICE_ID, session_id=SESSION_ID, consent_pending=False)
+        return CliIdentity(account_id=ACCOUNT_ID, device_id=DEVICE_ID, session_id=SESSION_ID)
 
     async def caller_dependency() -> Caller:
         return Caller(kind="account", subject=f"account:{ACCOUNT_ID}", account_id=ACCOUNT_ID)
@@ -346,5 +346,4 @@ async def test_account_and_current_session_revocation_are_separately_scoped() ->
         account_id=ACCOUNT_ID,
         device_id=DEVICE_ID,
         session_id=SESSION_ID,
-        consent_pending=False,
     )

@@ -123,7 +123,6 @@ class WebSessionService:
         user_agent: str | None,
         error: str | None = None,
         context: ActingContext,
-        consent_current: bool = False,
     ) -> tuple[str, str | None]:
         """Consume OAuth state, exchange the code, and return a session token and redirect.
 
@@ -138,7 +137,7 @@ class WebSessionService:
         if saved is None or saved.provider is not provider.provider:
             msg = "invalid_state"
             raise CallbackFailure(msg)
-        current_account_id = self._browser_account(context) if consent_current else None
+        current_account_id = self._browser_account(context)
         linking = saved.state.startswith("link.")
         if linking:
             _, nonce, binding = saved.state.split(".")

@@ -5,7 +5,7 @@ from typing import Any, override
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
-from squid.bot.accounts.consent import with_consented_account
+from squid.bot.accounts.identity import with_account
 from squid.bot.accounts.profile_render import present_claimant
 from squid.bot.ui import tr
 from squid.bot.utils.permissions import Grants
@@ -154,7 +154,7 @@ class ClaimReviewComponent(sl.Component[ComponentsV2Target, sd.Request]):
         async def resolve(live: sd.ActionEvent, staff_account_id: int) -> None:
             await self._resolve(live, claim, staff_account_id, approve=approve)
 
-        await with_consented_account(event, self._accounts, resolve)
+        await with_account(event, self._accounts, resolve)
 
     async def _resolve(
         self,

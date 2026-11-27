@@ -15,15 +15,13 @@ import squid_ui as sl
 import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.accounts.cog import VerifyCog
-from squid.bot.accounts.consent import ConsentPrompt, request_consent
 from squid.bot.accounts.creator_page import CreatorPage
-from squid.bot.accounts.overview import AccountOverview, ConsentAnswer
+from squid.bot.accounts.overview import AccountOverview, LinkConfirmationAnswer
 from squid.bot.accounts.presentation import refresh_message
 from squid.bot.accounts.profile_editor import ProfileEditor
 from squid.bot.accounts.workspace import AccountTab, AccountWorkspace
 from squid.bot.utils.permissions import Grants
 from squid.core.accounts.domain import (
-    AccountConsent,
     AccountMerge,
     ClaimStatus,
     CreditedAlias,
@@ -32,6 +30,7 @@ from squid.core.accounts.domain import (
     LinkPreview,
     LinkReservation,
     MergePreview,
+    PrivacyNoticeReceipt,
     ProfileLink,
     PublicCreatorProfile,
 )
@@ -54,7 +53,7 @@ from tests.support.services import bot_services
 ACCOUNT_ID = 42
 AUTHOR_ID = 555
 NOW = Instant.from_utc(2026, 8, 19)
-CONSENTED = AccountConsent.grant_current()
+CONSENTED = PrivacyNoticeReceipt.grant_current()
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
 
 DISCORD = replace(AccountIdentity.discord(AUTHOR_ID), id=1, verified_at=NOW)
@@ -65,7 +64,7 @@ async def edit_actor() -> Actor:
     return UserActor(account_id=ACCOUNT_ID, discord_user_id=AUTHOR_ID)
 
 
-def _seeded(*identities: AccountIdentity, consent: AccountConsent | None = CONSENTED) -> InMemoryAccountService:
+def _seeded(*identities: AccountIdentity, consent: PrivacyNoticeReceipt | None = CONSENTED) -> InMemoryAccountService:
     """The real account service holding the author's account, ACCOUNT_ID."""
     accounts = InMemoryAccountService()
     accounts.repository.accounts[ACCOUNT_ID] = Account(
@@ -98,9 +97,9 @@ def _overview(*, accounts: InMemoryAccountService, **kwargs: Any) -> AccountOver
 
 async def no_consent_request(
     event: sl.ActionEvent,
-    answered: ConsentAnswer,
+    answered: LinkConfirmationAnswer,
     *,
-    preview: LinkPreview | None = None,
+    preview: LinkPreview,
     on_abandon: Callable[[], Awaitable[None]] | None = None,
     timeout: float = 120.0,
 ) -> bool:
@@ -113,7 +112,7 @@ class ConsentCapture:
 
     def __init__(self, *, opened: bool = True) -> None:
         self.opened = opened
-        self.answered: ConsentAnswer | None = None
+        self.answered: LinkConfirmationAnswer | None = None
         self.preview: LinkPreview | None = None
         self.on_abandon: Callable[[], Awaitable[None]] | None = None
         self.timeout: float | None = None
@@ -121,9 +120,9 @@ class ConsentCapture:
     async def __call__(
         self,
         event: sl.ActionEvent,
-        answered: ConsentAnswer,
+        answered: LinkConfirmationAnswer,
         *,
-        preview: LinkPreview | None = None,
+        preview: LinkPreview,
         on_abandon: Callable[[], Awaitable[None]] | None = None,
         timeout: float = 120.0,
     ) -> bool:
@@ -195,7 +194,7 @@ class LinkAccountService(InMemoryAccountService):
         self.linked: list[tuple[int, str]] = []
         self.released: list[str] = []
         self.reservation_ttls: list[int] = []
-        self.created_consents: list[AccountConsent] = []
+        self.created_consents: list[PrivacyNoticeReceipt] = []
         self.granted: list[int] = []
         self.reservation = LinkReservation("held", NOW.add(minutes=5), LinkPreview(JAVA_UUID, "Notch"))
 
@@ -205,19 +204,13 @@ class LinkAccountService(InMemoryAccountService):
         provider: IdentityProvider,
         subject: str,
         *,
-        consent: AccountConsent | None = None,
+        consent: PrivacyNoticeReceipt | None = None,
     ) -> Account:
         assert provider is IdentityProvider.DISCORD
         assert subject == str(AUTHOR_ID)
         assert consent is not None
         self.created_consents.append(consent)
         return Account(identities=(AccountIdentity.discord(AUTHOR_ID),), consent=consent, id=ACCOUNT_ID, created_at=NOW)
-
-    @override
-    async def grant_current_consent(self, *, context: ActingContext) -> Account:
-        account_id = context.effective.require_account_id()
-        self.granted.append(account_id)
-        return Account(identities=(DISCORD,), consent=AccountConsent.grant_current(), id=account_id, created_at=NOW)
 
     @override
     async def reserve_minecraft_link(
@@ -236,7 +229,7 @@ class LinkAccountService(InMemoryAccountService):
         self,
         code: str,
         *,
-        consent: AccountConsent,
+        consent: PrivacyNoticeReceipt,
         context: ActingContext,
         reservation: LinkReservation | None = None,
     ) -> IdentityRefresh:
@@ -301,14 +294,14 @@ async def test_someone_with_no_account_gets_consent_and_linking_workspace() -> N
         accounts=InMemoryAccountService(),
         actor_id=AUTHOR_ID,
         account=None,
-        request_consent=no_consent_request,
+        request_link_confirmation=no_consent_request,
         grants=Grants(frozenset(), authorize),
     )
 
     await workspace.on_load()
 
     assert workspace._tabs is not None
-    assert {"Overview", "Accounts", "Credits", "Notifications", "Review privacy notice"} <= set(
+    assert {"Overview", "Accounts", "Credits", "Notifications", "Create account"} <= set(
         labels(workspace._tabs.render())
     )
 
@@ -343,9 +336,7 @@ def test_a_hidden_creator_page_still_opens_their_builds_but_cannot_be_followed()
 
 
 async def test_overview_previews_the_public_page_strangers_see() -> None:
-    panel = _overview(
-        accounts=_seeded(DISCORD), account_id=ACCOUNT_ID, actor_id=AUTHOR_ID, request_consent=no_consent_request
-    )
+    panel = _overview(accounts=_seeded(DISCORD), account_id=ACCOUNT_ID, actor_id=AUTHOR_ID)
     await panel.on_load()
 
     control = find(render_tree(panel), sl.semantic.RoutedActionControl, key="public_page")
@@ -364,7 +355,9 @@ async def test_choose_claim_opens_the_creator_picker(mocker: MockerFixture) -> N
 
 
 async def test_linking_runs_inside_the_workspace_and_refreshes_it() -> None:
-    account = Account(identities=(DISCORD,), consent=AccountConsent.grant_current(), id=ACCOUNT_ID, created_at=NOW)
+    account = Account(
+        identities=(DISCORD,), consent=PrivacyNoticeReceipt.grant_current(), id=ACCOUNT_ID, created_at=NOW
+    )
     accounts = LinkAccountService()
     consent = ConsentCapture()
 
@@ -375,7 +368,7 @@ async def test_linking_runs_inside_the_workspace_and_refreshes_it() -> None:
         accounts=accounts,
         actor_id=AUTHOR_ID,
         account=account,
-        request_consent=consent,
+        request_link_confirmation=consent,
         grants=Grants(frozenset(), authorize),
     )
     workspace._rebuild = no_refresh  # type: ignore[method-assign]
@@ -389,7 +382,7 @@ async def test_linking_runs_inside_the_workspace_and_refreshes_it() -> None:
     assert accounts.reservation_ttls == [120]
 
     assert consent.answered is not None
-    await consent.answered(event, AccountConsent.grant_current())
+    await consent.answered(event, PrivacyNoticeReceipt.grant_current())
 
     assert accounts.linked == [(ACCOUNT_ID, "abcd")]
     assert accounts.released == []
@@ -398,7 +391,9 @@ async def test_linking_runs_inside_the_workspace_and_refreshes_it() -> None:
 
 
 async def test_link_reservation_is_released_once_when_consent_is_abandoned() -> None:
-    account = Account(identities=(DISCORD,), consent=AccountConsent.grant_current(), id=ACCOUNT_ID, created_at=NOW)
+    account = Account(
+        identities=(DISCORD,), consent=PrivacyNoticeReceipt.grant_current(), id=ACCOUNT_ID, created_at=NOW
+    )
     accounts = LinkAccountService()
     consent = ConsentCapture()
 
@@ -409,7 +404,7 @@ async def test_link_reservation_is_released_once_when_consent_is_abandoned() -> 
         accounts=accounts,
         actor_id=AUTHOR_ID,
         account=account,
-        request_consent=consent,
+        request_link_confirmation=consent,
         grants=Grants(frozenset(), authorize),
     )
     workspace._rebuild = no_refresh  # type: ignore[method-assign]
@@ -424,7 +419,9 @@ async def test_link_reservation_is_released_once_when_consent_is_abandoned() -> 
 
 
 async def test_link_reservation_is_released_when_prompt_is_not_opened() -> None:
-    account = Account(identities=(DISCORD,), consent=AccountConsent.grant_current(), id=ACCOUNT_ID, created_at=NOW)
+    account = Account(
+        identities=(DISCORD,), consent=PrivacyNoticeReceipt.grant_current(), id=ACCOUNT_ID, created_at=NOW
+    )
     accounts = LinkAccountService()
     consent = ConsentCapture(opened=False)
 
@@ -435,7 +432,7 @@ async def test_link_reservation_is_released_when_prompt_is_not_opened() -> None:
         accounts=accounts,
         actor_id=AUTHOR_ID,
         account=account,
-        request_consent=consent,
+        request_link_confirmation=consent,
         grants=Grants(frozenset(), authorize),
     )
 
@@ -456,7 +453,7 @@ async def test_accountless_link_cancel_releases_without_creating_personal_rows()
         accounts=accounts,
         actor_id=AUTHOR_ID,
         account=None,
-        request_consent=consent,
+        request_link_confirmation=consent,
         grants=Grants(frozenset(), authorize),
     )
 
@@ -482,14 +479,14 @@ async def test_accountless_link_agreement_creates_the_account_then_consumes_the_
         accounts=accounts,
         actor_id=AUTHOR_ID,
         account=None,
-        request_consent=consent,
+        request_link_confirmation=consent,
         grants=Grants(frozenset(), authorize),
     )
     workspace._rebuild = no_refresh  # type: ignore[method-assign]
     prompt = notice_source()
 
     await workspace._link(notice_source(code="abcd"))
-    granted = AccountConsent.grant_current()
+    granted = PrivacyNoticeReceipt.grant_current()
     assert consent.answered is not None
     await consent.answered(prompt, granted)
 
@@ -504,8 +501,10 @@ async def test_accountless_link_agreement_creates_the_account_then_consumes_the_
     assert "linked to **Notch**" in source_text(notices(prompt)[0])
 
 
-async def test_stale_consent_is_refreshed_only_after_link_agreement() -> None:
-    account = Account(identities=(DISCORD,), consent=AccountConsent("older-notice", NOW), id=ACCOUNT_ID, created_at=NOW)
+async def test_existing_account_links_without_a_separate_receipt_write() -> None:
+    account = Account(
+        identities=(DISCORD,), consent=PrivacyNoticeReceipt("older-notice", NOW), id=ACCOUNT_ID, created_at=NOW
+    )
     accounts = LinkAccountService()
     consent = ConsentCapture()
 
@@ -516,7 +515,7 @@ async def test_stale_consent_is_refreshed_only_after_link_agreement() -> None:
         accounts=accounts,
         actor_id=AUTHOR_ID,
         account=account,
-        request_consent=consent,
+        request_link_confirmation=consent,
         grants=Grants(frozenset(), authorize),
     )
     workspace._rebuild = no_refresh  # type: ignore[method-assign]
@@ -524,14 +523,16 @@ async def test_stale_consent_is_refreshed_only_after_link_agreement() -> None:
     await workspace._link(notice_source(code="abcd"))
     assert accounts.granted == []
     assert consent.answered is not None
-    await consent.answered(notice_source(), AccountConsent.grant_current())
+    await consent.answered(notice_source(), PrivacyNoticeReceipt.grant_current())
 
-    assert accounts.granted == [ACCOUNT_ID]
+    assert accounts.granted == []
     assert accounts.linked == [(ACCOUNT_ID, "abcd")]
 
 
 def test_staff_refresh_picker_is_visible_only_with_the_moderation_permission() -> None:
-    account = Account(identities=(DISCORD,), consent=AccountConsent.grant_current(), id=ACCOUNT_ID, created_at=NOW)
+    account = Account(
+        identities=(DISCORD,), consent=PrivacyNoticeReceipt.grant_current(), id=ACCOUNT_ID, created_at=NOW
+    )
 
     async def authorize(_node: PermissionNode) -> bool:
         return True
@@ -541,7 +542,7 @@ def test_staff_refresh_picker_is_visible_only_with_the_moderation_permission() -
             accounts=LinkAccountService(),
             actor_id=AUTHOR_ID,
             account=account,
-            request_consent=no_consent_request,
+            request_link_confirmation=no_consent_request,
             grants=Grants(frozenset({ACCOUNT_IDENTITY_REFRESH_ANY} if allowed else ()), authorize),
         )
 
@@ -550,7 +551,9 @@ def test_staff_refresh_picker_is_visible_only_with_the_moderation_permission() -
 
 
 def test_own_refresh_control_is_visible_only_with_the_refresh_permission() -> None:
-    account = Account(identities=(DISCORD, JAVA), consent=AccountConsent.grant_current(), id=ACCOUNT_ID, created_at=NOW)
+    account = Account(
+        identities=(DISCORD, JAVA), consent=PrivacyNoticeReceipt.grant_current(), id=ACCOUNT_ID, created_at=NOW
+    )
 
     async def authorize(_node: PermissionNode) -> bool:
         return True
@@ -560,7 +563,7 @@ def test_own_refresh_control_is_visible_only_with_the_refresh_permission() -> No
             accounts=LinkAccountService(),
             actor_id=AUTHOR_ID,
             account=account,
-            request_consent=no_consent_request,
+            request_link_confirmation=no_consent_request,
             grants=Grants(frozenset({ACCOUNT_IDENTITY_REFRESH} if allowed else ()), authorize),
         )
 
@@ -570,7 +573,9 @@ def test_own_refresh_control_is_visible_only_with_the_refresh_permission() -> No
 
 @pytest.mark.parametrize("allowed", [False, True], ids=["revoked", "allowed"])
 async def test_own_refresh_rechecks_permission_at_the_handler(allowed: bool) -> None:
-    account = Account(identities=(DISCORD,), consent=AccountConsent.grant_current(), id=ACCOUNT_ID, created_at=NOW)
+    account = Account(
+        identities=(DISCORD,), consent=PrivacyNoticeReceipt.grant_current(), id=ACCOUNT_ID, created_at=NOW
+    )
     refresh = IdentityRefresh(ACCOUNT_ID, JAVA_UUID, "Notch", "Notch")
     accounts = StaffRefreshService(None, refresh)
     authorized: list[PermissionNode] = []
@@ -583,7 +588,7 @@ async def test_own_refresh_rechecks_permission_at_the_handler(allowed: bool) -> 
         accounts=accounts,
         actor_id=AUTHOR_ID,
         account=account,
-        request_consent=no_consent_request,
+        request_link_confirmation=no_consent_request,
         grants=Grants(frozenset({ACCOUNT_IDENTITY_REFRESH}), authorize),
     )
     workspace._rebuild = no_refresh  # type: ignore[method-assign]
@@ -602,7 +607,7 @@ async def test_own_refresh_rechecks_permission_at_the_handler(allowed: bool) -> 
 
 async def test_staff_refresh_rechecks_permission_before_reading_the_member() -> None:
     target = Account(
-        identities=(AccountIdentity.discord(999),), consent=AccountConsent.grant_current(), id=99, created_at=NOW
+        identities=(AccountIdentity.discord(999),), consent=PrivacyNoticeReceipt.grant_current(), id=99, created_at=NOW
     )
     accounts = StaffRefreshService(target, IdentityRefresh(99, JAVA_UUID, "Notch"))
 
@@ -613,7 +618,7 @@ async def test_staff_refresh_rechecks_permission_before_reading_the_member() -> 
         accounts=accounts,
         actor_id=AUTHOR_ID,
         account=None,
-        request_consent=no_consent_request,
+        request_link_confirmation=no_consent_request,
         grants=Grants(frozenset({ACCOUNT_IDENTITY_REFRESH_ANY}), authorize),
     )
     event = notice_source(user=discord.Object(id=999))
@@ -634,7 +639,7 @@ async def test_staff_refresh_reports_a_named_member_without_an_account() -> None
         accounts=accounts,
         actor_id=AUTHOR_ID,
         account=None,
-        request_consent=no_consent_request,
+        request_link_confirmation=no_consent_request,
         grants=Grants(frozenset({ACCOUNT_IDENTITY_REFRESH_ANY}), authorize),
     )
 
@@ -657,7 +662,7 @@ async def test_staff_refresh_targets_the_selected_account_and_forwards_its_notic
         ),
     )
     target = Account(
-        identities=(AccountIdentity.discord(999),), consent=AccountConsent.grant_current(), id=99, created_at=NOW
+        identities=(AccountIdentity.discord(999),), consent=PrivacyNoticeReceipt.grant_current(), id=99, created_at=NOW
     )
     accounts = StaffRefreshService(target, refresh)
 
@@ -668,7 +673,7 @@ async def test_staff_refresh_targets_the_selected_account_and_forwards_its_notic
         accounts=accounts,
         actor_id=AUTHOR_ID,
         account=None,
-        request_consent=no_consent_request,
+        request_link_confirmation=no_consent_request,
         grants=Grants(frozenset({ACCOUNT_IDENTITY_REFRESH_ANY}), authorize),
     )
     workspace._rebuild = no_refresh  # type: ignore[method-assign]
@@ -681,7 +686,9 @@ async def test_staff_refresh_targets_the_selected_account_and_forwards_its_notic
 
 
 async def test_merge_requires_the_workspace_decision() -> None:
-    account = Account(identities=(DISCORD,), consent=AccountConsent.grant_current(), id=ACCOUNT_ID, created_at=NOW)
+    account = Account(
+        identities=(DISCORD,), consent=PrivacyNoticeReceipt.grant_current(), id=ACCOUNT_ID, created_at=NOW
+    )
     accounts = MergeAccountService()
 
     async def authorize(_node: PermissionNode) -> bool:
@@ -691,7 +698,7 @@ async def test_merge_requires_the_workspace_decision() -> None:
         accounts=accounts,
         actor_id=AUTHOR_ID,
         account=account,
-        request_consent=no_consent_request,
+        request_link_confirmation=no_consent_request,
         grants=Grants(frozenset(), authorize),
     )
     submit = notice_source(code="merge-me")
@@ -717,7 +724,6 @@ def _account_panel(profile: AccountProfile) -> AccountOverview:
         accounts=_seeded(DISCORD),
         account_id=ACCOUNT_ID,
         actor_id=AUTHOR_ID,
-        request_consent=no_consent_request,
     )
     panel._profile = profile
     return panel
@@ -778,107 +784,15 @@ async def test_profile_editor_commit_persists_and_returns_to_account_panel() -> 
     assert len(notices(source)) == 1
 
 
-def _gated_panel(monkeypatch: pytest.MonkeyPatch) -> tuple[AccountOverview, dict[str, Any]]:
-    """Capture the consent continuation without mounting the notice.
-
-    Notice interactions are covered in ``test_consent_gate.py``.
-    """
-    del monkeypatch
-    opened: dict[str, Any] = {}
-
-    async def request(
-        event: sl.ActionEvent,
-        on_answer: Any,
-        *,
-        preview: LinkPreview | None = None,
-        on_abandon: Any = None,
-        timeout: float = 120.0,
-    ) -> bool:
-        del preview, on_abandon, timeout
-
-        async def answer(consent: AccountConsent | None) -> None:
-            with sl.runtime.transaction():
-                await on_answer(event, consent)
-            if consent is not None:
-                await cast(Any, event).responder.message_root.schedule()
-
-        opened["on_answer"] = answer
-        return True
-
+async def test_profile_opens_without_a_privacy_receipt() -> None:
     panel = _overview(
-        accounts=_seeded(replace(DISCORD, is_public=False), consent=None),
+        accounts=_seeded(DISCORD, consent=None),
         account_id=ACCOUNT_ID,
         actor_id=AUTHOR_ID,
-        request_consent=cast(Any, request),
     )
     panel._profile = AccountProfile.empty(ACCOUNT_ID)
-    panel._needs_consent = True
-    panel._refresh = no_refresh  # type: ignore[method-assign]
-
-    return panel, opened
-
-
-def _press(message_root: Any) -> Any:
-    """A press double carrying the Discord facts `_with_consent` reads off an event."""
-    return PressSource(message_root)
-
-
-async def test_a_press_needing_consent_ends_instead_of_holding_the_panel(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Return from the requesting press before the reader answers.
-
-    Awaiting consent inside the panel's exclusive action would retain its UI transaction and
-    dispatch lock, blocking other presses. The continuation opens the editor after acceptance.
-    """
-    panel, opened = _gated_panel(monkeypatch)
-    message_root = ScheduleRoot()
-
-    await panel._edit_page(cast(Any, _press(message_root)))
-
-    assert panel._profile_editor is None
-    assert message_root.scheduled == 0
-
-    await opened["on_answer"](AccountConsent.grant_current())
-
-    # The press resumes where the reader left it, on the panel's own message.
+    await panel._edit_page(cast(Any, PressSource(ScheduleRoot())))
     assert panel._profile_editor is not None
-    assert stored(panel).accounts[ACCOUNT_ID].consent is not None
-    assert message_root.scheduled == 1
-
-
-async def test_declining_leaves_the_panel_exactly_as_it_was(monkeypatch: pytest.MonkeyPatch) -> None:
-    panel, opened = _gated_panel(monkeypatch)
-    message_root = ScheduleRoot()
-
-    await panel._edit_page(cast(Any, _press(message_root)))
-    await opened["on_answer"](None)
-
-    assert panel._profile_editor is None
-    assert panel._needs_consent
-    assert stored(panel).accounts[ACCOUNT_ID].consent is None
-    assert message_root.scheduled == 0
-
-
-async def test_a_toggle_needing_consent_still_applies_once_the_reader_agrees(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Visibility writes wait for consent even when triggered by a toggle handler."""
-    panel, opened = _gated_panel(monkeypatch)
-    panel._identities = (replace(DISCORD, is_public=False),)
-    panel.selected_id = DISCORD.id
-    message_root = ScheduleRoot()
-
-    await panel._toggle_identity(cast(Any, _press(message_root)))
-
-    (identity,) = stored(panel).accounts[ACCOUNT_ID].identities
-    assert not identity.is_public
-
-    await opened["on_answer"](AccountConsent.grant_current())
-
-    (identity,) = stored(panel).accounts[ACCOUNT_ID].identities
-    assert identity.is_public
-    assert message_root.scheduled == 1
 
 
 class _Recorder:
@@ -897,7 +811,6 @@ def _linked_panel() -> tuple[AccountOverview, _Recorder, FakeAccountRepository, 
         accounts=accounts,
         account_id=ACCOUNT_ID,
         actor_id=AUTHOR_ID,
-        request_consent=no_consent_request,
     )
     panel._profile = AccountProfile.empty(ACCOUNT_ID)
     panel._identities = (DISCORD, JAVA)
@@ -953,9 +866,9 @@ async def test_link_reservation_is_released_once_when_prompt_delivery_fails() ->
         async def __call__(
             self,
             event: sl.ActionEvent,
-            answered: ConsentAnswer,
+            answered: LinkConfirmationAnswer,
             *,
-            preview: LinkPreview | None = None,
+            preview: LinkPreview,
             on_abandon: Callable[[], Awaitable[None]] | None = None,
             timeout: float = 120.0,
         ) -> bool:
@@ -971,7 +884,7 @@ async def test_link_reservation_is_released_once_when_prompt_delivery_fails() ->
         accounts=accounts,
         actor_id=AUTHOR_ID,
         account=None,
-        request_consent=consent,
+        request_link_confirmation=consent,
         grants=Grants(frozenset(), authorize),
     )
     with pytest.raises(RuntimeError, match="delivery failed"):
@@ -984,43 +897,22 @@ async def test_link_reservation_is_released_once_when_prompt_delivery_fails() ->
     assert accounts.linked == []
 
 
-async def test_embedded_overview_opens_consent_under_the_workspace_screen(mocker: MockerFixture) -> None:
+async def test_embedded_overview_opens_profile_editor_directly(mocker: MockerFixture) -> None:
     accounts = _seeded(DISCORD, consent=None)
     account = accounts.repository.accounts[ACCOUNT_ID]
-
-    async def consent(
-        event: sd.ActionEvent,
-        answered: ConsentAnswer,
-        *,
-        preview: LinkPreview | None = None,
-        on_abandon: Callable[[], Awaitable[None]] | None = None,
-        timeout: float = 120.0,
-    ) -> bool:
-        assert event.context.root is not None
-        assert event.context.root.component is workspace
-        return await request_consent(
-            event,
-            user_id=AUTHOR_ID,
-            on_answer=answered,
-            preview=preview,
-            on_abandon=on_abandon,
-            timeout=timeout,
-        )
 
     async def authorize(_node: PermissionNode) -> bool:
         return False
 
     notifications = mocker.Mock(spec=NotificationService)
-    notifications.editor_snapshot.return_value = NotificationEditorSnapshot(
-        NotificationPreferences(ACCOUNT_ID, consent_pending=False), ()
-    )
+    notifications.editor_snapshot.return_value = NotificationEditorSnapshot(NotificationPreferences(ACCOUNT_ID), ())
     notifications.inbox.return_value = Inbox(Page(items=(), total=0, next=None, prev=None), unread_count=0)
     workspace = _workspace(
         accounts=accounts,
         notifications=notifications,
         actor_id=AUTHOR_ID,
         account=account,
-        request_consent=consent,
+        request_link_confirmation=no_consent_request,
         grants=Grants(frozenset(), authorize),
     )
     async with sd.testing.stage(workspace, owner=object(), user_id=AUTHOR_ID) as ui:
@@ -1032,22 +924,7 @@ async def test_embedded_overview_opens_consent_under_the_workspace_screen(mocker
         edit_key = next(key for key in ui.root.snapshot().handler_keys if key.endswith("edit_page"))
         await ui.press(edit_key)
 
-        assert workspace.opening is not None
-        sessions = workspace.opening.runtime.sessions.get(sd.SessionKey.user("consent", AUTHOR_ID))
-        assert len(sessions) == 1
-        child_root = next(iter(sessions[0].message_roots))
-        prompt = child_root.component
-        assert isinstance(prompt, ConsentPrompt)
-        assert prompt.parent is workspace
-        assert overview._profile_editor is None
-
-        interaction = sd.testing.InteractionHarness(AUTHOR_ID, client=ui.interaction.client)
-        await child_root.dispatch("accept", interaction.source)
-
-        assert accounts.repository.accounts[ACCOUNT_ID].consent is not None
         assert overview._profile_editor is not None
-        assert not ui.root.finished
-        assert child_root.finished
 
         draft = overview._profile_editor
         cancel_key = next(key for key in ui.root.snapshot().handler_keys if key.endswith("cancel-profile-edit"))
@@ -1060,11 +937,10 @@ async def test_embedded_overview_opens_consent_under_the_workspace_screen(mocker
         assert overview._profile_editor is not None
         assert overview._profile_editor is not draft
         assert not overview._profile_editor.history.entries
-        notifications.editor_snapshot.assert_not_awaited()
         await ui.press(
             next(key for key in ui.root.snapshot().handler_keys if key.endswith("account-tabs.notifications"))
         )
-        notifications.editor_snapshot.assert_awaited_once_with(context=ActingContext.direct(await edit_actor()))
+        notifications.editor_snapshot.assert_awaited_with(context=ActingContext.direct(await edit_actor()))
         assert any("Your inbox is empty" in content for content in ui.texts())
 
 
@@ -1086,7 +962,6 @@ def test_linked_account_picker_uses_plain_names_and_visibility() -> None:
         account_id=ACCOUNT_ID,
         actor_id=AUTHOR_ID,
         discord_username="redbuilder",
-        request_consent=no_consent_request,
     )
     panel._identities = (DISCORD, replace(JAVA, is_public=False))
 
@@ -1102,17 +977,21 @@ def test_linked_account_picker_uses_plain_names_and_visibility() -> None:
     ]
 
 
-async def test_account_focus_before_and_after_load_preserves_user_selection() -> None:
+async def test_account_focus_before_and_after_load_preserves_user_selection(mocker: MockerFixture) -> None:
     async def authorize(_node: PermissionNode) -> bool:
         return False
 
     accounts = _seeded(DISCORD, consent=None)
     account = accounts.repository.accounts[ACCOUNT_ID]
+    notifications = mocker.Mock(spec=NotificationService)
+    notifications.editor_snapshot.return_value = NotificationEditorSnapshot(NotificationPreferences(ACCOUNT_ID), ())
+    notifications.inbox.return_value = Inbox(Page(items=(), total=0, next=None, prev=None), unread_count=0)
     workspace = _workspace(
+        notifications=notifications,
         accounts=accounts,
         actor_id=AUTHOR_ID,
         account=account,
-        request_consent=no_consent_request,
+        request_link_confirmation=no_consent_request,
         grants=Grants(frozenset(), authorize),
     )
     focusable: sl.Focusable[AccountTab] = workspace
@@ -1133,7 +1012,7 @@ async def test_account_focus_before_and_after_load_preserves_user_selection() ->
         del accounts.repository.accounts[ACCOUNT_ID]
         await workspace._rebuild()
         assert workspace._tabs.machine_state.selected == "notifications"
-        assert "Review privacy notice" in labels(workspace._tabs.render())
+        assert "Create account" in labels(workspace._tabs.render())
         await ui.root.refresh()
 
 
@@ -1149,14 +1028,14 @@ async def test_link_cleanup_survives_redemption_failure(failure: BaseException, 
         accounts=accounts,
         actor_id=AUTHOR_ID,
         account=None,
-        request_consent=consent,
+        request_link_confirmation=consent,
         grants=Grants(frozenset(), authorize),
     )
     mocker.patch.object(accounts, "link_minecraft_account", side_effect=failure)
     await workspace._link(notice_source(code="abcd"))
     assert consent.answered is not None
     with pytest.raises(type(failure)):
-        await consent.answered(notice_source(), AccountConsent.grant_current())
+        await consent.answered(notice_source(), PrivacyNoticeReceipt.grant_current())
     assert consent.on_abandon is not None
     await consent.on_abandon()
     assert accounts.released == ["abcd"]

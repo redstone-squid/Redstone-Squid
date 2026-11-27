@@ -22,7 +22,6 @@ from squid.api.v1.schemas.minecraft_auth import (
     InstallationCreateRequest,
     PaperChallengeCreateRequest,
 )
-from squid.core.accounts.errors import ConsentRequiredError
 from squid.core.actors import ActingContext
 from squid.core.errors import AuthenticationError
 from squid.core.idempotency import IdempotencyService, PendingRequest
@@ -552,8 +551,6 @@ async def test_account_dependency_rejects_services_and_stale_consent() -> None:
         kind="account",
         subject="account:42",
         account_id=ACCOUNT_ID,
-        consent_pending=True,
     )
 
-    with pytest.raises(ConsentRequiredError):
-        await current_browser_account_id(caller)
+    assert await current_browser_account_id(caller) == ACCOUNT_ID

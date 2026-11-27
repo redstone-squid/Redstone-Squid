@@ -1,4 +1,4 @@
-"""Ingest consenting build-log messages and prepare recalculation proposals."""
+"""Index opted-in build-log messages and prepare recalculation proposals."""
 
 import logging
 from typing import TYPE_CHECKING
@@ -9,7 +9,7 @@ import discord
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.routes import AppRequest
-from squid.bot.submission.consent_banner import BuildLogConsentStickyMessage
+from squid.bot.submission.indexing import BuildIndexingStickyMessage
 from squid.bot.submission.ingestion import ingest_message_bundle
 from squid.bot.submission.message_context import assemble_bundle
 from squid.bot.submission.ui import controls as build_controls
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Disable the consent banner without disabling ingestion for consenting accounts.
+# Control sticky reminders independently of account indexing preferences.
 # The bool annotation keeps type checkers from treating the guarded branches as unreachable.
 CONSENT_STICKY_ENABLED: bool = False
 
@@ -40,7 +40,7 @@ class BuildMessageIntake[BotT: squid.bot.app.RedstoneSquid]:
 
     def __init__(self, bot: BotT) -> None:
         self.bot = bot
-        self.consent_sticky: StickyMessage = BuildLogConsentStickyMessage(bot.background_tasks)
+        self.consent_sticky: StickyMessage = BuildIndexingStickyMessage(bot.background_tasks)
 
     async def close(self) -> None:
         """Stop pending consent-banner updates when the cog unloads."""
@@ -54,7 +54,7 @@ class BuildMessageIntake[BotT: squid.bot.app.RedstoneSquid]:
         return message.channel.id in settings.build_log_channel_ids
 
     async def infer_build_from_message(self, message: discord.Message) -> None:
-        """Ingest an eligible build log message when its author has current consent."""
+        """Ingest an eligible build log message when its author has enabled indexing."""
         if not await self._is_build_log_message(message):
             return
         assert isinstance(message.channel, discord.TextChannel)
@@ -65,10 +65,10 @@ class BuildMessageIntake[BotT: squid.bot.app.RedstoneSquid]:
         if (
             account is None
             or account.id is None  # pyright: ignore[reportUnnecessaryComparison]
-            or account.needs_consent_refresh
+            or not account.discord_build_indexing_enabled
         ):
             logger.debug(
-                "Skipping build inference for unconsented author %s in channel %s",
+                "Skipping build inference for indexing-disabled author %s in channel %s",
                 message.author.id,
                 message.channel.id,
             )
@@ -107,22 +107,25 @@ class BuildMessageIntake[BotT: squid.bot.app.RedstoneSquid]:
                 ),
             )
 
-        account = await self.bot.services.accounts.get_account_by_identity(
-            IdentityProvider.DISCORD, str(message.author.id)
-        )
+        accounts = self.bot.services.accounts
+        if request.user.id == message.author.id:
+            account = await accounts.get_or_create_identity(IdentityProvider.DISCORD, str(request.user.id))
+            return await self.propose_recalculation(request, message, owner_account_id=account.id)
+
+        account = await accounts.get_account_by_identity(IdentityProvider.DISCORD, str(message.author.id))
         if (
             account is None
             or account.id is None  # pyright: ignore[reportUnnecessaryComparison]
-            or account.needs_consent_refresh
+            or not account.discord_build_indexing_enabled
         ):
             user_id = message.author.id
             if CONSENT_STICKY_ENABLED and isinstance(message.channel, discord.TextChannel):
                 await self.consent_sticky.trigger(message.channel)
             return error_node(
-                tr(t"bot-submission-submit-author-has-not-consented = Author has not consented"),
+                tr(t"submit-author-indexing-off = Automatic indexing is off"),
                 md_tr(
-                    t"submit-author-consent-required = The author of this "
-                    t"message ({(user_mention := sl.mention(user_id))}) has not consented to data storage. They must grant consent before "  # noqa: F841 - captured text identifier
+                    t"submit-author-indexing-required = The author of this "
+                    t"message ({(user_mention := sl.mention(user_id))}) has automatic indexing turned off. They can enable it before "  # noqa: F841 - captured text identifier
                     t"this build can be ingested.",
                 ),
             )

@@ -30,7 +30,6 @@ from squid.runtime import ApiServices
 @dataclass(frozen=True)
 class SessionSnapshot:
     user: SessionUser | None
-    consent_pending: bool
     permissions: tuple[str, ...]
     counts: SessionCounts
 
@@ -68,11 +67,9 @@ class BrowserViews:
 
     async def session(self) -> SessionSnapshot:
         if self.account_id is None:
-            return SessionSnapshot(
-                user=None, consent_pending=False, permissions=(), counts=SessionCounts(0, 0, 0, None)
-            )
+            return SessionSnapshot(user=None, permissions=(), counts=SessionCounts(0, 0, 0, None))
         user, counts, permissions = await self.services.viewer_queries.session(context=self.caller.context())
-        return SessionSnapshot(user, self.caller.consent_pending, permissions, counts)
+        return SessionSnapshot(user, permissions, counts)
 
     async def build(self, build: Build, request: Request) -> BuildDetail:
         publication = await self.services.build_queries.publication(build, context=self.caller.context())
@@ -104,8 +101,7 @@ class BrowserViews:
             )
             allowed = permissions.allowed_nodes
             can_edit = (
-                not self.caller.consent_pending
-                and BUILD_SUBMISSION_CREATE.name in allowed
+                BUILD_SUBMISSION_CREATE.name in allowed
                 and decide_build_edit(
                     set(),
                     status=build.submission_status,

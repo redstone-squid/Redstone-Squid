@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.core.accounts.domain import AccountConsent
+from squid.core.accounts.domain import PrivacyNoticeReceipt
 from squid.core.accounts.models import Account
 from squid.core.actors import ActingContext, UserActor
 from squid.core.auth.impersonation import ImpersonationService
@@ -48,7 +48,7 @@ async def test_session_binding_revocation_and_transaction_audit(
     edit_id = uuid4()
     with effective.audit_scope():
         async with factory() as uow:
-            await uow.accounts.update_consent(effective.require_account_id(), AccountConsent.grant_current())
+            await uow.accounts.update_consent(effective.require_account_id(), PrivacyNoticeReceipt.grant_current())
             await uow.edits.record(
                 EditOutcome(
                     edit_id,
@@ -61,11 +61,11 @@ async def test_session_binding_revocation_and_transaction_audit(
             )
             await uow.commit()
         async with factory() as uow:
-            await uow.accounts.update_consent(operator.require_account_id(), AccountConsent.grant_current())
+            await uow.accounts.update_consent(operator.require_account_id(), PrivacyNoticeReceipt.grant_current())
     async with migrated_session_factory() as db:
         assert (await db.get_one(ImpersonatedEdit, edit_id)).use_id == use_id
-        assert (await db.get_one(Account, target.id)).consent_version is not None
-        assert (await db.get_one(Account, operator_account.id)).consent_version is None
+        assert (await db.get_one(Account, target.id)).privacy_notice_version is not None
+        assert (await db.get_one(Account, operator_account.id)).privacy_notice_version is None
         assert await db.scalar(select(ImpersonationUse.commits).where(ImpersonationUse.id == use_id)) == 1
 
     await service.stop("discord:1", session.id, context=ActingContext.direct(operator))

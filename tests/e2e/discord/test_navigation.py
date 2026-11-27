@@ -7,12 +7,12 @@ import pytest
 import wrapture
 
 import squid_ui.ext.discord as sd
-from squid.bot.accounts.consent import ConsentPrompt
+from squid.bot.accounts.link_confirmation import LinkConfirmation
 from squid.bot.accounts.workspace import AccountWorkspace
 from squid.bot.catalogue.browse import BuildBrowseScreen, BuildCreatorsScreen
 from squid.bot.routes import AppRequest, AppRoutes
 from squid.bot.submission.ui.drafts import DraftEditorScreen
-from squid.core.accounts.domain import AccountConsent
+from squid.core.accounts.domain import PrivacyNoticeReceipt
 from squid.core.actors import ActingContext
 from squid.core.builds.application import BuildQueryService
 from squid.core.builds.domain import BuildStatus, Credit
@@ -125,7 +125,7 @@ async def test_declining_consent_does_not_look_up_a_draft() -> None:
     services = bot_services(accounts=InMemoryAccountService(), submission_drafts=drafts)
     async with command_environment(NAVIGATION, services=services) as (bot, env):
         bot.ui_router.mount("drafts", DraftEditorScreen.open_draft)
-        wait = wrapture.binding(ConsentPrompt, "wait").on_call.decorates(
+        wait = wrapture.binding(LinkConfirmation, "wait").on_call.decorates(
             lambda wrapped, _instance, args, kwargs: env.external_wait(
                 wrapped(*args, **kwargs), reason="member consent"
             )
@@ -156,7 +156,7 @@ async def test_draft_access_failure_does_not_open_editor(error: Exception) -> No
         bot.ui_router.mount("drafts", DraftEditorScreen.open_draft)
         channel = env.guild.create_text_channel("builds")
         member = env.guild.add_member(env.create_user("builder"))
-        accounts.seed_account(member.id, account_id=7, consent=AccountConsent.grant_current())
+        accounts.seed_account(member.id, account_id=7, consent=PrivacyNoticeReceipt.grant_current())
         draft_id = UUID(int=1)
 
         result = await member.slash(channel, "open", address=f"/drafts/{draft_id}")

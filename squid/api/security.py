@@ -12,7 +12,6 @@ from litestar.di import NamedDependency
 from litestar.handlers import BaseRouteHandler
 from litestar.params import SkipValidation
 
-from squid.core.accounts.errors import ConsentRequiredError
 from squid.core.actors import ActingContext, Actor, AnonymousActor, ServiceActor, UserActor
 from squid.core.cli_auth.application import CLI_SESSION_TOKEN_PREFIX
 from squid.core.cli_auth.errors import CliAuthorizationError
@@ -43,7 +42,6 @@ class Caller:
     Resolve linked provider identities through the account service when needed.
     HTTP permission checks use the account ID and do not use a Discord guild.
     """
-    consent_pending: bool = False
     minecraft_origin: Literal["paper", "fabric"] | None = None
     java_uuid: UUID | None = None
     installation_id: UUID | None = None
@@ -123,20 +121,10 @@ class Caller:
         """Identify the HTTP operator and the subject of application work."""
         return self.acting_context or ActingContext.direct(self.to_actor())
 
-    def require_consented_account(self) -> int:
-        """Return the caller's account ID after checking privacy consent.
-
-        Accept any credential with an account ID, including CLI and Minecraft
-        credentials. Raise AuthenticationError without an account, or
-        ConsentRequiredError with consent-page links when acceptance is pending.
-        """
+    def require_account_id(self) -> int:
+        """Return the account authenticated by this credential."""
         if self.account_id is None:
             raise AuthenticationError
-        if self.consent_pending:
-            raise ConsentRequiredError(account_id=self.account_id).with_context(
-                public_context={"consent_url": "/v1/accounts/me/consent", "notice_url": "/v1/consent/notice"},
-                end_user_action="Accept the current privacy notice and retry.",
-            )
         return self.account_id
 
 
@@ -191,7 +179,6 @@ async def current_caller(request: Request) -> Caller:
         caller = replace(
             caller,
             account_id=target.id,
-            consent_pending=target.needs_consent_refresh,
             subject=f"impersonation:{session_id}",
             acting_context=replace(caller.context(), effective=effective, session_id=session_id),
         )
@@ -246,7 +233,6 @@ async def _authenticate_caller(request: Request) -> Caller:
             browser_session_id=identity.session_id,
             nodes=UNBOUNDED,
             account_id=identity.account_id,
-            consent_pending=identity.consent_pending,
         )
     if len(authorization) > 4096:
         raise AuthenticationError
@@ -273,7 +259,6 @@ async def _authenticate_caller(request: Request) -> Caller:
             subject=f"cli-session:{identity.session_id}",
             nodes=UNBOUNDED,
             account_id=identity.account_id,
-            consent_pending=identity.consent_pending,
             cli_device_id=identity.device_id,
             cli_session_id=identity.session_id,
         )
@@ -320,17 +305,17 @@ async def _authenticate_caller(request: Request) -> Caller:
 
 
 async def current_browser_account_id(caller: NamedDependency[SkipValidation[Caller]]) -> int:
-    """Require a signed-in browser account with current privacy consent."""
+    """Require a signed-in browser account."""
     if caller.kind != "account" or caller.account_id is None:
         raise AuthenticationError
-    return caller.require_consented_account()
+    return caller.require_account_id()
 
 
 BrowserAccountId = NamedDependency[int]
 
 
 async def current_browser_context(caller: NamedDependency[SkipValidation[Caller]]) -> ActingContext:
-    """Retain browser authority and operator attribution after the consent check."""
+    """Retain browser authority and operator attribution for an authenticated browser."""
     await current_browser_account_id(caller)
     return caller.context()
 
@@ -343,11 +328,6 @@ async def prevent_credential_storage(response: Response[Any]) -> Response[Any]:
     response.headers["Cache-Control"] = "no-store"
     response.headers["Pragma"] = "no-cache"
     return response
-
-
-async def consented_account_id(caller: NamedDependency[SkipValidation[Caller]]) -> int:
-    """Dependency form, for routes whose only precondition is a consented account."""
-    return caller.require_consented_account()
 
 
 ConsentedAccountId = NamedDependency[int]

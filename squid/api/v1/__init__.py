@@ -8,13 +8,13 @@ from squid.api.v1.auth import router as auth_router
 from squid.api.v1.builds import router as builds_router
 from squid.api.v1.capabilities import router as capabilities_router
 from squid.api.v1.cli_auth import router as cli_auth_router
-from squid.api.v1.consent import router as consent_router
 from squid.api.v1.creators import router as creator_aliases_router
 from squid.api.v1.diagnostics import router as diagnostics_router
 from squid.api.v1.minecraft_auth import router as minecraft_auth_router
 from squid.api.v1.minecraft_servers import router as minecraft_servers_router
 from squid.api.v1.notifications import router as notifications_router
 from squid.api.v1.permissions import router as permissions_router
+from squid.api.v1.privacy import router as privacy_router
 from squid.api.v1.records import router as records_router
 from squid.api.v1.schematics import router as schematics_router
 from squid.api.v1.search import router as search_router
@@ -40,7 +40,7 @@ router = Router(
         builds_router,
         capabilities_router,
         cli_auth_router,
-        consent_router,
+        privacy_router,
         diagnostics_router,
         minecraft_auth_router,
         minecraft_servers_router,

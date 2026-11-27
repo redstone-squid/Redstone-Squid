@@ -10,7 +10,7 @@ from whenever import Instant
 
 from squid.bot.submission.ui.drafts import DraftEditorScreen
 from squid.bot.submission.ui.inference import reopen_inference
-from squid.core.accounts.domain import AccountConsent
+from squid.core.accounts.domain import PrivacyNoticeReceipt
 from squid.core.actors import ActingContext, Actor, UserActor
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, offset_page
 from squid.core.permissions.application import PermissionService, SubjectRecords
@@ -87,7 +87,7 @@ async def test_saved_drafts_preserves_bot_owner_authority(inbox: bool) -> None:
     async with command_environment(EXTENSION, services=services) as (bot, env):
         owner = env.create_user("owner")
         bot.owner_id = owner.id
-        accounts.seed_account(owner.id, account_id=1, consent=AccountConsent.grant_current())
+        accounts.seed_account(owner.id, account_id=1, consent=PrivacyNoticeReceipt.grant_current())
 
         result = await owner.slash("build drafts", inbox=inbox)
 
@@ -114,7 +114,7 @@ async def test_saved_drafts_paginate_all_entries(inbox: bool, draft_count: int, 
     }
     async with command_environment(EXTENSION, services=services) as (bot, env):
         author = env.guild.add_member(env.create_user("author"))
-        accounts.seed_account(author.id, account_id=1, consent=AccountConsent.grant_current())
+        accounts.seed_account(author.id, account_id=1, consent=PrivacyNoticeReceipt.grant_current())
         bot.owner_id = author.id
         channel = env.guild.create_text_channel("submissions")
         result = await author.slash(channel, "build drafts", inbox=inbox)
@@ -161,7 +161,7 @@ async def test_staff_loses_access_to_an_inbox_draft_after_authority_is_revoked(b
         role = guild.create_role("Draft editors")
         user = env.create_user("reviewer")
         reviewer = guild.add_member(user, roles=[] if bot_owner else [role])
-        accounts.seed_account(user.id, account_id=1, consent=AccountConsent.grant_current())
+        accounts.seed_account(user.id, account_id=1, consent=PrivacyNoticeReceipt.grant_current())
         bot.owner_id = user.id if bot_owner else None
         grant = PermissionGrant(
             pattern="build.submission.edit",

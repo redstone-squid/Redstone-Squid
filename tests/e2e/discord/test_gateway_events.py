@@ -8,7 +8,7 @@ import pytest
 from squid.bot.events.spec import extension as events_extension
 from squid.bot.starboard.spec import extension as starboard_extension
 from squid.bot.voting.spec import extension as vote_extension
-from squid.core.accounts.domain import AccountConsent
+from squid.core.accounts.domain import PrivacyNoticeReceipt
 from squid.core.actors import ActingContext
 from squid.core.posts.domain import StarboardEntryKey
 from squid.core.starboard.application.services import StarboardVoteResult
@@ -63,8 +63,8 @@ async def test_public_poll_reaction_casts_and_withdraws_a_ballot(monkeypatch: py
         channel = env.guild.create_text_channel("voting")
         author = env.guild.add_member(env.create_user("author"))
         voter = env.guild.add_member(env.create_user("voter"))
-        accounts.seed_account(author.id, account_id=17, consent=AccountConsent.grant_current())
-        accounts.seed_account(voter.id, account_id=18, consent=AccountConsent.grant_current())
+        accounts.seed_account(author.id, account_id=17, consent=PrivacyNoticeReceipt.grant_current())
+        accounts.seed_account(voter.id, account_id=18, consent=PrivacyNoticeReceipt.grant_current())
 
         await author.slash(channel, "poll", question="Ready?", visibility=VoteVisibility.VISIBLE_LIVE.value)
         (card,) = channel.history()

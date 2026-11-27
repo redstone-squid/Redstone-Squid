@@ -15,35 +15,29 @@ from whenever import Instant
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
-from squid.bot.accounts.consent import (
-    ConsentPrompt,
-    ensure_consented_account,
-    prompt_for_consent,
-    request_consent,
+from squid.bot.accounts.identity import ensure_account
+from squid.bot.accounts.link_confirmation import (
+    LinkConfirmation,
+    request_link_confirmation,
 )
 from squid.core.accounts.application import AccountService
 from squid.core.accounts.domain import (
-    CURRENT_CONSENT_VERSION,
     PRIVACY_NOTICE,
-    AccountConsent,
+    PRIVACY_NOTICE_VERSION,
     CreditPreview,
     IdentityProvider,
     LinkPreview,
+    PrivacyNoticeReceipt,
 )
 from squid.core.accounts.models import Account, AccountIdentity
-from squid.core.sentinel import NOT_ASKED
 from squid_ui.content.text import NEUTRAL, resolve_text
-from squid_ui.ext.discord import Everyone, SessionKey, primitives
-from squid_ui.ext.discord.sessions import Opened
-from squid_ui.ext.discord.target_types import ComponentsV2Target
+from squid_ui.ext.discord import SessionKey, primitives
 from squid_ui.ext.discord.testing import (
     ContextHarness,
     InteractionHarness,
     MessageHarness,
     commit_render,
-    delivered_to,
     interaction_harness,
-    message_harness,
 )
 from squid_ui.testing import RecordingResponder, press
 from tests.support.discord import make_layout_bot
@@ -58,7 +52,7 @@ def discord_account(*, account_id: int = 7, consented: bool) -> Account:
         id=account_id,
         created_at=AFTER_CUTOFF,
         identities=(AccountIdentity.discord(USER_ID),),
-        consent=AccountConsent(CURRENT_CONSENT_VERSION, AFTER_CUTOFF) if consented else None,
+        consent=PrivacyNoticeReceipt(PRIVACY_NOTICE_VERSION, AFTER_CUTOFF) if consented else None,
     )
 
 
@@ -66,7 +60,7 @@ def discord_account(*, account_id: int = 7, consented: bool) -> Account:
 class IdentityCreation:
     provider: IdentityProvider
     subject: str
-    consent: AccountConsent | None
+    consent: PrivacyNoticeReceipt | None
 
 
 class AccountRecorder(AccountService):
@@ -82,7 +76,7 @@ class AccountRecorder(AccountService):
 
     @override
     async def get_or_create_identity(
-        self, provider: IdentityProvider, subject: str, *, consent: AccountConsent | None = None
+        self, provider: IdentityProvider, subject: str, *, consent: PrivacyNoticeReceipt | None = None
     ) -> Account:
         self.identity_creations.append(IdentityCreation(provider, subject, consent))
         return discord_account(consented=True)
@@ -121,7 +115,7 @@ def test_link_consent_card_names_every_stored_value_and_credit_outcome(
     credit: CreditPreview | None,
     expected_credit: str,
 ) -> None:
-    prompt = ConsentPrompt.from_preview(
+    prompt = LinkConfirmation.from_preview(
         user_id=USER_ID,
         preview=LinkPreview(JAVA_UUID, "Notch", credit),
     )
@@ -138,12 +132,12 @@ def test_link_consent_card_names_every_stored_value_and_credit_outcome(
     assert "Notch" in card_text
     assert str(JAVA_UUID) in card_text
     assert expected_credit in card_text
-    assert CURRENT_CONSENT_VERSION in card_text
-    assert all(label in rendered for label in ("Agree and link", "Cancel", "Privacy notice"))
+    assert PRIVACY_NOTICE_VERSION in card_text
+    assert all(label in rendered for label in ("Link Minecraft account", "Cancel", "Privacy notice"))
 
 
 async def test_cancel_and_privacy_never_record_consent() -> None:
-    cancel_prompt = ConsentPrompt.from_preview(user_id=USER_ID, preview=LinkPreview(JAVA_UUID, "Notch"))
+    cancel_prompt = LinkConfirmation.from_preview(user_id=USER_ID, preview=LinkPreview(JAVA_UUID, "Notch"))
     async with sd.testing.stage(cancel_prompt, owner=object(), user_id=USER_ID) as ui:
         await ui.press("cancel")
         outcome = await cancel_prompt.wait()
@@ -151,7 +145,7 @@ async def test_cancel_and_privacy_never_record_consent() -> None:
         assert cancel_prompt.consent is None
         assert ui.root.finished
 
-    privacy_prompt = ConsentPrompt.from_preview(user_id=USER_ID, preview=LinkPreview(JAVA_UUID, "Notch"))
+    privacy_prompt = LinkConfirmation.from_preview(user_id=USER_ID, preview=LinkPreview(JAVA_UUID, "Notch"))
     privacy_responder = RecordingResponder()
     await press(privacy_prompt, "privacy", responder=privacy_responder)
 
@@ -162,147 +156,12 @@ async def test_cancel_and_privacy_never_record_consent() -> None:
     ]
 
 
-async def test_an_already_consented_user_is_never_prompted() -> None:
-    """An existing current receipt avoids prompting or creating an account."""
-    accounts = make_accounts(discord_account(consented=True))
+async def test_requested_operation_creates_account_without_prompting() -> None:
+    accounts = make_accounts(None)
     ctx = make_context()
-
-    assert await ensure_consented_account(await gate(ctx), accounts) == 7
+    assert await ensure_account(await gate(ctx), accounts) == 7
+    assert accounts.identity_creations == [IdentityCreation(IdentityProvider.DISCORD, str(USER_ID), None)]
     ctx.send.assert_not_awaited()
-    assert accounts.identity_creations == []
-
-
-async def test_declining_stores_nothing_at_all(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Asking for consent must not create an account before acceptance."""
-    accounts = make_accounts(None)
-    ctx = make_context()
-    _stub_prompt(monkeypatch, agree=False)
-
-    assert await ensure_consented_account(await gate(ctx), accounts) is None
-    assert accounts.identity_creations == []
-    assert ctx.send.records  # The user is told, rather than left with a silent no-op.
-
-
-async def test_agreeing_mints_the_account_and_its_receipt_in_one_write(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Creating the row and recording consent separately leaves a receipt-less account behind
-    whenever the second call fails."""
-    accounts = make_accounts(None)
-    ctx = make_context()
-    _stub_prompt(monkeypatch, agree=True)
-
-    assert await ensure_consented_account(await gate(ctx), accounts) == 7
-
-    assert len(accounts.identity_creations) == 1
-    creation = accounts.identity_creations[0]
-    assert (creation.provider, creation.subject) == (IdentityProvider.DISCORD, str(USER_ID))
-    assert creation.consent is not None
-    assert creation.consent.version == CURRENT_CONSENT_VERSION
-
-
-async def test_a_stale_receipt_is_asked_again(monkeypatch: pytest.MonkeyPatch) -> None:
-    accounts = make_accounts(Account(id=7, created_at=AFTER_CUTOFF, consent=AccountConsent("1970-01-01", AFTER_CUTOFF)))
-    ctx = make_context()
-    _stub_prompt(monkeypatch, agree=True)
-
-    assert await ensure_consented_account(await gate(ctx), accounts) == 7
-    assert len(accounts.identity_creations) == 1
-
-
-@pytest.mark.parametrize("response_done", [False, True], ids=["fresh", "deferred"])
-async def test_the_gate_works_from_an_interaction_in_either_response_state(
-    monkeypatch: pytest.MonkeyPatch, response_done: bool
-) -> None:
-    """Slash cogs, modals and view buttons all reach the gate, and they differ only in whether
-    the interaction has already been answered."""
-    accounts = make_accounts(None)
-    interaction = make_interaction(response_done=response_done)
-    _stub_prompt(monkeypatch, agree=True)
-
-    assert await ensure_consented_account(await gate(interaction), accounts) == 7
-
-
-async def test_the_gate_stays_silent_when_the_user_was_never_asked(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A refused prompt already explained why it could not open; do not report a decline."""
-    accounts = make_accounts(None)
-    ctx = make_context()
-
-    async def prompt(*_args: object, **_kwargs: object) -> object:
-        return NOT_ASKED
-
-    monkeypatch.setattr("squid.bot.accounts.consent.prompt_for_consent", prompt)
-
-    assert await ensure_consented_account(await gate(ctx), accounts) is None
-    assert accounts.identity_creations == []
-    ctx.send.assert_not_awaited()
-
-
-class _Blank(sl.Component[ComponentsV2Target]):
-    @override
-    def render(self):
-        return [primitives.Text("parent")]
-
-
-async def _collect(into: list[Any], awaitable: Any) -> None:
-    into.append(await awaitable)
-
-
-async def test_a_second_prompt_is_refused_while_the_first_is_open() -> None:
-    """Refusing a duplicate preserves the first prompt and its awaiting caller."""
-    ctx = make_context()
-    request = await gate(ctx)
-    key = SessionKey.user("consent", USER_ID)
-    outcomes: list[Any] = []
-
-    async with anyio.create_task_group() as tasks:
-        tasks.start_soon(lambda: _collect(outcomes, prompt_for_consent(request, user_id=USER_ID, timeout=7)))
-        while not ctx.bot.sessions.get(key):
-            await anyio.sleep(0)
-        first = ctx.bot.sessions.get(key)
-        assert next(iter(first[0].message_roots)).timeout == 7
-
-        second = await prompt_for_consent(request, user_id=USER_ID)
-
-        assert second is NOT_ASKED
-        assert ctx.bot.sessions.get(key) == first  # the one being awaited is the one that stands
-        await ctx.bot.sessions.close(key, disable=False)
-
-    assert outcomes == [None]
-
-
-async def test_a_closing_parent_ends_the_wait_instead_of_stranding_it() -> None:
-    """Closing the parent must also resolve the waiter.
-
-    Disabling buttons alone would leave the awaiting caller blocked until timeout.
-    """
-    ctx = make_context()
-    request = await gate(ctx)
-    parent = sd.MessageRoot(_Blank(), access=Everyone(), timeout=None)
-    parent_opened = await ctx.bot.sessions.open(parent, delivered_to(message_harness()))
-    assert isinstance(parent_opened, Opened)
-    outcomes: list[Any] = []
-
-    # Bounded well under the prompt's own 120 s: a wait that only ends when the timeout
-    # expires would otherwise pass this test for exactly the wrong reason.
-    with anyio.fail_after(5):
-        async with anyio.create_task_group() as tasks:
-            tasks.start_soon(lambda: _collect(outcomes, prompt_for_consent(request, user_id=USER_ID, parent=parent)))
-            while len(parent_opened.session.message_roots) == 1:
-                await anyio.sleep(0)
-
-            await parent.finish(disable=False)
-
-    assert outcomes == [None]
-
-
-def _stub_prompt(monkeypatch: pytest.MonkeyPatch, *, agree: bool) -> None:
-    """Replace the waiting prompt with its outcome; the view itself is covered elsewhere."""
-
-    async def prompt(*_args: object, **_kwargs: object) -> AccountConsent | None:
-        return AccountConsent.grant_current() if agree else None
-
-    monkeypatch.setattr("squid.bot.accounts.consent.prompt_for_consent", prompt)
 
 
 class _Gate(sd.Screen):
@@ -327,9 +186,10 @@ class _Gate(sd.Screen):
         ]
 
     async def _ask(self, event: sd.PressEvent) -> None:
-        opened = await request_consent(
+        opened = await request_link_confirmation(
             event,
             user_id=USER_ID,
+            preview=LinkPreview(JAVA_UUID, "Notch"),
             on_answer=self._answered,
             on_abandon=self._abandoned,
         )
@@ -340,7 +200,7 @@ class _Gate(sd.Screen):
         del event
         self.presses += 1
 
-    async def _answered(self, event: sd.ActionEvent, consent: AccountConsent | None) -> None:
+    async def _answered(self, event: sd.ActionEvent, consent: PrivacyNoticeReceipt | None) -> None:
         self.granted = consent is not None
 
     async def _abandoned(self) -> None:
@@ -357,7 +217,7 @@ def _clicked(client: Any, *, message_id: int) -> Any:
 def _prompt_of(panel: _Gate) -> sd.MessageRoot | None:
     """A consent child has its own admission key and the parent's owned lifetime."""
     assert panel.opening is not None
-    sessions = panel.opening.runtime.sessions.get(SessionKey.user("consent", USER_ID))
+    sessions = panel.opening.runtime.sessions.get(SessionKey.user("link-confirmation", USER_ID))
     return next(iter(sessions[0].message_roots), None) if sessions else None
 
 
@@ -427,7 +287,7 @@ async def test_failed_parent_work_does_not_publish_consent_and_can_retry() -> No
         fail: bool = sl.state(True)
 
         @override
-        async def _answered(self, event: sd.ActionEvent, consent: AccountConsent | None) -> None:
+        async def _answered(self, event: sd.ActionEvent, consent: PrivacyNoticeReceipt | None) -> None:
             assert event.context.root is not None
             assert event.context.root.component is self
             self.granted = True
@@ -443,7 +303,7 @@ async def test_failed_parent_work_does_not_publish_consent_and_can_retry() -> No
 
         assert not panel.granted
         assert not prompt.finished
-        assert isinstance(prompt.component, ConsentPrompt)
+        assert isinstance(prompt.component, LinkConfirmation)
         assert prompt.component.outcome is None
         assert prompt.component.consent is None
         panel.fail = False
@@ -456,7 +316,7 @@ async def test_failed_parent_work_does_not_publish_consent_and_can_retry() -> No
 
 def test_consent_prompt_preserves_large_discord_mentions() -> None:
     user_id = 123456789012345678
-    prompt = ConsentPrompt.from_preview(user_id=user_id, preview=None)
+    prompt = LinkConfirmation.from_preview(user_id=user_id, preview=LinkPreview(JAVA_UUID, "Notch"))
     root = sd.MessageRoot(prompt, access=sd.Owner(user_id), timeout=120)
     content = str(commit_render(root).to_components())
     assert f"<@{user_id}>" in content

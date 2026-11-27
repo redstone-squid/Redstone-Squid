@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError, StatementError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
+from squid.core.accounts.domain import PRIVACY_NOTICE_VERSION, IdentityProvider
 from squid.core.accounts.models import Account, AccountIdentity, AccountProfile
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build
@@ -900,7 +900,7 @@ async def test_only_consented_accounts_have_their_guild_roles_stored(
         await session.execute(
             update(Account)
             .where(Account.id == consented)
-            .values(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now())
+            .values(privacy_notice_version=PRIVACY_NOTICE_VERSION, privacy_notice_acknowledged_at=Instant.now())
         )
         await session.execute(update(Account).where(Account.id == pending).values(created_at=Instant.now()))
         for account_id in (consented, pending):

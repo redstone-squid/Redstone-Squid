@@ -10,7 +10,7 @@ from squid.bot.events.spec import extension as events_extension
 from squid.bot.recount.spec import extension as recount_extension
 from squid.bot.starboard.spec import extension as starboard_extension
 from squid.bot.voting.spec import extension as vote_extension
-from squid.core.accounts.domain import AccountConsent
+from squid.core.accounts.domain import PrivacyNoticeReceipt
 from squid.core.permissions.domain.catalogue import (
     MESSAGE_ARCHIVE_CREATE,
     REDSTONER_PANEL_MANAGE,
@@ -45,7 +45,7 @@ def community_moderator(env: simcord.Env, accounts: FakeAccountRepository) -> si
         "Moderators", permissions=discord.Permissions(manage_guild=True, manage_roles=True, manage_messages=True)
     )
     moderator = env.guild.add_member(env.create_user("moderator"), roles=[role])
-    accounts.seed_account(moderator.id, account_id=17, consent=AccountConsent.grant_current())
+    accounts.seed_account(moderator.id, account_id=17, consent=PrivacyNoticeReceipt.grant_current())
     return moderator
 
 
@@ -128,7 +128,7 @@ async def test_archive_selection_only_applies_to_its_owner_and_guild(destination
                 "Staff", permissions=discord.Permissions(manage_guild=True, manage_messages=True)
             )
             other = guild.add_member(env.create_user("other moderator"), roles=[other_role])
-            accounts.seed_account(other.id, account_id=18, consent=AccountConsent.grant_current())
+            accounts.seed_account(other.id, account_id=18, consent=PrivacyNoticeReceipt.grant_current())
             result = await other.slash(guild.create_text_channel("archive"), "paste")
             expected = "Select a message"
         else:
@@ -166,7 +166,7 @@ async def test_paste_rechecks_source_access_after_a_role_is_removed() -> None:
         destination = guild.create_text_channel("archive")
         user = env.create_user("moderator")
         moderator = guild.add_member(user, roles=[moderator_role, reader_role])
-        accounts.seed_account(user.id, account_id=17, consent=AccountConsent.grant_current())
+        accounts.seed_account(user.id, account_id=17, consent=PrivacyNoticeReceipt.grant_current())
         builder = guild.add_member(env.create_user("builder"), roles=[reader_role])
         original = await builder.send(source, "The original design")
         selected = await moderator.context_menu(source, "Archive Message", original)

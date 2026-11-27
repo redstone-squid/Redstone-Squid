@@ -9,7 +9,7 @@ from uuid import UUID
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
-from squid.bot.accounts.consent import with_consented_account
+from squid.bot.accounts.identity import with_account
 from squid.bot.app import RedstoneSquid
 from squid.bot.catalogue.record_browser import CATALOGUE_PAGE_SIZE, record_browser
 from squid.bot.catalogue.records import RecordsScreen
@@ -365,9 +365,7 @@ class _BuildDetail(sl.Component[ComponentsV2Target, sd.Request[Any, RedstoneSqui
         if self._actor_account_id is not None:
             await apply_review(source, self._actor_account_id)
         else:
-            await with_consented_account(
-                source, cast(RedstoneSquid, source.context.client).services.accounts, apply_review
-            )
+            await with_account(source, cast(RedstoneSquid, source.context.client).services.accounts, apply_review)
 
     async def _refresh_review(self) -> None:
         self.projection.invalidate()

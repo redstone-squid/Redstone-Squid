@@ -2,8 +2,8 @@
 
 from litestar import Request, Response
 
-from squid.api.v1.consent import get_notice
-from squid.core.accounts.domain import CURRENT_CONSENT_VERSION
+from squid.api.v1.privacy import get_notice
+from squid.core.accounts.domain import PRIVACY_NOTICE_VERSION
 from tests.support.litestar import make_request
 
 
@@ -14,7 +14,7 @@ def request_with_locale(header: str | None) -> Request:
 
 async def test_the_notice_is_served_with_the_version_it_names() -> None:
     notice = (await get_notice.fn(request_with_locale(None))).content
-    assert notice.version == CURRENT_CONSENT_VERSION
+    assert notice.version == PRIVACY_NOTICE_VERSION
     assert notice.locale == "en"
     assert notice.title
     assert notice.body

@@ -201,7 +201,6 @@ async def test_link_requires_the_account_that_started_it(returning_account: int 
             if returning_account is None
             else UserActor(account_id=returning_account, credential_id="browser:return")
         ),
-        consent_current=True,
     )
     if returning_account == 42:
         _, destination = await attempt

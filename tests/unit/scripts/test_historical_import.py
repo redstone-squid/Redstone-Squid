@@ -16,7 +16,6 @@ import pytest
 import wrapture
 
 from scripts import populate_db_with_logs_historical_messages as importer
-from squid.core.accounts.domain import AccountConsent
 from squid.core.accounts.models import Account
 from squid.core.actors import ActingContext, UserActor, WorkerActor
 from squid.core.builds.application import BuildInferenceInput
@@ -56,12 +55,12 @@ class Channel:
 
 
 def services(*, consent: bool = True) -> BotServices:
-    account = Account(id=7, consent=AccountConsent.grant_current())
+    account = Account(id=7, discord_build_indexing_enabled=consent)
     return cast(
         BotServices,
         SimpleNamespace(
             accounts=SimpleNamespace(
-                get_account_by_identity=AsyncMock(return_value=account if consent else None),
+                get_account_by_identity=AsyncMock(return_value=account),
                 get_or_create_identity=AsyncMock(return_value=account),
             ),
             submission_inference=SimpleNamespace(
@@ -123,7 +122,7 @@ async def test_unconsented_author_is_skipped_before_inference() -> None:
     result = await importer.process_group(
         importer.MessageBundle((message(1),), ()), runtime, importer.ImportOptions("x")
     )
-    assert result.skipped_consent == 1
+    assert result.skipped_indexing_disabled == 1
     cast(AsyncMock, runtime.submission_inference.public_status).assert_not_awaited()
     cast(AsyncMock, runtime.accounts.get_or_create_identity).assert_not_awaited()
 
@@ -238,22 +237,6 @@ async def test_retained_run_resumes_even_when_a_candidate_is_already_saved(monke
     assert result.inferred_candidates == 2
     lookup.assert_not_awaited()
     ingest.assert_awaited_once()
-
-
-@pytest.mark.parametrize("dry_run", [False, True])
-async def test_channel_consent_allows_import_without_account_consent(dry_run: bool) -> None:
-    runtime = services(consent=False)
-    arguments = importer.parse_args(["--channel-consent"])
-    options = importer.ImportOptions("x", dry_run=dry_run, channel_consent=arguments.channel_consent)
-
-    result = await importer.process_group(importer.MessageBundle((message(1),), ()), runtime, options)
-
-    assert result.processed == 1
-    assert result.skipped_consent == 0
-    assert result.inferred_candidates == 2
-    cast(AsyncMock, runtime.accounts.get_account_by_identity).assert_not_awaited()
-    assert cast(AsyncMock, runtime.build_inference.infer).await_count == int(dry_run)
-    assert cast(AsyncMock, runtime.submission_inference.infer).await_count == int(not dry_run)
 
 
 @pytest.mark.parametrize("dry_run", [False, True])

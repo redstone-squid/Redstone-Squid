@@ -11,7 +11,7 @@ from discord.ext.commands import Context
 import squid_ui.ext.discord as sd
 from squid.bot.actors import AccountIdCache, DiscordActorResolver
 from squid.bot.app import RedstoneSquid
-from squid.core.accounts.domain import AccountConsent
+from squid.core.accounts.domain import PrivacyNoticeReceipt
 from squid.core.accounts.models import Account, AccountIdentity
 from squid.core.actors import ActingContext, UserActor, current_acting_context, impersonation_use
 from squid.core.auth.impersonation import AuthorizedImpersonation
@@ -152,7 +152,9 @@ async def test_debugger_uses_target_membership_for_every_callback(bot: Mock, mem
     target.roles = [discord.Object(55)]
     member.guild.fetch_member.side_effect = [member, target, member]
     bot.is_owner.side_effect = lambda user: user.id == member.id
-    account = Account(id=100, consent=AccountConsent.grant_current(), identities=(AccountIdentity.discord(target.id),))
+    account = Account(
+        id=100, consent=PrivacyNoticeReceipt.grant_current(), identities=(AccountIdentity.discord(target.id),)
+    )
     use_id = uuid4()
     bot.services.impersonation.use = AsyncMock(
         side_effect=[AuthorizedImpersonation(account, target.id, use_id), AuthorizationError()]

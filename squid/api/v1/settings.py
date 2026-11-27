@@ -90,7 +90,7 @@ async def update_runtime_settings(
     is unavailable, IDs are stored unchecked.
     """
     response_headers: dict[str, str] = {}
-    caller.require_consented_account()
+    caller.require_account_id()
     version = expected_revision(RUNTIME_TARGET, if_match)
     result = await services.edits.execute(
         EditCommand(RUNTIME_EDIT, (version,), EditValues.of(data.model_dump(exclude_unset=True)), operation_id),

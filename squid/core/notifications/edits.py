@@ -8,7 +8,6 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, JsonValue, StrictBool
 from whenever import Instant
 
-from squid.core.accounts.errors import ConsentRequiredError
 from squid.core.actors import Actor
 from squid.core.edits.application import EditUnitOfWork
 from squid.core.edits.domain import EditCommand, EditTarget, EditValues, PreparedEdit, Revision, require_revision
@@ -80,8 +79,6 @@ async def authorize(
     if actor.linked_account_id != account_id:
         raise OwnershipRequiredError
     await permissions.require(actor, ACCOUNT_SELF_MANAGE, uow=uow)
-    if not (await uow.notifications.get_preferences(account_id)).has_current_consent:
-        raise ConsentRequiredError(account_id=account_id)
 
 
 class NotificationSettingsEdit:

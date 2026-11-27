@@ -8,25 +8,23 @@ import pytest
 
 from squid.api.security import Caller, current_browser_account_id
 from squid.api.v1.submissions import _submission_origin
-from squid.core.accounts.errors import ConsentRequiredError
 from squid.core.errors import AuthenticationError
 from tests.unit.api.fakes import credential_nodes
 
 ANONYMOUS = Caller(kind="anonymous", subject="anonymous", nodes=credential_nodes())
 
 
-def account(*, consent_pending: bool) -> Caller:
+def account() -> Caller:
     return Caller(
         kind="account",
         subject="account:1",
         nodes=credential_nodes("build.submission.create"),
         account_id=1,
-        consent_pending=consent_pending,
     )
 
 
 GATES: list[tuple[str, Callable[[Caller], object]]] = [
-    ("security", Caller.require_consented_account),
+    ("security", Caller.require_account_id),
     ("submissions", _submission_origin),
     ("browser_auth", current_browser_account_id),
 ]
@@ -39,16 +37,9 @@ async def call(gate: Callable[[Caller], object], caller: Caller) -> object:
 
 
 @pytest.mark.parametrize(("name", "gate"), GATES, ids=[name for name, _ in GATES])
-async def test_a_consent_pending_caller_is_told_how_to_consent(name: str, gate: Callable[[Caller], object]) -> None:
-    """Each gate must expose both the notice and acceptance URLs."""
+async def test_ordinary_writes_need_no_privacy_receipt(name: str, gate: Callable[[Caller], object]) -> None:
     del name
-    with pytest.raises(ConsentRequiredError) as error:
-        await call(gate, account(consent_pending=True))
-
-    assert error.value.public_context == {
-        "consent_url": "/v1/accounts/me/consent",
-        "notice_url": "/v1/consent/notice",
-    }
+    await call(gate, account())
 
 
 @pytest.mark.parametrize(("name", "gate"), GATES, ids=[name for name, _ in GATES])
@@ -62,16 +53,11 @@ async def test_an_anonymous_caller_is_refused_before_consent_is_considered(
 
 
 @pytest.mark.parametrize("kind", ["service", "account", "cli", "minecraft_player"])
-@pytest.mark.parametrize("consent_pending", [False, True])
 def test_every_owned_credential_requires_current_consent(
-    kind: Literal["service", "account", "cli", "minecraft_player"], consent_pending: bool
+    kind: Literal["service", "account", "cli", "minecraft_player"],
 ) -> None:
-    caller = Caller(kind=kind, subject="owned", account_id=1, consent_pending=consent_pending)
-    if consent_pending:
-        with pytest.raises(ConsentRequiredError):
-            caller.require_consented_account()
-    else:
-        assert caller.require_consented_account() == 1
+    caller = Caller(kind=kind, subject="owned", account_id=1)
+    assert caller.require_account_id() == 1
 
 
 @pytest.mark.parametrize("kind", ["service", "cli", "minecraft_player"])

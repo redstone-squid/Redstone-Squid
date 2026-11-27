@@ -9,12 +9,6 @@ from squid.core.cli_auth.models import CliDevice, CliDeviceEnrollment, CliSessio
 from squid.core.unit_of_work import UnitOfWork
 
 
-class AccountConsentReader(Protocol):
-    """Read the current account consent state without coupling to account storage."""
-
-    async def has_current_consent(self, account_id: int) -> bool: ...
-
-
 class CliAuthorizationRepository(Protocol):
     """Persist enrollment, devices, proof challenges, and bearer sessions."""
 
@@ -73,6 +67,3 @@ class CliAuthorizationRepository(Protocol):
 class CliAuthorizationUnitOfWork(UnitOfWork, Protocol):
     @property
     def cli_authorization(self) -> CliAuthorizationRepository: ...
-
-    @property
-    def accounts(self) -> AccountConsentReader: ...

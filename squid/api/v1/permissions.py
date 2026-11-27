@@ -203,7 +203,7 @@ async def create_grant(
 
     Actors can grant only what they hold. Forbid is owner-only and needs a reason.
     """
-    caller.require_consented_account()
+    caller.require_account_id()
     subject = await _subject(services, caller, data.subject)
     scope = _int(data.scope_guild_id)
     await admin.grant(
@@ -239,7 +239,7 @@ async def create_grant(
 )
 async def revoke_grant(grant_id: FromPath[int], admin: PermissionAdmin, caller: CurrentCaller) -> None:
     """Revoke a grant. Removing the last direct holder of `perm.grant.global` answers 409."""
-    caller.require_consented_account()
+    caller.require_account_id()
     await admin.revoke_stored(grant_id, context=caller.context())
 
 
@@ -287,7 +287,7 @@ async def get_role(role_id: FromPath[int], admin: PermissionAdmin, caller: Curre
 )
 async def create_role(data: JSONBody[RoleCreateRequest], admin: PermissionAdmin, caller: CurrentCaller) -> RoleDetail:
     """Create an empty role below the actor's own rank; add patterns separately."""
-    caller.require_consented_account()
+    caller.require_account_id()
     role = await admin.create_role(
         context=caller.context(),
         slug=data.slug,
@@ -312,7 +312,7 @@ async def set_role_rank(
     role_id: FromPath[int], data: JSONBody[RoleRankRequest], admin: PermissionAdmin, caller: CurrentCaller
 ) -> RoleDetail:
     """Change who may manage the role. Rank never changes which rule wins."""
-    caller.require_consented_account()
+    caller.require_account_id()
     await admin.set_rank(await admin.role_by_id(role_id, context=caller.context()), data.rank, context=caller.context())
     return RoleDetail.of(await admin.role_by_id(role_id, context=caller.context()))
 
@@ -328,7 +328,7 @@ async def set_role_rank(
     guards=[requires(ROLE_DEFINITION_MANAGE_GUILD)],
 )
 async def delete_role(role_id: FromPath[int], admin: PermissionAdmin, caller: CurrentCaller) -> None:
-    caller.require_consented_account()
+    caller.require_account_id()
     await admin.delete_role(await admin.role_by_id(role_id, context=caller.context()), context=caller.context())
 
 
@@ -346,7 +346,7 @@ async def add_role_pattern(
     role_id: FromPath[int], data: JSONBody[RolePatternRequest], admin: PermissionAdmin, caller: CurrentCaller
 ) -> RoleDetail:
     """Include or exclude a pattern. Including needs every node it reaches; excluding only narrows the role."""
-    caller.require_consented_account()
+    caller.require_account_id()
     mode = PatternMode.INCLUDE if data.mode == "include" else PatternMode.EXCLUDE
     role = await admin.role_by_id(role_id, context=caller.context())
     await admin.add_pattern(role, data.pattern, context=caller.context(), mode=mode)
@@ -370,7 +370,7 @@ async def remove_role_pattern(
     caller: CurrentCaller,
 ) -> RoleDetail:
     """Remove an included or excluded pattern."""
-    caller.require_consented_account()
+    caller.require_account_id()
     await admin.remove_pattern(
         await admin.role_by_id(role_id, context=caller.context()), pattern, context=caller.context()
     )
@@ -391,7 +391,7 @@ async def add_role_include(
     role_id: FromPath[int], data: JSONBody[IncludedRoleRequest], admin: PermissionAdmin, caller: CurrentCaller
 ) -> RoleDetail:
     """Compose another role into this one. A cycle answers 409."""
-    caller.require_consented_account()
+    caller.require_account_id()
     role = await admin.role_by_id(role_id, context=caller.context())
     included = await admin.role_by_id(data.role_id, context=caller.context())
     await admin.add_include(role, included, context=caller.context())
@@ -411,7 +411,7 @@ async def add_role_include(
 async def remove_role_include(
     role_id: FromPath[int], included_id: FromPath[int], admin: PermissionAdmin, caller: CurrentCaller
 ) -> RoleDetail:
-    caller.require_consented_account()
+    caller.require_account_id()
     role = await admin.role_by_id(role_id, context=caller.context())
     included = await admin.role_by_id(included_id, context=caller.context())
     await admin.remove_include(role, included, context=caller.context())
@@ -465,7 +465,7 @@ async def create_assignment(
     data: JSONBody[AssignmentRequest], admin: PermissionAdmin, services: Services, caller: CurrentCaller
 ) -> AssignmentDetail:
     """Give a role below the actor's rank, and only if the actor holds everything it confers."""
-    caller.require_consented_account()
+    caller.require_account_id()
     subject = await _subject(services, caller, data.subject)
     role = await admin.role_by_id(data.role_id, context=caller.context())
     scope = _int(data.scope_guild_id)
@@ -501,7 +501,7 @@ async def create_assignment(
 )
 async def delete_assignment(assignment_id: FromPath[int], admin: PermissionAdmin, caller: CurrentCaller) -> None:
     """Take a role back. The owner role cannot be unassigned."""
-    caller.require_consented_account()
+    caller.require_account_id()
     await admin.unassign_stored(assignment_id, context=caller.context())
 
 

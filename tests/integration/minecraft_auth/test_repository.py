@@ -12,7 +12,7 @@ from sqlalchemy import func, select, text, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
+from squid.core.accounts.domain import PRIVACY_NOTICE_VERSION, IdentityProvider
 from squid.core.accounts.models import Account, AccountIdentity
 from squid.core.actors import ActingContext, AnonymousActor, UserActor
 from squid.core.minecraft_auth.application.crypto import MinecraftSecretCodec
@@ -68,7 +68,7 @@ async def consenting_account(
     java_uuid: UUID = JAVA_UUID,
 ) -> int:
     async with session_factory.begin() as session:
-        account = Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=NOW)
+        account = Account(privacy_notice_version=PRIVACY_NOTICE_VERSION, privacy_notice_acknowledged_at=NOW)
         session.add(account)
         await session.flush()
         session.add(
@@ -353,7 +353,7 @@ async def test_account_authorizer_requires_current_consent_and_exact_java_uuid(
             )
         )
 
-    assert await transact(authorizer, lambda uow: uow.accounts.has_current_consent(account_id))
+    assert await transact(authorizer, lambda uow: uow.accounts.account_exists(account_id))
     assert await transact(
         authorizer, lambda uow: uow.accounts.can_approve_minecraft_identity(account_id=account_id, java_uuid=JAVA_UUID)
     )
@@ -367,17 +367,17 @@ async def test_account_authorizer_requires_current_consent_and_exact_java_uuid(
             account_id=account_id, java_uuid=UUID("041873ab-65e9-4f44-a225-89d621df8e90")
         ),
     )
-    assert not await transact(authorizer, lambda uow: uow.accounts.has_current_consent(999_999))
+    assert not await transact(authorizer, lambda uow: uow.accounts.account_exists(999_999))
     assert not await transact(
         authorizer, lambda uow: uow.accounts.can_approve_minecraft_identity(account_id=999_999, java_uuid=JAVA_UUID)
     )
 
     unverified_java_uuid = UUID("44444444-4444-4444-8444-444444444444")
     async with async_session_factory.begin() as session:
-        unverified = Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=NOW)
+        unverified = Account(privacy_notice_version=PRIVACY_NOTICE_VERSION, privacy_notice_acknowledged_at=NOW)
         session.add(unverified)
         await session.flush()
-    assert await transact(authorizer, lambda uow: uow.accounts.has_current_consent(unverified.id))
+    assert await transact(authorizer, lambda uow: uow.accounts.account_exists(unverified.id))
     assert not await transact(
         authorizer,
         lambda uow: uow.accounts.can_approve_minecraft_identity(
@@ -388,9 +388,9 @@ async def test_account_authorizer_requires_current_consent_and_exact_java_uuid(
     async with async_session_factory.begin() as session:
         account = await session.scalar(select(Account).where(Account.id == account_id))
         assert account is not None
-        account.consent_version = "outdated"
+        account.privacy_notice_version = "outdated"
 
-    assert not await transact(authorizer, lambda uow: uow.accounts.has_current_consent(account_id))
-    assert not await transact(
+    assert await transact(authorizer, lambda uow: uow.accounts.account_exists(account_id))
+    assert await transact(
         authorizer, lambda uow: uow.accounts.can_approve_minecraft_identity(account_id=account_id, java_uuid=JAVA_UUID)
     )

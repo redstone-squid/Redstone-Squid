@@ -264,7 +264,7 @@ async def submit_schematic_video(
     request: Request,
 ) -> Response[VideoResponse]:
     """Queue a private MP4 of a stored schematic with timed input activations."""
-    caller.require_consented_account()
+    caller.require_account_id()
     if schematics.videos is None:
         raise SchematicSupportUnavailableError
     await build_queries.get_public(build_id, context=caller.context())
@@ -304,7 +304,7 @@ async def list_own_schematic_videos(
 
     Opening a video still checks that its schematic is published.
     """
-    caller.require_consented_account()
+    caller.require_account_id()
     if schematics.videos is None:
         raise SchematicSupportUnavailableError
     page = await schematics.videos.list_videos(
@@ -339,7 +339,7 @@ async def get_schematic_video(
     request: Request,
 ) -> Response[VideoResponse]:
     """Return only the requesting account's video status."""
-    caller.require_consented_account()
+    caller.require_account_id()
     if schematics.videos is None:
         raise SchematicSupportUnavailableError
     status = await schematics.videos.get_video(
@@ -375,7 +375,7 @@ async def get_schematic_video_content(
     caller: CurrentCaller,
 ) -> Response[bytes]:
     """Download a completed private video while its source remains accessible."""
-    caller.require_consented_account()
+    caller.require_account_id()
     if schematics.videos is None:
         raise SchematicSupportUnavailableError
     status = await schematics.videos.get_video(

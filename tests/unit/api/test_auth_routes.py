@@ -15,7 +15,7 @@ from pydantic import AnyHttpUrl, SecretStr
 
 from squid.api.dependencies import CurrentCaller
 from squid.config import OAuthClientCredentials
-from squid.core.accounts.domain import AccountConsent, IdentityProvider
+from squid.core.accounts.domain import IdentityProvider, PrivacyNoticeReceipt
 from squid.core.accounts.models import Account
 from squid.core.actors import ActingContext, current_acting_context
 from squid.core.auth.application.providers import DiscordOAuthProvider
@@ -211,7 +211,6 @@ def test_expired_session_returns_anonymous_snapshot(login: BrowserLogin) -> None
     assert response.json() == {
         "user": None,
         "permissions": [],
-        "consent_pending": False,
         "counts": {"unread_notifications": 0, "drafts": 0, "drafts_needing_attention": 0, "review_queue": None},
     }
 
@@ -223,7 +222,7 @@ def test_impersonation_header_is_request_scoped_and_bound_to_browser_login(login
     use_id = uuid4()
     service = login.client.app.state.runtime.services.impersonation
     service.use.return_value = AuthorizedImpersonation(
-        Account(id=77, consent=AccountConsent.grant_current()), None, use_id
+        Account(id=77, consent=PrivacyNoticeReceipt.grant_current()), None, use_id
     )
 
     @get("/v1/acting-probe")

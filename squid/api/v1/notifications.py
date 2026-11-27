@@ -53,7 +53,7 @@ UserCaller = NamedDependency[SkipValidation[Caller]]
     guards=[requires(ACCOUNT_SELF_READ)],
 )
 async def get_preferences(notifications: Notifications, caller: UserCaller) -> Response[NotificationPreferencesDetail]:
-    """Return channel preferences, with disabled defaults until privacy consent is accepted."""
+    """Return channel preferences, with both delivery channels off by default."""
     response_headers: dict[str, str] = {}
     _account_id(caller)
     preferences = await notifications.preferences(context=caller.context())

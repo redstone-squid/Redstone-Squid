@@ -12,7 +12,6 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.core.accounts.domain import IdentityProvider
-from squid.core.accounts.infrastructure.consent import account_consent_current
 from squid.core.accounts.models import Account, AccountIdentity, CreatorAlias
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build
@@ -98,13 +97,13 @@ class PostgresNotificationRepository:
     """Store notification preferences and turn domain events into recipient messages.
 
     Event-specific queries find candidates: build submitters, creator or record
-    subscribers, and staff recipients. Candidates that pass consent and channel
+    subscribers, and staff recipients. Candidates that pass channel
     checks become InboxNotification rows. Those rows also hold the message data
     for DMs, including when web delivery is disabled; NotificationDeliveryRecord
     tracks the separate send attempts.
 
     Source keys prevent an event retry from inserting the same notification twice.
-    DM claims recheck current consent and preferences and resolve the recipient's
+    DM claims recheck channel preferences and resolve the recipient's
     current Discord identity. A claim token and account-merge generation ensure
     only the current sender can settle an attempt.
 
@@ -209,25 +208,18 @@ class PostgresNotificationRepository:
     async def get_preferences(self, account_id: int) -> NotificationPreferences:
         session = self._session()
         profile = await session.get(NotificationProfile, account_id)
-        return _preferences(account_id, profile, await self._consent_pending(session, account_id))
-
-    @staticmethod
-    async def _consent_pending(session: AsyncSession, account_id: int) -> bool:
-        """Whether the account still owes the current privacy notice."""
-        writable = await session.scalar(select(Account.id).where(Account.id == account_id, account_consent_current()))
-        return writable is None
+        return _preferences(account_id, profile)
 
     async def update_preferences(
         self, account_id: int, *, web_enabled: bool, dm_enabled: bool
     ) -> NotificationPreferences | None:
         """Set both channels, creating the profile row on first use.
 
-        Return None when the account does not satisfy the consent policy. Enabling
+        Return None when the account does not exist. Enabling
         DMs clears a previous suspension; disabling them terminates pending deliveries.
         """
         session = self._session()
-        await session.get(Account, account_id, with_for_update=True)
-        if await self._consent_pending(session, account_id):
+        if await session.get(Account, account_id, with_for_update=True) is None:
             return None
         profile = (
             await session.scalars(
@@ -257,7 +249,7 @@ class PostgresNotificationRepository:
         ).one()
         if not dm_enabled:
             await self._cancel_pending_deliveries(session, account_id)
-        return _preferences(account_id, profile, consent_pending=False)
+        return _preferences(account_id, profile)
 
     async def subscription_target_exists(self, kind: SubscriptionKind, subject_id: UUID) -> bool:
         session = self._session()
@@ -428,7 +420,6 @@ class PostgresNotificationRepository:
                     NotificationDeliveryRecord.claimed_at.is_(None),
                     NotificationDeliveryRecord.claimed_at < func.now() - VISIBILITY_TIMEOUT,
                 ),
-                account_consent_current(),
                 NotificationProfile.dm_enabled.is_(True),
                 NotificationProfile.dm_suspended_at.is_(None),
                 or_(InboxNotification.kind != NotificationKind.STAFF_BUILD_SUBMITTED, claimable_staff),
@@ -793,7 +784,6 @@ class PostgresNotificationRepository:
                     .join(Account, Account.id == NotificationProfile.account_id)
                     .where(
                         NotificationProfile.account_id.in_(account_ids),
-                        account_consent_current(),
                         or_(NotificationProfile.web_enabled.is_(True), NotificationProfile.dm_enabled.is_(True)),
                     )
                 )
@@ -1024,15 +1014,12 @@ def _record_entry(record: _RecordGain) -> dict[str, object]:
     }
 
 
-def _preferences(
-    account_id: int, profile: NotificationProfile | None, consent_pending: bool
-) -> NotificationPreferences:
+def _preferences(account_id: int, profile: NotificationProfile | None) -> NotificationPreferences:
     if profile is None:
-        return NotificationPreferences(account_id=account_id, consent_pending=consent_pending)
+        return NotificationPreferences(account_id=account_id)
     return NotificationPreferences(
         account_id=account_id,
         revision=profile.revision,
-        consent_pending=consent_pending,
         web_enabled=profile.web_enabled,
         dm_enabled=profile.dm_enabled,
         dm_suspended_at=profile.dm_suspended_at,
@@ -1047,7 +1034,6 @@ def inbox_predicates(account_id: int, visibility: InboxVisibility) -> tuple[Colu
             NotificationProfile.account_id == account_id,
             NotificationProfile.web_enabled.is_(True),
             Account.id == NotificationProfile.account_id,
-            account_consent_current(),
         ),
     )
     if visibility.include_staff:

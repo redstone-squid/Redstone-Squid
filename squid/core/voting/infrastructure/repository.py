@@ -14,7 +14,6 @@ from sqlalchemy.orm import selectinload
 from whenever import Instant
 
 from squid.core.accounts.domain import IdentityProvider
-from squid.core.accounts.infrastructure.consent import account_consent_current
 from squid.core.accounts.models import Account, AccountIdentity, AccountProfile
 from squid.core.errors import DataIntegrityError
 from squid.core.messages.errors import MessageNotFoundError
@@ -678,7 +677,6 @@ class VoteRepository:
                 .where(
                     AccountIdentity.provider == IdentityProvider.DISCORD,
                     AccountIdentity.subject.in_([str(discord_id) for discord_id in batch]),
-                    account_consent_current(),
                 )
             )
             rows = {

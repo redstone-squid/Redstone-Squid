@@ -13,16 +13,17 @@ from whenever import Instant
 from squid.api.security import UNBOUNDED, Caller
 from squid.api.v1.accounts import (
     get_me,
-    grant_consent,
     refresh_minecraft_identity,
     resolve_account,
+    set_build_indexing,
 )
+from squid.api.v1.schemas.accounts import BuildIndexingRequest
 from squid.core.accounts.domain import (
-    CURRENT_CONSENT_VERSION,
-    AccountConsent,
+    PRIVACY_NOTICE_VERSION,
     ClaimStatus,
     IdentityProvider,
     IdentityRefresh,
+    PrivacyNoticeReceipt,
 )
 from squid.core.accounts.errors import AccountNotFoundError
 from squid.core.accounts.models import Account, AccountIdentity, AccountProfile, AliasClaim, CreatorAlias
@@ -41,7 +42,7 @@ def _account(*, discord: bool = True) -> Account:
         identities.insert(0, replace(AccountIdentity.discord(7), id=1))
     return Account(
         identities=tuple(identities),
-        consent=AccountConsent(CURRENT_CONSENT_VERSION, NOW),
+        consent=PrivacyNoticeReceipt(PRIVACY_NOTICE_VERSION, NOW),
         id=1,
         created_at=NOW,
         public_account_id=CREATOR_ID,
@@ -65,10 +66,9 @@ class AccountRecorder(InMemoryAccountService):
         self.refreshes: list[tuple[int, UUID | None]] = []
 
     @override
-    async def grant_current_consent(self, *, context: ActingContext) -> Account:
-        account_id = context.effective.require_account_id()
-        self.consent_grants.append(account_id)
-        return self.account
+    async def set_account_build_indexing(self, enabled: bool, *, context: ActingContext) -> None:
+        assert context.effective.require_account_id() == self.account.id
+        self.account.discord_build_indexing_enabled = enabled
 
     @override
     async def refresh_java_identity(
@@ -137,11 +137,12 @@ async def test_a_caller_without_an_account_is_rejected() -> None:
         await get_me.fn(_accounts(), anonymous)
 
 
-async def test_consent_is_granted_by_account_not_discord_id() -> None:
+async def test_indexing_setting_belongs_to_account() -> None:
     accounts = _accounts(account=_account(discord=False))
-    response = await grant_consent.fn(accounts, _caller("cli"), _reservation=None)
-    assert accounts.consent_grants == [1]
-    assert response.consent_pending is False
+    response = await set_build_indexing.fn(
+        accounts, _caller("account"), BuildIndexingRequest(enabled=True), _reservation=None
+    )
+    assert response.discord_build_indexing_enabled
 
 
 async def test_refresh_reports_a_rename_and_its_new_credit() -> None:

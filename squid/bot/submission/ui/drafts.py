@@ -36,7 +36,7 @@ from uuid import UUID
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
-from squid.bot.accounts.consent import ensure_consented_account
+from squid.bot.accounts.identity import ensure_account
 from squid.bot.edit_controller import EditController
 from squid.bot.routes import AppRequest, AppRoutes, ScreenUnavailable
 from squid.bot.submission import draft_intake
@@ -539,8 +539,7 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
         """Open one of the opener's drafts, after the account has consented."""
         services = request.client.services
         resolve_actor = partial(request.client.actors.request_actor, request, session, f"draft:{draft_id}")
-        if await ensure_consented_account(request, services.accounts, resolve_actor=resolve_actor) is None:
-            return None
+        await ensure_account(request, services.accounts, resolve_actor=resolve_actor)
         try:
             screen = await cls.load(
                 services,

@@ -13,7 +13,6 @@ from whenever import Instant
 
 from squid.core.accounts.application.ports import VerificationLinkResult
 from squid.core.accounts.domain import (
-    AccountConsent,
     AccountMerge,
     ClaimMethod,
     ClaimStatus,
@@ -25,6 +24,7 @@ from squid.core.accounts.domain import (
     IdentityRefresh,
     LinkPreview,
     LinkReservation,
+    PrivacyNoticeReceipt,
     ProfileUpdate,
     fold_creator_name,
 )
@@ -39,7 +39,6 @@ from squid.core.accounts.errors import (
 )
 from squid.core.accounts.infrastructure.account_merge import merge_accounts
 from squid.core.accounts.infrastructure.attribution import BUILD_CREDITS, attributed_credits
-from squid.core.accounts.infrastructure.consent import account_consent_current
 from squid.core.accounts.models import (
     Account,
     AccountIdentity,
@@ -64,8 +63,10 @@ def _hydrate_account(model: Account, identities: Sequence[AccountIdentity]) -> A
     """Populate identities and the consent receipt on the same loaded account."""
     model.identities = tuple(identities)
     model.consent = None
-    if model.consent_version is not None and model.consented_at is not None:
-        model.consent = AccountConsent(version=model.consent_version, granted_at=model.consented_at)
+    if model.privacy_notice_version is not None and model.privacy_notice_acknowledged_at is not None:
+        model.consent = PrivacyNoticeReceipt(
+            version=model.privacy_notice_version, granted_at=model.privacy_notice_acknowledged_at
+        )
     return model
 
 
@@ -96,26 +97,17 @@ class AccountRepository:
 
     # Account lookup and consent.
 
-    async def has_current_consent(self, account_id: int) -> bool:
-        """Return whether an existing account passes the consent gate, including grandfathered accounts."""
-        session = self._session()
-        result = await session.scalar(
-            select(Account.id).where(
-                Account.id == account_id,
-                account_consent_current(),
-            )
-        )
-        return result is not None
+    async def account_exists(self, account_id: int) -> bool:
+        return await self._session().scalar(select(Account.id).where(Account.id == account_id)) is not None
 
     async def can_approve_minecraft_identity(self, *, account_id: int, java_uuid: uuid.UUID) -> bool:
-        """Check consent and ownership of the verified Java UUID in one query."""
+        """Check ownership of the verified Java UUID in one query."""
         session = self._session()
         result = await session.scalar(
             select(AccountIdentity.id)
             .join(Account, Account.id == AccountIdentity.account_id)
             .where(
                 Account.id == account_id,
-                account_consent_current(),
                 AccountIdentity.provider == IdentityProvider.JAVA,
                 AccountIdentity.subject == str(java_uuid),
                 AccountIdentity.verified_at.is_not(None),
@@ -126,14 +118,14 @@ class AccountRepository:
     async def create(
         self,
         *,
-        consent: AccountConsent | None = None,
+        consent: PrivacyNoticeReceipt | None = None,
         identities: Sequence[AccountIdentity] = (),
     ) -> Account:
         """Insert one account and its verified identities atomically."""
         session = self._session()
         account = Account(
-            consent_version=None if consent is None else consent.version,
-            consented_at=None if consent is None else consent.granted_at,
+            privacy_notice_version=None if consent is None else consent.version,
+            privacy_notice_acknowledged_at=None if consent is None else consent.granted_at,
         )
         session.add(account)
         await session.flush()
@@ -197,7 +189,7 @@ class AccountRepository:
         return holder is not None and holder.id == account_id
 
     async def get_or_create_identity(
-        self, provider: IdentityProvider, subject: str, *, consent: AccountConsent | None = None
+        self, provider: IdentityProvider, subject: str, *, consent: PrivacyNoticeReceipt | None = None
     ) -> Account:
         """Resolve one external identity, atomically creating its account when absent.
 
@@ -212,8 +204,8 @@ class AccountRepository:
             return await self._load_account(session, existing)
 
         candidate = Account(
-            consent_version=None if consent is None else consent.version,
-            consented_at=None if consent is None else consent.granted_at,
+            privacy_notice_version=None if consent is None else consent.version,
+            privacy_notice_acknowledged_at=None if consent is None else consent.granted_at,
         )
         session.add(candidate)
         await session.flush()
@@ -239,14 +231,14 @@ class AccountRepository:
             return await self._load_account(session, holder)
         return await self._load_account(session, candidate)
 
-    async def update_consent(self, account_id: int, consent: AccountConsent) -> Account:
+    async def update_consent(self, account_id: int, consent: PrivacyNoticeReceipt) -> Account:
         """Replace an account's privacy-notice receipt."""
         session = self._session()
         model = await session.get(Account, account_id, with_for_update=True)
         if model is None:
             raise AccountNotFoundError(account_id)
-        model.consent_version = consent.version
-        model.consented_at = consent.granted_at
+        model.privacy_notice_version = consent.version
+        model.privacy_notice_acknowledged_at = consent.granted_at
         await session.flush()
         return await self._load_account(session, model)
 
@@ -898,7 +890,7 @@ class AccountRepository:
         *,
         account_id: int,
         code: str,
-        consent: AccountConsent,
+        consent: PrivacyNoticeReceipt,
         reservation_token: str | None = None,
     ) -> VerificationLinkResult:
         """Consume a code and link its Java identity within the caller's transaction.
@@ -967,8 +959,8 @@ class AccountRepository:
             existing_java.display_name = verification_code.username
             existing_java.verified_at = Instant.now()
         account.revision += 1
-        account.consent_version = consent.version
-        account.consented_at = consent.granted_at
+        account.privacy_notice_version = consent.version
+        account.privacy_notice_acknowledged_at = consent.granted_at
         verification_code.valid = False
 
         refresh = await self._reconcile_java_name(

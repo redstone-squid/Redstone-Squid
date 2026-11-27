@@ -159,7 +159,7 @@ from squid.core.tags.application.edits import (
 from squid.core.unit_of_work import UnitOfWorkFactory
 from squid.core.versions.application.services import VersionService
 from squid.core.voting.application import VoteService
-from squid.core.voting.application.accounts import AccountConsentedVoterLookup
+from squid.core.voting.application.accounts import DiscordVoterLookup
 from squid.core.voting.application.recount import BallotRecounter
 from squid.core.voting.infrastructure.discord_cards import DiscordVoteCards
 from squid.discord_rest import RestOnlyClient, rest_client
@@ -569,9 +569,7 @@ class _ServiceGraph:
         members = self.discord_guild_members
         if client is None or members is None:
             return None
-        return BallotRecounter(
-            self.votes, DiscordVoteCards(client), AccountConsentedVoterLookup(self.accounts), members
-        )
+        return BallotRecounter(self.votes, DiscordVoteCards(client), DiscordVoterLookup(self.accounts), members)
 
     @cached_property
     def accounts(self) -> AccountService:

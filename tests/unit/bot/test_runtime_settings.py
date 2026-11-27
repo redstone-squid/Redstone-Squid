@@ -25,7 +25,7 @@ async def test_runtime_edit_uses_internal_account_or_refuses_unlinked_owner(
 ) -> None:
     authorize = AsyncMock()
     monkeypatch.setattr("squid.bot.admin_cog.enforce", authorize)
-    account = SimpleNamespace(id=17, needs_consent_refresh=False) if linked else None
+    account = SimpleNamespace(id=17) if linked else None
     accounts = SimpleNamespace(get_account_by_identity=AsyncMock(return_value=account))
     edits = SimpleNamespace(
         execute=AsyncMock(

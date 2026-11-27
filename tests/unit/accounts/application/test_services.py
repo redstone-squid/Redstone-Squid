@@ -8,10 +8,9 @@ import pytest
 from squid.core.accounts.application.ports import VerificationLinkResult
 from squid.core.accounts.application.services import VERIFICATION_MAX_CONSECUTIVE_FAILURES
 from squid.core.accounts.domain import (
-    CURRENT_CONSENT_VERSION,
     MERGE_PROOF_MAX_AGE_SECONDS,
     MERGE_TICKET_TTL_SECONDS,
-    AccountConsent,
+    PRIVACY_NOTICE_VERSION,
     AccountMerge,
     ClaimMethod,
     ClaimStatus,
@@ -19,6 +18,7 @@ from squid.core.accounts.domain import (
     IdentityProvider,
     IdentityRefresh,
     LinkPreview,
+    PrivacyNoticeReceipt,
     ProfileUpdate,
     RecentAccountProof,
 )
@@ -26,7 +26,6 @@ from squid.core.accounts.errors import (
     AccountAlreadyLinkedError,
     AccountNotFoundError,
     ClaimNotFoundError,
-    ConsentRequiredError,
     InvalidMergeCodeError,
     InvalidMergeProofError,
     InvalidVerificationCodeError,
@@ -46,7 +45,7 @@ from tests.support.accounts import NOW, FakeAccountRepository, InMemoryAccountSe
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
 OTHER_JAVA_UUID = UUID("22222222-2222-2222-2222-222222222222")
-CONSENT = AccountConsent(CURRENT_CONSENT_VERSION, NOW)
+CONSENT = PrivacyNoticeReceipt(PRIVACY_NOTICE_VERSION, NOW)
 ATTEMPT = (IdentityProvider.DISCORD, "123")
 
 
@@ -68,17 +67,17 @@ async def test_discord_login_creates_an_account_without_making_discord_primary()
     assert account.identities_for(IdentityProvider.JAVA) == ()
 
 
-async def test_grant_current_consent_updates_the_internal_account() -> None:
+async def test_indexing_is_independent_of_old_receipts_and_shared_across_settings() -> None:
     repository = FakeAccountRepository()
-    seeded = repository.seed_account(123)
-    assert seeded.id is not None
-
-    account = await InMemoryAccountService(repository).grant_current_consent(
-        context=ActingContext.direct(UserActor(account_id=seeded.id))
+    account = repository.seed_account(123, consent=CONSENT)
+    service = InMemoryAccountService(repository)
+    assert not account.discord_build_indexing_enabled
+    await service.set_discord_build_indexing(123, enabled=True)
+    assert repository.accounts[account.id].discord_build_indexing_enabled
+    await service.set_account_build_indexing(
+        enabled=False, context=ActingContext.direct(UserActor(account_id=account.id))
     )
-
-    assert account.consent is not None
-    assert account.consent.version == CURRENT_CONSENT_VERSION
+    assert not repository.accounts[account.id].discord_build_indexing_enabled
 
 
 async def test_link_rejects_an_invalid_or_conflicting_java_identity() -> None:
@@ -345,16 +344,16 @@ async def test_holding_a_correct_code_is_never_charged_as_a_failure() -> None:
     assert repository.lockouts == {}
 
 
-async def test_alias_claim_requires_current_consent() -> None:
+async def test_alias_claim_needs_no_privacy_receipt() -> None:
     repository = FakeAccountRepository()
     seeded = repository.seed_account(123)
     assert seeded.id is not None
     repository.aliases[1] = CreatorAlias(id=1, name="OldName")
 
-    with pytest.raises(ConsentRequiredError):
-        await InMemoryAccountService(repository).request_alias_claim(
-            "OldName", context=ActingContext.direct(UserActor(account_id=seeded.id))
-        )
+    claim = await InMemoryAccountService(repository).request_alias_claim(
+        "OldName", context=ActingContext.direct(UserActor(account_id=seeded.id))
+    )
+    assert claim.account_id == seeded.id
 
 
 async def test_staff_resolution_records_the_staff_account() -> None:
@@ -725,12 +724,11 @@ async def test_an_account_can_be_created_with_its_consent_receipt_in_one_write()
     """Store consent with the new account so a separate failing call cannot leave the receipt missing."""
     repository = FakeAccountRepository()
     service = InMemoryAccountService(repository)
-    consent = AccountConsent.grant_current()
+    consent = PrivacyNoticeReceipt.grant_current()
 
     account = await service.get_or_create_identity(IdentityProvider.DISCORD, "99", consent=consent)
 
     assert account.consent == consent
-    assert not account.needs_consent_refresh
 
 
 async def test_an_existing_account_is_not_handed_a_receipt_it_never_agreed_to() -> None:
@@ -740,7 +738,7 @@ async def test_an_existing_account_is_not_handed_a_receipt_it_never_agreed_to() 
     existing = repository.seed_account(99, provider=IdentityProvider.DISCORD)
 
     account = await service.get_or_create_identity(
-        IdentityProvider.DISCORD, "99", consent=AccountConsent.grant_current()
+        IdentityProvider.DISCORD, "99", consent=PrivacyNoticeReceipt.grant_current()
     )
 
     assert account.id == existing.id

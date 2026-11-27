@@ -22,11 +22,11 @@ from tests.support.voting import GENERIC_MENU
 @pytest.fixture
 def poll_context() -> tuple[Any, Any]:
     cog = VoteCog.__new__(VoteCog)
-    account = SimpleNamespace(id=7, needs_consent_refresh=False)
+    account = SimpleNamespace(id=7)
     cast(Any, cog).bot = SimpleNamespace(
         actors=SimpleNamespace(resolve=AsyncMock(return_value=UserActor(account_id=7, guild_id=10))),
         services=SimpleNamespace(
-            accounts=SimpleNamespace(get_account_by_identity=AsyncMock(return_value=account)),
+            accounts=SimpleNamespace(get_or_create_identity=AsyncMock(return_value=account)),
             permissions=SimpleNamespace(check=AsyncMock(return_value=SimpleNamespace(allowed=True))),
         ),
     )

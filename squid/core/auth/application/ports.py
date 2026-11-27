@@ -5,7 +5,7 @@ from uuid import UUID
 
 from whenever import Instant
 
-from squid.core.accounts.domain import AccountConsent, IdentityProvider
+from squid.core.accounts.domain import IdentityProvider, PrivacyNoticeReceipt
 from squid.core.accounts.models import Account
 from squid.core.auth.domain.sessions import WebSessionIdentity
 from squid.core.auth.models.entities import ApiKey
@@ -19,7 +19,7 @@ class WebSessionRepository(Protocol):
     """Store pending OAuth logins and the local browser sessions they create.
 
     Consuming state removes one login attempt so its callback cannot be reused.
-    Session authentication returns the linked account and current consent status.
+    Session authentication returns the linked account.
     WebSessionService commits these operations through its unit of work.
     """
 
@@ -79,7 +79,7 @@ class BrowserAccountRepository(Protocol):
     async def link_browser_identity(self, account_id: int, provider: IdentityProvider, subject: str) -> bool: ...
 
     async def get_or_create_identity(
-        self, provider: IdentityProvider, subject: str, *, consent: AccountConsent | None = None
+        self, provider: IdentityProvider, subject: str, *, consent: PrivacyNoticeReceipt | None = None
     ) -> Account: ...
 
 

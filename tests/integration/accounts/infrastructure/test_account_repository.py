@@ -12,11 +12,11 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.core.accounts.domain import (
-    CURRENT_CONSENT_VERSION,
-    AccountConsent,
+    PRIVACY_NOTICE_VERSION,
     ClaimMethod,
     ClaimStatus,
     IdentityProvider,
+    PrivacyNoticeReceipt,
 )
 from squid.core.accounts.errors import AccountNotFoundError, AliasAlreadyClaimedError, CreatorAliasNotFoundError
 from squid.core.accounts.models import (
@@ -35,7 +35,7 @@ from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.unit_of_work import UnitOfWorkFactory
 from tests.support.unit_of_work import transact
 
-CONSENT = AccountConsent(CURRENT_CONSENT_VERSION, Instant.from_utc(2026, 8, 4))
+CONSENT = PrivacyNoticeReceipt(PRIVACY_NOTICE_VERSION, Instant.from_utc(2026, 8, 4))
 MINECRAFT_UUID = UUID("11111111-1111-1111-1111-111111111111")
 SECOND_MINECRAFT_UUID = UUID("22222222-2222-2222-2222-222222222222")
 

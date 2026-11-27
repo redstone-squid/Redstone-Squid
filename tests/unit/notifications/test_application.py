@@ -6,9 +6,9 @@ from unittest.mock import AsyncMock
 import pytest
 from pydantic import JsonValue
 
-from squid.core.accounts.errors import ConsentRequiredError
 from squid.core.actors import ActingContext, UserActor
 from squid.core.edits.domain import EditCommand, EditValues, Revision
+from squid.core.errors import OwnershipRequiredError
 from squid.core.notifications import NotificationPreferences, NotificationService
 from squid.core.notifications.application import NotificationRepository
 from squid.core.notifications.edits import (
@@ -29,11 +29,11 @@ from tests.support.settings import RuntimeSettingsStub
 
 
 @pytest.mark.parametrize("kind", [PREFERENCES_EDIT, SUBSCRIPTIONS_EDIT])
-async def test_edits_require_consent_before_target_lookup(kind: str) -> None:
+async def test_edits_require_ownership_before_target_lookup(kind: str) -> None:
     uow = AsyncMock(spec=NotificationEditUnitOfWork)
     uow.notifications = AsyncMock()
     uow.notifications.lock_settings.return_value = 1
-    uow.notifications.get_preferences.return_value = NotificationPreferences(account_id=7, consent_pending=True)
+    uow.notifications.get_preferences.return_value = NotificationPreferences(account_id=7)
     permissions = AsyncMock(spec=PermissionService)
     permissions.require.return_value = None
     handler = (
@@ -44,10 +44,10 @@ async def test_edits_require_consent_before_target_lookup(kind: str) -> None:
     values: dict[str, JsonValue] = (
         {"web_enabled": True} if kind == PREFERENCES_EDIT else {"create": {"kind": "creator"}}
     )
-    with pytest.raises(ConsentRequiredError):
+    with pytest.raises(OwnershipRequiredError):
         await handler.prepare(
             uow,
-            UserActor(account_id=7),
+            UserActor(account_id=8),
             EditCommand(kind, (Revision(notification_target(7), 1),), EditValues.of(values)),
         )
     uow.notifications.subscription_target_exists.assert_not_called()
@@ -57,7 +57,7 @@ async def test_subscription_target_is_checked_before_persistence() -> None:
     uow = AsyncMock(spec=NotificationEditUnitOfWork)
     uow.notifications = AsyncMock()
     uow.notifications.lock_settings.return_value = 1
-    uow.notifications.get_preferences.return_value = NotificationPreferences(account_id=7, consent_pending=False)
+    uow.notifications.get_preferences.return_value = NotificationPreferences(account_id=7)
     uow.notifications.subscription_target_exists.return_value = False
     permissions = AsyncMock(spec=PermissionService)
     permissions.require.return_value = None

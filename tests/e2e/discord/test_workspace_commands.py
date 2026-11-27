@@ -5,7 +5,7 @@ import pytest
 import simcord
 
 from squid.bot.diagnostics.screen import ErrorReportScreen
-from squid.core.accounts.domain import AccountConsent
+from squid.core.accounts.domain import PrivacyNoticeReceipt
 from squid.core.permissions.domain.catalogue import DIAGNOSTICS_ERROR_READ, PERM_GRANT_GUILD, SETTINGS_SERVER_VIEW
 from squid.core.settings.domain.guild import GuildSettings
 from squid.core.voting.domain.models import VoteConfiguration, VoteKind
@@ -114,7 +114,7 @@ async def test_notifications_show_a_consented_members_personal_inbox() -> None:
     ):
         channel = env.guild.create_text_channel("public")
         member = env.guild.add_member(env.create_user("builder"))
-        accounts.seed_account(member.id, account_id=7, consent=AccountConsent.grant_current())
+        accounts.seed_account(member.id, account_id=7, consent=PrivacyNoticeReceipt.grant_current())
 
         result = await member.slash(channel, "notifications")
 

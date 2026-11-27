@@ -100,7 +100,7 @@ async def list_proposals(
     cursor: CursorParam = None,
 ) -> Page[RecalculationProposalResponse]:
     """Page recalculation proposals for staff review; `status=pending&sort=oldest` is the review queue."""
-    caller.require_consented_account()
+    caller.require_account_id()
     page = await proposals.list_page(
         RecalculationProposalFilters(status, build_id),
         sort=sort,
@@ -130,7 +130,7 @@ async def history(
     _reservation: NamedDependency[SkipValidation[None]],
 ) -> list[RecalculationProposalResponse]:
     """List recalculation proposals for a source message after checking the caller's access."""
-    caller.require_consented_account()
+    caller.require_account_id()
     return [
         RecalculationProposalResponse.from_domain(item)
         for item in await proposals.list_for_source(message_id, context=caller.context())
@@ -156,7 +156,7 @@ async def get_proposal(
     _reservation: NamedDependency[SkipValidation[None]],
 ) -> RecalculationProposalResponse:
     """Return a recalculation proposal after checking the caller's access."""
-    caller.require_consented_account()
+    caller.require_account_id()
     return RecalculationProposalResponse.from_domain(await proposals.get(proposal_id, context=caller.context()))
 
 
@@ -183,7 +183,7 @@ async def match_proposal(
 
     With renew set, create a new proposal and retain the previous review.
     """
-    caller.require_consented_account()
+    caller.require_account_id()
     return RecalculationProposalResponse.from_domain(
         await proposals.match(proposal_id, data.build_id, context=caller.context(), renew=data.renew)
     )
@@ -211,7 +211,7 @@ async def approve_proposal(
 
     An already applied proposal returns its existing approval result.
     """
-    caller.require_consented_account()
+    caller.require_account_id()
     return RecalculationProposalResponse.from_domain(await proposals.approve(proposal_id, context=caller.context()))
 
 

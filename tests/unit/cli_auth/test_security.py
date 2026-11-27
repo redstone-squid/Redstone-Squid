@@ -36,7 +36,6 @@ class FakeCliAuthorization(CliAuthorizationService):
             account_id=42,
             device_id=DEVICE_ID,
             session_id=SESSION_ID,
-            consent_pending=False,
         )
 
 

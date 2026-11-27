@@ -9,22 +9,21 @@ import pytest
 from whenever import Instant
 
 import squid_ui.ext.discord as sd
-from squid.bot.accounts.consent import ConsentPrompt
 from squid.bot.routes import AppRequest
-from squid.bot.submission.consent_banner import (
-    CONSENT_BUTTON_CUSTOM_ID,
-    BuildLogConsentStickyMessage,
-    open_consent_prompt,
+from squid.bot.submission.indexing import (
+    BuildIndexingStickyMessage,
+    disable_indexing,
+    enable_indexing,
+    open_indexing_settings,
 )
 from squid.bot.submission.message_intake import BuildMessageIntake
 from squid.core.accounts.application import AccountService
-from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, IdentityProvider
+from squid.core.accounts.domain import PRIVACY_NOTICE_VERSION, IdentityProvider, PrivacyNoticeReceipt
 from squid.core.accounts.models import Account, AccountIdentity
 from squid.core.actors import ActingContext, UserActor
 from squid.core.settings.application import SettingsService
 from squid.core.settings.domain.runtime import RuntimeSettings
 from squid.core.submissions.errors import DraftCapacityExceededError
-from squid_ui.ext.discord import Cancelled, Completed
 from squid_ui.ext.discord.testing import AsyncCallRecorder, InteractionHarness, MessageHarness
 from tests.support.discord import make_layout_bot
 from tests.support.services import bot_services
@@ -44,23 +43,16 @@ def _discord_account(*, account_id: int = 7, consented: bool) -> Account:
     return Account(
         id=account_id,
         created_at=AFTER_CUTOFF,
+        discord_build_indexing_enabled=consented,
         identities=(AccountIdentity.discord(USER_ID),),
-        consent=AccountConsent(CURRENT_CONSENT_VERSION, AFTER_CUTOFF) if consented else None,
+        consent=PrivacyNoticeReceipt(PRIVACY_NOTICE_VERSION, AFTER_CUTOFF) if consented else None,
     )
-
-
-@dataclass(frozen=True)
-class IdentityCreation:
-    provider: IdentityProvider
-    subject: str
-    consent: AccountConsent | None
 
 
 class AccountRecorder(AccountService):
     def __init__(self, account: Account | None) -> None:
         self.account = account
         self.reads: list[tuple[IdentityProvider, str]] = []
-        self.creations: list[IdentityCreation] = []
 
     @override
     async def get_account_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None:
@@ -68,11 +60,9 @@ class AccountRecorder(AccountService):
         return self.account
 
     @override
-    async def get_or_create_identity(
-        self, provider: IdentityProvider, subject: str, *, consent: AccountConsent | None = None
-    ) -> Account:
-        self.creations.append(IdentityCreation(provider, subject, consent))
-        return _discord_account(consented=True)
+    async def set_discord_build_indexing(self, discord_user_id: int, *, enabled: bool) -> None:
+        assert discord_user_id == USER_ID
+        self.account = _discord_account(consented=enabled)
 
 
 class SettingsRecorder(SettingsService):
@@ -93,7 +83,7 @@ class CommunityConfig:
     build_log_channel_ids: set[int]
 
 
-class StickyRecorder(BuildLogConsentStickyMessage):
+class StickyRecorder(BuildIndexingStickyMessage):
     def __init__(self) -> None:
         self.triggers: list[discord.TextChannel] = []
         self.activity: list[int] = []
@@ -154,7 +144,7 @@ async def _empty_history():
         yield None
 
 
-async def test_unconsented_message_triggers_sticky_and_skips_ingestion(
+async def test_unknown_author_triggers_reminder_and_skips_indexing(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     intake = _make_intake(account=None)
@@ -171,7 +161,7 @@ async def test_unconsented_message_triggers_sticky_and_skips_ingestion(
     mock_ingest.assert_not_awaited()
 
 
-async def test_consented_message_records_activity_and_proceeds_with_ingestion(
+async def test_enabled_indexing_records_activity_and_processes_message(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     intake = _make_intake(account=_discord_account(consented=True))
@@ -220,11 +210,11 @@ def _make_interaction(accounts: AccountService) -> Any:
     return source
 
 
-async def test_routed_consent_button_shows_already_consented() -> None:
+async def test_indexing_settings_are_personal() -> None:
     accounts = AccountRecorder(_discord_account(consented=True))
     interaction = _make_interaction(accounts)
 
-    await open_consent_prompt(cast(AppRequest, await sd.request(cast(Any, interaction))))
+    await open_indexing_settings(cast(AppRequest, await sd.request(cast(Any, interaction))))
 
     assert accounts.reads == [(IdentityProvider.DISCORD, str(USER_ID))]
     interaction.response.send_message.assert_awaited_once()
@@ -232,44 +222,14 @@ async def test_routed_consent_button_shows_already_consented() -> None:
     assert kwargs.get("ephemeral") is True
 
 
-async def test_routed_consent_button_grants_consent_when_user_agrees(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+@pytest.mark.parametrize("enabled", [False, True])
+async def test_indexing_control_sets_explicit_value(enabled: bool) -> None:
     accounts = AccountRecorder(None)
     interaction = _make_interaction(accounts)
-
-    async def mock_wait(self: ConsentPrompt) -> Completed[AccountConsent]:
-        return Completed(AccountConsent.grant_current())
-
-    monkeypatch.setattr(ConsentPrompt, "wait", mock_wait)
-
-    await open_consent_prompt(cast(AppRequest, await sd.request(cast(Any, interaction))))
-
-    assert len(accounts.creations) == 1
-    creation = accounts.creations[0]
-    assert (creation.provider, creation.subject) == (IdentityProvider.DISCORD, str(USER_ID))
-    assert creation.consent is not None
-    assert creation.consent.version == CURRENT_CONSENT_VERSION
-    interaction.response.send_message.assert_awaited_once()
-    assert interaction.followup.send.await_count == 1
-
-
-async def test_routed_consent_button_cancelling_stores_no_account(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    accounts = AccountRecorder(None)
-    interaction = _make_interaction(accounts)
-
-    async def mock_wait(self: ConsentPrompt) -> Cancelled:
-        return Cancelled()
-
-    monkeypatch.setattr(ConsentPrompt, "wait", mock_wait)
-
-    await open_consent_prompt(cast(AppRequest, await sd.request(cast(Any, interaction))))
-
-    assert accounts.creations == []
-    interaction.response.send_message.assert_awaited_once()
-    interaction.followup.send.assert_not_awaited()
+    handler = enable_indexing if enabled else disable_indexing
+    await handler(cast(AppRequest, await sd.request(cast(Any, interaction))))
+    assert accounts.account is not None
+    assert accounts.account.discord_build_indexing_enabled is enabled
 
 
 async def test_sticky_banner_uses_shared_composition_and_preserves_its_route(caplog: pytest.LogCaptureFixture) -> None:
@@ -278,9 +238,9 @@ async def test_sticky_banner_uses_shared_composition_and_preserves_its_route(cap
     items = tuple(payload.layout.walk_children())
     descriptions = [item.content for item in items if isinstance(item, discord.ui.TextDisplay)]
     buttons = [item for item in items if isinstance(item, discord.ui.Button)]
-    assert descriptions[0].startswith("## 📋 Build Log Ingestion Consent")
-    assert "Messages from unconsented users are not ingested." in descriptions[0]
+    assert "Automatically index my Discord builds" in "\n".join(descriptions)
+    assert "all participating Discord channels" in "\n".join(descriptions)
     assert len(buttons) == 1
-    assert buttons[0].custom_id == CONSENT_BUTTON_CUSTOM_ID
+    assert buttons[0].custom_id == open_indexing_settings.custom_id()
     assert buttons[0].style == discord.ButtonStyle.primary
     assert not any("layout degraded" in record.message for record in caplog.records)

@@ -13,7 +13,7 @@ from sqlalchemy import insert, select, text, update
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, ClaimMethod, LinkReservation
+from squid.core.accounts.domain import PRIVACY_NOTICE_VERSION, ClaimMethod, LinkReservation, PrivacyNoticeReceipt
 from squid.core.accounts.models import Account as AccountModel
 from squid.core.accounts.models import AccountIdentity, CreatorAlias
 from squid.core.accounts.models import AccountIdentity as AccountIdentityModel
@@ -25,7 +25,7 @@ from squid.core.unit_of_work import UnitOfWorkFactory
 from tests.support.unit_of_work import transact
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
-CONSENT = AccountConsent(CURRENT_CONSENT_VERSION, Instant.from_utc(2026, 8, 4))
+CONSENT = PrivacyNoticeReceipt(PRIVACY_NOTICE_VERSION, Instant.from_utc(2026, 8, 4))
 CODE = "1234567890"
 TTL = 180
 

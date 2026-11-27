@@ -15,8 +15,8 @@ from squid.bot.catalogue.search.contextual import SEARCH_COMMAND_NAME, SEARCH_SC
 from squid.bot.catalogue.search.entry import SearchTarget, open_search
 from squid.bot.catalogue.search.results import SearchScreen
 from squid.bot.i18n import to_locale_str
-from squid.bot.submission.consent_banner import open_consent_prompt
 from squid.bot.submission.form import open_submission_form
+from squid.bot.submission.indexing import disable_indexing, enable_indexing, open_indexing_settings
 from squid.bot.submission.message_intake import BuildMessageIntake
 from squid.bot.submission.ui.attachment_review import (
     AttachmentReview,
@@ -426,7 +426,9 @@ async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
         BuildBrowseScreen.open_detail,
         BuildBrowseScreen.open_creator_builds,
         BuildCreatorsScreen.open,
-        open_consent_prompt,
+        open_indexing_settings,
+        enable_indexing,
+        disable_indexing,
         review_attachments,
         preview_build_source,
         edit_build,

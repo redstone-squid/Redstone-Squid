@@ -21,6 +21,7 @@ from uuid import UUID, uuid4
 
 from whenever import Instant
 
+from squid.core.accounts.errors import AccountNotFoundError
 from squid.core.actors import ActingContext, application_operation
 from squid.core.errors import InvalidStateError, ValidationError
 from squid.core.i18n import tr
@@ -44,7 +45,6 @@ from squid.core.minecraft_auth.domain import (
     PublishedPaperServer,
 )
 from squid.core.minecraft_auth.errors import (
-    AccountConsentRequiredError,
     AuthorizationPendingError,
     ChallengeAlreadyExchangedError,
     ChallengeApprovalDeniedError,
@@ -87,8 +87,8 @@ class InstallationCredentialService:
         owner_account_id = context.effective.require_account_id()
         with context.scope():
             async with self._uow_factory() as uow:
-                if not await uow.accounts.has_current_consent(owner_account_id):
-                    raise AccountConsentRequiredError
+                if not await uow.accounts.account_exists(owner_account_id):
+                    raise AccountNotFoundError(owner_account_id)
                 normalized_label = _installation_label(label)
                 issued_at = self._clock()
                 secret = self._codec.random_secret()
@@ -236,7 +236,7 @@ class InstallationCredentialService:
 class PlayerAuthorizationService:
     """Issue short-lived grants for verified Java identities through Paper or Fabric.
 
-    Approval and authentication check account consent and ownership of the Java
+    Approval and authentication check ownership of the Java
     UUID. Paper grants also belong to one installation credential version, so
     rotating that credential invalidates earlier grants. Fabric exchanges require
     the verifier for the challenge supplied at the start of authorization.
@@ -296,7 +296,7 @@ class PlayerAuthorizationService:
         )
 
     async def approve(self, *, context: ActingContext, user_code: str) -> PlayerAuthorizationChallenge:
-        """Approve a challenge only if the account owns its verified Java UUID and passes the consent gate."""
+        """Approve a challenge only if the account owns its verified Java UUID."""
         account_id = context.effective.require_account_id()
         with context.scope():
             async with self._uow_factory() as uow:
@@ -505,7 +505,7 @@ class PlayerAuthorizationService:
     async def _authenticate(
         self, uow: MinecraftAuthorizationUnitOfWork, token: str
     ) -> tuple[MinecraftPlayerContext, PlayerGrant]:
-        """Check the token, grant lifetime, current consent, and continued Java ownership.
+        """Check the token, grant lifetime, and continued Java ownership.
 
         Unlinking the Java identity invalidates existing grants even before they expire.
         Transport-specific checks run in the public authentication methods.

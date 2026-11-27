@@ -19,7 +19,6 @@ import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.limits import CommandLimits
 from squid.bot.ui import error_node
-from squid.core.accounts.errors import ConsentRequiredError
 from squid.core.actors import ActingContext, UserActor, current_acting_context
 from squid.core.diagnostics.application import ErrorReportService
 from squid.core.diagnostics.log_capture import captured
@@ -165,14 +164,6 @@ def build_error_notice(error: BaseException, locale: str | None = None) -> Error
 
 def _build_error_notice(error: BaseException) -> _NoticeDraft:
     error = unwrap_error(error)
-    if isinstance(error, ConsentRequiredError):
-        # Give Discord users an in-bot recovery path when an operation requires consent.
-        return _NoticeDraft(
-            tr(t"errors-consent-required = Consent required"),
-            md_tr(
-                t"errors-consent-required-hint = Run `/account consent` to read the privacy notice and accept it.",
-            ),
-        )
     if isinstance(error, (DomainError, ServiceUnavailableError)):
         return _NoticeDraft(error.title, error.public_text())
     if isinstance(error, commands.NoPrivateMessage):

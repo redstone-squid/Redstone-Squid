@@ -8,7 +8,7 @@ import discord
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
-from squid.bot.accounts.consent import ensure_consented_account
+from squid.bot.accounts.identity import ensure_account
 from squid.bot.routes import AppRequest
 from squid.bot.submission.build_card import render_build_card
 from squid.bot.submission.draft_intake import receive_attachments
@@ -53,10 +53,7 @@ async def open_submission_form(
     file_4: discord.Attachment | None = None,
 ) -> DraftEditorScreen | sl.LayoutNode[ComponentsV2Target, sd.Request] | None:
     """Submit a build. Every option is optional; fill in the rest in the form that opens."""
-    # Obtain consent before creating a draft or downloading attachments.
-    uploader_account_id = await ensure_consented_account(request, request.client.services.accounts)
-    if uploader_account_id is None:
-        return None
+    uploader_account_id = await ensure_account(request, request.client.services.accounts)
 
     if category != "Door" and (door_size is not None or door_type is not None):
         return error_node(

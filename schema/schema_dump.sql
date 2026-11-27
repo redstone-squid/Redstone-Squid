@@ -1558,11 +1558,12 @@ COMMENT ON COLUMN public.account_profiles.avatar_identity_id IS 'Linked identity
 CREATE TABLE public.accounts (
     id integer NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    consent_version text,
-    consented_at timestamp with time zone,
+    privacy_notice_version text,
+    privacy_notice_acknowledged_at timestamp with time zone,
     public_account_id uuid DEFAULT gen_random_uuid() NOT NULL,
     revision bigint DEFAULT 1 NOT NULL,
-    CONSTRAINT accounts_consent_receipt_complete CHECK (((consent_version IS NULL) = (consented_at IS NULL))),
+    discord_build_indexing_enabled boolean DEFAULT false NOT NULL,
+    CONSTRAINT accounts_privacy_notice_receipt_complete CHECK (((privacy_notice_version IS NULL) = (privacy_notice_acknowledged_at IS NULL))),
     CONSTRAINT accounts_revision_positive CHECK ((revision > 0))
 );
 

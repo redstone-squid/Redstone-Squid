@@ -40,4 +40,3 @@ class CliIdentity:
     account_id: int
     device_id: UUID
     session_id: UUID
-    consent_pending: bool

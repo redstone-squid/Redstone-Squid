@@ -46,7 +46,6 @@ class ImportOptions:
     group_max_messages: int = 8
     include_images: bool = True
     dry_run: bool = False
-    channel_consent: bool = False
     retry_failed: bool = False
     resume_channel: int | None = None
     resume_from: int | None = None
@@ -58,7 +57,7 @@ class ImportSummary:
     processed: int = 0
     inferred_candidates: int = 0
     skipped_existing: int = 0
-    skipped_consent: int = 0
+    skipped_indexing_disabled: int = 0
     failed: int = 0
 
     def __add__(self, other: ImportSummary) -> ImportSummary:
@@ -126,23 +125,22 @@ async def iter_bundles(channel: discord.TextChannel, options: ImportOptions) -> 
 
 
 async def process_group(bundle: MessageBundle, services: BotServices, options: ImportOptions) -> ImportSummary:
-    """Check consent and existing builds before inference; isolate failures per bundle."""
+    """Check indexing preferences and existing builds before inference; isolate failures per bundle."""
     primary = bundle.primary
     author = UserActor(discord_user_id=primary[0].author.id)
     worker = ActingContext.worker("historical-import")
     context = ActingContext(operator=worker.operator, effective=author, invocation_id=worker.invocation_id)
     with context.scope():
         try:
-            if not options.channel_consent:
-                account = await services.accounts.get_account_by_identity(
-                    IdentityProvider.DISCORD, str(primary[0].author.id)
-                )
-                if (
-                    account is None
-                    or account.id is None  # pyright: ignore[reportUnnecessaryComparison]  # Unflushed identity.
-                    or account.needs_consent_refresh
-                ):
-                    return ImportSummary(groups=1, skipped_consent=1)
+            account = await services.accounts.get_account_by_identity(
+                IdentityProvider.DISCORD, str(primary[0].author.id)
+            )
+            if (
+                account is None
+                or account.id is None  # pyright: ignore[reportUnnecessaryComparison]  # Unflushed identity.
+                or not account.discord_build_indexing_enabled
+            ):
+                return ImportSummary(groups=1, skipped_indexing_disabled=1)
             retained = await services.submission_inference.public_status(
                 message_bundle_run_id(primary), context=context
             )
@@ -322,11 +320,6 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser.add_argument(
         "--dry-run", action="store_true", help="Call inference without retaining or submitting results."
     )
-    parser.add_argument(
-        "--channel-consent",
-        action="store_true",
-        help="Use the selected channels' collection policy instead of per-account consent for this import only.",
-    )
     parser.add_argument("--resume-channel", type=_positive_int, help="Channel reported by an interrupted import.")
     parser.add_argument("--resume-from", type=_positive_int, help="Inclusive first message of the reported bundle.")
     arguments = parser.parse_args(argv)
@@ -353,7 +346,6 @@ async def main(arguments: argparse.Namespace) -> int:
         group_max_messages=arguments.group_max_messages,
         include_images=not arguments.no_images,
         dry_run=arguments.dry_run,
-        channel_consent=arguments.channel_consent,
         retry_failed=arguments.retry_failed,
         resume_channel=arguments.resume_channel,
         resume_from=arguments.resume_from,
@@ -370,8 +362,6 @@ async def main(arguments: argparse.Namespace) -> int:
         if not channel_ids:
             logger.error("No build-log channels configured; provide --channel-id")
             return 1
-        if options.channel_consent:
-            logger.info("Using channel-policy consent for this import only: %s", channel_ids)
         # HTTP history only: no gateway listener or background bot activity is needed.
         await client.login(process_config.discord.token.get_secret_value())
         # Freeze the upper boundary so a retry cannot merge new posts into the last group.

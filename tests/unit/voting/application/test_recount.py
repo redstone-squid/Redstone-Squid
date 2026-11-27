@@ -72,7 +72,7 @@ class Cards:
 class Voters:
     """Discord user N votes as account N + 1000; user 99 has no consented account."""
 
-    async def consented_account_id(self, discord_id: int) -> int | None:
+    async def voter_account_id(self, discord_id: int) -> int | None:
         return None if discord_id == 99 else discord_id + 1000
 
 

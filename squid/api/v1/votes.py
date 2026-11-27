@@ -61,7 +61,7 @@ async def list_review_votes(
 
     Repeat `kind` to choose several; without it every review kind is listed.
     """
-    account_id = caller.require_consented_account()
+    account_id = caller.require_account_id()
     page = await votes.list_reviews(
         ReviewFilters(frozenset(kind or ()), status),
         sort=sort,
@@ -109,7 +109,7 @@ async def get_vote_session(
     if session is None:
         raise VoteSessionNotFoundError(vote_session_id)
     detail = VoteSessionDetail.from_domain(session, caller_account_id=caller.account_id)
-    if caller.kind != "account" or caller.account_id is None or caller.consent_pending or not session.is_open:
+    if caller.kind != "account" or caller.account_id is None or not session.is_open:
         return detail
     weight = await votes.base_weight(vote_session_id, context=caller.context())
     match weight:
@@ -142,7 +142,7 @@ async def cast_vote(
 
     Repeating the call with the same option keeps the ballot.
     """
-    account_id = caller.require_consented_account()
+    account_id = caller.require_account_id()
     result = await votes.cast_vote(vote_session_id, data.option_id, toggle=False, context=caller.context())
     _raise_vote_rejection(vote_session_id, result)
     assert result.session is not None
@@ -165,7 +165,7 @@ async def clear_vote(
     caller: UserVoter,
 ) -> VoteSessionDetail:
     """Remove the caller's ballot; repeating this keeps it absent."""
-    account_id = caller.require_consented_account()
+    account_id = caller.require_account_id()
     result = await votes.clear_vote(vote_session_id, context=caller.context())
     _raise_vote_rejection(vote_session_id, result)
     assert result.session is not None

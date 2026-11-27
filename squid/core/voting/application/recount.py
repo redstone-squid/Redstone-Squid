@@ -69,7 +69,7 @@ class ReactingMembers(Protocol):
 class ConsentedVoterLookup(Protocol):
     """Find the account a reacting Discord user may vote with."""
 
-    async def consented_account_id(self, discord_id: int) -> int | None:
+    async def voter_account_id(self, discord_id: int) -> int | None:
         """Return the account ID if the account exists and its consent is current.
 
         A reaction gives no chance to ask for consent, so this never creates an account.
@@ -177,7 +177,7 @@ class BallotRecounter:
             cards.append((card, emojis, reactions))
             for alias in aliases:
                 for user_id in reactions.voters.get(alias.emoji, ()):
-                    account_id = await self._voters.consented_account_id(user_id)
+                    account_id = await self._voters.voter_account_id(user_id)
                     voter = Voter.discord(user_id) if account_id is None else Voter.account(account_id)
                     observed.setdefault(voter, []).append(
                         _ObservedReaction(card, user_id, alias.emoji, alias.option_id)

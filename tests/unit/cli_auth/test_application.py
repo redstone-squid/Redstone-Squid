@@ -32,7 +32,7 @@ class FakeConsentReader:
     def __init__(self, *, current: bool = True) -> None:
         self.current = current
 
-    async def has_current_consent(self, account_id: int) -> bool:
+    async def account_exists(self, account_id: int) -> bool:
         del account_id
         return self.current
 
@@ -187,7 +187,6 @@ async def test_enrollment_proves_private_key_and_issues_authenticated_session() 
     identity = await service.authenticate(token)
 
     assert identity.account_id == 42
-    assert identity.consent_pending is False
     assert repository.enrollments
     enrollment = next(iter(repository.enrollments.values()))
     assert len(enrollment.device_code_hash) == 32

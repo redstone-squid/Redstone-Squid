@@ -13,7 +13,6 @@ from squid.core.accounts.application.ports import AccountUnitOfWork
 from squid.core.accounts.domain import (
     MERGE_CODE_BYTES,
     MERGE_TICKET_TTL_SECONDS,
-    AccountConsent,
     AccountMerge,
     ClaimStatus,
     CreatorProfile,
@@ -21,6 +20,7 @@ from squid.core.accounts.domain import (
     IdentityRefresh,
     LinkReservation,
     MergePreview,
+    PrivacyNoticeReceipt,
     PublicCreatorProfile,
     RecentAccountProof,
 )
@@ -29,7 +29,6 @@ from squid.core.accounts.errors import (
     AccountNotFoundError,
     AliasAlreadyClaimedError,
     ClaimNotFoundError,
-    ConsentRequiredError,
     InvalidMergeCodeError,
     InvalidMergeProofError,
     InvalidVerificationCodeError,
@@ -151,7 +150,7 @@ class AccountService:
             return await uow.accounts.get_many(account_ids)
 
     async def get_or_create_identity(
-        self, provider: IdentityProvider, subject: str, *, consent: AccountConsent | None = None
+        self, provider: IdentityProvider, subject: str, *, consent: PrivacyNoticeReceipt | None = None
     ) -> Account:
         """Resolve a verified provider subject, creating an account if needed.
 
@@ -164,15 +163,20 @@ class AccountService:
             await uow.commit()
             return result
 
-    async def grant_current_consent(self, *, context: ActingContext) -> Account:
-        """Record consent for any authenticated caller, however they proved their identity."""
+    async def set_discord_build_indexing(self, discord_user_id: int, *, enabled: bool) -> None:
+        """Set the preference for the Discord user who pressed the indexing control."""
+        async with self._uow_factory() as uow:
+            account = await uow.accounts.get_or_create_identity(IdentityProvider.DISCORD, str(discord_user_id))
+            account.discord_build_indexing_enabled = enabled
+            await uow.commit()
+
+    async def set_account_build_indexing(self, enabled: bool, *, context: ActingContext) -> None:
         account_id = context.effective.require_account_id()
-        with context.scope():
-            async with self._uow_factory() as uow:
-                await self._permissions.require(context.effective, ACCOUNT_SELF_READ, uow=uow)
-                result = await uow.accounts.update_consent(account_id, AccountConsent.grant_current())
-                await uow.commit()
-                return result
+        async with self._uow_factory() as uow:
+            await self._permissions.require(context.effective, ACCOUNT_SELF_MANAGE, uow=uow)
+            account = await uow.accounts.lock_for_edit(account_id)
+            account.discord_build_indexing_enabled = enabled
+            await uow.commit()
 
     @application_operation
     async def merge_accounts(
@@ -364,7 +368,7 @@ class AccountService:
         self,
         code: str,
         *,
-        consent: AccountConsent,
+        consent: PrivacyNoticeReceipt,
         context: ActingContext,
         reservation: LinkReservation | None = None,
     ) -> IdentityRefresh:
@@ -552,8 +556,6 @@ class AccountService:
                 account = await uow.accounts.get_by_id(account_id)
                 if account is None or account.id is None:  # pyright: ignore[reportUnnecessaryComparison]
                     raise AccountNotFoundError(account_id)
-                if account.needs_consent_refresh:
-                    raise ConsentRequiredError(account_id=account_id)
                 try:
                     result = await uow.accounts.request_claim(name=name, account_id=account.id)
                 except AliasAlreadyClaimedError as conflict:

@@ -9,4 +9,3 @@ class WebSessionIdentity:
 
     session_id: str
     account_id: int
-    consent_pending: bool

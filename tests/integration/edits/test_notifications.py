@@ -8,9 +8,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.core.accounts.domain import AccountConsent, ClaimMethod
-from squid.core.accounts.errors import ConsentRequiredError
-from squid.core.accounts.models import Account, CreatorAlias
+from squid.core.accounts.domain import ClaimMethod, PrivacyNoticeReceipt
+from squid.core.accounts.models import CreatorAlias
 from squid.core.actors import ActingContext, UserActor
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import DoorBuild
@@ -49,8 +48,8 @@ async def test_follow_labels_resolve_public_names_and_latest_titles(
 ) -> None:
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory, verification_code_pepper="test-pepper")
     async with factory() as uow:
-        owner = await uow.accounts.create(consent=AccountConsent.grant_current())
-        creator = await uow.accounts.create(consent=AccountConsent.grant_current())
+        owner = await uow.accounts.create(consent=PrivacyNoticeReceipt.grant_current())
+        creator = await uow.accounts.create(consent=PrivacyNoticeReceipt.grant_current())
         await uow.commit()
     async with migrated_session_factory.begin() as session:
         session.add(
@@ -126,7 +125,7 @@ async def test_preferences_and_follows_compete_on_one_account_revision(
     )
     service = NotificationService(uow_factory=factory, permissions=PermissionService(uow_factory=factory))
     async with factory() as uow:
-        account = await uow.accounts.create(consent=AccountConsent.grant_current())
+        account = await uow.accounts.create(consent=PrivacyNoticeReceipt.grant_current())
         await uow.commit()
     actor = UserActor(account_id=account.id)
     expected = (Revision(notification_target(account.id), 0),)
@@ -174,7 +173,7 @@ async def test_follow_creation_undo_and_redo_keep_identity_and_monotonic_revisio
         factory, {SUBSCRIPTIONS_EDIT: NotificationSubscriptionsEdit(PermissionService(uow_factory=factory))}
     )
     async with factory() as uow:
-        account = await uow.accounts.create(consent=AccountConsent.grant_current())
+        account = await uow.accounts.create(consent=PrivacyNoticeReceipt.grant_current())
         await uow.commit()
     actor = UserActor(account_id=account.id)
     created = await executor.execute(
@@ -230,7 +229,7 @@ async def test_inbox_names_builds_by_their_current_title(
 ) -> None:
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory, verification_code_pepper="test-pepper")
     async with factory() as uow:
-        account = await uow.accounts.create(consent=AccountConsent.grant_current())
+        account = await uow.accounts.create(consent=PrivacyNoticeReceipt.grant_current())
         await uow.commit()
     door = DoorBuild(
         submitter_account_id=account.id, submission_status=BuildStatus.APPROVED, door_width=3, door_height=4
@@ -271,7 +270,7 @@ async def test_inbox_batch_conflict_is_atomic_and_arrivals_do_not_block_undo(
     executor = EditExecutor(factory, {INBOX_EDIT: InboxReadEdit(PermissionService(uow_factory=factory))})
     service = NotificationService(uow_factory=factory, permissions=PermissionService(uow_factory=factory))
     async with factory() as uow:
-        account = await uow.accounts.create(consent=AccountConsent.grant_current())
+        account = await uow.accounts.create(consent=PrivacyNoticeReceipt.grant_current())
         await uow.notifications.update_preferences(account.id, web_enabled=True, dm_enabled=False)
         await uow.commit()
     actor = UserActor(account_id=account.id)
@@ -353,15 +352,15 @@ async def test_inbox_batch_conflict_is_atomic_and_arrivals_do_not_block_undo(
     assert repeated.outcome.revisions == undone.outcome.revisions
 
 
-@pytest.mark.parametrize("gate", ["owner", "web", "consent"])
+@pytest.mark.parametrize("gate", ["owner", "web"])
 async def test_read_edit_requires_current_inbox_access(
     migrated_session_factory: async_sessionmaker[AsyncSession], gate: str
 ) -> None:
     factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory, verification_code_pepper="test-pepper")
     executor = EditExecutor(factory, {INBOX_EDIT: InboxReadEdit(PermissionService(uow_factory=factory))})
     async with factory() as uow:
-        owner = await uow.accounts.create(consent=AccountConsent.grant_current())
-        other = await uow.accounts.create(consent=AccountConsent.grant_current())
+        owner = await uow.accounts.create(consent=PrivacyNoticeReceipt.grant_current())
+        other = await uow.accounts.create(consent=PrivacyNoticeReceipt.grant_current())
         await uow.notifications.update_preferences(owner.id, web_enabled=gate != "web", dm_enabled=False)
         await uow.notifications.update_preferences(other.id, web_enabled=True, dm_enabled=False)
         await uow.commit()
@@ -379,14 +378,10 @@ async def test_read_edit_requires_current_inbox_access(
             source_key=NotificationSource(event.id, kind).key_for(owner.id),
         )
         session.add(item)
-        if gate == "consent":
-            account = await session.get_one(Account, owner.id)
-            account.consent_version = None
-            account.consented_at = None
     command = EditCommand(
         INBOX_EDIT, (Revision(inbox_target(item.id), item.revision),), EditValues.of({"states": {str(item.id): True}})
     )
-    with pytest.raises(ConsentRequiredError if gate == "consent" else NotificationNotFoundError):
+    with pytest.raises(NotificationNotFoundError):
         await executor.execute(
             command, context=ActingContext.direct(UserActor(account_id=other.id if gate == "owner" else owner.id))
         )

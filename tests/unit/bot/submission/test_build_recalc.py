@@ -11,11 +11,11 @@ from whenever import Instant
 
 import squid_ui.ext.discord as sd
 from squid.bot.submission.cog import BuildCommands
-from squid.bot.submission.consent_banner import BuildLogConsentStickyMessage
+from squid.bot.submission.indexing import BuildIndexingStickyMessage
 from squid.bot.submission.message_intake import BuildMessageIntake
 from squid.bot.utils.permissions import PermissionNodeRequired
 from squid.core.accounts.application import AccountService
-from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, AccountConsent, IdentityProvider
+from squid.core.accounts.domain import PRIVACY_NOTICE_VERSION, IdentityProvider, PrivacyNoticeReceipt
 from squid.core.accounts.models import Account
 from squid.core.actors import ActingContext, Actor, UserActor
 from squid.core.builds.application.inference import BuildInferenceInput
@@ -103,7 +103,7 @@ class CommunityConfig:
     build_log_channel_ids: set[int]
 
 
-class ConsentStickyRecorder(BuildLogConsentStickyMessage):
+class ConsentStickyRecorder(BuildIndexingStickyMessage):
     def __init__(self) -> None:
         self.calls: list[discord.TextChannel] = []
 
@@ -128,9 +128,10 @@ def _intake(*, allowed: bool = True, account_consented: bool = True) -> Recordin
     intake = RecordingMessageIntake()
     account = (
         Account(
+            discord_build_indexing_enabled=True,
             id=1,
             created_at=Instant.from_utc(2026, 8, 29),
-            consent=AccountConsent(CURRENT_CONSENT_VERSION, Instant.from_utc(2026, 8, 29)),
+            consent=PrivacyNoticeReceipt(PRIVACY_NOTICE_VERSION, Instant.from_utc(2026, 8, 29)),
         )
         if account_consented
         else None

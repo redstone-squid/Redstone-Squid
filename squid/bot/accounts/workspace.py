@@ -12,19 +12,20 @@ import squid_ui as sl
 import squid_ui.ext.discord as sd
 import squid_ui_widgets as sp
 from squid.bot.accounts.claims import ClaimReviewComponent
-from squid.bot.accounts.consent import CONSENT_PROMPT_TIMEOUT_SECONDS, request_consent
-from squid.bot.accounts.overview import AccountOverview, ConsentAnswer, ConsentRequest
+from squid.bot.accounts.link_confirmation import LINK_CONFIRMATION_TIMEOUT_SECONDS, request_link_confirmation
+from squid.bot.accounts.overview import AccountOverview, LinkConfirmationAnswer, LinkConfirmationRequest
 from squid.bot.accounts.presentation import link_conflict, link_message, refresh_message
 from squid.bot.app import RedstoneSquid
 from squid.bot.catalogue.browse import BuildBrowseScreen
 from squid.bot.lookup import pick
 from squid.bot.notifications_view import NotificationPanel
 from squid.bot.routes import AppRequest, AppRoutes, ScreenUnavailable
+from squid.bot.submission.indexing import open_indexing_settings
 from squid.bot.ui import tr
 from squid.bot.utils.permissions import Grants, requires_grant
 from squid.core.accounts.application import AccountService
 from squid.core.accounts.application.edits import account_target
-from squid.core.accounts.domain import AccountConsent, IdentityProvider, LinkPreview
+from squid.core.accounts.domain import IdentityProvider, LinkPreview, PrivacyNoticeReceipt
 from squid.core.accounts.errors import AccountAlreadyLinkedError, AccountNotFoundError
 from squid.core.accounts.models import Account
 from squid.core.actors import ActingContext, Actor
@@ -72,7 +73,7 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
         actor: Callable[[], Awaitable[Actor]],
         actor_id: int,
         account: Account | None,
-        request_consent: ConsentRequest,
+        request_link_confirmation: LinkConfirmationRequest,
         grants: Grants,
         discord_username: str | None = None,
     ) -> None:
@@ -83,7 +84,7 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
         self._actor_id = actor_id
         self._discord_username = discord_username
         self._account = account
-        self._request_consent = request_consent
+        self._request_link_confirmation = request_link_confirmation
         self.grants = grants
 
     @classmethod
@@ -98,9 +99,9 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
 
         async def open_consent(
             event: sd.ActionEvent,
-            answered: ConsentAnswer,
+            answered: LinkConfirmationAnswer,
             *,
-            preview: LinkPreview | None = None,
+            preview: LinkPreview,
             on_abandon: Callable[[], Awaitable[None]] | None = None,
             timeout: float = 120.0,
         ) -> bool:
@@ -108,12 +109,12 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
             message_root = press.root
             assert message_root is not None, "a press always arrives from a mounted message"
 
-            async def completed(prompt: sd.ActionEvent, consent: AccountConsent | None) -> None:
+            async def completed(prompt: sd.ActionEvent, consent: PrivacyNoticeReceipt | None) -> None:
                 await answered(prompt, consent)
                 if consent is not None:
                     await message_root.schedule()
 
-            return await request_consent(
+            return await request_link_confirmation(
                 event,
                 user_id=actor.id,
                 on_answer=completed,
@@ -133,7 +134,7 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
             actor_id=actor.id,
             discord_username=actor.name,
             account=account,
-            request_consent=open_consent,
+            request_link_confirmation=open_consent,
             grants=await Grants.load(
                 request,
                 ACCOUNT_CLAIM_LIST,
@@ -197,14 +198,13 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
                 actor=self._edit_actor,
                 account_id=account_id,
                 actor_id=self._actor_id,
-                request_consent=self._request_consent,
                 discord_username=self._discord_username,
                 on_access_changed=self._rebuild,
             )
         if self._overview is not None:
             await self._overview.on_load()
-        consent_needed = self._account is None or account_id is None or self._account.needs_consent_refresh
-        if consent_needed:
+        account_missing = self._account is None or account_id is None
+        if account_missing:
             self._notifications = None
         elif self._notifications is None or self._notifications.account_id != account_id:
             assert account_id is not None
@@ -216,20 +216,20 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
             )
         setup = self._setup_nodes(
             tr(t"account-workspace-set-up-profile = Set up your account"),
-            tr(t"account-workspace-profile-setup-help = Review the privacy notice to create your profile."),
+            tr(t"account-workspace-profile-setup-help = Create an account linked to your Discord ID."),
         )
         credit = (
             self._claim_nodes(self._account)
-            if self._account is not None and not consent_needed
+            if self._account is not None and not account_missing
             else self._setup_nodes(
                 tr(t"account-claim-heading = Claim credit for your builds"),
-                tr(t"account-workspace-credit-setup-help = Review the privacy notice before claiming build credit."),
+                tr(t"account-workspace-credit-setup-help = Create an account to claim build credit."),
             )
         )
         notifications = self._notifications or self._setup_nodes(
             tr(t"account-workspace-notifications = Notifications"),
             tr(
-                t"account-workspace-notifications-setup-help = Review the privacy notice to access your inbox, follows, and delivery settings."
+                t"account-workspace-notifications-setup-help = Create an account to access your inbox, follows, and delivery settings."
             ),
         )
         tabs: list[sp.Tab[ComponentsV2Target, AppRequest]] = [
@@ -265,7 +265,7 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
 
     def _privacy_control(self) -> sl.semantic.ActionControl[sd.Request]:
         return sl.action_control(
-            tr(t"account-workspace-review-privacy-notice = Review privacy notice"), self._consent, key="consent"
+            tr(t"account-workspace-review-privacy-notice = Create account"), self._create_account, key="create-account"
         )
 
     def _setup_nodes(
@@ -281,7 +281,6 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
         can_refresh = (
             account is not None
             and account.id is not None  # pyright: ignore[reportUnnecessaryComparison]
-            and not account.needs_consent_refresh
             and ACCOUNT_IDENTITY_REFRESH in self.grants
             and bool(account.identities_for(IdentityProvider.JAVA))
         )
@@ -323,6 +322,14 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
             )
         nodes: list[sl.LayoutNode[ComponentsV2Target, AppRequest]] = [
             header,
+            sl.action_controls(
+                sl.routed_action_control(
+                    tr(t"discord-indexing-manage = Manage automatic indexing"),
+                    open_indexing_settings.custom_id(),
+                    key="indexing",
+                ),
+                key="indexing-settings",
+            ),
             sl.action_controls(*controls, key="identity-tools", display=sl.semantic.ControlDisplay.INDIVIDUAL),
         ]
         if account is not None and account.id is not None:  # pyright: ignore[reportUnnecessaryComparison]
@@ -390,22 +397,9 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
             ),
         )
 
-    async def _consent(self, event: sd.PressEvent) -> None:
-        async def answered(_prompt: sd.ActionEvent, consent: AccountConsent | None) -> None:
-            if consent is None:
-                return
-            account = self._account
-            if account is None or account.id is None:  # pyright: ignore[reportUnnecessaryComparison]
-                await self._accounts.get_or_create_identity(
-                    IdentityProvider.DISCORD,
-                    str(self._actor_id),
-                    consent=consent,
-                )
-            else:
-                await self._accounts.grant_current_consent(context=ActingContext.for_actor(await self._edit_actor()))
-            await self._rebuild(changed_account_id=None if account is None else account.id)
-
-        await self._request_consent(event, answered)
+    async def _create_account(self, event: sd.PressEvent) -> None:
+        await self._accounts.get_or_create_identity(IdentityProvider.DISCORD, str(self._actor_id))
+        await self._rebuild()
 
     async def _link(self, event: sd.SubmitEvent) -> None:
         """Reserve the link code while the user reviews its identity and credit effects.
@@ -420,7 +414,7 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
         reservation = await self._accounts.reserve_minecraft_link(
             code,
             context=context,
-            ttl_seconds=int(CONSENT_PROMPT_TIMEOUT_SECONDS),
+            ttl_seconds=int(LINK_CONFIRMATION_TIMEOUT_SECONDS),
         )
         conflict = (
             None
@@ -445,7 +439,7 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
                     await self._accounts.release_minecraft_link(code, reservation, context=context)
                     settled = True
 
-        async def consented_account_id(consent: AccountConsent) -> int:
+        async def consented_account_id(consent: PrivacyNoticeReceipt) -> int:
             linked_account = account
             if linked_account is None or linked_account.id is None:  # pyright: ignore[reportUnnecessaryComparison]
                 linked_account = await self._accounts.get_or_create_identity(
@@ -453,16 +447,12 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
                     str(self._actor_id),
                     consent=consent,
                 )
-            elif linked_account.consent is None or linked_account.needs_consent_refresh:
-                linked_account = await self._accounts.grant_current_consent(
-                    context=ActingContext.for_actor(await self._edit_actor())
-                )
             account_id = linked_account.id
             if account_id is None:  # pyright: ignore[reportUnnecessaryComparison]
                 raise AccountNotFoundError(provider=IdentityProvider.DISCORD, subject=str(self._actor_id))
             return account_id
 
-        async def answered(prompt: sd.ActionEvent, consent: AccountConsent | None) -> None:
+        async def answered(prompt: sd.ActionEvent, consent: PrivacyNoticeReceipt | None) -> None:
             nonlocal settled
             if consent is None:
                 await release()
@@ -488,12 +478,12 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
             await prompt.notice(link_message(refresh))
 
         try:
-            opened = await self._request_consent(
+            opened = await self._request_link_confirmation(
                 event,
                 answered,
                 preview=reservation.preview,
                 on_abandon=release,
-                timeout=CONSENT_PROMPT_TIMEOUT_SECONDS,
+                timeout=LINK_CONFIRMATION_TIMEOUT_SECONDS,
             )
         except BaseException:
             # Failed or cancelled presentation never transfers the reservation to a live child.

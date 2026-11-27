@@ -8,7 +8,7 @@ from pydantic import BaseModel, ConfigDict
 
 from squid.core.accounts.application.ports import AccountRepository, AccountUnitOfWork
 from squid.core.accounts.domain import ProfileLink, ProfileUpdate
-from squid.core.accounts.errors import AccountIdentityNotFoundError, ConsentRequiredError
+from squid.core.accounts.errors import AccountIdentityNotFoundError
 from squid.core.accounts.models import Account, AccountProfile
 from squid.core.actors import Actor
 from squid.core.edits.application import EditUnitOfWork
@@ -61,8 +61,6 @@ class AccountEditRepository(AccountRepository, Protocol):
         self, account_id: int, actor_account_id: int, operation_id: UUID, revision: int
     ) -> None: ...
 
-    async def has_current_consent(self, account_id: int) -> bool: ...
-
     @override
     async def lock_for_edit(self, account_id: int) -> Account: ...
 
@@ -91,8 +89,6 @@ class AccountEdits:
         if actor.linked_account_id != account.id:
             raise OwnershipRequiredError
         await self._permissions.require(actor, ACCOUNT_SELF_MANAGE, uow=uow)
-        if not await uow.accounts.has_current_consent(account.id):
-            raise ConsentRequiredError(account_id=account.id)
 
 
 class AccountProfileEdit(FieldCommand[AccountEditUnitOfWork, Account, ProfileValues]):

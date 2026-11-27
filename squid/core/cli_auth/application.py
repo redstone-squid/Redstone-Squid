@@ -320,7 +320,6 @@ class CliAuthorizationService:
                 account_id=device.account_id,
                 device_id=device.id,
                 session_id=session.id,
-                consent_pending=not await uow.accounts.has_current_consent(device.account_id),
             )
 
     async def list_devices(self, *, context: ActingContext) -> tuple[CliDevice, ...]:

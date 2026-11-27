@@ -9,7 +9,7 @@ import discord
 import pytest
 import simcord
 
-from squid.core.accounts.domain import AccountConsent
+from squid.core.accounts.domain import PrivacyNoticeReceipt
 from squid.core.actors import ActingContext
 from squid.core.builds.application import BuildQueryService, BuildService
 from squid.core.builds.domain import BuildStatus
@@ -54,7 +54,7 @@ async def submission() -> AsyncIterator[tuple[simcord.Env, simcord.MemberActor, 
     )
     async with command_environment(EXTENSION, services=services) as (_, env):
         author = env.guild.add_member(env.create_user("author"))
-        accounts.seed_account(author.id, account_id=7, consent=AccountConsent.grant_current())
+        accounts.seed_account(author.id, account_id=7, consent=PrivacyNoticeReceipt.grant_current())
         yield env, author, drafts, accounts
 
 
@@ -63,7 +63,7 @@ async def test_submit_a_named_door_and_find_it_in_private_drafts() -> None:
         channel = env.guild.create_text_channel("submissions")
         other = env.guild.add_member(env.create_user("other"))
         # The other member has a consented account but owns no drafts.
-        accounts.seed_account(other.id, account_id=9, consent=AccountConsent.grant_current())
+        accounts.seed_account(other.id, account_id=9, consent=PrivacyNoticeReceipt.grant_current())
 
         submitted = await author.slash(channel, "build submit", name="Aurora", opening_size="2x2")
         assert submitted.response is not None

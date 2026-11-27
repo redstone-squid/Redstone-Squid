@@ -203,24 +203,13 @@ class NotificationCandidate:
 
 @dataclass(frozen=True, slots=True)
 class NotificationPreferences:
-    """An account's notification channel switches, and whether it may use them yet.
-
-    consent_pending comes from the account's privacy-consent policy, including any
-    exemption, rather than a separate notification notice. Consent permits opt-in;
-    it does not enable either channel automatically.
-    """
+    """An account's notification channel switches."""
 
     account_id: int
-    consent_pending: bool = True
     web_enabled: bool = False
     dm_enabled: bool = False
     dm_suspended_at: Instant | None = None
     revision: int = 0
-
-    @property
-    def has_current_consent(self) -> bool:
-        """Whether the account may enable and receive notifications at all."""
-        return not self.consent_pending
 
 
 @dataclass(frozen=True, slots=True)

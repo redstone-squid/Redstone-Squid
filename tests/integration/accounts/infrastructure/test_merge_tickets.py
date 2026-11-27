@@ -10,10 +10,10 @@ from whenever import Instant
 
 from squid.core.accounts.application import AccountService
 from squid.core.accounts.domain import (
-    CURRENT_CONSENT_VERSION,
     MERGE_TICKET_TTL_SECONDS,
-    AccountConsent,
+    PRIVACY_NOTICE_VERSION,
     AccountMerge,
+    PrivacyNoticeReceipt,
 )
 from squid.core.accounts.errors import AccountNotFoundError
 from squid.core.accounts.infrastructure.repository import AccountRepository
@@ -25,7 +25,7 @@ from squid.core.unit_of_work import UnitOfWorkFactory
 from tests.support.build_edits import build_edit_session
 from tests.support.build_edits import transact_build_edit as transact
 
-CONSENT = AccountConsent(CURRENT_CONSENT_VERSION, Instant.from_utc(2026, 8, 4))
+CONSENT = PrivacyNoticeReceipt(PRIVACY_NOTICE_VERSION, Instant.from_utc(2026, 8, 4))
 
 
 @pytest.fixture

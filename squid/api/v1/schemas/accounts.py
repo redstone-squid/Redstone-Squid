@@ -123,8 +123,7 @@ class AccountDetail(BaseModel):
     revision: int
 
     created_at: Instant | None
-    consent_version: str | None
-    consent_pending: bool
+    discord_build_indexing_enabled: bool
     identities: list[IdentityDetail]
     profile: ProfileDetail
 
@@ -133,19 +132,20 @@ class AccountDetail(BaseModel):
         cls,
         account: Account,
         profile: AccountProfile,
-        *,
-        consent_pending: bool,
     ) -> AccountDetail:
         assert account.public_account_id is not None
         return cls(
             id=account.public_account_id,
             revision=account.revision,
             created_at=account.created_at,
-            consent_version=account.consent.version if account.consent is not None else None,
-            consent_pending=consent_pending,
+            discord_build_indexing_enabled=account.discord_build_indexing_enabled,
             identities=[IdentityDetail.from_domain(identity) for identity in account.identities],
             profile=ProfileDetail.from_domain(profile, account.identities),
         )
+
+
+class BuildIndexingRequest(BaseModel):
+    enabled: bool
 
 
 class ProfileUpdateRequest(BaseModel):

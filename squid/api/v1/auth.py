@@ -130,7 +130,7 @@ async def link_provider(
     """Start identity linking for the consenting browser account."""
     if web_auth is None or caller.kind != "account":
         raise AuthenticationError
-    caller.require_consented_account()
+    caller.require_account_id()
     _validate_redirect(request, redirect_to)
     url = await web_auth.authorize_url(provider, redirect_to, link=True, context=caller.context())
     return LinkAuthorization(authorization_url=url)
@@ -166,7 +166,6 @@ async def browser_authorization_callback(
             user_agent=request.headers.get("User-Agent"),
             error=error,
             context=caller.context(),
-            consent_current=caller.kind == "account" and not caller.consent_pending,
         )
     except CallbackFailure as failure:
         params = {"auth_error": failure.callback_code}

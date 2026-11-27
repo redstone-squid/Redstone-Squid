@@ -8,7 +8,6 @@ from uuid import UUID
 from whenever import Instant
 
 from squid.core.accounts.domain import (
-    AccountConsent,
     AccountMerge,
     ClaimMethod,
     ClaimStatus,
@@ -17,6 +16,7 @@ from squid.core.accounts.domain import (
     IdentityProvider,
     IdentityRefresh,
     LinkReservation,
+    PrivacyNoticeReceipt,
     ProfileUpdate,
 )
 from squid.core.accounts.models import (
@@ -56,14 +56,14 @@ class VerificationLinkResult:
 
 
 class AccountMinecraftAuthorization(Protocol):
-    """Account-owned consent and verified Java-identity authorization."""
+    """Account existence and verified Java ownership."""
 
-    async def has_current_consent(self, account_id: int) -> bool:
-        """Return whether an existing account passes the current consent gate, including exemptions."""
+    async def account_exists(self, account_id: int) -> bool:
+        """Return whether the account exists."""
         ...
 
     async def can_approve_minecraft_identity(self, *, account_id: int, java_uuid: UUID) -> bool:
-        """Return whether the account passes consent checks and owns this verified Java UUID."""
+        """Return whether the account owns this verified Java UUID."""
         ...
 
 
@@ -73,7 +73,7 @@ class AccountRepository(Protocol):
     async def create(
         self,
         *,
-        consent: AccountConsent | None = None,
+        consent: PrivacyNoticeReceipt | None = None,
         identities: Sequence[AccountIdentity] = (),
     ) -> Account: ...
 
@@ -86,10 +86,10 @@ class AccountRepository(Protocol):
     async def get_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None: ...
 
     async def get_or_create_identity(
-        self, provider: IdentityProvider, subject: str, *, consent: AccountConsent | None = None
+        self, provider: IdentityProvider, subject: str, *, consent: PrivacyNoticeReceipt | None = None
     ) -> Account: ...
 
-    async def update_consent(self, account_id: int, consent: AccountConsent) -> Account: ...
+    async def update_consent(self, account_id: int, consent: PrivacyNoticeReceipt) -> Account: ...
 
     async def unlink_identity(self, account_id: int, identity_id: int) -> AccountIdentity | None:
         """Atomically remove an owned identity, raising LastIdentityError if it is the last.
@@ -162,7 +162,7 @@ class AccountRepository(Protocol):
         *,
         account_id: int,
         code: str,
-        consent: AccountConsent,
+        consent: PrivacyNoticeReceipt,
         reservation_token: str | None = None,
     ) -> VerificationLinkResult: ...
 

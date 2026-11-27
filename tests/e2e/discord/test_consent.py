@@ -1,7 +1,7 @@
 import pytest
 
-from squid.bot.accounts.consent import ConsentPrompt
-from squid.core.accounts.domain import CURRENT_CONSENT_VERSION
+from squid.bot.accounts.link_confirmation import LinkConfirmation
+from squid.core.accounts.domain import PRIVACY_NOTICE_VERSION
 from tests.e2e.discord.environment import command_environment, displayed_text
 from tests.e2e.discord.workspace_services import WorkspaceInbox, staff_permissions
 from tests.support.accounts import FakeAccountRepository, InMemoryAccountService
@@ -23,9 +23,9 @@ async def test_first_submission_waits_for_consent_before_saving(answer: str, mon
     )
     async with command_environment("squid.bot.submission.cog", services=services) as (_, env):
         # Only this wait needs another member action. Database and rendering work must settle normally.
-        wait = ConsentPrompt.wait
+        wait = LinkConfirmation.wait
         monkeypatch.setattr(
-            ConsentPrompt, "wait", lambda prompt: env.external_wait(wait(prompt), reason="member consent")
+            LinkConfirmation, "wait", lambda prompt: env.external_wait(wait(prompt), reason="member consent")
         )
         channel = env.guild.create_text_channel("submissions")
         alice = env.guild.add_member(env.create_user("Alice"))
@@ -48,7 +48,7 @@ async def test_first_submission_waits_for_consent_before_saving(answer: str, mon
         else:
             consent = accounts.accounts[37].consent
             assert consent is not None
-            assert consent.version == CURRENT_CONSENT_VERSION
+            assert consent.version == PRIVACY_NOTICE_VERSION
             assert drafts.current is not None
             assert drafts.current.snapshot.owner_account_id == 37
             assert drafts.current.snapshot.answers["display_name"] == "Alice's door"

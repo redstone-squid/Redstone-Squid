@@ -10,7 +10,7 @@ from typing import override
 from whenever import Instant
 
 from squid.core.accounts.application import AccountService
-from squid.core.accounts.domain import AccountConsent, IdentityDetails, IdentityProvider
+from squid.core.accounts.domain import IdentityDetails, IdentityProvider, PrivacyNoticeReceipt
 from squid.core.accounts.models import Account
 from squid.core.auth.domain.sessions import WebSessionIdentity
 from squid.core.auth.models.sessions import OAuthState
@@ -27,7 +27,7 @@ class AccountServiceRecorder(AccountService):
 
     @override
     async def get_or_create_identity(
-        self, provider: IdentityProvider, subject: str, *, consent: AccountConsent | None = None
+        self, provider: IdentityProvider, subject: str, *, consent: PrivacyNoticeReceipt | None = None
     ) -> Account:
         del consent
         self.identities.append((provider, subject))
@@ -78,7 +78,7 @@ class SessionRepository:
             or self.expires_at <= now
         ):
             return None
-        return WebSessionIdentity("session-id", self.account_id, consent_pending=False)
+        return WebSessionIdentity("session-id", self.account_id)
 
     async def revoke(self, token_hash: bytes, *, now: Instant) -> None:
         del now

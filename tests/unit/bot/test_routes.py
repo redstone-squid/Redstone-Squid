@@ -19,7 +19,7 @@ from tests.support.services import bot_services
     [
         ("squid.bot.voting.controls", "close_poll", {}, "/polls/close"),
         ("squid.bot.submission.ui.controls", "edit_build", {"build_id": 5, "session": None}, "/builds/5/edit"),
-        ("squid.bot.submission.consent_banner", "open_consent_prompt", {}, "/build-log-consents/new"),
+        ("squid.bot.submission.indexing", "open_indexing_settings", {}, "/build-indexing/settings"),
         ("squid.bot.give_redstoner_cog", "remove_own_redstoner_role", {}, "/redstoner-roles/self/remove"),
     ],
 )

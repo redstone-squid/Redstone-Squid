@@ -9,16 +9,16 @@ from litestar import Request, Response, Router, get
 from squid.api.contract import ANONYMOUS, contract, transport_only
 from squid.api.errors import responses
 from squid.api.i18n import locale_for_request
-from squid.api.v1.schemas.consent import PrivacyNoticeDetail
-from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, PRIVACY_NOTICE, PRIVACY_NOTICE_TITLE
+from squid.api.v1.schemas.privacy import PrivacyNoticeDetail
+from squid.core.accounts.domain import PRIVACY_NOTICE, PRIVACY_NOTICE_TITLE, PRIVACY_NOTICE_VERSION
 from squid.core.i18n import localization_for
 from squid_i18n import localization_scope
 
 
 @get(
-    "/notice",
+    "/policy",
     responses=responses(503),
-    operation_id="consent_notice_get",
+    operation_id="privacy_policy_get",
     security=[ANONYMOUS],
     opt=contract(cli=transport_only()),
     status_code=200,
@@ -26,7 +26,6 @@ from squid_i18n import localization_scope
 async def get_notice(request: Request) -> Response[PrivacyNoticeDetail]:
     """Return the privacy notice in the negotiated language.
 
-    Clients should display this text and submit its version when recording consent.
     The API and Discord use the same notice text and version.
     """
     response_headers: dict[str, str] = {}
@@ -36,7 +35,7 @@ async def get_notice(request: Request) -> Response[PrivacyNoticeDetail]:
     with localization_scope(localization_for(locale)):
         return Response(
             content=PrivacyNoticeDetail(
-                version=CURRENT_CONSENT_VERSION,
+                version=PRIVACY_NOTICE_VERSION,
                 locale=locale,
                 title=PRIVACY_NOTICE_TITLE.resolve(),
                 body=PRIVACY_NOTICE.resolve(),
@@ -46,4 +45,4 @@ async def get_notice(request: Request) -> Response[PrivacyNoticeDetail]:
         )
 
 
-router = Router(path="/consent", tags=["accounts"], route_handlers=[get_notice])
+router = Router(path="/privacy", tags=["accounts"], route_handlers=[get_notice])

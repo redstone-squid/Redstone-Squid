@@ -5,7 +5,7 @@ from typing import Self, override
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
-from squid.bot.accounts.consent import ensure_consented_account
+from squid.bot.accounts.identity import ensure_account
 from squid.bot.routes import AppRequest, AppRoutes, ScreenUnavailable
 from squid.bot.submission.ui.drafts import DraftEditorScreen
 from squid.bot.submission.ui.inference import reopen_inference
@@ -34,9 +34,7 @@ class SavedDraftsScreen(sd.Screen):
     @classmethod
     async def open_drafts(cls, request: AppRequest, inbox: bool = False) -> Self | None:
         """List the opener's drafts, or the staff correction inbox when `inbox` is set."""
-        account_id = await ensure_consented_account(request, request.client.services.accounts)
-        if account_id is None:
-            return None
+        await ensure_account(request, request.client.services.accounts)
         context = ActingContext.for_actor(await request.client.actors.resolve(request))
         services = request.client.services
         if inbox:

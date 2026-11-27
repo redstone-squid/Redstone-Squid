@@ -631,7 +631,7 @@ class MockNotifications(NotificationService):
 
     @override
     async def preferences(self, *, context: ActingContext) -> NotificationPreferences:
-        return NotificationPreferences(account_id=context.effective.require_account_id(), consent_pending=True)
+        return NotificationPreferences(account_id=context.effective.require_account_id())
 
     @override
     async def subscriptions(self, *, context: ActingContext) -> Sequence[NotificationSubscription]:

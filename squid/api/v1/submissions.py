@@ -224,7 +224,7 @@ async def authenticated_submission_caller(request: Request) -> Caller:
 
 
 def _submission_origin(caller: Caller) -> SubmissionOrigin:
-    """Derive submission origin from authenticated credentials and check consent.
+    """Derive submission origin from authenticated credentials.
 
     Only browser, CLI, and Minecraft player credentials may submit. CLI and
     Minecraft identities must include the identifiers required for their origin;
@@ -232,7 +232,6 @@ def _submission_origin(caller: Caller) -> SubmissionOrigin:
     """
     if caller.account_id is None or caller.kind not in {"account", "cli", "minecraft_player"}:
         raise AuthenticationError
-    caller.require_consented_account()
     if caller.kind == "account":
         origin = SubmissionOrigin.WEB
     elif caller.kind == "cli":
@@ -451,7 +450,6 @@ async def create_draft(
     if data.origin is not origin:
         raise AuthorizationError
     if data.source_build_id is not None:
-        caller.require_consented_account()
         editor = finalization.editor
         if origin is not SubmissionOrigin.WEB or editor is None:
             raise AuthorizationError
@@ -464,7 +462,7 @@ async def create_draft(
         )
         return StoredDraftResponse.from_domain(draft, await drafts.progress(draft))
     draft = await drafts.create(
-        owner_account_id=caller.require_consented_account(),
+        owner_account_id=caller.require_account_id(),
         context=caller.context(),
         category=data.category,
         origin=origin,

@@ -13,10 +13,10 @@ from whenever import Instant
 
 from squid.core.accounts.application import AccountService
 from squid.core.accounts.domain import (
-    CURRENT_CONSENT_VERSION,
-    AccountConsent,
+    PRIVACY_NOTICE_VERSION,
     ClaimMethod,
     IdentityProvider,
+    PrivacyNoticeReceipt,
     ProfileLink,
     ProfileUpdate,
 )
@@ -31,7 +31,7 @@ from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.unit_of_work import UnitOfWorkFactory
 from tests.support.unit_of_work import transact
 
-CONSENT = AccountConsent(CURRENT_CONSENT_VERSION, Instant.from_utc(2026, 8, 4))
+CONSENT = PrivacyNoticeReceipt(PRIVACY_NOTICE_VERSION, Instant.from_utc(2026, 8, 4))
 MINECRAFT_UUID = UUID("11111111-1111-1111-1111-111111111111")
 
 _TABLES = [

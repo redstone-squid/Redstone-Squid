@@ -46,7 +46,7 @@ ACCOUNT = Caller(kind="account", subject="account:7", nodes=UNBOUNDED, account_i
 
 class NotificationRecorder(NotificationService):
     def __init__(self) -> None:
-        self.preferences_result = NotificationPreferences(account_id=7, consent_pending=False)
+        self.preferences_result = NotificationPreferences(account_id=7)
         self.subscription_result: NotificationSubscription | None = None
         self.inbox_result = Inbox(Page(items=(), total=0, next=None, prev=None), unread_count=0)
         self.follows: tuple[FollowedSubject, ...] = ()
@@ -136,7 +136,6 @@ async def test_channels_stay_off_until_they_are_explicitly_turned_on() -> None:
             _reservation=None,
         )
     ).content
-    assert response.consent_pending is False
     assert response.web_enabled is False
     assert response.dm_enabled is False
     assert notifications.preference_updates == [(7, False, False)]

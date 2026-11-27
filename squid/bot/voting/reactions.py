@@ -28,7 +28,7 @@ from squid.bot.voting.actors import describe_rejection, resolve_actor
 from squid.bot.voting.members import ReactingMembers, VoterMemberSync
 from squid.core.actors import ActingContext, UserActor
 from squid.core.locks import KeyedLock
-from squid.core.voting.application.accounts import AccountConsentedVoterLookup
+from squid.core.voting.application.accounts import DiscordVoterLookup
 from squid.core.voting.application.recount import BallotRecounter
 from squid.core.voting.domain import CastVoteResult, Voter, VoteRejection, VoteSessionSnapshot
 from squid.runtime import JobHandle
@@ -64,7 +64,7 @@ class VoteReactionHandler:
         self.bot = bot
         self.vote_service = bot.services.votes
         self._members = members
-        self._voters = AccountConsentedVoterLookup(bot.services.accounts)
+        self._voters = DiscordVoterLookup(bot.services.accounts)
         self._recounter = BallotRecounter(
             self.vote_service, bot.services.vote_cards(bot), self._voters, ReactingMembers(bot)
         )
@@ -133,7 +133,7 @@ class VoteReactionHandler:
         if message is None or member is None:
             return
         # Without a consented account the member votes under their Discord ID.
-        account_id = await self._voters.consented_account_id(member.id)
+        account_id = await self._voters.voter_account_id(member.id)
         # Build reviews are weighed from stored owner-guild roles; keep this member's current.
         await self._members.record((member,))
         actor = await resolve_actor(self.bot, member, account_id=account_id)
@@ -186,7 +186,7 @@ class VoteReactionHandler:
             # account whose consent lapsed still owns the ballots it cast as an account.
             account_id = await self.bot.account_ids.resolve(self.bot.services.accounts, payload.user_id)
             if account_id is not None and snapshot.selection_for(Voter.account(account_id)) is None:
-                account_id = await self._voters.consented_account_id(payload.user_id)
+                account_id = await self._voters.voter_account_id(payload.user_id)
             member = await event.member(humans_only=True)
             if member is None:
                 return

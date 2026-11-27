@@ -10,7 +10,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.core.accounts.domain import CURRENT_CONSENT_VERSION
+from squid.core.accounts.domain import PRIVACY_NOTICE_VERSION
 from squid.core.accounts.models import Account
 from squid.core.actors import ActingContext, UserActor
 from squid.core.cli_auth import CliAuthorizationService, CliSecretCodec
@@ -52,7 +52,7 @@ async def cli_auth_tables(async_engine: AsyncEngine) -> AsyncGenerator[None]:
 
 async def consenting_account(session_factory: async_sessionmaker[AsyncSession]) -> int:
     async with session_factory.begin() as session:
-        account = Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=NOW)
+        account = Account(privacy_notice_version=PRIVACY_NOTICE_VERSION, privacy_notice_acknowledged_at=NOW)
         session.add(account)
         await session.flush()
         return account.id

@@ -1,13 +1,5 @@
 """Public account domain API: one account, many identities."""
 
-from squid.core.accounts.domain.consent import (
-    CONSENT_CUTOFF,
-    CURRENT_CONSENT_VERSION,
-    PRIVACY_NOTICE,
-    PRIVACY_NOTICE_TITLE,
-    AccountConsent,
-    consent_refresh_required,
-)
 from squid.core.accounts.domain.models import (
     MERGE_CODE_BYTES,
     MERGE_PROOF_MAX_AGE_SECONDS,
@@ -26,6 +18,12 @@ from squid.core.accounts.domain.models import (
     RecentAccountProof,
     VerificationCode,
     fold_creator_name,
+)
+from squid.core.accounts.domain.privacy import (
+    PRIVACY_NOTICE,
+    PRIVACY_NOTICE_TITLE,
+    PRIVACY_NOTICE_VERSION,
+    PrivacyNoticeReceipt,
 )
 from squid.core.accounts.domain.profiles import (
     DISCORD_AVATAR_URL_TEMPLATE,
@@ -46,8 +44,6 @@ from squid.core.accounts.domain.profiles import (
 )
 
 __all__ = [
-    "CONSENT_CUTOFF",
-    "CURRENT_CONSENT_VERSION",
     "DISCORD_AVATAR_URL_TEMPLATE",
     "JAVA_AVATAR_URL_TEMPLATE",
     "MAX_BIO_LENGTH",
@@ -61,8 +57,8 @@ __all__ = [
     "MERGE_TICKET_TTL_SECONDS",
     "PRIVACY_NOTICE",
     "PRIVACY_NOTICE_TITLE",
+    "PRIVACY_NOTICE_VERSION",
     "PROFILE_LINK_SCHEMES",
-    "AccountConsent",
     "AccountMerge",
     "ClaimMethod",
     "ClaimStatus",
@@ -76,12 +72,12 @@ __all__ = [
     "LinkPreview",
     "LinkReservation",
     "MergePreview",
+    "PrivacyNoticeReceipt",
     "ProfileLink",
     "ProfileUpdate",
     "PublicCreatorProfile",
     "RecentAccountProof",
     "VerificationCode",
     "avatar_url_for",
-    "consent_refresh_required",
     "fold_creator_name",
 ]

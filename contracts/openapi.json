@@ -580,14 +580,14 @@
         }
       }
     },
-    "/v1/accounts/me/consent": {
-      "post": {
+    "/v1/accounts/me/discord-build-indexing": {
+      "put": {
         "tags": [
           "accounts"
         ],
-        "summary": "GrantConsent",
-        "description": "Accept the current privacy notice for future writes.\n\nIf a notice version is supplied, it must match the current version. This lets\nclients detect that the displayed notice has become outdated.",
-        "operationId": "account_consent_grant",
+        "summary": "SetBuildIndexing",
+        "description": "Set automatic indexing for the caller's builds in participating Discord channels.",
+        "operationId": "account_build_indexing_set",
         "parameters": [
           {
             "name": "Idempotency-Key",
@@ -615,14 +615,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "oneOf": [
-                  {
-                    "$ref": "#/components/schemas/ConsentGrantRequest"
-                  },
-                  {
-                    "type": "null"
-                  }
-                ]
+                "$ref": "#/components/schemas/BuildIndexingRequest"
               }
             }
           },
@@ -691,21 +684,6 @@
           },
           "404": {
             "description": "Not Found",
-            "content": {
-              "application/problem+json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ProblemDetail"
-                }
-              }
-            },
-            "headers": {
-              "Request-Id": {
-                "$ref": "#/components/headers/RequestId"
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -5969,14 +5947,14 @@
         }
       }
     },
-    "/v1/consent/notice": {
+    "/v1/privacy/policy": {
       "get": {
         "tags": [
           "accounts"
         ],
         "summary": "GetNotice",
-        "description": "Return the privacy notice in the negotiated language.\n\nClients should display this text and submit its version when recording consent.\nThe API and Discord use the same notice text and version.",
-        "operationId": "consent_notice_get",
+        "description": "Return the privacy notice in the negotiated language.\n\nThe API and Discord use the same notice text and version.",
+        "operationId": "privacy_policy_get",
         "responses": {
           "200": {
             "description": "Request fulfilled, document follows",
@@ -8604,7 +8582,7 @@
           "notifications"
         ],
         "summary": "GetPreferences",
-        "description": "Return channel preferences, with disabled defaults until privacy consent is accepted.",
+        "description": "Return channel preferences, with both delivery channels off by default.",
         "operationId": "notification_preferences_get",
         "responses": {
           "200": {
@@ -25784,17 +25762,7 @@
               }
             ]
           },
-          "consent_version": {
-            "oneOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "consent_pending": {
+          "discord_build_indexing_enabled": {
             "type": "boolean"
           },
           "identities": {
@@ -25809,9 +25777,8 @@
         },
         "type": "object",
         "required": [
-          "consent_pending",
-          "consent_version",
           "created_at",
+          "discord_build_indexing_enabled",
           "id",
           "identities",
           "profile",
@@ -26622,6 +26589,18 @@
           "versions"
         ],
         "title": "BuildDetail"
+      },
+      "BuildIndexingRequest": {
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          }
+        },
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "BuildIndexingRequest"
       },
       "BuildKind": {
         "type": "string",
@@ -27824,23 +27803,6 @@
         ],
         "title": "ComparisonOperator",
         "description": "Allowlisted field comparison operators."
-      },
-      "ConsentGrantRequest": {
-        "properties": {
-          "version": {
-            "oneOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "type": "object",
-        "required": [],
-        "title": "ConsentGrantRequest"
       },
       "ControlKind": {
         "type": "string",
@@ -31730,9 +31692,6 @@
           "revision": {
             "type": "integer"
           },
-          "consent_pending": {
-            "type": "boolean"
-          },
           "web_enabled": {
             "type": "boolean"
           },
@@ -31745,7 +31704,6 @@
         },
         "type": "object",
         "required": [
-          "consent_pending",
           "dm_enabled",
           "dm_suspended",
           "revision",
@@ -37484,9 +37442,6 @@
               }
             ]
           },
-          "consent_pending": {
-            "type": "boolean"
-          },
           "permissions": {
             "items": {
               "type": "string"
@@ -37499,7 +37454,6 @@
         },
         "type": "object",
         "required": [
-          "consent_pending",
           "counts",
           "permissions",
           "user"

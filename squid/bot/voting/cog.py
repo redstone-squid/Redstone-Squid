@@ -11,7 +11,7 @@ from whenever import Instant
 
 import squid_ui.ext.discord as sd
 from squid.bot._types import GuildMessageable
-from squid.bot.accounts.consent import ensure_consented_account
+from squid.bot.accounts.identity import ensure_account
 from squid.bot.actors import has_manage_server
 from squid.bot.events.spec import DomainEventSubscriptions
 from squid.bot.events.spec import extension as domain_events_extension
@@ -32,7 +32,6 @@ from squid.bot.voting.publisher import DiscordPollPublisher
 from squid.bot.voting.reactions import VoteReactionHandler
 from squid.bot.voting.sessions import start_delete_log_vote
 from squid.bot.voting.spec import VotingExports, extension
-from squid.core.accounts.domain import IdentityProvider
 from squid.core.actors import ActingContext
 from squid.core.i18n import tr
 from squid.core.permissions.domain.catalogue import (
@@ -154,23 +153,7 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     ) -> sd.CommandResult:
         """Publish supplied poll content, or open an editor with the supplied defaults."""
         actor = request.user
-        account = await self.bot.services.accounts.get_account_by_identity(IdentityProvider.DISCORD, str(actor.id))
-        # ORM identity columns may still be None before flush.
-        if (
-            account is None
-            or account.id is None  # pyright: ignore[reportUnnecessaryComparison]
-            or account.needs_consent_refresh
-        ):
-            if await ensure_consented_account(request, self.bot.services.accounts) is None:
-                return None
-            return await request.respond(
-                text_node(
-                    md_tr(
-                        t"vote-submitted-open-poll-editor = Thanks. Run `/poll` again to open the editor.",
-                    )
-                ),
-                audience="personal",
-            )
+        account_id = await ensure_account(request, self.bot.services.accounts)
         allow_network = isinstance(actor, discord.Member) and await self.publisher.may_create_network(actor)
         guild = request.guild
         channel = request.channel
@@ -183,7 +166,7 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
 
         async def publish(draft: PollDraft, menu: VoteMenu) -> str:
             subject = await self.bot.actors.resolve(request, refresh=True)
-            if subject.account_id != account.id:
+            if subject.account_id != account_id:
                 raise InvalidVoteConfigurationError(
                     tr(t"poll-account-changed = Your account changed. Open the poll again.")
                 )
@@ -356,10 +339,7 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
                 tr(t"vote-message-guild-mismatch = The message is not from this guild."),
             )
 
-        author_account_id = await ensure_consented_account(request, self.bot.services.accounts)
-
-        if author_account_id is None:
-            return None
+        author_account_id = await ensure_account(request, self.bot.services.accounts)
 
         # The card is a public artifact of a public decision, so it goes in the channel rather
         # than into the ephemeral reply the right-click opened. The placeholder is adopted by the

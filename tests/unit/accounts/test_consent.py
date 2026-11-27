@@ -1,47 +1,4 @@
-"""Consent refresh rules and privacy-notice content checks."""
-
-from whenever import Instant
-
-from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, PRIVACY_NOTICE, AccountConsent, consent_refresh_required
-from squid.core.accounts.models import Account
-
-BEFORE_CUTOFF = Instant.from_utc(2026, 8, 3)
-AFTER_CUTOFF = Instant.from_utc(2026, 8, 5)
-SUPERSEDED = "1970-01-01"
-"""Fixed old version, independent of future changes to CURRENT_CONSENT_VERSION."""
-
-
-def test_a_current_receipt_needs_no_refresh() -> None:
-    assert not consent_refresh_required(AFTER_CUTOFF, CURRENT_CONSENT_VERSION)
-
-
-def test_an_account_created_after_the_cutoff_must_consent() -> None:
-    assert consent_refresh_required(AFTER_CUTOFF, None)
-
-
-def test_an_account_predating_receipts_is_grandfathered() -> None:
-    assert not consent_refresh_required(BEFORE_CUTOFF, None)
-
-
-def test_the_cutoff_is_not_a_permanent_opt_out() -> None:
-    """Once an account has a receipt, it must accept later versions even if it predates the cutoff."""
-    assert consent_refresh_required(BEFORE_CUTOFF, SUPERSEDED)
-    assert consent_refresh_required(AFTER_CUTOFF, SUPERSEDED)
-
-
-def test_an_unpersisted_account_is_never_grandfathered() -> None:
-    """No creation instant means nothing to judge, so the safe answer is to ask."""
-    assert consent_refresh_required(None, None)
-
-
-def test_the_account_aggregate_delegates_to_the_same_predicate() -> None:
-    grandfathered = Account(created_at=BEFORE_CUTOFF)
-    stale = Account(created_at=AFTER_CUTOFF, consent=AccountConsent(SUPERSEDED, AFTER_CUTOFF))
-    current = Account(created_at=AFTER_CUTOFF, consent=AccountConsent(CURRENT_CONSENT_VERSION, AFTER_CUTOFF))
-
-    assert not grandfathered.needs_consent_refresh
-    assert stale.needs_consent_refresh
-    assert not current.needs_consent_refresh
+from squid.core.accounts.domain import PRIVACY_NOTICE, PRIVACY_NOTICE_VERSION
 
 
 def test_the_notice_names_everything_it_is_consent_to() -> None:
@@ -57,7 +14,7 @@ def test_the_notice_names_everything_it_is_consent_to() -> None:
     assert "licence" in notice  # deferred to the per-submission choice, but named
     assert "creator page is public" in notice  # what is published about you
     assert "notifications are covered by this notice" in notice
-    assert "cancelling stores nothing" in notice  # and what declining costs
+    assert "off by default" in notice
 
 
 def test_the_notice_is_plain_text_in_paragraphs() -> None:
@@ -68,6 +25,6 @@ def test_the_notice_is_plain_text_in_paragraphs() -> None:
 
 
 def test_the_version_is_an_iso_date() -> None:
-    year, month, day = CURRENT_CONSENT_VERSION.split("-")
+    year, month, day = PRIVACY_NOTICE_VERSION.split("-")
     assert (len(year), len(month), len(day)) == (4, 2, 2)
-    assert CURRENT_CONSENT_VERSION.replace("-", "").isdigit()
+    assert PRIVACY_NOTICE_VERSION.replace("-", "").isdigit()

@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.bot.notifications_cog import render_delivery
-from squid.core.accounts.domain import CURRENT_CONSENT_VERSION, IdentityProvider
+from squid.core.accounts.domain import PRIVACY_NOTICE_VERSION, IdentityProvider
 from squid.core.accounts.models import Account, AccountIdentity
 from squid.core.events.models import DomainEvent
 from squid.core.notifications.domain import (
@@ -90,8 +90,8 @@ async def _seed_delivery(
 ) -> int:
     async with session_factory.begin() as session:
         account = Account(
-            consent_version=CURRENT_CONSENT_VERSION if consented else None,
-            consented_at=Instant.now() if consented else None,
+            privacy_notice_version=PRIVACY_NOTICE_VERSION if consented else None,
+            privacy_notice_acknowledged_at=Instant.now() if consented else None,
         )
         session.add(account)
         await session.flush()
@@ -404,7 +404,7 @@ async def test_inbox_count_and_both_keyset_directions_share_visibility(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     async with async_session_factory.begin() as session:
-        account = Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now())
+        account = Account(privacy_notice_version=PRIVACY_NOTICE_VERSION, privacy_notice_acknowledged_at=Instant.now())
         session.add(account)
         await session.flush()
         session.add(NotificationProfile(account_id=account.id, web_enabled=True, dm_enabled=False))
@@ -461,7 +461,7 @@ async def test_unread_filter_and_unread_ids_skip_read_and_newer_items(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     async with async_session_factory.begin() as session:
-        account = Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now())
+        account = Account(privacy_notice_version=PRIVACY_NOTICE_VERSION, privacy_notice_acknowledged_at=Instant.now())
         session.add(account)
         await session.flush()
         session.add(NotificationProfile(account_id=account.id, web_enabled=True, dm_enabled=False))
@@ -517,7 +517,10 @@ async def test_durable_staff_audience_is_not_implicit_for_owner_or_custom_role_r
         owner = PermissionRole(slug="owner", name="Owner", builtin_key=BuiltinRoleKeys.OWNER.value)
         custom = PermissionRole(slug="submission-reader", name="Submission reader")
         session.add_all((global_admin, owner, custom))
-        accounts = [Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now()) for _ in range(3)]
+        accounts = [
+            Account(privacy_notice_version=PRIVACY_NOTICE_VERSION, privacy_notice_acknowledged_at=Instant.now())
+            for _ in range(3)
+        ]
         session.add_all(accounts)
         await session.flush()
         session.add(
@@ -559,7 +562,8 @@ async def test_durable_staff_audience_discovery_has_constant_query_count(
         )
         session.add(role)
         accounts = [
-            Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now()) for _ in range(recipient_count)
+            Account(privacy_notice_version=PRIVACY_NOTICE_VERSION, privacy_notice_acknowledged_at=Instant.now())
+            for _ in range(recipient_count)
         ]
         session.add_all(accounts)
         await session.flush()
@@ -610,7 +614,8 @@ async def test_candidate_materialization_has_constant_query_count(
 ) -> None:
     async with async_session_factory.begin() as session:
         accounts = [
-            Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now()) for _ in range(recipient_count)
+            Account(privacy_notice_version=PRIVACY_NOTICE_VERSION, privacy_notice_acknowledged_at=Instant.now())
+            for _ in range(recipient_count)
         ]
         session.add_all(accounts)
         await session.flush()
@@ -654,7 +659,7 @@ async def test_candidate_materialization_is_unique_under_concurrent_replay(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     async with async_session_factory.begin() as session:
-        account = Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now())
+        account = Account(privacy_notice_version=PRIVACY_NOTICE_VERSION, privacy_notice_acknowledged_at=Instant.now())
         session.add(account)
         await session.flush()
         session.add(AccountIdentity(account_id=account.id, provider=IdentityProvider.DISCORD, subject="123"))
@@ -694,14 +699,14 @@ async def test_candidate_materialization_is_unique_under_concurrent_replay(
         assert len((await session.scalars(select(NotificationDeliveryRecord))).all()) == 1
 
 
-async def test_an_unconsented_account_keeps_its_switches_but_receives_nothing(
+async def test_an_account_without_a_receipt_receives_enabled_notifications(
     repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """Seed enabled channels and a pending delivery for an account without current consent."""
-    await _seed_delivery(async_session_factory, consented=False)
-
-    assert await transact(repository, lambda uow: uow.notifications.claim_deliveries(limit=10), commit=True) == ()
+    delivery_id = await _seed_delivery(async_session_factory, consented=False)
+    (claimed,) = await transact(repository, lambda uow: uow.notifications.claim_deliveries(limit=10), commit=True)
+    assert claimed.id == delivery_id
 
 
 async def test_a_consented_account_can_set_channels_without_a_separate_accept_step(
@@ -710,7 +715,7 @@ async def test_a_consented_account_can_set_channels_without_a_separate_accept_st
 ) -> None:
     """Preference updates create the missing notification profile for a consented account."""
     async with async_session_factory.begin() as session:
-        account = Account(consent_version=CURRENT_CONSENT_VERSION, consented_at=Instant.now())
+        account = Account(privacy_notice_version=PRIVACY_NOTICE_VERSION, privacy_notice_acknowledged_at=Instant.now())
         session.add(account)
         await session.flush()
         account_id = account.id
@@ -724,7 +729,6 @@ async def test_a_consented_account_can_set_channels_without_a_separate_accept_st
     assert preferences is not None
     assert preferences.web_enabled is True
     assert preferences.dm_enabled is False
-    assert preferences.consent_pending is False
 
 
 async def test_staff_fan_out_inserts_one_row_per_eligible_recipient(
@@ -741,8 +745,8 @@ async def test_staff_fan_out_inserts_one_row_per_eligible_recipient(
             ("opted_out", True, False, False),
         ):
             account = Account(
-                consent_version=CURRENT_CONSENT_VERSION if consented else None,
-                consented_at=Instant.now() if consented else None,
+                privacy_notice_version=PRIVACY_NOTICE_VERSION if consented else None,
+                privacy_notice_acknowledged_at=Instant.now() if consented else None,
             )
             session.add(account)
             await session.flush()
@@ -783,8 +787,8 @@ async def test_staff_fan_out_inserts_one_row_per_eligible_recipient(
         notified = set((await session.scalars(select(InboxNotification.account_id))).all())
         delivered = set((await session.scalars(select(NotificationDeliveryRecord.account_id))).all())
 
-    assert notified == {accounts["both"], accounts["web_only"]}
-    assert delivered == {accounts["both"]}
+    assert notified == {accounts["both"], accounts["web_only"], accounts["unconsented"]}
+    assert delivered == {accounts["both"], accounts["unconsented"]}
 
 
 async def test_expired_claim_does_not_consume_a_failure_attempt(

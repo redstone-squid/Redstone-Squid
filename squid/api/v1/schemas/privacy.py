@@ -15,12 +15,3 @@ class PrivacyNoticeDetail(BaseModel):
     title: str
     body: str
     """Plain text with blank lines between paragraphs, suitable for web, Discord, and terminal display."""
-
-
-class ConsentGrantRequest(BaseModel):
-    """Which notice version the client actually displayed before asking."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    version: str | None = None
-    """Version shown to the user. If supplied, it must match the currently published notice."""

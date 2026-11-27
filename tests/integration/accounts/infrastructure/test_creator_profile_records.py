@@ -9,10 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.core.accounts.domain import (
-    CURRENT_CONSENT_VERSION,
-    AccountConsent,
+    PRIVACY_NOTICE_VERSION,
     ClaimMethod,
     IdentityProvider,
+    PrivacyNoticeReceipt,
     ProfileUpdate,
     PublicCreatorProfile,
 )
@@ -27,7 +27,7 @@ from tests.support.build_edits import build_edit_session
 from tests.support.build_edits import transact_build_edit as transact
 
 JAVA_UUID = UUID("11111111-1111-1111-1111-111111111111")
-CONSENT = AccountConsent(CURRENT_CONSENT_VERSION, Instant.from_utc(2026, 8, 4))
+CONSENT = PrivacyNoticeReceipt(PRIVACY_NOTICE_VERSION, Instant.from_utc(2026, 8, 4))
 
 
 @pytest.fixture

@@ -56,7 +56,7 @@ class NotificationRecorder(NotificationService):
 
     @override
     async def preferences(self, *, context: ActingContext) -> NotificationPreferences:
-        return NotificationPreferences(context.effective.require_account_id(), consent_pending=False)
+        return NotificationPreferences(context.effective.require_account_id())
 
     @override
     async def subscriptions(self, *, context: ActingContext) -> tuple[NotificationSubscription, ...]:
@@ -65,9 +65,7 @@ class NotificationRecorder(NotificationService):
         return ()
 
     async def set_preferences(self, account_id: int, *, web_enabled: bool, dm_enabled: bool) -> NotificationPreferences:
-        return NotificationPreferences(
-            account_id, consent_pending=False, web_enabled=web_enabled, dm_enabled=dm_enabled
-        )
+        return NotificationPreferences(account_id, web_enabled=web_enabled, dm_enabled=dm_enabled)
 
     async def subscribe(
         self,

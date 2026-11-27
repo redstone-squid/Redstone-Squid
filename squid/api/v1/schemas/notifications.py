@@ -13,16 +13,11 @@ from squid.core.notifications.domain import NotificationKind, NotifiedBuild, Not
 
 
 class NotificationPreferencesDetail(BaseModel):
-    """Channel preferences and the account's privacy-consent status.
-
-    Consent_pending refers to the same notice as AccountDetail. Notifications do not have
-    a separate consent notice.
-    """
+    """The account's notification channel preferences."""
 
     model_config = ConfigDict(extra="forbid")
 
     revision: int
-    consent_pending: bool
     web_enabled: bool
     dm_enabled: bool
     dm_suspended: bool
@@ -31,7 +26,6 @@ class NotificationPreferencesDetail(BaseModel):
     def from_domain(cls, preferences: NotificationPreferences) -> NotificationPreferencesDetail:
         return cls(
             revision=preferences.revision,
-            consent_pending=preferences.consent_pending,
             web_enabled=preferences.web_enabled,
             dm_enabled=preferences.dm_enabled,
             dm_suspended=preferences.dm_suspended_at is not None,

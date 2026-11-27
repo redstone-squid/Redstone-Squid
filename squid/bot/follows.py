@@ -6,7 +6,7 @@ from uuid import UUID
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
-from squid.bot.accounts.consent import with_consented_account
+from squid.bot.accounts.identity import with_account
 from squid.bot.ui import tr
 from squid.core.actors import ActingContext
 from squid.core.edits.domain import EditCommand, EditValues, Revision
@@ -49,4 +49,4 @@ async def _follow(kind: SubscriptionKind, subject_id: UUID, event: sd.PressEvent
         )
         await source.notice(tr(t"context-follow-saved = Following. Manage your follows in /notifications."))
 
-    await with_consented_account(event, bot.services.accounts, save)
+    await with_account(event, bot.services.accounts, save)
