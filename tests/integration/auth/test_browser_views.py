@@ -43,7 +43,7 @@ async def test_browser_reads_and_links_are_scoped_to_the_account(
                 )
             )
         subscription = NotificationSubscription(
-            account_id=owner.id, kind=SubscriptionKind.CREATOR, subject_id=other.public_creator_id
+            account_id=owner.id, kind=SubscriptionKind.CREATOR, subject_id=other.public_account_id
         )
         session.add(subscription)
         accounts = AccountRepository(lambda: session, "test-pepper")
@@ -59,14 +59,14 @@ async def test_browser_reads_and_links_are_scoped_to_the_account(
     staff_context = ActingContext.direct(staff)
     user, counts, allowed = await views.session(context=owner_context)
     assert BUILD_SUBMISSION_VIEW_PENDING.name not in allowed
-    assert user.id == owner.public_creator_id
+    assert user.id == owner.public_account_id
     assert counts == SessionCounts(0, 1, 1, None)
     _, counts, allowed = await views.session(context=staff_context)
     assert BUILD_SUBMISSION_VIEW_PENDING.name in allowed
     assert counts == SessionCounts(0, 1, 0, 0)
-    assert (await views.creator(other.public_creator_id, context=owner_context)).subscription_id == subscription.id
-    assert (await views.creator(other.public_creator_id, context=staff_context)).is_self
-    assert await views.subscription(SubscriptionKind.CREATOR, other.public_creator_id, context=staff_context) is None
+    assert (await views.creator(other.public_account_id, context=owner_context)).subscription_id == subscription.id
+    assert (await views.creator(other.public_account_id, context=staff_context)).is_self
+    assert await views.subscription(SubscriptionKind.CREATOR, other.public_account_id, context=staff_context) is None
 
     limited = ActingContext.direct(replace(staff, credential_scopes=frozenset({ACCOUNT_SELF_READ.name})))
     _, counts, allowed = await views.session(context=limited)
@@ -74,4 +74,4 @@ async def test_browser_reads_and_links_are_scoped_to_the_account(
     assert allowed == (ACCOUNT_SELF_READ.name,)
     denied = ActingContext.direct(replace(staff, credential_scopes=frozenset()))
     with pytest.raises(PermissionDeniedError):
-        await views.creator(other.public_creator_id, context=denied)
+        await views.creator(other.public_account_id, context=denied)

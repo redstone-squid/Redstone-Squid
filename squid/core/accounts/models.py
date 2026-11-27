@@ -6,7 +6,7 @@ a credited name with an account, and AliasClaim records requests for staff revie
 when that association needs approval. Changing profile text does not move credit.
 
 VerificationCode rows support Java identity linking. MergeTicket rows authorize
-combining existing accounts; PublicCreatorRedirect preserves the absorbed
+combining existing accounts; PublicAccountRedirect preserves the absorbed
 account's public creator ID after the merge.
 """
 
@@ -98,7 +98,7 @@ class Account(CreatedAtMixin, Revisioned, Base, kw_only=True):
 
     __tablename__ = "accounts"
     __table_args__ = (
-        UniqueConstraint("public_creator_id", name="accounts_public_creator_id_key"),
+        UniqueConstraint("public_account_id", name="accounts_public_account_id_key"),
         CheckConstraint("revision > 0", name="accounts_revision_positive"),
         CheckConstraint(
             "(consent_version IS NULL) = (consented_at IS NULL)",
@@ -107,7 +107,7 @@ class Account(CreatedAtMixin, Revisioned, Base, kw_only=True):
     )
     id: Mapped[int] = mapped_column(primary_key=True, default=None)
     """Internal account identifier; assigned when the account is first saved."""
-    public_creator_id: Mapped[uuid.UUID] = mapped_column(
+    public_account_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), nullable=False, server_default=text("gen_random_uuid()"), default_factory=uuid.uuid4
     )
     consent_version: Mapped[str | None] = mapped_column(Text, default=None)
@@ -335,15 +335,15 @@ class AccountProfile(AuditTimestampsMixin, Base, kw_only=True):
         return cls(account_id=account_id)
 
 
-class PublicCreatorRedirect(Base):
+class PublicAccountRedirect(Base):
     """Permanent redirect from a merged public creator identifier."""
 
-    __tablename__ = "public_creator_redirects"
-    __table_args__ = (Index("public_creator_redirects_target_idx", "target_account_id"),)
-    retired_public_creator_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
+    __tablename__ = "public_account_redirects"
+    __table_args__ = (Index("public_account_redirects_target_idx", "target_account_id"),)
+    retired_public_account_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True)
     target_account_id: Mapped[int] = mapped_column(
         Integer,
-        ForeignKey("accounts.id", name="public_creator_redirects_target_account_id_fkey", ondelete="CASCADE"),
+        ForeignKey("accounts.id", name="public_account_redirects_target_account_id_fkey", ondelete="CASCADE"),
         nullable=False,
     )
     created_at: Mapped[Instant] = mapped_column(
@@ -401,7 +401,7 @@ class CreatorAlias(CreatedAtMixin, Base, kw_only=True):
     claimed_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
     claim_method: Mapped[ClaimMethod | None] = mapped_column(StrEnumText(ClaimMethod), default=None)
 
-    public_creator_id: uuid.UUID | None = None
+    public_account_id: uuid.UUID | None = None
     """Public identifier of the account claiming this alias."""
 
     @property

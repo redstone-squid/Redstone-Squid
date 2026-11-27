@@ -44,7 +44,7 @@ def _account(*, discord: bool = True) -> Account:
         consent=AccountConsent(CURRENT_CONSENT_VERSION, NOW),
         id=1,
         created_at=NOW,
-        public_creator_id=CREATOR_ID,
+        public_account_id=CREATOR_ID,
     )
 
 

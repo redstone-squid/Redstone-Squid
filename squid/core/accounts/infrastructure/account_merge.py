@@ -19,7 +19,7 @@ from squid.core.accounts.domain import AccountMerge, ClaimStatus
 from squid.core.accounts.errors import AccountNotFoundError
 from squid.core.accounts.models import Account as AccountModel
 from squid.core.accounts.models import AliasClaim as CreatorAliasClaimModel
-from squid.core.accounts.models import PublicCreatorRedirect
+from squid.core.accounts.models import PublicAccountRedirect
 from squid.core.notifications.infrastructure.account_merge import merge_account_notifications
 from squid.core.permissions.infrastructure.account_merge import merge_permissions
 from squid.core.persistence.account_merge import AccountMergeContext, AccountReference, move_account_references
@@ -77,13 +77,13 @@ async def _retire_absorbed_account(
 ) -> None:
     """Finish the merge by preserving public redirects and deleting the source row."""
     await session.execute(
-        update(PublicCreatorRedirect)
-        .where(PublicCreatorRedirect.target_account_id == absorbed.id)
+        update(PublicAccountRedirect)
+        .where(PublicAccountRedirect.target_account_id == absorbed.id)
         .values(target_account_id=survivor.id)
     )
     session.add(
-        PublicCreatorRedirect(
-            retired_public_creator_id=absorbed.public_creator_id,
+        PublicAccountRedirect(
+            retired_public_account_id=absorbed.public_account_id,
             target_account_id=survivor.id,
         )
     )
@@ -135,8 +135,8 @@ async def merge_accounts(session: AsyncSession, context: AccountMergeContext) ->
     result = AccountMerge(
         surviving_account_id=context.survivor,
         absorbed_account_id=context.absorbed,
-        surviving_public_creator_id=survivor.public_creator_id,
-        redirected_public_creator_id=absorbed.public_creator_id,
+        surviving_public_account_id=survivor.public_account_id,
+        redirected_public_account_id=absorbed.public_account_id,
     )
     await _retire_absorbed_account(session, survivor, absorbed)
     return result

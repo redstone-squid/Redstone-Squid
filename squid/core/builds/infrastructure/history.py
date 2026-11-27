@@ -40,7 +40,7 @@ class BuildHistoryQueries:
         session = self._session()
         subject = (
             await session.execute(
-                select(Account.public_creator_id, AccountProfile.display_name)
+                select(Account.public_account_id, AccountProfile.display_name)
                 .outerjoin(AccountProfile, (AccountProfile.account_id == Account.id) & AccountProfile.hidden.is_(False))
                 .where(Account.id == build.submitter_account_id)
             )
@@ -63,7 +63,7 @@ class BuildHistoryQueries:
                     BuildHistoryEntry.operation,
                     approval,
                     func.count().over(),
-                    Account.public_creator_id,
+                    Account.public_account_id,
                     AccountProfile.display_name,
                 )
                 .join(BuildHistorySnapshot, BuildHistorySnapshot.id == BuildHistoryEntry.after_state_id)
@@ -101,7 +101,7 @@ class BuildHistoryQueries:
         before = aliased(BuildHistorySnapshot)
         after = aliased(BuildHistorySnapshot)
         statement = (
-            select(BuildHistoryEntry, before, after, Account.public_creator_id, AccountProfile.display_name)
+            select(BuildHistoryEntry, before, after, Account.public_account_id, AccountProfile.display_name)
             .select_from(BuildHistoryEntry)
             .join(after, after.id == BuildHistoryEntry.after_state_id)
             .outerjoin(before, before.id == BuildHistoryEntry.before_state_id)

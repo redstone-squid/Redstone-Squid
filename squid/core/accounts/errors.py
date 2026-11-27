@@ -293,19 +293,19 @@ class AliasAlreadyClaimedError(ConflictError):
         self,
         name: str,
         *,
-        holder_public_creator_id: UUID | None = None,
+        holder_public_account_id: UUID | None = None,
         holder_account_id: int | None = None,
         end_user_action: str | Text | None = None,
     ) -> None:
         public_context: dict[str, JSONValue] = {"name": name}
-        if holder_public_creator_id is not None:
-            public_context["public_creator_id"] = str(holder_public_creator_id)
+        if holder_public_account_id is not None:
+            public_context["public_account_id"] = str(holder_public_account_id)
         context: dict[str, JSONValue] = dict(public_context)
         if holder_account_id is not None:
             context["holder_account_id"] = holder_account_id
         super().__init__(context=context, public_context=public_context, end_user_action=end_user_action)
         self.name = name
-        self.holder_public_creator_id = holder_public_creator_id
+        self.holder_public_account_id = holder_public_account_id
         self.holder_account_id = holder_account_id
 
     def with_holder_name(self, holder_name: str) -> AliasAlreadyClaimedError:

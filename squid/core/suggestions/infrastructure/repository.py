@@ -171,9 +171,9 @@ class PostgresSuggestionRepository:
     async def creator_profiles(self, query: str, *, limit: int) -> Sequence[tuple[str, str]]:
         """Return public UUIDs labelled by a matching claimed alias."""
         statement = (
-            select(Account.public_creator_id, func.min(CreatorAlias.name).label("name"))
+            select(Account.public_account_id, func.min(CreatorAlias.name).label("name"))
             .join(CreatorAlias, CreatorAlias.account_id == Account.id)
-            .group_by(Account.public_creator_id)
+            .group_by(Account.public_account_id)
         )
         terms = fold_creator_name(query)
         if terms:
@@ -181,7 +181,7 @@ class PostgresSuggestionRepository:
         statement = statement.order_by("name").limit(limit)
         session = self._session()
         rows = (await session.execute(statement)).all()
-        return [(str(row.public_creator_id), row.name) for row in rows]
+        return [(str(row.public_account_id), row.name) for row in rows]
 
     async def filter_values(self, field_name: str, prefix: str, *, limit: int) -> Sequence[str]:
         """Return distinct indexed text values for a field, ordered by the database.

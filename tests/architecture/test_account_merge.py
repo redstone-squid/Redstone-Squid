@@ -29,7 +29,7 @@ def test_every_account_foreign_key_has_an_explicit_merge_disposition() -> None:
         AccountReference("notification_deliveries", "account_id"),
         AccountReference("permission_grants", "subject_account_id"),
         AccountReference("permission_role_assignments", "subject_account_id"),
-        AccountReference("public_creator_redirects", "target_account_id"),
+        AccountReference("public_account_redirects", "target_account_id"),
     )
     # The survivor keeps its own profile; proof tickets for the absorbed account expire with it.
     deleted = (

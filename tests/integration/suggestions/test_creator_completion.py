@@ -107,7 +107,7 @@ async def test_public_profile_search_matches_every_alias_and_escapes_wildcards(
         account = Account()
         session.add(account)
         await session.flush()
-        public_id = str(account.public_creator_id)
+        public_id = str(account.public_account_id)
         session.add_all(
             CreatorAlias(
                 name=name,

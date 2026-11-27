@@ -262,7 +262,7 @@ class PostgresNotificationRepository:
         if kind is SubscriptionKind.CREATOR:
             statement = select(
                 exists().where(
-                    Account.public_creator_id == subject_id,
+                    Account.public_account_id == subject_id,
                     CreatorAlias.account_id == Account.id,
                 )
             )
@@ -295,9 +295,9 @@ class PostgresNotificationRepository:
             .subquery()
         )
         aliases = (
-            select(Account.public_creator_id, func.min(CreatorAlias.name).label("name"))
+            select(Account.public_account_id, func.min(CreatorAlias.name).label("name"))
             .join(CreatorAlias, CreatorAlias.account_id == Account.id)
-            .group_by(Account.public_creator_id)
+            .group_by(Account.public_account_id)
             .subquery()
         )
         label = func.coalesce(latest.c.title, aliases.c.name)
@@ -311,7 +311,7 @@ class PostgresNotificationRepository:
             .outerjoin(
                 aliases,
                 (NotificationSubscription.kind == SubscriptionKind.CREATOR)
-                & (aliases.c.public_creator_id == NotificationSubscription.subject_id),
+                & (aliases.c.public_account_id == NotificationSubscription.subject_id),
             )
             .where(NotificationSubscription.id.in_(subscription_ids), label.is_not(None))
         )
@@ -600,13 +600,13 @@ class PostgresNotificationRepository:
             await self._insert_candidates(session, event=event, candidates=candidates)
             return
         # Followers hear about a build's first confirmation, not every later review outcome.
-        creator_ids = tuple(await self._creator_public_ids(session, build.id))
-        if creator_ids:
+        public_account_ids = tuple(await self._creator_public_ids(session, build.id))
+        if public_account_ids:
             subscriptions = (
                 await session.execute(
                     select(NotificationSubscription.account_id, NotificationSubscription.id).where(
                         NotificationSubscription.kind == SubscriptionKind.CREATOR,
-                        NotificationSubscription.subject_id.in_(creator_ids),
+                        NotificationSubscription.subject_id.in_(public_account_ids),
                         NotificationSubscription.enabled.is_(True),
                     )
                 )
@@ -621,7 +621,7 @@ class PostgresNotificationRepository:
                     source_key=NotificationSource(event.id, NotificationKind.CREATOR_BUILD_CONFIRMED).key_for(
                         account_id
                     ),
-                    payload={"build_id": build.id, "creator_ids": [str(value) for value in creator_ids]},
+                    payload={"build_id": build.id, "account_ids": [str(value) for value in public_account_ids]},
                     subscription_ids=tuple(sorted(follows)),
                 )
                 for account_id, follows in follows_by_account.items()
@@ -897,7 +897,7 @@ class PostgresNotificationRepository:
         return tuple(
             (
                 await session.execute(
-                    select(Account.public_creator_id).join(credits, credits.c.account_id == Account.id).distinct()
+                    select(Account.public_account_id).join(credits, credits.c.account_id == Account.id).distinct()
                 )
             ).scalars()
         )
@@ -919,18 +919,18 @@ class PostgresNotificationRepository:
         credits = func.build_credit_accounts().table_valued("build_id", "position", "account_id", "name", "role")
         creator_rows = (
             await session.execute(
-                select(credits.c.build_id, Account.id, Account.public_creator_id)
+                select(credits.c.build_id, Account.id, Account.public_account_id)
                 .select_from(credits)
                 .join(Account, Account.id == credits.c.account_id)
                 .where(credits.c.build_id.in_(build_ids))
             )
         ).all()
-        creator_ids: dict[int, set[UUID]] = defaultdict(set)
-        for build_id, account_id, public_creator_id in creator_rows:
+        public_account_ids: dict[int, set[UUID]] = defaultdict(set)
+        for build_id, account_id, public_account_id in creator_rows:
             recipients[build_id][account_id] = None
-            creator_ids[build_id].add(public_creator_id)
+            public_account_ids[build_id].add(public_account_id)
 
-        relevant_subjects: set[UUID] = set().union(*creator_ids.values())
+        relevant_subjects: set[UUID] = set().union(*public_account_ids.values())
         relevant_subjects.update(gain.record_id for build_gains in gains.values() for gain in build_gains)
         exact_subscriptions = (
             await session.execute(
@@ -949,7 +949,7 @@ class PostgresNotificationRepository:
         for account_id, kind, subject_id, subscription_id in exact_subscriptions:
             for build_id, build_gains in gains.items():
                 subjects = (
-                    creator_ids[build_id]
+                    public_account_ids[build_id]
                     if kind is SubscriptionKind.CREATOR
                     else {gain.record_id for gain in build_gains}
                 )

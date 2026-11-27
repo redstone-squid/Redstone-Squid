@@ -49,7 +49,7 @@ from squid.core.accounts.models import (
     CreatorAlias,
     MergeTicket,
     ProfileClearAudit,
-    PublicCreatorRedirect,
+    PublicAccountRedirect,
 )
 from squid.core.accounts.models import VerificationAttempt as VerificationAttemptModel
 from squid.core.accounts.models import VerificationCode as VerificationCodeModel
@@ -69,9 +69,9 @@ def _hydrate_account(model: Account, identities: Sequence[AccountIdentity]) -> A
     return model
 
 
-def _hydrate_creator(alias: CreatorAlias, public_creator_id: uuid.UUID | None = None) -> CreatorAlias:
+def _hydrate_creator(alias: CreatorAlias, public_account_id: uuid.UUID | None = None) -> CreatorAlias:
     """Populate the public creator ID on the same loaded alias."""
-    alias.public_creator_id = public_creator_id
+    alias.public_account_id = public_account_id
     return alias
 
 
@@ -473,7 +473,7 @@ class AccountRepository:
     async def _hydrated_alias(self, condition: ColumnElement[bool]) -> CreatorAlias | None:
         row = (
             await self._session().execute(
-                select(CreatorAlias, Account.public_creator_id)
+                select(CreatorAlias, Account.public_account_id)
                 .outerjoin(Account, Account.id == CreatorAlias.account_id)
                 .where(condition)
             )
@@ -487,13 +487,13 @@ class AccountRepository:
 
     @staticmethod
     async def _account_for_public_id(session: AsyncSession, public_id: uuid.UUID) -> Account | None:
-        account = await session.scalar(select(Account).where(Account.public_creator_id == public_id))
+        account = await session.scalar(select(Account).where(Account.public_account_id == public_id))
         if account is not None:
             return account
         return await session.scalar(
             select(Account)
-            .join(PublicCreatorRedirect, PublicCreatorRedirect.target_account_id == Account.id)
-            .where(PublicCreatorRedirect.retired_public_creator_id == public_id)
+            .join(PublicAccountRedirect, PublicAccountRedirect.target_account_id == Account.id)
+            .where(PublicAccountRedirect.retired_public_account_id == public_id)
         )
 
     async def get_creator_profile(self, public_id: uuid.UUID) -> CreatorProfile | None:
@@ -502,7 +502,7 @@ class AccountRepository:
         account = await self._account_for_public_id(session, public_id)
         if account is None:
             return None
-        canonical_id = account.public_creator_id
+        canonical_id = account.public_account_id
         aliases = (
             await session.scalars(
                 select(CreatorAlias.name)
@@ -522,7 +522,7 @@ class AccountRepository:
         account = await self._account_for_public_id(session, public_id)
         if account is None:
             return None
-        canonical_id = account.public_creator_id
+        canonical_id = account.public_account_id
 
         profile_model = await session.get(AccountProfile, account.id)
         profile = AccountProfile.empty(account.id) if profile_model is None else profile_model
@@ -572,7 +572,7 @@ class AccountRepository:
         """Map credit positions to public creator IDs, using the shared attribution rule."""
         attributed = attributed_credits()
         rows = await self._session().execute(
-            select(attributed.c.position, Account.public_creator_id)
+            select(attributed.c.position, Account.public_account_id)
             .join(Account, Account.id == attributed.c.account_id)
             .where(attributed.c.build_id == build_id)
             # A credit claimed through an alias by one account and matching another's identity
@@ -593,7 +593,7 @@ class AccountRepository:
             .values(account_id=account_id, claimed_at=Instant.now(), claim_method=method)
             .returning(CreatorAlias)
         )
-        public_id = await session.scalar(select(Account.public_creator_id).where(Account.id == account_id))
+        public_id = await session.scalar(select(Account.public_account_id).where(Account.id == account_id))
         return None if alias is None else _hydrate_creator(alias, public_id)
 
     async def request_claim(self, *, name: str, account_id: int) -> AliasClaim:
@@ -607,7 +607,7 @@ class AccountRepository:
         if alias.account_id is not None:
             raise AliasAlreadyClaimedError(
                 alias.name,
-                holder_public_creator_id=await self._public_creator_id(session, alias.account_id),
+                holder_public_account_id=await self._public_account_id(session, alias.account_id),
                 holder_account_id=alias.account_id,
             )
         existing = await session.scalar(
@@ -687,7 +687,7 @@ class AccountRepository:
             if alias.account_id is not None and not (reassign and alias.account_id != claim.account_id):
                 raise AliasAlreadyClaimedError(
                     alias.name,
-                    holder_public_creator_id=await self._public_creator_id(session, alias.account_id),
+                    holder_public_account_id=await self._public_account_id(session, alias.account_id),
                     holder_account_id=alias.account_id,
                     # Staff audience: the flag that moves a held credit already exists, so say so
                     # rather than telling a reviewer to ask staff.
@@ -722,9 +722,9 @@ class AccountRepository:
         return hmac.digest(self._verification_code_pepper.encode(), code.encode(), hashlib.sha256).hex()
 
     @staticmethod
-    async def _public_creator_id(session: AsyncSession, account_id: int) -> uuid.UUID | None:
+    async def _public_account_id(session: AsyncSession, account_id: int) -> uuid.UUID | None:
         """Resolve an account's public creator identity, for naming a conflict safely."""
-        return await session.scalar(select(Account.public_creator_id).where(Account.id == account_id))
+        return await session.scalar(select(Account.public_account_id).where(Account.id == account_id))
 
     def _reservation_holds(self, row: VerificationCodeModel, token: str) -> bool:
         """Whether *token* is the live hold on *row*."""
@@ -777,7 +777,7 @@ class AccountRepository:
         )
         alias_row = (
             await session.execute(
-                select(CreatorAlias, Account.public_creator_id)
+                select(CreatorAlias, Account.public_account_id)
                 .outerjoin(Account, CreatorAlias.account_id == Account.id)
                 .where(CreatorAlias.normalized_name == fold_creator_name(row.username))
             )
@@ -785,7 +785,7 @@ class AccountRepository:
 
         credit = None
         if alias_row is not None:
-            alias, public_creator_id = alias_row
+            alias, public_account_id = alias_row
             build_count = await session.scalar(
                 select(func.count()).select_from(BUILD_CREDITS).where(BUILD_CREDITS.c.alias_id == alias.id)
             )
@@ -793,7 +793,7 @@ class AccountRepository:
                 name=alias.name,
                 build_count=build_count or 0,
                 # Only a *held* alias reports an owner; an unclaimed one has no account to join to.
-                held_by_public_creator_id=public_creator_id if alias.account_id is not None else None,
+                held_by_public_account_id=public_account_id if alias.account_id is not None else None,
             )
         return LinkPreview(
             java_uuid=row.minecraft_uuid,
@@ -1061,9 +1061,9 @@ class AccountRepository:
             alias.account_id = account.id
             alias.claimed_at = Instant.now()
             alias.claim_method = ClaimMethod.VERIFIED_IGN
-            claimed = _hydrate_creator(alias, account.public_creator_id)
+            claimed = _hydrate_creator(alias, account.public_account_id)
         elif alias.account_id == account.id:
-            claimed = _hydrate_creator(alias, account.public_creator_id)
+            claimed = _hydrate_creator(alias, account.public_account_id)
         else:
             # Someone else is credited under this name. Never transfer on a rename; open a
             # claim so it lands in the staff queue instead of vanishing.

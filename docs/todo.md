@@ -82,7 +82,7 @@
       is already unauthenticated, but nothing in `squid/bot/` ever calls
       `get_creator_profile`, so a public creator identity is unreachable from Discord.
   - Treating "who holds this creator credit" as staff-only information was a mistake: the profile is public data,
-    and `accounts.public_creator_id` exists to be shown.
+    and `accounts.public_account_id` exists to be shown.
   - Blocks naming the creator who holds a contested alias in the consent-verification UX: it only helps if the
     reader has somewhere to look the name up.
 

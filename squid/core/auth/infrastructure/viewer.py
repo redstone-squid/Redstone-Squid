@@ -49,7 +49,7 @@ class PostgresViewerRepository:
         draft_counts = drafts.subquery()
         query = (
             select(
-                Account.public_creator_id,
+                Account.public_account_id,
                 AccountProfile.display_name,
                 AccountIdentity,
                 unread.scalar_subquery(),
@@ -77,7 +77,7 @@ class PostgresViewerRepository:
     async def build_state(self, account_id: int, build: Build) -> tuple[dict[UUID, int], ViewerBallot | None]:
         follows = (
             select(NotificationSubscription.subject_id, NotificationSubscription.id)
-            .join(Account, Account.public_creator_id == NotificationSubscription.subject_id)
+            .join(Account, Account.public_account_id == NotificationSubscription.subject_id)
             .where(
                 NotificationSubscription.account_id == account_id,
                 NotificationSubscription.enabled,
@@ -127,7 +127,7 @@ class PostgresViewerRepository:
         )
         session = self._session()
         is_self, subscription = (
-            await session.execute(select(Account.public_creator_id == public_id, sub).where(Account.id == account_id))
+            await session.execute(select(Account.public_account_id == public_id, sub).where(Account.id == account_id))
         ).one()
         # Public profiles belong to accounts. Claims apply only to unclaimed aliases.
         return CreatorViewer(subscription, is_self, can_claim=False)

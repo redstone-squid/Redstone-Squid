@@ -41,8 +41,8 @@ class ComparisonOperator(StrEnum):
 
 type ScalarValue = str | int | float | Decimal | bool
 
-CREATOR_ID_STORAGE = "creator_id"
-"""Where builds index the public IDs of their credited creators."""
+ACCOUNT_ID_STORAGE = "account_id"
+"""Where builds index the public IDs of the accounts they credit."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,7 +78,7 @@ class FieldExpression:
         """
         if self.field.name == "creator" and isinstance(self.value, str):
             try:
-                return CREATOR_ID_STORAGE, str(UUID(self.value))
+                return ACCOUNT_ID_STORAGE, str(UUID(self.value))
             except ValueError:
                 pass
         return self.field.storage_name or self.field.name, self.value
@@ -86,7 +86,7 @@ class FieldExpression:
     @property
     def ranked(self) -> bool:
         """Whether the value also counts as text for relevance ranking. A creator ID does not."""
-        return self.field.ranked and self.stored()[0] != CREATOR_ID_STORAGE
+        return self.field.ranked and self.stored()[0] != ACCOUNT_ID_STORAGE
 
     def applies_to(self, scope: SearchScope) -> bool:
         if isinstance(self.value, RangeValue):

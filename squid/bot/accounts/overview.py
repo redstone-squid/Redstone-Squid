@@ -114,7 +114,7 @@ class AccountOverview(sl.Component[ComponentsV2Target, sd.Request]):
         self._identities = snapshot.account.identities
         self._needs_consent = snapshot.account.needs_consent_refresh
         self._profile = snapshot.profile
-        self._public_id = snapshot.account.public_creator_id
+        self._public_id = snapshot.account.public_account_id
         if self.selected is None:
             self.selected_id = None
 

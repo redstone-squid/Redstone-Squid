@@ -11,7 +11,7 @@ from squid.core.errors import InvalidStateError, ValidationError
 from squid.core.i18n import tr
 from squid.core.records.domain.models import BuildKind, RecordCriterion, VersionScope
 from squid.core.search.domain.fields import FieldDefinition, FieldGroup, FieldType, FreeTextWeight, TextMatch
-from squid.core.search.domain.query import CREATOR_ID_STORAGE, ScalarValue
+from squid.core.search.domain.query import ACCOUNT_ID_STORAGE, ScalarValue
 from squid.core.search.domain.scope import CATALOGUE_SCOPES, SearchScope
 from squid_i18n import Text, md_tr, plain
 
@@ -307,7 +307,7 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
             group=FieldGroup.CREDIT,
             examples=("creator:Steve",),
         ),
-        FieldDefinition(CREATOR_ID_STORAGE, FieldType.TEXT, queryable=False),
+        FieldDefinition(ACCOUNT_ID_STORAGE, FieldType.TEXT, queryable=False),
         FieldDefinition(
             "version",
             FieldType.TEXT,

@@ -161,7 +161,7 @@ async def test_private_provider_identity_does_not_reveal_credit_ownership_on_a_p
     async with migrated_session_factory() as session:
         account = await session.get(Account, account_id)
         assert account is not None
-        public_id = account.public_creator_id
+        public_id = account.public_account_id
     profile = await transact(repository, lambda uow: uow.accounts.get_creator_profile_record(public_id))
     assert profile is not None
     assert [alias.name for alias in profile.aliases] == ["Private Discord name"]

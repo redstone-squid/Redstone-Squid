@@ -86,7 +86,7 @@ async def test_follow_labels_resolve_public_names_and_latest_titles(
             await session.flush()
         follows = [
             NotificationSubscription(
-                account_id=owner.id, kind=SubscriptionKind.CREATOR, subject_id=creator.public_creator_id
+                account_id=owner.id, kind=SubscriptionKind.CREATOR, subject_id=creator.public_account_id
             ),
             NotificationSubscription(account_id=owner.id, kind=SubscriptionKind.RECORD, subject_id=title.public_id),
             NotificationSubscription(account_id=creator.id, kind=SubscriptionKind.RECORD, subject_id=title.public_id),
@@ -105,7 +105,7 @@ async def test_follow_labels_resolve_public_names_and_latest_titles(
         EditCommand(
             SUBSCRIPTIONS_EDIT,
             (Revision(notification_target(owner.id), snapshot.preferences.revision),),
-            EditValues.of({"create": {"kind": "creator", "subject_id": str(creator.public_creator_id)}}),
+            EditValues.of({"create": {"kind": "creator", "subject_id": str(creator.public_account_id)}}),
         ),
         context=ActingContext.direct(UserActor(account_id=owner.id)),
     )

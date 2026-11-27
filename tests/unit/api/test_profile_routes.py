@@ -102,7 +102,7 @@ class AccountRecorder(AccountService):
         surviving_account_id = context.effective.require_account_id()
         self.merge_previews.append((surviving_account_id, code))
         return MergePreview(
-            absorbed_public_creator_id=ABSORBED_ID,
+            absorbed_public_account_id=ABSORBED_ID,
             alias_names=("Notch",),
             identity_count=2,
             build_count=3,
@@ -293,7 +293,7 @@ class TestMerge:
 
         response = await preview_merge.fn(MergeRequest(code="ABCD2345"), accounts, _caller(), _reservation=None)
 
-        assert response.absorbed_public_creator_id == ABSORBED_ID
+        assert response.absorbed_public_account_id == ABSORBED_ID
         assert response.alias_names == ("Notch",)
         assert response.build_count == 3
 
@@ -303,8 +303,8 @@ class TestMerge:
         response = await complete_merge.fn(MergeRequest(code="ABCD2345"), accounts, _caller(), _reservation=None)
 
         assert accounts.merges == [(1, "ABCD2345")]
-        assert response.surviving_public_creator_id == SURVIVING_ID
-        assert response.redirected_public_creator_id == ABSORBED_ID
+        assert response.surviving_public_account_id == SURVIVING_ID
+        assert response.redirected_public_account_id == ABSORBED_ID
 
     async def test_a_bad_code_surfaces_as_a_validation_error(self) -> None:
         accounts = self._merge_accounts(merge_error=InvalidMergeCodeError())

@@ -18,17 +18,17 @@ def test_a_bare_conflict_still_names_the_alias() -> None:
     error = AliasAlreadyClaimedError("Notch")
 
     assert error.public_context == {"name": "Notch"}
-    assert error.holder_public_creator_id is None
+    assert error.holder_public_account_id is None
 
 
 def test_the_public_half_carries_the_creator_and_the_private_half_the_account() -> None:
     error = AliasAlreadyClaimedError(
         "Notch",
-        holder_public_creator_id=PUBLIC_CREATOR,
+        holder_public_account_id=PUBLIC_CREATOR,
         holder_account_id=HOLDER_ACCOUNT_ID,
     )
 
-    assert error.public_context == {"name": "Notch", "public_creator_id": str(PUBLIC_CREATOR)}
+    assert error.public_context == {"name": "Notch", "public_account_id": str(PUBLIC_CREATOR)}
     assert error.context["holder_account_id"] == HOLDER_ACCOUNT_ID
 
 
@@ -36,7 +36,7 @@ def test_the_internal_account_id_never_reaches_a_public_surface() -> None:
     """Check both error renderers so a safe error model cannot hide a presentation leak."""
     error = AliasAlreadyClaimedError(
         "Notch",
-        holder_public_creator_id=PUBLIC_CREATOR,
+        holder_public_account_id=PUBLIC_CREATOR,
         holder_account_id=HOLDER_ACCOUNT_ID,
     ).with_holder_name("Notch")
 
@@ -61,7 +61,7 @@ def test_the_internal_account_id_never_reaches_a_public_surface() -> None:
 
 
 def test_naming_the_holder_rewrites_the_user_facing_message() -> None:
-    error = AliasAlreadyClaimedError("Notch", holder_public_creator_id=PUBLIC_CREATOR)
+    error = AliasAlreadyClaimedError("Notch", holder_public_account_id=PUBLIC_CREATOR)
 
     before = error.public_detail()
     named = error.with_holder_name("Herobrine").public_detail()

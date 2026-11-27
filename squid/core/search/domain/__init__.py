@@ -24,7 +24,7 @@ from squid.core.search.domain.models import (
     SortDirection,
 )
 from squid.core.search.domain.query import (
-    CREATOR_ID_STORAGE,
+    ACCOUNT_ID_STORAGE,
     BooleanExpression,
     BooleanOperator,
     BuildQuery,
@@ -41,7 +41,7 @@ from squid.core.search.domain.query import (
 )
 
 __all__ = [
-    "CREATOR_ID_STORAGE",
+    "ACCOUNT_ID_STORAGE",
     "BooleanExpression",
     "BooleanOperator",
     "BuildQuery",

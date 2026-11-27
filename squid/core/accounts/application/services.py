@@ -236,12 +236,12 @@ class AccountService:
                     raise InvalidMergeCodeError
                 absorbed = await uow.accounts.get_by_id(ticket.account_id)
                 # ORM identity columns may still be None before flush.
-                if absorbed is None or absorbed.public_creator_id is None:  # pyright: ignore[reportUnnecessaryComparison]
+                if absorbed is None or absorbed.public_account_id is None:  # pyright: ignore[reportUnnecessaryComparison]
                     raise InvalidMergeCodeError
-                record = await uow.accounts.get_creator_profile_record(absorbed.public_creator_id)
+                record = await uow.accounts.get_creator_profile_record(absorbed.public_account_id)
                 aliases = () if record is None else record.aliases
                 return MergePreview(
-                    absorbed_public_creator_id=absorbed.public_creator_id,
+                    absorbed_public_account_id=absorbed.public_account_id,
                     alias_names=tuple(alias.name for alias in aliases),
                     identity_count=len(absorbed.identities),
                     build_count=sum(alias.build_count for alias in aliases),
@@ -564,9 +564,9 @@ class AccountService:
         path, and only where a human is going to read the result. A profile with no aliases yet
         leaves the message as it was rather than naming an empty string.
         """
-        if conflict.holder_public_creator_id is None:
+        if conflict.holder_public_account_id is None:
             return conflict
-        profile = await uow.accounts.get_creator_profile(conflict.holder_public_creator_id)
+        profile = await uow.accounts.get_creator_profile(conflict.holder_public_account_id)
         if profile is None or not profile.aliases:
             return conflict
         return conflict.with_holder_name(profile.aliases[0])

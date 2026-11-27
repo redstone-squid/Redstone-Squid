@@ -26,7 +26,7 @@ from squid.core.accounts.models import (
     AccountIdentity,
     AliasClaim,
     CreatorAlias,
-    PublicCreatorRedirect,
+    PublicAccountRedirect,
     VerificationCode,
 )
 from squid.core.accounts.models import AccountIdentity as AccountIdentityValue
@@ -43,7 +43,7 @@ _TABLES = [
     Base.metadata.tables["accounts"],
     Base.metadata.tables["account_identities"],
     Base.metadata.tables["account_profiles"],
-    Base.metadata.tables["public_creator_redirects"],
+    Base.metadata.tables["public_account_redirects"],
     Base.metadata.tables["creator_aliases"],
     Base.metadata.tables["creator_alias_claims"],
     Base.metadata.tables["verification_codes"],
@@ -188,9 +188,9 @@ async def test_claim_unclaimed_alias_matches_ignoring_case(
     assert claimed.id == alias_id
     assert claimed.account_id == account.id
     assert claimed.claim_method is ClaimMethod.VERIFIED_IGN
-    assert claimed.public_creator_id == account.public_creator_id
-    assert account.public_creator_id is not None
-    profile = await transact(repository, lambda uow: uow.accounts.get_creator_profile(account.public_creator_id))
+    assert claimed.public_account_id == account.public_account_id
+    assert account.public_account_id is not None
+    profile = await transact(repository, lambda uow: uow.accounts.get_creator_profile(account.public_account_id))
     assert profile is not None
     assert profile.aliases == ("player",)
 
@@ -467,7 +467,7 @@ async def test_public_creator_redirect_resolves_to_the_surviving_profile(
 ) -> None:
     account = await _create_discord_account(repository, 1)
     assert account.id is not None
-    assert account.public_creator_id is not None
+    assert account.public_account_id is not None
     retired_id = UUID("33333333-3333-3333-3333-333333333333")
     await _add_alias(async_session_factory, "Builder")
     await transact(
@@ -478,11 +478,11 @@ async def test_public_creator_redirect_resolves_to_the_surviving_profile(
         commit=True,
     )
     async with async_session_factory.begin() as session:
-        session.add(PublicCreatorRedirect(retired_public_creator_id=retired_id, target_account_id=account.id))
+        session.add(PublicAccountRedirect(retired_public_account_id=retired_id, target_account_id=account.id))
 
     profile = await transact(repository, lambda uow: uow.accounts.get_creator_profile(retired_id))
 
     assert profile is not None
     assert profile.public_id == retired_id
-    assert profile.canonical_public_id == account.public_creator_id
+    assert profile.canonical_public_id == account.public_account_id
     assert profile.aliases == ("Builder",)

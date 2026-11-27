@@ -33,7 +33,7 @@ _TABLES = [
     Base.metadata.tables["accounts"],
     Base.metadata.tables["account_identities"],
     Base.metadata.tables["account_profiles"],
-    Base.metadata.tables["public_creator_redirects"],
+    Base.metadata.tables["public_account_redirects"],
     Base.metadata.tables["creator_aliases"],
     Base.metadata.tables["creator_alias_claims"],
     Base.metadata.tables["verification_codes"],
@@ -373,7 +373,7 @@ async def test_the_preview_reports_a_contested_credit_by_public_creator(
     credit = reservation.preview.credit
     assert credit is not None
     assert credit.is_contested
-    assert credit.held_by_public_creator_id == holder.public_creator_id
+    assert credit.held_by_public_account_id == holder.public_account_id
 
 
 async def test_an_unclaimed_preview_can_become_contested_before_commit(

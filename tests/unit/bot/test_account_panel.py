@@ -69,7 +69,7 @@ def _seeded(*identities: AccountIdentity, consent: AccountConsent | None = CONSE
     """The real account service holding the author's account, ACCOUNT_ID."""
     accounts = InMemoryAccountService()
     accounts.repository.accounts[ACCOUNT_ID] = Account(
-        identities=identities, consent=consent, id=ACCOUNT_ID, created_at=NOW, public_creator_id=UUID(int=ACCOUNT_ID)
+        identities=identities, consent=consent, id=ACCOUNT_ID, created_at=NOW, public_account_id=UUID(int=ACCOUNT_ID)
     )
     return accounts
 

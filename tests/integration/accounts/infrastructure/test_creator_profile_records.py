@@ -95,7 +95,7 @@ async def test_record_carries_profile_identities_and_credit_counts(
         commit=True,
     )
     assert account.id is not None
-    assert account.public_creator_id is not None
+    assert account.public_account_id is not None
     await _credit_builds(async_session_factory, alias_name="Notch", submitter_id=account.id, count=3)
     await transact(
         repository,
@@ -112,7 +112,7 @@ async def test_record_carries_profile_identities_and_credit_counts(
         commit=True,
     )
 
-    record = await transact(repository, lambda uow: uow.accounts.get_creator_profile_record(account.public_creator_id))
+    record = await transact(repository, lambda uow: uow.accounts.get_creator_profile_record(account.public_account_id))
 
     assert record is not None
     assert record.profile.display_name == "Notch"
@@ -136,7 +136,7 @@ async def test_unclaimed_names_do_not_appear_and_uncredited_names_count_zero(
         commit=True,
     )
     assert account.id is not None
-    assert account.public_creator_id is not None
+    assert account.public_account_id is not None
     await _credit_builds(async_session_factory, alias_name="Someone Else", submitter_id=account.id, count=2)
     async with build_edit_session(async_session_factory) as session:
         session.add(CreatorAlias(name="Uncredited"))
@@ -148,7 +148,7 @@ async def test_unclaimed_names_do_not_appear_and_uncredited_names_count_zero(
         commit=True,
     )
 
-    record = await transact(repository, lambda uow: uow.accounts.get_creator_profile_record(account.public_creator_id))
+    record = await transact(repository, lambda uow: uow.accounts.get_creator_profile_record(account.public_account_id))
 
     assert record is not None
     assert [(alias.name, alias.build_count) for alias in record.aliases] == [("Uncredited", 0)]
@@ -167,7 +167,7 @@ async def test_record_follows_a_merge_redirect(repository: UnitOfWorkFactory[Sql
     )
     assert surviving.id is not None
     assert absorbed.id is not None
-    retired_id = absorbed.public_creator_id
+    retired_id = absorbed.public_account_id
     assert retired_id is not None
 
     await transact(repository, lambda uow: uow.accounts.merge(surviving.id, absorbed.id), commit=True)
@@ -176,7 +176,7 @@ async def test_record_follows_a_merge_redirect(repository: UnitOfWorkFactory[Sql
     assert record is not None
     assert record.account_id == surviving.id
     assert record.public_id == retired_id
-    assert record.canonical_public_id == surviving.public_creator_id
+    assert record.canonical_public_id == surviving.public_account_id
     assert PublicCreatorProfile.from_record(record).was_redirected
 
 

@@ -70,9 +70,9 @@ class VerifyCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="verify"):
             label = member.display_name if member is not None else name
             return await self._discord_page(request, user_id, label, audience="public")
         alias = await self.account_service.get_creator_alias(name, context=ActingContext.current())
-        if alias is None or alias.public_creator_id is None:
+        if alias is None or alias.public_account_id is None:
             return _personal(_missing_creator_page(name))
-        return await self._public_page(request, alias.public_creator_id, alias.name, audience="public")
+        return await self._public_page(request, alias.public_account_id, alias.name, audience="public")
 
     @sd.context_menu(
         name=to_locale_str(tr(t"command-creator-page-context = Creator Page")),
@@ -90,9 +90,9 @@ class VerifyCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT], name="verify"):
     ) -> sd.CommandResult:
         account = await self.account_service.get_account_by_identity(IdentityProvider.DISCORD, str(user_id))
         # ORM identity columns may still be None before flush.
-        if account is None or account.public_creator_id is None:  # pyright: ignore[reportUnnecessaryComparison]
+        if account is None or account.public_account_id is None:  # pyright: ignore[reportUnnecessaryComparison]
             return _personal(_missing_creator_page(label))
-        return await self._public_page(request, account.public_creator_id, label, audience=audience)
+        return await self._public_page(request, account.public_account_id, label, audience=audience)
 
     async def _public_page(
         self, request: sd.Request[Self, BotT], public_id: UUID, fallback_name: sl.TextLike, *, audience: sd.Audience

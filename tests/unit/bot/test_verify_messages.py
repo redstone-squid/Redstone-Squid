@@ -205,7 +205,7 @@ def test_a_claimant_without_discord_falls_back_to_the_java_name() -> None:
 
 def test_a_claimant_with_only_a_public_creator_is_named_by_it() -> None:
     creator = UUID("33333333-3333-3333-3333-333333333333")
-    claim = _claim(Account(identities=(), consent=None, id=42, created_at=NOW, public_creator_id=creator))
+    claim = _claim(Account(identities=(), consent=None, id=42, created_at=NOW, public_account_id=creator))
 
     presented = source_text(present_claimant(claim))
 
@@ -254,7 +254,7 @@ async def test_registered_claim_provider_uses_full_plain_labels(java_name: str |
     identity = (
         AccountIdentity.discord(555) if java_name is None else AccountIdentity.java(JAVA_UUID, username=java_name)
     )
-    claim = _claim(Account(identities=(identity,), consent=None, id=42, created_at=NOW, public_creator_id=OTHER_UUID))
+    claim = _claim(Account(identities=(identity,), consent=None, id=42, created_at=NOW, public_account_id=OTHER_UUID))
 
     class Claims:
         async def pending_alias_claims(

@@ -343,7 +343,7 @@ class AccountWorkspace(sd.Screen[None, Any, RedstoneSquid]):
             sl.action_controls(
                 sl.routed_action_control(
                     tr(t"account-credits-builds = Your builds"),
-                    BuildBrowseScreen.open_creator_builds.custom_id(public_id=account.public_creator_id),
+                    BuildBrowseScreen.open_creator_builds.custom_id(public_id=account.public_account_id),
                     key="builds",
                 ),
                 sl.action_control(

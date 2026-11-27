@@ -4,7 +4,7 @@ from typing import Any
 
 from sqlalchemy import Select, select
 
-from squid.core.accounts.infrastructure.attribution import attributed_credits, public_creator_ids
+from squid.core.accounts.infrastructure.attribution import attributed_credits, public_account_ids
 from squid.core.builds.domain import BuildListFilters, BuildStatus
 from squid.core.builds.models import Build, BuildCredit, BuildVersion
 from squid.core.tags.models import TagAssignment, TagSlug
@@ -31,7 +31,7 @@ def filter_build_listing[S: Select[Any]](
         )
     if filters.public_account_id is not None:
         linked = attributed_credits()
-        identifiers = public_creator_ids()
+        identifiers = public_account_ids()
         statement = statement.where(
             select(linked.c.build_id)
             .select_from(linked)

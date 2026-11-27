@@ -2719,3 +2719,63 @@ def test_server_directions_move_out_of_extra_info_without_history(
         command.upgrade(config, "head")
     finally:
         engine.dispose()
+
+
+def test_public_account_id_migration_renames_columns_and_stored_keys(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config(toml_file="pyproject.toml")
+    revision = "a82c82d78b61"
+    command.upgrade(config, f"{revision}-1")
+    engine = create_engine(migration_database_url)
+    public_id = str(uuid4())
+    try:
+        with engine.begin() as connection:
+            document_id = connection.execute(
+                text(
+                    "INSERT INTO search_documents (resource_kind, source_key, title, normalized_title, heading_terms, "
+                    "search_vector, document_data, source_hash, embedding_hash) VALUES ('build', '1', 'Door', 'door', "
+                    "'{}', ''::tsvector, CAST(:data AS jsonb), 'h', 'e') RETURNING id"
+                ),
+                {"data": json.dumps({"creator_ids": [public_id], "kept": 1})},
+            ).scalar_one()
+            connection.execute(
+                text(
+                    "INSERT INTO search_values (document_id, field_name, ordinal, text_value, normalized_text, "
+                    "term_vector) VALUES (:id, 'creator_id', 0, :value, :value, ''::tsvector)"
+                ),
+                {"id": document_id, "value": public_id},
+            )
+
+        command.upgrade(config, revision)
+        with engine.connect() as connection:
+            assert connection.execute(
+                text("SELECT document_data FROM search_documents WHERE id = :id"), {"id": document_id}
+            ).scalar_one() == {"account_ids": [public_id], "kept": 1}
+            assert (
+                connection.execute(
+                    text("SELECT field_name FROM search_values WHERE document_id = :id"), {"id": document_id}
+                ).scalar_one()
+                == "account_id"
+            )
+            assert connection.execute(text("SELECT to_regclass('public.public_account_redirects')")).scalar_one()
+            assert (
+                connection.execute(
+                    text(
+                        "SELECT count(*) FROM information_schema.columns "
+                        "WHERE table_name = 'accounts' AND column_name = 'public_account_id'"
+                    )
+                ).scalar_one()
+                == 1
+            )
+
+        command.downgrade(config, f"{revision}-1")
+        with engine.connect() as connection:
+            assert connection.execute(
+                text("SELECT document_data FROM search_documents WHERE id = :id"), {"id": document_id}
+            ).scalar_one() == {"creator_ids": [public_id], "kept": 1}
+            assert connection.execute(text("SELECT to_regclass('public.public_creator_redirects')")).scalar_one()
+    finally:
+        engine.dispose()

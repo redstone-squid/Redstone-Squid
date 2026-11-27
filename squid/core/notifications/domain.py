@@ -130,7 +130,7 @@ class _StoredPayload(BaseModel):
     model_config = ConfigDict(extra="ignore", strict=False)
     build_id: PositiveInt | None = Field(default=None, strict=True)
     records: list[_StoredRecord] = Field(default_factory=list)
-    creator_ids: list[UUID] = Field(default_factory=list)
+    account_ids: list[UUID] = Field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -138,13 +138,13 @@ class NotificationMessage:
     """What one stored notification says, parsed from its persisted payload.
 
     Every kind except `RECORD_RETIRED` names a build. Record kinds list at least one
-    record. `creator_ids` lists the followed creators of a `CREATOR_BUILD_CONFIRMED` build.
+    record. `account_ids` lists the followed creators of a `CREATOR_BUILD_CONFIRMED` build.
     """
 
     kind: NotificationKind
     build: NotifiedBuild | None = None
     records: tuple[NotifiedRecord, ...] = ()
-    creator_ids: tuple[UUID, ...] = ()
+    account_ids: tuple[UUID, ...] = ()
 
     @classmethod
     def from_payload(
@@ -167,7 +167,7 @@ class NotificationMessage:
             if stored.build_id is None
             else NotifiedBuild(stored.build_id, (build_titles or {}).get(stored.build_id)),
             records=tuple(NotifiedRecord(record.title_id, record.title) for record in stored.records),
-            creator_ids=tuple(stored.creator_ids),
+            account_ids=tuple(stored.account_ids),
         )
 
     @property

@@ -71,8 +71,8 @@ class MergePreviewDTO(DataclassDTO[MergePreview]):
 
     __schema_name__ = "MergePreviewDetail"
     config = DTOConfig(
-        include={"absorbed_public_creator_id", "alias_names", "identity_count", "build_count"},
-        rename_fields={"absorbed_public_creator_id": "absorbed_account_id"},
+        include={"absorbed_public_account_id", "alias_names", "identity_count", "build_count"},
+        rename_fields={"absorbed_public_account_id": "absorbed_account_id"},
     )
 
 
@@ -81,10 +81,10 @@ class AccountMergeDTO(DataclassDTO[AccountMerge]):
 
     __schema_name__ = "AccountMergeDetail"
     config = DTOConfig(
-        include={"surviving_public_creator_id", "redirected_public_creator_id"},
+        include={"surviving_public_account_id", "redirected_public_account_id"},
         rename_fields={
-            "surviving_public_creator_id": "surviving_account_id",
-            "redirected_public_creator_id": "redirected_account_id",
+            "surviving_public_account_id": "surviving_account_id",
+            "redirected_public_account_id": "redirected_account_id",
         },
     )
 

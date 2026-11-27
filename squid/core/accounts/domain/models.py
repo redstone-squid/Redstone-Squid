@@ -49,7 +49,7 @@ Ticket creation supplies the absorbed account's proof timestamp during a merge."
 class MergePreview:
     """The identities and build credits that a merge would move, shown before confirmation."""
 
-    absorbed_public_creator_id: UUID
+    absorbed_public_account_id: UUID
     alias_names: tuple[str, ...] = ()
     identity_count: int = 0
     build_count: int = 0
@@ -95,8 +95,8 @@ class AccountMerge:
 
     surviving_account_id: int
     absorbed_account_id: int
-    surviving_public_creator_id: UUID
-    redirected_public_creator_id: UUID
+    surviving_public_account_id: UUID
+    redirected_public_account_id: UUID
 
 
 @dataclass(frozen=True, slots=True)
@@ -185,7 +185,7 @@ class CreditPreview:
 
     name: str
     build_count: int
-    held_by_public_creator_id: UUID | None = None
+    held_by_public_account_id: UUID | None = None
     """Public ID of the current holder, or None if the name is unclaimed.
 
     Linking claims an unclaimed name. If another creator holds it, linking opens
@@ -195,7 +195,7 @@ class CreditPreview:
     @property
     def is_contested(self) -> bool:
         """Whether another creator already holds this name."""
-        return self.held_by_public_creator_id is not None
+        return self.held_by_public_account_id is not None
 
 
 @dataclass(frozen=True, slots=True)

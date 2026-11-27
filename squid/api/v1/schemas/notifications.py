@@ -257,7 +257,7 @@ class InboxNotificationDetail(BaseModel):
             case NotificationKind.CREATOR_BUILD_CONFIRMED:
                 assert build is not None
                 payload = CreatorBuildNotification(
-                    kind=message.kind, build=build, account_ids=list(message.creator_ids)
+                    kind=message.kind, build=build, account_ids=list(message.account_ids)
                 )
             case NotificationKind.STAFF_BUILD_SUBMITTED:
                 assert build is not None

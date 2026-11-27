@@ -25,7 +25,7 @@ from sqlalchemy.dialects.postgresql import TSVECTOR, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from squid.core.accounts.infrastructure.attribution import attributed_credits, public_creator_ids
+from squid.core.accounts.infrastructure.attribution import attributed_credits, public_account_ids
 from squid.core.accounts.models import CreatorAlias
 from squid.core.actors import ActingContext
 from squid.core.builds.domain.titles import format_build_category
@@ -53,7 +53,7 @@ from squid.core.records.models import (
     RecordResult,
     RecordTiedBuild,
 )
-from squid.core.search.domain import CREATOR_ID_STORAGE, FieldValue
+from squid.core.search.domain import ACCOUNT_ID_STORAGE, FieldValue
 from squid.core.search.infrastructure.documents import SearchProjection, index_document
 from squid.core.search.infrastructure.holder_metrics import timing_values
 from squid.core.search.models import (
@@ -132,7 +132,7 @@ class RecordHolderProjectionSource:
     title: str
     metric: dict[str, object]
     creators: tuple[str, ...] = ()
-    creator_ids: tuple[str, ...] = ()
+    account_ids: tuple[str, ...] = ()
 
     def values(self, build_kind: str) -> tuple[FieldValue, ...]:
         holder = self.build_id
@@ -426,8 +426,8 @@ class SearchProjectionLoader:
         )
         creator_names = tuple(name for creator in creators if (name := _mapped_text(creator, "name")) is not None)
         attributed = attributed_credits()
-        public_ids = public_creator_ids()
-        creator_ids = tuple(
+        public_ids = public_account_ids()
+        account_ids = tuple(
             str(public_id)
             for public_id in (
                 await self._session.scalars(
@@ -454,7 +454,7 @@ class SearchProjectionLoader:
             *((FieldValue("description", description),) if description else ()),
             *build_tag_name_values(approved_assignments),
             *(FieldValue("creator", name) for name in creator_names),
-            *(FieldValue(CREATOR_ID_STORAGE, public_id) for public_id in creator_ids),
+            *(FieldValue(ACCOUNT_ID_STORAGE, public_id) for public_id in account_ids),
             *(FieldValue("version", name) for name in version_names),
             FieldValue("status", build.submission_status.name.lower()),
             FieldValue("kind", build.category or "unknown"),
@@ -507,7 +507,7 @@ class SearchProjectionLoader:
                 "category": build.category,
                 "dimensions": dimensions,
                 "creators": creator_names,
-                "creator_ids": creator_ids,
+                "account_ids": account_ids,
                 "restrictions": restriction_names,
                 "types": type_names,
                 "tags": assigned_tag_names,
@@ -540,7 +540,7 @@ class SearchProjectionLoader:
                     RecordHolder,
                     SearchDocument.title,
                     SearchDocument.document_data["creators"],
-                    SearchDocument.document_data["creator_ids"],
+                    SearchDocument.document_data["account_ids"],
                 )
                 .join(
                     SearchDocument,
@@ -555,10 +555,10 @@ class SearchProjectionLoader:
                     build_id=holder.build_id,
                     title=title,
                     creators=tuple(creators or ()),
-                    creator_ids=tuple(creator_ids or ()),
+                    account_ids=tuple(account_ids or ()),
                     metric=holder.metric_snapshot,
                 )
-                for holder, title, creators, creator_ids in rows
+                for holder, title, creators, account_ids in rows
             )
             tied = tuple(
                 (
@@ -846,8 +846,8 @@ def build_record_projection(
             *source.category_values,
             *(FieldValue("creator", name) for name in dict.fromkeys(n for holder in holders for n in holder.creators)),
             *(
-                FieldValue(CREATOR_ID_STORAGE, public_id)
-                for public_id in dict.fromkeys(i for holder in holders for i in holder.creator_ids)
+                FieldValue(ACCOUNT_ID_STORAGE, public_id)
+                for public_id in dict.fromkeys(i for holder in holders for i in holder.account_ids)
             ),
             *(value for holder in holders for value in holder.values(source.build_kind)),
             *(FieldValue("former_holder", Decimal(build_id)) for build_id in source.former_holder_ids),

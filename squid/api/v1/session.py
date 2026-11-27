@@ -83,7 +83,7 @@ async def inspect_impersonation(
     target = await services.accounts.get_account_by_id(session.target_id)
     if target is None:
         raise AccountNotFoundError(session.target_id)
-    return ImpersonationDetails(target.public_creator_id, session.reason, session.expires_at, session.revoked_at)
+    return ImpersonationDetails(target.public_account_id, session.reason, session.expires_at, session.revoked_at)
 
 
 @delete(

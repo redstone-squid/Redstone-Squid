@@ -136,9 +136,9 @@ class AccountDetail(BaseModel):
         *,
         consent_pending: bool,
     ) -> AccountDetail:
-        assert account.public_creator_id is not None
+        assert account.public_account_id is not None
         return cls(
-            id=account.public_creator_id,
+            id=account.public_account_id,
             revision=account.revision,
             created_at=account.created_at,
             consent_version=account.consent.version if account.consent is not None else None,

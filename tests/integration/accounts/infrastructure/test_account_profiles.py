@@ -38,7 +38,7 @@ _TABLES = [
     Base.metadata.tables["accounts"],
     Base.metadata.tables["account_identities"],
     Base.metadata.tables["account_profiles"],
-    Base.metadata.tables["public_creator_redirects"],
+    Base.metadata.tables["public_account_redirects"],
     Base.metadata.tables["creator_aliases"],
     Base.metadata.tables["creator_alias_claims"],
     Base.metadata.tables["verification_codes"],

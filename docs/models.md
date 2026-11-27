@@ -9,6 +9,10 @@ Entities use object identity for equality and hashing. Compare IDs when deciding
 objects refer to the same record. Enums and embedded values remain typed in Python; column adapters preserve their
 existing integer, text, array, or JSON representation.
 
+Accounts have two IDs. `account_id` is the internal integer, which never leaves the API. The public UUID is
+`public_account_id` in code that may also hold the integer, and `account_id` in types that are only serialized
+publicly, such as `PublicBuildCredit`, so their fields match the API's names.
+
 Application operations own short transactions through `async with self._uow_factory() as uow`. The factory is a
 callable type alias; service-specific protocols expose the repositories each workflow needs. One concrete SQLAlchemy
 UoW supplies those repositories with the same session. Repositories query and flush, while the application decides

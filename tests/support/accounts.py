@@ -108,7 +108,7 @@ class FakeAccountRepository:
             consent=consent,
             id=account_id,
             created_at=NOW,
-            public_creator_id=UUID(int=account_id),
+            public_account_id=UUID(int=account_id),
         )
         self.accounts[account_id] = account
         return account
@@ -220,13 +220,13 @@ class FakeAccountRepository:
 
     async def account_id_for_public_id(self, public_id: UUID) -> int | None:
         return next(
-            (account_id for account_id, account in self.accounts.items() if account.public_creator_id == public_id),
+            (account_id for account_id, account in self.accounts.items() if account.public_account_id == public_id),
             None,
         )
 
     async def get_creator_profile_record(self, public_id: UUID) -> CreatorProfileRecord | None:
         account = next(
-            (candidate for candidate in self.accounts.values() if candidate.public_creator_id == public_id),
+            (candidate for candidate in self.accounts.values() if candidate.public_account_id == public_id),
             None,
         )
         # ORM identity columns may still be None before flush.
@@ -322,10 +322,10 @@ class FakeAccountRepository:
         if alias is None:
             return None
         holder = None if alias.account_id is None else self.accounts.get(alias.account_id)
-        return replace(alias, public_creator_id=None if holder is None else holder.public_creator_id)
+        return replace(alias, public_account_id=None if holder is None else holder.public_account_id)
 
     async def get_creator_profile(self, public_id: UUID) -> CreatorProfile | None:
-        account = next((account for account in self.accounts.values() if account.public_creator_id == public_id), None)
+        account = next((account for account in self.accounts.values() if account.public_account_id == public_id), None)
         if account is None:
             return None
         return CreatorProfile(public_id, self._alias_names(account.id), canonical_public_id=public_id)

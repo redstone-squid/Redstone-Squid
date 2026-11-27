@@ -56,7 +56,7 @@ class BuildLoader:
         linked = func.build_credit_accounts().table_valued("build_id", "position", "account_id")
         public = attributed_credits()
         public_id = (
-            select(Account.public_creator_id)
+            select(Account.public_account_id)
             .join(public, Account.id == public.c.account_id)
             .where(public.c.build_id == BuildCredit.build_id, public.c.position == BuildCredit.position)
             .order_by(Account.id)

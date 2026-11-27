@@ -21,4 +21,4 @@ class CreatorAliasDetail(BaseModel):
     @classmethod
     def from_domain(cls, alias: CreatorAlias) -> CreatorAliasDetail:
         assert alias.id is not None
-        return cls(id=alias.id, name=alias.name, claimed=alias.is_claimed, account_id=alias.public_creator_id)
+        return cls(id=alias.id, name=alias.name, claimed=alias.is_claimed, account_id=alias.public_account_id)

@@ -589,12 +589,12 @@ class TestProfiles:
         repository = FakeAccountRepository()
         account = repository.seed_account(1, consent=CONSENT)
         assert account.id is not None
-        assert account.public_creator_id is not None
+        assert account.public_account_id is not None
         accounts = InMemoryAccountService(repository)
         await repository.upsert_profile(account.id, ProfileUpdate(display_name="Notch", hidden=True))
 
         public = await accounts.get_public_profile(
-            account.public_creator_id, context=ActingContext.direct(AnonymousActor())
+            account.public_account_id, context=ActingContext.direct(AnonymousActor())
         )
 
         assert public is not None
@@ -640,7 +640,7 @@ class TestMergeCodes:
         preview = await accounts.preview_merge(code, context=ActingContext.direct(UserActor(account_id=survivor.id)))
 
         assert ticket.account_id == absorbed.id
-        assert preview.absorbed_public_creator_id == absorbed.public_creator_id
+        assert preview.absorbed_public_account_id == absorbed.public_account_id
         assert preview.identity_count == 1
 
         merge = await accounts.complete_merge(

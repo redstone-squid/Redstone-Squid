@@ -77,7 +77,7 @@ def test_record_documents_keep_category_text_apart_from_holder_text() -> None:
     assert FieldValue("holder_title", "2x2 Seamless Door", 42) in held.values
     assert FieldValue("holder_creator", "Bob", 57) in held.values
     assert FieldValue("creator", "Bob") in held.values
-    assert FieldValue("creator_id", "bob-id") in held.values
+    assert FieldValue("account_id", "bob-id") in held.values
     assert held.document_data["holder_build_ids"] == (42, 57)
     assert held.document_data["build_title"] == "2x2 Seamless Door"
     assert held.document_data["holder_metrics"] == {"42": {"opening": 4}, "57": {"opening": 4}}

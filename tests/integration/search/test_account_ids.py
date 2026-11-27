@@ -66,7 +66,7 @@ async def _found(service: SearchService, query: str, scope: SearchScope = Search
     }
 
 
-async def test_creator_ids_follow_claims_and_identity_visibility(
+async def test_account_ids_follow_claims_and_identity_visibility(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     uow_factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory, verification_code_pepper="pepper")
@@ -82,8 +82,8 @@ async def test_creator_ids_follow_claims_and_identity_visibility(
         commit=True,
     )
     assert account.id is not None
-    assert account.public_creator_id is not None
-    public_id = str(account.public_creator_id)
+    assert account.public_account_id is not None
+    public_id = str(account.public_account_id)
 
     async with build_edit_session(migrated_session_factory) as session:
         alias = CreatorAlias(name="Old Name")
@@ -112,26 +112,26 @@ async def test_creator_ids_follow_claims_and_identity_visibility(
     assert await _found(service, f"creator:{public_id.upper()}") == {str(by_alias), str(by_java)}
     assert str(impostor) not in await _found(service, f'creator:"{public_id}"')
     owners = partial(_owners, uow_factory)
-    assert await owners(by_alias) == await owners(by_java) == {0: account.public_creator_id}
+    assert await owners(by_alias) == await owners(by_java) == {0: account.public_account_id}
     assert await owners(by_private_discord) == await owners(impostor) == {}
 
     async with uow_factory() as uow:
         listed = await uow.builds.list_page(
             statuses=frozenset({BuildStatus.APPROVED}),
-            filters=BuildListFilters(public_account_id=account.public_creator_id),
+            filters=BuildListFilters(public_account_id=account.public_account_id),
             limit=10,
         )
         assert {build.id for build in listed} == {by_alias, by_java}
         summaries = await uow.builds.get_public_summaries([by_java, by_private_discord])
-        assert [summary.creators[0].account_id for summary in summaries] == [account.public_creator_id, None]
-        assert [summary.credits[0].account_id for summary in summaries] == [account.public_creator_id, None]
+        assert [summary.creators[0].account_id for summary in summaries] == [account.public_account_id, None]
+        assert [summary.credits[0].account_id for summary in summaries] == [account.public_account_id, None]
 
     async with migrated_session_factory.begin() as session:
         await session.execute(text("UPDATE account_identities SET is_public = true WHERE subject = '7'"))
     await _project(migrated_session_factory)
 
     assert await _found(service, f"creator:{public_id}") == {str(by_alias), str(by_java), str(by_private_discord)}
-    assert await owners(by_private_discord) == {0: account.public_creator_id}
+    assert await owners(by_private_discord) == {0: account.public_account_id}
 
 
 async def test_a_merged_accounts_old_id_still_finds_its_builds(
@@ -150,7 +150,7 @@ async def test_a_merged_accounts_old_id_still_finds_its_builds(
     )
     assert surviving.id is not None
     assert absorbed.id is not None
-    old_id = absorbed.public_creator_id
+    old_id = absorbed.public_account_id
     build = await _credited_build(migrated_session_factory, absorbed.id, name="absorbed", kind="discord", subject="2")
 
     await transact(uow_factory, lambda uow: uow.accounts.merge(surviving.id, absorbed.id), commit=True)
@@ -158,4 +158,4 @@ async def test_a_merged_accounts_old_id_still_finds_its_builds(
     service = SearchService(uow_factory=uow_factory)
 
     assert await _found(service, f"creator:{old_id}") == {str(build)}
-    assert await _found(service, f"creator:{surviving.public_creator_id}") == {str(build)}
+    assert await _found(service, f"creator:{surviving.public_account_id}") == {str(build)}

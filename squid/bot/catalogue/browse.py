@@ -53,7 +53,7 @@ from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY
 from squid.core.search.application.parser import QuerySyntaxError, SearchQueryParser
 from squid.core.search.domain import RecordQuery, SearchMode, SearchRequest, SearchResultAnchor, SearchScope, SearchSort
 from squid.core.search.domain.query import (
-    CREATOR_ID_STORAGE,
+    ACCOUNT_ID_STORAGE,
     BooleanExpression,
     BooleanOperator,
     FieldExpression,
@@ -1024,7 +1024,7 @@ class BuildBrowseScreen(sd.Screen[None, Any, RedstoneSquid]):
             if not isinstance(clause, FieldExpression):
                 continue
             storage, value = clause.stored()
-            if storage != CREATOR_ID_STORAGE or str(value) in names:
+            if storage != ACCOUNT_ID_STORAGE or str(value) in names:
                 continue
             profile = await self._accounts.get_public_profile(UUID(str(value)), context=ActingContext.current())
             if profile is not None and profile.name is not None:

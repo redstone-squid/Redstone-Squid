@@ -14,7 +14,7 @@ import squid_ui as sl
 from squid.bot.ui import tr, truncate_display_text
 from squid.core.search.domain.fields import FieldDefinition, FieldType
 from squid.core.search.domain.query import (
-    CREATOR_ID_STORAGE,
+    ACCOUNT_ID_STORAGE,
     ComparisonOperator,
     FieldExpression,
     NotExpression,
@@ -73,7 +73,7 @@ def filter_label(clause: QueryExpression, creators: Mapping[str, str] | None = N
         return tr(t"search-filter-is-not-set = {name} is not set")
     if isinstance(clause, FieldExpression):
         storage, value = clause.stored()
-        if storage == CREATOR_ID_STORAGE and creators and (creator := creators.get(str(value))) is not None:
+        if storage == ACCOUNT_ID_STORAGE and creators and (creator := creators.get(str(value))) is not None:
             name = clause.field.display_name
             shown = truncate_display_text(creator, _VALUE_LIMIT)
             return tr(t"search-filter-equals = {name} is {shown}")
