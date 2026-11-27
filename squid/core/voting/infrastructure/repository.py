@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from whenever import Instant
 
+from squid.core.accounts.models import AccountProfile
 from squid.core.errors import DataIntegrityError
 from squid.core.messages.errors import MessageNotFoundError
 from squid.core.messages.models import Message
@@ -786,18 +787,22 @@ class VoteRepository:
         )
         vote_rows = (
             await session.execute(
-                select(Vote, VoteSessionOption)
+                select(Vote, VoteSessionOption, AccountProfile.display_name)
                 .join(VoteSessionOption, VoteSessionOption.id == Vote.option_alias_id)
+                .outerjoin(
+                    AccountProfile, (AccountProfile.account_id == Vote.account_id) & AccountProfile.hidden.is_(False)
+                )
                 .where(Vote.vote_session_id == row.id)
                 .order_by(Vote.account_id)
             )
         ).all()
         selections = tuple(
-            VoteSelection(vote.account_id, vote.guild_id, option.identifier, option.emoji, vote.weight)
-            for vote, option in vote_rows
+            VoteSelection(vote.account_id, vote.guild_id, option.identifier, option.emoji, vote.weight, name)
+            for vote, option, name in vote_rows
         )
         signed_votes = {
-            vote.account_id: vote.weight * (-1 if option.choice is VoteChoice.DENY else 1) for vote, option in vote_rows
+            vote.account_id: vote.weight * (-1 if option.choice is VoteChoice.DENY else 1)
+            for vote, option, _ in vote_rows
         }
 
         target, poll = await VoteRepository._load_target(session, row)

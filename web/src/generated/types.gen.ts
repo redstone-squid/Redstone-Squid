@@ -2669,6 +2669,7 @@ export type ReviewVoteSummary = {
     tallies: VoteTallies | null;
     poll: VotePollSummary | null;
     own_selection: OwnVoteSelection | null;
+    voters: Array<VoteVoter> | null;
     build: PublicBuildSummary | null;
     submitted_by: HistoryActor | null;
 };
@@ -3780,6 +3781,7 @@ export type VoteSessionDetail = {
     tallies: VoteTallies | null;
     poll: VotePollSummary | null;
     own_selection: OwnVoteSelection | null;
+    voters: Array<VoteVoter> | null;
 };
 
 /**
@@ -3817,6 +3819,14 @@ export type VoteTallies = {
  * How much of a generic poll's state is disclosed while it is open.
  */
 export type VoteVisibility = 'anonymous_live' | 'visible_live' | 'anonymous_hidden';
+
+/**
+ * VoteVoter
+ */
+export type VoteVoter = {
+    display_name: string | null;
+    option_id: string;
+};
 
 export type JsonValue2 = unknown;
 

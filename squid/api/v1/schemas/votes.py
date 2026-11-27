@@ -73,11 +73,21 @@ class OwnVoteSelection(BaseModel):
         return cls(option_id=selection.option_id)
 
 
+class VoteVoter(BaseModel):
+    """A ballot on a poll that shows who voted."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    display_name: str | None
+    """Null if the voter has no public profile name or hides it."""
+    option_id: str
+
+
 class VoteSessionDetail(BaseModel):
     """Vote status, permitted totals, and the caller's own selection if present.
 
-    Other voters' selections and identities are omitted. Tallies are null while
-    the session's visibility rules hide them.
+    Tallies are null while the session's visibility rules hide them. `voters` is null
+    unless the session shows who voted, which only `visible_live` polls do.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -93,6 +103,7 @@ class VoteSessionDetail(BaseModel):
     tallies: VoteTallies | None
     poll: VotePollSummary | None
     own_selection: OwnVoteSelection | None
+    voters: list[VoteVoter] | None
 
     @classmethod
     def from_domain(cls, session: VoteSessionSnapshot, *, caller_account_id: int | None = None) -> VoteSessionDetail:
@@ -137,6 +148,12 @@ class VoteSessionDetail(BaseModel):
                 )
             ),
             own_selection=OwnVoteSelection.from_domain(own_selection) if own_selection is not None else None,
+            voters=None
+            if session.is_anonymous
+            else [
+                VoteVoter(display_name=selection.display_name, option_id=selection.option_id)
+                for selection in session.selections
+            ],
         )
 
 

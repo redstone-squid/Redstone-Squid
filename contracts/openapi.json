@@ -35182,6 +35182,19 @@
               }
             ]
           },
+          "voters": {
+            "oneOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/VoteVoter"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "build": {
             "oneOf": [
               {
@@ -35217,7 +35230,8 @@
           "result",
           "status",
           "submitted_by",
-          "tallies"
+          "tallies",
+          "voters"
         ],
         "title": "ReviewVoteSummary"
       },
@@ -38763,6 +38777,19 @@
                 "type": "null"
               }
             ]
+          },
+          "voters": {
+            "oneOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/VoteVoter"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object",
@@ -38777,7 +38804,8 @@
           "poll",
           "result",
           "status",
-          "tallies"
+          "tallies",
+          "voters"
         ],
         "title": "VoteSessionDetail"
       },
@@ -38847,6 +38875,29 @@
         ],
         "title": "VoteVisibility",
         "description": "How much of a generic poll's state is disclosed while it is open."
+      },
+      "VoteVoter": {
+        "properties": {
+          "display_name": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "option_id": {
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "required": [
+          "display_name",
+          "option_id"
+        ],
+        "title": "VoteVoter"
       },
       "JsonValue": {},
       "ValidationIssue": {

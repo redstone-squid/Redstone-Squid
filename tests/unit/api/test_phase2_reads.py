@@ -466,6 +466,29 @@ def test_hidden_vote_session_omits_ballots_and_live_tallies(
     assert "author_id" not in response.text
 
 
+@pytest.mark.parametrize("visibility", [VoteVisibility.ANONYMOUS_LIVE, VoteVisibility.ANONYMOUS_HIDDEN])
+def test_anonymous_polls_do_not_name_their_voters(visibility: VoteVisibility) -> None:
+    selections = (VoteSelection(111, 99, "red", "1", 2.5, "Alex"),)
+
+    assert VoteSessionDetail.from_domain(poll_snapshot(visibility=visibility, selections=selections)).voters is None
+
+
+def test_visible_polls_name_each_voter_and_their_choice() -> None:
+    selections = (VoteSelection(111, 99, "red", "1", 2.5, "Alex"), VoteSelection(112, 99, "red", "1", 1.0))
+    detail = VoteSessionDetail.from_domain(poll_snapshot(visibility=VoteVisibility.VISIBLE_LIVE, selections=selections))
+
+    assert [voter.model_dump() for voter in detail.voters or ()] == [
+        {"display_name": "Alex", "option_id": "red"},
+        {"display_name": None, "option_id": "red"},
+    ]
+
+
+def test_build_reviews_never_name_their_voters() -> None:
+    detail = VoteSessionDetail.from_domain(build_snapshot(selections=(VoteSelection(111, 10, "approve", "✅", 1.0),)))
+
+    assert detail.voters is None
+
+
 @pytest.mark.parametrize(
     ("session", "expected_kind", "expected_build_id", "expected_visibility"),
     [

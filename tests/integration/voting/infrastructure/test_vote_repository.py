@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError, StatementError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.core.accounts.models import Account
+from squid.core.accounts.models import Account, AccountProfile
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build
 from squid.core.errors import DataIntegrityError
@@ -69,6 +69,7 @@ _TABLES: tuple[Table, ...] = with_foreign_key_targets(
         Vote,
         Message,
         DiscordPost,
+        AccountProfile,
     )
 )
 
@@ -1048,3 +1049,25 @@ async def test_review_listing_pages_build_votes_in_creation_order_without_other_
     assert [item.id for item in newest] == [newer, closed, older]
     assert await transact(repository, lambda uow: uow.votes.count_reviews(queue)) == 2
     assert edits == 0
+
+
+async def test_ballots_carry_their_voters_public_names_but_not_hidden_ones(
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    shown, hidden = VOTER_ACCOUNT_IDS
+    async with async_session_factory.begin() as session:
+        session.add_all(
+            [
+                AccountProfile(account_id=shown, display_name="Alex"),
+                AccountProfile(account_id=hidden, display_name="Sam", hidden=True),
+            ]
+        )
+    session_id, _ = await seed_delete_log_vote(async_session_factory, pass_threshold=10, fail_threshold=-10)
+    await cast_ballot(repository, session_id, shown, "approve", "👍", 1.0)
+    await cast_ballot(repository, session_id, hidden, "deny", "👎", 1.0)
+
+    snapshot = await transact(repository, lambda uow: uow.votes.get_by_id(session_id))
+
+    assert snapshot is not None
+    assert [(item.account_id, item.display_name) for item in snapshot.selections] == [(shown, "Alex"), (hidden, None)]

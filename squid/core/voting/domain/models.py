@@ -179,6 +179,8 @@ class VoteSelection:
     option_id: str
     emoji: str
     weight: float
+    display_name: str | None = None
+    """The voter's public profile name, or None if they have none or hide it."""
 
     def __post_init__(self) -> None:
         if not isfinite(self.weight) or self.weight <= 0:
