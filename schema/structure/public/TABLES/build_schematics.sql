@@ -26,7 +26,7 @@ CREATE TABLE public.build_schematics (
     analyzer_version text NOT NULL,
     analysis_schema_version smallint NOT NULL,
     lattice jsonb,
-    analyzed_at timestamp with time zone DEFAULT now() NOT NULL,
+    attached_at timestamp with time zone DEFAULT now() NOT NULL,
     simulation_evidence jsonb,
     visibility text DEFAULT 'legacy_unverified'::text NOT NULL,
     license_code text,
@@ -35,6 +35,7 @@ CREATE TABLE public.build_schematics (
     published_at timestamp with time zone,
     withdrawn_at timestamp with time zone,
     uploaded_by_account_id integer,
+    block_counts jsonb,
     CONSTRAINT build_schematics_block_count_check CHECK ((block_count <= bounding_volume)),
     CONSTRAINT build_schematics_bounding_volume_check CHECK ((bounding_volume = (((width)::bigint * height) * length))),
     CONSTRAINT build_schematics_license_check CHECK (((license_code IS NULL) OR (license_code = ANY (ARRAY['cc0_1_0'::text, 'cc_by_4_0'::text, 'cc_by_sa_4_0'::text, 'cc_by_nd_4_0'::text, 'cc_by_nc_4_0'::text, 'cc_by_nc_sa_4_0'::text, 'cc_by_nc_nd_4_0'::text])))),
@@ -92,11 +93,15 @@ COMMENT ON COLUMN public.build_schematics.analysis_schema_version IS 'Applicatio
 
 COMMENT ON COLUMN public.build_schematics.lattice IS 'The highest-coverage repeating unit cell found, if the build has one.';
 
+COMMENT ON COLUMN public.build_schematics.attached_at IS 'When the file was first attached to this build; reanalysis leaves it unchanged.';
+
 COMMENT ON COLUMN public.build_schematics.simulation_evidence IS 'Staff-triggered tick-engine evidence. It never changes the build''s declared timing.';
 
 COMMENT ON COLUMN public.build_schematics.visibility IS 'Explicit download choice. Existing attachments remain private until re-attested.';
 
 COMMENT ON COLUMN public.build_schematics.uploaded_by_account_id IS 'Account that supplied the file, which can differ from the account attesting publication rights.';
+
+COMMENT ON COLUMN public.build_schematics.block_counts IS 'Non-air blocks per block state, or None for attachments analyzed before counts were stored.';
 
 ALTER TABLE ONLY public.build_schematics ALTER COLUMN id SET DEFAULT nextval('public.build_schematics_id_seq'::regclass);
 

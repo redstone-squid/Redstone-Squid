@@ -220,8 +220,9 @@ SELECT pg_catalog.set_config('search_path', '', false);
 \ir public/SEQUENCES/verification_codes_id_seq.sql
 \ir public/TABLES/versions.sql
 \ir public/SEQUENCES/versions_id_seq.sql
+\ir public/TABLES/vote_session_option_aliases.sql
+\ir public/SEQUENCES/vote_session_option_aliases_id_seq.sql
 \ir public/TABLES/vote_session_options.sql
-\ir public/SEQUENCES/vote_session_options_id_seq.sql
 \ir public/TABLES/vote_sessions.sql
 \ir public/SEQUENCES/vote_sessions_id_seq.sql
 \ir public/TABLES/votes.sql
