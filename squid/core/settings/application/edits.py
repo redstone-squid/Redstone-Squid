@@ -13,7 +13,6 @@ from squid.core.permissions.application.services import PermissionService
 from squid.core.permissions.domain.catalogue import SETTINGS_RUNTIME_EDIT, SETTINGS_SERVER_EDIT, SETTINGS_VOTING_EDIT
 from squid.core.settings.application.discord import RuntimeDiscordReferences
 from squid.core.settings.application.ports import GuildSettingsUnitOfWork, SettingsRepository
-from squid.core.settings.domain.events import GuildVotingChanged
 from squid.core.settings.domain.guild import CHANNEL_FIELDS, GuildSettings
 from squid.core.settings.domain.runtime import RuntimeSettings
 from squid.core.settings.models import RuntimeSetting, ServerSetting
@@ -187,5 +186,3 @@ class GuildSettingsEdit(FieldCommand[SettingsEditUnitOfWork, GuildEditState, Gui
                 await uow.votes.set_emoji_preset(configuration.preset)
             for weight in configuration.weights:
                 await uow.votes.set_role_weight(weight)
-        if before.voting != after.voting:
-            await uow.emit(GuildVotingChanged(guild_id))

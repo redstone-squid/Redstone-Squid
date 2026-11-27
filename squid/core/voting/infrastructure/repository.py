@@ -5,7 +5,7 @@ from dataclasses import replace
 from typing import Any
 
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository
-from sqlalchemy import Select, Text, delete, func, insert, select, update
+from sqlalchemy import Select, Text, delete, func, insert, select
 from sqlalchemy import cast as cast_sql
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -67,12 +67,12 @@ class _VoteSessionModelRepository(SQLAlchemyAsyncRepository[VoteSession]):
 class VoteRepository:
     """Store voting sessions, their ballots, and the messages that display them in PostgreSQL.
 
-    VoteService supplies eligibility decisions and calculated weights. This
+    VoteService supplies eligibility decisions and ballot weights. This
     repository records ballots and closes build or deletion votes when their
     stored net score reaches a threshold. Generic polls close through an explicit
     request or the service's deadline scheduler instead.
 
-    Before changing ballots, refreshing weights, or closing a vote, lock its
+    Before changing ballots or closing a vote, lock its
     VoteSession row. Concurrent updates to the same voting session then take
     turns, so the threshold check sees earlier committed changes. The database
     session comes from the surrounding unit of work, which also commits or rolls
@@ -393,7 +393,6 @@ class VoteRepository:
         retry_at: Instant | None = None,
         unreadable: Sequence[int] = (),
         deadline: Instant | None = None,
-        weights: dict[int, float] | None = None,
         actor_id: int | None = None,
         reason: str = "",
         claim: bool = False,
@@ -410,8 +409,6 @@ class VoteRepository:
         ):
             return None
         now = Instant.now().round("microsecond", mode="floor")
-        if weights:
-            await self._apply_refresh(session, row, weights, counting=True)
         row.status = status
         poll.count_revision += 1
         poll.retry_at = retry_at
@@ -483,7 +480,6 @@ class VoteRepository:
         guild_id: int,
         option: VoteOption,
         desired_weight: float,
-        refreshed_weights: dict[int, float] | None = None,
         *,
         toggle: bool = True,
         count_revision: int | None = None,
@@ -491,8 +487,8 @@ class VoteRepository:
         """Toggle or replace a ballot in an open session, returning None if missing or closed.
 
         `option` is the alias the service resolved for `guild_id`, and must be one of
-        the session's stored aliases. Refresh existing weights first, then compare
-        stable option IDs to decide whether to remove the voter's selection. Returned
+        the session's stored aliases. Stable option IDs decide whether this removes
+        the voter's selection. Returned
         weights are positive magnitudes; threshold scoring supplies the option's sign.
         """
         session = self._session()
@@ -505,7 +501,6 @@ class VoteRepository:
                 return None
         elif row.status is not VoteStatus.OPEN:
             return None
-        await self._apply_refresh(session, row, refreshed_weights or {})
         await ensure_server_settings(session, (guild_id,))
         previous = await session.scalar(
             select(Vote).where(Vote.vote_session_id == row.id, Vote.account_id == account_id)
@@ -566,15 +561,6 @@ class VoteRepository:
         just_closed = await self._close_at_threshold(session, row)
         return StoredVoteMutation(await self._to_snapshot(session, row), previous_weight, None, just_closed)
 
-    async def refresh_weights(self, vote_session_id: int, weights: dict[int, float]) -> StoredVoteMutation | None:
-        session = self._session()
-        row = await self._lock_session_row(session, vote_session_id)
-        if row is None:
-            return None
-        await self._apply_refresh(session, row, weights)
-        just_closed = await self._close_at_threshold(session, row)
-        return StoredVoteMutation(await self._to_snapshot(session, row), None, None, just_closed)
-
     async def close(self, vote_session_id: int) -> StoredVoteMutation | None:
         """Close an open session with the CANCELLED result; return None if missing or already closed."""
         session = self._session()
@@ -589,25 +575,6 @@ class VoteRepository:
             current_weight=None,
             just_closed=True,
         )
-
-    @staticmethod
-    async def _apply_refresh(
-        session: AsyncSession, row: VoteSession, weights: dict[int, float], *, counting: bool = False
-    ) -> None:
-        """Reweigh ballots only while the locked session still accepts changes."""
-        # Actor lookups happen before this lock, so a closing vote may have won
-        # while the refresh was in flight. Its final tally must stay frozen.
-        if row.status is not VoteStatus.OPEN and not (counting and row.status is VoteStatus.COUNTING):
-            return
-        for account_id, weight in weights.items():
-            if weight <= 0:
-                await session.execute(delete(Vote).where(Vote.vote_session_id == row.id, Vote.account_id == account_id))
-            else:
-                await session.execute(
-                    update(Vote)
-                    .where(Vote.vote_session_id == row.id, Vote.account_id == account_id)
-                    .values(weight=weight)
-                )
 
     @staticmethod
     async def _close_at_threshold(session: AsyncSession, row: VoteSession) -> bool:

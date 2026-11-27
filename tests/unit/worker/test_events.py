@@ -1,10 +1,7 @@
 """Core event acknowledgement, retry, and polling behavior without a chat client."""
 
-from types import SimpleNamespace
 from typing import cast, override
-from unittest.mock import AsyncMock
 
-import pytest
 from whenever import Instant
 
 from squid.config import WorkerConfig
@@ -20,7 +17,6 @@ from squid.core.voting.domain import BuildVoteTarget, VoteSessionResult, VoteSes
 from squid.worker.events import (
     ApplyBuildVoteOutcomeHandler,
     MaterializeNotificationHandler,
-    RefreshGuildVotingHandler,
 )
 from tests.support.voting import build_snapshot
 from tests.unit.worker.fakes import SupervisorRecorder, make_worker, worker_services
@@ -241,17 +237,3 @@ async def test_periodic_poll_materializes_an_event_without_a_listen_wake_hint() 
     assert periodic_poll.interval == 7
     assert notifications.materialized == [event]
     assert events.completed == [delivery]
-
-
-async def test_guild_voting_delivery_refreshes_current_configuration_and_checks_version() -> None:
-    refresh = AsyncMock()
-    handler = RefreshGuildVotingHandler(cast(VoteService, SimpleNamespace(refresh_configuration=refresh)))
-    event = DomainEvent(event_type="guild.voting_changed", aggregate_kind="guild", aggregate_id=17)
-    context = ActingContext.worker("events.core")
-    with context.scope():
-        await handler.handle(event)
-    refresh.assert_awaited_once_with(17, context=context)
-    event.schema_version = 2
-    with pytest.raises(UnsupportedEventVersionError):
-        await handler.handle(event)
-    assert refresh.await_count == 1

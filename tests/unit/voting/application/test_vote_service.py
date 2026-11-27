@@ -1,4 +1,3 @@
-import logging
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from math import inf, nan
@@ -54,7 +53,6 @@ class CastVoteCall:
     option_id: str
     emoji: str
     desired_weight: float
-    refreshed_weights: dict[int, float] | None
 
 
 def snapshot(
@@ -191,7 +189,6 @@ class FakeVoteRepository:
         guild_id: int,
         option: VoteOption,
         desired_weight: float,
-        refreshed_weights: dict[int, float] | None = None,
         *,
         toggle: bool = True,
         count_revision: int | None = None,
@@ -204,7 +201,6 @@ class FakeVoteRepository:
                 option_id=option.id,
                 emoji=option.emoji,
                 desired_weight=desired_weight,
-                refreshed_weights=refreshed_weights,
             )
         )
         return self.mutation
@@ -215,9 +211,6 @@ class FakeVoteRepository:
     async def close(self, vote_session_id: int) -> StoredVoteMutation | None:
         return self.mutation
 
-    async def refresh_weights(self, vote_session_id: int, weights: dict[int, float]) -> StoredVoteMutation | None:
-        return self.mutation
-
     async def transition_poll(
         self,
         snapshot: VoteSessionSnapshot,
@@ -226,7 +219,6 @@ class FakeVoteRepository:
         retry_at: Instant | None = None,
         unreadable: Sequence[int] = (),
         deadline: Instant | None = None,
-        weights: dict[int, float] | None = None,
         actor_id: int | None = None,
         reason: str = "",
         claim: bool = False,
@@ -277,16 +269,11 @@ class FakeVoteRepository:
 
 
 class MissingActorResolver:
-    """Return an unresolved lookup, which must preserve existing weights during refresh."""
+    """Return an unresolved lookup, as for an owner guild Discord cannot reach."""
 
     async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> None:
         del account_id, guild_id, kind
         return
-
-    async def resolve_many(
-        self, account_ids: Sequence[int], guild_id: int, kind: VoteKind
-    ) -> dict[int, UserActor | None]:
-        return dict.fromkeys(account_ids)
 
 
 class RecordingActorResolver:
@@ -295,7 +282,6 @@ class RecordingActorResolver:
     def __init__(self, members: dict[tuple[int, int], UserActor] | None = None):
         self.members = members or {}
         self.calls: list[tuple[int, int]] = []
-        self.batch_calls: list[tuple[tuple[int, ...], int]] = []
 
     async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> UserActor | None:
         del kind
@@ -304,12 +290,6 @@ class RecordingActorResolver:
             return self.members[(account_id, guild_id)]
         # Definitely not a member, as opposed to a guild we could not reach.
         return UserActor(account_id=account_id, discord_user_id=account_id * 10, guild_id=guild_id)
-
-    async def resolve_many(
-        self, account_ids: Sequence[int], guild_id: int, kind: VoteKind
-    ) -> dict[int, UserActor | None]:
-        self.batch_calls.append((tuple(account_ids), guild_id))
-        return {account_id: await self.resolve(account_id, guild_id, kind) for account_id in account_ids}
 
 
 def vote_grants(*nodes: str, account_id: int = 7) -> tuple[PermissionGrant, ...]:
@@ -394,23 +374,6 @@ async def test_message_attachment_is_committed() -> None:
     assert repository.attach_calls == [(26, 9001)]
 
 
-async def test_refresh_log_carries_session_id_without_user_attributes(caplog: pytest.LogCaptureFixture) -> None:
-    initial = replace(
-        snapshot(),
-        selections=(VoteSelection(account_id=9, guild_id=10, option_id="approve", emoji="👍", weight=1.0),),
-    )
-    service = VoteService(
-        actor_resolver=MissingActorResolver(), uow_factory=lambda: VoteUnitOfWork(FakeVoteRepository(initial))
-    )
-
-    with caplog.at_level(logging.WARNING, logger="squid.core.voting.application.services"):
-        await service.refresh(12, context=ActingContext.worker("voting.refresh"))
-
-    record_fields = vars(caplog.records[-1])
-    assert record_fields["squid.vote.session_id"] == 12
-    assert "squid.user.id" not in record_fields
-
-
 @pytest.mark.parametrize(
     ("emoji", "has_staff_weight", "expected_weight"),
     [
@@ -464,7 +427,6 @@ async def test_cast_vote_applies_choice_and_staff_weight(
             option_id=option_id,
             emoji=emoji,
             desired_weight=abs(expected_weight),
-            refreshed_weights={},
         )
     ]
 
@@ -503,7 +465,6 @@ async def test_cast_vote_resolves_a_stable_option_to_each_guild_alias(guild_id: 
             option_id="approve",
             emoji=emoji,
             desired_weight=1.0,
-            refreshed_weights={},
         )
     ]
 
@@ -589,7 +550,6 @@ async def test_the_delete_log_capability_admits_a_voter_and_staff_weight_still_a
             option_id="approve",
             emoji="👍",
             desired_weight=3.0,
-            refreshed_weights={},
         )
     ]
 
@@ -697,7 +657,6 @@ async def test_custom_vote_option_multiplier_is_applied_before_staff_weight() ->
             option_id="approve",
             emoji="<:strong_yes:123>",
             desired_weight=6.0,
-            refreshed_weights={},
         )
     ]
 
@@ -944,36 +903,26 @@ async def test_without_an_owner_guild_no_role_table_may_weight_a_build_vote() ->
     assert repository.cast_calls[0].desired_weight == 1.0
 
 
-async def test_refresh_reweighs_every_ballot_against_the_owner_guild() -> None:
-    selections = (
-        VoteSelection(account_id=7, guild_id=VOTING_GUILD_ID, option_id="approve", emoji="👍", weight=100.0),
-        VoteSelection(account_id=8, guild_id=OWNER_GUILD_ID, option_id="approve", emoji="👍", weight=1.0),
-    )
-    initial = replace(shared_snapshot(), selections=selections)
+async def test_casting_weighs_only_the_new_ballot() -> None:
+    """Earlier ballots keep the weight they were cast with, whatever their voters' roles are now."""
+    selections = (VoteSelection(account_id=8, guild_id=OWNER_GUILD_ID, option_id="approve", emoji="👍", weight=4.0),)
+    initial = replace(shared_snapshot(), selections=selections, votes={8: 4.0})
     repository = FakeVoteRepository(initial)
-    repository.role_weights = {
-        (OWNER_GUILD_ID, VoteKind.BUILD): [RoleWeight(OWNER_GUILD_ID, VoteKind.BUILD, 55, 4.0)],
-        (VOTING_GUILD_ID, VoteKind.BUILD): [RoleWeight(VOTING_GUILD_ID, VoteKind.BUILD, 77, 100.0)],
-    }
-    resolver = RecordingActorResolver(
-        {
-            (8, OWNER_GUILD_ID): UserActor(
-                account_id=8, discord_user_id=80, guild_id=OWNER_GUILD_ID, discord_role_ids=frozenset({55})
-            )
-        }
-    )
+    repository.mutation = StoredVoteMutation(initial, None, 1.0, just_closed=False)
+    resolver = RecordingActorResolver()
     service = VoteService(
         actor_resolver=resolver, build_owner_guild_id=OWNER_GUILD_ID, uow_factory=lambda: VoteUnitOfWork(repository)
     )
 
-    with ActingContext.worker("refresh-ballots").scope():
-        weights, unresolved = await service._calculate_refresh(initial)
+    result = await service.cast_vote(
+        12,
+        "approve",
+        emoji="👍",
+        context=ActingContext.for_actor(UserActor(account_id=7, discord_user_id=70, guild_id=VOTING_GUILD_ID)),
+    )
 
-    assert unresolved == []
-    # The cast guild is never consulted, so the ballot cast in 999 loses its 100x.
-    assert [guild for _, guild in resolver.calls] == [OWNER_GUILD_ID, OWNER_GUILD_ID]
-    assert resolver.batch_calls == [((7, 8), OWNER_GUILD_ID)]
-    assert weights == {7: 1.0, 8: 4.0}
+    assert result.accepted
+    assert resolver.calls == [(7, OWNER_GUILD_ID)]
 
 
 async def test_each_kind_names_the_guild_that_owns_its_weights() -> None:
@@ -993,47 +942,6 @@ async def test_each_kind_names_the_guild_that_owns_its_weights() -> None:
     assert service._owner_guild_id(poll) == 77
     assert service._owner_guild_id(replace(poll, poll=replace(poll.poll, guild_id=None))) is None
     assert VoteService(uow_factory=lambda: VoteUnitOfWork(FakeVoteRepository(None)))._owner_guild_id(snapshot()) is None
-
-
-async def test_a_weight_edit_reaches_only_the_sessions_that_guild_owns() -> None:
-    initial = shared_snapshot()
-    repository = FakeVoteRepository(initial)
-    resolver = RecordingActorResolver()
-    service = VoteService(
-        actor_resolver=resolver, build_owner_guild_id=OWNER_GUILD_ID, uow_factory=lambda: VoteUnitOfWork(repository)
-    )
-
-    # A guild that merely hosts a card for the shared review.
-    await service.refresh_configuration(VOTING_GUILD_ID, context=ActingContext.direct(AnonymousActor()))
-
-    assert resolver.calls == []
-
-
-async def test_a_weight_edit_in_the_owner_guild_reweighs_its_sessions() -> None:
-    selections = (VoteSelection(account_id=7, guild_id=VOTING_GUILD_ID, option_id="approve", emoji="👍", weight=9.0),)
-    initial = replace(shared_snapshot(), selections=selections)
-    repository = FakeVoteRepository(initial)
-    resolver = RecordingActorResolver()
-    service = VoteService(
-        actor_resolver=resolver, build_owner_guild_id=OWNER_GUILD_ID, uow_factory=lambda: VoteUnitOfWork(repository)
-    )
-
-    await service.refresh_configuration(OWNER_GUILD_ID, context=ActingContext.direct(AnonymousActor()))
-
-    assert resolver.calls == [(7, OWNER_GUILD_ID)]
-
-
-async def test_a_due_poll_without_a_card_still_has_its_weights_recomputed() -> None:
-    selections = (VoteSelection(account_id=7, guild_id=77, option_id="one", emoji="1️⃣", weight=9.0),)
-    poll = replace(poll_snapshot(guild_id=77), selections=selections, messages=())
-    repository = FakeVoteRepository(poll)
-    repository.due = [poll]
-    resolver = RecordingActorResolver()
-    service = VoteService(actor_resolver=resolver, uow_factory=lambda: VoteUnitOfWork(repository))
-
-    await service.close_due(context=ActingContext.worker("test-worker"))
-
-    assert resolver.calls == [(7, 77)]
 
 
 async def test_a_network_poll_needs_an_owning_guild_and_unscoped_options() -> None:
@@ -1099,13 +1007,10 @@ async def test_a_due_poll_is_recounted_before_it_closes_only_if_the_recount_succ
     poll = replace(poll_snapshot(guild_id=77), selections=selections)
     repository = FakeVoteRepository(poll)
     repository.due = [poll]
-    # Closing refreshes weights through the resolver, so its calls show whether the close ran.
-    resolver = RecordingActorResolver()
-    service = VoteService(actor_resolver=resolver, uow_factory=lambda: VoteUnitOfWork(repository))
+    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
     recounted: list[int] = []
 
     async def recount(vote_session_id: int, revision: int) -> tuple[bool, tuple[int, ...]]:
-        assert resolver.calls == []
         recounted.append(vote_session_id)
         if recount_fails:
             raise RuntimeError("Discord is down")

@@ -1675,17 +1675,11 @@ bot-voting-actors-that-vote-is-already-closed = That vote is already closed.
 # squid/bot/voting/actors.py:25
 bot-voting-actors-you-do-not-have-a-trusted-role = You do not have a trusted role.
 
-# squid/bot/voting/controls.py:37
+# squid/bot/voting/controls.py:36
 bot-voting-controls-close-poll = Close poll
 
-# squid/bot/voting/controls.py:72
+# squid/bot/voting/controls.py:68
 bot-voting-controls-poll-closed = Poll closed.
-
-# squid/bot/voting/controls.py:86
-bot-voting-controls-poll-weights-refreshed = Poll weights refreshed.
-
-# squid/bot/voting/controls.py:40
-bot-voting-controls-refresh-weights = Refresh weights
 
 # squid/bot/voting/poll_wizard.py:502
 bot-voting-poll-wizard-cancel = Cancel
@@ -5033,7 +5027,7 @@ poll-command-visibility = Who can see votes and when results are shown.
 # squid/bot/voting/cog.py:93
 poll-command-visibility-name = visibility
 
-# squid/bot/voting/controls.py:69
+# squid/bot/voting/controls.py:65
 poll-final-count-pending = The final count is pending.
 
 # squid/bot/voting/poll_wizard.py:456
@@ -7184,9 +7178,6 @@ vote-server-mismatch = That vote belongs to a different server.
 
 # squid/bot/voting/cog.py:134
 vote-submitted-open-poll-editor = Thanks. Run `/poll` again to open the editor.
-
-# squid/bot/voting/controls.py:90
-vote-unresolved-voter-cache-retained = { $count } voter(s) could not be resolved, so their cached weight was kept.
 
 # squid/core/voting/errors.py:34
 voting-discord-membership-information = Discord membership information is temporarily unavailable.

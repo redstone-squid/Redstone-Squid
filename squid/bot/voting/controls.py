@@ -1,8 +1,8 @@
-"""Close and refresh controls attached to generic poll cards.
+"""The close control attached to generic poll cards.
 
-The message containing the clicked control identifies the poll. Both actions use
-the session's close authorization and read an existing account without creating
-one. Shared card labels are fixed; personal replies use the caller's locale.
+The message containing the clicked control identifies the poll. Closing uses the
+session's close authorization and reads an existing account without creating one.
+The shared card label is fixed; personal replies use the caller's locale.
 """
 
 from typing import TYPE_CHECKING, Any, cast
@@ -17,7 +17,6 @@ from squid.bot.voting.actors import describe_rejection, resolve_actor
 from squid.core.actors import ActingContext, Actor
 from squid.core.i18n import tr
 from squid.core.voting.domain import VoteRejection, VoteSessionSnapshot
-from squid_i18n import Text, md_tr
 
 router = AppRoutes()
 
@@ -35,9 +34,6 @@ def poll_controls() -> sl.semantic.ActionControls:
     return sl.action_controls(
         sl.routed_action_control(
             tr(t"bot-voting-controls-close-poll = Close poll"), close_poll.custom_id(), key="close", tone=sl.Tone.DANGER
-        ),
-        sl.routed_action_control(
-            tr(t"bot-voting-controls-refresh-weights = Refresh weights"), refresh_poll.custom_id(), key="refresh"
         ),
         key="poll.controls",
     )
@@ -72,37 +68,10 @@ async def close_poll(request: AppRequest) -> None:
     await request.respond(text_node(tr(t"bot-voting-controls-poll-closed = Poll closed.")), audience="personal")
 
 
-@polls.route("/refresh")
-async def refresh_poll(request: AppRequest) -> None:
-    """Recompute cached role weights, for a poll whose voters gained or lost roles."""
-    authorized = await _authorize(request)
-    if authorized is None:
-        return
-    snapshot, _actor = authorized
-    bot = request.client
-    result = await bot.services.votes.refresh(snapshot.id, context=ActingContext.current())
-    if result.session is not None:
-        await bot.refresh_posts("vote_session", str(result.session.id))
-    text = tr(t"bot-voting-controls-poll-weights-refreshed = Poll weights refreshed.")
-    if not result.complete:
-        # Report unresolved voters as a count without exposing their account IDs.
-        count = len(result.unresolved_account_ids)
-        warning = md_tr(
-            t"vote-unresolved-voter-cache-retained = {count} voter(s) could not be resolved, "
-            t"so their cached weight was kept.",
-        )
-        text = Text(t"{text} {warning}")
-    await request.respond(text_node(text), audience="personal")
-
-
 async def _authorize(
     request: sd.Request[Any, squid.bot.app.RedstoneSquid],
 ) -> tuple[VoteSessionSnapshot, Actor] | None:
-    """The session and actor behind a click, or `None` once the click has been refused.
-
-    Refreshing recomputes the weights a close would act on, so both controls are gated by
-    the session's own `can_close` rather than by a second copy of the rule.
-    """
+    """The session and actor behind a click, or `None` once the click has been refused."""
     interaction = request.interaction
     assert interaction is not None
     bot = interaction.client

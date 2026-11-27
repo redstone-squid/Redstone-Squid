@@ -36,19 +36,13 @@ class VoteWeightPolicy(Protocol):
 class VoteActorResolver(Protocol):
     """Resolve membership in the guild whose roles determine ballot weight."""
 
-    async def resolve_many(
-        self, account_ids: Sequence[int], guild_id: int, kind: VoteKind
-    ) -> dict[int, UserActor | None]:
-        """Resolve accounts together, preserving unknown membership as None."""
-        ...
-
     async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> UserActor | None:
         """Return the account's membership facts in `guild_id`.
 
         An account that is definitely not a member resolves to a `UserActor` with
         no roles or capabilities. The policy then determines whether the account is
         still eligible and what weight it receives. `None` means membership could
-        not be established; refreshes preserve the ballot's cached weight.
+        not be established.
         """
         ...
 
@@ -145,7 +139,6 @@ class VoteRepository(Protocol):
         guild_id: int,
         option: VoteOption,
         desired_weight: float,
-        refreshed_weights: dict[int, float] | None = None,
         *,
         toggle: bool = True,
         count_revision: int | None = None,
@@ -153,8 +146,7 @@ class VoteRepository(Protocol):
         """Toggle the same option off or replace the ballot, then check thresholds.
 
         `option` is the exact alias the ballot uses, as resolved from the session's
-        options for `guild_id`. Return None if the session is missing or closed. Supplied refresh weights apply
-        before the ballot change; nonpositive refresh values remove existing ballots. With `toggle` false,
+        options for `guild_id`. Return None if the session is missing or closed. With `toggle` false,
         selecting the stored option again keeps the ballot instead of removing it.
         """
         ...
@@ -167,14 +159,6 @@ class VoteRepository(Protocol):
         """Close an open session as cancelled; return None if it is missing or already closed."""
         ...
 
-    async def refresh_weights(self, vote_session_id: int, weights: dict[int, float]) -> StoredVoteMutation | None:
-        """Update weights and check thresholds in the same transaction.
-
-        Missing accounts in `weights` remain unchanged. Closed sessions remain frozen;
-        only a missing session returns None.
-        """
-        ...
-
     async def transition_poll(
         self,
         snapshot: VoteSessionSnapshot,
@@ -183,7 +167,6 @@ class VoteRepository(Protocol):
         retry_at: Instant | None = None,
         unreadable: Sequence[int] = (),
         deadline: Instant | None = None,
-        weights: dict[int, float] | None = None,
         actor_id: int | None = None,
         reason: str = "",
         claim: bool = False,

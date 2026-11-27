@@ -168,7 +168,7 @@ class VoteOption:
 
 @dataclass(frozen=True, slots=True)
 class VoteSelection:
-    """One account's ballot, including its cached positive weight.
+    """One account's ballot, with the positive weight it was cast with.
 
     `guild_id` records where it was cast, which identifies the applicable emoji
     alias. The voting session's owner guild determines role weights separately.
@@ -184,7 +184,7 @@ class VoteSelection:
 
     def __post_init__(self) -> None:
         if not isfinite(self.weight) or self.weight <= 0:
-            msg = "Cached vote weight must be finite and greater than zero."
+            msg = "Vote weight must be finite and greater than zero."
             raise InvalidVoteConfigurationError(msg)
 
 
@@ -315,8 +315,7 @@ class VoteSessionSnapshot:
     """Validated session state used by application and presentation adapters.
 
     `votes` maps account IDs to signed weights for score calculations. `selections`
-    retains the ballots with positive weights and stable option IDs for tallies
-    and refreshes. For example, a deny ballot of weight 2 appears as -2 in `votes`
+    retains the ballots with positive weights and stable option IDs for tallies. For example, a deny ballot of weight 2 appears as -2 in `votes`
     and as weight 2 with the default option ID `deny` in `selections`.
     """
 
@@ -463,19 +462,6 @@ class CastVoteResult:
     @property
     def accepted(self) -> bool:
         return self.rejection is None
-
-
-@dataclass(frozen=True, slots=True)
-class VoteRefreshResult:
-    """Outcome of recomputing cached weights."""
-
-    session: VoteSessionSnapshot | None
-    unresolved_account_ids: tuple[int, ...] = ()
-    just_closed: bool = False
-
-    @property
-    def complete(self) -> bool:
-        return not self.unresolved_account_ids
 
 
 @dataclass(frozen=True, slots=True)

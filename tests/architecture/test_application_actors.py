@@ -30,7 +30,7 @@ IDENTITY_RESOLUTION = {
         "start_fabric_challenge",
         "start_paper_challenge",
     },
-    "InteractiveVoteActorResolver": {"member", "resolve", "resolve_many"},
+    "InteractiveVoteActorResolver": {"member", "resolve"},
 }
 
 # Policy calculations can evaluate a voter, grantee, or proposed role independently of the caller.
@@ -48,6 +48,7 @@ INFRASTRUCTURE = {
     "ArtifactStore": {"aclose", "delete", "get", "get_path", "put", "put_path", "stat"},
     "BallotRecounter": {"count_cards"},  # Recount callback uses the enclosing operation's invocation.
     "DomainEventWakeListener": {"run"},
+    "MediaProcessingJobService": {"download"},  # Copies an artifact the caller already authorized.
 }
 
 
@@ -73,6 +74,7 @@ CONTEXT_FREE_OPERATIONS = {
     },
     "SchematicService": {"render_recipe"},
     "SubmissionAttachmentIntake": {"max_file_bytes"},
+    "SubmissionDraftService": {"progress"},  # Counts answers on a draft the caller already loaded.
     "VoteService": {"set_actor_resolver"},  # Wire the process's Discord or worker resolver.
     "WebSessionService": {"hash_token"},
 }

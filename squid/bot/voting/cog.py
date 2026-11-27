@@ -1,7 +1,7 @@
 """Voting commands and current actor resolution for persisted ballot weights."""
 
 import contextlib
-from collections.abc import Awaitable, Callable, Sequence
+from collections.abc import Awaitable, Callable
 from dataclasses import replace
 from typing import TYPE_CHECKING, Literal, Self, cast, override
 
@@ -16,7 +16,7 @@ from squid.bot.events.spec import DomainEventSubscriptions
 from squid.bot.events.spec import extension as domain_events_extension
 from squid.bot.ui import error_node, info_node, text_node
 from squid.bot.voting.actors import resolve_actor
-from squid.bot.voting.controls import close_poll, refresh_poll
+from squid.bot.voting.controls import close_poll
 from squid.bot.voting.event_handlers import DeleteVotedMessageHandler, PostSubmittedBuildHandler
 from squid.bot.voting.poll_wizard import (
     DEFAULT_POLL_CHOICES,
@@ -355,39 +355,24 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         return await request.respond(text_node(tr(t"bot-voting-vote-deletion-vote-opened = Deletion vote opened.")))
 
     async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> UserActor | None:
-        """Resolve member roles and capabilities for a persisted voter's weight refresh.
+        """Resolve an account's member roles and capabilities in `guild_id`.
 
-        No linked Discord identity or a confirmed missing member produces an
-        actor with no roles. An unavailable guild or denied member lookup returns
-        `None`, which tells the service to retain the cached ballot weight.
+        No linked Discord identity or a confirmed missing member produces an actor
+        with no roles. An unavailable guild or failed member lookup returns `None`.
         """
-        return (await self.resolve_many((account_id,), guild_id, kind))[account_id]
-
-    async def resolve_many(
-        self, account_ids: Sequence[int], guild_id: int, kind: VoteKind
-    ) -> dict[int, UserActor | None]:
-        """Read accounts together and resolve uncached Discord members in batches."""
-        accounts = await self.bot.services.accounts.get_accounts(account_ids)
-        result: dict[int, UserActor | None] = {}
-        discord_ids: dict[int, int] = {}
-        for account_id in dict.fromkeys(account_ids):
-            account = accounts.get(account_id)
-            identity = None if account is None else account.most_recent_identity_for(IdentityProvider.DISCORD)
-            discord_id = None if identity is None else identity.discord_id
-            if discord_id is None:
-                result[account_id] = UserActor(account_id=account_id, guild_id=guild_id)
-            else:
-                discord_ids[account_id] = discord_id
+        del kind
+        account = await self.bot.services.accounts.get_account_by_id(account_id)
+        identity = None if account is None else account.most_recent_identity_for(IdentityProvider.DISCORD)
+        if identity is None or identity.discord_id is None:
+            return UserActor(account_id=account_id, guild_id=guild_id)
+        discord_id = identity.discord_id
         guild = self.bot.get_guild(guild_id)
-        members = await self.bot.members.resolve(guild, tuple(discord_ids.values())) if guild is not None else {}
-        for account_id, discord_id in discord_ids.items():
-            if discord_id not in members:
-                result[account_id] = None
-            elif (member := members[discord_id]) is None:
-                result[account_id] = UserActor(account_id=account_id, discord_user_id=discord_id, guild_id=guild_id)
-            else:
-                result[account_id] = await resolve_actor(self.bot, member, account_id=account_id)
-        return result
+        members = await self.bot.members.resolve(guild, (discord_id,)) if guild is not None else {}
+        if discord_id not in members:
+            return None
+        if (member := members[discord_id]) is None:
+            return UserActor(account_id=account_id, discord_user_id=discord_id, guild_id=guild_id)
+        return await resolve_actor(self.bot, member, account_id=account_id)
 
 
 async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
@@ -395,7 +380,7 @@ async def setup(bot: squid.bot.app.RedstoneSquid) -> None:
     cog = VoteCog(bot, ctx.require(domain_events_extension))
     await bot.add_cog(cog)
     ctx.publish(VotingExports(recount=cog.reactions))
-    bot.ui_router.mount(__name__, close_poll, refresh_poll)
+    bot.ui_router.mount(__name__, close_poll)
 
 
 async def teardown(bot: squid.bot.app.RedstoneSquid) -> None:

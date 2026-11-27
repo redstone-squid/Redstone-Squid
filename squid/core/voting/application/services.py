@@ -8,7 +8,7 @@ from math import isfinite
 import anyio
 from whenever import Instant
 
-from squid.core.actors import ActingContext, Actor, UserActor, WorkerActor, application_operation
+from squid.core.actors import ActingContext, Actor, UserActor, application_operation
 from squid.core.errors import AuthorizationError
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector
 from squid.core.permissions.application import PermissionService
@@ -41,9 +41,7 @@ from squid.core.voting.domain import (
     VoteChoice,
     VoteKind,
     VoteOption,
-    VoteRefreshResult,
     VoteRejection,
-    VoteSelection,
     VoteSessionSnapshot,
     VoteStatus,
     VoteVisibility,
@@ -62,10 +60,10 @@ type FinalRecount = Callable[[int, int], Awaitable[tuple[bool, tuple[int, ...]]]
 class VoteService:
     """Check voter eligibility and manage voting sessions through the repository.
 
-    Discord membership and resolved capabilities determine each ballot's weight.
-    Existing weights are refreshed before a ballot changes or a poll closes, so
-    role changes can affect the outcome. The repository applies those weights and
-    any threshold closure together; this service commits the transaction.
+    A ballot is weighed once, when it is cast, from the voter's membership in the
+    session's owner guild. Role changes afterwards do not move it, so a result can
+    be explained from the ballots alone. The repository stores a ballot and any
+    threshold closure together; this service commits the transaction.
 
     Results describe the resulting voting session. Publishing its Discord messages
     and acting on an approved build or deletion vote happen outside this service.
@@ -113,7 +111,7 @@ class VoteService:
 
         With no owner guild, retain the supplied actor for eligibility checks. With no
         resolver, use an actor without roles or capabilities for a different owner
-        guild. A failed lookup returns None; casting and refresh handle that separately.
+        guild. A failed lookup returns None.
         """
         if owner_guild_id is None or actor.guild_id == owner_guild_id:
             return actor
@@ -317,7 +315,7 @@ class VoteService:
         count_revision: int | None = None,
         context: ActingContext,
     ) -> CastVoteResult:
-        """Validate eligibility, refresh weights, and toggle or replace the actor's ballot.
+        """Validate eligibility, weigh the ballot, and toggle or replace the actor's ballot.
 
         The ballot is cast in `actor.guild_id`, which must be a guild the session is
         published in; that guild's aliases decide which emoji the option goes by.
@@ -328,8 +326,7 @@ class VoteService:
         Pass `toggle=False` to select instead: the ballot then stays on that option, which
         makes repeating the call safe when the caller only knows the desired selection.
         The repository serializes the mutation and any threshold closure. An unresolved
-        owner-guild lookup uses base weight 1 for the new ballot, before the option
-        multiplier. Unresolved existing ballots retain their cached weights.
+        owner-guild lookup uses base weight 1, before the option multiplier.
         """
         return await self._apply_ballot(
             context.effective.require_user(),
@@ -394,15 +391,6 @@ class VoteService:
         # The option's alias comes from where the ballot was cast; role weights come from the owner guild.
         owner_guild_id = self._owner_guild_id(snapshot)
         weight_actor = await self._weight_actor(actor, snapshot, owner_guild_id)
-        # Refresh earlier ballots too: role changes may alter the score that closes this vote.
-        refreshed, unresolved = await self._calculate_refresh(snapshot, replacing=weight_actor)
-        if unresolved:
-            logger.warning(
-                "Vote session %s refresh retained cached weights for accounts %s",
-                snapshot.id,
-                unresolved,
-                extra={"squid.vote.session_id": snapshot.id},
-            )
         async with self._uow_factory() as uow:
             if not (await self._permissions.check(actor, VOTE_POLL_CAST, uow=uow)).allowed:
                 return CastVoteResult(snapshot, VoteRejection.NOT_ELIGIBLE)
@@ -410,8 +398,7 @@ class VoteService:
                 if snapshot.kind is VoteKind.DELETE_LOG:
                     return CastVoteResult(snapshot, VoteRejection.NOT_ELIGIBLE)
                 # The owner guild is unreachable right now. Land the ballot at the
-                # default weight rather than letting a Discord blip veto the vote; the
-                # next refresh corrects it.
+                # default weight rather than letting a Discord blip veto the vote.
                 logger.warning(
                     "Vote session %s could not resolve account %s in owner guild %s; weighting at 1.0",
                     snapshot.id,
@@ -443,7 +430,6 @@ class VoteService:
                 actor.guild_id,
                 option,
                 weight,
-                refreshed,
                 toggle=toggle,
                 count_revision=count_revision,
             )
@@ -489,42 +475,10 @@ class VoteService:
         )
 
     @application_operation
-    async def refresh(self, vote_session_id: int, *, context: ActingContext) -> VoteRefreshResult:
-        """Recalculate resolvable ballot weights and check the session's existing thresholds."""
-        snapshot = await self.get_session(vote_session_id, context=context)
-        if snapshot is None:
-            return VoteRefreshResult(None)
-        return await self._refresh_snapshot(
-            snapshot, actor=context.effective if not isinstance(context.effective, WorkerActor) else None
-        )
-
-    async def _refresh_snapshot(
-        self, snapshot: VoteSessionSnapshot, *, actor: Actor | None = None
-    ) -> VoteRefreshResult:
-        weights, unresolved = await self._calculate_refresh(snapshot)
-        async with self._uow_factory() as uow:
-            if actor is not None and await self._poll_authority(uow, snapshot, actor) is not None:
-                raise AuthorizationError
-            mutation = await uow.votes.refresh_weights(snapshot.id, weights)
-            await uow.commit()
-        if unresolved:
-            logger.warning(
-                "Vote session %s refresh retained cached weights for users %s",
-                snapshot.id,
-                unresolved,
-                extra={"squid.vote.session_id": snapshot.id},
-            )
-        return VoteRefreshResult(
-            mutation.session if mutation is not None else snapshot,
-            tuple(unresolved),
-            mutation.just_closed if mutation is not None else False,
-        )
-
-    @application_operation
     async def close(
         self, vote_session_id: int, *, recount: FinalRecount | None = None, context: ActingContext
     ) -> CastVoteResult:
-        """Refresh and close a generic poll if its author or an authorized actor requests it."""
+        """Count and close a generic poll if its author or an authorized actor requests it."""
         actor = context.effective.require_user()
         actor.require_account_id()
         snapshot = await self.get_session(vote_session_id, context=context)
@@ -591,7 +545,6 @@ class VoteService:
         if counting is None or counting.poll is None:
             return CastVoteResult(snapshot, VoteRejection.CLOSED)
         unreadable = tuple(sorted({*(card.id for card in counting.messages), *counting.poll.unreadable_cards}))
-        weights: dict[int, float] = {}
         failed = False
         try:
             with anyio.fail_after(8 * 60):
@@ -600,10 +553,6 @@ class VoteService:
                     # A card removed from the post registry between attempts is still missing.
                     detached = set(counting.poll.unreadable_cards).difference(card.id for card in counting.messages)
                     unreadable = tuple(sorted(detached.union(unreadable)))
-                latest = await self.get_session(counting.id, context=ActingContext.current())
-                if latest is None or latest.poll is None or latest.poll.count_revision != counting.poll.count_revision:
-                    return CastVoteResult(latest, VoteRejection.CLOSED)
-                weights, _ = await self._calculate_refresh(latest)
         except Exception:
             logger.exception("Final count interrupted for poll %s", counting.id)
             failed = True
@@ -615,9 +564,7 @@ class VoteService:
                 status = VoteStatus.COUNTING
                 retry_at = Instant.now().add(minutes=1)
         async with self._uow_factory() as uow:
-            result = await uow.votes.transition_poll(
-                counting, status, unreadable=unreadable, retry_at=retry_at, weights=weights
-            )
+            result = await uow.votes.transition_poll(counting, status, unreadable=unreadable, retry_at=retry_at)
             await uow.commit()
         if result is None:
             return CastVoteResult(snapshot, VoteRejection.CLOSED)
@@ -741,74 +688,3 @@ class VoteService:
     async def get_role_weights(self, guild_id: int, kind: VoteKind, *, context: ActingContext) -> Sequence[RoleWeight]:
         async with self._uow_factory() as uow:
             return await uow.votes.get_role_weights(guild_id, kind)
-
-    @application_operation
-    async def refresh_configuration(self, guild_id: int, *, context: ActingContext) -> None:
-        """Refresh ballots after a durable guild-configuration event, including retries."""
-        for kind in VoteKind:
-            await self._refresh_kind(guild_id, kind)
-
-    async def _refresh_kind(self, guild_id: int, kind: VoteKind) -> None:
-        """Refresh open sessions whose owner guild supplies the changed role weights."""
-        for snapshot in await self.list_open(kind, context=ActingContext.current()):
-            if self._owner_guild_id(snapshot) == guild_id:
-                await self._refresh_snapshot(snapshot)
-
-    async def _calculate_refresh(
-        self, snapshot: VoteSessionSnapshot, *, replacing: UserActor | None = None
-    ) -> tuple[dict[int, float], list[int]]:
-        """Calculate replacement weights without changing stored ballots.
-
-        A zero removes an ineligible voter. Unresolved accounts are returned separately
-        and omitted from the weight map, preserving their stored weights. Without a
-        resolver, return no updates.
-        """
-        if self._actor_resolver is None:
-            return {}, []
-        owner_guild_id = self._owner_guild_id(snapshot)
-        by_guild: dict[int, set[int]] = {}
-        for selection in snapshot.selections:
-            if replacing is not None and replacing.account_id == selection.account_id:
-                continue
-            guild_id = owner_guild_id if owner_guild_id is not None else selection.guild_id or 0
-            by_guild.setdefault(guild_id, set()).add(selection.account_id)
-        actors: dict[tuple[int, int], UserActor | None] = {}
-        for guild_id, account_ids in by_guild.items():
-            resolved = await self._actor_resolver.resolve_many(sorted(account_ids), guild_id, snapshot.kind)
-            actors.update(((guild_id, account_id), actor) for account_id, actor in resolved.items())
-        weights: dict[int, float] = {}
-        unresolved: list[int] = []
-        for selection in snapshot.selections:
-            actor = replacing if replacing is not None and replacing.account_id == selection.account_id else None
-            guild_id = owner_guild_id if owner_guild_id is not None else selection.guild_id or 0
-            actor = actor or actors.get((guild_id, selection.account_id))
-            if actor is None:
-                unresolved.append(selection.account_id)
-                continue
-            weight = await self._policy.calculate(actor, snapshot)
-            if weight is None:
-                weights[selection.account_id] = 0
-            elif isfinite(weight) and weight > 0:
-                # Mirror the cast path: no authority guild means no role multipliers.
-                scored = weight if owner_guild_id is not None else 1.0
-                weights[selection.account_id] = scored * self._option_multiplier(snapshot, selection)
-        return weights, unresolved
-
-    @staticmethod
-    def _option_multiplier(snapshot: VoteSessionSnapshot, selection: VoteSelection) -> float:
-        """Return the multiplier of the option this ballot picked.
-
-        Matched against the guild the ballot was cast in, which still aliases
-        options even though it no longer decides the voter's weight.
-        """
-        option = next(
-            (
-                item
-                for item in snapshot.options
-                if item.identifier == selection.option_id
-                and item.emoji == selection.emoji
-                and item.guild_id in (None, selection.guild_id)
-            ),
-            None,
-        )
-        return option.multiplier if option is not None else 1

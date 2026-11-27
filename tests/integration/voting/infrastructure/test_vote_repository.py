@@ -388,14 +388,12 @@ async def test_selecting_the_stored_option_again_keeps_the_ballot(
         pytest.param("deny", "👎", VoteSessionResult.DENIED, id="denied"),
     ],
 )
-@pytest.mark.parametrize("refreshed_weight", [0.0, 4.0], ids=["remove-ballot", "reweigh-ballot"])
 async def test_threshold_closure_freezes_the_deciding_ballot(
     repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
     option_id: str,
     emoji: str,
     expected_result: VoteSessionResult,
-    refreshed_weight: float,
 ) -> None:
     session_id, _ = await seed_delete_log_vote(async_session_factory, pass_threshold=1, fail_threshold=-1)
 
@@ -406,32 +404,8 @@ async def test_threshold_closure_freezes_the_deciding_ballot(
     assert mutation.session.status is VoteStatus.CLOSED
     assert mutation.session.result is expected_result
 
-    refreshed = await transact(
-        repository, lambda uow: uow.votes.refresh_weights(session_id, {7: refreshed_weight}), commit=True
-    )
-
-    assert refreshed is not None
-    assert not refreshed.just_closed
-    assert refreshed.session == mutation.session
+    assert await cast_ballot(repository, session_id, 8, "deny", "👎", 4.0) is None
     assert await transact(repository, lambda uow: uow.votes.get_by_id(session_id)) == mutation.session
-
-
-async def test_refresh_can_remove_and_reweigh_ballots_until_the_threshold_is_reached(
-    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
-    async_session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    session_id, _ = await seed_delete_log_vote(async_session_factory, pass_threshold=3, fail_threshold=-3)
-    await cast_ballot(repository, session_id, 7, "approve", "👍", 1.0)
-    await cast_ballot(repository, session_id, 8, "deny", "👎", 1.0)
-
-    refreshed = await transact(
-        repository, lambda uow: uow.votes.refresh_weights(session_id, {7: 3.0, 8: 0.0}), commit=True
-    )
-
-    assert refreshed is not None
-    assert refreshed.just_closed
-    assert refreshed.session.result is VoteSessionResult.APPROVED
-    assert refreshed.session.votes == {7: 3.0}
 
 
 async def test_concurrent_votes_report_exactly_one_closure(
@@ -492,14 +466,7 @@ async def test_generic_poll_persists_choices_tallies_and_due_closure(
     assert closed.just_closed
     assert closed.session.status is VoteStatus.CLOSED
     assert await transact(repository, lambda uow: uow.votes.list_due(Instant.now())) == []
-
-    refreshed = await transact(
-        repository, lambda uow: uow.votes.refresh_weights(session_id, {7: 0.0, 8: 4.0}), commit=True
-    )
-
-    assert refreshed is not None
-    assert not refreshed.just_closed
-    assert refreshed.session == closed.session
+    assert await cast_ballot(repository, session_id, 8, "one", "1️⃣", 4) is None
     assert await transact(repository, lambda uow: uow.votes.get_by_id(session_id)) == closed.session
 
 

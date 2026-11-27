@@ -84,11 +84,6 @@ class Actors:
             return None
         return UserActor(account_id=account_id, discord_user_id=account_id - 1000, guild_id=guild_id)
 
-    async def resolve_many(
-        self, account_ids: Sequence[int], guild_id: int, kind: VoteKind
-    ) -> dict[int, UserActor | None]:
-        return {account_id: await self.resolve(account_id, guild_id, kind) for account_id in account_ids}
-
 
 def _snapshot(*, anonymous: bool = False, selections: tuple[VoteSelection, ...] = ()) -> VoteSessionSnapshot:
     visibility = VoteVisibility.ANONYMOUS_LIVE if anonymous else VoteVisibility.VISIBLE_LIVE

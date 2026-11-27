@@ -3,14 +3,12 @@
 from functools import partial
 
 import pytest
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from squid.core.actors import ActingContext, AnonymousActor, UserActor
 from squid.core.edits.application import EditExecutor
 from squid.core.edits.domain import EditCommand, EditValues, Revision, RevisionConflictError
 from squid.core.errors import AuthorizationError
-from squid.core.events.models import DomainEvent, DomainEventDeliveryRecord
 from squid.core.permissions.application.services import PermissionService
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.settings.application.edits import GUILD_EDIT, GuildSettingsEdit, guild_target
@@ -71,19 +69,6 @@ async def test_guild_voting_round_trip_and_current_authority(
         context=ActingContext.direct(actor),
     )
     assert saved.receipt is not None
-    async with migrated_session_factory() as session:
-        queued = (
-            await session.scalars(
-                select(DomainEventDeliveryRecord)
-                .join(DomainEvent)
-                .where(
-                    DomainEvent.event_type == "guild.voting_changed",
-                    DomainEvent.aggregate_id == GUILD,
-                    DomainEventDeliveryRecord.consumer == "core",
-                )
-            )
-        ).all()
-        assert len(queued) == 1
     revoked = UserActor(guild_id=GUILD, discord_user_id=17)
     with pytest.raises(AuthorizationError):
         await executor.execute(saved.receipt.undo(saved.outcome.revisions), context=ActingContext.direct(revoked))

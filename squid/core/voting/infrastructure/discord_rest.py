@@ -2,7 +2,7 @@
 
 import enum
 import logging
-from collections.abc import Callable, Sequence
+from collections.abc import Callable
 from dataclasses import replace
 from time import monotonic
 from typing import Protocol
@@ -49,7 +49,7 @@ class DiscordRestActorResolver:
     including absent members and unreadable guilds.
 
     `member` exposes lookup failures to interactive callers. `resolve` converts
-    failures to None so weight refreshes can preserve their cached values.
+    them to None, which casting treats as an unknown membership.
     """
 
     def __init__(
@@ -86,12 +86,11 @@ class DiscordRestActorResolver:
         return membership if isinstance(membership, UserActor) else None
 
     async def resolve(self, account_id: int, guild_id: int, kind: VoteKind) -> UserActor | None:
-        """Return membership for a weight refresh, or None when the lookup cannot answer.
+        """Return membership for weighing a ballot, or None when the lookup cannot answer.
 
         A known non-member becomes an actor without roles or capabilities. The
         weighting policy may give that actor a default weight or reject them as
-        ineligible. An unreadable guild or failed member lookup returns None,
-        allowing the service to preserve the ballot's cached weight.
+        ineligible. An unreadable guild or failed member lookup returns None.
         """
         del kind
         try:
@@ -102,7 +101,7 @@ class DiscordRestActorResolver:
             membership = await self._membership(account_id, discord_id, guild_id)
         except Exception:
             logger.warning(
-                "Could not refresh Discord membership facts for vote session",
+                "Could not read Discord membership facts for vote session",
                 exc_info=True,
                 extra={"squid.discord.guild_id": guild_id},
             )
@@ -114,12 +113,6 @@ class DiscordRestActorResolver:
                 return UserActor(account_id=account_id, discord_user_id=discord_id, guild_id=guild_id)
             case _NotAMember.UNKNOWN:
                 return None
-
-    async def resolve_many(
-        self, account_ids: Sequence[int], guild_id: int, kind: VoteKind
-    ) -> dict[int, UserActor | None]:
-        """Use the REST membership cache; Discord's REST API has no bulk lookup."""
-        return {account_id: await self.resolve(account_id, guild_id, kind) for account_id in dict.fromkeys(account_ids)}
 
     async def _discord_id(self, account_id: int) -> int | None:
         if self._discord_ids is None:

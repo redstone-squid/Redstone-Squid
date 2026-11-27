@@ -29,7 +29,6 @@ from squid.runtime import BackgroundTaskSupervisor, RuntimeJob, WorkerServices, 
 from squid.worker.events import (
     ApplyBuildVoteOutcomeHandler,
     MaterializeNotificationHandler,
-    RefreshGuildVotingHandler,
 )
 from squid.worker.rendering import SchematicPreviewWorker
 from squid_reactivity import LocalTopicBus
@@ -91,7 +90,6 @@ class DatabaseWorker:
                 "build.denied": (notification_handler.handle,),
                 "record_run.published": (notification_handler.handle,),
                 "vote_session.closed": (outcome_handler.handle,),
-                "guild.voting_changed": (RefreshGuildVotingHandler(services.votes).handle,),
             },
         )
         self._build_embeddings = DomainEventRunner(
