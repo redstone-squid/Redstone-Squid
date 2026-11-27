@@ -7122,7 +7122,7 @@ vocabulary-version-scope-all-time = All time
 # squid/core/vocabulary.py:32
 vocabulary-version-scope-up-to-date = Current version
 
-# squid/bot/voting/reactions.py:314
+# squid/bot/voting/reactions.py:315
 vote-consent-required = { $user }, voting stores your Discord user ID. Run `/account consent` first.
 
 # squid/bot/voting/cog.py:347

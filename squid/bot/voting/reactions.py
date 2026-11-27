@@ -152,7 +152,8 @@ class VoteReactionHandler:
         if result.rejection is VoteRejection.CLOSED:
             return
         if result.rejection is not None:
-            if snapshot.should_remove_reaction_on_cast():
+            # An anonymous card must not show who voted, even a refused voter.
+            if snapshot.is_anonymous:
                 await self._remove_reaction(message, payload.emoji, member)
             if not recovering:
                 await self._report_rejection(message, result.rejection)
@@ -160,7 +161,7 @@ class VoteReactionHandler:
         session = snapshot if recovering else result.session
         if session is None:
             return
-        remove_reaction = session.should_remove_reaction_on_cast()
+        remove_reaction = session.is_anonymous
         # Live cleanup runs under the handler's owner only after commit. Recovery waits for
         # cleanup itself, leaving the reaction as a retry source if recovery is interrupted.
         if remove_reaction and not recovering:

@@ -117,7 +117,6 @@ def test_visible_poll_lists_voters_and_keeps_their_reactions() -> None:
     )
 
     assert not visible.is_anonymous
-    assert not visible.should_remove_reaction_on_cast()
     assert "<@420>" in generic_poll_text(visible, {42: 420})
 
 
@@ -191,7 +190,6 @@ def test_anonymous_polls_strip_the_voter_reaction(visibility: VoteVisibility) ->
     )
 
     assert snapshot.is_anonymous
-    assert snapshot.should_remove_reaction_on_cast()
     assert "<@420>" not in generic_poll_text(snapshot, {42: 420})
 
 

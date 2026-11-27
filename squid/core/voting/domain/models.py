@@ -492,10 +492,6 @@ class VoteSessionSnapshot:
         """Whether current totals may be disclosed to viewers."""
         return self.visibility is not VoteVisibility.ANONYMOUS_HIDDEN or self.status is VoteStatus.CLOSED
 
-    def should_remove_reaction_on_cast(self) -> bool:
-        """Return whether the transport should remove the reaction to hide the voter's choice."""
-        return self.is_anonymous
-
     def can_close(self, actor: Actor) -> VoteRejection | None:
         """Return why `actor` may not close this session, or None when they may."""
         if not isinstance(actor, UserActor) or self.kind is not VoteKind.GENERIC or self.poll is None:

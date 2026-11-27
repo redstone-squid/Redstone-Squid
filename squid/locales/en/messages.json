@@ -23737,7 +23737,7 @@
       }
     ],
     "locations": [
-      "squid/bot/voting/reactions.py:314"
+      "squid/bot/voting/reactions.py:315"
     ]
   },
   "vote-message-guild-mismatch": {
