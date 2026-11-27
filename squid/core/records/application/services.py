@@ -11,14 +11,14 @@ from uuid import UUID
 import anyio
 
 from squid.core.actors import ActingContext, application_operation
-from squid.core.errors import DataIntegrityError, InvalidStateError, ServiceUnavailableError
+from squid.core.errors import DataIntegrityError, InvalidStateError
 from squid.core.i18n import tr
 from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
 from squid.core.permissions.application.services import PermissionService
 from squid.core.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD
 from squid.core.records.application.affected import ScopeCategories, Threshold
 from squid.core.records.application.door_categories import door_category_lookup, family_at_category
-from squid.core.records.application.expansion_regions import DoorRangeQuery, DoorRangeResult
+from squid.core.records.application.expansion_regions import DoorRangeQuery
 from squid.core.records.application.history import reconstruct_history
 from squid.core.records.application.live import (
     LiveDoorRecord,
@@ -50,7 +50,6 @@ from squid.core.records.application.models import (
     ScopedCategory,
 )
 from squid.core.records.application.ports import (
-    DoorRangeAnalyzer,
     PublicBuildSummaryReader,
     RecomputeLease,
     RecordQueryUnitOfWork,
@@ -526,14 +525,10 @@ class RecordService:
         *,
         permissions: PermissionService,
         uow_factory: UnitOfWorkFactory[RecordUnitOfWork],
-        range_analyzer: DoorRangeAnalyzer | None = None,
-        range_concurrency: int = 2,
     ) -> None:
         self._uow_factory = uow_factory
         self._computation = computation
         self._permissions = permissions
-        self._range_analyzer = range_analyzer
-        self._range_limiter = anyio.CapacityLimiter(range_concurrency)
 
     @application_operation
     async def gaps(self, *, kind: BuildKind | None = None, context: ActingContext) -> Sequence[RecordGap]:
@@ -556,45 +551,6 @@ class RecordService:
         """Return one current record result."""
         async with self._uow_factory() as uow:
             return await uow.records.get_published_record(result_id)
-
-    @application_operation
-    async def lookup_door_ranges(self, request: DoorRangeQuery, *, context: ActingContext) -> DoorRangeResult:
-        """Analyze live smallest-record widths without publishing or storing regions.
-
-        Admission covers database loading and analysis. The worker receives
-        immutable facts after the read-only transaction closes. Saturation fails
-        immediately; requests do not queue with loaded candidate documents.
-        """
-        if self._range_analyzer is None:
-            raise ServiceUnavailableError(context={"reason": "range_analyzer_unavailable"})
-        try:
-            self._range_limiter.acquire_nowait()
-        except anyio.WouldBlock as error:
-            raise ServiceUnavailableError(context={"reason": "range_capacity"}) from error
-        try:
-            if request.follow_current_version:
-                async with self._uow_factory() as uow:
-                    version_id = await uow.records.active_current_version_id()
-                if version_id is None:
-                    raise ServiceUnavailableError(context={"reason": "current_version_unset"})
-                request = request.model_copy(update={"version_id": version_id, "follow_current_version": False})
-            async with self._uow_factory() as uow:
-                sources = tuple(
-                    await uow.record_candidates.list_for_door_widths(
-                        request.height,
-                        request.depth,
-                        request.orientation,
-                        request.version_id,
-                        minimum=request.minimum,
-                        maximum=request.maximum,
-                    )
-                )
-            result = await self._range_analyzer.analyze(
-                self._computation.door_range_candidates(request, sources), request
-            )
-            return DoorRangeResult(request, datetime.now(UTC), result.analysis, result.configurations)
-        finally:
-            self._range_limiter.release()
 
     @application_operation
     async def request_recompute(self, record_id: UUID, *, context: ActingContext) -> bool:

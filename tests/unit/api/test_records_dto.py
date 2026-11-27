@@ -15,6 +15,7 @@ from squid.api.security import ANONYMOUS
 from squid.api.v1.records import (
     get_door_ranges,
     get_record,
+    list_door_ranges,
     list_records,
     lookup_door_ranges,
 )
@@ -24,8 +25,14 @@ from squid.core.builds.domain import BuildCategory
 from squid.core.builds.domain.expansion import DoorExpansion, ExpansionBranch
 from squid.core.builds.domain.expansion_evaluation import PointStatus
 from squid.core.pagination import Page, PageAnchor
-from squid.core.records.application import PublicRecordQueryService, RecordService
-from squid.core.records.application.expansion_regions import DoorRangeQuery, DoorRangeResult, analyze_door_widths
+from squid.core.records.application import PublicRecordQueryService
+from squid.core.records.application.expansion_regions import (
+    DoorRangeQuery,
+    DoorRangeResult,
+    RangeLabels,
+    RangeTag,
+    analyze_door_widths,
+)
 from squid.core.records.application.live import LiveDoorConfiguration, LiveDoorRecord
 from squid.core.records.application.metrics import MetricUnit, RecordMetric
 from squid.core.records.application.models import (
@@ -36,8 +43,9 @@ from squid.core.records.application.models import (
     RecordListSort,
     RecordStatus,
 )
+from squid.core.records.application.range_ports import RangeListFilters
 from squid.core.records.application.range_publication import RangePublicationService
-from squid.core.records.application.range_snapshots import RangeAttempt, RangePublication
+from squid.core.records.application.range_snapshots import RangeAttempt, RangePublication, RangeRegistration
 from squid.core.records.domain import BuildKind, RecordCriterion, RecordResolution, VersionScope
 from squid.core.records.domain.door_evidence import DoorExpansionSource, DoorRecordEvidence
 from squid.core.records.domain.regions import RegionAnalysisStatus, SmallestRegionAnalysis
@@ -256,18 +264,22 @@ async def test_record_detail_serializes_the_application_read_model(expanded: boo
 
 @pytest.mark.parametrize("status", [RegionAnalysisStatus.EXACT, RegionAnalysisStatus.TIMED_OUT])
 async def test_range_lookup_serializes_live_analysis_and_validates_dimensions(status: RegionAnalysisStatus) -> None:
-    records = create_autospec(RecordService, instance=True)
+    publications = create_autospec(RangePublicationService, instance=True)
     analysis = analyze_door_widths((), height=3).analysis
     if status is RegionAnalysisStatus.TIMED_OUT:
         analysis = SmallestRegionAnalysis(status, diagnostic="Elapsed-time limit exceeded.")
     query = DoorRangeQuery(height=3)
-    records.lookup_door_ranges.return_value = DoorRangeResult(
-        query, datetime(2026, 8, 10, 12, tzinfo=UTC), analysis, ()
+    publications.lookup.return_value = DoorRangeResult(
+        query,
+        datetime(2026, 8, 10, 12, tzinfo=UTC),
+        analysis,
+        (),
+        labels=RangeLabels(restrictions=(RangeTag(7, "Width", "width", "at_most", "4"),), version="Java 1.21.5"),
     )
     handler = post(
         "/records/lookup/door/ranges",
         status_code=200,
-        dependencies={"records": Provide(lambda: records, sync_to_thread=False)},
+        dependencies={"publications": Provide(lambda: publications, sync_to_thread=False)},
     )(lookup_door_ranges.fn)
     app = Litestar([handler], dependencies={"caller": Provide(lambda: ANONYMOUS, sync_to_thread=False)})
     transport = httpx.ASGITransport(app=app)  # type: ignore[bad-argument-type]
@@ -282,9 +294,14 @@ async def test_range_lookup_serializes_live_analysis_and_validates_dimensions(st
             assert body["analysis"]["regions"] == []
         else:
             assert body["analysis"]["regions"][0]["domain"]["maximum"] is None
-        records.lookup_door_ranges.assert_awaited_once_with(query, context=ANONYMOUS.context())
-        records.lookup_or_materialize.assert_not_called()
-        records.lookup_door_ranges.reset_mock()
+        assert body["labels"] == {
+            "types": [],
+            "restrictions": [{"id": 7, "name": "Width", "slug": "width", "operator": "at_most", "value": "4"}],
+            "version": "Java 1.21.5",
+        }
+        assert body["holders"] == []
+        publications.lookup.assert_awaited_once_with(query, context=ANONYMOUS.context())
+        publications.lookup.reset_mock()
         for invalid in (
             {"height": 0},
             {"height": True},
@@ -299,10 +316,40 @@ async def test_range_lookup_serializes_live_analysis_and_validates_dimensions(st
         ):
             response = await client.post("/records/lookup/door/ranges", json=invalid)
             assert response.status_code == 400, invalid
-        records.lookup_door_ranges.assert_not_called()
+        publications.lookup.assert_not_called()
     schemas = app.openapi_schema.to_schema()["components"]["schemas"]
     assert "DoorRangeQuery" in schemas
     assert "DoorRangeResult" in schemas
+
+
+async def test_registered_ranges_list_filters_and_names_their_tags() -> None:
+    publications = create_autospec(RangePublicationService, instance=True)
+    registration = RangeRegistration(
+        7,
+        DoorRangeQuery(height=3, type_ids=frozenset({20})),
+        published_at=datetime(2026, 11, 14, tzinfo=UTC),
+        last_checked_at=None,
+        refresh_pending=False,
+        labels=RangeLabels(types=(RangeTag(20, "Flush", "flush"),)),
+    )
+    publications.list_page.return_value = Page(items=(registration,), total=1, next=None, prev=None)
+    handler = get(
+        "/records/ranges/door",
+        dependencies={"publications": Provide(lambda: publications, sync_to_thread=False)},
+    )(list_door_ranges.fn)
+    app = Litestar([handler], dependencies={"caller": Provide(lambda: ANONYMOUS, sync_to_thread=False)})
+    transport = httpx.ASGITransport(app=app)  # type: ignore[bad-argument-type]
+    async with httpx.AsyncClient(transport=transport, base_url="https://test") as client:
+        response = await client.get("/records/ranges/door", params={"orientation": "Door", "height": 3})
+        assert response.status_code == 200
+        (item,) = response.json()["items"]
+        assert item["query_id"] == 7
+        assert item["labels"]["types"] == [
+            {"id": 20, "name": "Flush", "slug": "flush", "operator": None, "value": None}
+        ]
+        assert item["published_at"] == "2026-11-14T00:00:00Z"
+        assert publications.list_page.call_args.args == (RangeListFilters("Door", 3, None),)
+        assert (await client.get("/records/ranges/door", params={"height": 0})).status_code == 400
 
 
 async def test_published_ranges_show_active_and_failed_latest_attempts() -> None:

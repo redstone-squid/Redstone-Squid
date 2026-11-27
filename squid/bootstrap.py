@@ -355,6 +355,7 @@ class _ServiceGraph:
             self.permissions,
             uow_factory=self.uow_factory,
             analyzer=SubprocessRangeAnalyzer(),
+            builds=self.build_queries,
         )
 
     @cached_property
@@ -363,7 +364,6 @@ class _ServiceGraph:
             self.record_computation,
             permissions=self.permissions,
             uow_factory=self.uow_factory,
-            range_analyzer=SubprocessRangeAnalyzer(),
         )
 
     @cached_property

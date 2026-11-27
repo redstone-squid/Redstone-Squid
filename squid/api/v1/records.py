@@ -6,7 +6,7 @@ from uuid import UUID
 
 from litestar import Router, get, post
 from litestar.di import Provide
-from litestar.params import FromPath, FromQuery, JSONBody, PathParameter
+from litestar.params import FromPath, FromQuery, JSONBody, PathParameter, QueryParameter
 
 from squid.api.contract import ANONYMOUS, DEVICE, SERVICE, WEB, WEB_WRITE, contract, transport_only
 from squid.api.dependencies import (
@@ -33,6 +33,7 @@ from squid.api.pagination import (
 )
 from squid.api.security import requires
 from squid.api.v1.browser_views import BrowserViews
+from squid.core.builds.domain import DoorOrientationLiteral
 from squid.core.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD
 from squid.core.records.application.expansion_regions import DoorRangeQuery, DoorRangeResult
 from squid.core.records.application.models import (
@@ -46,7 +47,8 @@ from squid.core.records.application.models import (
     RecordStatus,
 )
 from squid.core.records.application.published_points import PublishedDoorPoint
-from squid.core.records.application.range_snapshots import RangePublication
+from squid.core.records.application.range_ports import RangeListFilters
+from squid.core.records.application.range_snapshots import RangePublication, RangeRegistration
 from squid.core.records.domain import BuildKind, RecordCriterion, VersionScope
 from squid.core.records.errors import RecordNotFoundError
 
@@ -125,18 +127,48 @@ async def list_records(
     status_code=200,
     responses=responses(400, 422, 503),
     operation_id="records_lookup_door_ranges",
+    dependencies={"publications": Provide(get_range_publication, sync_to_thread=False)},
     security=[ANONYMOUS],
     opt=contract(cli=transport_only()),
 )
 async def lookup_door_ranges(
-    data: JSONBody[DoorRangeQuery], records: Records, caller: CurrentCaller
+    data: JSONBody[DoorRangeQuery], publications: RangePublications, caller: CurrentCaller
 ) -> DoorRangeResult:
     """Find smallest-record width ranges at fixed height and depth.
 
     Results are live and never published. Unsupported inputs, exhausted limits,
     and timeouts return an analysis status with no awarded ranges.
     """
-    return await records.lookup_door_ranges(data, context=caller.context())
+    return await publications.lookup(data, context=caller.context())
+
+
+@get(
+    "/ranges/door",
+    responses=responses(400, 422, 503),
+    operation_id="records_list_door_ranges",
+    dependencies={"publications": Provide(get_range_publication, sync_to_thread=False)},
+    security=[ANONYMOUS],
+    opt=contract(cli=transport_only()),
+)
+async def list_door_ranges(
+    publications: RangePublications,
+    caller: CurrentCaller,
+    orientation: FromQuery[DoorOrientationLiteral | None] = None,
+    height: Annotated[int | None, QueryParameter(ge=1, le=2**31 - 1)] = None,
+    depth: Annotated[int | None, QueryParameter(ge=1, le=2**31 - 1)] = None,
+    page_size: PageSizeParam = 20,
+    offset: OffsetParam = None,
+    after_id: AfterIdParam = None,
+    before_id: BeforeIdParam = None,
+) -> Page[RangeRegistration]:
+    """List registered door range queries newest first, with the names of their tags and version."""
+    page = await publications.list_page(
+        RangeListFilters(orientation, height, depth),
+        selector=resolve_selector(offset=offset, after_id=after_id, before_id=before_id),
+        page_size=page_size,
+        context=caller.context(),
+    )
+    return Page[RangeRegistration].from_domain(page)
 
 
 @get(
@@ -329,6 +361,7 @@ router = Router(
         get_record,
         list_records,
         lookup_door_ranges,
+        list_door_ranges,
         get_door_ranges,
         register_door_ranges,
         refresh_door_ranges,

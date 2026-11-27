@@ -13916,23 +13916,153 @@
         }
       }
     },
-    "/v1/records/ranges/door/{query_id}": {
+    "/v1/records/ranges/door": {
       "get": {
         "tags": [
           "records"
         ],
-        "summary": "GetDoorRanges",
-        "description": "Read a registered query's active publication and latest computation attempt.",
-        "operationId": "records_get_door_ranges",
+        "summary": "ListDoorRanges",
+        "description": "List registered door range queries newest first, with the names of their tags and version.",
+        "operationId": "records_list_door_ranges",
         "parameters": [
           {
-            "name": "query_id",
-            "in": "path",
+            "name": "orientation",
+            "in": "query",
             "schema": {
-              "type": "integer"
+              "type": [
+                "null",
+                "string"
+              ],
+              "enum": [
+                "Door",
+                "Skydoor",
+                "Trapdoor",
+                null
+              ]
             },
-            "required": true,
-            "deprecated": false
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "height",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maximum": 2147483647,
+              "minimum": 1
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "depth",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maximum": 2147483647,
+              "minimum": 1
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "maximum": 50.0,
+              "minimum": 1.0,
+              "description": "Maximum number of items to return.",
+              "default": 20
+            },
+            "description": "Maximum number of items to return.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maximum": 10000,
+              "description": "Number of items to skip. Excludes after_id and before_id."
+            },
+            "description": "Number of items to skip. Excludes after_id and before_id.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "after_id",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "minimum": 1,
+              "description": "Return the items after this identifier in display order. Excludes offset."
+            },
+            "description": "Return the items after this identifier in display order. Excludes offset.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "before_id",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "minimum": 1,
+              "description": "Return the items before this identifier in display order. Excludes offset."
+            },
+            "description": "Return the items before this identifier in display order. Excludes offset.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
           }
         ],
         "responses": {
@@ -13946,13 +14076,13 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/RangePublication"
+                  "$ref": "#/components/schemas/Page_squid.core.records.application.range_snapshots.RangeRegistration_"
                 }
               }
             }
           },
-          "429": {
-            "description": "Too Many Requests",
+          "400": {
+            "description": "Bad Request",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -13966,8 +14096,8 @@
               }
             }
           },
-          "404": {
-            "description": "Not Found",
+          "429": {
+            "description": "Too Many Requests",
             "content": {
               "application/problem+json": {
                 "schema": {
@@ -14019,9 +14149,7 @@
         "x-squid-cli": {
           "classification": "transport-only"
         }
-      }
-    },
-    "/v1/records/ranges/door": {
+      },
       "post": {
         "tags": [
           "records"
@@ -14197,6 +14325,111 @@
             "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
           }
         ]
+      }
+    },
+    "/v1/records/ranges/door/{query_id}": {
+      "get": {
+        "tags": [
+          "records"
+        ],
+        "summary": "GetDoorRanges",
+        "description": "Read a registered query's active publication and latest computation attempt.",
+        "operationId": "records_get_door_ranges",
+        "parameters": [
+          {
+            "name": "query_id",
+            "in": "path",
+            "schema": {
+              "type": "integer"
+            },
+            "required": true,
+            "deprecated": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RangePublication"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {}
+        ],
+        "x-squid-cli": {
+          "classification": "transport-only"
+        }
       }
     },
     "/v1/records/ranges/door/{query_id}/refresh": {
@@ -28542,6 +28775,16 @@
               "$ref": "#/components/schemas/DoorRegionConfiguration"
             },
             "type": "array"
+          },
+          "labels": {
+            "$ref": "#/components/schemas/RangeLabels"
+          },
+          "holders": {
+            "items": {
+              "$ref": "#/components/schemas/RecordHolderSummary"
+            },
+            "type": "array",
+            "default": []
           }
         },
         "type": "object",
@@ -32476,6 +32719,47 @@
         ],
         "title": "Page[RecordDrift]"
       },
+      "Page_squid.core.records.application.range_snapshots.RangeRegistration_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RangeRegistration"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "next": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prev": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "next",
+          "prev",
+          "total"
+        ],
+        "title": "Page[RangeRegistration]"
+      },
       "PaperChallengeCreateRequest": {
         "properties": {
           "java_uuid": {
@@ -34095,6 +34379,37 @@
         ],
         "title": "RangeAttemptSummary"
       },
+      "RangeLabels": {
+        "properties": {
+          "types": {
+            "items": {
+              "$ref": "#/components/schemas/RangeTag"
+            },
+            "type": "array",
+            "default": []
+          },
+          "restrictions": {
+            "items": {
+              "$ref": "#/components/schemas/RangeTag"
+            },
+            "type": "array",
+            "default": []
+          },
+          "version": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [],
+        "title": "RangeLabels"
+      },
       "RangePublication": {
         "properties": {
           "query_id": {
@@ -34137,6 +34452,16 @@
           "refresh_pending": {
             "type": "boolean",
             "default": false
+          },
+          "labels": {
+            "$ref": "#/components/schemas/RangeLabels"
+          },
+          "holders": {
+            "items": {
+              "$ref": "#/components/schemas/RecordHolderSummary"
+            },
+            "type": "array",
+            "default": []
           }
         },
         "type": "object",
@@ -34147,6 +34472,93 @@
           "query_id"
         ],
         "title": "RangePublication"
+      },
+      "RangeRegistration": {
+        "properties": {
+          "query_id": {
+            "type": "integer"
+          },
+          "query": {
+            "$ref": "#/components/schemas/DoorRangeQuery"
+          },
+          "published_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "last_checked_at": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "refresh_pending": {
+            "type": "boolean"
+          },
+          "labels": {
+            "$ref": "#/components/schemas/RangeLabels"
+          }
+        },
+        "type": "object",
+        "required": [
+          "last_checked_at",
+          "published_at",
+          "query",
+          "query_id",
+          "refresh_pending"
+        ],
+        "title": "RangeRegistration"
+      },
+      "RangeTag": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "operator": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "value": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "slug"
+        ],
+        "title": "RangeTag"
       },
       "Reason": {
         "type": "string",

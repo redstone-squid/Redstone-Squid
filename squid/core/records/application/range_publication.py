@@ -1,21 +1,31 @@
 """Capture immutable inputs, compute outside transactions, and publish complete ranges."""
 
 import logging
+from collections.abc import Sequence
 from contextlib import suppress
+from dataclasses import replace
 from datetime import UTC, datetime
 
 import anyio
 
 from squid.core.actors import ActingContext, application_operation
+from squid.core.errors import ServiceUnavailableError
+from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
 from squid.core.permissions.application.services import PermissionService
 from squid.core.permissions.domain.catalogue import RECORD_ENTRY_REBUILD
-from squid.core.records.application.expansion_regions import DoorRangeQuery
-from squid.core.records.application.ports import DoorRangeAnalyzer
+from squid.core.records.application.expansion_regions import DoorRangeQuery, DoorRangeResult
+from squid.core.records.application.metrics import RecordHolderSummary
+from squid.core.records.application.ports import DoorRangeAnalyzer, PublicBuildSummaryReader
 from squid.core.records.application.published_points import (
     PublishedDoorPoint,
 )
-from squid.core.records.application.range_ports import RangePublicationUnitOfWork
-from squid.core.records.application.range_snapshots import RangePublication, RangeSnapshotDocument, RangeSource
+from squid.core.records.application.range_ports import RangeListFilters, RangePublicationUnitOfWork
+from squid.core.records.application.range_snapshots import (
+    RangePublication,
+    RangeRegistration,
+    RangeSnapshotDocument,
+    RangeSource,
+)
 from squid.core.records.application.services import RecordComputationService
 from squid.core.records.domain.regions import DEFAULT_REGION_LIMITS, RegionAnalysisStatus
 from squid.core.unit_of_work import UnitOfWorkFactory
@@ -25,12 +35,14 @@ logger = logging.getLogger(__name__)
 
 
 class RangePublicationService:
-    """Publish registered queries independently from the fixed-title catalogue.
+    """Analyze door width ranges live, and publish registered queries.
 
     Registration opts a query into door recomputation. Each attempt reserves its
     generation before reading candidates, saves its snapshot before arithmetic,
     and activates only if no newer attempt has been reserved. Failed analyses
     remain inspectable while readers retain the previous exact result.
+
+    Results name their tags and version and summarize their public holders.
     """
 
     def __init__(
@@ -40,12 +52,95 @@ class RangePublicationService:
         *,
         uow_factory: UnitOfWorkFactory[RangePublicationUnitOfWork],
         analyzer: DoorRangeAnalyzer,
+        builds: PublicBuildSummaryReader,
+        live_concurrency: int = 2,
     ) -> None:
         self._computation = computation
         self._permissions = permissions
         self._uow_factory = uow_factory
         self._analyzer = analyzer
+        self._builds = builds
         self._limiter = anyio.CapacityLimiter(1)
+        self._live_limiter = anyio.CapacityLimiter(live_concurrency)
+
+    @application_operation
+    async def lookup(self, request: DoorRangeQuery, *, context: ActingContext) -> DoorRangeResult:
+        """Analyze live smallest-record widths without publishing or storing regions.
+
+        Admission covers database loading and analysis. The worker receives
+        immutable facts after the read-only transaction closes. Saturation fails
+        immediately; requests do not queue with loaded candidate documents.
+        """
+        try:
+            self._live_limiter.acquire_nowait()
+        except anyio.WouldBlock as error:
+            raise ServiceUnavailableError(context={"reason": "range_capacity"}) from error
+        try:
+            if request.follow_current_version:
+                async with self._uow_factory() as uow:
+                    version_id = await uow.records.active_current_version_id()
+                if version_id is None:
+                    raise ServiceUnavailableError(context={"reason": "current_version_unset"})
+                request = request.model_copy(update={"version_id": version_id, "follow_current_version": False})
+            async with self._uow_factory() as uow:
+                sources = tuple(
+                    await uow.record_candidates.list_for_door_widths(
+                        request.height,
+                        request.depth,
+                        request.orientation,
+                        request.version_id,
+                        minimum=request.minimum,
+                        maximum=request.maximum,
+                    )
+                )
+            result = await self._analyzer.analyze(self._computation.door_range_candidates(request, sources), request)
+        finally:
+            self._live_limiter.release()
+        holder_ids = (id for region in result.analysis.regions for id in region.resolution.holder_ids)
+        async with self._uow_factory() as uow:
+            (labels,) = await uow.record_ranges.labels(((request, request.version_id),))
+        return DoorRangeResult(
+            request,
+            datetime.now(UTC),
+            result.analysis,
+            result.configurations,
+            labels=labels,
+            holders=await self._holders(tuple(dict.fromkeys(holder_ids)), context=context),
+        )
+
+    @application_operation
+    async def list_page(
+        self,
+        filters: RangeListFilters,
+        *,
+        selector: PageSelector = FIRST_PAGE,
+        page_size: int = 20,
+        context: ActingContext,
+    ) -> Page[RangeRegistration]:
+        """Return registered queries newest first, with their labels."""
+        async with self._uow_factory() as uow:
+            rows = await uow.record_ranges.list_registrations(filters, selector=selector, limit=page_size + 1)
+            page = keyset_page(
+                rows,
+                selector=selector,
+                page_size=page_size,
+                total=await uow.record_ranges.count_registrations(filters),
+                id_of=lambda registration: registration.query_id,
+            )
+            # Following the pin names the version it currently resolves to.
+            pinned = await uow.records.active_current_version_id()
+            labels = await uow.record_ranges.labels(
+                tuple(
+                    (item.query, pinned if item.query.follow_current_version else item.query.version_id)
+                    for item in page.items
+                )
+            )
+        items = tuple(replace(item, labels=label) for item, label in zip(page.items, labels, strict=True))
+        return Page(items, page.total, page.next, page.prev)
+
+    async def _holders(self, build_ids: Sequence[int], *, context: ActingContext) -> tuple[RecordHolderSummary, ...]:
+        builds = await self._builds.get_public_summaries(build_ids, context=context) if build_ids else ()
+        return tuple(RecordHolderSummary.from_build(build) for build in builds)
 
     async def register(self, query: DoorRangeQuery, *, context: ActingContext) -> int:
         """Register a query and queue its initial computation; duplicates reuse its ID."""
@@ -69,7 +164,12 @@ class RangePublicationService:
     async def get(self, query_id: int, *, context: ActingContext) -> RangePublication | None:
         """Read publication metadata and saved results without consulting live builds."""
         async with self._uow_factory() as uow:
-            return await uow.record_ranges.get(query_id)
+            publication = await uow.record_ranges.get(query_id)
+            if publication is None:
+                return None
+            (labels,) = await uow.record_ranges.labels(((publication.query, publication.version_id),))
+        holders = await self._holders(publication.holder_ids, context=context)
+        return replace(publication, labels=labels, holders=holders)
 
     @application_operation
     async def get_point(self, query_id: int, width: int, *, context: ActingContext) -> PublishedDoorPoint | None:

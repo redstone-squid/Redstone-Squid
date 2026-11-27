@@ -16,7 +16,8 @@ from squid.core.permissions.application.services import PermissionService
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.records.application.expansion_regions import DoorRangeQuery
 from squid.core.records.application.live import DoorRecordLookup, evaluate_door_record
-from squid.core.records.application.services import RecordComputationService, RecordService
+from squid.core.records.application.range_publication import RangePublicationService
+from squid.core.records.application.services import RecordComputationService
 from squid.core.records.domain import BuildKind, TimingVariant
 from squid.core.records.domain.regions import RegionAnalysisStatus
 from squid.core.records.infrastructure.range_analyzer import SubprocessRangeAnalyzer
@@ -32,6 +33,7 @@ from squid.core.records.models import (
 from squid.core.versions.models import Version
 from tests.support.build_edits import build_edit_session
 from tests.support.database import record_queries
+from tests.support.public_builds import public_builds
 
 
 def document() -> DoorExpansion:
@@ -212,14 +214,15 @@ async def test_width_lookup_reads_stored_families_and_fixed_exceptions_without_w
     async with sessions() as session:
         before = [await session.scalar(select(func.count()).select_from(model)) for model in models]
     factory = partial(SqlAlchemyUnitOfWork, sessions)
-    service = RecordService(
+    service = RangePublicationService(
         RecordComputationService(uow_factory=factory),
-        permissions=PermissionService(uow_factory=factory),
+        PermissionService(uow_factory=factory),
         uow_factory=factory,
-        range_analyzer=SubprocessRangeAnalyzer(),
+        analyzer=SubprocessRangeAnalyzer(),
+        builds=public_builds(factory),
     )
     with record_queries(sessions) as statements:
-        result = await service.lookup_door_ranges(
+        result = await service.lookup(
             DoorRangeQuery(height=3, version_id=version_id), context=ActingContext.direct(AnonymousActor())
         )
         assert result.analysis.status is RegionAnalysisStatus.EXACT
@@ -234,7 +237,7 @@ async def test_width_lookup_reads_stored_families_and_fixed_exceptions_without_w
                 DoorRecordLookup(opening=(width, 3, 1), version_id=version_id), sources, evaluated_at=datetime.now(UTC)
             )
             assert region.resolution == expected.resolution
-        clipped = await service.lookup_door_ranges(
+        clipped = await service.lookup(
             DoorRangeQuery(
                 height=3,
                 minimum=7,
@@ -245,7 +248,7 @@ async def test_width_lookup_reads_stored_families_and_fixed_exceptions_without_w
         )
         assert {c.build_id for c in clipped.configurations} == {family_id}
         assert all(r.resolution.holder_ids == (family_id,) for r in clipped.analysis.regions)
-        empty = await service.lookup_door_ranges(
+        empty = await service.lookup(
             DoorRangeQuery(height=3, orientation="Skydoor"), context=ActingContext.direct(AnonymousActor())
         )
         assert empty.analysis.status is RegionAnalysisStatus.EXACT

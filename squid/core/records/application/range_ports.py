@@ -5,9 +5,23 @@ from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
 
-from squid.core.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery
+from squid.core.pagination import PageSelector
+from squid.core.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery, RangeLabels
+from squid.core.records.application.live import DoorRecordCategory
 from squid.core.records.application.ports import RecordUnitOfWork
-from squid.core.records.application.range_snapshots import RangeAttempt, RangePublication, RangeSnapshotDocument
+from squid.core.records.application.range_snapshots import (
+    RangeAttempt,
+    RangePublication,
+    RangeRegistration,
+    RangeSnapshotDocument,
+)
+
+
+@dataclass(frozen=True, slots=True)
+class RangeListFilters:
+    orientation: str | None = None
+    height: int | None = None
+    depth: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,6 +55,18 @@ class RangePublicationRepository(Protocol):
         ...
 
     async def get(self, query_id: int) -> RangePublication | None: ...
+
+    async def list_registrations(
+        self, filters: RangeListFilters, *, selector: PageSelector, limit: int
+    ) -> Sequence[RangeRegistration]:
+        """List registrations newest first; a `before_id` page is returned in display order."""
+        ...
+
+    async def count_registrations(self, filters: RangeListFilters) -> int: ...
+
+    async def labels(self, queries: Sequence[tuple[DoorRecordCategory, int | None]]) -> tuple[RangeLabels, ...]:
+        """Name each category's tags and version, in the order given."""
+        ...
 
 
 class RangePublicationUnitOfWork(RecordUnitOfWork, Protocol):

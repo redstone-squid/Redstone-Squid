@@ -17,6 +17,7 @@ from squid.core.records.domain import BuildKind
 from squid.core.records.infrastructure.range_analyzer import SubprocessRangeAnalyzer
 from squid.core.records.models import DoorRangeRecomputeQueueItem, RecordRecomputeQueueItem, RecordSettings
 from squid.core.versions.models import Version
+from tests.support.public_builds import NoPublicBuilds
 
 
 async def test_pin_invalidates_both_kinds_and_is_not_changed_by_fixed_publications(
@@ -98,6 +99,7 @@ async def test_current_ranges_follow_the_pin_without_changing_fixed_queries(
         PermissionService(uow_factory=factory),
         uow_factory=factory,
         analyzer=PinChangingAnalyzer(),
+        builds=NoPublicBuilds(),
     )
     fixed = await publisher.publish(
         DoorRangeQuery(height=3, version_id=first_id), context=ActingContext.direct(AnonymousActor())
@@ -133,6 +135,7 @@ async def test_current_range_without_a_pin_stays_pending(
         PermissionService(uow_factory=factory),
         uow_factory=factory,
         analyzer=SubprocessRangeAnalyzer(),
+        builds=NoPublicBuilds(),
     )
     query_id = await publisher.register(
         DoorRangeQuery(height=3, follow_current_version=True),

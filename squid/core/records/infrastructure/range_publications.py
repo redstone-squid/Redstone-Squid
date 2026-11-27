@@ -3,21 +3,26 @@
 import hashlib
 import json
 from collections.abc import Callable, Sequence
-from typing import cast
+from typing import Any, cast
 
 from pydantic import TypeAdapter
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import Select, and_, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 from whenever import Instant
 
 from squid.core.errors import InvalidStateError
+from squid.core.pagination import PageSelector
+from squid.core.persistence.paging import KeysetOrder
 from squid.core.persistence.queue import ClaimedRowQueue, QueueSpec
-from squid.core.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery
-from squid.core.records.application.range_ports import RangeRefreshClaim
+from squid.core.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery, RangeLabels, RangeTag
+from squid.core.records.application.live import DoorRecordCategory
+from squid.core.records.application.range_ports import RangeListFilters, RangeRefreshClaim
 from squid.core.records.application.range_snapshots import (
     RangeAttempt,
     RangePublication,
+    RangeRegistration,
     RangeSnapshotDocument,
     canonical_range_query,
 )
@@ -30,6 +35,8 @@ from squid.core.records.models import (
     RecordSettings,
     RulesRevision,
 )
+from squid.core.tags.models import TagDefinition
+from squid.core.versions.models import Version
 
 _RESULT = TypeAdapter(DoorRangeAnalysis)
 
@@ -269,6 +276,79 @@ class PostgresRangePublicationRepository:
             last_checked_at=None if registration.last_checked_at is None else registration.last_checked_at.to_stdlib(),
             refresh_pending=rows[0][3],
         )
+
+    async def list_registrations(
+        self, filters: RangeListFilters, *, selector: PageSelector, limit: int
+    ) -> Sequence[RangeRegistration]:
+        session = self._session()
+        active = aliased(DoorRangeRun)
+        pending = select(DoorRangeRecomputeQueueItem.query_id).where(
+            DoorRangeRecomputeQueueItem.query_id == DoorRangeRegistration.id
+        )
+        listing = _filtered(
+            select(DoorRangeRegistration, active.completed_at, pending.exists().label("refresh_pending")).outerjoin(
+                active, (active.query_id == DoorRangeRegistration.id) & active.is_active
+            ),
+            filters,
+        )
+        order = KeysetOrder(DoorRangeRegistration.id, DoorRangeRegistration.id, descending=True)
+        rows = (await session.execute((await order.apply(session, listing, selector)).limit(limit))).all()
+        return tuple(
+            RangeRegistration(
+                registration.id,
+                DoorRangeQuery.model_validate(registration.query),
+                None if published_at is None else published_at.to_stdlib(),
+                None if registration.last_checked_at is None else registration.last_checked_at.to_stdlib(),
+                refresh_pending,
+            )
+            for registration, published_at, refresh_pending in (rows[::-1] if selector.before_id is not None else rows)
+        )
+
+    async def count_registrations(self, filters: RangeListFilters) -> int:
+        statement = _filtered(select(func.count()).select_from(DoorRangeRegistration), filters)
+        return await self._session().scalar(statement) or 0
+
+    async def labels(self, queries: Sequence[tuple[DoorRecordCategory, int | None]]) -> tuple[RangeLabels, ...]:
+        session = self._session()
+        tag_ids = {tag_id for query, _ in queries for tag_id in (*query.type_ids, *query.restriction_ids)}
+        version_ids = {version_id for _, version_id in queries if version_id is not None}
+        tags = {
+            tag_id: (name, slug)
+            for tag_id, name, slug in await session.execute(
+                select(TagDefinition.id, TagDefinition.display_name, TagDefinition.slug).where(
+                    TagDefinition.id.in_(tag_ids)
+                )
+            )
+        }
+        versions = {
+            version.id: version.name
+            for version in await session.scalars(select(Version).where(Version.id.in_(version_ids)))
+        }
+
+        def described(query: DoorRecordCategory, version_id: int | None) -> RangeLabels:
+            thresholds = {tag_id: (operator, value) for tag_id, operator, value in query.restriction_values}
+            return RangeLabels(
+                types=tuple(RangeTag(tag_id, *tags[tag_id]) for tag_id in sorted(query.type_ids) if tag_id in tags),
+                restrictions=tuple(
+                    RangeTag(tag_id, *tags[tag_id], *thresholds.get(tag_id, (None, None)))
+                    for tag_id in sorted(query.restriction_ids)
+                    if tag_id in tags
+                ),
+                version=versions.get(version_id) if version_id is not None else None,
+            )
+
+        return tuple(described(query, version_id) for query, version_id in queries)
+
+
+def _filtered[S: Select[*tuple[Any, ...]]](statement: S, filters: RangeListFilters) -> S:
+    query = DoorRangeRegistration.query
+    if filters.orientation is not None:
+        statement = statement.where(query["orientation"].astext == filters.orientation)
+    if filters.height is not None:
+        statement = statement.where(query["height"].as_integer() == filters.height)
+    if filters.depth is not None:
+        statement = statement.where(query["depth"].as_integer() == filters.depth)
+    return statement
 
 
 def _attempt(run: DoorRangeRun, snapshot: DoorRangeSnapshot | None) -> RangeAttempt:

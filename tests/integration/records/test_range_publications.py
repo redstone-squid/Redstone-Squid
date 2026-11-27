@@ -19,9 +19,15 @@ from squid.core.errors import InvalidStateError
 from squid.core.permissions.application.services import PermissionService
 from squid.core.permissions.errors import PermissionDeniedError
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
-from squid.core.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery, analyze_door_widths
+from squid.core.records.application.expansion_regions import (
+    DoorRangeAnalysis,
+    DoorRangeQuery,
+    RangeTag,
+    analyze_door_widths,
+)
 from squid.core.records.application.models import CandidateBuild
 from squid.core.records.application.ports import DoorRangeAnalyzer
+from squid.core.records.application.range_ports import RangeListFilters
 from squid.core.records.application.range_publication import RangePublicationService
 from squid.core.records.application.range_snapshots import RangeSnapshotDocument, RangeSource
 from squid.core.records.application.services import RecordComputationService
@@ -29,7 +35,10 @@ from squid.core.records.domain.regions import RegionAnalysisStatus
 from squid.core.records.infrastructure.range_analyzer import SubprocessRangeAnalyzer
 from squid.core.records.infrastructure.range_wire import failed_analysis
 from squid.core.records.models import DoorRangeRecomputeQueueItem, DoorRangeSnapshot, RulesRevision
+from squid.core.tags.domain.models import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
+from squid.core.tags.models import TagDefinition
 from tests.support.build_edits import build_edit_session
+from tests.support.public_builds import NoPublicBuilds, public_builds
 from tests.unit.records.application.test_expansion_regions import branch, family
 
 ADMIN = ActingContext.direct(UserActor(account_id=7, is_bot_owner=True))
@@ -197,6 +206,7 @@ async def test_publication_uses_saved_inputs_despite_live_edits_and_queue_refres
         PermissionService(uow_factory=factory),
         uow_factory=factory,
         analyzer=EditingAnalyzer(),
+        builds=NoPublicBuilds(),
     )
     first = await publisher.publish(DoorRangeQuery(height=3), context=ActingContext.direct(AnonymousActor()))
     assert first.active is not None
@@ -243,6 +253,7 @@ async def test_cancelled_publication_records_failure_and_preserves_previous_resu
         PermissionService(uow_factory=factory),
         uow_factory=factory,
         analyzer=analyzer,
+        builds=NoPublicBuilds(),
     )
     query = DoorRangeQuery(height=3)
     first = await publisher.publish(query, context=ActingContext.direct(AnonymousActor()))
@@ -313,6 +324,7 @@ async def test_registration_deduplicates_and_refresh_preserves_new_queue_work(
         PermissionService(uow_factory=factory),
         uow_factory=factory,
         analyzer=analyzer,
+        builds=NoPublicBuilds(),
     )
     query = DoorRangeQuery(
         height=3, restriction_ids=frozenset({7, 8}), restriction_values=((7, "exact", "3"), (8, "at_most", "4"))
@@ -354,6 +366,7 @@ async def test_refresh_attempts_every_query_before_reporting_a_failure(
         PermissionService(uow_factory=factory),
         uow_factory=factory,
         analyzer=analyzer,
+        builds=NoPublicBuilds(),
     )
     broken = await publisher.register(DoorRangeQuery(height=3), context=ADMIN)
     healthy = await publisher.register(DoorRangeQuery(height=4), context=ADMIN)
@@ -400,6 +413,7 @@ async def test_query_with_too_many_sources_saves_no_snapshot(
         PermissionService(uow_factory=factory),
         uow_factory=factory,
         analyzer=analyzer,
+        builds=NoPublicBuilds(),
     )
     publication = await publisher.publish(DoorRangeQuery(height=3), context=ActingContext.direct(AnonymousActor()))
     assert publication.active is None
@@ -421,6 +435,7 @@ async def test_inexact_refresh_keeps_publication_and_retries_only_that_query(
         PermissionService(uow_factory=factory),
         uow_factory=factory,
         analyzer=analyzer,
+        builds=NoPublicBuilds(),
     )
     query_id = await publisher.register(DoorRangeQuery(height=3), context=ADMIN)
     assert await publisher.process_queue(context=ActingContext.worker("test-worker")) == (1, 0)
@@ -456,6 +471,7 @@ async def test_unchanged_range_keeps_publication_and_advances_last_checked(
         PermissionService(uow_factory=factory),
         uow_factory=factory,
         analyzer=analyzer,
+        builds=NoPublicBuilds(),
     )
     query_id = await publisher.register(DoorRangeQuery(height=3), context=ADMIN)
     assert await publisher.process_queue(context=ActingContext.worker("test-worker")) == (1, 0)
@@ -481,3 +497,60 @@ async def test_unchanged_range_keeps_publication_and_advances_last_checked(
     assert checked.last_checked_at is not None
     assert checked.last_checked_at >= first.last_checked_at
     assert not checked.refresh_pending
+
+
+async def test_publications_and_listings_name_tags_and_summarize_holders(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    sessions = migrated_session_factory
+    factory = partial(SqlAlchemyUnitOfWork, sessions)
+    async with build_edit_session(sessions) as session:
+        account = Account()
+        session.add(account)
+        session.add(
+            TagDefinition(
+                id=901,
+                stable_key="flush",
+                display_name="Flush",
+                authority=TagAuthority.OFFICIAL,
+                semantic_kind=TagSemanticKind.RESTRICTION,
+                restriction_type="miscellaneous",
+                value_type=TagValueType.NONE,
+                moderation_status=TagModerationStatus.APPROVED,
+            )
+        )
+        await session.flush()
+        door = DoorBuild(
+            submitter_account_id=account.id,
+            submission_status=BuildStatus.APPROVED,
+            orientation="Door",
+            expansion=family(branch(volume="10n")).expansion,
+        )
+        session.add(door)
+        await session.flush()
+        build_id = door.id
+    publisher = RangePublicationService(
+        RecordComputationService(uow_factory=factory),
+        PermissionService(uow_factory=factory),
+        uow_factory=factory,
+        analyzer=SubprocessRangeAnalyzer(),
+        builds=public_builds(factory),
+    )
+    anonymous = ActingContext.direct(AnonymousActor())
+    published = await publisher.publish(DoorRangeQuery(height=3), context=anonymous)
+    flush = await publisher.register(DoorRangeQuery(height=3, restriction_ids=frozenset({901})), context=ADMIN)
+    await publisher.register(DoorRangeQuery(height=4), context=ADMIN)
+
+    publication = await publisher.get(published.query_id, context=anonymous)
+    assert publication is not None
+    assert [holder.build_id for holder in publication.holders] == [build_id]
+    live = await publisher.lookup(DoorRangeQuery(height=3), context=anonymous)
+    assert [holder.build_id for holder in live.holders] == [build_id]
+
+    page = await publisher.list_page(RangeListFilters(orientation="Door", height=3), context=anonymous)
+    assert page.total == 2
+    assert [item.query_id for item in page.items] == [flush, published.query_id]
+    assert page.items[0].labels.restrictions == (RangeTag(901, "Flush", "flush"),)
+    assert page.items[0].published_at is None
+    assert page.items[0].refresh_pending
+    assert page.items[1].published_at is not None

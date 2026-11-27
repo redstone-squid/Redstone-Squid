@@ -437,7 +437,7 @@ class SearchProjectionLoader:
                 )
             ).all()
         )
-        version_names = tuple(_version_name(version) for version in versions)
+        version_names = tuple(version.name for version in versions)
         dimensions = {
             name: value
             for name, value in (("width", build.width), ("height", build.height), ("depth", build.depth))
@@ -707,7 +707,7 @@ class SearchProjectionLoader:
             version = await self._session.get(Version, source_id)
             if version is None:
                 return None
-            title = _version_name(version)
+            title = version.name
             return _metadata_projection(
                 source_key=f"version:{source_id}",
                 title=title,
@@ -914,10 +914,6 @@ def build_tag_name_values(assignments: Sequence[TagAssignment]) -> tuple[FieldVa
             fields = {"restriction": ("restriction",), "pattern": ("type", "pattern")}.get(definition.semantic_kind, ())
             values.extend(FieldValue(field, name) for field in fields for name in names)
     return tuple(values)
-
-
-def _version_name(version: Version) -> str:
-    return f"{version.edition} {version.major_version}.{version.minor_version}.{version.patch_number}"
 
 
 def _mapped_text(model: object, attribute: str) -> str | None:

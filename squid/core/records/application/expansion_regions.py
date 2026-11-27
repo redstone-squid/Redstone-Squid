@@ -10,7 +10,7 @@ Source record claims and sample metrics never compete.
 """
 
 from collections.abc import Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from datetime import datetime
 from fractions import Fraction
 from itertools import pairwise
@@ -36,6 +36,7 @@ from squid.core.builds.domain.expansion_math import (
     substitute_formula,
 )
 from squid.core.records.application.live import DoorRecordCategory, LookupDimension
+from squid.core.records.application.metrics import RecordHolderSummary
 from squid.core.records.application.models import CandidateBuild
 from squid.core.records.domain.models import RecordCriterion
 from squid.core.records.domain.region_math import (
@@ -113,13 +114,38 @@ class DoorRangeAnalysis:
 
 
 @dataclass(frozen=True, slots=True)
+class RangeTag:
+    """A tag a range query names; `operator` and `value` are set for a restriction threshold."""
+
+    id: int
+    name: str
+    slug: str
+    operator: str | None = None
+    value: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class RangeLabels:
+    """Names for the tags and version a range query refers to by ID; deleted tags are left out."""
+
+    types: tuple[RangeTag, ...] = ()
+    restrictions: tuple[RangeTag, ...] = ()
+    version: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
 class DoorRangeResult:
-    """A live analysis of approved facts, without a persistent record identity."""
+    """A live analysis of approved facts, without a persistent record identity.
+
+    `holders` summarizes every public build that holds a region.
+    """
 
     query: DoorRangeQuery
     evaluated_at: datetime
     analysis: SmallestRegionAnalysis
     configurations: tuple[DoorRegionConfiguration, ...]
+    labels: RangeLabels = field(default_factory=RangeLabels, kw_only=True)
+    holders: tuple[RecordHolderSummary, ...] = field(default=(), kw_only=True)
 
 
 def analyze_door_widths(

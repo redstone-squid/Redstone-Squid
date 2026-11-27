@@ -9,7 +9,8 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict
 
 from squid.core.builds.domain.expansion import DoorExpansion
-from squid.core.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery
+from squid.core.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery, RangeLabels
+from squid.core.records.application.metrics import RecordHolderSummary
 from squid.core.records.application.models import CandidateBuild
 from squid.core.records.domain.models import BuildKind, Candidate
 
@@ -111,9 +112,46 @@ class RangeAttempt:
 
 @dataclass(frozen=True, slots=True)
 class RangePublication:
+    """A registered query's active result and latest attempt.
+
+    `holders` summarizes every public build that holds a region in either attempt.
+    """
+
     query_id: int
     query: DoorRangeQuery
     active: RangeAttempt | None
     latest: RangeAttempt | None
     last_checked_at: datetime | None = field(default=None, kw_only=True)
     refresh_pending: bool = field(default=False, kw_only=True)
+    labels: RangeLabels = field(default_factory=RangeLabels, kw_only=True)
+    holders: tuple[RecordHolderSummary, ...] = field(default=(), kw_only=True)
+
+    @property
+    def version_id(self) -> int | None:
+        """The version the query compares builds in, resolved by the latest attempt when it follows the pin."""
+        if not self.query.follow_current_version:
+            return self.query.version_id
+        attempt = self.latest or self.active
+        return attempt.resolved_version_id if attempt is not None else None
+
+    @property
+    def holder_ids(self) -> tuple[int, ...]:
+        regions = (
+            region
+            for attempt in (self.active, self.latest)
+            if attempt is not None and attempt.result is not None
+            for region in attempt.result.analysis.regions
+        )
+        return tuple(dict.fromkeys(build_id for region in regions for build_id in region.resolution.holder_ids))
+
+
+@dataclass(frozen=True, slots=True)
+class RangeRegistration:
+    """A registered range query in a list; `published_at` is null until a result is exact."""
+
+    query_id: int
+    query: DoorRangeQuery
+    published_at: datetime | None
+    last_checked_at: datetime | None
+    refresh_pending: bool
+    labels: RangeLabels = field(default_factory=RangeLabels)

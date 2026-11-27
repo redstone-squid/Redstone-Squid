@@ -842,6 +842,8 @@ export type DoorRangeResult = {
     evaluated_at: string;
     analysis: SmallestRegionAnalysis;
     configurations: Array<DoorRegionConfiguration>;
+    labels?: RangeLabels;
+    holders?: Array<RecordHolderSummary>;
 };
 
 /**
@@ -1950,6 +1952,16 @@ export type PageSquidCoreRecordsApplicationModelsRecordDrift = {
 };
 
 /**
+ * Page[RangeRegistration]
+ */
+export type PageSquidCoreRecordsApplicationRangeSnapshotsRangeRegistration = {
+    items: Array<RangeRegistration>;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+};
+
+/**
  * PaperChallengeCreateRequest
  */
 export type PaperChallengeCreateRequest = {
@@ -2332,6 +2344,15 @@ export type RangeAttemptSummary = {
 };
 
 /**
+ * RangeLabels
+ */
+export type RangeLabels = {
+    types?: Array<RangeTag>;
+    restrictions?: Array<RangeTag>;
+    version?: string | null;
+};
+
+/**
  * RangePublication
  */
 export type RangePublication = {
@@ -2341,6 +2362,31 @@ export type RangePublication = {
     latest: RangeAttempt | null;
     last_checked_at?: string | null;
     refresh_pending?: boolean;
+    labels?: RangeLabels;
+    holders?: Array<RecordHolderSummary>;
+};
+
+/**
+ * RangeRegistration
+ */
+export type RangeRegistration = {
+    query_id: number;
+    query: DoorRangeQuery;
+    published_at: string | null;
+    last_checked_at: string | null;
+    refresh_pending: boolean;
+    labels?: RangeLabels;
+};
+
+/**
+ * RangeTag
+ */
+export type RangeTag = {
+    id: number;
+    name: string;
+    slug: string;
+    operator?: string | null;
+    value?: string | null;
 };
 
 /**
@@ -8230,20 +8276,38 @@ export type RecordsLookupDoorRangesResponses = {
 
 export type RecordsLookupDoorRangesResponse = RecordsLookupDoorRangesResponses[keyof RecordsLookupDoorRangesResponses];
 
-export type RecordsGetDoorRangesData = {
+export type RecordsListDoorRangesData = {
     body?: never;
-    path: {
-        query_id: number;
+    path?: never;
+    query?: {
+        orientation?: 'Door' | 'Skydoor' | 'Trapdoor' | null;
+        height?: number | null;
+        depth?: number | null;
+        /**
+         * Maximum number of items to return.
+         */
+        page_size?: number;
+        /**
+         * Number of items to skip. Excludes after_id and before_id.
+         */
+        offset?: number | null;
+        /**
+         * Return the items after this identifier in display order. Excludes offset.
+         */
+        after_id?: number | null;
+        /**
+         * Return the items before this identifier in display order. Excludes offset.
+         */
+        before_id?: number | null;
     };
-    query?: never;
-    url: '/v1/records/ranges/door/{query_id}';
+    url: '/v1/records/ranges/door';
 };
 
-export type RecordsGetDoorRangesErrors = {
+export type RecordsListDoorRangesErrors = {
     /**
-     * Not Found
+     * Bad Request
      */
-    404: ProblemDetail;
+    400: ProblemDetail;
     /**
      * Unprocessable Content
      */
@@ -8258,16 +8322,16 @@ export type RecordsGetDoorRangesErrors = {
     503: ProblemDetail;
 };
 
-export type RecordsGetDoorRangesError = RecordsGetDoorRangesErrors[keyof RecordsGetDoorRangesErrors];
+export type RecordsListDoorRangesError = RecordsListDoorRangesErrors[keyof RecordsListDoorRangesErrors];
 
-export type RecordsGetDoorRangesResponses = {
+export type RecordsListDoorRangesResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: RangePublication;
+    200: PageSquidCoreRecordsApplicationRangeSnapshotsRangeRegistration;
 };
 
-export type RecordsGetDoorRangesResponse = RecordsGetDoorRangesResponses[keyof RecordsGetDoorRangesResponses];
+export type RecordsListDoorRangesResponse = RecordsListDoorRangesResponses[keyof RecordsListDoorRangesResponses];
 
 export type RecordsRegisterDoorRangesData = {
     body: DoorRangeQuery;
@@ -8323,6 +8387,45 @@ export type RecordsRegisterDoorRangesResponses = {
 };
 
 export type RecordsRegisterDoorRangesResponse = RecordsRegisterDoorRangesResponses[keyof RecordsRegisterDoorRangesResponses];
+
+export type RecordsGetDoorRangesData = {
+    body?: never;
+    path: {
+        query_id: number;
+    };
+    query?: never;
+    url: '/v1/records/ranges/door/{query_id}';
+};
+
+export type RecordsGetDoorRangesErrors = {
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type RecordsGetDoorRangesError = RecordsGetDoorRangesErrors[keyof RecordsGetDoorRangesErrors];
+
+export type RecordsGetDoorRangesResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: RangePublication;
+};
+
+export type RecordsGetDoorRangesResponse = RecordsGetDoorRangesResponses[keyof RecordsGetDoorRangesResponses];
 
 export type RecordsRefreshDoorRangesData = {
     body?: never;

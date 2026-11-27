@@ -28,3 +28,8 @@ class Version(Base):
     None means no data version is recorded. Bedrock and early Java releases do not
     have one.
     """
+
+    @property
+    def name(self) -> str:
+        """The release as users write it, e.g. "Java 1.21.5"."""
+        return f"{self.edition} {self.major_version}.{self.minor_version}.{self.patch_number}"

@@ -4,7 +4,7 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from decimal import Decimal
 from functools import partial
-from typing import override
+from typing import cast, override
 from unittest.mock import Mock, create_autospec
 
 import anyio
@@ -19,7 +19,12 @@ from squid.core.errors import DataIntegrityError, ServiceUnavailableError
 from squid.core.pagination import FIRST_PAGE, PageSelector
 from squid.core.permissions.application.services import PermissionService
 from squid.core.permissions.errors import PermissionDeniedError
-from squid.core.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery, analyze_door_widths
+from squid.core.records.application.expansion_regions import (
+    DoorRangeAnalysis,
+    DoorRangeQuery,
+    RangeLabels,
+    analyze_door_widths,
+)
 from squid.core.records.application.live import DoorRecordLookup
 from squid.core.records.application.models import (
     ALL_RECORDS,
@@ -43,6 +48,8 @@ from squid.core.records.application.models import (
     ScopedCategory,
 )
 from squid.core.records.application.ports import DoorRangeAnalyzer, RecomputeLease, StoredRecord
+from squid.core.records.application.range_ports import RangePublicationRepository, RangePublicationUnitOfWork
+from squid.core.records.application.range_publication import RangePublicationService
 from squid.core.records.application.services import PublicRecordQueryService, RecordComputationService, RecordService
 from squid.core.records.domain import (
     BuildKind,
@@ -794,6 +801,29 @@ def test_requested_door_category_rejects_incompatible_threshold_without_crashing
     assert category is None or not category.candidates
 
 
+class RangeScope[CandidatesT, RunsT](RecordScope[CandidatesT, RunsT]):
+    def __init__(self, candidates: CandidatesT, runs: RunsT) -> None:
+        super().__init__(candidates, runs)
+        self.record_ranges = create_autospec(RangePublicationRepository, instance=True)
+        self.record_ranges.labels.return_value = (RangeLabels(),)
+
+
+def _range_service(
+    candidates: object, runs: FakeRuns, analyzer: DoorRangeAnalyzer, *, live_concurrency: int = 2
+) -> RangePublicationService:
+    def scope() -> RangePublicationUnitOfWork:
+        return cast(RangePublicationUnitOfWork, RangeScope(candidates, runs))
+
+    return RangePublicationService(
+        RecordComputationService(uow_factory=lambda: RecordScope(FakeCandidates(()), runs)),
+        create_autospec(PermissionService, instance=True),
+        uow_factory=scope,
+        analyzer=analyzer,
+        builds=FakePublicBuilds(()),
+        live_concurrency=live_concurrency,
+    )
+
+
 async def test_width_lookup_filters_tags_and_versions_without_writes() -> None:
     fixed = _door(1, volume=1, opening=10, restrictions=())
     family = replace(
@@ -812,13 +842,8 @@ async def test_width_lookup_filters_tags_and_versions_without_writes() -> None:
     wrong_type = replace(family, candidate=replace(family.candidate, build_id=4), types=())
     candidates = FakeCandidates((fixed, family, wrong_version, wrong_type))
     runs = FakeRuns()
-    service = RecordService(
-        RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs)),
-        permissions=create_autospec(PermissionService, instance=True),
-        uow_factory=lambda: RecordScope(candidates, runs),
-        range_analyzer=SubprocessRangeAnalyzer(),
-    )
-    result = await service.lookup_door_ranges(
+    service = _range_service(candidates, runs, SubprocessRangeAnalyzer())
+    result = await service.lookup(
         DoorRangeQuery(height=2, type_ids=frozenset({20}), version_id=3), context=ActingContext.direct(AnonymousActor())
     )
     assert result.analysis.status is RegionAnalysisStatus.EXACT
@@ -845,27 +870,19 @@ async def test_range_admission_precedes_loading_and_releases_on_cancellation() -
         raise AssertionError("Cancelled analysis returned")
 
     analyzer.analyze.side_effect = blocked
-    service = RecordService(
-        RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs)),
-        permissions=create_autospec(PermissionService, instance=True),
-        uow_factory=lambda: RecordScope(candidates, runs),
-        range_analyzer=analyzer,
-        range_concurrency=1,
-    )
+    service = _range_service(candidates, runs, analyzer, live_concurrency=1)
     request = DoorRangeQuery(height=3)
     with anyio.fail_after(5):
         async with anyio.create_task_group() as group:
-            group.start_soon(
-                partial(service.lookup_door_ranges, context=ActingContext.direct(AnonymousActor())), request
-            )
+            group.start_soon(partial(service.lookup, context=ActingContext.direct(AnonymousActor())), request)
             await started.wait()
             with pytest.raises(ServiceUnavailableError):
-                await service.lookup_door_ranges(request, context=ActingContext.direct(AnonymousActor()))
+                await service.lookup(request, context=ActingContext.direct(AnonymousActor()))
             candidates.list_for_door_widths.assert_awaited_once()
             group.cancel_scope.cancel()
     analyzer.analyze.side_effect = None
     analyzer.analyze.return_value = analyze_door_widths((), height=3)
-    result = await service.lookup_door_ranges(request, context=ActingContext.direct(AnonymousActor()))
+    result = await service.lookup(request, context=ActingContext.direct(AnonymousActor()))
     assert result.query == request
     assert result.analysis.status is RegionAnalysisStatus.EXACT
     assert candidates.list_for_door_widths.await_count == 2

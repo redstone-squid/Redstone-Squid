@@ -197,9 +197,7 @@ class BuildLoader:
             .join(Version, BuildVersion.version_id == Version.id)
             .where(BuildVersion.build_id.in_(build_ids))
         ):
-            versions[build_id].append(
-                f"{version.edition} {version.major_version}.{version.minor_version}.{version.patch_number}"
-            )
+            versions[build_id].append(version.name)
 
         # Join source links to messages so the whole page needs one origin query.
         source_messages: dict[int, list[MessageRef]] = {build_id: [] for build_id in build_ids}

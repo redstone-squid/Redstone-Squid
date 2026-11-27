@@ -142,4 +142,4 @@ class VersionRepository:
         version = await session.scalar(statement)
         if version is None:
             return None
-        return f"{version.edition} {version.major_version}.{version.minor_version}.{version.patch_number}"
+        return version.name
