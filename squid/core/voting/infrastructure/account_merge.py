@@ -7,7 +7,10 @@ from sqlalchemy.orm import aliased
 from squid.core.persistence.account_merge import AccountMergeContext, AccountReference, move_account_references
 from squid.core.voting.models import Vote
 
-VOTING_REFERENCES = (AccountReference("vote_sessions", "author_account_id"),)
+VOTING_REFERENCES = (
+    AccountReference("vote_sessions", "author_account_id"),
+    AccountReference("vote_ballot_events", "account_id"),
+)
 
 
 def _collapse_votes_statement(context: AccountMergeContext) -> Delete:
@@ -34,6 +37,7 @@ async def merge_voting(session: AsyncSession, context: AccountMergeContext) -> N
     """Move authorship and ballots to the surviving account in the caller's transaction.
 
     When both accounts voted in one session, retain the survivor's ballot unchanged.
+    Both accounts' ballot histories move to the survivor.
     """
     await move_account_references(session, VOTING_REFERENCES, context)
     await session.execute(_collapse_votes_statement(context))

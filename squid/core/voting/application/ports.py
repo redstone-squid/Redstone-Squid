@@ -9,6 +9,7 @@ from squid.core.actors import UserActor
 from squid.core.pagination import Page, PageSelector
 from squid.core.permissions.application.ports import PermissionUnitOfWork
 from squid.core.voting.domain import (
+    BallotChange,
     EmojiPreset,
     PollScope,
     ReviewFilters,
@@ -59,7 +60,8 @@ class VoteRepository(Protocol):
 
     A voting session represents one build review, deletion vote, or poll. Several
     Discord messages can display the same voting session; they share its ballots
-    and result. A ballot records one account's selected option and the weight it was cast with.
+    and result. A ballot records one account's selected option and the weight it was cast with,
+    and every change to a ballot is also kept as a ballot event.
 
     Changes to one voting session must run one at a time. Updating ballots and
     checking whether their net score closes the vote belong to the same transaction,
@@ -153,8 +155,10 @@ class VoteRepository(Protocol):
         """
         ...
 
-    async def clear_vote(self, vote_session_id: int, account_id: int) -> StoredVoteMutation | None:
-        """Remove a ballot and check thresholds; return None if the session is missing or closed."""
+    async def clear_vote(
+        self, vote_session_id: int, account_id: int, *, change: BallotChange = BallotChange.CLEAR
+    ) -> StoredVoteMutation | None:
+        """Remove a ballot, recording `change`, and check thresholds; None if the session is missing or closed."""
         ...
 
     async def close(self, vote_session_id: int) -> StoredVoteMutation | None:

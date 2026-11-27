@@ -117,6 +117,14 @@ class VoteRejection(StrEnum):
     NOT_AUTHORIZED = "not_authorized"
 
 
+class BallotChange(StrEnum):
+    """What happened to a ballot: a voter chose an option, withdrew it, or staff voided it."""
+
+    CAST = "cast"
+    CLEAR = "clear"
+    VOID = "void"
+
+
 class VoteChoice(StrEnum):
     """The scoring behavior of a session option."""
 

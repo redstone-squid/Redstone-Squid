@@ -1810,12 +1810,9 @@ def test_schema_audit_backfills_legacy_rows(
                 == "Other"
             )
             ballots = connection.execute(
-                text(
-                    "SELECT v.account_id, v.guild_id, o.guild_id FROM votes v "
-                    "JOIN vote_session_options o ON o.id = v.option_alias_id ORDER BY v.account_id"
-                )
+                text("SELECT account_id, guild_id, option_identifier, emoji FROM votes ORDER BY account_id")
             ).all()
-            assert ballots == [(accounts[0], 42, 42), (accounts[1], None, None)]
+            assert ballots == [(accounts[0], 42, "approve", "yes"), (accounts[1], None, "approve", "yes")]
         command.check(config)
     finally:
         engine.dispose()

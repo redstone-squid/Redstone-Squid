@@ -6,7 +6,7 @@ import pytest
 from alembic_utils.pg_function import PGFunction
 from alembic_utils.pg_trigger import PGTrigger
 from anyio import create_task_group
-from sqlalchemy import Table, insert, text, update
+from sqlalchemy import Table, insert, select, text, update
 from sqlalchemy.exc import IntegrityError, StatementError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
@@ -25,6 +25,7 @@ from squid.core.settings.models import ServerSetting
 from squid.core.unit_of_work import UnitOfWorkFactory
 from squid.core.voting.domain import (
     DEFAULT_VOTE_MENU,
+    BallotChange,
     DeleteLogVoteTarget,
     ReviewFilters,
     ReviewKind,
@@ -44,6 +45,7 @@ from squid.core.voting.models import (
     DeleteLogVoteSession,
     GenericVoteSession,
     Vote,
+    VoteBallotEvent,
     VoteSession,
     VoteSessionOption,
     VoteSessionOptionAlias,
@@ -68,6 +70,7 @@ _TABLES: tuple[Table, ...] = with_foreign_key_targets(
         VoteSession,
         VoteSessionOption,
         VoteSessionOptionAlias,
+        VoteBallotEvent,
         BuildVoteSession,
         DeleteLogVoteSession,
         GenericVoteSession,
@@ -836,6 +839,42 @@ async def test_ballot_cannot_reference_an_option_its_session_lacks(
                 ),
                 {"session": session_id, "guild": GUILD_ID},
             )
+
+
+async def test_every_ballot_change_is_kept_as_an_event(
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    session_id, _ = await seed_delete_log_vote(async_session_factory, pass_threshold=10, fail_threshold=-10)
+    await cast_ballot(repository, session_id, 7, "approve", "👍", 1.0)
+    await cast_ballot(repository, session_id, 7, "deny", "👎", 2.0)
+    await cast_ballot(repository, session_id, 7, "deny", "❌", 2.0)
+    await cast_ballot(repository, session_id, 8, "approve", "👍", 1.0)
+    await transact(repository, lambda uow: uow.votes.clear_vote(session_id, 8, change=BallotChange.VOID), commit=True)
+    await transact(repository, lambda uow: uow.votes.clear_vote(session_id, 8), commit=True)
+
+    async with async_session_factory() as session:
+        events = (
+            await session.execute(
+                select(
+                    VoteBallotEvent.account_id,
+                    VoteBallotEvent.change,
+                    VoteBallotEvent.option_identifier,
+                    VoteBallotEvent.weight,
+                    VoteBallotEvent.emoji,
+                )
+                .where(VoteBallotEvent.vote_session_id == session_id)
+                .order_by(VoteBallotEvent.id)
+            )
+        ).all()
+    # Toggling deny off with another alias of it is a clear; clearing an absent ballot records nothing.
+    assert events == [
+        (7, BallotChange.CAST, "approve", 1.0, "👍"),
+        (7, BallotChange.CAST, "deny", 2.0, "👎"),
+        (7, BallotChange.CLEAR, None, None, "❌"),
+        (8, BallotChange.CAST, "approve", 1.0, "👍"),
+        (8, BallotChange.VOID, None, None, None),
+    ]
 
 
 async def test_clearing_a_ballot_twice_keeps_it_absent(

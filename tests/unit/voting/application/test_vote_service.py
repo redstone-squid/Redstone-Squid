@@ -13,6 +13,7 @@ from squid.core.permissions.models import PermissionGrant
 from squid.core.voting.application import VoteService
 from squid.core.voting.domain import (
     DEFAULT_VOTE_MENU,
+    BallotChange,
     DeleteLogVoteTarget,
     EmojiPreset,
     PollScope,
@@ -98,6 +99,7 @@ class FakeVoteRepository:
     def __init__(self, session: VoteSessionSnapshot | None):
         self.session = session
         self.cast_calls: list[CastVoteCall] = []
+        self.clear_calls: list[tuple[int, int, BallotChange]] = []
         self.mutation: StoredVoteMutation | None = None
         self.role_weights: dict[tuple[int, VoteKind], list[RoleWeight]] = {}
         self.role_weight_lookups: list[tuple[int, VoteKind]] = []
@@ -215,7 +217,10 @@ class FakeVoteRepository:
         )
         return self.mutation
 
-    async def clear_vote(self, vote_session_id: int, account_id: int) -> StoredVoteMutation | None:
+    async def clear_vote(
+        self, vote_session_id: int, account_id: int, *, change: BallotChange = BallotChange.CLEAR
+    ) -> StoredVoteMutation | None:
+        self.clear_calls.append((vote_session_id, account_id, change))
         return self.mutation
 
     async def close(self, vote_session_id: int) -> StoredVoteMutation | None:
@@ -922,6 +927,20 @@ async def test_casting_weighs_only_the_new_ballot() -> None:
 
     assert result.accepted
     assert resolver.calls == [(7, OWNER_GUILD_ID)]
+
+
+@pytest.mark.parametrize(("guild_id", "voided"), [(OWNER_GUILD_ID, True), (VOTING_GUILD_ID, False)])
+async def test_a_ban_voids_ballots_only_in_the_sessions_that_guild_weighs(guild_id: int, voided: bool) -> None:
+    selections = (VoteSelection(account_id=7, guild_id=VOTING_GUILD_ID, option_id="approve", emoji="👍", weight=4.0),)
+    initial = replace(shared_snapshot(), selections=selections, votes={7: 4.0})
+    repository = FakeVoteRepository(initial)
+    repository.mutation = StoredVoteMutation(replace(initial, selections=(), votes={}), 4.0, None, just_closed=False)
+    service = VoteService(build_owner_guild_id=OWNER_GUILD_ID, uow_factory=lambda: VoteUnitOfWork(repository))
+
+    changed = await service.void_ballots(7, guild_id, context=ActingContext.worker("discord.ban"))
+
+    assert repository.clear_calls == ([(12, 7, BallotChange.VOID)] if voided else [])
+    assert [session.id for session in changed] == ([12] if voided else [])
 
 
 async def test_each_kind_names_the_guild_that_owns_its_weights() -> None:

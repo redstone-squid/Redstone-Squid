@@ -30,6 +30,7 @@ from squid.core.voting.domain import (
     DEFAULT_VOTE_MENU,
     MAX_POLL_DURATION_SECONDS,
     MIN_POLL_DURATION_SECONDS,
+    BallotChange,
     CastVoteResult,
     DeleteLogVoteTarget,
     EmojiPreset,
@@ -473,6 +474,28 @@ class VoteService:
             current_weight=mutation.current_weight,
             just_closed=mutation.just_closed,
         )
+
+    @application_operation
+    async def void_ballots(
+        self, account_id: int, guild_id: int, *, context: ActingContext
+    ) -> tuple[VoteSessionSnapshot, ...]:
+        """Void an account's ballots in the open sessions `guild_id` weighs, after it bans them.
+
+        Ballots keep their weight when roles change, so a ban is the one membership
+        change that removes them. Removing a ballot can still close a threshold vote.
+        Returns the sessions that changed.
+        """
+        changed: list[VoteSessionSnapshot] = []
+        for kind in VoteKind:
+            for snapshot in await self.list_open(kind, context=context):
+                if self._owner_guild_id(snapshot) != guild_id or snapshot.selection_for(account_id) is None:
+                    continue
+                async with self._uow_factory() as uow:
+                    mutation = await uow.votes.clear_vote(snapshot.id, account_id, change=BallotChange.VOID)
+                    await uow.commit()
+                if mutation is not None:
+                    changed.append(mutation.session)
+        return tuple(changed)
 
     @application_operation
     async def close(

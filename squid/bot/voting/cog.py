@@ -72,6 +72,15 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             self._detach_domain_events = None
         await self.reactions.close()
 
+    @sd.Cog.listener()
+    async def on_member_ban(self, guild: discord.Guild, user: discord.User | discord.Member) -> None:
+        """Void the banned member's ballots in the sessions this guild weighs."""
+        account_id = await self.bot.account_ids.resolve(self.bot.services.accounts, user.id)
+        if account_id is None:
+            return
+        for session in await self.vote_service.void_ballots(account_id, guild.id, context=ActingContext.current()):
+            await self.bot.refresh_posts("vote_session", str(session.id))
+
     @sd.command(
         name=to_locale_str(tr(t"command-poll-name = poll")),
         description=to_locale_str(tr(t"command-poll-help = Create a poll from options or open the poll editor.")),

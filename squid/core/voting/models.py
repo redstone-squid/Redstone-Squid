@@ -3,7 +3,8 @@
 A VoteSession holds the shared status and outcome. Its kind selects a build,
 deletion, or poll record for the question being decided. VoteSessionOption rows
 capture the options and their multipliers; VoteSessionOptionAlias rows map emojis
-to them on Discord cards. Vote rows record ballots using the stable option IDs.
+to them on Discord cards. Vote rows hold each account's current ballot, and
+VoteBallotEvent rows record every change to it, in the same transaction.
 
 Discord messages displaying a voting session are linked through DiscordPost in
 the messages package. Multiple messages therefore share the same ballots.
@@ -33,7 +34,15 @@ from whenever import Instant
 from squid.core.errors import JSONValue
 from squid.core.persistence.base import Base
 from squid.core.persistence.types import InstantUTC, StrEnumText
-from squid.core.voting.domain import PollScope, VoteChoice, VoteKind, VoteSessionResult, VoteStatus, VoteVisibility
+from squid.core.voting.domain import (
+    BallotChange,
+    PollScope,
+    VoteChoice,
+    VoteKind,
+    VoteSessionResult,
+    VoteStatus,
+    VoteVisibility,
+)
 
 _KIND_VALUES = ", ".join(f"'{kind.value}'" for kind in VoteKind)
 _CHOICE_VALUES = ", ".join(f"'{choice.value}'" for choice in VoteChoice)
@@ -41,6 +50,7 @@ _STATUS_VALUES = ", ".join(f"'{status.value}'" for status in VoteStatus)
 _RESULT_VALUES = ", ".join(f"'{result.value}'" for result in VoteSessionResult)
 _VISIBILITY_VALUES = ", ".join(f"'{visibility.value}'" for visibility in VoteVisibility)
 
+_BALLOT_CHANGE_VALUES = ", ".join(f"'{change.value}'" for change in BallotChange)
 _SCOPE_VALUES = ", ".join(f"'{scope.value}'" for scope in PollScope)
 
 THRESHOLD_CONSTRAINT = (
@@ -329,6 +339,47 @@ class Vote(Base):
     """Positive magnitude fixed at cast; the option's choice determines the sign used in threshold scoring."""
 
     vote_session: Mapped[VoteSession] = relationship(back_populates="votes", lazy="raise_on_sql", repr=False)
+
+
+class VoteBallotEvent(Base, kw_only=True):
+    """One change to an account's ballot, kept after the ballot itself changes again."""
+
+    __tablename__ = "vote_ballot_events"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["vote_session_id", "option_identifier"],
+            ["vote_session_options.vote_session_id", "vote_session_options.identifier"],
+            name="vote_ballot_events_option_fkey",
+            ondelete="CASCADE",
+        ),
+        Index("vote_ballot_events_session_idx", "vote_session_id", "id"),
+        Index("vote_ballot_events_account_idx", "account_id"),
+        CheckConstraint(f"change IN ({_BALLOT_CHANGE_VALUES})", name="vote_ballot_events_change_check"),
+        CheckConstraint(
+            "(change = 'cast') = (option_identifier IS NOT NULL AND weight IS NOT NULL)",
+            name="vote_ballot_events_selection_check",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
+    vote_session_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("vote_sessions.id", name="vote_ballot_events_vote_session_id_fkey", ondelete="CASCADE"),
+        nullable=False,
+    )
+    account_id: Mapped[int] = mapped_column(
+        ForeignKey("accounts.id", name="vote_ballot_events_account_id_fkey", ondelete="CASCADE"), nullable=False
+    )
+    change: Mapped[BallotChange] = mapped_column(StrEnumText(BallotChange), nullable=False)
+    option_identifier: Mapped[str | None] = mapped_column(Text, nullable=True)
+    """The option the ballot selects after a cast, or None after a clear or void."""
+    weight: Mapped[float | None] = mapped_column(Float, nullable=True)
+    guild_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    """The guild whose card the change came from, or None for a change made without Discord."""
+    emoji: Mapped[str | None] = mapped_column(Text, nullable=True)
+    recorded_at: Mapped[Instant] = mapped_column(
+        InstantUTC(), nullable=False, server_default=func.now(), default_factory=Instant.now
+    )
 
 
 class GuildVoteEmoji(Base, kw_only=True):

@@ -24,6 +24,7 @@ from squid.core.settings.infrastructure.repository import ensure_server_settings
 from squid.core.settings.models import ServerSetting
 from squid.core.voting.domain import (
     DEFAULT_VOTE_MENU,
+    BallotChange,
     BuildEditVoteTarget,
     BuildVoteTarget,
     DeleteLogVoteTarget,
@@ -56,6 +57,7 @@ from squid.core.voting.models import (
     GuildVoteEmoji,
     GuildVoteRoleWeight,
     Vote,
+    VoteBallotEvent,
     VoteSession,
     VoteSessionOption,
     VoteSessionOptionAlias,
@@ -533,6 +535,7 @@ class VoteRepository:
         if toggle and previous is not None and previous.option_identifier == option.id:
             await session.delete(previous)
             current_weight = None
+            event = {"change": BallotChange.CLEAR, "guild_id": guild_id, "emoji": emoji}
         else:
             values = {"option_identifier": option.id, "guild_id": guild_id, "emoji": emoji, "weight": weight}
             await session.execute(
@@ -541,10 +544,19 @@ class VoteRepository:
                 .on_conflict_do_update(index_elements=[Vote.vote_session_id, Vote.account_id], set_=values)
             )
             current_weight = weight
+            event = {"change": BallotChange.CAST, **values}
+        await session.execute(insert(VoteBallotEvent).values(vote_session_id=row.id, account_id=account_id, **event))
         just_closed = await self._close_at_threshold(session, row)
         return StoredVoteMutation(await self._to_snapshot(session, row), previous_weight, current_weight, just_closed)
 
-    async def clear_vote(self, vote_session_id: int, account_id: int) -> StoredVoteMutation | None:
+    async def clear_vote(
+        self, vote_session_id: int, account_id: int, *, change: BallotChange = BallotChange.CLEAR
+    ) -> StoredVoteMutation | None:
+        """Remove a ballot from an open session and check thresholds.
+
+        `change` records why: the voter withdrew it, or staff voided it. Removing a
+        ballot the account does not have records nothing.
+        """
         session = self._session()
         row = await self._lock_session_row(session, vote_session_id)
         if row is None or row.status is not VoteStatus.OPEN:
@@ -552,6 +564,10 @@ class VoteRepository:
         previous_weight = await session.scalar(
             delete(Vote).where(Vote.vote_session_id == row.id, Vote.account_id == account_id).returning(Vote.weight)
         )
+        if previous_weight is not None:
+            await session.execute(
+                insert(VoteBallotEvent).values(vote_session_id=row.id, account_id=account_id, change=change)
+            )
         just_closed = await self._close_at_threshold(session, row)
         return StoredVoteMutation(await self._to_snapshot(session, row), previous_weight, None, just_closed)
 

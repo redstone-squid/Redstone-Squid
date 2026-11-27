@@ -1753,7 +1753,7 @@ bot-voting-poll-wizard-options-one-per-line = Choices (commas or one per line)
 # squid/bot/voting/poll_wizard.py:467
 bot-voting-poll-wizard-poll-cancelled = Poll cancelled.
 
-# squid/bot/voting/cog.py:197, squid/bot/voting/poll_wizard.py:462
+# squid/bot/voting/cog.py:206, squid/bot/voting/poll_wizard.py:462
 bot-voting-poll-wizard-poll-published = Poll published: { $published_url }
 
 # squid/bot/voting/poll_wizard.py:322
@@ -1783,19 +1783,19 @@ bot-voting-poll-wizard-visibility = Visibility
 # squid/bot/voting/poll_wizard.py:335
 bot-voting-poll-wizard-visibility-and-duration = Visibility and duration
 
-# squid/bot/voting/cog.py:318
+# squid/bot/voting/cog.py:327
 bot-voting-vote-cannot-vote-on-this-message = Cannot vote on this message
 
-# squid/bot/voting/cog.py:355
+# squid/bot/voting/cog.py:364
 bot-voting-vote-deletion-vote-opened = Deletion vote opened.
 
-# squid/bot/voting/cog.py:334
+# squid/bot/voting/cog.py:343
 bot-voting-vote-getting-information = Getting information...
 
-# squid/bot/voting/cog.py:333
+# squid/bot/voting/cog.py:342
 bot-voting-vote-working = Working
 
-# squid/bot/voting/cog.py:159
+# squid/bot/voting/cog.py:168
 bot-voting-vote-you-may-no-longer-publish-a-poll = You may no longer publish a poll to every server.
 
 # squid/bot/catalogue/browse.py:1140
@@ -2557,16 +2557,16 @@ command-paste-help = Move your selected archive message into this channel
 # squid/bot/admin_cog.py:110
 command-paste-name = paste
 
-# squid/bot/voting/cog.py:77
+# squid/bot/voting/cog.py:86
 command-poll-help = Create a poll from options or open the poll editor.
 
-# squid/bot/voting/cog.py:76
+# squid/bot/voting/cog.py:85
 command-poll-name = poll
 
-# squid/bot/voting/cog.py:206
+# squid/bot/voting/cog.py:215
 command-poll-review-help = Inspect a paused poll or confirm a review decision.
 
-# squid/bot/voting/cog.py:205
+# squid/bot/voting/cog.py:214
 command-poll-review-name = poll-review
 
 # squid/bot/submission/cog.py:77
@@ -2710,7 +2710,7 @@ command-versions-help = Browse recognized Minecraft versions
 # squid/bot/version_tracking_cog.py:127
 command-versions-name = versions
 
-# squid/bot/voting/cog.py:311
+# squid/bot/voting/cog.py:320
 command-vote-to-delete-name = Vote to Delete
 
 # squid/bot/diagnostics/cog.py:48
@@ -4955,7 +4955,7 @@ permissions-vote-polls = Vote in polls.
 # squid/core/permissions/domain/catalogue.py:510
 permissions-votes-counted-staff = Have your votes counted at the staff weight.
 
-# squid/bot/voting/cog.py:154
+# squid/bot/voting/cog.py:163
 poll-account-changed = Your account changed. Open the poll again.
 
 # squid/bot/voting/poll_wizard.py:400
@@ -4988,43 +4988,43 @@ poll-choices-format = Separate choices with commas or line breaks; quote choices
 # squid/bot/voting/poll_wizard.py:225
 poll-choices-length = Keep the choices within 1000 characters.
 
-# squid/bot/voting/cog.py:86
+# squid/bot/voting/cog.py:95
 poll-command-choices = 2-10 choices, separated by commas or \n; default: Yes, No.
 
-# squid/bot/voting/cog.py:85
+# squid/bot/voting/cog.py:94
 poll-command-choices-name = choices
 
-# squid/bot/voting/cog.py:90
+# squid/bot/voting/cog.py:99
 poll-command-duration = How long to vote: 2h15m, 2 days, etc. Default: 24h.
 
-# squid/bot/voting/cog.py:89
+# squid/bot/voting/cog.py:98
 poll-command-duration-name = duration
 
-# squid/bot/voting/cog.py:187
+# squid/bot/voting/cog.py:196
 poll-command-network-denied = You do not have permission to publish to every server.
 
-# squid/bot/voting/cog.py:104
+# squid/bot/voting/cog.py:113
 poll-command-preview = Review and edit before publishing. Default: publish immediately.
 
-# squid/bot/voting/cog.py:103
+# squid/bot/voting/cog.py:112
 poll-command-preview-name = preview
 
-# squid/bot/voting/cog.py:82
+# squid/bot/voting/cog.py:91
 poll-command-question = Poll question; omit to open the editor.
 
-# squid/bot/voting/cog.py:81
+# squid/bot/voting/cog.py:90
 poll-command-question-name = question
 
-# squid/bot/voting/cog.py:99
+# squid/bot/voting/cog.py:108
 poll-command-scope = This server, or every server if you have permission.
 
-# squid/bot/voting/cog.py:98
+# squid/bot/voting/cog.py:107
 poll-command-scope-name = scope
 
-# squid/bot/voting/cog.py:94
+# squid/bot/voting/cog.py:103
 poll-command-visibility = Who can see votes and when results are shown.
 
-# squid/bot/voting/cog.py:93
+# squid/bot/voting/cog.py:102
 poll-command-visibility-name = visibility
 
 # squid/bot/voting/controls.py:65
@@ -5039,49 +5039,49 @@ poll-publish-final = One vote per person; voting again changes your choice. Publ
 # squid/bot/voting/poll_wizard.py:222
 poll-question-length = Enter a question between 1 and 300 characters.
 
-# squid/bot/voting/cog.py:219
+# squid/bot/voting/cog.py:228
 poll-review-action-finalize = Finalize
 
-# squid/bot/voting/cog.py:215
+# squid/bot/voting/cog.py:224
 poll-review-action-help = Review decision to inspect or confirm.
 
-# squid/bot/voting/cog.py:217
+# squid/bot/voting/cog.py:226
 poll-review-action-inspect = Inspect
 
-# squid/bot/voting/cog.py:214
+# squid/bot/voting/cog.py:223
 poll-review-action-name = action
 
-# squid/bot/voting/cog.py:220
+# squid/bot/voting/cog.py:229
 poll-review-action-reopen = Reopen
 
-# squid/bot/voting/cog.py:218
+# squid/bot/voting/cog.py:227
 poll-review-action-retry = Retry
 
-# squid/bot/voting/cog.py:221
+# squid/bot/voting/cog.py:230
 poll-review-action-void = Void
 
-# squid/bot/voting/cog.py:234
+# squid/bot/voting/cog.py:243
 poll-review-duration-help = Voting time to add when reopening the poll.
 
-# squid/bot/voting/cog.py:233
+# squid/bot/voting/cog.py:242
 poll-review-duration-name = duration
 
-# squid/bot/voting/cog.py:211
+# squid/bot/voting/cog.py:220
 poll-review-poll-id-help = Poll to review. Omit to list paused polls.
 
-# squid/bot/voting/cog.py:210
+# squid/bot/voting/cog.py:219
 poll-review-poll-id-name = poll_id
 
-# squid/bot/voting/cog.py:230
+# squid/bot/voting/cog.py:239
 poll-review-reason-help = Reason for finalizing, reopening, or voiding the poll.
 
-# squid/bot/voting/cog.py:229
+# squid/bot/voting/cog.py:238
 poll-review-reason-name = reason
 
-# squid/bot/voting/cog.py:226
+# squid/bot/voting/cog.py:235
 poll-review-revision-help = Count revision shown by the inspection.
 
-# squid/bot/voting/cog.py:225
+# squid/bot/voting/cog.py:234
 poll-review-revision-name = revision
 
 # squid/bot/voting/poll_wizard.py:52
@@ -7122,7 +7122,7 @@ vocabulary-version-scope-up-to-date = Current version
 # squid/bot/voting/reactions.py:311
 vote-consent-required = { $user }, voting stores your Discord user ID. Run `/account consent` first.
 
-# squid/bot/voting/cog.py:319
+# squid/bot/voting/cog.py:328
 vote-message-guild-mismatch = The message is not from this guild.
 
 # squid/bot/voting/actors.py:23
@@ -7176,7 +7176,7 @@ vote-rows-title = Vote emojis
 # squid/bot/voting/actors.py:29
 vote-server-mismatch = That vote belongs to a different server.
 
-# squid/bot/voting/cog.py:134
+# squid/bot/voting/cog.py:143
 vote-submitted-open-poll-editor = Thanks. Run `/poll` again to open the editor.
 
 # squid/core/voting/errors.py:34
