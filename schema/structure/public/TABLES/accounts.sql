@@ -5,6 +5,7 @@ CREATE TABLE public.accounts (
     consented_at timestamp with time zone,
     public_account_id uuid DEFAULT gen_random_uuid() NOT NULL,
     revision bigint DEFAULT 1 NOT NULL,
+    discord_build_indexing_enabled boolean DEFAULT false NOT NULL,
     CONSTRAINT accounts_consent_receipt_complete CHECK (((consent_version IS NULL) = (consented_at IS NULL))),
     CONSTRAINT accounts_revision_positive CHECK ((revision > 0))
 );

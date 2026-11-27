@@ -110,6 +110,7 @@ class Account(CreatedAtMixin, Revisioned, Base, kw_only=True):
     public_account_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), nullable=False, server_default=text("gen_random_uuid()"), default_factory=uuid.uuid4
     )
+    discord_build_indexing_enabled: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
     consent_version: Mapped[str | None] = mapped_column(Text, default=None)
     consented_at: Mapped[Instant | None] = mapped_column(InstantUTC(), default=None)
 
