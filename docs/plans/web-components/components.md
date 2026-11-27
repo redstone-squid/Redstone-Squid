@@ -216,7 +216,7 @@ The `src/ui` primitives and patterns, the feature components built from them, an
   - `alert` is for failures the user must act on now.
   - `status` is for outcomes: saved, sent, approved.
   - It is the only success-feedback mechanism (no toasts).
-- _Users:_ every mutation and status banner: pending build (P5), expiry (S2), consent (A1), DMs suspended (A7), flash messages after redirects.
+- _Users:_ every mutation and status banner: pending build (P5), expiry (S2), DMs suspended (A7), flash messages after redirects.
 
 **`SaveStatus`**
 
@@ -497,7 +497,7 @@ The `src/ui` primitives and patterns, the feature components built from them, an
 
 - _API:_ `title`, `errors` of `{fieldId, message}`, `focusOnMount` (default true).
 - _Behavior:_ `role=alert` with `tabindex=-1`. Receives focus after a failed submit. Each item links to `#fieldId`, and clicking focuses the field.
-- _Users:_ S2 submit, M4, A2, X1, P9 form, A1 consent.
+- _Users:_ S2 submit, M4, A2, X1, P9 form.
 
 **`FormActions`**
 
@@ -953,7 +953,7 @@ Without JS, the trigger links to a confirmation page (for example `/account/devi
 - **Three cases:**
   - Can never do it: hide the control.
   - Could do it after signing in: show it as a link to `/sign-in?redirect_to=<current URL>&intent=<action>`. The intent is replayed after login, e.g. auto-follow, after a confirmation.
-  - Signed in but temporarily blocked (consent pending, DMs suspended): show it with an explanation and a fix.
+  - Signed in but temporarily blocked (DMs suspended): show it with an explanation and a fix.
 - **Staff controls** are never rendered for non-staff, not even disabled. The server enforces every permission anyway; UI gating uses `session.permissions` and `viewer` blocks only.
 - **Rendering and caching.** Public catalogue pages (P1–P16) render identical HTML for everyone, so they stay cacheable and fast. Viewer-specific parts (user menu, follow state, vote panel, edit button) are small islands fed by `/v1/session` and the `viewer` blocks through Query. Account, submission, review and admin pages render with the session on the server (`Cache-Control: private, no-store`) and redirect anonymous visitors to sign-in.
 - **Trade-off:** without JS, public pages don't show personalized controls. Accepted.

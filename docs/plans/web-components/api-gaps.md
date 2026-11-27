@@ -8,7 +8,7 @@ Unfinished items come first, then finished ones, each grouped by area. Numbers a
 
 ### Identity, session and permissions
 
-56. **Consent before the account.** The OAuth callback creates the account and its identity before the visitor sees the privacy notice, yet the notice says "Cancelling stores nothing". A1's decline signs the visitor out, but the account row stays. Either create the account on acceptance (hold the verified identity in the session until then) or reword the notice. The callback's error redirect also goes to the unprefixed `/sign-in`, so a zh-CN visitor sees English errors; carry the locale in the saved state.
+56. **OAuth error locale.** Carry the sign-in locale through OAuth state so callback errors return to the localized sign-in page.
 57. **List Minecraft grants.** A4 lists grants with origin, server and expiry, but `/v1/minecraft` has only `DELETE /grants/{id}`. Add `GET /v1/accounts/me/minecraft/grants`.
 
 ### Builds
@@ -69,8 +69,8 @@ Unfinished items come first, then finished ones, each grouped by area. Numbers a
 ### Identity, session and permissions
 
 1. **`GET /v1/session`** supplies one snapshot for the server render and header island. The island reuses the snapshot on hydration.
-   - Return `{user: {id, display_name, avatar_url} | null, consent_pending: bool, permissions: string[], counts: {unread_notifications: int, drafts: int, drafts_needing_attention: int, review_queue: int | null}}`. Permissions are effective global node names.
-   - A missing or expired cookie returns 200 with a null user, false consent flag, empty permissions, zero personal counts and a null review queue. The queue count is null whenever the viewer lacks access and zero when a visible queue is empty.
+   - Return `{user: {id, display_name, avatar_url} | null, permissions: string[], counts: {unread_notifications: int, drafts: int, drafts_needing_attention: int, review_queue: int | null}}`. Permissions are effective global node names.
+   - A missing or expired cookie returns 200 with a null user, empty permissions, zero personal counts and a null review queue. The queue count is null whenever the viewer lacks access and zero when a visible queue is empty.
    - A local PostgreSQL benchmark of the signed-in staff endpoint measured 6.2 ms median and 7.6 ms p95 over 25 warm requests, with 10,000 builds (1,000 pending) and 10,000 drafts (10 owned).
 2. **Detail responses include a nullable `viewer`** so one request supplies the controls for the resource. Anonymous callers get null. Keep personalized responses out of shared caches and enforce each permission on the action itself.
    - `BuildDetail.viewer` includes `can_edit`, `can_review`, `can_download_private_schematics`, a map of followed creator IDs to subscription IDs, and the caller’s nullable `ballot`. The vote session belongs to the build (item 6).
@@ -164,5 +164,5 @@ Records, search and ranges share one **record holder summary**, `{build_id, titl
     - **Stored links use IDs.** Notification hrefs, follows and payloads never embed a name. The website may keep readable routes such as `/creators/{name}` and `/tags/{slug}` that resolve through a lookup.
     - **Filters** follow item 58: `tag_id` and `tag_slug`, never one parameter that guesses, and `account_id` for accounts.
     - **Values defined in code** (`/auth/{provider}`, `/suggest/{source}`, `/media/{kind}`) and opaque references (`/diagnostics/errors/{reference}`, `/schematic-renders/{recipe_hash}`) may be path segments.
-    - **Accounts** are one collection keyed by the public UUID, which survives merges; the integer ID never appears in the API. `/accounts/me` is the caller's private view and holds its self-only routes (consent, identities, merges, notifications); `/accounts/{id}` is the public profile. Routes that owners and staff share, such as `/accounts/{id}/profile` and `/minecraft/refresh`, take an ID or `me`, and core decides which permission applies.
+    - **Accounts** are one collection keyed by the public UUID, which survives merges; the integer ID never appears in the API. `/accounts/me` is the caller's private view and holds its self-only routes (Discord build indexing, identities, merges, notifications); `/accounts/{id}` is the public profile. Routes that owners and staff share, such as `/accounts/{id}/profile` and `/minecraft/refresh`, take an ID or `me`, and core decides which permission applies.
     - **Creators** are credited names: `/creator-aliases/{id}` by alias ID, with the account summary when claimed. "Creator" stays out of account routes because unclaimed creators have no account; account references in bodies are `account_id`, not `creator_id`.

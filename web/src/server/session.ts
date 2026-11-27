@@ -1,6 +1,6 @@
 import type { APIContext } from "astro";
 import { ApiError, unwrap } from "@/api-client/api-error";
-import { accountConsentGrant, browserSessionGet, browserSessionRevoke } from "@/generated/sdk.gen";
+import { browserSessionGet, browserSessionRevoke } from "@/generated/sdk.gen";
 import type { SessionSnapshot } from "@/generated/types.gen";
 import { localizePath } from "@/locales/locale";
 import { apiCsrfToken, apiSessionCookie, clearApiSession } from "./cookies";
@@ -22,31 +22,6 @@ export async function loadSession(context: Context): Promise<SessionSnapshot | n
   } catch (caught) {
     logFailure("session_load_failed", ApiError.from(caught));
     return null;
-  }
-}
-
-type ConsentOutcome = "granted" | "stale" | "signed-out" | "failed";
-
-/**
- * Accept the privacy notice `version` for the visitor, forwarding their session.
- *
- * The site's own form posts here, so the API's double-submit CSRF check is satisfied by copying
- * the visitor's token from their cookie into the header. That is safe only because Astro's
- * `checkOrigin` rejects cross-site form posts before this runs. "stale" means a newer notice was
- * published after the visitor loaded the page.
- */
-export async function grantConsent(context: Context, version: string): Promise<ConsentOutcome> {
-  const headers = writeHeaders(context);
-  if (headers === undefined) return "signed-out";
-  try {
-    unwrap(await accountConsentGrant({ client: context.locals.api, headers, body: { version } }));
-    return "granted";
-  } catch (caught) {
-    const error = ApiError.from(caught);
-    if (error.problem?.code === "CONSENT_VERSION_STALE") return "stale";
-    if (error.status === 401) return "signed-out";
-    logFailure("consent_grant_failed", error);
-    return "failed";
   }
 }
 
@@ -80,7 +55,7 @@ export function returnPath(value: FormDataEntryValue | null | undefined): string
   return url.origin === base ? `${url.pathname}${url.search}${url.hash}` : localizePath("/");
 }
 
-function writeHeaders(context: Context): Record<string, string> | undefined {
+export function writeHeaders(context: Context): Record<string, string> | undefined {
   const cookie = apiSessionCookie(context);
   const csrf = apiCsrfToken(context);
   if (cookie === undefined || csrf === undefined) return undefined;

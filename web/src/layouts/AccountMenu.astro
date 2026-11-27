@@ -10,12 +10,12 @@ import Menu from "@/ui/overlays/Menu.svelte";
 /**
  * The header's account entry: a sign-in link, or a menu of the signed-in visitor's actions.
  * The menu is a native popover of links and forms, so it needs no JavaScript or hydration.
- * The sign-in and consent pages leave it out, since they are that flow.
+ * The sign-in page already offers the provider buttons.
  */
 const { session, requestedPath } = Astro.locals;
 const user = session?.user ?? null;
 const back = encodeURIComponent(requestedPath);
-const inFlow = ["/sign-in", "/consent"].includes(unprefixedPath(Astro.url.pathname));
+const inFlow = unprefixedPath(Astro.url.pathname) === "/sign-in";
 ---
 
 {inFlow ? null : user === null ? (
@@ -26,15 +26,7 @@ const inFlow = ["/sign-in", "/consent"].includes(unprefixedPath(Astro.url.pathna
     label={m.navAccount()}
     trigger={{ label: user.display_name ?? m.navAccount(), icon: CircleUser }}
     items={[
-      ...(session?.consent_pending === true
-        ? [
-            {
-              label: m.navReviewConsent(),
-              href: `${localizePath("/consent")}?redirect_to=${back}`,
-              icon: ShieldCheck,
-            },
-          ]
-        : []),
+      { label: m.indexingTitle(), href: localizePath("/settings"), icon: ShieldCheck },
       {
         label: m.navSignOut(),
         action: `${localizePath("/sign-out")}?return=${back}`,

@@ -12,15 +12,11 @@ import "@/ui/app.css";
 import Button from "@/ui/actions/Button.svelte";
 import SkipLink from "@/ui/content/SkipLink.svelte";
 import Announcer from "@/ui/feedback/Announcer.svelte";
-import Notice from "@/ui/feedback/Notice.svelte";
 import Container from "@/ui/layout/Container.svelte";
 import NavBar from "@/ui/patterns/NavBar.svelte";
 type Props = ComponentProps<typeof DocumentHead>;
-const { config, session, requestedPath } = Astro.locals;
+const { config } = Astro.locals;
 const activePath = unprefixedPath(Astro.url.pathname);
-// A new notice version leaves signed-in visitors read-only until they accept it.
-const consentPending =
-  session?.user != null && session.consent_pending && activePath !== "/consent";
 const nav = [
   [m.navBuilds, "/builds"],
   [m.navRecords, "/records"],
@@ -61,18 +57,6 @@ const nav = [
           </Fragment>
         </NavBar>
       </Container>
-      {consentPending && (
-        <Notice variant="banner" tone="warning">
-          {m.consentPendingBanner()}
-          <Fragment slot="actions">
-            <a
-              href={`${localizePath("/consent")}?redirect_to=${encodeURIComponent(requestedPath)}`}
-            >
-              {m.navReviewConsent()}
-            </a>
-          </Fragment>
-        </Notice>
-      )}
     </header>
     <Container as="main" id="main-content" class="grid content-start gap-8 py-12">
       <slot />

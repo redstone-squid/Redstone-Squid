@@ -1,3 +1,4 @@
+import { text as readText } from "node:stream/consumers";
 import { createServer } from "node:http";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { doorEvidence } from "./door-record";
@@ -250,6 +251,8 @@ function cookie(request: Request, name: string): string | undefined {
   return undefined;
 }
 
+const indexing = new Map<string, boolean>();
+
 function session(request: Request): SessionSnapshot {
   const name = cookie(request, "__Host-squid_session") ?? "";
   const display = Object.hasOwn(sessionUsers, name)
@@ -260,7 +263,6 @@ function session(request: Request): SessionSnapshot {
       display === null
         ? null
         : { id: "00000000-0000-4000-8000-000000000007", display_name: display, avatar_url: null },
-    consent_pending: display !== null && name !== "member",
     permissions: [],
     counts: { unread_notifications: 0, drafts: 0, drafts_needing_attention: 0, review_queue: null },
   };
@@ -280,20 +282,25 @@ async function routeRequest(request: Request): Promise<Response> {
   if (url.pathname === "/v1/auth/providers") {
     return json([{ id: "discord" }] satisfies BrowserProvider[]);
   }
-  if (url.pathname === "/v1/consent/notice") {
+  if (url.pathname === "/v1/privacy/policy") {
     return json({
       version: "2026-08-18",
       locale: "en",
       title: "Privacy notice",
-      body: "Redstone Squid stores your Discord user ID.\n\nAgreeing records this notice's version.",
+      body: "Redstone Squid stores your Discord user ID.\n\nAutomatic indexing is off by default.",
     } satisfies PrivacyNoticeDetail);
   }
-  if (url.pathname === "/v1/accounts/me/consent" && request.method === "POST") {
-    if (session(request).user === null) return problem(request, 401, "AUTHENTICATION_REQUIRED");
-    if (!csrfMatches(request)) return problem(request, 403, "FORBIDDEN");
-    if (cookie(request, "__Host-squid_session") === "stale")
-      return problem(request, 409, "CONSENT_VERSION_STALE");
-    return json({});
+  if (
+    url.pathname === "/v1/accounts/me" ||
+    url.pathname === "/v1/accounts/me/discord-build-indexing"
+  ) {
+    const user = cookie(request, "__Host-squid_session");
+    if (!user || !session(request).user) return problem(request, 401, "AUTHENTICATION_REQUIRED");
+    if (request.method === "PUT") {
+      if (!csrfMatches(request)) return problem(request, 403, "FORBIDDEN");
+      indexing.set(user, (await request.json()).enabled === true);
+    }
+    return json({ discord_build_indexing_enabled: indexing.get(user) ?? false });
   }
   if (url.pathname === "/v1/auth/logout" && request.method === "POST") {
     if (!csrfMatches(request)) return problem(request, 403, "FORBIDDEN");
@@ -431,6 +438,10 @@ async function handleIncoming(incoming: IncomingMessage, outgoing: ServerRespons
     const request = new Request(`http://127.0.0.1:${port}${incoming.url ?? "/"}`, {
       method: incoming.method,
       headers,
+      body:
+        incoming.method === "GET" || incoming.method === "HEAD"
+          ? undefined
+          : await readText(incoming),
     });
     const response = await routeRequest(request);
     outgoing.statusCode = response.status;

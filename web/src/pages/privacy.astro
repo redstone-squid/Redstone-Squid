@@ -1,0 +1,20 @@
+---
+import { privacyPolicyGet } from "@/generated/sdk.gen";
+import CatalogueLayout from "@/layouts/CatalogueLayout.astro";
+import * as m from "@/locales/messages.gen";
+import { load } from "@/server/api";
+import PageHeader from "@/ui/patterns/PageHeader.svelte";
+import Prose from "@/ui/content/Prose.svelte";
+const loaded = await load(privacyPolicyGet({ client: Astro.locals.api }));
+if ("status" in loaded) return Astro.rewrite(`/${loaded.status}`);
+const title = m.privacyTitle();
+---
+
+<CatalogueLayout {title} canonicalPath="/privacy">
+  <PageHeader {title} />
+  <Prose>
+    {loaded.data.body.split(/\n\s*\n/).map((paragraph) => (
+      <p>{paragraph}</p>
+    ))}
+  </Prose>
+</CatalogueLayout>

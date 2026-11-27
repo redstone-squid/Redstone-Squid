@@ -121,7 +121,7 @@ Rules that apply to every screen:
 - *Related links:* builds, records held, past records.
 - *Primary action:* owner: edit profile; unclaimed alias: claim; everyone else: follow.
 
-**P14. Content pages: `/about`, `/rules` (door rules), `/privacy` (consent notice)**
+**P14. Content pages: `/about`, `/rules` (door rules), `/privacy` (Privacy Policy), `/terms` (Terms of Service)**
 - *Needs:* long-form prose with a table of contents and anchored headings.
 
 **P15. System pages: 404, 503, `/offline`**
@@ -133,9 +133,9 @@ Rules that apply to every screen:
 
 ## Account (signed in)
 
-**A1. Sign in `/sign-in?redirect_to=` and consent `/consent`**
+**A1. Sign in `/sign-in?redirect_to=`**
 - *Goal:* authenticate, then return to what the user was doing.
-- *Needs:* a provider button (Discord) and a one-line explanation of what is stored. If consent is pending, the privacy notice is shown with accept or decline before continuing. Errors returned from the OAuth callback are shown inline.
+- *Needs:* a provider button (Discord) and a one-line explanation of what is stored. Terms and Privacy Policy links appear before the provider button. Errors returned from the OAuth callback are shown inline.
 
 **A2. Profile `/account`**
 - *Goal:* control the public profile.
@@ -169,7 +169,7 @@ Rules that apply to every screen:
 **A7. Notification settings `/account/notifications`**
 - *Goal:* choose channels and subscriptions.
 - *Needs:*
-  - Web inbox and Discord DM switches, with the consent prompt if consent is pending, and a "DMs suspended" warning with a fix.
+  - Web inbox and Discord DM switches, and a "DMs suspended" warning with a fix.
   - The subscription list with readable subjects: creator name, record title, or a filter summary. Each can be removed.
 
 ## Submissions

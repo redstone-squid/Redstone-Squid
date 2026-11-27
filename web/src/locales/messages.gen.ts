@@ -3384,34 +3384,6 @@ export function navSignOut(locale: Locale = getLocale()): string {
   }
 }
 
-/** Review privacy notice */
-export function navReviewConsent(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Review privacy notice";
-    case "zh-CN":
-      return "查看隐私声明";
-    case "en-XA":
-      return "[" + "Ŕéṽîéŵ þŕîṽåçý ñöţîçé" + "·········]";
-  }
-}
-
-/** Accept the privacy notice to submit builds, vote, or follow updates. */
-export function consentPendingBanner(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Accept the privacy notice to submit builds, vote, or follow updates.";
-    case "zh-CN":
-      return "接受隐私声明后即可提交作品、投票或关注更新。";
-    case "en-XA":
-      return (
-        "[" +
-        "Åççéþţ ţĥé þŕîṽåçý ñöţîçé ţö šûƀɱîţ ƀûîļđš, ṽöţé, öŕ ƒöļļöŵ ûþđåţéš." +
-        "····························]"
-      );
-  }
-}
-
 /** Sign in */
 export function signInTitle(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -3424,19 +3396,55 @@ export function signInTitle(locale: Locale = getLocale()): string {
   }
 }
 
-/** Redstone Squid keeps your account ID from the provider so it can recognise you. You review the privacy notice next. */
+/** On your first sign-in, Redstone Squid creates an account linked to your provider ID. */
 export function signInDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Redstone Squid keeps your account ID from the provider so it can recognise you. You review the privacy notice next.";
+      return "On your first sign-in, Redstone Squid creates an account linked to your provider ID.";
     case "zh-CN":
-      return "Redstone Squid 会保存登录服务提供的账户 ID，以便识别你。接下来你将查看隐私声明。";
+      return "首次登录时，Redstone Squid 会创建一个关联登录服务账户 ID 的账户。";
     case "en-XA":
       return (
         "[" +
-        "Ŕéđšţöñé Šǫûîđ ķééþš ýöûŕ åççöûñţ ÎĐ ƒŕöɱ ţĥé þŕöṽîđéŕ šö îţ çåñ ŕéçöĝñîšé ýöû. Ýöû ŕéṽîéŵ ţĥé þŕîṽåçý ñöţîçé ñéẋţ." +
-        "··············································]"
+        "Öñ ýöûŕ ƒîŕšţ šîĝñ-îñ, Ŕéđšţöñé Šǫûîđ çŕéåţéš åñ åççöûñţ ļîñķéđ ţö ýöûŕ þŕöṽîđéŕ ÎĐ." +
+        "··································]"
       );
+  }
+}
+
+/** By continuing, you agree to the */
+export function signInAgreement(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "By continuing, you agree to the";
+    case "zh-CN":
+      return "继续即表示你同意";
+    case "en-XA":
+      return "[" + "Ɓý çöñţîñûîñĝ, ýöû åĝŕéé ţö ţĥé" + "·············]";
+  }
+}
+
+/** Terms of Service */
+export function termsTitle(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Terms of Service";
+    case "zh-CN":
+      return "服务条款";
+    case "en-XA":
+      return "[" + "Ţéŕɱš öƒ Šéŕṽîçé" + "·······]";
+  }
+}
+
+/** Privacy Policy */
+export function privacyTitle(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Privacy Policy";
+    case "zh-CN":
+      return "隐私政策";
+    case "en-XA":
+      return "[" + "Þŕîṽåçý Þöļîçý" + "······]";
   }
 }
 
@@ -3563,85 +3571,54 @@ export function signInErrorGeneric(locale: Locale = getLocale()): string {
   }
 }
 
-/** Read this before you continue. Accepting lets you submit builds, vote, and follow updates. */
-export function consentDescription(locale: Locale = getLocale()): string {
+/** Automatically index my Discord builds */
+export function indexingTitle(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Read this before you continue. Accepting lets you submit builds, vote, and follow updates.";
+      return "Automatically index my Discord builds";
     case "zh-CN":
-      return "继续之前请阅读此声明。接受后即可提交作品、投票和关注更新。";
+      return "自动收录我的 Discord 作品";
+    case "en-XA":
+      return "[" + "Åûţöɱåţîçåļļý îñđéẋ ɱý Đîšçöŕđ ƀûîļđš" + "···············]";
+  }
+}
+
+/** Add my builds from all participating Discord channels to the catalogue and copy their attachments. Turning this off stops future indexing. Builds already in the catalogue stay there. */
+export function indexingDescription(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Add my builds from all participating Discord channels to the catalogue and copy their attachments. Turning this off stops future indexing. Builds already in the catalogue stay there.";
+    case "zh-CN":
+      return "将我在所有参与频道发布的作品添加到目录，并复制附件。关闭后将停止收录新作品，已收录的作品会保留。";
     case "en-XA":
       return (
         "[" +
-        "Ŕéåđ ţĥîš ƀéƒöŕé ýöû çöñţîñûé. Åççéþţîñĝ ļéţš ýöû šûƀɱîţ ƀûîļđš, ṽöţé, åñđ ƒöļļöŵ ûþđåţéš." +
-        "····································]"
+        "Åđđ ɱý ƀûîļđš ƒŕöɱ åļļ þåŕţîçîþåţîñĝ Đîšçöŕđ çĥåññéļš ţö ţĥé çåţåļöĝûé åñđ çöþý ţĥéîŕ åţţåçĥɱéñţš. Ţûŕñîñĝ ţĥîš öƒƒ šţöþš ƒûţûŕé îñđéẋîñĝ. Ɓûîļđš åļŕéåđý îñ ţĥé çåţåļöĝûé šţåý ţĥéŕé." +
+        "·········································································]"
       );
   }
 }
 
-/** Notice version { $version } */
-export function consentVersion(
-  args: { version: string | number },
-  locale: Locale = getLocale(),
-): string {
+/** Save setting */
+export function indexingSave(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Notice version " + formatValue(locale, args.version);
+      return "Save setting";
     case "zh-CN":
-      return "声明版本 " + formatValue(locale, args.version);
+      return "保存设置";
     case "en-XA":
-      return "[" + "Ñöţîçé ṽéŕšîöñ " + formatValue(locale, args.version) + "······]";
+      return "[" + "Šåṽé šéţţîñĝ" + "·····]";
   }
 }
 
-/** Accept and continue */
-export function consentAccept(locale: Locale = getLocale()): string {
+/** Could not save your setting. Please try again. */
+export function indexingError(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Accept and continue";
+      return "Could not save your setting. Please try again.";
     case "zh-CN":
-      return "接受并继续";
+      return "无法保存设置，请重试。";
     case "en-XA":
-      return "[" + "Åççéþţ åñđ çöñţîñûé" + "········]";
-  }
-}
-
-/** Decline and sign out */
-export function consentDecline(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Decline and sign out";
-    case "zh-CN":
-      return "拒绝并退出登录";
-    case "en-XA":
-      return "[" + "Đéçļîñé åñđ šîĝñ öûţ" + "········]";
-  }
-}
-
-/** The notice changed while you were reading. Review the new version below. */
-export function consentErrorStale(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "The notice changed while you were reading. Review the new version below.";
-    case "zh-CN":
-      return "你阅读期间声明已更新，请查看下方的新版本。";
-    case "en-XA":
-      return (
-        "[" +
-        "Ţĥé ñöţîçé çĥåñĝéđ ŵĥîļé ýöû ŵéŕé ŕéåđîñĝ. Ŕéṽîéŵ ţĥé ñéŵ ṽéŕšîöñ ƀéļöŵ." +
-        "·····························]"
-      );
-  }
-}
-
-/** Your answer wasn’t saved. Try again in a moment. */
-export function consentErrorFailed(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Your answer wasn’t saved. Try again in a moment.";
-    case "zh-CN":
-      return "你的选择未能保存，请稍后再试。";
-    case "en-XA":
-      return "[" + "Ýöûŕ åñšŵéŕ ŵåšñ’ţ šåṽéđ. Ţŕý åĝåîñ îñ å ɱöɱéñţ." + "····················]";
+      return "[" + "Çöûļđ ñöţ šåṽé ýöûŕ šéţţîñĝ. Þļéåšé ţŕý åĝåîñ." + "···················]";
   }
 }

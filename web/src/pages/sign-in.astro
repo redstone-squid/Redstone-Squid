@@ -10,23 +10,23 @@ import PageHeader from "@/ui/patterns/PageHeader.svelte";
 
 const { session, config } = Astro.locals;
 const redirectTo = returnPath(Astro.url.searchParams.get("redirect_to"));
-// Every sign-in passes through /consent, which continues at once when nothing is pending.
-const consentPath = `${localizePath("/consent")}?redirect_to=${encodeURIComponent(redirectTo)}`;
-if (session?.user != null) {
-  return Astro.redirect(session.consent_pending ? consentPath : redirectTo);
-}
+if (session?.user != null) return Astro.redirect(redirectTo);
 const loaded = await load(browserProvidersList({ client: Astro.locals.api }));
 if ("status" in loaded) return Astro.rewrite(`/${loaded.status}`);
 // The API redirects to the relative `redirect_to` on its own origin, which is this site's
 // (api-gaps.md item 52).
 const providers = loaded.data.map((provider) => ({
   provider,
-  href: `${config.apiBaseUrl}/v1/auth/${encodeURIComponent(provider.id)}?redirect_to=${encodeURIComponent(consentPath)}`,
+  href: `${config.apiBaseUrl}/v1/auth/${encodeURIComponent(provider.id)}?redirect_to=${encodeURIComponent(redirectTo)}`,
 }));
 const title = m.signInTitle();
 ---
 
 <CatalogueLayout {title} canonicalPath="/sign-in" noindex>
   <PageHeader {title} description={m.signInDescription()} />
+  <p>
+    {m.signInAgreement()} <a href={localizePath("/terms")}>{m.termsTitle()}</a>.{" "}
+    <a href={localizePath("/privacy")}>{m.privacyTitle()}</a>
+  </p>
   <SignInPanel {providers} authError={Astro.url.searchParams.get("auth_error")} />
 </CatalogueLayout>

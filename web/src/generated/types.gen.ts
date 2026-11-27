@@ -40,8 +40,7 @@ export type AccountDetail = {
     id: string;
     revision: number;
     created_at: string | null;
-    consent_version: string | null;
-    consent_pending: boolean;
+    discord_build_indexing_enabled: boolean;
     identities: Array<IdentityDetail>;
     profile: ProfileDetail;
 };
@@ -240,6 +239,13 @@ export type BuildDetail = {
     schematics?: BuildSchematicOverview | null;
     viewer?: BuildViewer | null;
     sponsor?: BuildSponsor | null;
+};
+
+/**
+ * BuildIndexingRequest
+ */
+export type BuildIndexingRequest = {
+    enabled: boolean;
 };
 
 /**
@@ -576,13 +582,6 @@ export type CliSessionExchangeRequest = {
  * Allowlisted field comparison operators.
  */
 export type ComparisonOperator = 'eq' | 'lt' | 'lte' | 'gt' | 'gte';
-
-/**
- * ConsentGrantRequest
- */
-export type ConsentGrantRequest = {
-    version?: string | null;
-};
 
 /**
  * ControlKind
@@ -1716,7 +1715,6 @@ export type NotificationPreferenceUpdate = {
  */
 export type NotificationPreferencesDetail = {
     revision: number;
-    consent_pending: boolean;
     web_enabled: boolean;
     dm_enabled: boolean;
     dm_suspended: boolean;
@@ -3246,7 +3244,6 @@ export type SessionCounts = {
  */
 export type SessionSnapshot = {
     user: SessionUser | null;
-    consent_pending: boolean;
     permissions: Array<string>;
     counts: SessionCounts;
 };
@@ -4182,8 +4179,8 @@ export type AccountGetResponses = {
 
 export type AccountGetResponse = AccountGetResponses[keyof AccountGetResponses];
 
-export type AccountConsentGrantData = {
-    body: ConsentGrantRequest | null;
+export type AccountBuildIndexingSetData = {
+    body: BuildIndexingRequest;
     headers?: {
         /**
          * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
@@ -4192,10 +4189,10 @@ export type AccountConsentGrantData = {
     };
     path?: never;
     query?: never;
-    url: '/v1/accounts/me/consent';
+    url: '/v1/accounts/me/discord-build-indexing';
 };
 
-export type AccountConsentGrantErrors = {
+export type AccountBuildIndexingSetErrors = {
     /**
      * Unauthorized
      */
@@ -4208,10 +4205,6 @@ export type AccountConsentGrantErrors = {
      * Not Found
      */
     404: ProblemDetail;
-    /**
-     * Conflict
-     */
-    409: ProblemDetail;
     /**
      * Unprocessable Entity
      */
@@ -4226,16 +4219,16 @@ export type AccountConsentGrantErrors = {
     503: ProblemDetail;
 };
 
-export type AccountConsentGrantError = AccountConsentGrantErrors[keyof AccountConsentGrantErrors];
+export type AccountBuildIndexingSetError = AccountBuildIndexingSetErrors[keyof AccountBuildIndexingSetErrors];
 
-export type AccountConsentGrantResponses = {
+export type AccountBuildIndexingSetResponses = {
     /**
      * Request fulfilled, document follows
      */
     200: AccountDetail;
 };
 
-export type AccountConsentGrantResponse = AccountConsentGrantResponses[keyof AccountConsentGrantResponses];
+export type AccountBuildIndexingSetResponse = AccountBuildIndexingSetResponses[keyof AccountBuildIndexingSetResponses];
 
 export type AccountProfileUpdateData = {
     body: ProfileUpdateRequest;
@@ -5864,14 +5857,14 @@ export type CliSessionRevokeResponses = {
 
 export type CliSessionRevokeResponse = CliSessionRevokeResponses[keyof CliSessionRevokeResponses];
 
-export type ConsentNoticeGetData = {
+export type PrivacyPolicyGetData = {
     body?: never;
     path?: never;
     query?: never;
-    url: '/v1/consent/notice';
+    url: '/v1/privacy/policy';
 };
 
-export type ConsentNoticeGetErrors = {
+export type PrivacyPolicyGetErrors = {
     /**
      * Too Many Requests
      */
@@ -5882,16 +5875,16 @@ export type ConsentNoticeGetErrors = {
     503: ProblemDetail;
 };
 
-export type ConsentNoticeGetError = ConsentNoticeGetErrors[keyof ConsentNoticeGetErrors];
+export type PrivacyPolicyGetError = PrivacyPolicyGetErrors[keyof PrivacyPolicyGetErrors];
 
-export type ConsentNoticeGetResponses = {
+export type PrivacyPolicyGetResponses = {
     /**
      * Request fulfilled, document follows
      */
     200: PrivacyNoticeDetail;
 };
 
-export type ConsentNoticeGetResponse = ConsentNoticeGetResponses[keyof ConsentNoticeGetResponses];
+export type PrivacyPolicyGetResponse = PrivacyPolicyGetResponses[keyof PrivacyPolicyGetResponses];
 
 export type DiagnosticsErrorsClearData = {
     body?: never;

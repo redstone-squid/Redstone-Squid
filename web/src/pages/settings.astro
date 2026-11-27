@@ -1,0 +1,52 @@
+---
+import { accountGet, accountBuildIndexingSet } from "@/generated/sdk.gen";
+import CatalogueLayout from "@/layouts/CatalogueLayout.astro";
+import { localizePath } from "@/locales/locale";
+import * as m from "@/locales/messages.gen";
+import { apiSessionCookie } from "@/server/cookies";
+import { writeHeaders } from "@/server/session";
+import { load } from "@/server/api";
+import CheckField from "@/ui/forms/CheckField.svelte";
+import Button from "@/ui/actions/Button.svelte";
+import PageHeader from "@/ui/patterns/PageHeader.svelte";
+const cookie = apiSessionCookie(Astro);
+if (!cookie || !Astro.locals.session?.user)
+  return Astro.redirect(
+    localizePath("/sign-in") + "?redirect_to=" + encodeURIComponent(localizePath("/settings")),
+  );
+const client = Astro.locals.api;
+let failed = false;
+if (Astro.request.method === "POST") {
+  const form = await Astro.request.formData();
+  const headers = writeHeaders(Astro);
+  if (headers) {
+    const saved = await load(
+      accountBuildIndexingSet({
+        client,
+        headers,
+        body: { enabled: form.get("indexing") === "on" },
+      }),
+    );
+    if (!("status" in saved)) return Astro.redirect(localizePath("/settings"), 303);
+  }
+  failed = true;
+  Astro.response.status = 503;
+}
+const loaded = await load(accountGet({ client, headers: { Cookie: cookie } }));
+if ("status" in loaded) return Astro.rewrite(`/${loaded.status}`);
+const title = m.indexingTitle();
+---
+
+<CatalogueLayout {title} noindex>
+  <PageHeader {title} />
+  {failed && <p role="alert">{m.indexingError()}</p>}
+  <form method="post">
+    <CheckField
+      name="indexing"
+      label={title}
+      hint={m.indexingDescription()}
+      checked={loaded.data.discord_build_indexing_enabled}
+    />
+    <Button type="submit">{m.indexingSave()}</Button>
+  </form>
+</CatalogueLayout>
