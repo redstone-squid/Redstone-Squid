@@ -382,8 +382,6 @@ async def test_core_conflict_statements_collapse_claim_vote_and_subscription_col
                 vote_session=vote_session,
                 vote_session_id=vote_session.id,
                 identifier=label,
-                emoji=label,
-                guild_id=None,
                 choice=VoteChoice.APPROVE,
                 position=position,
             )
@@ -412,7 +410,8 @@ async def test_core_conflict_statements_collapse_claim_vote_and_subscription_col
                     vote_session_id=vote_session.id,
                     account_id=survivor.id,
                     guild_id=1,
-                    option_alias_id=options[0].id,
+                    option_identifier=options[0].identifier,
+                    emoji=None,
                     weight=1.0,
                 ),
                 Vote(
@@ -420,7 +419,8 @@ async def test_core_conflict_statements_collapse_claim_vote_and_subscription_col
                     vote_session_id=vote_session.id,
                     account_id=absorbed.id,
                     guild_id=1,
-                    option_alias_id=options[1].id,
+                    option_identifier=options[1].identifier,
+                    emoji=None,
                     weight=1.0,
                 ),
                 NotificationSubscription(

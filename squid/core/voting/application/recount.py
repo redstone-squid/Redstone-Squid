@@ -155,8 +155,8 @@ class BallotRecounter:
         cards: list[tuple[VoteMessage, tuple[str, ...], CardReactions]] = []
         observed: dict[int, list[_ObservedReaction]] = {}
         for card in snapshot.messages:
-            options = snapshot.options_for_guild(card.guild_id)
-            emojis = tuple(option.emoji for option in options)
+            aliases = snapshot.menu.aliases_for_guild(card.guild_id)
+            emojis = tuple(alias.emoji for alias in aliases)
             try:
                 reactions = await self._cards.read(card, emojis)
             except Exception:
@@ -168,14 +168,14 @@ class BallotRecounter:
                 unreadable.append(card.id)
                 continue
             cards.append((card, emojis, reactions))
-            for option in options:
-                for user_id in reactions.voters.get(option.emoji, ()):
+            for alias in aliases:
+                for user_id in reactions.voters.get(alias.emoji, ()):
                     account_id = await self._voters.consented_account_id(user_id)
                     if account_id is None:
-                        await self._cards.remove(card, option.emoji, user_id)
+                        await self._cards.remove(card, alias.emoji, user_id)
                         continue
                     observed.setdefault(account_id, []).append(
-                        _ObservedReaction(card, user_id, option.emoji, option.id)
+                        _ObservedReaction(card, user_id, alias.emoji, alias.option_id)
                     )
 
         # Cast one ballot per account and tidy its reactions.

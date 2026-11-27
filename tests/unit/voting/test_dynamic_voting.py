@@ -1,4 +1,3 @@
-from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from math import inf, nan
 from typing import Any, cast, override
@@ -13,28 +12,29 @@ from squid.core.actors import ActingContext, UserActor
 from squid.core.permissions.domain.catalogue import VOTE_LOG_DELETE_CAST, VOTE_POLL_CLOSE_ANY, VOTE_WEIGHT_STAFF
 from squid.core.voting.application import RoleVoteWeightPolicy, VoteService
 from squid.core.voting.domain import (
-    DEFAULT_VOTE_OPTIONS,
+    DEFAULT_VOTE_MENU,
     BuildVoteTarget,
     DeleteLogVoteTarget,
     GenericPoll,
     PollScope,
     RoleWeight,
+    VoteAlias,
     VoteChoice,
     VoteKind,
+    VoteMenu,
     VoteOption,
     VoteRejection,
     VoteSelection,
     VoteSessionResult,
     VoteStatus,
     VoteVisibility,
-    normalize_vote_options,
     validate_thresholds,
 )
 from squid.core.voting.errors import InvalidVoteConfigurationError
 from squid.runtime import BotServices
 from squid_ui.content.text import NEUTRAL, resolve_text
 from tests.support.services import bot_services
-from tests.support.voting import GENERIC_OPTIONS, build_snapshot, poll_snapshot
+from tests.support.voting import GENERIC_MENU, build_snapshot, poll_snapshot
 
 STAFF = frozenset({VOTE_WEIGHT_STAFF.name})
 DELETE_LOG = frozenset({VOTE_LOG_DELETE_CAST.name})
@@ -70,10 +70,7 @@ async def test_delete_policy_rejects_a_member_without_the_delete_log_node() -> N
         return ()
 
     policy = RoleVoteWeightPolicy(no_weights)
-    snapshot = build_snapshot(
-        kind=VoteKind.DELETE_LOG,
-        options=(VoteOption("👍", VoteChoice.APPROVE), VoteOption("👎", VoteChoice.DENY)),
-    )
+    snapshot = build_snapshot(kind=VoteKind.DELETE_LOG)
 
     assert await policy.calculate(UserActor(account_id=1, discord_user_id=100, guild_id=10), snapshot) is None
     assert (
@@ -255,10 +252,10 @@ def test_generic_polls_reject_thresholds_entirely() -> None:
                 )
             },
         ),
-        (build_snapshot(), {"options": GENERIC_OPTIONS}),
+        (build_snapshot(), {"menu": GENERIC_MENU}),
         (poll_snapshot(), {"target": BuildVoteTarget(42)}),
         (poll_snapshot(), {"poll": None}),
-        (poll_snapshot(), {"options": DEFAULT_VOTE_OPTIONS}),
+        (poll_snapshot(), {"menu": DEFAULT_VOTE_MENU}),
     ],
     ids=(
         "build-delete-target",
@@ -301,21 +298,30 @@ def test_poll_visibility_matrix(
     assert snapshot.shows_tallies is shows_tallies
 
 
-def test_binary_aliases_may_repeat_choice_but_not_emoji_per_guild() -> None:
-    assert (
-        len(
-            normalize_vote_options(
-                (
-                    VoteOption("👍", VoteChoice.APPROVE),
-                    VoteOption("✅", VoteChoice.APPROVE),
-                    VoteOption("👎", VoteChoice.DENY),
-                )
-            )
-        )
-        == 3
-    )
+def test_binary_aliases_may_repeat_an_option_but_not_an_emoji_per_guild() -> None:
+    assert DEFAULT_VOTE_MENU.validated(VoteKind.BUILD) == DEFAULT_VOTE_MENU
+    clash = VoteMenu(DEFAULT_VOTE_MENU.options, (VoteAlias("approve", "👍"), VoteAlias("deny", "👍", position=1)))
     with pytest.raises(InvalidVoteConfigurationError, match="unique"):
-        normalize_vote_options((VoteOption("👍", VoteChoice.APPROVE), VoteOption("👍", VoteChoice.DENY)))
+        clash.validated(VoteKind.BUILD)
+    with pytest.raises(InvalidVoteConfigurationError, match="must select"):
+        VoteMenu(DEFAULT_VOTE_MENU.options, (*DEFAULT_VOTE_MENU.aliases, VoteAlias("maybe", "🤷"))).validated(
+            VoteKind.BUILD
+        )
+
+
+def test_a_shared_menu_keeps_only_the_first_guilds_multipliers() -> None:
+    def strong(guild_id: int, multiplier: float) -> VoteMenu:
+        return VoteMenu(
+            (*DEFAULT_VOTE_MENU.options, VoteOption("strong_approve", VoteChoice.APPROVE, multiplier=multiplier)),
+            (VoteAlias("strong_approve", "🔥", guild_id), VoteAlias("deny", "👎", guild_id, 1)),
+        )
+
+    owner_first = VoteMenu.shared([strong(1, 2.0), strong(2, 50.0)])
+    elsewhere_only = VoteMenu.shared([DEFAULT_VOTE_MENU, strong(2, 50.0)])
+
+    assert owner_first.option("strong_approve") == VoteOption("strong_approve", VoteChoice.APPROVE, multiplier=2.0)
+    assert elsewhere_only.option("strong_approve") == VoteOption("strong_approve", VoteChoice.APPROVE)
+    assert [alias.guild_id for alias in owner_first.aliases] == [1, 1, 2, 2]
 
 
 @pytest.mark.parametrize("multiplier", [0, -1, inf, nan])
@@ -347,21 +353,16 @@ def test_duration_labels_match_the_presets_where_one_exists(seconds: int, expect
 
 
 def test_option_lines_fall_back_to_the_guild_palette_for_missing_emojis() -> None:
-    palette = (
-        VoteOption("1️⃣", VoteChoice.GENERIC, identifier="1", guild_id=10, label="Option 1"),
-        VoteOption("2️⃣", VoteChoice.GENERIC, identifier="2", guild_id=10, label="Option 2"),
-    )
+    menu = parse_option_lines(["Red", "🔵 | Blue"], guild_id=10, palette=("1️⃣", "2️⃣"))
 
-    options = parse_option_lines(["Red", "🔵 | Blue"], guild_id=10, palette=palette)
-
-    assert [(option.emoji, option.label, option.id) for option in options] == [
+    assert [(alias.emoji, option.label, option.id) for option, alias in menu.rows()] == [
         ("1️⃣", "Red", "1"),
         ("🔵", "Blue", "2"),
     ]
 
 
 def test_option_lines_reject_duplicates_bad_counts_and_unusable_emojis() -> None:
-    palette = (VoteOption("1️⃣", VoteChoice.GENERIC, identifier="1", guild_id=10, label="Option 1"),)
+    palette = ("1️⃣",)
 
     with pytest.raises(InvalidVoteConfigurationError, match="between 2 and 10"):
         parse_option_lines(["Only one"], guild_id=10, palette=palette)
@@ -416,7 +417,7 @@ async def test_publishing_a_network_poll_unscopes_its_options() -> None:
             question: str,
             visibility: VoteVisibility,
             duration_seconds: int,
-            options: Sequence[VoteOption],
+            menu: VoteMenu,
             guild_id: int | None = None,
             scope: PollScope = PollScope.GUILD,
             now: Instant | None = None,
@@ -426,7 +427,7 @@ async def test_publishing_a_network_poll_unscopes_its_options() -> None:
                 "question": question,
                 "visibility": visibility,
                 "duration_seconds": duration_seconds,
-                "options": options,
+                "menu": menu,
                 "guild_id": guild_id,
                 "scope": scope,
                 "now": now,
@@ -462,13 +463,13 @@ async def test_publishing_a_network_poll_unscopes_its_options() -> None:
         question="Which?",
         visibility=VoteVisibility.ANONYMOUS_LIVE,
         duration_seconds=3600,
-        options=GENERIC_OPTIONS,
+        menu=GENERIC_MENU,
         scope=PollScope.NETWORK,
     )
 
     assert votes.created["scope"] is PollScope.NETWORK
     assert votes.created["guild_id"] == 10
-    assert all(option.guild_id is None for option in cast(Sequence[VoteOption], votes.created["options"]))
+    assert all(alias.guild_id is None for alias in cast(VoteMenu, votes.created["menu"]).aliases)
 
 
 @pytest.mark.parametrize(

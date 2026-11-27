@@ -1013,103 +1013,103 @@ bot-recount-that-vote-is-already-closed = That vote is already closed.
 # squid/bot/recount_cog.py:117
 bot-recount-votes-recounted = Votes recounted.
 
-# squid/bot/settings/screen.py:620
+# squid/bot/settings/screen.py:633
 bot-settings-role-multiplier = { $role } — { NUMBER($multiplier, useGrouping: 0, maximumSignificantDigits: 6) }x
 
-# squid/bot/settings/screen.py:351
+# squid/bot/settings/screen.py:360
 bot-settings-view-bot-language = Bot language
 
-# squid/bot/settings/screen.py:72
+# squid/bot/settings/screen.py:81
 bot-settings-view-build-edit-reviews = Build edit reviews
 
-# squid/bot/settings/screen.py:71
+# squid/bot/settings/screen.py:80
 bot-settings-view-build-reviews = Build reviews
 
-# squid/bot/settings/screen.py:66
+# squid/bot/settings/screen.py:75
 bot-settings-view-builds-awaiting-review = Builds awaiting review
 
-# squid/bot/settings/screen.py:257
+# squid/bot/settings/screen.py:266
 bot-settings-view-change-as-many-as-you-like-an = Change as many as you like; an emptied picker clears that setting.
 
-# squid/bot/settings/screen.py:329
+# squid/bot/settings/screen.py:338
 bot-settings-view-changed = Changed { $setting_label }
 
-# squid/bot/settings/screen.py:338
+# squid/bot/settings/screen.py:347
 bot-settings-view-changed-the-bot-language = Changed the bot language
 
-# squid/bot/settings/screen.py:417
+# squid/bot/settings/screen.py:426
 bot-settings-view-choose-a-role = Choose a role
 
-# squid/bot/settings/screen.py:431
+# squid/bot/settings/screen.py:440
 bot-settings-view-confirm-reset = Confirm reset
 
-# squid/bot/settings/screen.py:65
+# squid/bot/settings/screen.py:74
 bot-settings-view-confirmed-builds = Approved builds
 
-# squid/bot/settings/screen.py:634
+# squid/bot/settings/screen.py:647
 bot-settings-view-deleted-role = _Deleted role_ ({ $role_id })
 
-# squid/bot/settings/screen.py:73
+# squid/bot/settings/screen.py:82
 bot-settings-view-deletion-votes = Deletion votes
 
-# squid/bot/settings/screen.py:425
+# squid/bot/settings/screen.py:434
 bot-settings-view-edit-emojis = Edit emojis
 
-# squid/bot/settings/screen.py:627
+# squid/bot/settings/screen.py:640
 bot-settings-view-emojis = Emojis
 
-# squid/bot/settings/screen.py:63
+# squid/bot/settings/screen.py:72
 bot-settings-view-fastest-record-builds = Fastest-record builds
 
-# squid/bot/settings/screen.py:64
+# squid/bot/settings/screen.py:73
 bot-settings-view-first-of-a-kind-builds = First-of-a-kind builds
 
-# squid/bot/settings/screen.py:296
+# squid/bot/settings/screen.py:305
 bot-settings-view-follow-discord = Follow Discord
 
-# squid/bot/settings/screen.py:534
+# squid/bot/settings/screen.py:548
 bot-settings-view-is-not-a-vote-choice = `{ $choice_text }` is not a vote choice.
 
-# squid/bot/settings/screen.py:613, squid/bot/settings/screen.py:625
+# squid/bot/settings/screen.py:626, squid/bot/settings/screen.py:638
 bot-settings-view-none = _None_
 
-# squid/bot/settings/screen.py:358
+# squid/bot/settings/screen.py:367
 bot-settings-view-not-found = _Not found_ ({ $channel_id })
 
-# squid/bot/settings/screen.py:356
+# squid/bot/settings/screen.py:365
 bot-settings-view-not-set = _Not set_
 
-# squid/bot/settings/screen.py:664
+# squid/bot/settings/screen.py:677
 bot-settings-view-one-choice-emoji-per-line = One `choice | emoji` per line
 
-# squid/bot/settings/screen.py:74
+# squid/bot/settings/screen.py:83
 bot-settings-view-polls = Polls
 
-# squid/bot/settings/screen.py:433
+# squid/bot/settings/screen.py:442
 bot-settings-view-reset = Reset
 
-# squid/bot/settings/screen.py:628
+# squid/bot/settings/screen.py:641
 bot-settings-view-role-multipliers = Role multipliers
 
-# squid/bot/settings/screen.py:266
+# squid/bot/settings/screen.py:275
 bot-settings-view-server-settings = Server settings
 
-# squid/bot/settings/screen.py:62
+# squid/bot/settings/screen.py:71
 bot-settings-view-smallest-record-builds = Smallest-record builds
 
-# squid/bot/settings/screen.py:463
+# squid/bot/settings/screen.py:474
 bot-settings-view-that-role-has-been-deleted = That role has been deleted.
 
-# squid/bot/settings/screen.py:458
+# squid/bot/settings/screen.py:469
 bot-settings-view-that-role-selection-is-invalid = That role selection is invalid.
 
-# squid/bot/settings/screen.py:471
+# squid/bot/settings/screen.py:482
 bot-settings-view-vote-weight-for = Vote weight for { $role_name }
 
-# squid/bot/settings/screen.py:155
+# squid/bot/settings/screen.py:164
 bot-settings-view-voting = Voting
 
-# squid/bot/settings/screen.py:398
+# squid/bot/settings/screen.py:407
 bot-settings-view-voting-2 = Voting — { $kind_label }
 
 # squid/bot/starboard/render.py:27
@@ -1316,65 +1316,65 @@ bot-submission-schematics-tick-gt-after-input = tick { $tick } ({ $duration } gt
 # squid/bot/submission/cog.py:159
 bot-submission-search-open-this-build-directly = Open this build directly.
 
-# squid/bot/catalogue/search/results.py:700
+# squid/bot/catalogue/search/results.py:691
 bot-submission-search-view-build-base-title =
     { "*" }*Build**
     { $build_title } ({ $build_id })
     { "*" }*Record criterion**
     { $criterion } · { $version_scope }
 
-# squid/bot/catalogue/search/results.py:547
+# squid/bot/catalogue/search/results.py:538
 bot-submission-search-view-creator = Creator
 
-# squid/bot/catalogue/search/results.py:734
+# squid/bot/catalogue/search/results.py:725
 bot-submission-search-view-kind =
     { "*" }*Kind**
     { $kind }
 
-# squid/bot/catalogue/search/results.py:711
+# squid/bot/catalogue/search/results.py:702
 bot-submission-search-view-metrics =
     { $fields }
     { "*" }*Metrics**
     { $metrics }
 
-# squid/bot/catalogue/search/results.py:543
+# squid/bot/catalogue/search/results.py:534
 bot-submission-search-view-pattern = Pattern
 
-# squid/bot/catalogue/search/results.py:541
+# squid/bot/catalogue/search/results.py:532
 bot-submission-search-view-restriction = Restriction
 
-# squid/bot/catalogue/search/results.py:306, squid/bot/catalogue/search/results.py:387
+# squid/bot/catalogue/search/results.py:297, squid/bot/catalogue/search/results.py:378
 bot-submission-search-view-retry = Retry
 
-# squid/bot/catalogue/search/results.py:382
+# squid/bot/catalogue/search/results.py:373
 bot-submission-search-view-search-results = Search results
 
-# squid/bot/catalogue/search/results.py:545
+# squid/bot/catalogue/search/results.py:536
 bot-submission-search-view-showcase-tag = Showcase tag
 
-# squid/bot/catalogue/search/results.py:723
+# squid/bot/catalogue/search/results.py:714
 bot-submission-search-view-status =
     { "*" }*Status**
     { $status }
 
-# squid/bot/catalogue/search/results.py:551
+# squid/bot/catalogue/search/results.py:542
 bot-submission-search-view-tag = Tag
 
-# squid/bot/catalogue/search/results.py:743
+# squid/bot/catalogue/search/results.py:734
 bot-submission-search-view-tags =
     { $fields }
     { "*" }*Tags**
     { $tags }
 
-# squid/bot/catalogue/search/results.py:751
+# squid/bot/catalogue/search/results.py:742
 bot-submission-search-view-value =
     { $description }
     { $fields }
 
-# squid/bot/catalogue/search/results.py:549
+# squid/bot/catalogue/search/results.py:540
 bot-submission-search-view-version = Version
 
-# squid/bot/catalogue/search/results.py:155
+# squid/bot/catalogue/search/results.py:146
 bot-submission-search-view-view-build = Expand
 
 # squid/bot/submission/message_intake.py:122
@@ -1681,106 +1681,106 @@ bot-voting-controls-close-poll = Close poll
 # squid/bot/voting/controls.py:68
 bot-voting-controls-poll-closed = Poll closed.
 
-# squid/bot/voting/poll_wizard.py:502
+# squid/bot/voting/poll_wizard.py:496
 bot-voting-poll-wizard-cancel = Cancel
 
-# squid/bot/voting/poll_wizard.py:359
+# squid/bot/voting/poll_wizard.py:353
 bot-voting-poll-wizard-closes-after = Closes after
 
-# squid/bot/voting/poll_wizard.py:261, squid/bot/voting/poll_wizard.py:435
+# squid/bot/voting/poll_wizard.py:255, squid/bot/voting/poll_wizard.py:429
 bot-voting-poll-wizard-create-a-poll = Create a poll
 
-# squid/bot/voting/poll_wizard.py:88
+# squid/bot/voting/poll_wizard.py:90
 bot-voting-poll-wizard-day =
     { $count ->
         [one] { $count } day
        *[other] { $count } days
     }
 
-# squid/bot/voting/poll_wizard.py:35
+# squid/bot/voting/poll_wizard.py:37
 bot-voting-poll-wizard-days = 3 days
 
-# squid/bot/voting/poll_wizard.py:36
+# squid/bot/voting/poll_wizard.py:38
 bot-voting-poll-wizard-days-2 = 7 days
 
-# squid/bot/voting/poll_wizard.py:303
+# squid/bot/voting/poll_wizard.py:297
 bot-voting-poll-wizard-duration = Duration
 
-# squid/bot/voting/poll_wizard.py:188, squid/bot/voting/poll_wizard.py:365
+# squid/bot/voting/poll_wizard.py:182, squid/bot/voting/poll_wizard.py:359
 bot-voting-poll-wizard-every-server = Every server
 
-# squid/bot/voting/poll_wizard.py:54
+# squid/bot/voting/poll_wizard.py:56
 bot-voting-poll-wizard-hidden-until-close = Hidden until Close
 
-# squid/bot/voting/poll_wizard.py:31
+# squid/bot/voting/poll_wizard.py:33
 bot-voting-poll-wizard-hour = 1 hour
 
-# squid/bot/voting/poll_wizard.py:98
+# squid/bot/voting/poll_wizard.py:100
 bot-voting-poll-wizard-hour-2 =
     { $count ->
         [one] { $count } hour
        *[other] { $count } hours
     }
 
-# squid/bot/voting/poll_wizard.py:32
+# squid/bot/voting/poll_wizard.py:34
 bot-voting-poll-wizard-hours = 6 hours
 
-# squid/bot/voting/poll_wizard.py:33
+# squid/bot/voting/poll_wizard.py:35
 bot-voting-poll-wizard-hours-2 = 12 hours
 
-# squid/bot/voting/poll_wizard.py:34
+# squid/bot/voting/poll_wizard.py:36
 bot-voting-poll-wizard-hours-3 = 24 hours
 
-# squid/bot/voting/poll_wizard.py:44
+# squid/bot/voting/poll_wizard.py:46
 bot-voting-poll-wizard-live-anonymous = Live Anonymous
 
-# squid/bot/voting/poll_wizard.py:49
+# squid/bot/voting/poll_wizard.py:51
 bot-voting-poll-wizard-live-public = Live Public
 
-# squid/bot/voting/poll_wizard.py:305
+# squid/bot/voting/poll_wizard.py:299
 bot-voting-poll-wizard-m-h-d = 30m, 2h15m, 2 days
 
-# squid/bot/voting/poll_wizard.py:109
+# squid/bot/voting/poll_wizard.py:111
 bot-voting-poll-wizard-minute =
     { $count ->
         [one] { $count } minute
        *[other] { $count } minutes
     }
 
-# squid/bot/voting/poll_wizard.py:271
+# squid/bot/voting/poll_wizard.py:265
 bot-voting-poll-wizard-options-one-per-line = Choices (commas or one per line)
 
-# squid/bot/voting/poll_wizard.py:473
+# squid/bot/voting/poll_wizard.py:467
 bot-voting-poll-wizard-poll-cancelled = Poll cancelled.
 
-# squid/bot/voting/cog.py:197, squid/bot/voting/poll_wizard.py:468
+# squid/bot/voting/cog.py:197, squid/bot/voting/poll_wizard.py:462
 bot-voting-poll-wizard-poll-published = Poll published: { $published_url }
 
-# squid/bot/voting/poll_wizard.py:328
+# squid/bot/voting/poll_wizard.py:322
 bot-voting-poll-wizard-poll-settings = Poll settings
 
-# squid/bot/voting/poll_wizard.py:265
+# squid/bot/voting/poll_wizard.py:259
 bot-voting-poll-wizard-question = Question
 
-# squid/bot/voting/poll_wizard.py:337
+# squid/bot/voting/poll_wizard.py:331
 bot-voting-poll-wizard-question-and-options = Question and options
 
-# squid/bot/voting/poll_wizard.py:318
+# squid/bot/voting/poll_wizard.py:312
 bot-voting-poll-wizard-reach = Reach
 
-# squid/bot/voting/poll_wizard.py:364
+# squid/bot/voting/poll_wizard.py:358
 bot-voting-poll-wizard-reaches = Reaches
 
-# squid/bot/voting/poll_wizard.py:440
+# squid/bot/voting/poll_wizard.py:434
 bot-voting-poll-wizard-review-poll = Review poll
 
-# squid/bot/voting/poll_wizard.py:183
+# squid/bot/voting/poll_wizard.py:177
 bot-voting-poll-wizard-this-server = This server
 
-# squid/bot/voting/poll_wizard.py:291, squid/bot/voting/poll_wizard.py:356
+# squid/bot/voting/poll_wizard.py:285, squid/bot/voting/poll_wizard.py:350
 bot-voting-poll-wizard-visibility = Visibility
 
-# squid/bot/voting/poll_wizard.py:341
+# squid/bot/voting/poll_wizard.py:335
 bot-voting-poll-wizard-visibility-and-duration = Visibility and duration
 
 # squid/bot/voting/cog.py:318
@@ -2071,19 +2071,19 @@ build-schematic-tools-hide = Hide schematic tools
 # squid/bot/catalogue/browse.py:277
 build-schematic-tools-show = Schematic tools
 
-# squid/bot/catalogue/search/results.py:170, squid/bot/catalogue/search/results.py:174, squid/bot/catalogue/search/results.py:250, squid/bot/catalogue/search/results.py:303
+# squid/bot/catalogue/search/results.py:161, squid/bot/catalogue/search/results.py:165, squid/bot/catalogue/search/results.py:241, squid/bot/catalogue/search/results.py:294
 build-search-build-unavailable = That build is no longer available.
 
-# squid/bot/catalogue/search/results.py:386
+# squid/bot/catalogue/search/results.py:377
 build-search-load-failed = Could not load search results.
 
-# squid/bot/catalogue/search/results.py:385
+# squid/bot/catalogue/search/results.py:376
 build-search-loading = Loading search results…
 
 # squid/bot/submission/cog.py:106
 build-search-matching-mode-help = Use keyword matching or smart meaning-based matching.
 
-# squid/bot/catalogue/search/results.py:383
+# squid/bot/catalogue/search/results.py:374
 build-search-no-results = No results match this query.
 
 # squid/bot/submission/cog.py:116
@@ -4958,34 +4958,34 @@ permissions-votes-counted-staff = Have your votes counted at the staff weight.
 # squid/bot/voting/cog.py:154
 poll-account-changed = Your account changed. Open the poll again.
 
-# squid/bot/voting/poll_wizard.py:406
+# squid/bot/voting/poll_wizard.py:400
 poll-choice-row-emoji = Emoji (optional)
 
-# squid/bot/voting/poll_wizard.py:404
+# squid/bot/voting/poll_wizard.py:398
 poll-choice-row-label = Label
 
-# squid/bot/voting/poll_wizard.py:402
+# squid/bot/voting/poll_wizard.py:396
 poll-choice-row-title = Poll choice
 
-# squid/bot/voting/poll_wizard.py:485
+# squid/bot/voting/poll_wizard.py:479
 poll-choice-rows-cancel = Cancel
 
-# squid/bot/voting/poll_wizard.py:496
+# squid/bot/voting/poll_wizard.py:490
 poll-choice-rows-edit = Edit choice rows
 
-# squid/bot/voting/poll_wizard.py:479
+# squid/bot/voting/poll_wizard.py:473
 poll-choice-rows-save = Use choices
 
-# squid/bot/voting/poll_wizard.py:400
+# squid/bot/voting/poll_wizard.py:394
 poll-choice-rows-title = Poll choices
 
-# squid/bot/voting/poll_wizard.py:254
+# squid/bot/voting/poll_wizard.py:248
 poll-choices-empty = Choices cannot be empty.
 
-# squid/bot/voting/poll_wizard.py:251
+# squid/bot/voting/poll_wizard.py:245
 poll-choices-format = Separate choices with commas or line breaks; quote choices containing commas.
 
-# squid/bot/voting/poll_wizard.py:231
+# squid/bot/voting/poll_wizard.py:225
 poll-choices-length = Keep the choices within 1000 characters.
 
 # squid/bot/voting/cog.py:86
@@ -5030,13 +5030,13 @@ poll-command-visibility-name = visibility
 # squid/bot/voting/controls.py:65
 poll-final-count-pending = The final count is pending.
 
-# squid/bot/voting/poll_wizard.py:456
+# squid/bot/voting/poll_wizard.py:450
 poll-history-edit = Edit poll
 
-# squid/bot/voting/poll_wizard.py:442
+# squid/bot/voting/poll_wizard.py:436
 poll-publish-final = One vote per person; voting again changes your choice. Publishing is final and cannot be undone here.
 
-# squid/bot/voting/poll_wizard.py:228
+# squid/bot/voting/poll_wizard.py:222
 poll-question-length = Enter a question between 1 and 300 characters.
 
 # squid/bot/voting/cog.py:219
@@ -5084,43 +5084,43 @@ poll-review-revision-help = Count revision shown by the inspection.
 # squid/bot/voting/cog.py:225
 poll-review-revision-name = revision
 
-# squid/bot/voting/poll_wizard.py:50
+# squid/bot/voting/poll_wizard.py:52
 poll-setup-ballot-attribution-notice = Reactions stay on the message, so every ballot is attributable.
 
-# squid/bot/voting/poll_wizard.py:161
+# squid/bot/voting/poll_wizard.py:163
 poll-setup-custom-emoji-unavailable = The custom emoji { $emoji } is not accessible to this bot.
 
-# squid/bot/voting/poll_wizard.py:189
+# squid/bot/voting/poll_wizard.py:183
 poll-setup-distribution-all-servers = Card the poll in every server's vote channel.
 
-# squid/bot/voting/poll_wizard.py:184
+# squid/bot/voting/poll_wizard.py:178
 poll-setup-distribution-channel-only = Card the poll in this channel only.
 
-# squid/bot/voting/poll_wizard.py:72
+# squid/bot/voting/poll_wizard.py:74
 poll-setup-duration-format-help = Use a duration like `30m`, `2h15m`, or `2 days 3 hours`.
 
-# squid/bot/voting/poll_wizard.py:234, squid/bot/voting/poll_wizard.py:76
+# squid/bot/voting/poll_wizard.py:228, squid/bot/voting/poll_wizard.py:78
 poll-setup-duration-out-of-range = Poll duration must be between 1 minute and 30 days.
 
-# squid/bot/voting/poll_wizard.py:149
+# squid/bot/voting/poll_wizard.py:151
 poll-setup-emoji-palette-too-small = The configured generic emoji palette does not have enough entries for these options.
 
-# squid/bot/voting/poll_wizard.py:141
+# squid/bot/voting/poll_wizard.py:143
 poll-setup-option-count-invalid = Enter between 2 and 10 option lines.
 
-# squid/bot/voting/poll_wizard.py:157
+# squid/bot/voting/poll_wizard.py:159
 poll-setup-option-emoji-required = Each option needs a non-empty emoji and label.
 
-# squid/bot/voting/poll_wizard.py:176
+# squid/bot/voting/poll_wizard.py:170
 poll-setup-option-emojis-unique = Poll option emojis must be unique.
 
-# squid/bot/voting/poll_wizard.py:273
+# squid/bot/voting/poll_wizard.py:267
 poll-setup-option-format-help = Red, Blue or 🔴 | Red, 🔵 | Blue
 
-# squid/bot/voting/poll_wizard.py:55
+# squid/bot/voting/poll_wizard.py:57
 poll-setup-results-hidden-until-close = No totals at all until the poll closes.
 
-# squid/bot/voting/poll_wizard.py:45
+# squid/bot/voting/poll_wizard.py:47
 poll-setup-vote-privacy-notice = Running totals are public; who voted for what is not.
 
 # squid/core/posts/errors.py:10
@@ -5589,7 +5589,7 @@ search-boolean-minimum-operands = Boolean expressions require at least two opera
 # squid/core/search/application/ranking.py:75
 search-branch-limit-positive = branch_limit must be positive
 
-# squid/bot/catalogue/search/results.py:607
+# squid/bot/catalogue/search/results.py:598
 search-close-match = close spelling
 
 # squid/core/search/application/fields.py:61
@@ -5655,25 +5655,25 @@ search-filter-not = Not: { $inner }
 # squid/bot/catalogue/search/labels.py:91
 search-filter-range = { $name } { $lower } to { $upper }
 
-# squid/bot/catalogue/search/results.py:509
+# squid/bot/catalogue/search/results.py:500
 search-grouped-build-count = { $total } builds
 
-# squid/bot/catalogue/search/results.py:260
+# squid/bot/catalogue/search/results.py:251
 search-grouped-build-details = Build details
 
-# squid/bot/catalogue/search/results.py:311
+# squid/bot/catalogue/search/results.py:302
 search-grouped-loading-build = Loading build…
 
-# squid/bot/catalogue/search/results.py:201
+# squid/bot/catalogue/search/results.py:192
 search-grouped-matching-records = Matching records
 
-# squid/bot/catalogue/search/results.py:685
+# squid/bot/catalogue/search/results.py:676
 search-grouped-more-records = +{ $count } more records
 
-# squid/bot/catalogue/search/results.py:203
+# squid/bot/catalogue/search/results.py:194
 search-grouped-records = Records
 
-# squid/bot/catalogue/search/results.py:511
+# squid/bot/catalogue/search/results.py:502
 search-grouped-result-count = { $total } results
 
 # squid/bot/catalogue/record_display.py:41
@@ -5682,7 +5682,7 @@ search-grouped-tied-holders = Tied holders
 # squid/core/search/application/ranking.py:73
 search-k-positive = k must be positive
 
-# squid/bot/catalogue/search/results.py:599
+# squid/bot/catalogue/search/results.py:590
 search-match-holder = Holder
 
 # squid/core/search/domain/query.py:169
@@ -5802,7 +5802,7 @@ search-reference-version-scope = `version_scope:` { $scopes }
 # squid/core/search/application/fields.py:474
 search-search-numbers-finite = Search numbers must be finite
 
-# squid/core/search/application/services.py:105
+# squid/core/search/application/services.py:96
 search-search-results-sorted = Search results cannot be sorted by { $field_name }.
 
 # squid/core/search/application/fields.py:106
@@ -5823,34 +5823,34 @@ search-sort-oldest = { $field }, oldest first
 # squid/core/search/application/ranking.py:82
 search-weight-negative = weight for { $branch_name } cannot be negative
 
-# squid/bot/settings/screen.py:312
+# squid/bot/settings/screen.py:321
 settings-channel-invalid = That channel selection is invalid.
 
-# squid/bot/settings/screen.py:544
+# squid/bot/settings/screen.py:558
 settings-custom-emoji-unavailable = The custom emoji { $emoji } is inaccessible.
 
 # squid/core/settings/application/discord.py:54
 settings-discord-unavailable = Discord is unavailable, so names cannot be looked up.
 
-# squid/bot/settings/screen.py:527
+# squid/bot/settings/screen.py:541
 settings-emoji-format-error = Each line must read `choice | emoji`.
 
-# squid/bot/settings/screen.py:349
+# squid/bot/settings/screen.py:358
 settings-follow-server-language = Following this server's Discord language
 
-# squid/bot/settings/screen.py:642
+# squid/bot/settings/screen.py:655
 settings-review-weighting-explained = Build reviews are weighted by the network's own server, so these multipliers do not apply here.
 
-# squid/bot/settings/screen.py:655
+# squid/bot/settings/screen.py:668
 settings-role-multiplier-help = Multiplier; leave empty to remove this role's weight
 
-# squid/bot/settings/screen.py:163
+# squid/bot/settings/screen.py:172
 settings-tab-diagnostics = Diagnostics
 
-# squid/bot/settings/screen.py:147
+# squid/bot/settings/screen.py:156
 settings-tab-server = Server
 
-# squid/bot/settings/screen.py:516
+# squid/bot/settings/screen.py:530
 settings-vote-multiplier-invalid = A vote multiplier must be a positive number, such as 1.5.
 
 # squid/bot/submission/ui/showcase_tags.py:52
@@ -7119,7 +7119,7 @@ vocabulary-version-scope-all-time = All time
 # squid/core/vocabulary.py:32
 vocabulary-version-scope-up-to-date = Current version
 
-# squid/bot/voting/reactions.py:305
+# squid/bot/voting/reactions.py:311
 vote-consent-required = { $user }, voting stores your Discord user ID. Run `/account consent` first.
 
 # squid/bot/voting/cog.py:319
@@ -7134,43 +7134,43 @@ vote-option-unavailable = That option is not available on this vote.
 # squid/bot/voting/actors.py:30
 vote-poll-action-permission-denied = Only the poll creator or staff can do that.
 
-# squid/bot/settings/vote_emoji_editor.py:81
+# squid/bot/settings/vote_emoji_editor.py:82
 vote-row-add = Add emoji
 
-# squid/bot/settings/vote_emoji_editor.py:51
+# squid/bot/settings/vote_emoji_editor.py:52
 vote-row-approve = Approve
 
-# squid/bot/settings/vote_emoji_editor.py:48
+# squid/bot/settings/vote_emoji_editor.py:49
 vote-row-choice = Choice
 
-# squid/bot/settings/vote_emoji_editor.py:52
+# squid/bot/settings/vote_emoji_editor.py:53
 vote-row-deny = Deny
 
-# squid/bot/settings/vote_emoji_editor.py:67
+# squid/bot/settings/vote_emoji_editor.py:68
 vote-row-edit = Edit
 
-# squid/bot/settings/vote_emoji_editor.py:30
+# squid/bot/settings/vote_emoji_editor.py:31
 vote-row-emoji = Emoji
 
-# squid/bot/settings/vote_emoji_editor.py:94
+# squid/bot/settings/vote_emoji_editor.py:95
 vote-row-emoji-unavailable = That custom emoji is inaccessible.
 
-# squid/bot/settings/vote_emoji_editor.py:39
+# squid/bot/settings/vote_emoji_editor.py:40
 vote-row-label = Option label
 
-# squid/bot/settings/vote_emoji_editor.py:73
+# squid/bot/settings/vote_emoji_editor.py:74
 vote-row-remove = Remove
 
-# squid/bot/settings/vote_emoji_editor.py:56
+# squid/bot/settings/vote_emoji_editor.py:57
 vote-row-title = Vote emoji
 
-# squid/bot/settings/vote_emoji_editor.py:83
+# squid/bot/settings/vote_emoji_editor.py:84
 vote-rows-cancel = Cancel
 
-# squid/bot/settings/vote_emoji_editor.py:82
+# squid/bot/settings/vote_emoji_editor.py:83
 vote-rows-save = Save emojis
 
-# squid/bot/settings/vote_emoji_editor.py:61
+# squid/bot/settings/vote_emoji_editor.py:62
 vote-rows-title = Vote emojis
 
 # squid/bot/voting/actors.py:29

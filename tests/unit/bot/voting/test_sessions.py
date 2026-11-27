@@ -13,7 +13,7 @@ from squid.core.actors import ActingContext
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import OtherBuild
 from squid.core.settings.domain.runtime import RuntimeSettings
-from squid.core.voting.domain import VoteKind
+from squid.core.voting.domain import DEFAULT_VOTE_MENU, VoteKind
 from tests.support.settings import RuntimeSettingsStub
 
 pytestmark = [
@@ -41,7 +41,9 @@ async def test_a_guild_without_a_vote_channel_does_not_fail_the_submission(
 async def test_build_reviews_read_current_default_thresholds() -> None:
     settings = RuntimeSettingsStub(RuntimeSettings(build_vote_pass_threshold=5, build_vote_fail_threshold=-4))
     votes = SimpleNamespace(
-        emoji_presets=AsyncMock(return_value={1: SimpleNamespace(options=[]), 2: SimpleNamespace(options=[])}),
+        emoji_presets=AsyncMock(
+            return_value={1: SimpleNamespace(menu=DEFAULT_VOTE_MENU), 2: SimpleNamespace(menu=DEFAULT_VOTE_MENU)}
+        ),
         ensure_build_submission_vote=AsyncMock(return_value=123),
     )
     bot = SimpleNamespace(services=SimpleNamespace(settings=settings, votes=votes), refresh_posts=AsyncMock())

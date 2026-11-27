@@ -11,11 +11,12 @@ from squid.core.actors import ActingContext, Actor, UserActor
 from squid.core.errors import AuthenticationError, AuthorizationError, ConflictError, ValidationError
 from squid.core.voting.application import VoteService
 from squid.core.voting.domain import (
+    DEFAULT_VOTE_MENU,
     CastVoteResult,
-    VoteChoice,
+    VoteAlias,
     VoteKind,
+    VoteMenu,
     VoteMessage,
-    VoteOption,
     VoteRejection,
     VoteSessionSnapshot,
 )
@@ -27,11 +28,14 @@ from tests.unit.api.fakes import credential_nodes
 def snapshot() -> VoteSessionSnapshot:
     return build_snapshot(
         messages=(VoteMessage(100, 200, 10), VoteMessage(101, 201, 999)),
-        options=(
-            VoteOption("<:yes:1>", VoteChoice.APPROVE, identifier="approve", guild_id=10, position=0),
-            VoteOption("<:no:2>", VoteChoice.DENY, identifier="deny", guild_id=10, position=1),
-            VoteOption("✅", VoteChoice.APPROVE, identifier="approve", guild_id=999, position=0),
-            VoteOption("❌", VoteChoice.DENY, identifier="deny", guild_id=999, position=1),
+        menu=VoteMenu(
+            DEFAULT_VOTE_MENU.options,
+            (
+                VoteAlias("approve", "<:yes:1>", 10),
+                VoteAlias("deny", "<:no:2>", 10, 1),
+                VoteAlias("approve", "✅", 999),
+                VoteAlias("deny", "❌", 999, 1),
+            ),
         ),
     )
 

@@ -30,7 +30,7 @@ from squid.core.settings.application import SettingsService
 from squid.core.settings.domain import ScalarChannelSetting, Setting, SettingOptions
 from squid.core.settings.domain.guild import CHANNEL_FIELDS, GuildSettings
 from squid.core.voting.application import VoteService
-from squid.core.voting.domain import EmojiPreset, RoleWeight, VoteKind, VoteOption
+from squid.core.voting.domain import EmojiPreset, RoleWeight, VoteKind, VoteMenu, VoteOption
 from squid.core.voting.domain.models import VoteConfiguration
 from squid_i18n import Localization, resolve_text
 from squid_reactivity.transactions import readonly_transaction
@@ -129,7 +129,7 @@ class FakeVoteService(VoteService):
 
     @override
     async def emoji_preset(self, guild_id: int, kind: VoteKind, *, context: ActingContext) -> EmojiPreset:
-        return EmojiPreset(guild_id, kind, ())
+        return EmojiPreset(guild_id, kind, VoteMenu(()))
 
     @override
     async def get_role_weights(

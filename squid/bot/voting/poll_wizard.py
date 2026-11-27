@@ -16,7 +16,9 @@ from squid.core.voting.domain import (
     MAX_POLL_DURATION_SECONDS,
     MIN_POLL_DURATION_SECONDS,
     PollScope,
+    VoteAlias,
     VoteChoice,
+    VoteMenu,
     VoteOption,
     VoteVisibility,
 )
@@ -125,9 +127,9 @@ def parse_option_lines(
     lines: Sequence[str],
     *,
     guild_id: int,
-    palette: Sequence[VoteOption],
+    palette: Sequence[str],
     emoji_is_usable: Callable[[str], bool] = lambda _emoji: True,
-) -> tuple[VoteOption, ...]:
+) -> VoteMenu:
     """Parse two to ten nonblank `emoji | label` or plain-label option lines.
 
     Plain labels use the palette entry at that line's position, including earlier
@@ -140,7 +142,7 @@ def parse_option_lines(
         raise InvalidVoteConfigurationError(
             tr(t"poll-setup-option-count-invalid = Enter between 2 and 10 option lines.")
         )
-    options: list[VoteOption] = []
+    rows: list[tuple[VoteOption, VoteAlias]] = []
     for index, line in enumerate(cleaned):
         emoji, label = _split_option_line(line)
         if emoji is None:
@@ -151,7 +153,7 @@ def parse_option_lines(
                         t"configured generic emoji palette does not have enough entries for these options."
                     )
                 )
-            emoji = palette[index].emoji
+            emoji = palette[index]
         if not emoji or not label:
             raise InvalidVoteConfigurationError(
                 tr(t"poll-setup-option-emoji-required = Each option needs a non-empty emoji and label.")
@@ -162,19 +164,11 @@ def parse_option_lines(
                     t"poll-setup-custom-emoji-unavailable = The custom emoji {emoji} is not accessible to this bot.",
                 )
             )
-        options.append(
-            VoteOption(
-                emoji,
-                VoteChoice.GENERIC,
-                identifier=str(index + 1),
-                guild_id=guild_id,
-                label=label,
-                position=index,
-            )
-        )
-    if len({option.emoji for option in options}) != len(options):
+        option_id = str(index + 1)
+        rows.append((VoteOption(option_id, VoteChoice.GENERIC, label=label), VoteAlias(option_id, emoji, guild_id)))
+    if len({alias.emoji for _, alias in rows}) != len(rows):
         raise InvalidVoteConfigurationError(tr(t"poll-setup-option-emojis-unique = Poll option emojis must be unique."))
-    return tuple(options)
+    return VoteMenu.of(rows)
 
 
 SCOPE_CHOICES: tuple[tuple[PollScope, Text, Text], ...] = (
@@ -278,8 +272,8 @@ def poll_form(draft: PollDraft | None = None) -> sl.forms.FormSpec[sd.Request[An
     )
 
 
-type ResolveOptions = Callable[[tuple[str, ...]], Awaitable[tuple[VoteOption, ...]]]
-type PublishPoll = Callable[[PollDraft, tuple[VoteOption, ...]], Awaitable[str]]
+type ResolveOptions = Callable[[tuple[str, ...]], Awaitable[VoteMenu]]
+type PublishPoll = Callable[[PollDraft, VoteMenu], Awaitable[str]]
 
 
 def _settings_form(allow_network: bool) -> sl.forms.FormSpec[sd.Request[Any, Any]]:

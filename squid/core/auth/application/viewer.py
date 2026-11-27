@@ -35,7 +35,7 @@ class SessionCounts:
 @dataclass(frozen=True)
 class ViewerBallot:
     vote_session_id: int
-    option_alias_id: int
+    option_id: str
 
 
 class ViewerRepository(Protocol):

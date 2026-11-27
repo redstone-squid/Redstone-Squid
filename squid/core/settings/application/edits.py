@@ -162,7 +162,7 @@ class GuildSettingsEdit(FieldCommand[SettingsEditUnitOfWork, GuildEditState, Gui
             if configuration.preset is not None and (
                 configuration.preset.guild_id != guild_id
                 or configuration.preset.kind != kind
-                or any(option.guild_id != guild_id for option in configuration.preset.options)
+                or any(alias.guild_id != guild_id for alias in configuration.preset.menu.aliases)
             ):
                 message = "Vote emojis must belong to this guild and voting kind"
                 raise ValidationError(message)

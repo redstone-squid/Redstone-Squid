@@ -39130,13 +39130,13 @@
           "vote_session_id": {
             "type": "integer"
           },
-          "option_alias_id": {
-            "type": "integer"
+          "option_id": {
+            "type": "string"
           }
         },
         "type": "object",
         "required": [
-          "option_alias_id",
+          "option_id",
           "vote_session_id"
         ],
         "title": "ViewerBallot"
@@ -39243,6 +39243,9 @@
           "choice": {
             "type": "string"
           },
+          "multiplier": {
+            "type": "number"
+          },
           "position": {
             "type": "integer"
           }
@@ -39252,6 +39255,7 @@
           "choice",
           "id",
           "label",
+          "multiplier",
           "position"
         ],
         "title": "VoteOptionSummary"

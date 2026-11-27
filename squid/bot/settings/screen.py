@@ -27,8 +27,17 @@ from squid.core.permissions.domain.catalogue import (
 from squid.core.settings.application.edits import GUILD_EDIT, guild_target
 from squid.core.settings.domain import ScalarChannelSetting
 from squid.core.settings.domain.guild import CHANNEL_FIELDS, GuildSettings
-from squid.core.voting.domain import EmojiPreset, RoleWeight, VoteChoice, VoteKind, VoteOption, normalize_vote_options
-from squid.core.voting.domain.models import DEFAULT_VOTE_OPTIONS, VoteConfiguration
+from squid.core.voting.domain import (
+    DEFAULT_VOTE_MENU,
+    EmojiPreset,
+    RoleWeight,
+    VoteAlias,
+    VoteChoice,
+    VoteKind,
+    VoteMenu,
+    VoteOption,
+)
+from squid.core.voting.domain.models import VoteConfiguration
 from squid.core.voting.errors import InvalidVoteConfigurationError
 from squid_i18n import NUMBER, Text, emoji_text, md_tr
 from squid_ui.ext.discord.target_types import ComponentsV2Target
@@ -442,7 +451,9 @@ class VotingSettings(sl.Component[ComponentsV2Target, sd.Request]):
 
     def emoji_preset_text(self) -> str:
         return (
-            "\n".join(f"{option.choice.value} | {option.emoji}" for option in self.configuration.preset.options)
+            "\n".join(
+                f"{option.choice.value} | {alias.emoji}" for option, alias in self.configuration.preset.menu.rows()
+            )
             if self.configuration.preset
             else ""
         )
@@ -480,13 +491,16 @@ class VotingSettings(sl.Component[ComponentsV2Target, sd.Request]):
         assert snapshot is not None
         revision, kind = self._settings.revision, self.kind
         before = snapshot.voting[kind]
-        options = (
-            before.preset.options
+        menu = (
+            before.preset.menu
             if before.preset is not None
             else (
-                tuple(replace(option, guild_id=self._guild.id) for option in DEFAULT_VOTE_OPTIONS)
+                replace(
+                    DEFAULT_VOTE_MENU,
+                    aliases=tuple(replace(alias, guild_id=self._guild.id) for alias in DEFAULT_VOTE_MENU.aliases),
+                )
                 if kind is not VoteKind.GENERIC
-                else ()
+                else None
             )
         )
         source = cast(sd.PressEvent, event)
@@ -494,7 +508,7 @@ class VotingSettings(sl.Component[ComponentsV2Target, sd.Request]):
         parent = source.context.root.component
         assert isinstance(parent, sd.Screen)
 
-        async def selected(result: sd.ScreenResultEvent[tuple[VoteOption, ...]]) -> None:
+        async def selected(result: sd.ScreenResultEvent[VoteMenu]) -> None:
             if not await self.grants.confirm(result, SETTINGS_VOTING_EDIT):
                 return
             after = replace(before, preset=EmojiPreset(self._guild.id, kind, result.value))
@@ -503,7 +517,7 @@ class VotingSettings(sl.Component[ComponentsV2Target, sd.Request]):
                 EditValues.of({"voting": values.model_dump(mode="json")["voting"]}), KIND_LABELS[kind]
             )
 
-        await parent.open_child(source, VoteEmojiEditor(self._guild, kind, options), on_result=selected)
+        await parent.open_child(source, VoteEmojiEditor(self._guild, kind, menu), on_result=selected)
 
     @requires_grant(SETTINGS_VOTING_EDIT)
     async def _role_weight_submitted(self, event: sl.SubmitEvent, role_id: int) -> None:
@@ -520,7 +534,7 @@ class VotingSettings(sl.Component[ComponentsV2Target, sd.Request]):
     async def _emoji_form_submitted(self, event: sl.SubmitEvent) -> None:
         form = _VoteEmojisForm.from_submission(event)
         text = form.aliases
-        options: list[VoteOption] = []
+        rows: list[tuple[VoteOption, VoteAlias]] = []
         for position, line in enumerate(filter(None, (line.strip() for line in text.splitlines()))):
             parts = [part.strip() for part in line.split("|", 1)]
             if len(parts) != 2:
@@ -546,18 +560,16 @@ class VotingSettings(sl.Component[ComponentsV2Target, sd.Request]):
                         )
                     )
                     return
-            options.append(
-                VoteOption(
-                    emoji,
-                    choice,
-                    identifier=str(position + 1) if self.kind is VoteKind.GENERIC else choice.value,
-                    guild_id=self._guild.id,
-                    label=f"Option {position + 1}" if self.kind is VoteKind.GENERIC else None,
-                    position=position,
+            generic = self.kind is VoteKind.GENERIC
+            option_id = str(position + 1) if generic else choice.value
+            rows.append(
+                (
+                    VoteOption(option_id, choice, label=f"Option {position + 1}" if generic else None),
+                    VoteAlias(option_id, emoji, self._guild.id),
                 )
             )
         try:
-            await self.set_emojis(options)
+            await self.set_emojis(VoteMenu.of(rows))
         except InvalidVoteConfigurationError as error:
             await event.notice(str(error))
 
@@ -578,15 +590,13 @@ class VotingSettings(sl.Component[ComponentsV2Target, sd.Request]):
             weights += (RoleWeight(self._guild.id, self.kind, role_id, multiplier),)
         await self._save_voting(replace(before, weights=tuple(sorted(weights, key=lambda weight: weight.role_id))))
 
-    async def set_emojis(self, options: Sequence[VoteOption]) -> None:
+    async def set_emojis(self, menu: VoteMenu) -> None:
         if self._settings.snapshot is None:
             await self._settings.refresh()
         assert self._settings.snapshot is not None
         before = self._settings.snapshot.voting[self.kind]
         await self._save_voting(
-            replace(
-                before, preset=EmojiPreset(self._guild.id, self.kind, normalize_vote_options(options, kind=self.kind))
-            )
+            replace(before, preset=EmojiPreset(self._guild.id, self.kind, menu.validated(self.kind)))
         )
 
     async def _save_voting(self, after: VoteConfiguration) -> None:
@@ -608,8 +618,11 @@ class VotingSettings(sl.Component[ComponentsV2Target, sd.Request]):
     def _voting_fields(self) -> list[CardField]:
         preset = self.configuration.preset
         emojis = (
-            Text.join("\n", (Text(t"{emoji_text(option.emoji)} — {option.choice.value}") for option in preset.options))
-            if preset is not None and preset.options
+            Text.join(
+                "\n",
+                (Text(t"{emoji_text(alias.emoji)} — {option.choice.value}") for option, alias in preset.menu.rows()),
+            )
+            if preset is not None and preset.menu.aliases
             else md_tr(t"bot-settings-view-none = _None_")
         )
         weight_lines: list[Text] = []

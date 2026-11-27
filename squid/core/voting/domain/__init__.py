@@ -2,7 +2,7 @@
 
 from squid.core.voting.domain.models import (
     DEFAULT_GENERIC_EMOJIS,
-    DEFAULT_VOTE_OPTIONS,
+    DEFAULT_VOTE_MENU,
     MAX_POLL_DURATION_SECONDS,
     MIN_POLL_DURATION_SECONDS,
     BuildEditVoteTarget,
@@ -17,9 +17,11 @@ from squid.core.voting.domain.models import (
     ReviewSort,
     RoleWeight,
     StoredVoteMutation,
+    VoteAlias,
     VoteChange,
     VoteChoice,
     VoteKind,
+    VoteMenu,
     VoteMessage,
     VoteOption,
     VoteRejection,
@@ -29,14 +31,13 @@ from squid.core.voting.domain.models import (
     VoteStatus,
     VoteTarget,
     VoteVisibility,
-    normalize_vote_options,
     validate_session_payload,
     validate_thresholds,
 )
 
 __all__ = [
     "DEFAULT_GENERIC_EMOJIS",
-    "DEFAULT_VOTE_OPTIONS",
+    "DEFAULT_VOTE_MENU",
     "MAX_POLL_DURATION_SECONDS",
     "MIN_POLL_DURATION_SECONDS",
     "BuildEditVoteTarget",
@@ -51,9 +52,11 @@ __all__ = [
     "ReviewSort",
     "RoleWeight",
     "StoredVoteMutation",
+    "VoteAlias",
     "VoteChange",
     "VoteChoice",
     "VoteKind",
+    "VoteMenu",
     "VoteMessage",
     "VoteOption",
     "VoteRejection",
@@ -63,7 +66,6 @@ __all__ = [
     "VoteStatus",
     "VoteTarget",
     "VoteVisibility",
-    "normalize_vote_options",
     "validate_session_payload",
     "validate_thresholds",
 ]

@@ -24,14 +24,16 @@ from squid.core.posts.models import DiscordPost
 from squid.core.settings.models import ServerSetting
 from squid.core.unit_of_work import UnitOfWorkFactory
 from squid.core.voting.domain import (
-    DEFAULT_VOTE_OPTIONS,
+    DEFAULT_VOTE_MENU,
     DeleteLogVoteTarget,
     ReviewFilters,
     ReviewKind,
     ReviewSort,
     StoredVoteMutation,
+    VoteAlias,
     VoteChoice,
     VoteKind,
+    VoteMenu,
     VoteOption,
     VoteSessionResult,
     VoteStatus,
@@ -44,6 +46,7 @@ from squid.core.voting.models import (
     Vote,
     VoteSession,
     VoteSessionOption,
+    VoteSessionOptionAlias,
 )
 from tests.support.schema import model_tables, with_foreign_key_targets
 from tests.support.unit_of_work import transact
@@ -55,6 +58,7 @@ from tests.support.voting import (
     TARGET_MESSAGE_ID,
     VOTER_ACCOUNT_IDS,
     attach_vote_message,
+    generic_menu,
     record_vote_message,
     seed_delete_log_vote,
 )
@@ -63,6 +67,7 @@ _TABLES: tuple[Table, ...] = with_foreign_key_targets(
     *model_tables(
         VoteSession,
         VoteSessionOption,
+        VoteSessionOptionAlias,
         BuildVoteSession,
         DeleteLogVoteSession,
         GenericVoteSession,
@@ -146,7 +151,7 @@ async def seed_generic_poll(
     question: str,
     visibility: VoteVisibility,
     deadline: Instant,
-    options: tuple[VoteOption, ...],
+    menu: VoteMenu,
     guild_id: int | None = GUILD_ID,
     attach: bool = True,
 ) -> tuple[int, int | None]:
@@ -158,7 +163,7 @@ async def seed_generic_poll(
             question=question,
             visibility=visibility,
             deadline=deadline,
-            options=options,
+            menu=menu,
             guild_id=guild_id,
         ),
         commit=True,
@@ -179,13 +184,16 @@ async def cast_ballot(
     emoji: str,
     weight: float,
 ) -> StoredVoteMutation | None:
-    """Resolve the alias the way VoteService does, then cast through the repository."""
+    """Resolve the option the way VoteService does, then cast through the repository."""
     snapshot = await transact(repository, lambda uow: uow.votes.get_by_id(session_id))
     assert snapshot is not None
-    option = snapshot.option_by_id(option_id, GUILD_ID, emoji=emoji)
+    option = snapshot.menu.option(option_id)
     assert option is not None
+    assert snapshot.menu.alias_for(option_id, GUILD_ID, emoji=emoji) is not None
     return await transact(
-        repository, lambda uow: uow.votes.cast_vote(session_id, account_id, GUILD_ID, option, weight), commit=True
+        repository,
+        lambda uow: uow.votes.cast_vote(session_id, account_id, option, weight, guild_id=GUILD_ID, emoji=emoji),
+        commit=True,
     )
 
 
@@ -306,14 +314,17 @@ async def test_get_by_message_maps_votes_messages_and_delete_target(
     assert snapshot.id == vote_session_id
     assert snapshot.votes == {7: 1.0, 8: -1.0}
     assert [message.id for message in snapshot.messages] == [message_id]
-    assert snapshot.options == DEFAULT_VOTE_OPTIONS
+    assert snapshot.menu == DEFAULT_VOTE_MENU
     assert snapshot.target == DeleteLogVoteTarget(TARGET_MESSAGE_ID, CHANNEL_ID, GUILD_ID)
 
 
 async def test_custom_vote_options_are_persisted_in_order(repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]) -> None:
-    options = (
-        VoteOption("<:strong_yes:123>", VoteChoice.APPROVE, 2.0),
-        VoteOption("👎", VoteChoice.DENY),
+    menu = VoteMenu(
+        (
+            VoteOption("strong_approve", VoteChoice.APPROVE, multiplier=2.0),
+            VoteOption("deny", VoteChoice.DENY, position=1),
+        ),
+        (VoteAlias("strong_approve", "<:strong_yes:123>"), VoteAlias("deny", "👎", position=1)),
     )
 
     vote_session_id = await transact(
@@ -325,7 +336,7 @@ async def test_custom_vote_options_are_persisted_in_order(repository: UnitOfWork
             message_id=TARGET_MESSAGE_ID,
             channel_id=CHANNEL_ID,
             server_id=GUILD_ID,
-            options=options,
+            menu=menu,
         ),
         commit=True,
     )
@@ -333,10 +344,7 @@ async def test_custom_vote_options_are_persisted_in_order(repository: UnitOfWork
     snapshot = await transact(repository, lambda uow: uow.votes.get_by_id(vote_session_id))
 
     assert snapshot is not None
-    assert [(option.emoji, option.choice, option.multiplier) for option in snapshot.options] == [
-        ("<:strong_yes:123>", VoteChoice.APPROVE, 2.0),
-        ("👎", VoteChoice.DENY, 1.0),
-    ]
+    assert snapshot.menu == menu
 
 
 async def test_cast_vote_replaces_then_toggles_the_same_choice(
@@ -367,12 +375,12 @@ async def test_selecting_the_stored_option_again_keeps_the_ballot(
     await cast_ballot(repository, session_id, 7, "approve", "👍", 1.0)
     snapshot = await transact(repository, lambda uow: uow.votes.get_by_id(session_id))
     assert snapshot is not None
-    option = snapshot.option_by_id("approve", GUILD_ID, emoji="👍")
+    option = snapshot.menu.option("approve")
     assert option is not None
 
     kept = await transact(
         repository,
-        lambda uow: uow.votes.cast_vote(session_id, 7, GUILD_ID, option, 2.0, toggle=False),
+        lambda uow: uow.votes.cast_vote(session_id, 7, option, 2.0, guild_id=GUILD_ID, emoji="👍", toggle=False),
         commit=True,
     )
 
@@ -442,10 +450,7 @@ async def test_generic_poll_persists_choices_tallies_and_due_closure(
         visibility=VoteVisibility.ANONYMOUS_HIDDEN,
         # Already past, so the poll is due the moment it opens.
         deadline=Instant.now().subtract(seconds=1),
-        options=(
-            VoteOption("1️⃣", VoteChoice.GENERIC, identifier="one", guild_id=GUILD_ID, label="One"),
-            VoteOption("2️⃣", VoteChoice.GENERIC, identifier="two", guild_id=GUILD_ID, label="Two"),
-        ),
+        menu=generic_menu(GUILD_ID),
     )
 
     await cast_ballot(repository, session_id, 7, "one", "1️⃣", 3)
@@ -481,10 +486,7 @@ async def test_generic_polls_store_null_thresholds_rather_than_sentinels(
         question="Choose one",
         visibility=VoteVisibility.ANONYMOUS_LIVE,
         deadline=Instant.now().add(hours=1),
-        options=(
-            VoteOption("1️⃣", VoteChoice.GENERIC, identifier="one", guild_id=GUILD_ID, label="One"),
-            VoteOption("2️⃣", VoteChoice.GENERIC, identifier="two", guild_id=GUILD_ID, label="Two"),
-        ),
+        menu=generic_menu(GUILD_ID),
     )
 
     async with async_session_factory() as session:
@@ -510,10 +512,7 @@ async def test_a_poll_in_a_guild_without_settings_creates_the_settings_row(
         question="New guild",
         visibility=VoteVisibility.VISIBLE_LIVE,
         deadline=Instant.now().add(hours=1),
-        options=(
-            VoteOption("1️⃣", VoteChoice.GENERIC, identifier="one", label="One"),
-            VoteOption("2️⃣", VoteChoice.GENERIC, identifier="two", label="Two"),
-        ),
+        menu=generic_menu(None),
         guild_id=unseen_guild_id,
         attach=False,
     )
@@ -537,10 +536,7 @@ async def test_a_poll_can_be_created_before_it_belongs_to_any_guild(
         question="Guild-free",
         visibility=VoteVisibility.ANONYMOUS_LIVE,
         deadline=Instant.now().add(hours=1),
-        options=(
-            VoteOption("1️⃣", VoteChoice.GENERIC, identifier="one", label="One"),
-            VoteOption("2️⃣", VoteChoice.GENERIC, identifier="two", label="Two"),
-        ),
+        menu=generic_menu(None),
         guild_id=None,
         attach=False,
     )
@@ -563,10 +559,7 @@ async def test_a_guild_less_poll_becomes_addressable_once_a_card_is_attached(
         question="Attach me",
         visibility=VoteVisibility.ANONYMOUS_LIVE,
         deadline=Instant.now().add(hours=1),
-        options=(
-            VoteOption("1️⃣", VoteChoice.GENERIC, identifier="one", label="One"),
-            VoteOption("2️⃣", VoteChoice.GENERIC, identifier="two", label="Two"),
-        ),
+        menu=generic_menu(None),
         guild_id=None,
         attach=False,
     )
@@ -593,10 +586,7 @@ async def test_a_message_cannot_be_attached_to_two_vote_sessions(
         question="First",
         visibility=VoteVisibility.ANONYMOUS_LIVE,
         deadline=Instant.now().add(hours=1),
-        options=(
-            VoteOption("1️⃣", VoteChoice.GENERIC, identifier="one", label="One"),
-            VoteOption("2️⃣", VoteChoice.GENERIC, identifier="two", label="Two"),
-        ),
+        menu=generic_menu(None),
         guild_id=None,
         attach=False,
     )
@@ -606,10 +596,7 @@ async def test_a_message_cannot_be_attached_to_two_vote_sessions(
         question="Second",
         visibility=VoteVisibility.ANONYMOUS_LIVE,
         deadline=Instant.now().add(hours=1),
-        options=(
-            VoteOption("1️⃣", VoteChoice.GENERIC, identifier="one", label="One"),
-            VoteOption("2️⃣", VoteChoice.GENERIC, identifier="two", label="Two"),
-        ),
+        menu=generic_menu(None),
         guild_id=None,
         attach=False,
     )
@@ -631,10 +618,7 @@ async def test_a_poll_shown_in_two_places_tracks_both_locations(
         question="Two homes",
         visibility=VoteVisibility.ANONYMOUS_LIVE,
         deadline=Instant.now().add(hours=1),
-        options=(
-            VoteOption("1️⃣", VoteChoice.GENERIC, identifier="one", guild_id=GUILD_ID, label="One"),
-            VoteOption("2️⃣", VoteChoice.GENERIC, identifier="two", guild_id=GUILD_ID, label="Two"),
-        ),
+        menu=generic_menu(GUILD_ID),
     )
     assert message_id is not None
 
@@ -734,7 +718,7 @@ async def test_kind_and_subtype_can_transition_atomically(
         await session.execute(
             update(VoteSessionOption)
             .where(VoteSessionOption.vote_session_id == vote_session_id)
-            .values(choice=VoteChoice.GENERIC, identifier=VoteSessionOption.emoji, label=VoteSessionOption.emoji)
+            .values(choice=VoteChoice.GENERIC, label=VoteSessionOption.identifier)
         )
 
     transitioned = await transact(repository, lambda uow: uow.votes.get_by_id(vote_session_id))
@@ -815,53 +799,42 @@ async def test_changing_only_the_kind_cannot_strand_the_existing_subtype(
     assert unchanged.kind is VoteKind.BUILD
 
 
-async def test_ballot_references_one_alias_when_global_and_guild_aliases_overlap(
+async def test_ballot_keeps_the_card_and_alias_it_was_cast_with(
     repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    options = (
-        VoteOption("👍", VoteChoice.APPROVE, identifier="approve", guild_id=None, position=0),
-        VoteOption("👍", VoteChoice.APPROVE, identifier="approve", guild_id=GUILD_ID, position=1),
-    )
-    session_id, _ = await seed_delete_log_vote(async_session_factory, pass_threshold=2, options=options)
-    mutation = await cast_ballot(repository, session_id, 7, "approve", "👍", 1.0)
-    assert mutation is not None
-    assert not mutation.just_closed
-    assert mutation.session.votes == {7: 1.0}
-    async with async_session_factory() as session:
-        alias_guild = await session.scalar(
-            text("SELECT o.guild_id FROM votes v JOIN vote_session_options o ON o.id = v.option_alias_id")
-        )
-    assert alias_guild == GUILD_ID
+    session_id, _ = await seed_delete_log_vote(async_session_factory, pass_threshold=2)
+    await cast_ballot(repository, session_id, 7, "approve", "✅", 1.0)
+    snapshot = await transact(repository, lambda uow: uow.votes.get_by_id(session_id))
+    assert snapshot is not None
+    selection = snapshot.selection_for(7)
+    assert selection is not None
+    assert (selection.option_id, selection.guild_id, selection.emoji) == ("approve", GUILD_ID, "✅")
 
 
-async def test_casting_an_alias_the_session_does_not_store_is_an_integrity_error(
+async def test_casting_an_option_the_session_does_not_store_is_an_integrity_error(
     repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    """The repository matches the exact alias rather than falling back to a similar one."""
     session_id, _ = await seed_delete_log_vote(async_session_factory)
-    # The default aliases are global; a guild-scoped copy of one is a different alias.
-    scoped = VoteOption("👍", VoteChoice.APPROVE, identifier="approve", guild_id=GUILD_ID)
+    stranger = VoteOption("strong_approve", VoteChoice.APPROVE, multiplier=2.0)
 
-    with pytest.raises(DataIntegrityError, match="not one of the session's aliases"):
-        await transact(repository, lambda uow: uow.votes.cast_vote(session_id, 7, GUILD_ID, scoped, 1.0))
+    with pytest.raises(DataIntegrityError, match="not one of the session's options"):
+        await transact(repository, lambda uow: uow.votes.cast_vote(session_id, 7, stranger, 1.0))
 
 
-async def test_ballot_cannot_reference_another_sessions_alias(
+async def test_ballot_cannot_reference_an_option_its_session_lacks(
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    first, _ = await seed_delete_log_vote(async_session_factory)
-    second, _ = await seed_delete_log_vote(async_session_factory)
+    session_id, _ = await seed_delete_log_vote(async_session_factory)
     with pytest.raises(IntegrityError):
         async with async_session_factory.begin() as session:
             await session.execute(
                 text(
-                    "INSERT INTO votes (vote_session_id, account_id, guild_id, option_alias_id, weight) "
-                    "SELECT :first, 7, :guild, id, 1 FROM vote_session_options "
-                    "WHERE vote_session_id = :second LIMIT 1"
+                    "INSERT INTO votes (vote_session_id, account_id, guild_id, option_identifier, weight) "
+                    "VALUES (:session, 7, :guild, 'strong_approve', 1)"
                 ),
-                {"first": first, "second": second, "guild": GUILD_ID},
+                {"session": session_id, "guild": GUILD_ID},
             )
 
 
@@ -921,10 +894,7 @@ async def test_review_preserves_collected_ballots_and_rejects_stale_decisions(
         question="Choose one",
         visibility=VoteVisibility.VISIBLE_LIVE,
         deadline=Instant.now(),
-        options=(
-            VoteOption("1️⃣", VoteChoice.GENERIC, identifier="one", guild_id=GUILD_ID, label="One"),
-            VoteOption("2️⃣", VoteChoice.GENERIC, identifier="two", guild_id=GUILD_ID, label="Two"),
-        ),
+        menu=generic_menu(GUILD_ID),
     )
     await cast_ballot(repository, session_id, 7, "one", "1️⃣", 3)
     snapshot = await transact(repository, lambda uow: uow.votes.get_by_id(session_id))
@@ -987,10 +957,7 @@ async def test_review_listing_pages_build_votes_in_creation_order_without_other_
         question="Not a review",
         visibility=VoteVisibility.ANONYMOUS_LIVE,
         deadline=Instant.now().add(hours=1),
-        options=(
-            VoteOption("1️⃣", VoteChoice.GENERIC, identifier="one", label="One"),
-            VoteOption("2️⃣", VoteChoice.GENERIC, identifier="two", label="Two"),
-        ),
+        menu=generic_menu(None),
     )
     queue = ReviewFilters(status=VoteStatus.OPEN)
 

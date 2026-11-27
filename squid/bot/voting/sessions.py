@@ -13,7 +13,7 @@ from squid.bot._types import GuildMessageable
 from squid.core.actors import ActingContext
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build
-from squid.core.voting.domain import VoteKind
+from squid.core.voting.domain import VoteKind, VoteMenu
 
 if TYPE_CHECKING:
     import squid.bot.app
@@ -69,7 +69,7 @@ async def ensure_build_review(
         VoteKind.BUILD,
         context=ActingContext.current(),
     )
-    options = [option for preset in presets.values() for option in preset.options]
+    menu = VoteMenu.shared([preset.menu for preset in presets.values()])
 
     settings = await bot.services.settings.get_runtime(context=ActingContext.current())
     session_id = await bot.services.votes.ensure_build_submission_vote(
@@ -78,7 +78,7 @@ async def ensure_build_review(
         fail_threshold=settings.build_vote_fail_threshold,
         build_id=build.id,
         changes=[("submission_status", BuildStatus.PENDING, BuildStatus.APPROVED)],
-        options=options,
+        menu=menu,
         context=ActingContext.current(),
     )
     await bot.refresh_posts("vote_session", str(session_id))
@@ -102,9 +102,7 @@ async def start_delete_log_vote(
         msg = "Delete-log votes require a guild message."
         raise ValueError(msg)
 
-    options = (
-        await bot.services.votes.emoji_preset(target_message.guild.id, VoteKind.DELETE_LOG, context=context)
-    ).options
+    preset = await bot.services.votes.emoji_preset(target_message.guild.id, VoteKind.DELETE_LOG, context=context)
     settings = await bot.services.settings.get_runtime(context=context)
     session_id = await bot.services.votes.start_delete_log_vote(
         pass_threshold=settings.delete_vote_pass_threshold,
@@ -112,7 +110,7 @@ async def start_delete_log_vote(
         message_id=target_message.id,
         channel_id=target_message.channel.id,
         server_id=target_message.guild.id,
-        options=options,
+        menu=preset.menu,
         context=context,
     )
     await bot.post_reconciler.adopt(published_message, "vote_session", str(session_id), "vote_card")

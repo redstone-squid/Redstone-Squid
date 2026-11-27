@@ -28,12 +28,19 @@ class VoteOptionSummary(BaseModel):
     id: str
     label: str | None
     choice: str
+    multiplier: float
+    """Scales the voter's weight, so one session can offer a small and a big approve."""
     position: int
 
     @classmethod
     def from_domain(cls, option: VoteOption) -> VoteOptionSummary:
-        assert option.identifier is not None
-        return cls(id=option.identifier, label=option.label, choice=option.choice.value, position=option.position)
+        return cls(
+            id=option.id,
+            label=option.label,
+            choice=option.choice.value,
+            multiplier=option.multiplier,
+            position=option.position,
+        )
 
 
 class VoteTallies(BaseModel):
@@ -107,10 +114,6 @@ class VoteSessionDetail(BaseModel):
 
     @classmethod
     def from_domain(cls, session: VoteSessionSnapshot, *, caller_account_id: int | None = None) -> VoteSessionDetail:
-        options_by_id: dict[str, VoteOption] = {}
-        for option in session.options:
-            assert option.identifier is not None
-            options_by_id.setdefault(option.identifier, option)
         tallies = None
         if session.shows_tallies:
             tallies = VoteTallies(
@@ -134,7 +137,7 @@ class VoteSessionDetail(BaseModel):
             build_id=session.target.build_id
             if isinstance(session.target, BuildVoteTarget | BuildEditVoteTarget)
             else None,
-            options=[VoteOptionSummary.from_domain(option) for option in options_by_id.values()],
+            options=[VoteOptionSummary.from_domain(option) for option in session.menu.options],
             tallies=tallies,
             poll=(
                 None

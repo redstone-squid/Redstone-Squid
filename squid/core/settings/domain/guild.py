@@ -7,7 +7,7 @@ from pydantic_core import PydanticCustomError
 
 from squid.core.i18n import SUPPORTED_LOCALES
 from squid.core.settings.domain.models import Setting
-from squid.core.voting.domain.models import VoteConfiguration, VoteKind, normalize_vote_options
+from squid.core.voting.domain.models import VoteConfiguration, VoteKind
 
 _INVALID_VALUE = "value_error"
 
@@ -46,7 +46,7 @@ class GuildSettings(BaseModel):
             raise PydanticCustomError(_INVALID_VALUE, message)
         for kind, configuration in self.voting.items():
             if configuration.preset is not None:
-                normalize_vote_options(configuration.preset.options, kind=kind)
+                configuration.preset.menu.validated(kind)
             roles = [weight.role_id for weight in configuration.weights]
             if len(roles) != len(set(roles)):
                 message = "A role may have only one weight per voting kind"

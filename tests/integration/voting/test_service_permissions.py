@@ -14,7 +14,7 @@ from squid.core.permissions.models import PermissionGrant
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.voting.application import VoteService
 from squid.core.voting.domain import PollScope, VoteRejection, VoteStatus, VoteVisibility
-from tests.support.voting import GENERIC_OPTIONS
+from tests.support.voting import generic_menu
 
 
 async def test_poll_creation_and_closure_recheck_grants_and_credential_scope(
@@ -29,7 +29,6 @@ async def test_poll_creation_and_closure_recheck_grants_and_credential_scope(
         session.add(PermissionGrant(pattern="vote.poll.create", effect=1, subject_account_id=creator.id))
         session.add(PermissionGrant(pattern="vote.poll.close_any", effect=1, subject_account_id=moderator.id))
     operator = UserActor(account_id=creator.id, guild_id=10, capabilities=frozenset({"vote.poll.network_create"}))
-    options = tuple(replace(option, guild_id=None) for option in GENERIC_OPTIONS)
 
     async def create(context: ActingContext, scope: PollScope) -> int:
         return await service.create_generic_poll(
@@ -39,7 +38,7 @@ async def test_poll_creation_and_closure_recheck_grants_and_credential_scope(
             duration_seconds=3600,
             guild_id=10,
             scope=scope,
-            options=options,
+            menu=generic_menu(None),
         )
 
     with pytest.raises(AuthorizationError):

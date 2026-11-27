@@ -19,7 +19,7 @@ from squid_ui.runtime import transaction
 from squid_ui.testing import labels
 from squid_ui_widgets import testing as wt
 from tests.support.discord import make_layout_bot
-from tests.support.voting import GENERIC_OPTIONS
+from tests.support.voting import GENERIC_MENU
 
 OWNER_ID = 11
 
@@ -30,7 +30,7 @@ class Guild:
 
 
 def make_screen(*, failure: Exception | None = None, draft: PollDraft | None = None) -> PollScreen:
-    resolve = AsyncCallRecorder(error=failure, result=GENERIC_OPTIONS)
+    resolve = AsyncCallRecorder(error=failure, result=GENERIC_MENU)
     publish = AsyncCallRecorder(result="https://discord.com/channels/1/2/3")
     return PollScreen(resolve, publish, allow_network=True, draft=draft)
 
@@ -106,7 +106,7 @@ async def test_wizard_finishes_publication_once() -> None:
             duration_seconds=12 * 3600,
             scope=PollScope.GUILD,
         ),
-        GENERIC_OPTIONS,
+        GENERIC_MENU,
     )
     assert screen.published_url is not None
 

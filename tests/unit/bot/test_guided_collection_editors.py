@@ -9,20 +9,22 @@ import squid_ui.ext.discord as sd
 from squid.bot.catalogue.schematics.video import VideoEditor
 from squid.bot.settings.vote_emoji_editor import VoteEmojiEditor
 from squid.core.schematics.application.video import VideoInteraction, VideoRenderRequest
-from squid.core.voting.domain import VoteChoice, VoteKind, VoteOption
+from squid.core.voting.domain import VoteAlias, VoteChoice, VoteKind, VoteMenu, VoteOption
 from squid.core.voting.errors import InvalidVoteConfigurationError
 from squid_ui.ext.discord.testing import stage
 
 
 async def test_vote_row_edit_preserves_option_identity_and_weight() -> None:
-    before = VoteOption("👍", VoteChoice.GENERIC, identifier="stable", label="Yes", multiplier=2, guild_id=7)
-    screen = VoteEmojiEditor(Mock(spec=discord.Guild, id=7), VoteKind.GENERIC, (before,))
+    before = VoteMenu(
+        (VoteOption("stable", VoteChoice.GENERIC, label="Yes", multiplier=2),), (VoteAlias("stable", "👍", 7),)
+    )
+    screen = VoteEmojiEditor(Mock(spec=discord.Guild, id=7), VoteKind.GENERIC, before)
     async with stage(screen, owner=object()) as ui:
         form = await ui.press_for_form("edit-0")
         await form.submit({"emoji": "✅", "label": "Proceed"})
-        option = screen.options[0]
-        assert (option.emoji, option.label) == ("✅", "Proceed")
-        assert (option.identifier, option.multiplier, option.guild_id) == ("stable", 2, 7)
+        option, alias = screen.rows[0]
+        assert (alias.emoji, option.label) == ("✅", "Proceed")
+        assert (option.id, option.multiplier, alias.guild_id) == ("stable", 2, 7)
     with pytest.raises(InvalidVoteConfigurationError, match="between 2 and 10"):
         await screen._save(Mock(spec=sd.PressEvent))
 

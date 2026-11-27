@@ -12,8 +12,8 @@ deadline or an authorized request instead.
 """
 
 from collections import defaultdict
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from collections.abc import Iterable, Mapping, Sequence
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from math import isfinite
 
@@ -127,57 +127,168 @@ class VoteChoice(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class VoteOption:
-    """One emoji alias for a stable selectable option.
+    """One choice a voter can pick, however a frontend shows it.
 
-    For example, the default 👍 and ✅ aliases both select the `approve` option.
-    Selecting either after already choosing `approve` toggles the same ballot off.
-    `guild_id` limits where the alias appears. None defines a global alias, used
-    where the voting session has no guild-specific aliases.
+    `multiplier` scales the voter's weight, so a session can offer both a small and
+    a big approve, such as `approve` at 1x and `strong_approve` at 2x.
     """
 
-    emoji: str
+    id: str
     choice: VoteChoice
-    multiplier: float = 1.0
-    identifier: str | None = None
-    guild_id: int | None = None
     label: str | None = None
+    multiplier: float = 1.0
+    position: int = 0
+
+    def __post_init__(self) -> None:
+        if not self.id.strip():
+            msg = "Vote option identifier cannot be empty."
+            raise InvalidVoteConfigurationError(msg)
+        if not isfinite(self.multiplier) or self.multiplier <= 0:
+            msg = "Vote option multiplier must be finite and greater than zero."
+            raise InvalidVoteConfigurationError(msg, context={"multiplier": self.multiplier})
+        if self.choice is VoteChoice.GENERIC and not (self.label or "").strip():
+            msg = "Generic vote options require a label."
+            raise InvalidVoteConfigurationError(msg)
+
+
+@dataclass(frozen=True, slots=True)
+class VoteAlias:
+    """An emoji that selects an option on the Discord cards of one guild.
+
+    `guild_id` None defines an alias for every guild without aliases of its own.
+    Several aliases may select one option: the default 👍 and ✅ both select
+    `approve`, and choosing either after the other keeps the same ballot.
+    """
+
+    option_id: str
+    emoji: str
+    guild_id: int | None = None
     position: int = 0
 
     def __post_init__(self) -> None:
         if not self.emoji.strip():
             msg = "Vote option emoji cannot be empty."
             raise InvalidVoteConfigurationError(msg)
-        if not isfinite(self.multiplier) or self.multiplier <= 0:
-            msg = "Vote option multiplier must be finite and greater than zero."
-            raise InvalidVoteConfigurationError(msg, context={"multiplier": self.multiplier})
-        identifier = self.identifier or (self.choice.value if self.choice is not VoteChoice.GENERIC else self.emoji)
-        if not identifier.strip():
-            msg = "Vote option identifier cannot be empty."
-            raise InvalidVoteConfigurationError(msg)
-        object.__setattr__(self, "identifier", identifier)
-        if self.choice is VoteChoice.GENERIC and not (self.label or "").strip():
-            msg = "Generic vote options require a label."
-            raise InvalidVoteConfigurationError(msg)
 
-    @property
-    def id(self) -> str:
-        """The stable identifier, independent of Discord, which `__post_init__` always fills."""
-        assert self.identifier is not None
-        return self.identifier
+
+@dataclass(frozen=True, slots=True)
+class VoteMenu:
+    """The options a session offers and the emoji aliases that select them on Discord."""
+
+    options: tuple[VoteOption, ...]
+    aliases: tuple[VoteAlias, ...] = ()
+
+    @classmethod
+    def of(cls, rows: Iterable[tuple[VoteOption, VoteAlias]]) -> VoteMenu:
+        """Build a menu from emoji rows, each paired with the option it selects.
+
+        The first row naming an option defines it. Positions follow row order.
+        """
+        options: dict[str, VoteOption] = {}
+        aliases: list[VoteAlias] = []
+        positions: dict[int | None, int] = {}
+        for option, alias in rows:
+            options.setdefault(option.id, replace(option, position=len(options)))
+            position = positions[alias.guild_id] = positions.get(alias.guild_id, -1) + 1
+            aliases.append(replace(alias, option_id=option.id, position=position))
+        return cls(tuple(options.values()), tuple(aliases))
+
+    def rows(self) -> tuple[tuple[VoteOption, VoteAlias], ...]:
+        """Return each alias paired with its option, the inverse of `of`."""
+        options = {option.id: option for option in self.options}
+        return tuple((options[alias.option_id], alias) for alias in self.aliases)
+
+    @classmethod
+    def shared(cls, menus: Sequence[VoteMenu]) -> VoteMenu:
+        """Combine guild menus for one session shown in all of their guilds.
+
+        Earlier menus win an option ID, so pass the owner guild's menu first. Options
+        that only other guilds define get multiplier 1: a guild hosting a card must
+        not be able to weight a shared outcome.
+        """
+        options: dict[str, VoteOption] = {}
+        for index, menu in enumerate(menus):
+            for option in menu.options:
+                if option.id not in options:
+                    options[option.id] = option if index == 0 else replace(option, multiplier=1.0)
+        return cls(tuple(options.values()), tuple(alias for menu in menus for alias in menu.aliases))
+
+    def validated(self, kind: VoteKind) -> VoteMenu:
+        """Return this menu after checking it suits `kind`.
+
+        Option IDs and each guild's emojis must be unique, and every alias must select
+        an option. Generic polls take 2 to 10 generic options. Threshold votes take
+        approve and deny options, and every guild with aliases needs both choices.
+        """
+        if not self.options:
+            msg = "Vote options cannot be empty."
+            raise InvalidVoteConfigurationError(msg)
+        ids = [option.id for option in self.options]
+        if len(ids) != len(set(ids)):
+            msg = "Vote option identifiers must be unique."
+            raise InvalidVoteConfigurationError(msg)
+        aliases = [(alias.guild_id, alias.emoji) for alias in self.aliases]
+        if len(aliases) != len(set(aliases)):
+            msg = "Vote option emojis must be unique within a guild session."
+            raise InvalidVoteConfigurationError(msg)
+        choices = {option.id: option.choice for option in self.options}
+        if any(alias.option_id not in choices for alias in self.aliases):
+            msg = "Every vote emoji must select one of the session's options."
+            raise InvalidVoteConfigurationError(msg)
+        if kind is VoteKind.GENERIC:
+            if not 2 <= len(self.options) <= 10:
+                msg = "Generic polls require between 2 and 10 options."
+                raise InvalidVoteConfigurationError(msg)
+            if any(option.choice is not VoteChoice.GENERIC for option in self.options):
+                msg = "Generic poll options must use the generic choice type."
+                raise InvalidVoteConfigurationError(msg)
+        else:
+            if set(choices.values()) != {VoteChoice.APPROVE, VoteChoice.DENY}:
+                msg = "Vote sessions require at least one approve and one deny option."
+                raise InvalidVoteConfigurationError(msg)
+            for guild_id in {alias.guild_id for alias in self.aliases}:
+                scoped = {choices[alias.option_id] for alias in self.aliases if alias.guild_id == guild_id}
+                if scoped != {VoteChoice.APPROVE, VoteChoice.DENY}:
+                    msg = "Vote sessions require at least one approve and one deny option."
+                    raise InvalidVoteConfigurationError(msg)
+        return self
+
+    def option(self, option_id: str) -> VoteOption | None:
+        return next((option for option in self.options if option.id == option_id), None)
+
+    def aliases_for_guild(self, guild_id: int) -> tuple[VoteAlias, ...]:
+        """Return the guild's own aliases, falling back to the shared ones only when it has none."""
+        scoped = tuple(alias for alias in self.aliases if alias.guild_id == guild_id)
+        return scoped or tuple(alias for alias in self.aliases if alias.guild_id is None)
+
+    def option_for_emoji(self, emoji: str, guild_id: int) -> VoteOption | None:
+        alias = next((alias for alias in self.aliases_for_guild(guild_id) if alias.emoji == emoji), None)
+        return None if alias is None else self.option(alias.option_id)
+
+    def alias_for(self, option_id: str, guild_id: int, *, emoji: str | None = None) -> VoteAlias | None:
+        """Return the guild's alias for an option: the one using `emoji` if given, otherwise the first."""
+        return next(
+            (
+                alias
+                for alias in self.aliases_for_guild(guild_id)
+                if alias.option_id == option_id and (emoji is None or alias.emoji == emoji)
+            ),
+            None,
+        )
 
 
 @dataclass(frozen=True, slots=True)
 class VoteSelection:
     """One account's ballot, with the positive weight it was cast with.
 
-    `guild_id` records where it was cast, which identifies the applicable emoji
-    alias. The voting session's owner guild determines role weights separately.
+    `guild_id` and `emoji` record the card and alias it was cast with, or None for a
+    ballot cast without Discord. The session's owner guild decides weight separately.
     """
 
     account_id: int
     guild_id: int | None
     option_id: str
-    emoji: str
+    emoji: str | None
     weight: float
     display_name: str | None = None
     """The voter's public profile name, or None if they have none or hide it."""
@@ -328,14 +439,14 @@ class VoteSessionSnapshot:
     fail_threshold: int | None
     votes: Mapping[int, float]
     messages: tuple[VoteMessage, ...]
-    options: tuple[VoteOption, ...]
+    menu: VoteMenu
     target: VoteTarget = None
     selections: tuple[VoteSelection, ...] = ()
     poll: GenericPoll | None = None
 
     def __post_init__(self) -> None:
         validate_thresholds(self.kind, self.pass_threshold, self.fail_threshold)
-        validate_session_payload(self.kind, self.target, self.poll, self.options)
+        validate_session_payload(self.kind, self.target, self.poll, self.menu.options)
 
     @property
     def is_open(self) -> bool:
@@ -398,25 +509,6 @@ class VoteSessionSnapshot:
             recount_only and VOTE_POLL_RECOUNT.name in actor.capabilities
         )
 
-    def options_for_guild(self, guild_id: int) -> tuple[VoteOption, ...]:
-        """Return guild-specific options, falling back to global options only when none exist."""
-        scoped = tuple(option for option in self.options if option.guild_id == guild_id)
-        return scoped or tuple(option for option in self.options if option.guild_id is None)
-
-    def option_by_emoji(self, emoji: str, guild_id: int) -> VoteOption | None:
-        return next((option for option in self.options_for_guild(guild_id) if option.emoji == emoji), None)
-
-    def option_by_id(self, option_id: str, guild_id: int, *, emoji: str | None = None) -> VoteOption | None:
-        """Return the guild's alias for an option: the one using `emoji` if given, otherwise the first."""
-        return next(
-            (
-                option
-                for option in self.options_for_guild(guild_id)
-                if option.id == option_id and (emoji is None or option.emoji == emoji)
-            ),
-            None,
-        )
-
     def selection_for(self, account_id: int) -> VoteSelection | None:
         return next((selection for selection in self.selections if selection.account_id == account_id), None)
 
@@ -466,11 +558,11 @@ class CastVoteResult:
 
 @dataclass(frozen=True, slots=True)
 class EmojiPreset:
-    """Default emoji options for one guild and voting kind."""
+    """The menu one guild offers by default for a voting kind."""
 
     guild_id: int
     kind: VoteKind
-    options: tuple[VoteOption, ...]
+    menu: VoteMenu
 
 
 @dataclass(frozen=True, slots=True)
@@ -488,50 +580,18 @@ class RoleWeight:
             raise InvalidVoteConfigurationError(msg)
 
 
-DEFAULT_VOTE_OPTIONS = (
-    VoteOption("👍", VoteChoice.APPROVE, position=0),
-    VoteOption("✅", VoteChoice.APPROVE, position=1),
-    VoteOption("👎", VoteChoice.DENY, position=2),
-    VoteOption("❌", VoteChoice.DENY, position=3),
+DEFAULT_VOTE_MENU = VoteMenu(
+    (VoteOption("approve", VoteChoice.APPROVE, position=0), VoteOption("deny", VoteChoice.DENY, position=1)),
+    (
+        VoteAlias("approve", "👍", position=0),
+        VoteAlias("approve", "✅", position=1),
+        VoteAlias("deny", "👎", position=2),
+        VoteAlias("deny", "❌", position=3),
+    ),
 )
 DEFAULT_GENERIC_EMOJIS = ("1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟")
 MIN_POLL_DURATION_SECONDS = 60
 MAX_POLL_DURATION_SECONDS = 30 * 86400
-
-
-def normalize_vote_options(options: Sequence[VoteOption], *, kind: VoteKind = VoteKind.BUILD) -> tuple[VoteOption, ...]:
-    """Validate options and preserve their order in a tuple.
-
-    Emoji aliases must be unique within each guild. Generic polls require 2 to 10
-    options with distinct IDs and generic choices. Threshold votes require approve
-    and deny choices in each configured guild.
-    """
-    normalized = tuple(options)
-    if not normalized:
-        msg = "Vote options cannot be empty."
-        raise InvalidVoteConfigurationError(msg)
-    aliases = [(option.guild_id, option.emoji) for option in normalized]
-    if len(aliases) != len(set(aliases)):
-        msg = "Vote option emojis must be unique within a guild session."
-        raise InvalidVoteConfigurationError(msg)
-    if kind is VoteKind.GENERIC:
-        identifiers = [option.identifier for option in normalized]
-        if len(identifiers) != len(set(identifiers)):
-            msg = "Generic option identifiers must be unique."
-            raise InvalidVoteConfigurationError(msg)
-        if not 2 <= len(normalized) <= 10:
-            msg = "Generic polls require between 2 and 10 options."
-            raise InvalidVoteConfigurationError(msg)
-        if any(option.choice is not VoteChoice.GENERIC for option in normalized):
-            msg = "Generic poll options must use the generic choice type."
-            raise InvalidVoteConfigurationError(msg)
-    else:
-        for guild_id in {option.guild_id for option in normalized}:
-            choices = {option.choice for option in normalized if option.guild_id == guild_id}
-            if choices != {VoteChoice.APPROVE, VoteChoice.DENY}:
-                msg = "Vote sessions require at least one approve and one deny option."
-                raise InvalidVoteConfigurationError(msg)
-    return normalized
 
 
 @dataclass(frozen=True, slots=True)

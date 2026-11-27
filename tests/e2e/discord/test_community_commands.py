@@ -350,7 +350,7 @@ async def test_question_only_publishes_a_poll_with_default_settings() -> None:
         assert values["duration_seconds"] == 86400
         assert values["visibility"] is VoteVisibility.ANONYMOUS_LIVE
         assert values["scope"] is PollScope.GUILD
-        assert [(option.emoji, option.label) for option in values["options"]] == [("👍", "Yes"), ("👎", "No")]
+        assert [(alias.emoji, option.label) for option, alias in values["menu"].rows()] == [("👍", "Yes"), ("👎", "No")]
         (published,) = channel.history()
         votes.poll_attachments.assert_awaited_once_with(42, published.id)
 

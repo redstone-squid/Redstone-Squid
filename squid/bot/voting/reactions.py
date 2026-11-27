@@ -123,7 +123,7 @@ class VoteReactionHandler:
         recovering = event.recovering
         assert payload.guild_id is not None  # The subscription is guild-only.
         emoji = str(payload.emoji)
-        option = snapshot.option_by_emoji(emoji, payload.guild_id)
+        option = snapshot.menu.option_for_emoji(emoji, payload.guild_id)
         if option is None:
             return
         message = await event.message()
@@ -137,7 +137,13 @@ class VoteReactionHandler:
             return
         actor = await resolve_actor(self.bot, member, account_id=account_id)
         previous = snapshot.selection_for(actor.require_account_id())
-        if not recovering and not snapshot.is_anonymous and previous is not None and previous.option_id != option.id:
+        if (
+            not recovering
+            and not snapshot.is_anonymous
+            and previous is not None
+            and previous.option_id != option.id
+            and previous.emoji is not None
+        ):
             await self._remove_reaction(message, previous.emoji, member)
         result, changed = await self._set_reaction_selection(snapshot, actor, emoji, selected=True)
         if result.rejection is VoteRejection.CLOSED:
@@ -232,7 +238,7 @@ class VoteReactionHandler:
         """
         if actor.guild_id is None:
             return CastVoteResult(snapshot, VoteRejection.WRONG_GUILD), False
-        option = snapshot.option_by_emoji(emoji, actor.guild_id)
+        option = snapshot.menu.option_for_emoji(emoji, actor.guild_id)
         if option is None:
             return CastVoteResult(snapshot, VoteRejection.INVALID_OPTION), False
         current = snapshot.selection_for(actor.require_account_id())
@@ -258,9 +264,9 @@ class VoteReactionHandler:
         message = await self.bot.get_or_fetch_message(location.channel_id, message_id)
         if message is None:
             return
-        for option in snapshot.options_for_guild(location.guild_id):
+        for alias in snapshot.menu.aliases_for_guild(location.guild_id):
             with contextlib.suppress(discord.NotFound, discord.Forbidden, discord.HTTPException):
-                await message.add_reaction(option.emoji)
+                await message.add_reaction(alias.emoji)
 
     @staticmethod
     async def _remove_reaction(

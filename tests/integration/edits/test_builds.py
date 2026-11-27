@@ -207,9 +207,9 @@ async def test_credited_creator_proposes_published_changes_and_vote_applies_the_
     assert snapshot.kind is VoteKind.BUILD_EDIT
     assert isinstance(snapshot.target, BuildEditVoteTarget)
     async with factory() as uow:
-        option = next(option for option in snapshot.options if option.choice is VoteChoice.APPROVE)
+        option = next(option for option in snapshot.menu.options if option.choice is VoteChoice.APPROVE)
         assert owner.account_id is not None
-        mutation = await uow.votes.cast_vote(vote_id, owner.account_id, 1, option, 3)
+        mutation = await uow.votes.cast_vote(vote_id, owner.account_id, option, 3)
         assert mutation is not None
         await uow.commit()
     closed = await VoteService(uow_factory=factory).get_session(vote_id, context=ActingContext.direct(AnonymousActor()))

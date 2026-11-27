@@ -2,8 +2,8 @@
 
 A VoteSession holds the shared status and outcome. Its kind selects a build,
 deletion, or poll record for the question being decided. VoteSessionOption rows
-capture the emoji aliases and multipliers available to that voting session;
-Vote rows record ballots using those stable option IDs.
+capture the options and their multipliers; VoteSessionOptionAlias rows map emojis
+to them on Discord cards. Vote rows record ballots using the stable option IDs.
 
 Discord messages displaying a voting session are linked through DiscordPost in
 the messages package. Multiple messages therefore share the same ballots.
@@ -99,40 +99,30 @@ class VoteSession(Base, kw_only=True):
         init=False,
         repr=False,
     )
+    aliases: Mapped[list[VoteSessionOptionAlias]] = relationship(
+        default_factory=list,
+        lazy="raise_on_sql",
+        primaryjoin="VoteSession.id == foreign(VoteSessionOptionAlias.vote_session_id)",
+        order_by="VoteSessionOptionAlias.position",
+        viewonly=True,
+        init=False,
+        repr=False,
+    )
 
 
 class VoteSessionOption(Base, kw_only=True):
-    """A reaction option configured for one vote session."""
+    """An option captured for one vote session."""
 
     __tablename__ = "vote_session_options"
     __table_args__ = (
-        UniqueConstraint("vote_session_id", "id", name="vote_session_options_session_id_key"),
-        UniqueConstraint(
-            "vote_session_id",
-            "guild_id",
-            "emoji",
-            name="vote_session_options_alias_key",
-            postgresql_nulls_not_distinct=True,
-        ),
-        UniqueConstraint(
-            "vote_session_id",
-            "guild_id",
-            "position",
-            name="vote_session_options_vote_session_id_position_key",
-            postgresql_nulls_not_distinct=True,
-        ),
         CheckConstraint(f"choice IN ({_CHOICE_VALUES})", name="vote_session_options_choice_check"),
         CheckConstraint(
             "multiplier > 0 AND multiplier != 'Infinity'::double precision AND multiplier != 'NaN'::double precision",
             name="vote_session_options_multiplier_check",
         ),
         CheckConstraint("position >= 0", name="vote_session_options_position_check"),
-        {"comment": "Ordered reaction options and positive weight multipliers captured for each vote session."},
+        {"comment": "Ordered options and positive weight multipliers captured for each vote session."},
     )
-
-    # An alias is one emoji for a logical option in a guild (or globally when guild_id is None).
-    # For example, 👍 and ✅ can both have identifier="approve", but each has its own row ID.
-    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
 
     vote_session_id: Mapped[int] = mapped_column(
         BigInteger,
@@ -142,18 +132,52 @@ class VoteSessionOption(Base, kw_only=True):
             ondelete="CASCADE",
             onupdate="CASCADE",
         ),
-        nullable=False,
+        primary_key=True,
     )
-    identifier: Mapped[str] = mapped_column(Text, nullable=False)
-    guild_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-    """Guild using this emoji alias, or None for an option shared across guilds."""
-    emoji: Mapped[str] = mapped_column(Text, nullable=False)
+    identifier: Mapped[str] = mapped_column(Text, primary_key=True)
     choice: Mapped[VoteChoice] = mapped_column(StrEnumText(VoteChoice), nullable=False)
     label: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
     multiplier: Mapped[float] = mapped_column(Float, nullable=False, server_default=text("1.0"), default=1.0)
     position: Mapped[int] = mapped_column(SmallInteger, nullable=False)
 
     vote_session: Mapped[VoteSession] = relationship(back_populates="options", lazy="raise_on_sql", repr=False)
+
+
+class VoteSessionOptionAlias(Base, kw_only=True):
+    """An emoji that selects a session option on one guild's cards, or every guild's when guild_id is None."""
+
+    __tablename__ = "vote_session_option_aliases"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["vote_session_id", "option_identifier"],
+            ["vote_session_options.vote_session_id", "vote_session_options.identifier"],
+            name="vote_session_option_aliases_option_fkey",
+            ondelete="CASCADE",
+            onupdate="CASCADE",
+        ),
+        UniqueConstraint(
+            "vote_session_id",
+            "guild_id",
+            "emoji",
+            name="vote_session_option_aliases_emoji_key",
+            postgresql_nulls_not_distinct=True,
+        ),
+        UniqueConstraint(
+            "vote_session_id",
+            "guild_id",
+            "position",
+            name="vote_session_option_aliases_position_key",
+            postgresql_nulls_not_distinct=True,
+        ),
+        CheckConstraint("position >= 0", name="vote_session_option_aliases_position_check"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
+    vote_session_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    option_identifier: Mapped[str] = mapped_column(Text, nullable=False)
+    guild_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    emoji: Mapped[str] = mapped_column(Text, nullable=False)
+    position: Mapped[int] = mapped_column(SmallInteger, nullable=False)
 
 
 class BuildVoteSession(Base, kw_only=True):
@@ -263,16 +287,15 @@ class GenericVoteSession(Base, kw_only=True):
 
 
 class Vote(Base):
-    """One account's selected option and cached positive weight in a session."""
+    """One account's selected option and the positive weight it was cast with."""
 
     __tablename__ = "votes"
     __table_args__ = (
         ForeignKeyConstraint(
-            ["vote_session_id", "option_alias_id"],
-            ["vote_session_options.vote_session_id", "vote_session_options.id"],
-            name="votes_option_alias_fkey",
+            ["vote_session_id", "option_identifier"],
+            ["vote_session_options.vote_session_id", "vote_session_options.identifier"],
+            name="votes_option_fkey",
         ),
-        Index("votes_option_alias_idx", "vote_session_id", "option_alias_id"),
         Index("votes_account_idx", "account_id"),
         CheckConstraint(
             "weight > 0 AND weight != 'Infinity'::double precision AND weight != 'NaN'::double precision",
@@ -293,17 +316,17 @@ class Vote(Base):
         ForeignKey("accounts.id", name="votes_account_id_fkey", ondelete="CASCADE"),
         primary_key=True,
     )
+    option_identifier: Mapped[str] = mapped_column(Text, nullable=False)
     guild_id: Mapped[int | None] = mapped_column(
         BigInteger,
         ForeignKey("server_settings.server_id", name="votes_guild_id_fkey", ondelete="RESTRICT"),
         nullable=True,
     )
-    """The guild whose card the ballot was cast on, which decides the option's emoji alias."""
-    # References the exact VoteSessionOption row used, including its emoji and guild scope.
-    # Its identifier may be shared by several aliases, so that string cannot identify the FK target.
-    option_alias_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    """The guild whose card the ballot was cast on, or None for a ballot cast without Discord."""
+    emoji: Mapped[str | None] = mapped_column(Text, nullable=True)
+    """The alias the ballot was cast with, which a public card keeps as the voter's reaction."""
     weight: Mapped[float] = mapped_column(Float, nullable=False)
-    """Cached positive magnitude; the option choice determines the sign used in threshold scoring."""
+    """Positive magnitude fixed at cast; the option's choice determines the sign used in threshold scoring."""
 
     vote_session: Mapped[VoteSession] = relationship(back_populates="votes", lazy="raise_on_sql", repr=False)
 

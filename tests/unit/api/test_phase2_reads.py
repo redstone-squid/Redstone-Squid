@@ -37,8 +37,10 @@ from squid.core.versions.application.services import VersionService
 from squid.core.versions.domain import MinecraftVersion, VersionEntry
 from squid.core.voting.application import VoteService
 from squid.core.voting.domain import (
+    VoteAlias,
     VoteChoice,
     VoteKind,
+    VoteMenu,
     VoteOption,
     VoteSelection,
     VoteSessionSnapshot,
@@ -450,7 +452,13 @@ def test_hidden_vote_session_omits_ballots_and_live_tallies(
         question="Pick a color",
         visibility=VoteVisibility.ANONYMOUS_HIDDEN,
         guild_id=99,
-        options=(VoteOption("1", VoteChoice.GENERIC, identifier="red", label="Red"),),
+        menu=VoteMenu(
+            (
+                VoteOption("red", VoteChoice.GENERIC, label="Red"),
+                VoteOption("blue", VoteChoice.GENERIC, label="Blue", position=1),
+            ),
+            (VoteAlias("red", "1"), VoteAlias("blue", "2", position=1)),
+        ),
         selections=(VoteSelection(111, 99, "red", "1", 2.5),),
     )
     _override(app, votes=VoteFake(session))
@@ -461,7 +469,10 @@ def test_hidden_vote_session_omits_ballots_and_live_tallies(
     assert response.status_code == 200
     payload = response.json()
     assert payload["tallies"] is None
-    assert payload["options"] == [{"id": "red", "label": "Red", "choice": "generic", "position": 0}]
+    assert payload["options"] == [
+        {"id": "red", "label": "Red", "choice": "generic", "multiplier": 1.0, "position": 0},
+        {"id": "blue", "label": "Blue", "choice": "generic", "multiplier": 1.0, "position": 1},
+    ]
     assert "111" not in response.text
     assert "author_id" not in response.text
 

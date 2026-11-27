@@ -70,7 +70,7 @@ class VoteSessionRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
         guild_id = message.guild.id if message.guild is not None else 0
         # Attempt every option even if one reaction fails, then report the failures.
         outcomes = await settle_all(
-            [_add_reaction(message, option.emoji) for option in snapshot.options_for_guild(guild_id)],
+            [_add_reaction(message, alias.emoji) for alias in snapshot.menu.aliases_for_guild(guild_id)],
             limit=DISCORD_FANOUT_LIMIT,
         )
         forbidden = sum(

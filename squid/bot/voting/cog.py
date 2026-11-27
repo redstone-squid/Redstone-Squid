@@ -34,7 +34,7 @@ from squid.core.accounts.domain import IdentityProvider
 from squid.core.actors import ActingContext, UserActor
 from squid.core.i18n import tr
 from squid.core.permissions.domain.catalogue import VOTE_POLL_CLOSE_ANY, VOTE_POLL_NETWORK_CREATE, VOTE_POLL_RECOUNT
-from squid.core.voting.domain import PollScope, VoteKind, VoteOption, VoteStatus, VoteVisibility
+from squid.core.voting.domain import PollScope, VoteKind, VoteMenu, VoteStatus, VoteVisibility
 from squid.core.voting.errors import InvalidVoteConfigurationError
 from squid_i18n import md_tr
 from squid_ui.ext.discord.i18n import to_locale_str
@@ -144,10 +144,10 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
         if guild is None or channel is None:
             return None
 
-        async def resolve_options(lines: tuple[str, ...]) -> tuple[VoteOption, ...]:
+        async def resolve_options(lines: tuple[str, ...]) -> VoteMenu:
             return await self.publisher.resolve_options(guild.id, lines)
 
-        async def publish(draft: PollDraft, options: tuple[VoteOption, ...]) -> str:
+        async def publish(draft: PollDraft, menu: VoteMenu) -> str:
             subject = await self.bot.actors.resolve(request, refresh=True)
             if subject.account_id != account.id:
                 raise InvalidVoteConfigurationError(
@@ -168,7 +168,7 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
                 question=draft.question,
                 visibility=draft.visibility,
                 duration_seconds=draft.duration_seconds,
-                options=options,
+                menu=menu,
                 scope=draft.scope,
             )
             return publication.message.jump_url
@@ -190,9 +190,9 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
                 )
             if question is not None:
                 draft.validate()
-                options = await resolve_options(draft.option_lines)
+                menu = await resolve_options(draft.option_lines)
                 if not preview:
-                    published_url = await publish(draft, options)
+                    published_url = await publish(draft, menu)
                     return sd.Response(
                         text_node(md_tr(t"bot-voting-poll-wizard-poll-published = Poll published: {published_url}")),
                         audience="personal",

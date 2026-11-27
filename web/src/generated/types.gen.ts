@@ -3821,7 +3821,7 @@ export type VideoSimulation = {
  */
 export type ViewerBallot = {
     vote_session_id: number;
-    option_alias_id: number;
+    option_id: string;
 };
 
 /**
@@ -3864,6 +3864,7 @@ export type VoteOptionSummary = {
     id: string;
     label: string | null;
     choice: string;
+    multiplier: number;
     position: number;
 };
 

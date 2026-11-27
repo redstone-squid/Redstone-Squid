@@ -4,7 +4,6 @@ Attaching a message here means recording its association with the vote session. 
 database write must reuse the Discord message rather than send another poll card.
 """
 
-from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, cast, override
@@ -18,9 +17,9 @@ from squid.core.actors import ActingContext, UserActor
 from squid.core.messages.application.services import MessageService
 from squid.core.messages.domain import MessageSnapshot
 from squid.core.voting.application import VoteService
-from squid.core.voting.domain import PollScope, VoteOption, VoteVisibility
+from squid.core.voting.domain import PollScope, VoteMenu, VoteVisibility
 from tests.support.services import bot_services
-from tests.support.voting import GENERIC_OPTIONS
+from tests.support.voting import GENERIC_MENU
 
 
 class VoteRecorder(VoteService):
@@ -37,12 +36,12 @@ class VoteRecorder(VoteService):
         question: str,
         visibility: VoteVisibility,
         duration_seconds: int,
-        options: Sequence[VoteOption],
+        menu: VoteMenu,
         guild_id: int | None = None,
         scope: PollScope = PollScope.GUILD,
         now: Instant | None = None,
     ) -> int:
-        del context, question, visibility, duration_seconds, options, guild_id, scope, now
+        del context, question, visibility, duration_seconds, menu, guild_id, scope, now
         self.create_calls += 1
         return 41
 
@@ -117,7 +116,7 @@ async def _publish(publisher: DiscordPollPublisher, channel: Channel) -> PollPub
         question="Which?",
         visibility=VoteVisibility.ANONYMOUS_LIVE,
         duration_seconds=3600,
-        options=GENERIC_OPTIONS,
+        menu=GENERIC_MENU,
     )
 
 

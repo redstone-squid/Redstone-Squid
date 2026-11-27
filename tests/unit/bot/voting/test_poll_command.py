@@ -16,7 +16,7 @@ from squid.bot.voting.poll_wizard import PollDraft, PollScreen, parse_option_lin
 from squid.bot.voting.publisher import DiscordPollPublisher
 from squid.core.actors import UserActor
 from squid.core.voting.domain import PollScope, VoteVisibility
-from tests.support.voting import GENERIC_OPTIONS
+from tests.support.voting import GENERIC_MENU
 
 
 @pytest.fixture
@@ -32,7 +32,7 @@ def poll_context() -> tuple[Any, Any]:
     )
     cast(Any, cog).publisher = SimpleNamespace(
         may_create_network=AsyncMock(return_value=True),
-        resolve_options=AsyncMock(return_value=GENERIC_OPTIONS),
+        resolve_options=AsyncMock(return_value=GENERIC_MENU),
         create_and_publish=AsyncMock(
             return_value=SimpleNamespace(message=SimpleNamespace(jump_url="https://discord.com/channels/1/2/3"))
         ),
@@ -116,8 +116,8 @@ def test_slash_options_cover_every_draft_setting() -> None:
 
 
 def test_default_choices_do_not_need_a_configured_palette() -> None:
-    options = parse_option_lines(PollDraft("Ready?").option_lines, guild_id=10, palette=())
-    assert [(option.emoji, option.label) for option in options] == [("👍", "Yes"), ("👎", "No")]
+    menu = parse_option_lines(PollDraft("Ready?").option_lines, guild_id=10, palette=())
+    assert [(alias.emoji, option.label) for option, alias in menu.rows()] == [("👍", "Yes"), ("👎", "No")]
 
 
 @pytest.mark.parametrize(

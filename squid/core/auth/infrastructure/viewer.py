@@ -92,7 +92,7 @@ class PostgresViewerRepository:
             .order_by(BuildVoteSession.vote_session_id.desc())
             .limit(1)
         )
-        ballot = select(Vote.vote_session_id, Vote.option_alias_id).where(
+        ballot = select(Vote.vote_session_id, Vote.option_identifier).where(
             Vote.account_id == account_id, Vote.vote_session_id == active.scalar_subquery()
         )
         session = self._session()

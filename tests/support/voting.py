@@ -4,7 +4,7 @@ from collections.abc import Mapping, Sequence
 from copy import copy
 from typing import Self, cast
 
-from sqlalchemy import insert, select
+from sqlalchemy import insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
@@ -14,13 +14,15 @@ from squid.core.permissions.application.ports import PermissionSubject, SubjectR
 from squid.core.permissions.models import PermissionGrant
 from squid.core.posts.models import DiscordPost
 from squid.core.voting.domain import (
-    DEFAULT_VOTE_OPTIONS,
+    DEFAULT_VOTE_MENU,
     BuildVoteTarget,
     DeleteLogVoteTarget,
     GenericPoll,
     PollScope,
+    VoteAlias,
     VoteChoice,
     VoteKind,
+    VoteMenu,
     VoteMessage,
     VoteOption,
     VoteSelection,
@@ -30,7 +32,7 @@ from squid.core.voting.domain import (
     VoteTarget,
     VoteVisibility,
 )
-from squid.core.voting.models import DeleteLogVoteSession, Vote, VoteSession, VoteSessionOption
+from squid.core.voting.models import DeleteLogVoteSession, Vote, VoteSession, VoteSessionOption, VoteSessionOptionAlias
 from tests.support.unit_of_work import PublishingFakeUnitOfWork
 
 GUILD_ID = 503
@@ -44,10 +46,16 @@ DEFAULT_BUILD_TARGET = BuildVoteTarget(42)
 DEFAULT_DELETE_LOG_TARGET = DeleteLogVoteTarget(TARGET_MESSAGE_ID, CHANNEL_ID, GUILD_ID)
 _INFER_TARGET = object()
 
-GENERIC_OPTIONS = (
-    VoteOption("1️⃣", VoteChoice.GENERIC, identifier="one", guild_id=10, label="One"),
-    VoteOption("2️⃣", VoteChoice.GENERIC, identifier="two", guild_id=10, label="Two"),
-)
+
+def generic_menu(guild_id: int | None = 10, ids: tuple[str, str] = ("one", "two")) -> VoteMenu:
+    """A two-option poll menu aliased by 1️⃣ and 2️⃣ in `guild_id`."""
+    return VoteMenu.of(
+        (VoteOption(option_id, VoteChoice.GENERIC, label=option_id.title()), VoteAlias(option_id, emoji, guild_id))
+        for option_id, emoji in zip(ids, ("1️⃣", "2️⃣"), strict=True)
+    )
+
+
+GENERIC_MENU = generic_menu()
 
 
 def build_snapshot(
@@ -61,7 +69,7 @@ def build_snapshot(
     fail_threshold: int | None = -3,
     votes: Mapping[int, float] | None = None,
     messages: tuple[VoteMessage, ...] = (VoteMessage(100, 200, 10),),
-    options: tuple[VoteOption, ...] = DEFAULT_VOTE_OPTIONS,
+    menu: VoteMenu = DEFAULT_VOTE_MENU,
     target: VoteTarget | object = _INFER_TARGET,
     selections: tuple[VoteSelection, ...] = (),
     poll: GenericPoll | None = None,
@@ -83,7 +91,7 @@ def build_snapshot(
         fail_threshold=fail_threshold,
         votes=dict(votes or {}),
         messages=messages,
-        options=options,
+        menu=menu,
         target=cast(VoteTarget, target),
         selections=selections,
         poll=poll,
@@ -101,7 +109,7 @@ def poll_snapshot(
     guild_id: int | None = 10,
     scope: PollScope = PollScope.GUILD,
     messages: tuple[VoteMessage, ...] = (),
-    options: tuple[VoteOption, ...] = GENERIC_OPTIONS,
+    menu: VoteMenu = GENERIC_MENU,
     selections: tuple[VoteSelection, ...] = (),
     deadline: Instant | None = None,
 ) -> VoteSessionSnapshot:
@@ -116,7 +124,7 @@ def poll_snapshot(
         fail_threshold=None,
         votes={},
         messages=messages,
-        options=options,
+        menu=menu,
         target=None,
         selections=selections,
         poll=GenericPoll(question, visibility, deadline or Instant.now().add(hours=1), guild_id, scope),
@@ -182,7 +190,7 @@ async def seed_delete_log_vote(
     pass_threshold: int = 3,
     fail_threshold: int = -3,
     votes: Mapping[int, float] | None = None,
-    options: Sequence[VoteOption] = DEFAULT_VOTE_OPTIONS,
+    menu: VoteMenu = DEFAULT_VOTE_MENU,
 ) -> tuple[int, int]:
     """Persist an open delete-log vote session and return its session/message IDs.
 
@@ -207,21 +215,33 @@ async def seed_delete_log_vote(
         ).scalar_one()
         message_id = 1_000 + vote_session_id
         # Projected from the domain defaults rather than restated, so that the
-        # `snapshot.options == DEFAULT_VOTE_OPTIONS` assertions prove a round trip
-        # instead of comparing two hand-written copies of the same four options.
+        # `snapshot.menu == DEFAULT_VOTE_MENU` assertions prove a round trip
+        # instead of comparing two hand-written copies of the same menu.
         await session.execute(
             insert(VoteSessionOption),
             [
                 {
                     "vote_session_id": vote_session_id,
-                    "identifier": option.identifier,
-                    "guild_id": option.guild_id,
-                    "emoji": option.emoji,
+                    "identifier": option.id,
                     "choice": option.choice.value,
+                    "label": option.label,
                     "multiplier": option.multiplier,
                     "position": option.position,
                 }
-                for option in options
+                for option in menu.options
+            ],
+        )
+        await session.execute(
+            insert(VoteSessionOptionAlias),
+            [
+                {
+                    "vote_session_id": vote_session_id,
+                    "option_identifier": alias.option_id,
+                    "guild_id": alias.guild_id,
+                    "emoji": alias.emoji,
+                    "position": alias.position,
+                }
+                for alias in menu.aliases
             ],
         )
         await session.execute(
@@ -234,24 +254,15 @@ async def seed_delete_log_vote(
         )
         await attach_vote_message(session, message_id=message_id, vote_session_id=vote_session_id, content="Vote now")
         if votes:
-            aliases = dict(
-                (
-                    await session.execute(
-                        select(VoteSessionOption.emoji, VoteSessionOption.id).where(
-                            VoteSessionOption.vote_session_id == vote_session_id
-                        )
-                    )
-                ).all()
-            )
             await session.execute(
                 insert(Vote),
                 [
                     {
                         "vote_session_id": vote_session_id,
                         "account_id": account_id,
-                        "discord_id": account_id * 10,
                         "guild_id": GUILD_ID,
-                        "option_alias_id": aliases["👎" if weight < 0 else "👍"],
+                        "option_identifier": "deny" if weight < 0 else "approve",
+                        "emoji": "👎" if weight < 0 else "👍",
                         "weight": abs(weight),
                     }
                     for account_id, weight in votes.items()

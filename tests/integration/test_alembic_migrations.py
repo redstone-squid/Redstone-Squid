@@ -34,6 +34,7 @@ DYNAMIC_VOTING_REVISION = "4c9e7a2b1d63"
 """The migration whose downgrade path the drift test also exercises."""
 
 NULLABLE_VOTE_THRESHOLDS_REVISION = "b2c3d4e5f6a8"
+VOTE_OPTION_SPLIT_REVISION = "c41f7e2a9d58"
 VOTE_SUBTYPE_INVARIANT_REVISION = "a9b5c8d3e6f0"
 IDEMPOTENCY_CALLER_REVISION = "b0c6d9e4f7a1"
 FINALIZATION_RESULT_METADATA_REVISION = "c1d7e0f5a8b2"
@@ -645,6 +646,80 @@ def test_nullable_vote_thresholds_migrate_sentinels_in_both_directions(
                 text("SELECT pass_threshold, fail_threshold FROM vote_sessions WHERE id = :id"),
                 {"id": vote_session_id},
             ).one() == (32767, -32768)
+    finally:
+        engine.dispose()
+
+
+def test_vote_option_split_collapses_aliases_and_keeps_ballots_in_both_directions(
+    migration_database_url: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Aliases of one option become one option row, and ballots keep the emoji they were cast with."""
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config(toml_file="pyproject.toml")
+    command.upgrade(config, f"{VOTE_OPTION_SPLIT_REVISION}-1")
+    engine = create_engine(migration_database_url)
+    try:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE vote_sessions DISABLE TRIGGER vote_sessions_enqueue_discord_sync"))
+            connection.execute(text("ALTER TABLE votes DISABLE TRIGGER votes_enqueue_discord_sync"))
+            account_id = connection.execute(text("INSERT INTO accounts DEFAULT VALUES RETURNING id")).scalar_one()
+            connection.execute(text("INSERT INTO server_settings (server_id) VALUES (503)"))
+            session_id = connection.execute(
+                text(
+                    "INSERT INTO vote_sessions (status, result, author_account_id, kind, pass_threshold, fail_threshold)"
+                    " VALUES ('open', 'pending', :author, 'delete_log', 3, -3) RETURNING id"
+                ),
+                {"author": account_id},
+            ).scalar_one()
+            connection.execute(
+                text(
+                    "INSERT INTO delete_log_vote_sessions"
+                    " (vote_session_id, target_message_id, target_channel_id, target_server_id)"
+                    " VALUES (:id, 1, 2, 503)"
+                ),
+                {"id": session_id},
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO vote_session_options (vote_session_id, identifier, guild_id, emoji, choice, position)"
+                    " VALUES (:id, 'approve', NULL, '👍', 'approve', 0), (:id, 'deny', NULL, '👎', 'deny', 1),"
+                    " (:id, 'approve', 503, '✅', 'approve', 0), (:id, 'deny', 503, '❌', 'deny', 1)"
+                ),
+                {"id": session_id},
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO votes (vote_session_id, account_id, guild_id, option_alias_id, weight)"
+                    " SELECT :id, :account, 503, id, 2 FROM vote_session_options WHERE emoji = '✅'"
+                ),
+                {"id": session_id, "account": account_id},
+            )
+
+        command.upgrade(config, VOTE_OPTION_SPLIT_REVISION)
+        with engine.connect() as connection:
+            options = connection.execute(
+                text("SELECT identifier, choice, position FROM vote_session_options ORDER BY position")
+            ).all()
+            aliases = connection.execute(
+                text("SELECT option_identifier, guild_id, emoji FROM vote_session_option_aliases ORDER BY id")
+            ).all()
+            ballot = connection.execute(text("SELECT option_identifier, guild_id, emoji, weight FROM votes")).one()
+        assert options == [("approve", "approve", 0), ("deny", "deny", 1)]
+        assert aliases == [("approve", None, "👍"), ("deny", None, "👎"), ("approve", 503, "✅"), ("deny", 503, "❌")]
+        assert ballot == ("approve", 503, "✅", 2)
+
+        command.downgrade(config, f"{VOTE_OPTION_SPLIT_REVISION}-1")
+        with engine.connect() as connection:
+            restored = connection.execute(
+                text(
+                    "SELECT o.identifier, o.guild_id, o.emoji, v.weight FROM votes v"
+                    " JOIN vote_session_options o ON o.id = v.option_alias_id"
+                )
+            ).one()
+            rows = connection.execute(text("SELECT count(*) FROM vote_session_options")).scalar_one()
+        assert restored == ("approve", 503, "✅", 2)
+        assert rows == 4
     finally:
         engine.dispose()
 

@@ -22,11 +22,11 @@ from squid.core.tags.models import TagDefinition
 from squid.core.voting.application import VoteService
 from squid.core.voting.application.ports import VoteActorResolver
 from squid.core.voting.domain import (
-    DEFAULT_VOTE_OPTIONS,
+    DEFAULT_VOTE_MENU,
     EmojiPreset,
     PollScope,
     VoteKind,
-    VoteOption,
+    VoteMenu,
     VoteSessionSnapshot,
     VoteVisibility,
 )
@@ -65,7 +65,7 @@ class CommunityVotes(VoteService):
         question: str,
         visibility: VoteVisibility,
         duration_seconds: int,
-        options: Sequence[VoteOption],
+        menu: VoteMenu,
         guild_id: int | None = None,
         scope: PollScope = PollScope.GUILD,
         now: Instant | None = None,
@@ -75,7 +75,7 @@ class CommunityVotes(VoteService):
             question=question,
             visibility=visibility,
             duration_seconds=duration_seconds,
-            options=options,
+            menu=menu,
             guild_id=guild_id,
             scope=scope,
         )
@@ -98,7 +98,7 @@ class CommunityVotes(VoteService):
 
     @override
     async def emoji_preset(self, guild_id: int, kind: VoteKind, *, context: ActingContext) -> EmojiPreset:
-        return EmojiPreset(guild_id, kind, DEFAULT_VOTE_OPTIONS)
+        return EmojiPreset(guild_id, kind, DEFAULT_VOTE_MENU)
 
     @override
     async def start_delete_log_vote(
@@ -109,7 +109,7 @@ class CommunityVotes(VoteService):
         message_id: int,
         channel_id: int,
         server_id: int,
-        options: Sequence[VoteOption] = DEFAULT_VOTE_OPTIONS,
+        menu: VoteMenu = DEFAULT_VOTE_MENU,
         context: ActingContext,
     ) -> int:
         self.deletion_targets.append((context.effective.require_account_id(), server_id, channel_id, message_id))

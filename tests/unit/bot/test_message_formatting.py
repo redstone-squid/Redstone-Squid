@@ -11,7 +11,16 @@ from squid.bot.voting.rendering import render_build_review, render_delete_log, r
 from squid.core.messages.models import Message
 from squid.core.starboard.application import EntryState
 from squid.core.starboard.models import OriginMessage, StarboardConfig, StarboardEntry
-from squid.core.voting.domain import VoteChoice, VoteKind, VoteOption, VoteSessionResult, VoteStatus
+from squid.core.voting.domain import (
+    DEFAULT_VOTE_MENU,
+    VoteAlias,
+    VoteChoice,
+    VoteKind,
+    VoteMenu,
+    VoteOption,
+    VoteSessionResult,
+    VoteStatus,
+)
 from squid_ui.ext.discord.testing import MessageHarness
 from tests.support.voting import build_snapshot, poll_snapshot
 
@@ -69,9 +78,8 @@ def test_delete_log_vote_preserves_the_original_message(closed: bool) -> None:
 
 def test_build_review_instructions_keep_custom_emoji_and_authored_markdown() -> None:
     snapshot = build_snapshot(
-        options=(
-            VoteOption("<:yes:123>", VoteChoice.APPROVE),
-            VoteOption("<a:no:456>", VoteChoice.DENY),
+        menu=VoteMenu(
+            DEFAULT_VOTE_MENU.options, (VoteAlias("approve", "<:yes:123>"), VoteAlias("deny", "<a:no:456>", position=1))
         )
     )
 
@@ -84,9 +92,12 @@ def test_build_review_instructions_keep_custom_emoji_and_authored_markdown() -> 
 
 def test_poll_tallies_keep_custom_emoji_and_literal_option_labels() -> None:
     snapshot = poll_snapshot(
-        options=(
-            VoteOption("<:yes:123>", VoteChoice.GENERIC, identifier="one", guild_id=10, label="**One**"),
-            VoteOption("<a:no:456>", VoteChoice.GENERIC, identifier="two", guild_id=10, label="Two"),
+        menu=VoteMenu(
+            (
+                VoteOption("one", VoteChoice.GENERIC, label="**One**"),
+                VoteOption("two", VoteChoice.GENERIC, label="Two"),
+            ),
+            (VoteAlias("one", "<:yes:123>", 10), VoteAlias("two", "<a:no:456>", 10, 1)),
         )
     )
 

@@ -19,7 +19,7 @@ from squid.bot.ui import render_payload, text_node
 from squid.bot.voting.poll_wizard import parse_option_lines
 from squid.core.actors import ActingContext, application_operation
 from squid.core.permissions.domain.catalogue import VOTE_POLL_NETWORK_CREATE
-from squid.core.voting.domain import PollScope, VoteKind, VoteOption, VoteVisibility
+from squid.core.voting.domain import PollScope, VoteKind, VoteMenu, VoteVisibility
 from squid_ui.ext.discord import send_to
 
 if TYPE_CHECKING:
@@ -55,7 +55,7 @@ class PollPublicationError(RuntimeError):
 class PollPublisher(Protocol):
     """Poll creation and Discord publication, as the wizard views need it."""
 
-    async def resolve_options(self, guild_id: int, lines: Sequence[str]) -> tuple[VoteOption, ...]: ...
+    async def resolve_options(self, guild_id: int, lines: Sequence[str]) -> VoteMenu: ...
 
     async def create_and_publish(
         self,
@@ -65,7 +65,7 @@ class PollPublisher(Protocol):
         question: str,
         visibility: VoteVisibility,
         duration_seconds: int,
-        options: Sequence[VoteOption],
+        menu: VoteMenu,
         scope: PollScope = PollScope.GUILD,
     ) -> PollPublication: ...
 
@@ -82,13 +82,14 @@ class DiscordPollPublisher:
     def __init__(self, bot: squid.bot.app.RedstoneSquid) -> None:
         self._bot = bot
 
-    async def palette(self, guild_id: int) -> tuple[VoteOption, ...]:
+    async def palette(self, guild_id: int) -> tuple[str, ...]:
         """Return the guild's configured generic emoji palette."""
-        return (
-            await self._bot.services.votes.emoji_preset(guild_id, VoteKind.GENERIC, context=ActingContext.current())
-        ).options
+        preset = await self._bot.services.votes.emoji_preset(
+            guild_id, VoteKind.GENERIC, context=ActingContext.current()
+        )
+        return tuple(alias.emoji for alias in preset.menu.aliases)
 
-    async def resolve_options(self, guild_id: int, lines: Sequence[str]) -> tuple[VoteOption, ...]:
+    async def resolve_options(self, guild_id: int, lines: Sequence[str]) -> VoteMenu:
         """Turn wizard option lines into stable options, filling aliases from the palette."""
         return parse_option_lines(
             lines,
@@ -106,25 +107,25 @@ class DiscordPollPublisher:
         question: str,
         visibility: VoteVisibility,
         duration_seconds: int,
-        options: Sequence[VoteOption],
+        menu: VoteMenu,
         scope: PollScope = PollScope.GUILD,
     ) -> PollPublication:
         """Create a durable poll, then attach its initial card with one automatic retry.
 
         Publication failure raises `PollPublicationError` with the same session ID
-        and any message returned by Discord. Network polls use unscoped options
+        and any message returned by Discord. Network polls use unscoped aliases
         so cards in other guilds can offer the same choices.
         """
         if scope is PollScope.NETWORK:
             # Aliases resolved against the author's guild would leave every other
             # server's card with nothing to react to.
-            options = [replace(option, guild_id=None) for option in options]
+            menu = replace(menu, aliases=tuple(replace(alias, guild_id=None) for alias in menu.aliases))
         session_id = await self._bot.services.votes.create_generic_poll(
             context=context,
             question=question,
             visibility=visibility,
             duration_seconds=duration_seconds,
-            options=options,
+            menu=menu,
             guild_id=channel.guild.id,
             scope=scope,
         )

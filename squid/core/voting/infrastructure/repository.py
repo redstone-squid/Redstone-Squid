@@ -23,7 +23,7 @@ from squid.core.scores import round_score
 from squid.core.settings.infrastructure.repository import ensure_server_settings
 from squid.core.settings.models import ServerSetting
 from squid.core.voting.domain import (
-    DEFAULT_VOTE_OPTIONS,
+    DEFAULT_VOTE_MENU,
     BuildEditVoteTarget,
     BuildVoteTarget,
     DeleteLogVoteTarget,
@@ -34,9 +34,11 @@ from squid.core.voting.domain import (
     ReviewSort,
     RoleWeight,
     StoredVoteMutation,
+    VoteAlias,
     VoteChange,
     VoteChoice,
     VoteKind,
+    VoteMenu,
     VoteMessage,
     VoteOption,
     VoteSelection,
@@ -45,7 +47,6 @@ from squid.core.voting.domain import (
     VoteStatus,
     VoteTarget,
     VoteVisibility,
-    normalize_vote_options,
 )
 from squid.core.voting.errors import VoteSessionNotFoundError
 from squid.core.voting.models import (
@@ -57,7 +58,10 @@ from squid.core.voting.models import (
     Vote,
     VoteSession,
     VoteSessionOption,
+    VoteSessionOptionAlias,
 )
+
+_LOAD_MENU = (selectinload(VoteSession.options), selectinload(VoteSession.aliases))
 
 
 class _VoteSessionModelRepository(SQLAlchemyAsyncRepository[VoteSession]):
@@ -92,12 +96,11 @@ class VoteRepository:
             )
         ).all()
         presets = await self.get_emoji_presets(guild_ids, VoteKind.BUILD_EDIT) if guild_ids else {}
-        options = normalize_vote_options(
-            (*DEFAULT_VOTE_OPTIONS, *(option for preset in presets.values() for option in preset.options)),
-            kind=VoteKind.BUILD_EDIT,
+        menu = VoteMenu.shared((DEFAULT_VOTE_MENU, *(preset.menu for preset in presets.values()))).validated(
+            VoteKind.BUILD_EDIT
         )
         session_id = await self._create_session(
-            session, author_account_id, VoteKind.BUILD_EDIT, pass_threshold, fail_threshold, options
+            session, author_account_id, VoteKind.BUILD_EDIT, pass_threshold, fail_threshold, menu
         )
         await session.execute(
             insert(BuildVoteSession).values(
@@ -119,14 +122,14 @@ class VoteRepository:
         fail_threshold: int,
         build_id: int,
         changes: Sequence[VoteChange],
-        options: Sequence[VoteOption] = DEFAULT_VOTE_OPTIONS,
+        menu: VoteMenu = DEFAULT_VOTE_MENU,
     ) -> int:
         """Return the earliest build review session, creating it under a per-build transaction lock.
 
         An existing session is reused even when closed. The caller must keep the
         transaction open through commit to serialize concurrent creation attempts.
         """
-        options = normalize_vote_options(options, kind=VoteKind.BUILD)
+        menu = menu.validated(VoteKind.BUILD)
         session = self._session()
         lock_key = f"build-submission-vote:{build_id}"
         await session.execute(select(func.pg_advisory_xact_lock(func.hashtextextended(lock_key, 0))))
@@ -140,7 +143,7 @@ class VoteRepository:
         if existing is not None:
             return existing
         session_id = await self._create_session(
-            session, author_account_id, VoteKind.BUILD, pass_threshold, fail_threshold, options
+            session, author_account_id, VoteKind.BUILD, pass_threshold, fail_threshold, menu
         )
         await session.execute(
             insert(BuildVoteSession).values(vote_session_id=session_id, build_id=build_id, changes=list(changes))
@@ -155,12 +158,12 @@ class VoteRepository:
         fail_threshold: int,
         build_id: int,
         changes: Sequence[VoteChange],
-        options: Sequence[VoteOption] = DEFAULT_VOTE_OPTIONS,
+        menu: VoteMenu = DEFAULT_VOTE_MENU,
     ) -> int:
-        options = normalize_vote_options(options, kind=VoteKind.BUILD)
+        menu = menu.validated(VoteKind.BUILD)
         session = self._session()
         session_id = await self._create_session(
-            session, author_account_id, VoteKind.BUILD, pass_threshold, fail_threshold, options
+            session, author_account_id, VoteKind.BUILD, pass_threshold, fail_threshold, menu
         )
         await session.execute(
             insert(BuildVoteSession).values(vote_session_id=session_id, build_id=build_id, changes=list(changes))
@@ -176,9 +179,9 @@ class VoteRepository:
         message_id: int,
         channel_id: int,
         server_id: int,
-        options: Sequence[VoteOption] = DEFAULT_VOTE_OPTIONS,
+        menu: VoteMenu = DEFAULT_VOTE_MENU,
     ) -> int:
-        options = normalize_vote_options(options, kind=VoteKind.DELETE_LOG)
+        menu = menu.validated(VoteKind.DELETE_LOG)
         session = self._session()
         # Match build-review creation: keep this lock through the caller's commit.
         lock_key = f"delete-log-vote:{message_id}"
@@ -192,7 +195,7 @@ class VoteRepository:
         if existing is not None:
             return existing
         session_id = await self._create_session(
-            session, author_account_id, VoteKind.DELETE_LOG, pass_threshold, fail_threshold, options
+            session, author_account_id, VoteKind.DELETE_LOG, pass_threshold, fail_threshold, menu
         )
         await session.execute(
             insert(DeleteLogVoteSession).values(
@@ -211,13 +214,13 @@ class VoteRepository:
         question: str,
         visibility: VoteVisibility,
         deadline: Instant,
-        options: Sequence[VoteOption],
+        menu: VoteMenu,
         guild_id: int | None = None,
         scope: PollScope = PollScope.GUILD,
     ) -> int:
-        options = normalize_vote_options(options, kind=VoteKind.GENERIC)
+        menu = menu.validated(VoteKind.GENERIC)
         session = self._session()
-        session_id = await self._create_session(session, author_account_id, VoteKind.GENERIC, None, None, options)
+        session_id = await self._create_session(session, author_account_id, VoteKind.GENERIC, None, None, menu)
         await ensure_server_settings(session, (guild_id,))
         await session.execute(
             insert(GenericVoteSession).values(
@@ -307,7 +310,7 @@ class VoteRepository:
         kind: VoteKind,
         pass_threshold: int | None,
         fail_threshold: int | None,
-        options: Sequence[VoteOption],
+        menu: VoteMenu,
     ) -> int:
         session_id = (
             await session.execute(
@@ -328,24 +331,37 @@ class VoteRepository:
             [
                 {
                     "vote_session_id": session_id,
-                    "identifier": option.identifier,
-                    "guild_id": option.guild_id,
-                    "emoji": option.emoji,
+                    "identifier": option.id,
                     "choice": option.choice.value,
                     "label": option.label,
                     "multiplier": option.multiplier,
                     "position": position,
                 }
-                for position, option in enumerate(options)
+                for position, option in enumerate(menu.options)
             ],
         )
+        positions: dict[int | None, int] = {}
+        aliases = []
+        for alias in menu.aliases:
+            position = positions[alias.guild_id] = positions.get(alias.guild_id, -1) + 1
+            aliases.append(
+                {
+                    "vote_session_id": session_id,
+                    "option_identifier": alias.option_id,
+                    "guild_id": alias.guild_id,
+                    "emoji": alias.emoji,
+                    "position": position,
+                }
+            )
+        if aliases:
+            await session.execute(insert(VoteSessionOptionAlias), aliases)
         return session_id
 
     async def get_by_message(self, message_id: int) -> VoteSessionSnapshot | None:
         session = self._session()
         statement = (
             select(VoteSession)
-            .options(selectinload(VoteSession.options))
+            .options(*_LOAD_MENU)
             .join(DiscordPost, DiscordPost.resource_key == cast_sql(VoteSession.id, Text))
             .where(
                 DiscordPost.message_id == message_id,
@@ -358,14 +374,14 @@ class VoteRepository:
 
     async def get_by_id(self, vote_session_id: int) -> VoteSessionSnapshot | None:
         session = self._session()
-        row = await _VoteSessionModelRepository(
-            session=session, load=[selectinload(VoteSession.options)]
-        ).get_one_or_none(id=vote_session_id)
+        row = await _VoteSessionModelRepository(session=session, load=list(_LOAD_MENU)).get_one_or_none(
+            id=vote_session_id
+        )
         return None if row is None else await self._to_snapshot(session, row)
 
     async def list_open(self, kind: VoteKind) -> Sequence[VoteSessionSnapshot]:
         session = self._session()
-        rows = await _VoteSessionModelRepository(session=session, load=[selectinload(VoteSession.options)]).get_many(
+        rows = await _VoteSessionModelRepository(session=session, load=list(_LOAD_MENU)).get_many(
             VoteSession.status == VoteStatus.OPEN, VoteSession.kind == kind
         )
         return [await self._to_snapshot(session, row) for row in rows]
@@ -378,7 +394,7 @@ class VoteRepository:
         total = await session.scalar(_reviews(select(func.count()).select_from(VoteSession), filters))
         page = await order.page(
             session,
-            _reviews(select(VoteSession).options(selectinload(VoteSession.options)), filters),
+            _reviews(select(VoteSession).options(*_LOAD_MENU), filters),
             selector,
             page_size=page_size,
             total=total or 0,
@@ -463,7 +479,7 @@ class VoteRepository:
         rows = (
             await session.scalars(
                 select(VoteSession)
-                .options(selectinload(VoteSession.options))
+                .options(*_LOAD_MENU)
                 .join(GenericVoteSession, GenericVoteSession.vote_session_id == VoteSession.id)
                 .where(
                     ((VoteSession.status == VoteStatus.OPEN) & (GenericVoteSession.deadline <= now))
@@ -477,19 +493,20 @@ class VoteRepository:
         self,
         vote_session_id: int,
         account_id: int,
-        guild_id: int,
         option: VoteOption,
-        desired_weight: float,
+        weight: float,
         *,
+        guild_id: int | None = None,
+        emoji: str | None = None,
         toggle: bool = True,
         count_revision: int | None = None,
     ) -> StoredVoteMutation | None:
         """Toggle or replace a ballot in an open session, returning None if missing or closed.
 
-        `option` is the alias the service resolved for `guild_id`, and must be one of
-        the session's stored aliases. Stable option IDs decide whether this removes
-        the voter's selection. Returned
-        weights are positive magnitudes; threshold scoring supplies the option's sign.
+        `option` must be one of the session's options. `guild_id` and `emoji` record the
+        card and alias the ballot was cast with, if any. Selecting the stored option
+        again removes the ballot unless `toggle` is false. Returned weights are
+        positive magnitudes; threshold scoring supplies the option's sign.
         """
         session = self._session()
         row = await self._lock_session_row(session, vote_session_id)
@@ -501,52 +518,29 @@ class VoteRepository:
                 return None
         elif row.status is not VoteStatus.OPEN:
             return None
-        await ensure_server_settings(session, (guild_id,))
+        if all(stored.identifier != option.id for stored in row.options):
+            # Options are written once with the session, so the service cannot have resolved
+            # an option the session does not store.
+            msg = "Vote option is not one of the session's options."
+            raise DataIntegrityError(msg, context={"vote_session_id": vote_session_id, "option_id": option.id})
+        if guild_id is not None:
+            await ensure_server_settings(session, (guild_id,))
         previous = await session.scalar(
             select(Vote).where(Vote.vote_session_id == row.id, Vote.account_id == account_id)
         )
         previous_weight = previous.weight if previous is not None else None
-        aliases = {alias.id: alias for alias in row.options}
-        alias = next(
-            (
-                alias
-                for alias in row.options
-                if (alias.identifier, alias.emoji, alias.guild_id) == (option.id, option.emoji, option.guild_id)
-            ),
-            None,
-        )
-        if alias is None:
-            # Aliases are written once with the session, so the service cannot have resolved
-            # an option the session does not store.
-            msg = "Vote option is not one of the session's aliases."
-            raise DataIntegrityError(
-                msg, context={"vote_session_id": vote_session_id, "option_id": option.id, "emoji": option.emoji}
-            )
-        # Aliases of the same logical option toggle the same ballot: ✅ after 👍 still means "approve".
-        toggled_off = toggle and previous is not None and aliases[previous.option_alias_id].identifier == option.id
-        if toggled_off:
+        # Aliases of the same option toggle the same ballot: ✅ after 👍 still means "approve".
+        if toggle and previous is not None and previous.option_identifier == option.id:
             await session.delete(previous)
             current_weight = None
         else:
+            values = {"option_identifier": option.id, "guild_id": guild_id, "emoji": emoji, "weight": weight}
             await session.execute(
                 pg_insert(Vote)
-                .values(
-                    vote_session_id=row.id,
-                    account_id=account_id,
-                    guild_id=guild_id,
-                    option_alias_id=alias.id,
-                    weight=desired_weight,
-                )
-                .on_conflict_do_update(
-                    index_elements=[Vote.vote_session_id, Vote.account_id],
-                    set_={
-                        "guild_id": guild_id,
-                        "option_alias_id": alias.id,
-                        "weight": desired_weight,
-                    },
-                )
+                .values(vote_session_id=row.id, account_id=account_id, **values)
+                .on_conflict_do_update(index_elements=[Vote.vote_session_id, Vote.account_id], set_=values)
             )
-            current_weight = desired_weight
+            current_weight = weight
         just_closed = await self._close_at_threshold(session, row)
         return StoredVoteMutation(await self._to_snapshot(session, row), previous_weight, current_weight, just_closed)
 
@@ -585,7 +579,8 @@ class VoteRepository:
             select(Vote.weight, VoteSessionOption.choice)
             .join(
                 VoteSessionOption,
-                VoteSessionOption.id == Vote.option_alias_id,
+                (VoteSessionOption.vote_session_id == Vote.vote_session_id)
+                & (VoteSessionOption.identifier == Vote.option_identifier),
             )
             .where(Vote.vote_session_id == row.id)
         )
@@ -615,6 +610,7 @@ class VoteRepository:
         return (await self.get_emoji_presets((guild_id,), kind)).get(guild_id)
 
     async def get_emoji_presets(self, guild_ids: Sequence[int], kind: VoteKind) -> dict[int, EmojiPreset]:
+        """Read each guild's stored menu; rows sharing an identifier are aliases of one option."""
         rows = (
             await self._session().scalars(
                 select(GuildVoteEmoji)
@@ -622,19 +618,18 @@ class VoteRepository:
                 .order_by(GuildVoteEmoji.guild_id, GuildVoteEmoji.position)
             )
         ).all()
-        options: dict[int, list[VoteOption]] = {}
+        rows_by_guild: dict[int, list[tuple[VoteOption, VoteAlias]]] = {}
         for row in rows:
-            options.setdefault(row.guild_id, []).append(
-                VoteOption(
-                    row.emoji,
-                    row.choice,
-                    identifier=row.identifier,
-                    guild_id=row.guild_id,
-                    label=row.label,
-                    position=row.position,
+            rows_by_guild.setdefault(row.guild_id, []).append(
+                (
+                    VoteOption(row.identifier, row.choice, label=row.label),
+                    VoteAlias(row.identifier, row.emoji, row.guild_id),
                 )
             )
-        return {guild_id: EmojiPreset(guild_id, kind, tuple(values)) for guild_id, values in options.items()}
+        return {
+            guild_id: EmojiPreset(guild_id, kind, VoteMenu.of(guild_rows))
+            for guild_id, guild_rows in rows_by_guild.items()
+        }
 
     async def set_emoji_preset(self, preset: EmojiPreset) -> None:
         await self.lock_configuration(preset.guild_id)
@@ -650,13 +645,13 @@ class VoteRepository:
                 {
                     "guild_id": preset.guild_id,
                     "kind": preset.kind.value,
-                    "identifier": option.identifier,
-                    "emoji": option.emoji,
+                    "identifier": option.id,
+                    "emoji": alias.emoji,
                     "choice": option.choice.value,
                     "label": option.label,
                     "position": position,
                 }
-                for position, option in enumerate(preset.options)
+                for position, (option, alias) in enumerate(preset.menu.rows())
             ],
         )
 
@@ -723,7 +718,7 @@ class VoteRepository:
         """Load a session with its options and lock it until the transaction ends."""
         return await session.scalar(
             select(VoteSession)
-            .options(selectinload(VoteSession.options))
+            .options(*_LOAD_MENU)
             .where(VoteSession.id == vote_session_id)
             .with_for_update(of=VoteSession)
         )
@@ -754,8 +749,12 @@ class VoteRepository:
         )
         vote_rows = (
             await session.execute(
-                select(Vote, VoteSessionOption, AccountProfile.display_name)
-                .join(VoteSessionOption, VoteSessionOption.id == Vote.option_alias_id)
+                select(Vote, VoteSessionOption.choice, AccountProfile.display_name)
+                .join(
+                    VoteSessionOption,
+                    (VoteSessionOption.vote_session_id == Vote.vote_session_id)
+                    & (VoteSessionOption.identifier == Vote.option_identifier),
+                )
                 .outerjoin(
                     AccountProfile, (AccountProfile.account_id == Vote.account_id) & AccountProfile.hidden.is_(False)
                 )
@@ -764,12 +763,11 @@ class VoteRepository:
             )
         ).all()
         selections = tuple(
-            VoteSelection(vote.account_id, vote.guild_id, option.identifier, option.emoji, vote.weight, name)
-            for vote, option, name in vote_rows
+            VoteSelection(vote.account_id, vote.guild_id, vote.option_identifier, vote.emoji, vote.weight, name)
+            for vote, _, name in vote_rows
         )
         signed_votes = {
-            vote.account_id: vote.weight * (-1 if option.choice is VoteChoice.DENY else 1)
-            for vote, option, _ in vote_rows
+            vote.account_id: vote.weight * (-1 if choice is VoteChoice.DENY else 1) for vote, choice, _ in vote_rows
         }
 
         target, poll = await VoteRepository._load_target(session, row)
@@ -784,17 +782,15 @@ class VoteRepository:
             fail_threshold=row.fail_threshold,
             votes=signed_votes,
             messages=vote_messages,
-            options=tuple(
-                VoteOption(
-                    option.emoji,
-                    option.choice,
-                    option.multiplier,
-                    option.identifier,
-                    option.guild_id,
-                    option.label,
-                    option.position,
-                )
-                for option in row.options
+            menu=VoteMenu(
+                tuple(
+                    VoteOption(option.identifier, option.choice, option.label, option.multiplier, option.position)
+                    for option in row.options
+                ),
+                tuple(
+                    VoteAlias(alias.option_identifier, alias.emoji, alias.guild_id, alias.position)
+                    for alias in row.aliases
+                ),
             ),
             target=target,
             selections=selections,

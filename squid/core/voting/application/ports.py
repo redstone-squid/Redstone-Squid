@@ -17,6 +17,7 @@ from squid.core.voting.domain import (
     StoredVoteMutation,
     VoteChange,
     VoteKind,
+    VoteMenu,
     VoteOption,
     VoteSessionSnapshot,
     VoteStatus,
@@ -58,7 +59,7 @@ class VoteRepository(Protocol):
 
     A voting session represents one build review, deletion vote, or poll. Several
     Discord messages can display the same voting session; they share its ballots
-    and result. A ballot records one account's selected option and current weight.
+    and result. A ballot records one account's selected option and the weight it was cast with.
 
     Changes to one voting session must run one at a time. Updating ballots and
     checking whether their net score closes the vote belong to the same transaction,
@@ -76,7 +77,7 @@ class VoteRepository(Protocol):
         fail_threshold: int,
         build_id: int,
         changes: Sequence[VoteChange],
-        options: Sequence[VoteOption],
+        menu: VoteMenu,
     ) -> int: ...
 
     async def create_build_session(
@@ -87,7 +88,7 @@ class VoteRepository(Protocol):
         fail_threshold: int,
         build_id: int,
         changes: Sequence[VoteChange],
-        options: Sequence[VoteOption],
+        menu: VoteMenu,
     ) -> int: ...
 
     async def create_delete_log_session(
@@ -99,7 +100,7 @@ class VoteRepository(Protocol):
         message_id: int,
         channel_id: int,
         server_id: int,
-        options: Sequence[VoteOption],
+        menu: VoteMenu,
     ) -> int: ...
 
     async def create_generic_session(
@@ -109,7 +110,7 @@ class VoteRepository(Protocol):
         question: str,
         visibility: VoteVisibility,
         deadline: Instant,
-        options: Sequence[VoteOption],
+        menu: VoteMenu,
         guild_id: int | None = None,
         scope: PollScope = PollScope.GUILD,
     ) -> int: ...
@@ -136,18 +137,19 @@ class VoteRepository(Protocol):
         self,
         vote_session_id: int,
         account_id: int,
-        guild_id: int,
         option: VoteOption,
-        desired_weight: float,
+        weight: float,
         *,
+        guild_id: int | None = None,
+        emoji: str | None = None,
         toggle: bool = True,
         count_revision: int | None = None,
     ) -> StoredVoteMutation | None:
         """Toggle the same option off or replace the ballot, then check thresholds.
 
-        `option` is the exact alias the ballot uses, as resolved from the session's
-        options for `guild_id`. Return None if the session is missing or closed. With `toggle` false,
-        selecting the stored option again keeps the ballot instead of removing it.
+        `guild_id` and `emoji` record the card and alias used, if any. Return None if
+        the session is missing or closed. With `toggle` false, selecting the stored
+        option again keeps the ballot instead of removing it.
         """
         ...
 

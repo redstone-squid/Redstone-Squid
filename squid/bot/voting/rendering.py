@@ -11,7 +11,7 @@ from squid.bot.chrome import CHROME
 from squid.bot.ui import CardField, card_node, render_payload
 from squid.bot.voting.controls import poll_controls
 from squid.bot.voting.poll_display import poll_choices, poll_question
-from squid.core.voting.domain import VoteChoice, VoteSessionResult, VoteSessionSnapshot, VoteStatus
+from squid.core.voting.domain import VoteChoice, VoteOption, VoteSessionResult, VoteSessionSnapshot, VoteStatus
 from squid_i18n import discord_markup
 from squid_ui.ext.discord import primitives
 from squid_ui.ext.discord.target_types import ComponentsV2Target
@@ -19,8 +19,26 @@ from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 def primary_emoji(snapshot: VoteSessionSnapshot, choice: VoteChoice, guild_id: int | None = None) -> str:
     """Return the first configured emoji for a vote choice in one guild."""
-    options = snapshot.options_for_guild(guild_id or 0)
-    return next(option.emoji for option in options if option.choice is choice)
+    menu = snapshot.menu
+    return next(
+        alias.emoji
+        for alias in menu.aliases_for_guild(guild_id or 0)
+        if (option := menu.option(alias.option_id)) is not None and option.choice is choice
+    )
+
+
+def _rows(snapshot: VoteSessionSnapshot, guild_id: int | None) -> list[tuple[VoteOption, str]]:
+    """Return a poll's options with the emoji its owner guild selects them by.
+
+    A poll drafted outside a guild has no aliases of its own, so it falls back to the
+    unscoped aliases rather than to some arbitrary guild's palette.
+    """
+    menu = snapshot.menu
+    return [
+        (option, alias.emoji)
+        for alias in menu.aliases_for_guild(guild_id or 0)
+        if (option := menu.option(alias.option_id)) is not None
+    ]
 
 
 def render_build_review(
@@ -141,7 +159,7 @@ def _generic_poll_nodes(
     assert poll is not None
     closed = snapshot.status is VoteStatus.CLOSED
     show_totals = poll.visibility != "anonymous_hidden" or closed
-    options = snapshot.options_for_guild(poll.guild_id or 0)
+    rows = _rows(snapshot, poll.guild_id)
     nodes: list[sl.LayoutNode[ComponentsV2Target, sd.Request]] = [poll_question(poll.question)]
 
     if snapshot.status is VoteStatus.VOID:
@@ -161,45 +179,35 @@ def _generic_poll_nodes(
         raw = snapshot.raw_tallies()
         weighted = snapshot.weighted_tallies()
         tally_options: list[sp.TallyOption] = []
-        for option in options:
-            option_id = option.identifier or ""
+        for option, emoji in rows:
+            option_id = option.id
             voters = [
                 sl.mention(discord_id)
                 for vote in snapshot.selections
-                if vote.option_id == option.identifier
-                and (discord_id := voter_discord_ids.get(vote.account_id)) is not None
+                if vote.option_id == option.id and (discord_id := voter_discord_ids.get(vote.account_id)) is not None
             ]
             voter_suffix: sl.TextLike = ""
             if poll.visibility == "visible_live" and voters:
                 voter_names = sl.text.Text.join(", ", voters)
                 voter_suffix = sl.text.Text(t" ({voter_names})")
-            label = option.label or option.identifier or option.emoji
+            label = option.label or option.id
             weighted_count = weighted.get(option_id, 0)
             tally_options.append(
                 sp.TallyOption(
                     option_id,
                     sl.md(t"{label} — {weighted_count:g} weighted{voter_suffix}"),
                     raw.get(option_id, 0),
-                    emoji=option.emoji,
+                    emoji=emoji,
                 )
             )
         nodes.append(sl.tally(tally_options, key="poll.tally", chrome=CHROME))
     else:
-        nodes.append(
-            poll_choices(
-                (option.identifier or option.emoji, option.label or option.identifier or option.emoji, option.emoji)
-                for option in options
-            )
-        )
+        nodes.append(poll_choices((option.id, option.label or option.id, emoji) for option, emoji in rows))
 
     if closed:
         weighted = snapshot.weighted_tallies()
         best = max(weighted.values(), default=0)
-        winners = [
-            option.label or option.identifier or option.emoji
-            for option in snapshot.options
-            if weighted.get(option.identifier or "", 0) == best
-        ]
+        winners = [option.label or option.id for option in snapshot.menu.options if weighted.get(option.id, 0) == best]
         outcome = (
             "No votes"
             if not weighted
@@ -236,20 +244,15 @@ def generic_poll_text(snapshot: VoteSessionSnapshot, voter_discord_ids: Mapping[
     raw = snapshot.raw_tallies()
     weighted = snapshot.weighted_tallies()
     lines = [f"## {poll.question}"]
-    # A poll drafted outside a guild has no aliases of its own, so it falls back to
-    # the unscoped options rather than to some arbitrary guild's palette.
-    for option in snapshot.options_for_guild(poll.guild_id or 0):
-        line = f"{option.emoji} **{option.label}**"
+    for option, emoji in _rows(snapshot, poll.guild_id):
+        line = f"{emoji} **{option.label}**"
         if show_totals:
-            line += (
-                f" — {raw.get(option.identifier or '', 0)} votes, {weighted.get(option.identifier or '', 0):g} weighted"
-            )
+            line += f" — {raw.get(option.id, 0)} votes, {weighted.get(option.id, 0):g} weighted"
         if poll.visibility == "visible_live" and show_totals:
             voters = [
                 f"<@{discord_id}>"
                 for vote in snapshot.selections
-                if vote.option_id == option.identifier
-                and (discord_id := voter_discord_ids.get(vote.account_id)) is not None
+                if vote.option_id == option.id and (discord_id := voter_discord_ids.get(vote.account_id)) is not None
             ]
             if voters:
                 line += f" ({', '.join(voters)})"
@@ -257,11 +260,7 @@ def generic_poll_text(snapshot: VoteSessionSnapshot, voter_discord_ids: Mapping[
     if closed:
         totals = snapshot.weighted_tallies()
         best = max(totals.values(), default=0)
-        winners = [
-            option.label or option.identifier or option.emoji
-            for option in snapshot.options
-            if totals.get(option.identifier or "", 0) == best
-        ]
+        winners = [option.label or option.id for option in snapshot.menu.options if totals.get(option.id, 0) == best]
         outcome = (
             "No votes" if not totals else f"Tie: {', '.join(winners)}" if len(winners) > 1 else f"Winner: {winners[0]}"
         )

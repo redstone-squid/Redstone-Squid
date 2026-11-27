@@ -12,7 +12,7 @@ from squid.core.permissions.domain.catalogue import VOTE_LOG_DELETE_CAST, VOTE_W
 from squid.core.permissions.models import PermissionGrant
 from squid.core.voting.application import VoteService
 from squid.core.voting.domain import (
-    DEFAULT_VOTE_OPTIONS,
+    DEFAULT_VOTE_MENU,
     DeleteLogVoteTarget,
     EmojiPreset,
     PollScope,
@@ -21,9 +21,11 @@ from squid.core.voting.domain import (
     ReviewSort,
     RoleWeight,
     StoredVoteMutation,
+    VoteAlias,
     VoteChange,
     VoteChoice,
     VoteKind,
+    VoteMenu,
     VoteMessage,
     VoteOption,
     VoteRejection,
@@ -34,7 +36,14 @@ from squid.core.voting.domain import (
     VoteVisibility,
 )
 from squid.core.voting.errors import InvalidVoteConfigurationError
-from tests.support.voting import DEFAULT_BUILD_TARGET, GENERIC_OPTIONS, VoteUnitOfWork, build_snapshot, poll_snapshot
+from tests.support.voting import (
+    DEFAULT_BUILD_TARGET,
+    GENERIC_MENU,
+    VoteUnitOfWork,
+    build_snapshot,
+    generic_menu,
+    poll_snapshot,
+)
 
 STAFF = frozenset({VOTE_WEIGHT_STAFF.name})
 DELETE_LOG = frozenset({VOTE_LOG_DELETE_CAST.name})
@@ -49,9 +58,9 @@ VOTING_GUILD_ID = 999
 class CastVoteCall:
     vote_session_id: int
     account_id: int
-    guild_id: int
+    guild_id: int | None
     option_id: str
-    emoji: str
+    emoji: str | None
     desired_weight: float
 
 
@@ -94,8 +103,8 @@ class FakeVoteRepository:
         self.role_weight_lookups: list[tuple[int, VoteKind]] = []
         self.due: list[VoteSessionSnapshot] = []
         self.generic_scopes: list[PollScope] = []
-        self.build_create_calls: list[tuple[int, int, int, int, list[VoteChange], tuple[VoteOption, ...]]] = []
-        self.delete_create_calls: list[tuple[int, int, int, int, int, int, tuple[VoteOption, ...]]] = []
+        self.build_create_calls: list[tuple[int, int, int, int, list[VoteChange], VoteMenu]] = []
+        self.delete_create_calls: list[tuple[int, int, int, int, int, int, VoteMenu]] = []
         self.generic_create_calls: list[tuple[int, str, VoteVisibility, Instant, int | None]] = []
         self.attach_calls: list[tuple[int, int]] = []
 
@@ -107,10 +116,10 @@ class FakeVoteRepository:
         fail_threshold: int,
         build_id: int,
         changes: Sequence[VoteChange],
-        options: Sequence[VoteOption],
+        menu: VoteMenu,
     ) -> int:
         self.build_create_calls.append(
-            (author_account_id, pass_threshold, fail_threshold, build_id, list(changes), tuple(options))
+            (author_account_id, pass_threshold, fail_threshold, build_id, list(changes), menu)
         )
         return 23
 
@@ -121,7 +130,7 @@ class FakeVoteRepository:
         question: str,
         visibility: VoteVisibility,
         deadline: Instant,
-        options: Sequence[VoteOption],
+        menu: VoteMenu,
         guild_id: int | None = None,
         scope: PollScope = PollScope.GUILD,
     ) -> int:
@@ -141,10 +150,10 @@ class FakeVoteRepository:
         fail_threshold: int,
         build_id: int,
         changes: Sequence[VoteChange],
-        options: Sequence[VoteOption],
+        menu: VoteMenu,
     ) -> int:
         self.build_create_calls.append(
-            (author_account_id, pass_threshold, fail_threshold, build_id, list(changes), tuple(options))
+            (author_account_id, pass_threshold, fail_threshold, build_id, list(changes), menu)
         )
         return 24
 
@@ -157,10 +166,10 @@ class FakeVoteRepository:
         message_id: int,
         channel_id: int,
         server_id: int,
-        options: Sequence[VoteOption],
+        menu: VoteMenu,
     ) -> int:
         self.delete_create_calls.append(
-            (author_account_id, pass_threshold, fail_threshold, message_id, channel_id, server_id, tuple(options))
+            (author_account_id, pass_threshold, fail_threshold, message_id, channel_id, server_id, menu)
         )
         return 25
 
@@ -186,10 +195,11 @@ class FakeVoteRepository:
         self,
         vote_session_id: int,
         account_id: int,
-        guild_id: int,
         option: VoteOption,
-        desired_weight: float,
+        weight: float,
         *,
+        guild_id: int | None = None,
+        emoji: str | None = None,
         toggle: bool = True,
         count_revision: int | None = None,
     ) -> StoredVoteMutation | None:
@@ -199,8 +209,8 @@ class FakeVoteRepository:
                 account_id=account_id,
                 guild_id=guild_id,
                 option_id=option.id,
-                emoji=option.emoji,
-                desired_weight=desired_weight,
+                emoji=emoji,
+                desired_weight=weight,
             )
         )
         return self.mutation
@@ -343,8 +353,8 @@ async def test_vote_creation_delegates_complete_aggregate_to_repository() -> Non
 
     assert build_session_id == 24
     assert delete_session_id == 25
-    assert repository.build_create_calls == [(7, 3, -3, 42, changes, DEFAULT_VOTE_OPTIONS)]
-    assert repository.delete_create_calls == [(8, 4, -2, 100, 200, 300, DEFAULT_VOTE_OPTIONS)]
+    assert repository.build_create_calls == [(7, 3, -3, 42, changes, DEFAULT_VOTE_MENU)]
+    assert repository.delete_create_calls == [(8, 4, -2, 100, 200, 300, DEFAULT_VOTE_MENU)]
 
 
 async def test_initial_build_vote_creation_uses_idempotent_repository_operation() -> None:
@@ -362,7 +372,7 @@ async def test_initial_build_vote_creation_uses_idempotent_repository_operation(
     )
 
     assert session_id == 23
-    assert repository.build_create_calls == [(7, 3, -3, 42, changes, DEFAULT_VOTE_OPTIONS)]
+    assert repository.build_create_calls == [(7, 3, -3, 42, changes, DEFAULT_VOTE_MENU)]
 
 
 async def test_message_attachment_is_committed() -> None:
@@ -436,13 +446,16 @@ async def test_cast_vote_applies_choice_and_staff_weight(
     [(OWNER_GUILD_ID, "<:yes:1>"), (VOTING_GUILD_ID, "✅")],
 )
 async def test_cast_vote_resolves_a_stable_option_to_each_guild_alias(guild_id: int, emoji: str) -> None:
-    options = (
-        VoteOption("<:yes:1>", VoteChoice.APPROVE, identifier="approve", guild_id=OWNER_GUILD_ID),
-        VoteOption("<:no:2>", VoteChoice.DENY, identifier="deny", guild_id=OWNER_GUILD_ID),
-        VoteOption("✅", VoteChoice.APPROVE, identifier="approve", guild_id=VOTING_GUILD_ID),
-        VoteOption("❌", VoteChoice.DENY, identifier="deny", guild_id=VOTING_GUILD_ID),
+    menu = replace(
+        DEFAULT_VOTE_MENU,
+        aliases=(
+            VoteAlias("approve", "<:yes:1>", OWNER_GUILD_ID),
+            VoteAlias("deny", "<:no:2>", OWNER_GUILD_ID, 1),
+            VoteAlias("approve", "✅", VOTING_GUILD_ID),
+            VoteAlias("deny", "❌", VOTING_GUILD_ID, 1),
+        ),
     )
-    initial = replace(shared_snapshot(), options=options)
+    initial = replace(shared_snapshot(), menu=menu)
     repository = FakeVoteRepository(initial)
     repository.mutation = StoredVoteMutation(
         session=initial,
@@ -621,12 +634,12 @@ async def test_race_with_another_closing_vote_returns_closed_rejection() -> None
     assert not result.just_closed
 
 
-async def test_custom_vote_option_multiplier_is_applied_before_staff_weight() -> None:
-    options = (
-        VoteOption("<:strong_yes:123>", VoteChoice.APPROVE, 2.0),
-        VoteOption("👎", VoteChoice.DENY),
+async def test_option_multiplier_scales_the_staff_weight() -> None:
+    menu = VoteMenu(
+        (VoteOption("strong_approve", VoteChoice.APPROVE, multiplier=2.0), VoteOption("deny", VoteChoice.DENY)),
+        (VoteAlias("strong_approve", "<:strong_yes:123>"), VoteAlias("deny", "👎", position=1)),
     )
-    initial = replace(snapshot(), options=options)
+    initial = replace(snapshot(), menu=menu)
     repository = FakeVoteRepository(initial)
     repository.mutation = StoredVoteMutation(
         session=initial,
@@ -641,7 +654,7 @@ async def test_custom_vote_option_multiplier_is_applied_before_staff_weight() ->
 
     result = await service.cast_vote(
         12,
-        "approve",
+        "strong_approve",
         emoji="<:strong_yes:123>",
         context=ActingContext.for_actor(
             UserActor(account_id=7, discord_user_id=70, guild_id=OWNER_GUILD_ID, capabilities=STAFF)
@@ -654,7 +667,7 @@ async def test_custom_vote_option_multiplier_is_applied_before_staff_weight() ->
             vote_session_id=12,
             account_id=7,
             guild_id=10,
-            option_id="approve",
+            option_id="strong_approve",
             emoji="<:strong_yes:123>",
             desired_weight=6.0,
         )
@@ -687,10 +700,7 @@ async def test_vote_options_require_unique_emojis_and_both_choices() -> None:
             fail_threshold=-3,
             build_id=42,
             changes=[],
-            options=(
-                VoteOption("👍", VoteChoice.APPROVE),
-                VoteOption("👍", VoteChoice.DENY),
-            ),
+            menu=VoteMenu(DEFAULT_VOTE_MENU.options, (VoteAlias("approve", "👍"), VoteAlias("deny", "👍", position=1))),
             context=ActingContext.worker("submission-review"),
         )
 
@@ -701,7 +711,7 @@ async def test_vote_options_require_unique_emojis_and_both_choices() -> None:
             fail_threshold=-3,
             build_id=42,
             changes=[],
-            options=(VoteOption("👍", VoteChoice.APPROVE),),
+            menu=VoteMenu((VoteOption("approve", VoteChoice.APPROVE),), (VoteAlias("approve", "👍"),)),
             context=ActingContext.worker("submission-review"),
         )
 
@@ -709,24 +719,19 @@ async def test_vote_options_require_unique_emojis_and_both_choices() -> None:
 @pytest.mark.parametrize("multiplier", [0.0, -1.0, inf, nan])
 def test_vote_option_rejects_non_positive_or_non_finite_multiplier(multiplier: float) -> None:
     with pytest.raises(InvalidVoteConfigurationError, match="finite and greater than zero"):
-        VoteOption("👍", VoteChoice.APPROVE, multiplier)
+        VoteOption("approve", VoteChoice.APPROVE, multiplier=multiplier)
 
 
 async def test_poll_creation_needs_no_guild_and_no_publication_target() -> None:
     """A poll is a database row before it is a Discord message."""
     repository = FakeVoteRepository(None)
     service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository, grants=vote_grants("vote.poll.create")))
-    options = (
-        VoteOption("1️⃣", VoteChoice.GENERIC, identifier="1", label="One"),
-        VoteOption("2️⃣", VoteChoice.GENERIC, identifier="2", label="Two"),
-    )
-
     session_id = await service.create_generic_poll(
         context=ActingContext.direct(UserActor(account_id=7)),
         question="  Which one?  ",
         visibility=VoteVisibility.ANONYMOUS_LIVE,
         duration_seconds=3600,
-        options=options,
+        menu=generic_menu(None),
     )
 
     assert session_id == 26
@@ -744,10 +749,7 @@ async def test_poll_creation_rejects_durations_outside_the_supported_range(durat
             question="Which one?",
             visibility=VoteVisibility.ANONYMOUS_LIVE,
             duration_seconds=duration_seconds,
-            options=(
-                VoteOption("1️⃣", VoteChoice.GENERIC, identifier="1", label="One"),
-                VoteOption("2️⃣", VoteChoice.GENERIC, identifier="2", label="Two"),
-            ),
+            menu=generic_menu(None),
         )
 
 
@@ -760,10 +762,7 @@ async def test_poll_creation_rejects_an_empty_question() -> None:
             question="   ",
             visibility=VoteVisibility.ANONYMOUS_LIVE,
             duration_seconds=3600,
-            options=(
-                VoteOption("1️⃣", VoteChoice.GENERIC, identifier="1", label="One"),
-                VoteOption("2️⃣", VoteChoice.GENERIC, identifier="2", label="Two"),
-            ),
+            menu=generic_menu(None),
         )
 
 
@@ -946,10 +945,7 @@ async def test_each_kind_names_the_guild_that_owns_its_weights() -> None:
 
 async def test_a_network_poll_needs_an_owning_guild_and_unscoped_options() -> None:
     service = VoteService(uow_factory=lambda: VoteUnitOfWork(FakeVoteRepository(None)))
-    unscoped = (
-        VoteOption("1️⃣", VoteChoice.GENERIC, identifier="one", label="One"),
-        VoteOption("2️⃣", VoteChoice.GENERIC, identifier="two", label="Two"),
-    )
+    unscoped = generic_menu(None)
 
     with pytest.raises(InvalidVoteConfigurationError, match="must belong to a guild"):
         await service.create_generic_poll(
@@ -957,7 +953,7 @@ async def test_a_network_poll_needs_an_owning_guild_and_unscoped_options() -> No
             question="Which?",
             visibility=VoteVisibility.ANONYMOUS_LIVE,
             duration_seconds=3600,
-            options=unscoped,
+            menu=unscoped,
             scope=PollScope.NETWORK,
         )
 
@@ -969,7 +965,7 @@ async def test_a_network_poll_needs_an_owning_guild_and_unscoped_options() -> No
             question="Which?",
             visibility=VoteVisibility.ANONYMOUS_LIVE,
             duration_seconds=3600,
-            options=GENERIC_OPTIONS,
+            menu=GENERIC_MENU,
             guild_id=10,
             scope=PollScope.NETWORK,
         )
@@ -990,10 +986,7 @@ async def test_a_network_poll_records_its_scope() -> None:
         question="Which?",
         visibility=VoteVisibility.ANONYMOUS_LIVE,
         duration_seconds=3600,
-        options=(
-            VoteOption("1️⃣", VoteChoice.GENERIC, identifier="one", label="One"),
-            VoteOption("2️⃣", VoteChoice.GENERIC, identifier="two", label="Two"),
-        ),
+        menu=generic_menu(None),
         guild_id=10,
         scope=PollScope.NETWORK,
     )

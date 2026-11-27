@@ -75,7 +75,7 @@ async def test_public_poll_reaction_casts_and_withdraws_a_ballot(monkeypatch: py
             author_account_id=17,
             guild_id=env.guild.id,
             visibility=VoteVisibility.VISIBLE_LIVE,
-            options=creation.kwargs["options"],
+            menu=creation.kwargs["menu"],
             messages=(VoteMessage(card.id, channel.id, env.guild.id),),
         )
 

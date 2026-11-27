@@ -27,7 +27,7 @@ from squid.core.voting.application.policies import RoleVoteWeightPolicy
 from squid.core.voting.application.ports import VoteActorResolver, VoteUnitOfWork, VoteWeightPolicy
 from squid.core.voting.domain import (
     DEFAULT_GENERIC_EMOJIS,
-    DEFAULT_VOTE_OPTIONS,
+    DEFAULT_VOTE_MENU,
     MAX_POLL_DURATION_SECONDS,
     MIN_POLL_DURATION_SECONDS,
     CastVoteResult,
@@ -37,15 +37,16 @@ from squid.core.voting.domain import (
     ReviewFilters,
     ReviewSort,
     RoleWeight,
+    VoteAlias,
     VoteChange,
     VoteChoice,
     VoteKind,
+    VoteMenu,
     VoteOption,
     VoteRejection,
     VoteSessionSnapshot,
     VoteStatus,
     VoteVisibility,
-    normalize_vote_options,
 )
 from squid.core.voting.domain.models import VoteConfiguration
 from squid.core.voting.errors import InvalidVoteConfigurationError
@@ -130,20 +131,19 @@ class VoteService:
         fail_threshold: int,
         build_id: int,
         changes: Sequence[VoteChange],
-        options: Sequence[VoteOption] = DEFAULT_VOTE_OPTIONS,
+        menu: VoteMenu = DEFAULT_VOTE_MENU,
         context: ActingContext,
     ) -> int:
         """Create a build vote and its target atomically."""
         context.require_worker()
         async with self._uow_factory() as uow:
-            options = normalize_vote_options(options, kind=VoteKind.BUILD)
             result = await uow.votes.create_build_session(
                 author_account_id=author_account_id,
                 pass_threshold=pass_threshold,
                 fail_threshold=fail_threshold,
                 build_id=build_id,
                 changes=changes,
-                options=options,
+                menu=menu.validated(VoteKind.BUILD),
             )
             await uow.commit()
             return result
@@ -157,7 +157,7 @@ class VoteService:
         fail_threshold: int,
         build_id: int,
         changes: Sequence[VoteChange],
-        options: Sequence[VoteOption] = DEFAULT_VOTE_OPTIONS,
+        menu: VoteMenu = DEFAULT_VOTE_MENU,
         context: ActingContext,
     ) -> int:
         """Return the earliest review session for a build, creating one if none exists.
@@ -167,14 +167,13 @@ class VoteService:
         """
         context.require_worker()
         async with self._uow_factory() as uow:
-            options = normalize_vote_options(options, kind=VoteKind.BUILD)
             result = await uow.votes.get_or_create_build_submission_session(
                 author_account_id=author_account_id,
                 pass_threshold=pass_threshold,
                 fail_threshold=fail_threshold,
                 build_id=build_id,
                 changes=changes,
-                options=options,
+                menu=menu.validated(VoteKind.BUILD),
             )
             await uow.commit()
             return result
@@ -188,7 +187,7 @@ class VoteService:
         message_id: int,
         channel_id: int,
         server_id: int,
-        options: Sequence[VoteOption] = DEFAULT_VOTE_OPTIONS,
+        menu: VoteMenu = DEFAULT_VOTE_MENU,
         context: ActingContext,
     ) -> int:
         """Create a message-deletion vote and its target atomically."""
@@ -197,7 +196,6 @@ class VoteService:
             raise AuthorizationError
         async with self._uow_factory() as uow:
             await self._permissions.require(context.effective, VOTE_POLL_CREATE, uow=uow)
-            options = normalize_vote_options(options, kind=VoteKind.DELETE_LOG)
             result = await uow.votes.create_delete_log_session(
                 author_account_id=author_account_id,
                 pass_threshold=pass_threshold,
@@ -205,7 +203,7 @@ class VoteService:
                 message_id=message_id,
                 channel_id=channel_id,
                 server_id=server_id,
-                options=options,
+                menu=menu.validated(VoteKind.DELETE_LOG),
             )
             await uow.commit()
             return result
@@ -217,7 +215,7 @@ class VoteService:
         question: str,
         visibility: VoteVisibility,
         duration_seconds: int,
-        options: Sequence[VoteOption],
+        menu: VoteMenu,
         guild_id: int | None = None,
         scope: PollScope = PollScope.GUILD,
         now: Instant | None = None,
@@ -225,7 +223,7 @@ class VoteService:
         """Validate and persist a poll with a deadline derived from its duration.
 
         Publication is separate, so creating a poll does not require a Discord message.
-        Network polls require an owning guild and options usable in every guild.
+        Network polls require an owning guild and aliases usable in every guild.
         """
         actor = context.effective.require_user()
         author_account_id = actor.require_account_id()
@@ -239,8 +237,8 @@ class VoteService:
                 if not MIN_POLL_DURATION_SECONDS <= duration_seconds <= MAX_POLL_DURATION_SECONDS:
                     msg = "Poll duration must be between 1 minute and 30 days."
                     raise InvalidVoteConfigurationError(msg, context={"duration_seconds": duration_seconds})
-                options = normalize_vote_options(options, kind=VoteKind.GENERIC)
-                if guild_id is not None and any(option.guild_id not in (None, guild_id) for option in options):
+                menu = menu.validated(VoteKind.GENERIC)
+                if guild_id is not None and any(alias.guild_id not in (None, guild_id) for alias in menu.aliases):
                     msg = "Poll options must belong to the poll guild."
                     raise InvalidVoteConfigurationError(msg)
                 if scope is PollScope.NETWORK:
@@ -248,7 +246,7 @@ class VoteService:
                         # The owning guild weighs the ballots cast on every card.
                         msg = "A network poll must belong to a guild."
                         raise InvalidVoteConfigurationError(msg)
-                    if any(option.guild_id is not None for option in options):
+                    if any(alias.guild_id is not None for alias in menu.aliases):
                         # Guild-scoped aliases would leave the other guilds' cards unvotable.
                         msg = "Network poll options must not be scoped to one guild."
                         raise InvalidVoteConfigurationError(msg)
@@ -259,7 +257,7 @@ class VoteService:
                     question=question.strip(),
                     visibility=visibility,
                     deadline=(now or Instant.now()).add(seconds=duration_seconds),
-                    options=options,
+                    menu=menu,
                     guild_id=guild_id,
                     scope=scope,
                 )
@@ -384,8 +382,9 @@ class VoteService:
             return CastVoteResult(session=snapshot, rejection=VoteRejection.CLOSED)
         if actor.guild_id is None or actor.guild_id not in {message.guild_id for message in snapshot.messages}:
             return CastVoteResult(session=snapshot, rejection=VoteRejection.WRONG_GUILD)
-        option = snapshot.option_by_id(option_id, actor.guild_id, emoji=emoji)
-        if option is None:
+        option = snapshot.menu.option(option_id)
+        alias = snapshot.menu.alias_for(option_id, actor.guild_id, emoji=emoji)
+        if option is None or alias is None:
             return CastVoteResult(session=snapshot, rejection=VoteRejection.INVALID_OPTION)
 
         # The option's alias comes from where the ballot was cast; role weights come from the owner guild.
@@ -427,9 +426,10 @@ class VoteService:
             mutation = await uow.votes.cast_vote(
                 vote_session_id,
                 account_id,
-                actor.guild_id,
                 option,
                 weight,
+                guild_id=actor.guild_id,
+                emoji=alias.emoji,
                 toggle=toggle,
                 count_revision=count_revision,
             )
@@ -667,22 +667,22 @@ class VoteService:
     @staticmethod
     def _default_emoji_preset(guild_id: int, kind: VoteKind) -> EmojiPreset:
         if kind is VoteKind.GENERIC:
-            options = tuple(
-                VoteOption(emoji, VoteChoice.GENERIC, identifier=str(index), guild_id=guild_id, label=f"Option {index}")
-                for index, emoji in enumerate(DEFAULT_GENERIC_EMOJIS, 1)
+            menu = VoteMenu(
+                tuple(
+                    VoteOption(str(index), VoteChoice.GENERIC, label=f"Option {index}", position=index - 1)
+                    for index in range(1, len(DEFAULT_GENERIC_EMOJIS) + 1)
+                ),
+                tuple(
+                    VoteAlias(str(index), emoji, guild_id, index - 1)
+                    for index, emoji in enumerate(DEFAULT_GENERIC_EMOJIS, 1)
+                ),
             )
         else:
-            options = tuple(
-                VoteOption(
-                    option.emoji,
-                    option.choice,
-                    identifier=option.identifier,
-                    guild_id=guild_id,
-                    position=option.position,
-                )
-                for option in DEFAULT_VOTE_OPTIONS
+            menu = replace(
+                DEFAULT_VOTE_MENU,
+                aliases=tuple(replace(alias, guild_id=guild_id) for alias in DEFAULT_VOTE_MENU.aliases),
             )
-        return EmojiPreset(guild_id, kind, options)
+        return EmojiPreset(guild_id, kind, menu)
 
     @application_operation
     async def get_role_weights(self, guild_id: int, kind: VoteKind, *, context: ActingContext) -> Sequence[RoleWeight]:

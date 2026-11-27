@@ -1,6 +1,5 @@
 """Prepare an emoji preset as rows before saving the complete valid preset."""
 
-from dataclasses import replace
 from functools import partial
 from typing import Any, override
 from uuid import uuid4
@@ -10,25 +9,27 @@ import discord
 import squid_ui as sl
 import squid_ui.ext.discord as sd
 from squid.bot.ui import tr
-from squid.core.voting.domain import VoteChoice, VoteKind, VoteOption, normalize_vote_options
+from squid.core.voting.domain import VoteAlias, VoteChoice, VoteKind, VoteMenu, VoteOption
 from squid_ui.ext.discord.target_types import ComponentsV2Target
 
 
-class VoteEmojiEditor(sd.Screen[tuple[VoteOption, ...]]):
+class VoteEmojiEditor(sd.Screen[VoteMenu]):
     policy = sd.ResponseSpec(timeout=300, session=sd.SessionSpec("vote-emoji-editor"))
-    options: tuple[VoteOption, ...] = sl.state(())
+    rows: tuple[tuple[VoteOption, VoteAlias], ...] = sl.state(())
+    """One row per emoji, paired with the option it selects."""
 
-    def __init__(self, guild: discord.Guild, kind: VoteKind, options: tuple[VoteOption, ...]) -> None:
+    def __init__(self, guild: discord.Guild, kind: VoteKind, menu: VoteMenu | None) -> None:
         self.guild = guild
         self.kind = kind
-        self.options = options
+        self.rows = () if menu is None else menu.rows()
 
-    def _form(self, option: VoteOption | None = None) -> sl.forms.FormSpec[sd.Request]:
+    def _form(self, row: tuple[VoteOption, VoteAlias] | None = None) -> sl.forms.FormSpec[sd.Request]:
+        option, alias = (None, None) if row is None else row
         fields: list[sl.forms.FormField[Any, Any]] = [
             sl.forms.TextField(
                 key="emoji",
                 label=tr(t"vote-row-emoji = Emoji"),
-                default=None if option is None else option.emoji,
+                default=None if alias is None else alias.emoji,
                 maximum=100,
             )
         ]
@@ -61,11 +62,11 @@ class VoteEmojiEditor(sd.Screen[tuple[VoteOption, ...]]):
             sl.heading(tr(t"vote-rows-title = Vote emojis")),
             *(
                 sl.stack(
-                    sl.paragraph(f"{option.emoji} — {option.label or option.choice.value}"),
+                    sl.paragraph(f"{alias.emoji} — {option.label or option.choice.value}"),
                     sl.action_controls(
                         sl.form(
                             tr(t"vote-row-edit = Edit"),
-                            self._form(option),
+                            self._form((option, alias)),
                             key=f"edit-{index}",
                             on_submit=partial(self._edit, index),
                         ),
@@ -75,7 +76,7 @@ class VoteEmojiEditor(sd.Screen[tuple[VoteOption, ...]]):
                         key=f"row-{index}",
                     ),
                 )
-                for index, option in enumerate(self.options)
+                for index, (option, alias) in enumerate(self.rows)
             ),
             sl.action_controls(
                 sl.form(tr(t"vote-row-add = Add emoji"), self._form(), key="add", on_submit=partial(self._edit, None)),
@@ -95,37 +96,22 @@ class VoteEmojiEditor(sd.Screen[tuple[VoteOption, ...]]):
                 return
         choice = VoteChoice.GENERIC if self.kind is VoteKind.GENERIC else VoteChoice(str(event.values["choice"]))
         label = str(event.values["label"]) if self.kind is VoteKind.GENERIC else None
+        before = None if index is None else self.rows[index][0]
+        option_id = (before.id if before is not None else uuid4().hex) if choice is VoteChoice.GENERIC else choice.value
+        # An edit keeps the option's identity and multiplier; only what the row shows changes.
+        multiplier = before.multiplier if before is not None and before.id == option_id else 1.0
+        option = VoteOption(option_id, choice, label=label, multiplier=multiplier)
+        row = (option, VoteAlias(option_id, emoji, self.guild.id))
         if index is None:
-            self.options = (
-                *self.options,
-                VoteOption(
-                    emoji,
-                    choice,
-                    guild_id=self.guild.id,
-                    label=label,
-                    identifier=uuid4().hex if choice is VoteChoice.GENERIC else choice.value,
-                    position=len(self.options),
-                ),
-            )
+            self.rows = (*self.rows, row)
         else:
-            before = self.options[index]
-            after = replace(
-                before,
-                emoji=emoji,
-                choice=choice,
-                label=label,
-                identifier=before.identifier if choice is VoteChoice.GENERIC else choice.value,
-            )
-            self.options = (*self.options[:index], after, *self.options[index + 1 :])
+            self.rows = (*self.rows[:index], row, *self.rows[index + 1 :])
 
     async def _remove(self, index: int, _event: sd.PressEvent) -> None:
-        self.options = (*self.options[:index], *self.options[index + 1 :])
+        self.rows = (*self.rows[:index], *self.rows[index + 1 :])
 
     async def _save(self, event: sd.PressEvent) -> None:
-        options = normalize_vote_options(
-            tuple(replace(option, position=index) for index, option in enumerate(self.options)), kind=self.kind
-        )
-        self.complete(event, options)
+        self.complete(event, VoteMenu.of(self.rows).validated(self.kind))
 
     async def _cancel(self, event: sd.PressEvent) -> None:
         self.cancel(event)

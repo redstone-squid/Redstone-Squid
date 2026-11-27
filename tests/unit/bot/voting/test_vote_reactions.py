@@ -41,7 +41,7 @@ from squid.runtime import BackgroundTaskSupervisor
 from squid_ui.ext.discord.testing import MessageHarness
 from tests.support.discord import make_layout_bot, make_reaction_payload
 from tests.support.services import bot_services
-from tests.support.voting import GENERIC_OPTIONS, poll_snapshot
+from tests.support.voting import GENERIC_MENU, poll_snapshot
 
 if TYPE_CHECKING:
     from squid.bot.app import RedstoneSquid
@@ -455,10 +455,15 @@ async def test_multi_guild_alias_recovery_is_idempotent_and_removal_unsets_the_s
     reactions.votes.snapshot = poll_snapshot(
         visibility=VoteVisibility.VISIBLE_LIVE,
         messages=(VoteMessage(100, 200, 10), VoteMessage(101, 201, 11)),
-        options=GENERIC_OPTIONS
-        + tuple(
-            replace(option, emoji=emoji, guild_id=11)
-            for option, emoji in zip(GENERIC_OPTIONS, ("🔴", "🔵"), strict=True)
+        menu=replace(
+            GENERIC_MENU,
+            aliases=(
+                *GENERIC_MENU.aliases,
+                *(
+                    replace(alias, emoji=emoji, guild_id=11)
+                    for alias, emoji in zip(GENERIC_MENU.aliases, ("🔴", "🔵"), strict=True)
+                ),
+            ),
         ),
         selections=(VoteSelection(7, 10, "one", "1️⃣", 1),),
     )
