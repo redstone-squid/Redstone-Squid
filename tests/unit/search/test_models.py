@@ -4,15 +4,8 @@ import pytest
 
 from squid.core.errors import ErrorCode, ValidationError
 from squid.core.pagination import MAX_PAGE_OFFSET
-from squid.core.search.domain import (
-    BuildSearchHit,
-    MetadataSearchHit,
-    RecordSearchHit,
-    SearchPage,
-    SearchRequest,
-    SearchSort,
-    SortDirection,
-)
+from squid.core.search.application.results import BuildSearchHit, MetadataSearchHit, RecordSearchHit, SearchPage
+from squid.core.search.domain import SearchRequest, SearchSort, SortDirection
 
 
 def test_search_page_preserves_discriminated_hits() -> None:

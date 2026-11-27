@@ -90,7 +90,8 @@ from squid.core.schematics.domain import SCHEMATIC_FILE_SCHEMA_MAX_BYTES
 from squid.core.schematics.errors import SchematicNotFoundError
 from squid.core.search.application import SearchService
 from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY
-from squid.core.search.domain import SearchPage, SearchRequest
+from squid.core.search.application.results import SearchPage
+from squid.core.search.domain import SearchRequest
 from squid.core.search.domain.query import SearchQuery
 from squid.core.submissions.application import FormOptionSet, SubmissionFormService, build_submission_manifest
 from squid.core.submissions.application.drafts import StoredDraft, SubmissionDraftService

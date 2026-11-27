@@ -29,7 +29,8 @@ from squid.core.edits.domain import Revision, RevisionConflictError
 from squid.core.media.application.build_media import PublishedBuildMedia
 from squid.core.messages.domain import MessageRef, MessageSnapshot
 from squid.core.search.application import SearchService
-from squid.core.search.domain import BuildSearchHit, RecordSearchHit, SearchPage, SearchRequest
+from squid.core.search.application.results import BuildSearchHit, RecordSearchHit, SearchPage
+from squid.core.search.domain import SearchRequest
 from squid.core.sponsors import PublicSponsor
 from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagSemanticKind, TagValueType
 from squid.core.tags.models import TagAssignment, TagDefinition

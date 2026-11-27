@@ -22,11 +22,10 @@ from squid.core.records.application.metrics import RecordHolderSummary
 from squid.core.search.application import SearchQueryParser, SearchService, SearchSlice
 from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldRegistry
 from squid.core.search.application.ports import QueryEmbedding
+from squid.core.search.application.results import BuildSearchHit, RecordSearchHit
 from squid.core.search.domain import (
     BuildQuery,
-    BuildSearchHit,
     FieldDefinition,
-    RecordSearchHit,
     SearchMode,
     SearchQuery,
     SearchRequest,

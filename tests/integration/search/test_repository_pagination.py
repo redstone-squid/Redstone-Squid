@@ -16,8 +16,8 @@ import squid.core.search.infrastructure.repository as search_repository
 from squid.core.persistence.base import Base
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.search.application import DEFAULT_FIELD_REGISTRY, SearchQueryParser
+from squid.core.search.application.results import BuildSearchHit
 from squid.core.search.domain import (
-    BuildSearchHit,
     FieldValue,
     SearchMode,
     SearchRequest,

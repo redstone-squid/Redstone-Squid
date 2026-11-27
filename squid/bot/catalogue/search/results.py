@@ -16,17 +16,8 @@ from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build
 from squid.core.records.domain.models import RecordCriterion, VersionScope
 from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY
-from squid.core.search.domain import (
-    BuildSearchHit,
-    FieldMatch,
-    RecordSearchHit,
-    SearchHit,
-    SearchPage,
-    SearchRequest,
-    SearchResultAnchor,
-    SearchScope,
-    SearchText,
-)
+from squid.core.search.application.results import BuildSearchHit, RecordSearchHit, SearchHit, SearchPage
+from squid.core.search.domain import FieldMatch, SearchRequest, SearchResultAnchor, SearchScope, SearchText
 from squid.core.vocabulary import RECORD_CRITERIA, VERSION_SCOPES
 from squid_i18n import Text, md_tr, strong
 from squid_reactivity import untracked

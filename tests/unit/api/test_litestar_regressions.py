@@ -17,7 +17,8 @@ from squid.core.builds.application import BuildQueryService
 from squid.core.idempotency.application import IdempotencyService
 from squid.core.idempotency.domain import PendingRequest
 from squid.core.search.application import SearchService
-from squid.core.search.domain import SearchPage, SearchScope
+from squid.core.search.application.results import SearchPage
+from squid.core.search.domain import SearchScope
 
 
 async def test_edit_operation_id_waits_for_dependency_reservation() -> None:

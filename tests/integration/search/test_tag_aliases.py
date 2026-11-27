@@ -26,7 +26,8 @@ from squid.core.records.models import (
     RulesRevision,
 )
 from squid.core.search.application import SearchService
-from squid.core.search.domain import BuildSearchHit, SearchPage, SearchRequest, SearchScope, SearchSort
+from squid.core.search.application.results import BuildSearchHit, SearchPage
+from squid.core.search.domain import SearchRequest, SearchScope, SearchSort
 from squid.core.search.domain.text import normalize_text
 from squid.core.search.infrastructure.projection import SearchProjectionWorker
 from squid.core.search.models import SearchDocument, SearchProjectionQueueItem, SearchValue

@@ -3,7 +3,8 @@
 from dataclasses import dataclass
 from typing import Protocol
 
-from squid.core.search.domain import FieldDefinition, SearchHit, SearchQuery, SearchRequest
+from squid.core.search.application.results import SearchHit
+from squid.core.search.domain import FieldDefinition, SearchQuery, SearchRequest
 
 
 @dataclass(frozen=True, slots=True)

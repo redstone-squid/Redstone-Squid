@@ -24,13 +24,11 @@ from squid.core.records.application import RecordService
 from squid.core.records.application.metrics import MetricUnit, RecordHolderSummary, RecordMetric
 from squid.core.search.application import SearchService
 from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldRegistry
+from squid.core.search.application.results import BuildSearchHit, RecordSearchHit, SearchPage
 from squid.core.search.domain import (
-    BuildSearchHit,
     FieldMatch,
-    RecordSearchHit,
     SearchEvidence,
     SearchMode,
-    SearchPage,
     SearchRequest,
     SearchScope,
     SearchText,

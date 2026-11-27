@@ -14,17 +14,8 @@ from squid.core.search.application.fields import FieldRegistry
 from squid.core.search.application.parser import SearchQueryParser
 from squid.core.search.application.ports import QueryEmbedding, SearchBackend
 from squid.core.search.application.query_analysis import is_filter_only
-from squid.core.search.domain import (
-    BuildSearchHit,
-    QueryClause,
-    RecordSearchHit,
-    SearchHit,
-    SearchMode,
-    SearchPage,
-    SearchQuery,
-    SearchRequest,
-    SearchScope,
-)
+from squid.core.search.application.results import BuildSearchHit, RecordSearchHit, SearchHit, SearchPage
+from squid.core.search.domain import QueryClause, SearchMode, SearchQuery, SearchRequest, SearchScope
 from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from squid.core.validation import (
     AboveMaximum,

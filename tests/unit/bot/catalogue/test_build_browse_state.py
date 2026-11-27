@@ -44,17 +44,8 @@ from squid.core.schematics.application import SchematicService
 from squid.core.search.application import SearchService
 from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY
 from squid.core.search.application.parser import SearchQueryParser
-from squid.core.search.domain import (
-    BuildQuery,
-    BuildSearchHit,
-    RecordQuery,
-    RecordSearchHit,
-    SearchMode,
-    SearchPage,
-    SearchRequest,
-    SearchResultAnchor,
-    SearchScope,
-)
+from squid.core.search.application.results import BuildSearchHit, RecordSearchHit, SearchPage
+from squid.core.search.domain import BuildQuery, RecordQuery, SearchMode, SearchRequest, SearchResultAnchor, SearchScope
 from squid.core.search.domain.query import TextExpression
 from squid.core.suggestions.application import Candidate, SuggestionRegistry, SuggestionService
 from squid.core.suggestions.application import SuggestionSource as RegisteredSource

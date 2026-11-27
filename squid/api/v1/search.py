@@ -29,7 +29,8 @@ from squid.core.actors import ActingContext
 from squid.core.builds.application import BuildQueryService, PublicBuildSummary
 from squid.core.builds.domain import BuildStatus
 from squid.core.errors import DataIntegrityError
-from squid.core.search.domain import SearchHit, SearchMode, SearchRequest, SearchScope, SearchSort
+from squid.core.search.application.results import SearchHit
+from squid.core.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
 
 logger = logging.getLogger(__name__)
 

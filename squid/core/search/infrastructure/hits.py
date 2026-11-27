@@ -4,7 +4,7 @@ from typing import Literal, cast
 
 from squid.core.builds.application.queries import PublicBuildCreator
 from squid.core.records.application.metrics import RecordHolderSummary, holder_metrics
-from squid.core.search.domain import BuildSearchHit, MetadataSearchHit, RecordSearchHit, SearchHit
+from squid.core.search.application.results import BuildSearchHit, MetadataSearchHit, RecordSearchHit, SearchHit
 from squid.core.search.models import SearchDocument
 
 

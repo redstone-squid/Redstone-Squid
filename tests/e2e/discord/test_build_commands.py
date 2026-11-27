@@ -17,14 +17,8 @@ from squid.core.builds.models import Build, DoorBuild
 from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT, BUILD_SUBMISSION_RECALC
 from squid.core.search.application import SearchService
 from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldRegistry
-from squid.core.search.domain import (
-    BuildSearchHit,
-    MetadataSearchHit,
-    RecordSearchHit,
-    SearchPage,
-    SearchRequest,
-    SearchScope,
-)
+from squid.core.search.application.results import BuildSearchHit, MetadataSearchHit, RecordSearchHit, SearchPage
+from squid.core.search.domain import SearchRequest, SearchScope
 from squid.core.submissions.application.inference_runs import SubmissionInferenceRuns
 from tests.e2e.discord.environment import command_environment, displayed_text
 from tests.e2e.discord.workspace_services import staff_member, staff_permissions

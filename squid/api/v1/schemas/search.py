@@ -11,6 +11,7 @@ from squid.api.pagination import PageAnchor
 from squid.core.builds.application.queries import PublicBuildSummary
 from squid.core.errors import ValidationError
 from squid.core.records.application.metrics import RecordHolderSummary, RecordMetric
+from squid.core.search.application.results import MetadataSearchHit, RecordSearchHit
 from squid.core.search.domain import (
     ComparisonOperator,
     FieldDefinition,
@@ -18,12 +19,10 @@ from squid.core.search.domain import (
     FieldGroup,
     FieldMatch,
     FieldType,
-    MetadataSearchHit,
     NotExpression,
     PresenceExpression,
     QueryClause,
     RangeValue,
-    RecordSearchHit,
     SearchMatch,
     SearchScope,
     TextExpression,

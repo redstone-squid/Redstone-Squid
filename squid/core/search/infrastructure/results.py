@@ -21,15 +21,12 @@ from squid.core.pagination import MAX_PAGE_OFFSET
 from squid.core.search.application.explanation import explain
 from squid.core.search.application.ports import SearchSlice
 from squid.core.search.application.ranking import RankedCandidate
+from squid.core.search.application.results import BuildSearchHit, MetadataSearchHit, RecordSearchHit, SearchHit
 from squid.core.search.domain import (
-    BuildSearchHit,
     FieldDefinition,
     FieldType,
     FieldValue,
-    MetadataSearchHit,
-    RecordSearchHit,
     SearchEvidence,
-    SearchHit,
     SearchMatch,
     SearchQuery,
     SearchRequest,

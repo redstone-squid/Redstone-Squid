@@ -17,18 +17,8 @@ from squid.core.errors import DataIntegrityError
 from squid.core.pagination import PageAnchor
 from squid.core.records.application.metrics import MetricUnit, RecordMetric
 from squid.core.search.application import SearchQueryParser, SearchService
-from squid.core.search.domain import (
-    BuildSearchHit,
-    FieldMatch,
-    MetadataSearchHit,
-    RecordSearchHit,
-    SearchEvidence,
-    SearchMatch,
-    SearchPage,
-    SearchQuery,
-    SearchRequest,
-    SearchScope,
-)
+from squid.core.search.application.results import BuildSearchHit, MetadataSearchHit, RecordSearchHit, SearchPage
+from squid.core.search.domain import FieldMatch, SearchEvidence, SearchMatch, SearchQuery, SearchRequest, SearchScope
 
 
 class Fakes(NamedTuple):

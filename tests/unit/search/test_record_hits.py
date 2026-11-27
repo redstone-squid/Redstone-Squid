@@ -3,7 +3,7 @@
 from unittest.mock import Mock
 
 from squid.core.records.application.metrics import MetricUnit, RecordMetric
-from squid.core.search.domain import BuildSearchHit, RecordSearchHit
+from squid.core.search.application.results import BuildSearchHit, RecordSearchHit
 from squid.core.search.infrastructure.hits import document_hit
 from squid.core.search.models import SearchDocument
 
