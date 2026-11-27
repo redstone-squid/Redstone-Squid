@@ -4,6 +4,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
+from squid.core.builds.application.queries import PublicBuildSummary
+from squid.core.builds.history import HistoryActor
 from squid.core.voting.domain import (
     BuildEditVoteTarget,
     BuildVoteTarget,
@@ -136,3 +138,13 @@ class VoteSessionDetail(BaseModel):
             ),
             own_selection=OwnVoteSelection.from_domain(own_selection) if own_selection is not None else None,
         )
+
+
+class ReviewVoteSummary(VoteSessionDetail):
+    """A build review vote with the build it decides on.
+
+    `build` is null if the build has been deleted since the vote opened.
+    """
+
+    build: PublicBuildSummary | None
+    submitted_by: HistoryActor | None

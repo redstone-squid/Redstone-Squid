@@ -52,6 +52,36 @@ class VoteStatus(StrEnum):
     CLOSED = "closed"
 
 
+class ReviewKind(StrEnum):
+    """A vote that reviews a build: its submission or an edit to it."""
+
+    BUILD = VoteKind.BUILD.value
+    BUILD_EDIT = VoteKind.BUILD_EDIT.value
+
+    @property
+    def vote_kind(self) -> VoteKind:
+        return VoteKind(self.value)
+
+
+class ReviewSort(StrEnum):
+    """Review listing orders; session IDs follow creation, so both sort by ID."""
+
+    NEWEST = "newest"
+    OLDEST = "oldest"
+
+
+@dataclass(frozen=True, slots=True)
+class ReviewFilters:
+    """Narrow a review listing; empty `kinds` means every review kind."""
+
+    kinds: frozenset[ReviewKind] = frozenset()
+    status: VoteStatus | None = None
+
+    @property
+    def vote_kinds(self) -> frozenset[VoteKind]:
+        return frozenset(kind.vote_kind for kind in (self.kinds or ReviewKind))
+
+
 class VoteSessionResult(StrEnum):
     """A session's outcome, or PENDING while it remains undecided."""
 

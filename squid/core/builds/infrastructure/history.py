@@ -1,6 +1,6 @@
 """Capture persisted build aggregates in the same transaction as their changes."""
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from copy import deepcopy
 from typing import cast
 
@@ -94,6 +94,15 @@ class BuildHistoryQueries:
             else BuildLastEdit(at.to_stdlib(), HistoryActor(name, creator) if creator else None)
         )
         return BuildPublication(approved.to_stdlib() if approved else None, submitter, edit, count, vote)
+
+    async def submitters(self, builds: Sequence[Build]) -> dict[int, HistoryActor]:
+        rows = await self._session().execute(
+            select(Build.id, Account.public_account_id, AccountProfile.display_name)
+            .join(Account, Account.id == Build.submitter_account_id)
+            .outerjoin(AccountProfile, (AccountProfile.account_id == Account.id) & AccountProfile.hidden.is_(False))
+            .where(Build.id.in_([build.id for build in builds]))
+        )
+        return {build_id: HistoryActor(name, public_id) for build_id, public_id, name in rows}
 
     async def public_page(
         self, build_id: int, labels: Mapping[str, str], *, offset: int, page_size: int

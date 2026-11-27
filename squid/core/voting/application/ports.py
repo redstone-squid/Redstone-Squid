@@ -6,10 +6,13 @@ from typing import Protocol
 from whenever import Instant
 
 from squid.core.actors import UserActor
+from squid.core.pagination import PageSelector
 from squid.core.permissions.application.ports import PermissionUnitOfWork
 from squid.core.voting.domain import (
     EmojiPreset,
     PollScope,
+    ReviewFilters,
+    ReviewSort,
     RoleWeight,
     StoredVoteMutation,
     VoteChange,
@@ -128,6 +131,14 @@ class VoteRepository(Protocol):
     async def get_by_id(self, vote_session_id: int) -> VoteSessionSnapshot | None: ...
 
     async def list_open(self, kind: VoteKind) -> Sequence[VoteSessionSnapshot]: ...
+
+    async def list_reviews(
+        self, filters: ReviewFilters, *, sort: ReviewSort, selector: PageSelector, limit: int
+    ) -> Sequence[VoteSessionSnapshot]:
+        """Read one page of build review sessions in display order."""
+        ...
+
+    async def count_reviews(self, filters: ReviewFilters) -> int: ...
 
     async def cast_vote(
         self,

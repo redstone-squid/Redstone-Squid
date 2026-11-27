@@ -1885,6 +1885,16 @@ export type PageSquidApiV1SchemasSchematicsSchematicSummary = {
 };
 
 /**
+ * Page[VideoResponse]
+ */
+export type PageSquidApiV1SchemasSchematicsVideoResponse = {
+    items: Array<VideoResponse>;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+};
+
+/**
  * Page[DraftSummaryResponse]
  */
 export type PageSquidApiV1SchemasSubmissionsDraftSummaryResponse = {
@@ -1909,6 +1919,16 @@ export type PageSquidApiV1SchemasSubmissionsSubmissionAttemptResponse = {
  */
 export type PageSquidApiV1SchemasVersionsVersionDetail = {
     items: Array<VersionDetail>;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+};
+
+/**
+ * Page[ReviewVoteSummary]
+ */
+export type PageSquidApiV1SchemasVotesReviewVoteSummary = {
+    items: Array<ReviewVoteSummary>;
     total: number;
     next: PageAnchor | null;
     prev: PageAnchor | null;
@@ -2621,6 +2641,39 @@ export type RequiredValueParams = {
 };
 
 /**
+ * ReviewKind
+ *
+ * A vote that reviews a build: its submission or an edit to it.
+ */
+export type ReviewKind = 'build' | 'build_edit';
+
+/**
+ * ReviewSort
+ *
+ * Review listing orders; session IDs follow creation, so both sort by ID.
+ */
+export type ReviewSort = 'newest' | 'oldest';
+
+/**
+ * ReviewVoteSummary
+ */
+export type ReviewVoteSummary = {
+    id: number;
+    kind: VoteKind;
+    status: VoteStatus;
+    result: VoteSessionResult;
+    pass_threshold: number | null;
+    fail_threshold: number | null;
+    build_id: number | null;
+    options: Array<VoteOptionSummary>;
+    tallies: VoteTallies | null;
+    poll: VotePollSummary | null;
+    own_selection: OwnVoteSelection | null;
+    build: PublicBuildSummary | null;
+    submitted_by: HistoryActor | null;
+};
+
+/**
  * RoleCreateRequest
  */
 export type RoleCreateRequest = {
@@ -2778,6 +2831,22 @@ export type SavedBuildFormResponse = {
 };
 
 /**
+ * SchematicBlockCount
+ */
+export type SchematicBlockCount = {
+    block: string;
+    count: number;
+};
+
+/**
+ * SchematicBlocks
+ */
+export type SchematicBlocks = {
+    top: Array<SchematicBlockCount>;
+    other: number;
+};
+
+/**
  * SchematicDetection
  */
 export type SchematicDetection = {
@@ -2873,11 +2942,13 @@ export type SchematicSubmissionSuggestions = {
 export type SchematicSummary = {
     id: number;
     primary: boolean;
+    attached_at: string;
     format: string;
     byte_size: number;
     dimensions: SchematicSize;
     allocated_dimensions: SchematicSize;
     block_count: number;
+    blocks: SchematicBlocks | null;
     bounding_volume: number;
     entity_count: number;
     palette_size: number;
@@ -8898,6 +8969,65 @@ export type SchematicVideoCreateResponses = {
 
 export type SchematicVideoCreateResponse = SchematicVideoCreateResponses[keyof SchematicVideoCreateResponses];
 
+export type AccountSchematicVideoListData = {
+    body?: never;
+    path?: never;
+    query?: {
+        schematic_id?: number | null;
+        /**
+         * Maximum number of items to return.
+         */
+        page_size?: number;
+        /**
+         * Number of items to skip. Excludes after_id and before_id.
+         */
+        offset?: number | null;
+        /**
+         * Return the items after this identifier in display order. Excludes offset.
+         */
+        after_id?: number | null;
+        /**
+         * Return the items before this identifier in display order. Excludes offset.
+         */
+        before_id?: number | null;
+    };
+    url: '/v1/accounts/me/schematic-videos';
+};
+
+export type AccountSchematicVideoListErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type AccountSchematicVideoListError = AccountSchematicVideoListErrors[keyof AccountSchematicVideoListErrors];
+
+export type AccountSchematicVideoListResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: PageSquidApiV1SchemasSchematicsVideoResponse;
+};
+
+export type AccountSchematicVideoListResponse = AccountSchematicVideoListResponses[keyof AccountSchematicVideoListResponses];
+
 export type SchematicVideoStatusData = {
     body?: never;
     path: {
@@ -11464,6 +11594,74 @@ export type MinecraftVersionsCorrectResponses = {
 };
 
 export type MinecraftVersionsCorrectResponse = MinecraftVersionsCorrectResponses[keyof MinecraftVersionsCorrectResponses];
+
+export type VoteSessionListData = {
+    body?: never;
+    path?: never;
+    query?: {
+        kind?: Array<ReviewKind> | null;
+        status?: VoteStatus | null;
+        /**
+         * Review listing orders; session IDs follow creation, so both sort by ID.
+         */
+        sort?: ReviewSort;
+        /**
+         * Maximum number of items to return.
+         */
+        page_size?: number;
+        /**
+         * Number of items to skip. Excludes after_id and before_id.
+         */
+        offset?: number | null;
+        /**
+         * Return the items after this identifier in display order. Excludes offset.
+         */
+        after_id?: number | null;
+        /**
+         * Return the items before this identifier in display order. Excludes offset.
+         */
+        before_id?: number | null;
+    };
+    url: '/v1/vote-sessions';
+};
+
+export type VoteSessionListErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type VoteSessionListError = VoteSessionListErrors[keyof VoteSessionListErrors];
+
+export type VoteSessionListResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: PageSquidApiV1SchemasVotesReviewVoteSummary;
+};
+
+export type VoteSessionListResponse = VoteSessionListResponses[keyof VoteSessionListResponses];
 
 export type VoteSessionGetData = {
     body?: never;

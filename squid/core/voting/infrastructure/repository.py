@@ -1,9 +1,10 @@
 """SQLAlchemy voting repository."""
 
 from collections.abc import Callable, Sequence
+from typing import Any
 
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository
-from sqlalchemy import Text, delete, func, insert, select, update
+from sqlalchemy import Select, Text, delete, func, insert, select, update
 from sqlalchemy import cast as cast_sql
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -13,6 +14,8 @@ from whenever import Instant
 from squid.core.errors import DataIntegrityError
 from squid.core.messages.errors import MessageNotFoundError
 from squid.core.messages.models import Message
+from squid.core.pagination import PageSelector
+from squid.core.persistence.paging import KeysetOrder
 from squid.core.posts.models import DiscordPost
 from squid.core.scores import round_score
 from squid.core.settings.infrastructure.repository import ensure_server_settings
@@ -25,6 +28,8 @@ from squid.core.voting.domain import (
     EmojiPreset,
     GenericPoll,
     PollScope,
+    ReviewFilters,
+    ReviewSort,
     RoleWeight,
     StoredVoteMutation,
     VoteChange,
@@ -362,6 +367,22 @@ class VoteRepository:
             VoteSession.status == VoteStatus.OPEN, VoteSession.kind == kind
         )
         return [await self._to_snapshot(session, row) for row in rows]
+
+    async def list_reviews(
+        self, filters: ReviewFilters, *, sort: ReviewSort, selector: PageSelector, limit: int
+    ) -> Sequence[VoteSessionSnapshot]:
+        """Read one page in display order; a `before_id` page is read in reverse and restored."""
+        session = self._session()
+        order = KeysetOrder(VoteSession.id, VoteSession.id, descending=sort is ReviewSort.NEWEST)
+        statement = await order.apply(
+            session, _reviews(select(VoteSession).options(selectinload(VoteSession.options)), filters), selector
+        )
+        rows = [await self._to_snapshot(session, row) for row in await session.scalars(statement.limit(limit))]
+        return rows[::-1] if selector.before_id is not None else rows
+
+    async def count_reviews(self, filters: ReviewFilters) -> int:
+        statement = _reviews(select(func.count()).select_from(VoteSession), filters)
+        return await self._session().scalar(statement) or 0
 
     async def transition_poll(
         self,
@@ -859,3 +880,10 @@ class VoteRepository:
                     generic.retry_at,
                     tuple(generic.unreadable_cards),
                 )
+
+
+def _reviews[S: Select[Any]](statement: S, filters: ReviewFilters) -> S:
+    statement = statement.where(VoteSession.kind.in_(filters.vote_kinds))
+    if filters.status is not None:
+        statement = statement.where(VoteSession.status == filters.status)
+    return statement

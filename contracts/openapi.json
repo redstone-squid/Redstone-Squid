@@ -16322,6 +16322,223 @@
         }
       }
     },
+    "/v1/accounts/me/schematic-videos": {
+      "get": {
+        "tags": [
+          "schematics"
+        ],
+        "summary": "ListOwnSchematicVideos",
+        "description": "Page the videos the caller requested, newest first, optionally for one schematic.\n\nOpening a video still checks that its schematic is published.",
+        "operationId": "account_schematic_video_list",
+        "parameters": [
+          {
+            "name": "schematic_id",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "minimum": 1
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "maximum": 50.0,
+              "minimum": 1.0,
+              "description": "Maximum number of items to return.",
+              "default": 20
+            },
+            "description": "Maximum number of items to return.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maximum": 10000,
+              "description": "Number of items to skip. Excludes after_id and before_id."
+            },
+            "description": "Number of items to skip. Excludes after_id and before_id.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "after_id",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "minimum": 1,
+              "description": "Return the items after this identifier in display order. Excludes offset."
+            },
+            "description": "Return the items after this identifier in display order. Excludes offset.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "before_id",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "minimum": 1,
+              "description": "Return the items before this identifier in display order. Excludes offset."
+            },
+            "description": "Return the items before this identifier in display order. Excludes offset.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_squid.api.v1.schemas.schematics.VideoResponse_"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "WebSession": []
+          },
+          {
+            "DeviceSession": []
+          },
+          {
+            "MinecraftPlayer": []
+          }
+        ],
+        "x-squid-cli": {
+          "classification": "transport-only"
+        }
+      }
+    },
     "/v1/schematic-videos/{video_id}": {
       "get": {
         "tags": [
@@ -24544,6 +24761,268 @@
         ]
       }
     },
+    "/v1/vote-sessions": {
+      "get": {
+        "tags": [
+          "vote sessions"
+        ],
+        "summary": "ListReviewVotes",
+        "description": "Page build submission and edit votes for reviewers; `status=open&sort=oldest` is the review queue.\n\nRepeat `kind` to choose several; without it every review kind is listed.",
+        "operationId": "vote_session_list",
+        "parameters": [
+          {
+            "name": "kind",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "items": {
+                    "$ref": "#/components/schemas/ReviewKind"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/VoteStatus"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ReviewSort"
+            },
+            "description": "Review listing orders; session IDs follow creation, so both sort by ID.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "maximum": 50.0,
+              "minimum": 1.0,
+              "description": "Maximum number of items to return.",
+              "default": 20
+            },
+            "description": "Maximum number of items to return.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maximum": 10000,
+              "description": "Number of items to skip. Excludes after_id and before_id."
+            },
+            "description": "Number of items to skip. Excludes after_id and before_id.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "after_id",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "minimum": 1,
+              "description": "Return the items after this identifier in display order. Excludes offset."
+            },
+            "description": "Return the items after this identifier in display order. Excludes offset.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "before_id",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "minimum": 1,
+              "description": "Return the items before this identifier in display order. Excludes offset."
+            },
+            "description": "Return the items before this identifier in display order. Excludes offset.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_squid.api.v1.schemas.votes.ReviewVoteSummary_"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "WebSession": []
+          },
+          {
+            "DeviceSession": []
+          }
+        ],
+        "x-squid-private-response": true,
+        "x-squid-cli": {
+          "classification": "transport-only"
+        }
+      }
+    },
     "/v1/vote-sessions/{vote_session_id}": {
       "get": {
         "tags": [
@@ -31733,6 +32212,47 @@
         ],
         "title": "Page[SchematicSummary]"
       },
+      "Page_squid.api.v1.schemas.schematics.VideoResponse_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/VideoResponse"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "next": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prev": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "next",
+          "prev",
+          "total"
+        ],
+        "title": "Page[VideoResponse]"
+      },
       "Page_squid.api.v1.schemas.submissions.DraftSummaryResponse_": {
         "properties": {
           "items": {
@@ -31855,6 +32375,47 @@
           "total"
         ],
         "title": "Page[VersionDetail]"
+      },
+      "Page_squid.api.v1.schemas.votes.ReviewVoteSummary_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewVoteSummary"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "next": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prev": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "next",
+          "prev",
+          "total"
+        ],
+        "title": "Page[ReviewVoteSummary]"
       },
       "Page_squid.api.v1.submission_recalculations.RecalculationProposalResponse_": {
         "properties": {
@@ -34522,6 +35083,144 @@
         "title": "RequiredValueParams",
         "type": "object"
       },
+      "ReviewKind": {
+        "type": "string",
+        "enum": [
+          "build",
+          "build_edit"
+        ],
+        "title": "ReviewKind",
+        "description": "A vote that reviews a build: its submission or an edit to it."
+      },
+      "ReviewSort": {
+        "type": "string",
+        "enum": [
+          "newest",
+          "oldest"
+        ],
+        "title": "ReviewSort",
+        "description": "Review listing orders; session IDs follow creation, so both sort by ID.",
+        "default": "newest"
+      },
+      "ReviewVoteSummary": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/VoteKind"
+          },
+          "status": {
+            "$ref": "#/components/schemas/VoteStatus"
+          },
+          "result": {
+            "$ref": "#/components/schemas/VoteSessionResult"
+          },
+          "pass_threshold": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fail_threshold": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "build_id": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "options": {
+            "items": {
+              "$ref": "#/components/schemas/VoteOptionSummary"
+            },
+            "type": "array"
+          },
+          "tallies": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/VoteTallies"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "poll": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/VotePollSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "own_selection": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/OwnVoteSelection"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "build": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PublicBuildSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "submitted_by": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/HistoryActor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "build",
+          "build_id",
+          "fail_threshold",
+          "id",
+          "kind",
+          "options",
+          "own_selection",
+          "pass_threshold",
+          "poll",
+          "result",
+          "status",
+          "submitted_by",
+          "tallies"
+        ],
+        "title": "ReviewVoteSummary"
+      },
       "RoleCreateRequest": {
         "properties": {
           "slug": {
@@ -35193,6 +35892,41 @@
         ],
         "title": "SavedBuildFormResponse"
       },
+      "SchematicBlockCount": {
+        "properties": {
+          "block": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "block",
+          "count"
+        ],
+        "title": "SchematicBlockCount"
+      },
+      "SchematicBlocks": {
+        "properties": {
+          "top": {
+            "items": {
+              "$ref": "#/components/schemas/SchematicBlockCount"
+            },
+            "type": "array"
+          },
+          "other": {
+            "type": "integer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "other",
+          "top"
+        ],
+        "title": "SchematicBlocks"
+      },
       "SchematicDetection": {
         "properties": {
           "field_id": {
@@ -35489,6 +36223,10 @@
           "primary": {
             "type": "boolean"
           },
+          "attached_at": {
+            "type": "string",
+            "format": "date-time"
+          },
           "format": {
             "type": "string"
           },
@@ -35503,6 +36241,16 @@
           },
           "block_count": {
             "type": "integer"
+          },
+          "blocks": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SchematicBlocks"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "bounding_volume": {
             "type": "integer"
@@ -35544,7 +36292,9 @@
           "allocated_dimensions",
           "analysis_schema_version",
           "analyzer_version",
+          "attached_at",
           "block_count",
+          "blocks",
           "bounding_volume",
           "byte_size",
           "dimensions",

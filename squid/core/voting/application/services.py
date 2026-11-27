@@ -10,8 +10,10 @@ from whenever import Instant
 
 from squid.core.actors import ActingContext, Actor, UserActor, WorkerActor, application_operation
 from squid.core.errors import AuthorizationError
+from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.domain.catalogue import (
+    BUILD_SUBMISSION_VIEW_PENDING,
     VOTE_LOG_DELETE_CAST,
     VOTE_POLL_CAST,
     VOTE_POLL_CLOSE_ANY,
@@ -32,6 +34,8 @@ from squid.core.voting.domain import (
     DeleteLogVoteTarget,
     EmojiPreset,
     PollScope,
+    ReviewFilters,
+    ReviewSort,
     RoleWeight,
     VoteChange,
     VoteChoice,
@@ -286,6 +290,23 @@ class VoteService:
     async def list_open(self, kind: VoteKind, *, context: ActingContext) -> Sequence[VoteSessionSnapshot]:
         async with self._uow_factory() as uow:
             return await uow.votes.list_open(kind)
+
+    @application_operation
+    async def list_reviews(
+        self,
+        filters: ReviewFilters,
+        *,
+        sort: ReviewSort = ReviewSort.NEWEST,
+        selector: PageSelector = FIRST_PAGE,
+        page_size: int = 20,
+        context: ActingContext,
+    ) -> Page[VoteSessionSnapshot]:
+        """Page build submission and edit votes for reviewers who can see unreviewed builds."""
+        async with self._uow_factory() as uow:
+            await self._permissions.require(context.effective, BUILD_SUBMISSION_VIEW_PENDING, uow=uow)
+            rows = await uow.votes.list_reviews(filters, sort=sort, selector=selector, limit=page_size + 1)
+            total = await uow.votes.count_reviews(filters)
+            return keyset_page(rows, selector=selector, page_size=page_size, total=total, id_of=lambda row: row.id)
 
     @application_operation
     async def cast_vote(

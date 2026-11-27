@@ -7,7 +7,8 @@ import pytest
 from whenever import Instant
 
 from squid.core.actors import ActingContext, AnonymousActor, UserActor
-from squid.core.errors import AuthenticationError
+from squid.core.errors import AuthenticationError, AuthorizationError
+from squid.core.pagination import FIRST_PAGE, PageSelector
 from squid.core.permissions.domain.catalogue import VOTE_LOG_DELETE_CAST, VOTE_WEIGHT_STAFF
 from squid.core.permissions.models import PermissionGrant
 from squid.core.voting.application import VoteService
@@ -16,6 +17,9 @@ from squid.core.voting.domain import (
     DeleteLogVoteTarget,
     EmojiPreset,
     PollScope,
+    ReviewFilters,
+    ReviewKind,
+    ReviewSort,
     RoleWeight,
     StoredVoteMutation,
     VoteChange,
@@ -170,6 +174,17 @@ class FakeVoteRepository:
 
     async def list_open(self, kind: VoteKind) -> Sequence[VoteSessionSnapshot]:
         return [] if self.session is None or self.session.kind is not kind else [self.session]
+
+    async def list_reviews(
+        self, filters: ReviewFilters, *, sort: ReviewSort, selector: PageSelector, limit: int
+    ) -> Sequence[VoteSessionSnapshot]:
+        session = self.session
+        if session is None or session.kind not in filters.vote_kinds:
+            return []
+        return [] if filters.status not in (None, session.status) else [session]
+
+    async def count_reviews(self, filters: ReviewFilters) -> int:
+        return len(await self.list_reviews(filters, sort=ReviewSort.NEWEST, selector=FIRST_PAGE, limit=1))
 
     async def cast_vote(
         self,
@@ -1204,3 +1219,24 @@ async def test_retry_permission_can_read_current_cards_and_seal_a_complete_recou
     )
     assert reads == [snapshot.id]
     assert result.just_closed
+
+
+async def test_reviewers_who_can_see_pending_builds_page_review_votes() -> None:
+    repository = FakeVoteRepository(snapshot())
+    service = VoteService(
+        uow_factory=lambda: VoteUnitOfWork(repository, grants=vote_grants("build.submission.view_pending"))
+    )
+    reviewer = ActingContext.direct(UserActor(account_id=7))
+
+    page = await service.list_reviews(ReviewFilters(status=VoteStatus.OPEN), context=reviewer)
+    edits = await service.list_reviews(ReviewFilters(frozenset({ReviewKind.BUILD_EDIT})), context=reviewer)
+
+    assert ([item.id for item in page.items], page.total) == ([snapshot().id], 1)
+    assert edits.items == ()
+
+
+async def test_review_votes_are_hidden_from_members_who_cannot_see_pending_builds() -> None:
+    service = VoteService(uow_factory=lambda: VoteUnitOfWork(FakeVoteRepository(snapshot())))
+
+    with pytest.raises(AuthorizationError):
+        await service.list_reviews(ReviewFilters(), context=ActingContext.direct(UserActor(account_id=7)))

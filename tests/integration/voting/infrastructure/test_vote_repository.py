@@ -16,6 +16,7 @@ from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build
 from squid.core.errors import DataIntegrityError
 from squid.core.messages.models import Message
+from squid.core.pagination import FIRST_PAGE, PageSelector
 from squid.core.persistence.alembic_entities import current_entities
 from squid.core.persistence.base import Base
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
@@ -25,6 +26,9 @@ from squid.core.unit_of_work import UnitOfWorkFactory
 from squid.core.voting.domain import (
     DEFAULT_VOTE_OPTIONS,
     DeleteLogVoteTarget,
+    ReviewFilters,
+    ReviewKind,
+    ReviewSort,
     StoredVoteMutation,
     VoteChoice,
     VoteKind,
@@ -988,3 +992,59 @@ async def test_review_preserves_collected_ballots_and_rejects_stale_decisions(
         )
         is None
     )
+
+
+async def test_review_listing_pages_build_votes_in_creation_order_without_other_kinds(
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    async def build_vote() -> int:
+        return await transact(
+            repository,
+            lambda uow: uow.votes.create_build_session(
+                author_account_id=99,
+                pass_threshold=3,
+                fail_threshold=-3,
+                build_id=BUILD_ID,
+                changes=[("submission_status", "pending", "confirmed")],
+            ),
+            commit=True,
+        )
+
+    older, closed, newer = await build_vote(), await build_vote(), await build_vote()
+    await transact(repository, lambda uow: uow.votes.close(closed), commit=True)
+    await seed_generic_poll(
+        async_session_factory,
+        repository,
+        question="Not a review",
+        visibility=VoteVisibility.ANONYMOUS_LIVE,
+        deadline=Instant.now().add(hours=1),
+        options=(
+            VoteOption("1️⃣", VoteChoice.GENERIC, identifier="one", label="One"),
+            VoteOption("2️⃣", VoteChoice.GENERIC, identifier="two", label="Two"),
+        ),
+    )
+    queue = ReviewFilters(status=VoteStatus.OPEN)
+
+    first = await transact(
+        repository, lambda uow: uow.votes.list_reviews(queue, sort=ReviewSort.OLDEST, selector=FIRST_PAGE, limit=2)
+    )
+    after = await transact(
+        repository,
+        lambda uow: uow.votes.list_reviews(
+            queue, sort=ReviewSort.OLDEST, selector=PageSelector(after_id=older), limit=2
+        ),
+    )
+    newest = await transact(
+        repository,
+        lambda uow: uow.votes.list_reviews(ReviewFilters(), sort=ReviewSort.NEWEST, selector=FIRST_PAGE, limit=5),
+    )
+    edits = await transact(
+        repository, lambda uow: uow.votes.count_reviews(ReviewFilters(frozenset({ReviewKind.BUILD_EDIT})))
+    )
+
+    assert [item.id for item in first] == [older, newer]
+    assert [item.id for item in after] == [newer]
+    assert [item.id for item in newest] == [newer, closed, older]
+    assert await transact(repository, lambda uow: uow.votes.count_reviews(queue)) == 2
+    assert edits == 0
