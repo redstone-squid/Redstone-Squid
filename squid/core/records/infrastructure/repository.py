@@ -2,7 +2,7 @@
 
 from collections import defaultdict
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 from itertools import batched, pairwise, zip_longest
@@ -135,17 +135,6 @@ class PostgresRecordRepository:
         if kind is BuildKind.EXTENDER:
             return await self._list_extenders(session)
         return ()
-
-    async def list_for_door_lookup(
-        self, opening: tuple[int, int, int], orientation: str, version_id: int | None
-    ) -> Sequence[CandidateBuild]:
-        """Load a coherent live population without creating record definitions."""
-        width, height, depth = opening
-        sources = await self.list_for_door_widths(height, depth, orientation, version_id, minimum=width, maximum=width)
-        size = f"{width}x{height}" + (f"x{depth}" if depth != 1 else "")
-        return tuple(
-            replace(source, door=replace(source.door, size=size)) for source in sources if source.door is not None
-        )
 
     async def list_for_door_widths(
         self,

@@ -69,16 +69,6 @@ class RecordCandidateRepository(Protocol):
 
     async def list_confirmed(self, kind: BuildKind) -> Sequence[CandidateBuild]: ...
 
-    async def list_for_door_lookup(
-        self, opening: tuple[int, int, int], orientation: str, version_id: int | None
-    ) -> Sequence[CandidateBuild]:
-        """Read fixed doors and families from one consistent, read-only transaction.
-
-        Call first in a fresh unit of work. Families carry the requested category
-        size but no sample metrics; their membership still needs evaluation.
-        """
-        ...
-
     async def list_for_door_widths(
         self,
         height: int,

@@ -17,7 +17,6 @@ from squid.api.v1.records import (
     get_door_ranges,
     get_record,
     list_records,
-    lookup_door,
     lookup_door_ranges,
 )
 from squid.core.builds.application import PublicBuildDimensions, PublicBuildPreview, PublicBuildSummary, PublicBuildTag
@@ -28,7 +27,7 @@ from squid.core.builds.domain.expansion_evaluation import PointStatus
 from squid.core.pagination import Page, PageAnchor
 from squid.core.records.application import PublicRecordQueryService, RecordService
 from squid.core.records.application.expansion_regions import DoorRangeQuery, DoorRangeResult, analyze_door_widths
-from squid.core.records.application.live import DoorRecordLookup, LiveDoorConfiguration, LiveDoorRecord
+from squid.core.records.application.live import LiveDoorConfiguration, LiveDoorRecord
 from squid.core.records.application.models import PublicRecordDetail, PublishedRecordResult
 from squid.core.records.application.range_publication import RangePublicationService
 from squid.core.records.application.range_snapshots import RangeAttempt, RangePublication
@@ -210,66 +209,6 @@ async def test_record_detail_serializes_the_application_read_model(expanded: boo
     assert schemas["PublicRecordDetail"]["properties"]["holder_builds"]["items"] == {
         "$ref": "#/components/schemas/PublicBuildSummary"
     }
-
-
-async def test_live_door_lookup_serializes_configuration_evidence() -> None:
-    records = create_autospec(RecordService, instance=True)
-    records.lookup_door.return_value = LiveDoorRecord(
-        opening=(9999, 3, 1),
-        criterion=RecordCriterion.SMALLEST,
-        version_id=None,
-        evaluated_at=datetime(2026, 8, 10, 12, tzinfo=UTC),
-        resolution=RecordResolution(holder_ids=(42,)),
-        holder_configuration_ids=(0,),
-        configurations=(
-            LiveDoorConfiguration(
-                id=0,
-                build_id=42,
-                branch_index=0,
-                membership=PointStatus.SUPPORTED,
-                parameters=(("n", 9999),),
-                volume=50000,
-                timing_variants=((4999, None, None, None, None, None),),
-            ),
-        ),
-    )
-    handler = post(
-        "/records/lookup/door",
-        status_code=200,
-        dependencies={"records": Provide(lambda: records, sync_to_thread=False)},
-    )(lookup_door.fn)
-    app = Litestar([handler], dependencies={"caller": Provide(lambda: ANONYMOUS, sync_to_thread=False)})
-    transport = httpx.ASGITransport(app=app)  # type: ignore[bad-argument-type]
-    async with httpx.AsyncClient(transport=transport, base_url="https://test") as client:
-        response = await client.post("/records/lookup/door", json={"opening": [9999, 3, 1]})
-        assert response.status_code == 200
-        body = response.json()
-        assert body["resolution"]["holder_ids"] == [42]
-        assert body["holder_configuration_ids"] == [0]
-        assert body["configurations"][0]["parameters"] == [["n", 9999]]
-        assert body["configurations"][0]["volume"] == 50000
-        assert body["configurations"][0]["membership"] == "supported"
-        assert body["configurations"][0]["timing_variants"] == [[4999, None, None, None, None, None]]
-        records.lookup_door.assert_awaited_once_with(
-            DoorRecordLookup(opening=(9999, 3, 1)), context=ANONYMOUS.context()
-        )
-        records.lookup_or_materialize.assert_not_called()
-        records.lookup_door.reset_mock()
-        for invalid in (
-            {"opening": [0, 3, 1]},
-            {"opening": [True, 3, 1]},
-            {"opening": [1.5, 3, 1]},
-            {"opening": [6, 3, 1], "version_id": 32768},
-            {"opening": [6, 3, 1], "orientation": "Invalid"},
-            {"opening": [6, 3, 1], "restriction_values": [[7, "exact", "3"]]},
-            {"opening": [6, 3, 1], "unknown": True},
-        ):
-            response = await client.post("/records/lookup/door", json=invalid)
-            assert response.status_code == 400, (invalid, records.lookup_door.call_args)
-        records.lookup_door.assert_not_called()
-    schemas = app.openapi_schema.to_schema()["components"]["schemas"]
-    assert "LiveDoorRecord" in schemas
-    assert "DoorRecordLookup" in schemas
 
 
 @pytest.mark.parametrize("status", [RegionAnalysisStatus.EXACT, RegionAnalysisStatus.TIMED_OUT])

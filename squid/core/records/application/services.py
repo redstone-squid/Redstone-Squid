@@ -21,7 +21,6 @@ from squid.core.records.application.door_categories import door_category_lookup,
 from squid.core.records.application.expansion_regions import DoorRangeQuery, DoorRangeResult
 from squid.core.records.application.history import reconstruct_history
 from squid.core.records.application.live import (
-    DoorRecordLookup,
     LiveDoorRecord,
     evaluate_door_record,
     resolve_door_configurations,
@@ -586,28 +585,6 @@ class RecordService:
                 total=await uow.records.count_published_records(version_scope=version_scope),
                 id_of=lambda record: record.result_id or 0,
             )
-
-    @application_operation
-    async def lookup_door(self, request: DoorRecordLookup, *, context: ActingContext) -> LiveDoorRecord:
-        """Evaluate one size against current approved facts without persisting it.
-
-        The repository pins a read-only database snapshot before loading related
-        facts. Evaluation continues on immutable values after releasing that
-        transaction. This result does not replace published records.
-        """
-        async with self._uow_factory() as uow:
-            sources = tuple(
-                await uow.record_candidates.list_for_door_lookup(
-                    request.opening, request.orientation, request.version_id
-                )
-            )
-        category = self._computation.requested_category(request.identity, sources)
-        matched_ids = {candidate.build_id for candidate in category.candidates} if category is not None else set()
-        return evaluate_door_record(
-            request,
-            tuple(source for source in sources if source.candidate.build_id in matched_ids),
-            evaluated_at=datetime.now(UTC),
-        )
 
     @application_operation
     async def lookup_door_ranges(self, request: DoorRangeQuery, *, context: ActingContext) -> DoorRangeResult:

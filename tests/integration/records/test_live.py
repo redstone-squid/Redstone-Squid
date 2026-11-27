@@ -1,5 +1,6 @@
-"""Live door lookup uses confirmed source facts without growing the record catalogue."""
+"""Live door range lookups use confirmed source facts without growing the record catalogue."""
 
+from datetime import UTC, datetime
 from functools import partial
 
 import pytest
@@ -14,9 +15,9 @@ from squid.core.builds.models import BuildVersion, DoorBuild, ExtenderBuild
 from squid.core.permissions.application.services import PermissionService
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.records.application.expansion_regions import DoorRangeQuery
-from squid.core.records.application.live import DoorRecordLookup
+from squid.core.records.application.live import DoorRecordLookup, evaluate_door_record
 from squid.core.records.application.services import RecordComputationService, RecordService
-from squid.core.records.domain import BuildKind, RecordCriterion, TimingVariant
+from squid.core.records.domain import BuildKind, TimingVariant
 from squid.core.records.domain.regions import RegionAnalysisStatus
 from squid.core.records.infrastructure.range_analyzer import SubprocessRangeAnalyzer
 from squid.core.records.infrastructure.repository import PostgresRecordRepository
@@ -96,72 +97,8 @@ async def test_unknown_patterns_exclude_builds_from_record_candidates(
 
     async with sessions() as session:
         repository = PostgresRecordRepository(lambda: session)
-        candidates = await repository.list_for_door_lookup((6, 3, 1), "Door", version_id=None)
+        candidates = await repository.list_for_door_widths(3, 1, "Door", None, minimum=6, maximum=6)
         assert [row.candidate.build_id for row in candidates] == [door.id]
-
-
-async def test_live_lookup_does_not_materialize_large_sizes(
-    migrated_session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    sessions = migrated_session_factory
-    async with build_edit_session(sessions) as session:
-        account = Account()
-        session.add(account)
-        await session.flush()
-        family = DoorBuild(
-            submitter_account_id=account.id,
-            submission_status=BuildStatus.APPROVED,
-            orientation="Door",
-            expansion=document(),
-        )
-        fixed = DoorBuild(
-            submitter_account_id=account.id,
-            submission_status=BuildStatus.APPROVED,
-            orientation="Door",
-            door_width=6,
-            door_height=3,
-            width=10,
-            height=10,
-            depth=1,
-            normal_opening_time=10,
-        )
-        session.add_all([family, fixed])
-        await session.flush()
-        family_id, fixed_id = family.id, fixed.id
-    models = (Record, RecordDefinition, ComputationRun, RulesRevision, RecordRecomputeQueueItem)
-    async with sessions() as session:
-        before = [await session.scalar(select(func.count()).select_from(model)) for model in models]
-    factory = partial(SqlAlchemyUnitOfWork, sessions)
-    service = RecordService(
-        RecordComputationService(uow_factory=factory),
-        permissions=PermissionService(uow_factory=factory),
-        uow_factory=factory,
-        range_analyzer=SubprocessRangeAnalyzer(),
-    )
-    with record_queries(sessions) as statements:
-        result = await service.lookup_door(
-            DoorRecordLookup(opening=(6, 3, 1)), context=ActingContext.direct(AnonymousActor())
-        )
-        assert result.resolution.holder_ids == (family_id,)
-        assert {c.build_id for c in result.configurations} == {family_id, fixed_id}
-        fastest = await service.lookup_door(
-            DoorRecordLookup(opening=(6, 3, 1), criterion=RecordCriterion.FASTEST),
-            context=ActingContext.direct(AnonymousActor()),
-        )
-        assert fastest.resolution.holder_ids == (family_id,)
-        large = await service.lookup_door(
-            DoorRecordLookup(opening=(9999, 3, 1)), context=ActingContext.direct(AnonymousActor())
-        )
-        assert large.resolution.holder_ids == (family_id,)
-        assert large.configurations[0].volume == 50000
-        no_version = await service.lookup_door(
-            DoorRecordLookup(opening=(6, 3, 1), version_id=32767), context=ActingContext.direct(AnonymousActor())
-        )
-        assert not no_version.resolution
-    assert not any(statement.lstrip().upper().startswith(("INSERT", "UPDATE", "DELETE")) for statement in statements)
-    async with sessions() as session:
-        after = [await session.scalar(select(func.count()).select_from(model)) for model in models]
-    assert after == before
 
 
 @pytest.mark.parametrize("publication", [False, True])
@@ -212,12 +149,14 @@ async def test_lookup_snapshot_does_not_mix_concurrent_measurement_edits(
             await records.begin_computation()
             sources = await records.list_confirmed(BuildKind.DOOR)
         else:
-            sources = await records.list_for_door_lookup((6, 3, 1), "Door", None)
+            sources = await records.list_for_door_widths(3, 1, "Door", None, minimum=6, maximum=6)
     assert sources[0].candidate.fixed_volume == 100
     assert sources[0].candidate.timing_variants[0].values[0] == 10
     monkeypatch.setattr(PostgresRecordRepository, "_door_timings", original_timings)
     async with sessions() as session:
-        sources = await PostgresRecordRepository(lambda: session).list_for_door_lookup((6, 3, 1), "Door", None)
+        sources = await PostgresRecordRepository(lambda: session).list_for_door_widths(
+            3, 1, "Door", None, minimum=6, maximum=6
+        )
     assert sources[0].candidate.fixed_volume == 200
     assert sources[0].candidate.timing_variants[0].values[0] == 1
 
@@ -287,9 +226,12 @@ async def test_width_lookup_reads_stored_families_and_fixed_exceptions_without_w
         assert {c.build_id for c in result.configurations} == {family_id, fixed_id}
         for width in (1, 2, 5, 6, 7, 9, 9999):
             region = next(r for r in result.analysis.regions if r.domain.contains(width))
-            expected = await service.lookup_door(
-                DoorRecordLookup(opening=(width, 3, 1), version_id=version_id),
-                context=ActingContext.direct(AnonymousActor()),
+            async with SqlAlchemyUnitOfWork(sessions) as uow:
+                sources = await uow.record_candidates.list_for_door_widths(
+                    3, 1, "Door", version_id, minimum=width, maximum=width
+                )
+            expected = evaluate_door_record(
+                DoorRecordLookup(opening=(width, 3, 1), version_id=version_id), sources, evaluated_at=datetime.now(UTC)
             )
             assert region.resolution == expected.resolution
         clipped = await service.lookup_door_ranges(

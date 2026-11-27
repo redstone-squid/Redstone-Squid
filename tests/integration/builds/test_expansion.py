@@ -164,17 +164,15 @@ async def test_live_lookup_loads_families_without_sample_dimensions(
         await session.flush()
         family_id, fixed_id = family.id, fixed.id
     async with SqlAlchemyUnitOfWork(sessions) as uow:
-        candidates = await uow.record_candidates.list_for_door_lookup((6, 3, 1), "Door", None)
+        candidates = await uow.record_candidates.list_for_door_widths(3, 1, "Door", None, minimum=6, maximum=6)
         assert {candidate.candidate.build_id for candidate in candidates} == {family_id, fixed_id}
         loaded = next(candidate for candidate in candidates if candidate.candidate.build_id == family_id)
         assert loaded.expansion == expansion_document()
         assert loaded.candidate.fixed_volume is None
         assert loaded.candidate.timing_variants == ()
         assert loaded.candidate.completion_at is None
-        assert loaded.door is not None
-        assert loaded.door.size == "6x3"
     async with SqlAlchemyUnitOfWork(sessions) as uow:
-        candidates = await uow.record_candidates.list_for_door_lookup((9999, 3, 1), "Door", None)
+        candidates = await uow.record_candidates.list_for_door_widths(3, 1, "Door", None, minimum=9999, maximum=9999)
         assert [candidate.candidate.build_id for candidate in candidates] == [family_id]
     async with SqlAlchemyUnitOfWork(sessions) as uow:
-        assert await uow.record_candidates.list_for_door_lookup((6, 3, 1), "Skydoor", None) == ()
+        assert await uow.record_candidates.list_for_door_widths(3, 1, "Skydoor", None, minimum=6, maximum=6) == ()

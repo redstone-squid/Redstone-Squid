@@ -36,7 +36,6 @@ from squid.api.security import requires
 from squid.api.v1.browser_views import BrowserViews
 from squid.core.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD
 from squid.core.records.application.expansion_regions import DoorRangeQuery, DoorRangeResult
-from squid.core.records.application.live import DoorRecordLookup, LiveDoorRecord
 from squid.core.records.application.models import (
     PublicRecordDetail,
     PublishedRecordResult,
@@ -123,19 +122,6 @@ async def list_records(
     selector = resolve_selector(offset=offset, after_id=after_id, before_id=before_id)
     page = await records.list_page(selector=selector, sort=sort, page_size=page_size, context=caller.context())
     return Page[PublishedRecordResult].from_domain(page)
-
-
-@post(
-    "/lookup/door",
-    status_code=200,
-    responses=responses(400, 422, 503),
-    operation_id="records_lookup_door",
-    security=[ANONYMOUS],
-    opt=contract(cli=transport_only()),
-)
-async def lookup_door(data: JSONBody[DoorRecordLookup], records: Records, caller: CurrentCaller) -> LiveDoorRecord:
-    """Compare fixed doors and expandable configurations without creating a title."""
-    return await records.lookup_door(data, context=caller.context())
 
 
 @post(
@@ -346,7 +332,6 @@ router = Router(
     route_handlers=[
         get_record,
         list_records,
-        lookup_door,
         lookup_door_ranges,
         get_door_ranges,
         register_door_ranges,

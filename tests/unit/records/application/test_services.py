@@ -66,20 +66,6 @@ class FakeCandidates:
     async def list_confirmed(self, kind: BuildKind) -> Sequence[CandidateBuild]:
         return tuple(candidate for candidate in self.candidates if candidate.kind is kind)
 
-    async def list_for_door_lookup(
-        self, opening: tuple[int, int, int], orientation: str, version_id: int | None
-    ) -> Sequence[CandidateBuild]:
-        width, height, depth = opening
-        size = f"{width}x{height}" + (f"x{depth}" if depth != 1 else "")
-        return tuple(
-            replace(candidate, door=replace(candidate.door, size=size))
-            for candidate in self.candidates
-            if candidate.door is not None
-            and candidate.door.orientation == orientation
-            and (candidate.expansion is not None or candidate.door.size == size)
-            and (version_id is None or version_id in candidate.version_ids)
-        )
-
     async def list_for_door_widths(
         self,
         height: int,
@@ -739,8 +725,7 @@ async def test_a_build_lease_recomputes_only_the_categories_of_that_build() -> N
     }
 
 
-async def test_live_door_lookup_applies_tags_version_and_thresholds_without_writes() -> None:
-
+def test_requested_door_category_applies_types_restrictions_and_thresholds() -> None:
     flush = CandidateTag(id=1, kind=RecordTagRole.RESTRICTION, name="Flush", restriction_type="wiring-placement")
     width = CandidateTag(
         id=7,
@@ -763,36 +748,23 @@ async def test_live_door_lookup_applies_tags_version_and_thresholds_without_writ
             branches=(ExpansionBranch(opening_width="n", opening_height="2", opening_depth="1", volume="10n"),),
         ),
     )
-    wrong_version = replace(family, candidate=replace(family.candidate, build_id=3), version_ids=frozenset({4}))
     wrong_types = replace(family, candidate=replace(family.candidate, build_id=4), types=())
     wrong_restrictions = replace(family, candidate=replace(family.candidate, build_id=5), restrictions=())
-    candidates = FakeCandidates((source, family, wrong_version, wrong_types, wrong_restrictions))
-    runs = FakeRuns()
-    computation = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
-    service = RecordService(
-        computation,
-        permissions=create_autospec(PermissionService, instance=True),
-        uow_factory=lambda: RecordScope(candidates, runs),
+    lookup = DoorRecordLookup(
+        opening=(2, 2, 1),
+        type_ids=frozenset({20}),
+        restriction_ids=frozenset({1, 7}),
+        restriction_values=((7, "at_most", "4"),),
     )
-    result = await service.lookup_door(
-        DoorRecordLookup(
-            opening=(2, 2, 1),
-            type_ids=frozenset({20}),
-            restriction_ids=frozenset({1, 7}),
-            restriction_values=((7, "at_most", "4"),),
-            version_id=3,
-        ),
-        context=ActingContext.direct(AnonymousActor()),
+    category = RecordComputationService(uow_factory=Mock()).requested_category(
+        lookup.identity, (source, family, wrong_types, wrong_restrictions)
     )
-    assert result.resolution.holder_ids == (2,)
-    assert {configuration.build_id for configuration in result.configurations} == {1, 2}
-    assert runs.batches == []
-    assert runs.requested == {}
+    assert category is not None
+    assert {candidate.build_id for candidate in category.candidates} == {1, 2}
 
 
 @pytest.mark.parametrize("threshold", ["not a number", "NaN", "Infinity", "1e999999", "1e-999999", "2"])
-async def test_live_lookup_rejects_incompatible_threshold_without_crashing(threshold: str) -> None:
-
+def test_requested_door_category_rejects_incompatible_threshold_without_crashing(threshold: str) -> None:
     width = CandidateTag(
         id=7,
         kind=RecordTagRole.RESTRICTION,
@@ -801,24 +773,16 @@ async def test_live_lookup_rejects_incompatible_threshold_without_crashing(thres
         assigned_value=Decimal(3),
         record_operator="at_most",
     )
-    candidates = FakeCandidates((_door(1, volume=100, opening=10, restrictions=(width,)),))
-    runs = FakeRuns()
-    computation = RecordComputationService(uow_factory=lambda: RecordScope(candidates, runs))
-    service = RecordService(
-        computation,
-        permissions=create_autospec(PermissionService, instance=True),
-        uow_factory=lambda: RecordScope(candidates, runs),
+    lookup = DoorRecordLookup(
+        opening=(2, 2, 1),
+        type_ids=frozenset({20}),
+        restriction_ids=frozenset({7}),
+        restriction_values=((7, "at_most", threshold),),
     )
-    result = await service.lookup_door(
-        DoorRecordLookup(
-            opening=(2, 2, 1),
-            type_ids=frozenset({20}),
-            restriction_ids=frozenset({7}),
-            restriction_values=((7, "at_most", threshold),),
-        ),
-        context=ActingContext.direct(AnonymousActor()),
+    category = RecordComputationService(uow_factory=Mock()).requested_category(
+        lookup.identity, (_door(1, volume=100, opening=10, restrictions=(width,)),)
     )
-    assert not result.resolution
+    assert category is None or not category.candidates
 
 
 async def test_width_lookup_filters_tags_and_versions_without_writes() -> None:

@@ -855,27 +855,6 @@ export type DoorRecordEvidence = {
 };
 
 /**
- * DoorRecordLookup
- */
-export type DoorRecordLookup = {
-    orientation?: 'Door' | 'Skydoor' | 'Trapdoor';
-    type_ids?: Array<number>;
-    restriction_ids?: Array<number>;
-    restriction_values?: Array<[
-        number,
-        'exact' | 'at_most' | 'at_least',
-        string
-    ] | unknown>;
-    version_id?: number | null;
-    opening: [
-        number,
-        number,
-        number
-    ];
-    criterion?: RecordCriterion;
-};
-
-/**
  * DoorRegionConfiguration
  */
 export type DoorRegionConfiguration = {
@@ -8150,43 +8129,6 @@ export type RecordsListResponses = {
 };
 
 export type RecordsListResponse = RecordsListResponses[keyof RecordsListResponses];
-
-export type RecordsLookupDoorData = {
-    body: DoorRecordLookup;
-    path?: never;
-    query?: never;
-    url: '/v1/records/lookup/door';
-};
-
-export type RecordsLookupDoorErrors = {
-    /**
-     * Bad Request
-     */
-    400: ProblemDetail;
-    /**
-     * Unprocessable Content
-     */
-    422: ValidationProblemDetail;
-    /**
-     * Too Many Requests
-     */
-    429: ProblemDetail;
-    /**
-     * Service Unavailable
-     */
-    503: ProblemDetail;
-};
-
-export type RecordsLookupDoorError = RecordsLookupDoorErrors[keyof RecordsLookupDoorErrors];
-
-export type RecordsLookupDoorResponses = {
-    /**
-     * Request fulfilled, document follows
-     */
-    200: LiveDoorRecord;
-};
-
-export type RecordsLookupDoorResponse = RecordsLookupDoorResponses[keyof RecordsLookupDoorResponses];
 
 export type RecordsLookupDoorRangesData = {
     body: DoorRangeQuery;
