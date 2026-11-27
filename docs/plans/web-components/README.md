@@ -174,10 +174,10 @@ were built here, ahead of their phases.
 5. P13, needs API 24–25.
 6. A1 and the header, need API 1 and 3.
 7. A6 and A7, need API 29–31.
-8. S1, S2 and S3, need API 32–36.
+8. S1, S2 and S3, need API 32–36 and 60.
 9. L1 and L2, no API changes needed.
 10. A2–A5.
-11. P9 and P10, need API 15–17.
+11. P9, needs API 15.
 12. M1–M4, need API 8, 10, 37, 39–41.
 13. X1–X8.
 14. P1, P6, P14–P16.

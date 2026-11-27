@@ -99,11 +99,6 @@ Rules that apply to every screen:
   - The per-width point page shows the holder configurations.
 - *Actions:* change category, select a width, open a holder, share the link. Staff can refresh.
 
-**P10. Record check `/records/check`**
-- *Goal:* "would my door be a record?"
-- *Needs:* a form for the category, opening dimensions, timings and version. The result is the live evaluation: resolution status, current holders, and whether the entered numbers beat them.
-- *Actions:* start a submission prefilled with these values.
-
 **P11. Tags `/tags`**
 - *Goal:* look up what a restriction or pattern means.
 - *Needs:* a glossary grouped by kind, with a filter box. Each entry shows name, aliases, unit, and build and record counts, and links to P12.
@@ -199,12 +194,12 @@ Rules that apply to every screen:
   - Supplied files.
   - When the manifest is upgraded, a notice with "Update form".
   - Expiry notice.
-  - Submit panel: an error summary, then finalize.
+  - Submit panel: an error summary, the records this build would hold, share or miss (a prediction), then finalize.
 - *Actions:* edit, upload, remove (with undo), choose the primary schematic, submit, discard the draft.
 
 **S3. Submission status `/submit/[draftId]/status`**
 - *Goal:* know what happens after submitting.
-- *Needs:* attempt status as steps (queued, processing, needs attention, completed). Issues link back to their fields. When complete, a link to the build. Vote progress once the build is pending.
+- *Needs:* attempt status as steps (queued, processing, needs attention, completed). Issues link back to their fields. When complete, a link to the build. Vote progress and the predicted records once the build is pending.
 
 ## Device link flows
 
@@ -223,7 +218,7 @@ Rules that apply to every screen:
 
 **M2. Review build `/review/builds/[id]`**
 - *Goal:* decide on one build.
-- *Needs:* the P5 content, plus a vote panel (options, my vote, tallies, thresholds) and edit access. Approve and reject are shown only if the user has those permissions.
+- *Needs:* the P5 content and the records approval would change, plus a vote panel (options, my vote, tallies, thresholds) and edit access. Approve and reject are shown only if the user has those permissions.
 
 **M3. Correction proposal `/review/corrections/[id]`**
 - *Goal:* accept or reject an inferred correction.

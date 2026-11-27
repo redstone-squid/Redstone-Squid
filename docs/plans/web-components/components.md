@@ -440,9 +440,9 @@ The `src/ui` primitives and patterns, the feature components built from them, an
 
 - _API:_ `type` (`radio | checkbox`), `options` of `{value, label, description?, icon?, disabled?}`, `value` (bindable), `variant` (`list | inline | cards`), `columns?`.
 - _Renders:_ `fieldset` and `legend`. Arrow keys work natively for radios.
-- _Users:_ S1 category cards, S2 choice and multi_choice controls (up to about 7 options), P2 filter enums, P10, A7, VoteControl, X1.
+- _Users:_ S1 category cards, S2 choice and multi_choice controls (up to about 7 options), P2 filter enums, A7, VoteControl, X1.
 
-**`FieldGroup`**: kept as a fieldset wrapper for related heterogeneous fields, such as door dimensions (width, height, depth) or a range. _Users:_ S2, P9 form, P10, M4.
+**`FieldGroup`**: kept as a fieldset wrapper for related heterogeneous fields, such as door dimensions (width, height, depth) or a range. _Users:_ S2, P9 form, M4.
 
 **`RangeField`**
 
@@ -452,7 +452,7 @@ The `src/ui` primitives and patterns, the feature components built from them, an
 **`UnitField`** (duration and measurement)
 
 - _API:_ `value` (the canonical number, e.g. game ticks), `units` (`[{id, label, factor}]`), `unit` (bindable), `labels`. Shows the converted value as a hint, e.g. "= 1.25 s".
-- _Users:_ S2 duration control (game ticks, redstone ticks, seconds), P10, M4, P2 timing filters.
+- _Users:_ S2 duration control (game ticks, redstone ticks, seconds), M4, P2 timing filters.
 
 **`Autocomplete`** (free text with suggestions, refit)
 
@@ -472,7 +472,7 @@ The `src/ui` primitives and patterns, the feature components built from them, an
 
 - _API:_ `options` or `load` (async with signal), `value` (string, or string[] when `multiple`), `multiple?` (selected values as removable `Chip`s inside the control), `allowCreate?` with `createLabel(text)` passed as a pre-bound string template, `labels`, plus the field contract.
 - _No-JS:_ when `options` is static, render a native `<select>` (with `multiple`). When the options are async, fall back to a text input.
-- _Users:_ S2 choice fields with more than 7 options or an `option_source`; the version picker (S2, P2, P9, P10); tag pickers (P9, P10, P2 filters, A7 filter subscription); M3 build match; X1 channel and role pickers; X6 subject picker.
+- _Users:_ S2 choice fields with more than 7 options or an `option_source`; the version picker (S2, P2, P9); tag pickers (P9, P2 filters, A7 filter subscription); M3 build match; X1 channel and role pickers; X6 subject picker.
 
 **`ListField`** (repeatable rows)
 
@@ -497,7 +497,7 @@ The `src/ui` primitives and patterns, the feature components built from them, an
 
 - _API:_ `title`, `errors` of `{fieldId, message}`, `focusOnMount` (default true).
 - _Behavior:_ `role=alert` with `tabindex=-1`. Receives focus after a failed submit. Each item links to `#fieldId`, and clicking focuses the field.
-- _Users:_ S2 submit, M4, A2, X1, P10, P9 form, A1 consent.
+- _Users:_ S2 submit, M4, A2, X1, P9 form, A1 consent.
 
 **`FormActions`**
 

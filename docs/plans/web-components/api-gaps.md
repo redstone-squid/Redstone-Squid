@@ -17,17 +17,16 @@ Unfinished items come first, then finished ones, each grouped by area. Numbers a
 
 ### Records
 
-Items 12, 13, 15 and 17 share one **record holder summary**: `{build_id, title, creators: [{name, account_id | null}], preview}`. It extends search's `RecordSearchHolder` rather than adding another holder type. **Metrics** everywhere use `{name: {value, unit, display}}`; search's flat `metrics` map changes to match, so the server owns units and formatting.
+Items 12, 13, 15 and 60 share one **record holder summary**: `{build_id, title, creators: [{name, account_id | null}], preview}`, a core records type built from `PublicBuildSummary`. Search's record holders use it too, which re-indexes record documents. **Metrics** everywhere use `{name: {value, unit, display}}`, with `display` rendered in the request locale; search's flat `metrics` map changes to match, so the server owns units and formatting.
 
-11. **Record list filters and sorts.** `GET /v1/records` takes `build_kind`, `criterion`, `version_scope`, `status` and repeated `tag` IDs or slugs, as a `RecordListFilters`. Sorts are `recently_changed` and `title` beside `id`. Text search stays on `/v1/search`, whose records scope takes the same filters as query clauses. Needed by P7.
-12. **Holders on record lists.** The `/v1/records` list response gains `holders` (holder summaries), `metrics`, `category_key` and `holder_since`. Add them to the list's response type, not to the core `PublishedRecordResult`. `holder_since` is the `held_from` of the open history period, not `computed_at`, which changes on every recompute. Needed by P1 and RecordCard without N+1 requests.
-13. **Richer detail history.** `PublicRecordDetail.history` already returns stored periods with `build_ids`. Each entry gains holder summaries, because former holders are not always among the detail's builds, and `metrics`. Metrics are the holders' current values, so past measurements are not recoverable and chart 2 must not imply they are. History is short enough not to need paging. Needed by P8 Timeline and chart 2.
-14. **`PublicRecordDetail.siblings`:** `[{record_id, title, subtitle, criterion, version_scope, status}]` for the same category. Needed by the P8 switcher.
+11. **Record list filters and sorts.** `GET /v1/records` takes `build_kind`, `criterion`, `version_scope`, `status` and repeated `tag` IDs or slugs. `status` is `resolved` or `unresolved` (the result has gaps); the list holds current results only, so retired records are found through search's `record_state:retired`. Sorts are `recently_changed` (`computed_at`, which moves only when the published result changes) and `title` beside `id`. Text search stays on `/v1/search`. Needed by P7.
+12. **Holders on record lists.** Each `/v1/records` item gains `holders` (holder summaries), `metrics`, `category_key` and `holder_since`, assembled in core with one batched summary load per page. `holder_since` is the `held_from` of the open history period: when the holder was completed, not when we published it. Needed by P1 and RecordCard without N+1 requests.
+13. **Richer detail history.** Each `PublicRecordDetail.history` entry gains holder summaries, because former holders are not always among the detail's builds, and `metrics`. Metrics are the holders' current values, since each publish rewrites history from current builds, so chart 2 must not imply past measurements. History is short enough not to need paging. Needed by P8 Timeline and chart 2.
+14. **`PublicRecordDetail.siblings`:** `[{record_id, title, subtitle, criterion, version_scope}]` for the same category. Needed by the P8 switcher.
 15. **Range discovery and labels:**
-    - `GET /v1/records/ranges/door?orientation&height&depth` lists registered range queries with labels.
-    - `RangePublication` and `DoorRangeResult` gain `labels: {types: [{id, name, slug}], restrictions: [...], version: string | null}`. `DoorRangeQuery` is also a request body, so it stays unchanged. Without labels, P9 looks tags up by id.
+    - `GET /v1/records/ranges/door?orientation&height&depth` pages registered range queries with labels.
+    - `RangePublication` and `DoorRangeResult` gain `labels: {types: [{id, name, slug}], restrictions: [{id, name, slug, operator, value}], version: string | null}`, with `operator` and `value` null for plain restrictions. `DoorRangeQuery` is also a request body, so it stays unchanged.
     - Awarded regions gain holder summaries. The chart turns periodic regions into segments itself; if expansion is non-trivial, core provides it, not the API layer.
-17. **`records_lookup_door` returns holder summaries and a nullable `comparison`** (`beats_current: bool`, `delta` per metric) against the published record for the same category. `comparison` is null when no record is published for that category. P10's result needs it.
 
 ### Search
 
@@ -58,6 +57,7 @@ Items 12, 13, 15 and 17 share one **record holder summary**: `{build_id, title, 
 
 36. **Finalization push (phase 2).** S3 polls `/drafts/{id}/status` with `If-None-Match`. Add a long-poll or SSE stream only if polling proves costly.
 38. **Draft sharing.** `submission_draft_access` already exists. Add `GET/POST/DELETE /v1/submissions/drafts/{id}/editors`, needed if S2 adds collaborators (todo.md). This is a product decision, so leave it as an optional phase.
+60. **Record preview.** `GET /v1/submissions/drafts/{id}/record-preview` turns the draft into a record candidate and runs record publication against current approved builds without publishing. It returns each category the build would enter: the record (`record_id` null for a new one), an `outcome` of `holds`, `shares`, `ties_later`, `loses` or `undecided`, the missing facts and their fields when undecided, current holder summaries, and per-metric deltas. Other pending builds, approvals and rule changes can change the outcome, so the screen calls it a prediction. Phase 1 serves pending builds (`GET /v1/builds/{id}/record-preview`), which already load as candidates, for S3 and M2. Phase 2 needs a draft-to-candidate mapping. Needed by S2's submit panel, S3 and M2.
 
 ### Voting and review
 
@@ -112,7 +112,7 @@ Items 12, 13, 15 and 17 share one **record holder summary**: `{build_id, title, 
 
 ### Records
 
-16. **Door options come from the form option sources.** `GET /v1/submissions/form/options/{source}` is anonymous: `approved_patterns` for types, `approved_restrictions` and `approved_source_versions`; orientations come from the form manifest. P9 and P10 use these, so no new endpoint is needed.
+16. **Door options come from the form option sources.** `GET /v1/submissions/form/options/{source}` is anonymous: `approved_patterns` for types, `approved_restrictions` and `approved_source_versions`; orientations come from the form manifest. P9 uses these, so no new endpoint is needed.
 
 ### Search
 
