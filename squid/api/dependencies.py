@@ -10,6 +10,7 @@ from squid.api.security import Caller, current_caller
 from squid.core.accounts.application import AccountService
 from squid.core.auth.application.web import WebSessionService
 from squid.core.builds.application import BuildQueryService, BuildService
+from squid.core.catalogue.application import CatalogueStatsService
 from squid.core.diagnostics.application import ErrorReportService
 from squid.core.errors import ServiceUnavailableError
 from squid.core.media.errors import DraftMediaUnavailableError
@@ -64,6 +65,10 @@ def get_range_publication(services: Services) -> RangePublicationService:
 
 def get_public_records(services: Services) -> PublicRecordQueryService:
     return services.public_records
+
+
+def get_catalogue_stats(services: Services) -> CatalogueStatsService:
+    return services.catalogue_stats
 
 
 def get_notifications(services: Services) -> NotificationService:
@@ -147,6 +152,7 @@ RangePublications = NamedDependency[SkipValidation[RangePublicationService]]
 RecordAdministration = NamedDependency[SkipValidation[RecordAdministrationService]]
 PermissionAdmin = NamedDependency[SkipValidation[PermissionAdministrationService]]
 PublicRecords = NamedDependency[SkipValidation[PublicRecordQueryService]]
+CatalogueStatistics = NamedDependency[SkipValidation[CatalogueStatsService]]
 Notifications = NamedDependency[SkipValidation[NotificationService]]
 Schematics = NamedDependency[SkipValidation[SchematicService]]
 Search = NamedDependency[SkipValidation[SearchService]]

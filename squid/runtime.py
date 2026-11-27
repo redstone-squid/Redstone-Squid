@@ -29,6 +29,7 @@ from squid.core.auth.application.web import WebSessionService
 from squid.core.auth.impersonation import ImpersonationService
 from squid.core.builds.application import BuildInferenceService, BuildQueryService, BuildService, RestrictionService
 from squid.core.builds.application.ports import BuildSchematicSummaryProvider
+from squid.core.catalogue.application import CatalogueStatsService
 from squid.core.cli_auth import CliAuthorizationService
 from squid.core.community.application import WelcomeRelayService
 from squid.core.diagnostics.application import ErrorReportService
@@ -132,6 +133,7 @@ class ApiServices:
     records: RecordService
     record_administration: RecordAdministrationService
     public_records: PublicRecordQueryService
+    catalogue_stats: CatalogueStatsService
     range_publication: RangePublicationService
     schematics: SchematicService
     search: SearchService

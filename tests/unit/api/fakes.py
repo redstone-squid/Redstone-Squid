@@ -32,6 +32,7 @@ from squid.core.builds.domain import EMPTY_BUILD_FILTERS, BuildListFilters
 from squid.core.builds.domain.models import BuildStatus
 from squid.core.builds.errors import BuildNotFoundError
 from squid.core.builds.models import Build
+from squid.core.catalogue.application import CatalogueStats, CatalogueStatsService
 from squid.core.cli_auth.application import CliAuthorizationService
 from squid.core.cli_auth.domain import CliIdentity, IssuedCliEnrollment, IssuedCliSession, IssuedCliSessionChallenge
 from squid.core.cli_auth.errors import InvalidCliEnrollmentError
@@ -57,6 +58,7 @@ from squid.core.minecraft_auth.domain.models import (
     IssuedPlayerGrant,
     MinecraftPlayerContext,
     PublicServerProfile,
+    PublishedPaperServer,
 )
 from squid.core.minecraft_auth.errors import InvalidChallengeError, InvalidInstallationCredentialError
 from squid.core.minecraft_auth.models import PaperInstallation, PlayerAuthorizationChallenge
@@ -411,6 +413,10 @@ class MockMinecraftInstallations(InstallationCredentialService):
         raise InvalidInstallationCredentialError
 
     @override
+    async def public_servers(self, *, context: ActingContext) -> tuple[PublishedPaperServer, ...]:
+        return ()
+
+    @override
     async def rotate(self, *, context: ActingContext, installation_id: UUID) -> IssuedInstallationCredential:
         raise InvalidInstallationCredentialError
 
@@ -538,6 +544,15 @@ class MockRecordAdministration(RecordAdministrationService):
     @override
     async def request_backstop(self, *, kinds: Sequence[BuildKind], context: ActingContext) -> None:
         return None
+
+
+class MockCatalogueStats(CatalogueStatsService):
+    def __init__(self) -> None:
+        """Count an empty catalogue."""
+
+    @override
+    async def stats(self, *, context: ActingContext) -> CatalogueStats:
+        return CatalogueStats(builds=0, records=0, creators=0)
 
 
 class MockPublicRecords(PublicRecordQueryService):
@@ -831,6 +846,8 @@ def build_services(
     range_publication: RangePublicationService | None = None,
     versions: VersionService | None = None,
     permission_admin: PermissionAdministrationService | None = None,
+    catalogue_stats: CatalogueStatsService | None = None,
+    minecraft_installations: InstallationCredentialService | None = None,
 ) -> ApiServices:
     """Build the complete API graph with empty stores and injectable service replacements.
 
@@ -845,7 +862,7 @@ def build_services(
         api_keys=None,
         web_auth=web_auth,
         cli_authorization=cli_authorization or MockCliAuthorization(),
-        minecraft_installations=MockMinecraftInstallations(),
+        minecraft_installations=minecraft_installations or MockMinecraftInstallations(),
         minecraft_player_authorization=MockMinecraftPlayerAuthorization(),
         idempotency=idempotency or MockIdempotency(),
         notifications=MockNotifications(),
@@ -867,6 +884,7 @@ def build_services(
         records=MockRecords(),
         record_administration=MockRecordAdministration(),
         public_records=MockPublicRecords(),
+        catalogue_stats=catalogue_stats or MockCatalogueStats(),
         range_publication=range_publication or MockRangePublication(),
         submission_forms=MockSubmissionForms(),
         submission_drafts=MockSubmissionDrafts(),
@@ -890,6 +908,8 @@ def build_app(
     range_publication: RangePublicationService | None = None,
     versions: VersionService | None = None,
     permission_admin: PermissionAdministrationService | None = None,
+    catalogue_stats: CatalogueStatsService | None = None,
+    minecraft_installations: InstallationCredentialService | None = None,
     config: ApiProcessConfig = TEST_CONFIG,
 ) -> tuple[Litestar, MockDatabaseManager]:
     """Build the API app wired to in-memory fakes instead of real infrastructure."""
@@ -903,6 +923,8 @@ def build_app(
         range_publication=range_publication,
         versions=versions,
         permission_admin=permission_admin,
+        catalogue_stats=catalogue_stats,
+        minecraft_installations=minecraft_installations,
     )
     runtime = ApplicationRuntime(services, database.close, keep_database_active)
     return create_api_app(lambda _config: runtime, config=config), database

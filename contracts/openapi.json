@@ -8507,6 +8507,139 @@
         }
       }
     },
+    "/v1/minecraft/servers": {
+      "get": {
+        "tags": [
+          "minecraft-servers"
+        ],
+        "summary": "ListServers",
+        "description": "List active Paper servers whose owners turned on their public profile, oldest first.",
+        "operationId": "minecraft_servers_list",
+        "parameters": [
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "maximum": 50.0,
+              "minimum": 1.0,
+              "description": "Maximum number of items to return.",
+              "default": 50
+            },
+            "description": "Maximum number of items to return.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maximum": 10000,
+              "description": "Number of items to skip. Excludes after_id and before_id."
+            },
+            "description": "Number of items to skip. Excludes after_id and before_id.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_squid.api.v1.minecraft_servers.PublicServerSummary_"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {}
+        ],
+        "x-squid-cli": {
+          "classification": "transport-only"
+        }
+      }
+    },
     "/v1/accounts/me/notifications/preferences": {
       "get": {
         "tags": [
@@ -18025,6 +18158,77 @@
         }
       }
     },
+    "/v1/stats": {
+      "get": {
+        "tags": [
+          "catalogue"
+        ],
+        "summary": "CatalogueStats",
+        "description": "Count approved builds, current records, and credited creators.",
+        "operationId": "catalogue_stats",
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "required": false,
+                "deprecated": false
+              },
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogueStatsDetail"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {}
+        ],
+        "x-squid-cli": {
+          "classification": "transport-only"
+        }
+      }
+    },
     "/v1/impersonation": {
       "post": {
         "summary": "StartImpersonation",
@@ -27427,6 +27631,26 @@
         ],
         "title": "CandidateGap"
       },
+      "CatalogueStatsDetail": {
+        "properties": {
+          "builds": {
+            "type": "integer"
+          },
+          "records": {
+            "type": "integer"
+          },
+          "creators": {
+            "type": "integer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "builds",
+          "creators",
+          "records"
+        ],
+        "title": "CatalogueStatsDetail"
+      },
       "CategoryFormResponse": {
         "properties": {
           "code": {
@@ -32063,6 +32287,47 @@
         ],
         "title": "Page[TagSummary]"
       },
+      "Page_squid.api.v1.minecraft_servers.PublicServerSummary_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/PublicServerSummary"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "next": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prev": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "next",
+          "prev",
+          "total"
+        ],
+        "title": "Page[PublicServerSummary]"
+      },
       "Page_squid.api.v1.schemas.diagnostics.ErrorReportSummary_": {
         "properties": {
           "items": {
@@ -34087,6 +34352,73 @@
           "version_scope"
         ],
         "title": "PublicRecordSummary"
+      },
+      "PublicServerSummary": {
+        "properties": {
+          "installation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "display_name": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "address": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "description": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "website_url": {
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "url"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sponsor": {
+            "type": "boolean"
+          },
+          "listed_since": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "type": "object",
+        "required": [
+          "address",
+          "description",
+          "display_name",
+          "installation_id",
+          "listed_since",
+          "sponsor",
+          "website_url"
+        ],
+        "title": "PublicServerSummary"
       },
       "PublishedDoorPoint": {
         "properties": {
@@ -39581,6 +39913,14 @@
     {
       "name": "minecraft-authentication",
       "description": "Paper installation credentials and player-bound device authorization."
+    },
+    {
+      "name": "minecraft-servers",
+      "description": "Paper servers that publish a public profile."
+    },
+    {
+      "name": "catalogue",
+      "description": "Catalogue-wide counts."
     },
     {
       "name": "builds",

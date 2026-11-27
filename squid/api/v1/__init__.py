@@ -12,6 +12,7 @@ from squid.api.v1.consent import router as consent_router
 from squid.api.v1.creators import router as creator_aliases_router
 from squid.api.v1.diagnostics import router as diagnostics_router
 from squid.api.v1.minecraft_auth import router as minecraft_auth_router
+from squid.api.v1.minecraft_servers import router as minecraft_servers_router
 from squid.api.v1.notifications import router as notifications_router
 from squid.api.v1.permissions import router as permissions_router
 from squid.api.v1.records import router as records_router
@@ -19,6 +20,7 @@ from squid.api.v1.schematics import router as schematics_router
 from squid.api.v1.search import router as search_router
 from squid.api.v1.session import inspect_impersonation, session_snapshot, start_impersonation, stop_impersonation
 from squid.api.v1.settings import router as settings_router
+from squid.api.v1.stats import catalogue_stats
 from squid.api.v1.submission_intake import router as submission_intake_router
 from squid.api.v1.submission_media import router as submission_media_router
 from squid.api.v1.submission_recalculations import router as submission_recalculations_router
@@ -41,6 +43,7 @@ router = Router(
         consent_router,
         diagnostics_router,
         minecraft_auth_router,
+        minecraft_servers_router,
         notifications_router,
         permissions_router,
         records_router,
@@ -48,6 +51,7 @@ router = Router(
         search_router,
         settings_router,
         session_snapshot,
+        catalogue_stats,
         start_impersonation,
         inspect_impersonation,
         stop_impersonation,
@@ -75,6 +79,8 @@ TAGS_METADATA = [
         "name": "minecraft-authentication",
         "description": "Paper installation credentials and player-bound device authorization.",
     },
+    {"name": "minecraft-servers", "description": "Paper servers that publish a public profile."},
+    {"name": "catalogue", "description": "Catalogue-wide counts."},
     {"name": "builds", "description": "Public redstone build catalog."},
     {"name": "search", "description": "Search grammar and field discovery."},
     {"name": "suggest", "description": "Typeahead completions for registered value sources."},

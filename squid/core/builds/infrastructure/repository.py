@@ -15,6 +15,7 @@ from sqlalchemy import (
     Table,
     delete,
     func,
+    literal,
     select,
     update,
 )
@@ -26,6 +27,7 @@ from sqlalchemy.orm.exc import StaleDataError
 from whenever import Instant
 
 from squid.core.accounts.domain import fold_creator_name
+from squid.core.accounts.infrastructure.attribution import attributed_credits
 from squid.core.accounts.models import Account, CreatorAlias
 from squid.core.builds.application.queries import (
     BuildListSort,
@@ -40,6 +42,7 @@ from squid.core.builds.domain import (
     BuildStatus,
     Credit,
     CreditAttribution,
+    CreditRole,
     Info,
     UnresolvedTags,
 )
@@ -428,6 +431,37 @@ class BuildRepository:
             filters=filters,
         )
         return await session.scalar(statement) or 0
+
+    async def count_creators(self) -> int:
+        """Count the distinct people credited as creators or designers on approved builds, as cards list them.
+
+        A credit counts as its public account when it has one, so one person credited
+        under several names or identities counts once. Other credits count by alias,
+        then provider subject, then lowercased name.
+        """
+        public = attributed_credits()
+        account = (
+            select(func.min(public.c.account_id))
+            .where(public.c.build_id == BuildCredit.build_id, public.c.position == BuildCredit.position)
+            .correlate(BuildCredit)
+            .scalar_subquery()
+        )
+        person = func.coalesce(
+            literal("account:") + account.cast(String),
+            "alias:" + BuildCredit.alias_id.cast(String),
+            BuildCredit.kind.cast(String) + ":" + BuildCredit.subject,
+            "name:" + func.lower(BuildCredit.name),
+        )
+        statement = (
+            select(func.count(func.distinct(person)))
+            .select_from(BuildCredit)
+            .join(Build, Build.id == BuildCredit.build_id)
+            .where(
+                Build.submission_status == BuildStatus.APPROVED,
+                BuildCredit.role.in_((CreditRole.CREATOR, CreditRole.DESIGNER)),
+            )
+        )
+        return await self._session().scalar(statement) or 0
 
     async def next_attachment_review(self, after: int) -> int | None:
         builds = Build.__table__.c

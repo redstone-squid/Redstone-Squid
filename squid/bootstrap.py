@@ -54,6 +54,7 @@ from squid.core.builds.application.tag_service import BuildTagService
 from squid.core.builds.infrastructure.embeddings import OpenAIEmbeddingModel
 from squid.core.builds.infrastructure.schematic_summary import SchematicServiceSummaryProvider
 from squid.core.builds.infrastructure.text_generation import OpenAITextGenerator
+from squid.core.catalogue.application import CatalogueStatsService
 from squid.core.cli_auth import CliAuthorizationService, CliSecretCodec
 from squid.core.community.application import WelcomeRelayService
 from squid.core.community.domain import WelcomeRelayPolicy
@@ -692,6 +693,7 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
             graph.record_computation, graph.permissions, uow_factory=graph.uow_factory
         ),
         public_records=graph.public_records,
+        catalogue_stats=CatalogueStatsService(uow_factory=graph.uow_factory),
         range_publication=graph.range_publication,
         schematics=graph.schematics,
         search=graph.search,
