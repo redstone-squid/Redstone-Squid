@@ -32,6 +32,7 @@ from squid.api.pagination import (
     PageSizeParam,
     resolve_selector,
 )
+from squid.api.revisions import InvalidRevisionError
 from squid.api.security import Caller, requires
 from squid.api.v1.browser_views import BrowserViews
 from squid.api.v1.schemas.builds import BuildDetail, BuildPatch, BuildStatusFilter
@@ -46,7 +47,6 @@ from squid.core.builds.application.edits import BUILD_EDIT, build_target, patch_
 from squid.core.builds.domain import BuildCategory, BuildListFilters, BuildStatus
 from squid.core.builds.errors import (
     BuildNotFoundError,
-    BuildRevisionMismatchError,
     BuildRevisionRequiredError,
 )
 from squid.core.builds.history import PublicBuildRevision
@@ -299,13 +299,13 @@ def _expected_revision(build_id: int, if_match: str | None) -> int:
     """Read the revision from a single strong build ETag.
 
     Missing If-Match raises BuildRevisionRequiredError. A malformed tag or a tag
-    for another build raises BuildRevisionMismatchError.
+    for another build raises InvalidRevisionError.
     """
     if if_match is None:
         raise BuildRevisionRequiredError(build_id)
     match = _BUILD_ETAG.fullmatch(if_match.strip())
     if match is None or int(match.group("build_id")) != build_id:
-        raise BuildRevisionMismatchError(build_id, expected_revision=None)
+        raise InvalidRevisionError
     return int(match.group("revision"))
 
 

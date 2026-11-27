@@ -24,7 +24,6 @@ class ErrorCode(StrEnum):
     ALIAS_IN_USE = "ALIAS_IN_USE"
     BUILD_BUSY = "BUILD_BUSY"
     BUILD_NOT_FOUND = "BUILD_NOT_FOUND"
-    BUILD_REVISION_MISMATCH = "BUILD_REVISION_MISMATCH"
     BUILD_REVISION_REQUIRED = "BUILD_REVISION_REQUIRED"
     CLAIM_NOT_FOUND = "CLAIM_NOT_FOUND"
     CREATOR_ALIAS_NOT_FOUND = "CREATOR_ALIAS_NOT_FOUND"
@@ -59,6 +58,7 @@ class ErrorCode(StrEnum):
     RATE_LIMITED = "RATE_LIMITED"
     RECORD_NOT_FOUND = "RECORD_NOT_FOUND"
     RESTRICTION_NOT_FOUND = "RESTRICTION_NOT_FOUND"
+    REVISION_CONFLICT = "REVISION_CONFLICT"
     SCHEMATIC_INVALID = "SCHEMATIC_INVALID"
     SCHEMATIC_NOT_FOUND = "SCHEMATIC_NOT_FOUND"
     SCHEMATIC_RENDER_REFUSED = "SCHEMATIC_RENDER_REFUSED"
@@ -243,6 +243,32 @@ class ConflictError(DomainError, RuntimeError):
 
     default_message = tr(t"core-operation-conflict = The operation conflicts with the current state.")
     default_title = tr(t"core-errors-operation-conflict = Operation conflict")
+
+
+class StaleRevisionError(ConflictError):
+    """The caller's revision of a resource is no longer current, so the write was refused.
+
+    Every subclass shares the `REVISION_CONFLICT` code, and the HTTP API answers 412.
+    Public context holds the caller's `expected` revision and the stored `current` one,
+    each omitted when the raiser does not know it, such as after a lost commit race.
+    """
+
+    default_message = tr(t"core-revision-conflict = This item changed elsewhere. Reload it before trying again.")
+    default_title = tr(t"core-errors-revision-conflict = Item changed")
+    default_code = ErrorCode.REVISION_CONFLICT
+
+    def __init__(
+        self,
+        expected: int | None = None,
+        current: int | None = None,
+        *,
+        context: Mapping[str, JSONValue] | None = None,
+        public_context: Mapping[str, JSONValue] | None = None,
+    ) -> None:
+        revisions = {name: value for name, value in (("expected", expected), ("current", current)) if value is not None}
+        super().__init__(
+            context={**revisions, **(context or {})}, public_context={**revisions, **(public_context or {})}
+        )
 
 
 class AuthenticationError(DomainError):

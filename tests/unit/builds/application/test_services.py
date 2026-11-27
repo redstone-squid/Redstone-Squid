@@ -457,7 +457,7 @@ async def test_edit_rejects_a_stale_expected_revision(existing_build: DoorBuild)
             source="test",
             context=ActingContext.worker("test"),
         )
-    assert error.value.public_context == {"build_id": 42, "expected_revision": 2, "current_revision": 1}
+    assert error.value.public_context == {"build_id": 42, "expected": 2, "current": 1}
     assert locks.acquisitions == []
     assert existing_build.dimensions == (None, None, None)
 

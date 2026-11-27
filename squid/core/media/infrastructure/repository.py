@@ -678,7 +678,7 @@ class PostgresMediaJobRepository(MediaJobRepository):
             if owner_account_id != authorization.owner_account_id:
                 raise MediaDraftNotFoundError(draft_id)
             if revision != authorization.draft_revision:
-                raise MediaDraftRevisionConflictError(expected=authorization.draft_revision, actual=revision)
+                raise MediaDraftRevisionConflictError(expected=authorization.draft_revision, current=revision)
         if require_editable and DraftStatus(status) not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
             raise MediaDraftStateConflictError(status)
         return DraftStatus(status)

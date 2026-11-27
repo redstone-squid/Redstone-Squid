@@ -10,7 +10,7 @@ from uuid import UUID, uuid4
 from pydantic import JsonValue
 from whenever import Instant
 
-from squid.core.errors import ConflictError, ErrorCode, InvalidStateError, ValidationError
+from squid.core.errors import ConflictError, ErrorCode, InvalidStateError, StaleRevisionError, ValidationError
 from squid.core.i18n import tr
 
 
@@ -189,13 +189,9 @@ class EditResult:
     replayed: bool = False
 
 
-class RevisionConflictError(ConflictError):
-    default_message = tr(t"edits-revision-conflict = This item changed elsewhere. Reload it before editing.")
-
+class RevisionConflictError(StaleRevisionError):
     def __init__(self, expected: Revision, current: int) -> None:
-        super().__init__(context={"target": expected.target.identity, "expected": expected.value, "current": current})
-        self.expected = expected
-        self.current = current
+        super().__init__(expected.value, current, context={"target": expected.target.identity})
 
 
 def require_revision(expected: Revision | LatestRevision, current: int) -> Revision:
@@ -231,7 +227,7 @@ class EditExpiredError(InvalidStateError):
     default_message = tr(t"edits-operation-expired = This edit has expired. Reload the item before editing again.")
 
 
-class ConcurrentEditError(ConflictError):
+class ConcurrentEditError(StaleRevisionError):
     default_message = tr(
         t"edits-concurrent-write = Another edit committed first. Reload this item before trying again."
     )

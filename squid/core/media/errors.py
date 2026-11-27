@@ -14,6 +14,7 @@ from squid.core.errors import (
     InvalidStateError,
     NotFoundError,
     ServiceUnavailableError,
+    StaleRevisionError,
     ValidationError,
 )
 from squid.core.i18n import tr
@@ -82,7 +83,7 @@ class MediaDraftStateConflictError(ConflictError):
         super().__init__(public_context={"reason": "draft_state", "status": status})
 
 
-class MediaDraftRevisionConflictError(ConflictError):
+class MediaDraftRevisionConflictError(StaleRevisionError):
     """An authorized upload raced with another draft mutation."""
 
     default_message = tr(
@@ -91,12 +92,6 @@ class MediaDraftRevisionConflictError(ConflictError):
     default_title = tr(t"media-errors-draft-changed = Draft changed")
     default_resource = "media"
     default_end_user_action = tr(t"media-reload-draft-upload = Reload the draft and upload the attachment again.")
-
-    def __init__(self, *, expected: int, actual: int) -> None:
-        super().__init__(
-            context={"expected_revision": expected, "actual_revision": actual},
-            public_context={"reason": "draft_revision", "actual_revision": actual},
-        )
 
 
 class MediaDraftNotFoundError(NotFoundError):

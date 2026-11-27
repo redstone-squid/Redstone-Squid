@@ -283,7 +283,7 @@ def test_draft_field_operations_are_atomic_and_revisioned() -> None:
 
     with pytest.raises(DraftRevisionConflictError) as error:
         updated.apply(change)
-    assert error.value.public_context == {"expected_revision": 0, "actual_revision": 1}
+    assert error.value.public_context == {"expected": 0, "current": 1}
 
 
 def test_draft_lifecycle_prevents_edits_while_processing() -> None:

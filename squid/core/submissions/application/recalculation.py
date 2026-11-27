@@ -233,8 +233,8 @@ class RecalculationProposalService:
             if build.revision != proposal.expected_revision:
                 raise BuildRevisionMismatchError(
                     build.id or proposal.build_id,
-                    expected_revision=proposal.expected_revision,
-                    current_revision=build.revision,
+                    expected=proposal.expected_revision,
+                    current=build.revision,
                 )
             prepared = await self._builds.prepare_edit(
                 build.copy_for_edit(), proposal.facts.patch(build), context=ActingContext.for_actor(actor)
@@ -278,7 +278,7 @@ class RecalculationProposalService:
                 raise ConflictError(message)
             if current.revision != proposal.expected_revision:
                 raise BuildRevisionMismatchError(
-                    current.id or 0, expected_revision=proposal.expected_revision, current_revision=current.revision
+                    current.id or 0, expected=proposal.expected_revision, current=current.revision
                 )
             if (current.submitter_account_id, current.category, current.submission_status) != (
                 build.submitter_account_id,

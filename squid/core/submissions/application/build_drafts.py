@@ -117,9 +117,7 @@ class BuildDraftEditor:
                     for key in sorted(source.answers.keys() | saved.answers.keys())
                     if source.answers.get(key) != saved.answers.get(key)
                 ]
-                raise RevisionConflictError(expected, build.revision).with_context(
-                    public_context={"expected": source.revision, "current": build.revision, "changes": changes}
-                )
+                raise RevisionConflictError(expected, build.revision).with_context(public_context={"changes": changes})
             answers = current.snapshot.answers
             if answers.keys() - source.answers.keys():
                 raise AuthorizationError

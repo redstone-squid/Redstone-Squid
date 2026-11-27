@@ -16,9 +16,8 @@ from squid.api.request_context import resolve_request_id
 from squid.api.revisions import InvalidRevisionError, RevisionRequiredError
 from squid.api.security import ANONYMOUS, Caller
 from squid.api.validation import ValidationContext
-from squid.core.builds.errors import BuildRevisionMismatchError, BuildRevisionRequiredError
+from squid.core.builds.errors import BuildRevisionRequiredError
 from squid.core.diagnostics.log_capture import captured
-from squid.core.edits.domain import ConcurrentEditError, RevisionConflictError
 from squid.core.errors import (
     AuthenticationError,
     AuthorizationError,
@@ -30,6 +29,7 @@ from squid.core.errors import (
     RateLimitedError,
     ServiceUnavailableError,
     SquidError,
+    StaleRevisionError,
     ValidationError,
 )
 from squid.core.i18n import localization_for, tr
@@ -150,9 +150,7 @@ def _problem_response(
 def _status_for_error(error: SquidError) -> int:
     if isinstance(error, (BuildRevisionRequiredError, RevisionRequiredError)):
         return HTTPStatus.PRECONDITION_REQUIRED
-    if isinstance(
-        error, (BuildRevisionMismatchError, InvalidRevisionError, RevisionConflictError, ConcurrentEditError)
-    ):
+    if isinstance(error, (StaleRevisionError, InvalidRevisionError)):
         return HTTPStatus.PRECONDITION_FAILED
     if isinstance(error, AuthenticationError):
         return HTTPStatus.UNAUTHORIZED

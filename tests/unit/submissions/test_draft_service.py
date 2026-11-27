@@ -163,7 +163,7 @@ class FakeDraftRepository:
         if current.snapshot.schema_revision == target_schema_revision:
             return AppliedDraftUpgrade(current, replayed=True)
         if current.snapshot.revision != expected_revision:
-            raise DraftRevisionConflictError(expected=expected_revision, actual=current.snapshot.revision)
+            raise DraftRevisionConflictError(expected=expected_revision, current=current.snapshot.revision)
         updated = replace(
             current,
             snapshot=replace(

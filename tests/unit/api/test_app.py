@@ -3,6 +3,7 @@
 import re
 
 import httpx
+import pytest
 from litestar import Litestar, get
 from litestar.testing import TestClient
 from pytest_mock import MockerFixture
@@ -12,7 +13,9 @@ from squid.api.errors import PROBLEM_DETAIL_MEDIA_TYPE
 from squid.config import ApiConfig, ApiProcessConfig
 from squid.core.accounts.errors import MinecraftServiceUnavailableError
 from squid.core.builds.errors import BuildRevisionMismatchError, BuildRevisionRequiredError
-from squid.core.errors import ErrorCode, InternalError
+from squid.core.edits.domain import ConcurrentEditError, EditTarget, Revision, RevisionConflictError
+from squid.core.errors import ErrorCode, InternalError, StaleRevisionError
+from squid.core.submissions.domain import DraftRevisionConflictError
 from tests.unit.api.fakes import (
     NONEXISTENT_UUID,
     TEST_SYNERGY_SECRET,
@@ -214,7 +217,7 @@ def test_build_revision_errors_use_http_preconditions(app_factory: tuple[Litesta
 
     @get("/revision-mismatch")
     async def revision_mismatch() -> None:
-        raise BuildRevisionMismatchError(42, expected_revision=3, current_revision=4)
+        raise BuildRevisionMismatchError(42, expected=3, current=4)
 
     app.register(revision_mismatch)
 
@@ -225,4 +228,32 @@ def test_build_revision_errors_use_http_preconditions(app_factory: tuple[Litesta
     assert required.status_code == 428
     assert required.json()["code"] == ErrorCode.BUILD_REVISION_REQUIRED
     assert mismatch.status_code == 412
-    assert mismatch.json()["context"] == {"build_id": 42, "expected_revision": 3, "current_revision": 4}
+    assert mismatch.json()["code"] == ErrorCode.REVISION_CONFLICT
+    assert mismatch.json()["context"] == {"build_id": 42, "expected": 3, "current": 4}
+
+
+@pytest.mark.parametrize(
+    ("error", "context"),
+    [
+        (RevisionConflictError(Revision(EditTarget("account", "7"), 2), 3), {"expected": 2, "current": 3}),
+        (DraftRevisionConflictError(expected=0, current=1), {"expected": 0, "current": 1}),
+        (ConcurrentEditError(), {}),
+    ],
+)
+def test_revision_conflicts_share_one_code(
+    app_factory: tuple[Litestar, MockDatabaseManager], error: StaleRevisionError, context: dict[str, int]
+) -> None:
+    app, _database = app_factory
+
+    @get("/conflict")
+    async def conflict() -> None:
+        raise error
+
+    app.register(conflict)
+
+    with TestClient(app, raise_server_exceptions=False) as internal_client:
+        response = internal_client.get("/conflict")
+
+    assert response.status_code == 412
+    assert response.json()["code"] == ErrorCode.REVISION_CONFLICT
+    assert response.json().get("context", {}) == context

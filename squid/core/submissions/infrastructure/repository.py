@@ -307,7 +307,7 @@ class PostgresDraftRepository(DraftRepository):
         if model.status not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
             raise DraftStateConflictError(model.status.value, operation="upgrade_manifest")
         if model.revision != expected_revision:
-            raise DraftRevisionConflictError(expected=expected_revision, actual=model.revision)
+            raise DraftRevisionConflictError(expected=expected_revision, current=model.revision)
         if target_schema_revision != model.schema_revision + 1:
             msg = "draft manifests must be upgraded by one revision"
             raise ValueError(msg)

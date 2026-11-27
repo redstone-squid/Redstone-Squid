@@ -99,7 +99,7 @@ def _public_attachment_errors() -> dict[type[SquidError], SquidError]:
     errors: tuple[SquidError, ...] = (
         MediaLimitExceededError(MediaViolation(MediaLimitMeasure.SOURCE_BYTES, 9, 8)),
         MediaDraftStateConflictError("locked"),
-        MediaDraftRevisionConflictError(expected=1, actual=2),
+        MediaDraftRevisionConflictError(expected=1, current=2),
         MediaDraftNotFoundError(UPLOAD_ID),
         DraftMediaRequestError("content_length_invalid"),
         DraftMediaNotFoundError(UPLOAD_ID),

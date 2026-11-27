@@ -845,22 +845,22 @@ admin-synced-the-tree-to = Synced the tree to { $synced }/{ $total }.
 # squid/bot/admin_cog.py:103
 admin-that-message-is-not-from-this-server = That message is not from this server.
 
-# squid/api/errors.py:265
+# squid/api/errors.py:263
 api-errors-http-error = HTTP error
 
-# squid/api/errors.py:217, squid/api/errors.py:286
+# squid/api/errors.py:215, squid/api/errors.py:284
 api-errors-internal-server-error = Internal server error
 
-# squid/api/errors.py:240
+# squid/api/errors.py:238
 api-errors-invalid-request = Invalid request
 
-# squid/api/errors.py:215
+# squid/api/errors.py:213
 api-errors-service-unavailable = Service unavailable
 
 # squid/api/errors.py:45
 api-internal-server-error-occurred = An internal server error occurred.
 
-# squid/api/errors.py:241
+# squid/api/errors.py:239
 api-request-validation-failed = The request did not pass validation.
 
 # squid/api/errors.py:46
@@ -2101,10 +2101,10 @@ build-search-sort-help = Order results by a field, ascending or descending.
 # squid/bot/submission/cog.py:88
 build-search-target-types-help = What to look through: records, builds, patterns, restrictions, or all.
 
-# squid/core/builds/errors.py:122
+# squid/core/builds/errors.py:116
 builds-alias-restriction = That alias is already on this restriction.
 
-# squid/core/builds/errors.py:139
+# squid/core/builds/errors.py:133
 builds-alias-used = That alias is already used by another restriction.
 
 # squid/core/builds/domain/models.py:166
@@ -2122,10 +2122,10 @@ builds-check-id-action = Check the build ID and try again.
 # squid/core/builds/errors.py:49
 builds-edit-in-progress = This build is currently being edited by someone else.
 
-# squid/core/builds/errors.py:123
+# squid/core/builds/errors.py:117
 builds-errors-alias-already-added = Alias already added
 
-# squid/core/builds/errors.py:140
+# squid/core/builds/errors.py:134
 builds-errors-alias-in-use = Alias in use
 
 # squid/core/builds/errors.py:50
@@ -2143,7 +2143,7 @@ builds-errors-build-revision-required = Build revision required
 # squid/core/builds/errors.py:72
 builds-errors-fetch-the-build-again-and-retry-with = Fetch the build again and retry with its ETag.
 
-# squid/core/builds/errors.py:106
+# squid/core/builds/errors.py:100
 builds-errors-restriction-not-found = Restriction not found.
 
 # squid/core/builds/errors.py:53
@@ -2155,13 +2155,13 @@ builds-if-match-build = An If-Match build revision is required for this operatio
 # squid/core/builds/domain/models.py:190
 builds-not-dataclass = { $class_name } is not a dataclass
 
-# squid/core/builds/errors.py:112
+# squid/core/builds/errors.py:106
 builds-restriction-does-not-exist = Restriction '{ $name }' does not exist.
 
 # squid/core/builds/errors.py:86
 builds-revision-conflict = The build changed after it was read.
 
-# squid/core/builds/errors.py:90
+# squid/core/builds/errors.py:89
 builds-revision-conflict-action = Fetch the latest build, merge the changes, and try again.
 
 # squid/core/catalogue/domain/titles.py:147
@@ -2815,28 +2815,28 @@ contextual-search-pick = Select a match to add it
 # squid/bot/catalogue/search/contextual.py:88
 contextual-search-prompt = Use { $command } here within two minutes. Leave { $scope } empty.
 
-# squid/core/errors.py:272
+# squid/core/errors.py:298
 core-account-required-action = A linked account is required for this action.
 
-# squid/core/errors.py:309
+# squid/core/errors.py:335
 core-configuration-invalid = Application configuration is invalid.
 
-# squid/core/errors.py:323
+# squid/core/errors.py:349
 core-dependency-failed = An infrastructure dependency failed.
 
 # squid/core/errors.py:90
 core-errors-an-application-error-occurred = An application error occurred.
 
-# squid/core/errors.py:298
+# squid/core/errors.py:324
 core-errors-an-internal-application-error-occurred = An internal application error occurred.
 
 # squid/core/errors.py:93
 core-errors-application-error = Application error
 
-# squid/core/errors.py:268
+# squid/core/errors.py:294
 core-errors-forbidden = Forbidden
 
-# squid/core/errors.py:301
+# squid/core/errors.py:327
 core-errors-internal-error = Internal error
 
 # squid/core/errors.py:229
@@ -2854,22 +2854,25 @@ core-errors-request-failed = Request failed
 # squid/core/errors.py:237
 core-errors-resource-not-found = Resource not found
 
-# squid/core/errors.py:348
+# squid/core/errors.py:257
+core-errors-revision-conflict = Item changed
+
+# squid/core/errors.py:374
 core-errors-service-unavailable = Service unavailable
 
-# squid/core/errors.py:287
+# squid/core/errors.py:313
 core-errors-too-many-requests = Too many requests
 
-# squid/core/errors.py:251
+# squid/core/errors.py:277
 core-errors-unauthorized = Unauthorized.
 
-# squid/core/errors.py:252
+# squid/core/errors.py:278
 core-errors-unauthorized-2 = Unauthorized
 
-# squid/core/errors.py:265
+# squid/core/errors.py:291
 core-errors-you-do-not-have-permission-to-perform = You do not have permission to perform this action.
 
-# squid/core/errors.py:280
+# squid/core/errors.py:306
 core-guild-required-action = This action must be performed in the server it belongs to.
 
 # squid/core/errors.py:244
@@ -2878,7 +2881,7 @@ core-operation-conflict = The operation conflicts with the current state.
 # squid/core/errors.py:180
 core-operation-failed = The requested operation could not be completed.
 
-# squid/core/errors.py:276
+# squid/core/errors.py:302
 core-owner-required-action = Only the owner can perform this action.
 
 # squid/core/pagination.py:66
@@ -2887,25 +2890,28 @@ core-page-anchor-not-found = The page anchor is no longer in this list.
 # squid/core/pagination.py:69
 core-page-anchor-not-found-action = Go back to the first page.
 
-# squid/core/errors.py:338
+# squid/core/errors.py:364
 core-persisted-data-inconsistent = Persisted data is inconsistent with application expectations.
 
-# squid/core/errors.py:330
+# squid/core/errors.py:356
 core-persistence-operation-failed = A persistence operation failed.
 
-# squid/core/errors.py:286
+# squid/core/errors.py:312
 core-rate-limited = Too many requests. Please try again later.
 
 # squid/core/errors.py:236
 core-requested-resource-not-found = The requested resource was not found.
 
-# squid/core/errors.py:347
+# squid/core/errors.py:373
 core-required-service-temporarily = A required service is temporarily unavailable.
 
-# squid/core/errors.py:303
+# squid/core/errors.py:329
 core-retry-later = Please try again later.
 
-# squid/core/errors.py:316
+# squid/core/errors.py:256
+core-revision-conflict = This item changed elsewhere. Reload it before trying again.
+
+# squid/core/errors.py:342
 core-state-invalid-operation = Application state is invalid for this operation.
 
 # squid/core/errors.py:228
@@ -3434,10 +3440,10 @@ editor-detail-closed = Done. You can dismiss this message.
 # squid/bot/submission/ui/sections.py:361
 editor-detail-locked = These answers can no longer be edited here.
 
-# squid/core/edits/domain.py:221
+# squid/core/edits/domain.py:217
 edits-commit-uncertain = The change may not have been saved. Check the values and try again.
 
-# squid/core/edits/domain.py:235
+# squid/core/edits/domain.py:231
 edits-concurrent-write = Another edit committed first. Reload this item before trying again.
 
 # squid/core/edits/domain.py:164
@@ -3446,17 +3452,14 @@ edits-final = This operation cannot be undone.
 # squid/api/revisions.py:15
 edits-invalid-revision = This revision does not match the item being edited.
 
-# squid/core/edits/domain.py:231
+# squid/core/edits/domain.py:227
 edits-operation-expired = This edit has expired. Reload the item before editing again.
 
-# squid/core/edits/domain.py:211
+# squid/core/edits/domain.py:207
 edits-operation-reused = This operation identifier was already used for another edit.
 
 # squid/bot/edit_controller.py:252
 edits-refresh = Refresh saved values
-
-# squid/core/edits/domain.py:193
-edits-revision-conflict = This item changed elsewhere. Reload it before editing.
 
 # squid/api/revisions.py:11
 edits-revision-required = Send the ETag you read in the If-Match header.
@@ -4162,79 +4165,79 @@ lookup-use-selection = Use selection
 # squid/core/media/application/jobs.py:183
 media-artifact-dimensions-either = Media artifact dimensions must either both be present or both be absent.
 
-# squid/core/media/errors.py:42
+# squid/core/media/errors.py:43
 media-attachment-exceeds-processing = The attachment exceeds one or more processing limits.
 
-# squid/core/media/errors.py:145
+# squid/core/media/errors.py:140
 media-attachment-upload-identifier = The attachment upload identifier is already in use.
 
-# squid/core/media/errors.py:122
+# squid/core/media/errors.py:117
 media-check-attachment-type = Check the attachment type and upload it again.
 
-# squid/core/media/errors.py:45
+# squid/core/media/errors.py:46
 media-choose-fewer-smaller = Choose fewer, smaller, or less resource-intensive attachments and try again.
 
 # squid/core/media/application/jobs.py:214
 media-claimed-media-job = Claimed media job metadata is invalid.
 
-# squid/core/media/errors.py:131
+# squid/core/media/errors.py:126
 media-draft-attachment-not-found = Draft attachment not found.
 
-# squid/core/media/errors.py:157
+# squid/core/media/errors.py:152
 media-draft-attachment-processing = Draft attachment processing is temporarily unavailable.
 
-# squid/core/media/errors.py:119
+# squid/core/media/errors.py:114
 media-draft-attachment-upload = The draft attachment upload request is invalid.
 
-# squid/core/media/errors.py:132
+# squid/core/media/errors.py:127
 media-errors-attachment-not-found = Attachment not found
 
-# squid/core/media/errors.py:158
+# squid/core/media/errors.py:153
 media-errors-attachment-processing-unavailable = Attachment processing unavailable
 
-# squid/core/media/errors.py:146
+# squid/core/media/errors.py:141
 media-errors-attachment-upload-conflict = Attachment upload conflict
 
-# squid/core/media/errors.py:91
+# squid/core/media/errors.py:92
 media-errors-draft-changed = Draft changed
 
-# squid/core/media/errors.py:75
+# squid/core/media/errors.py:76
 media-errors-draft-media-locked = Draft media locked
 
-# squid/core/media/errors.py:106
+# squid/core/media/errors.py:101
 media-errors-draft-not-found = Draft not found
 
-# squid/core/media/errors.py:202
+# squid/core/media/errors.py:197
 media-errors-export-the-file-again-and-retry-or = Export the file again and retry, or remove it from the submission.
 
-# squid/core/media/errors.py:171
+# squid/core/media/errors.py:166
 media-errors-export-the-file-again-in-a-common = Export the file again in a common image or video format and retry.
 
-# squid/core/media/errors.py:120
+# squid/core/media/errors.py:115
 media-errors-invalid-attachment-upload = Invalid attachment upload
 
-# squid/core/media/errors.py:200
+# squid/core/media/errors.py:195
 media-errors-media-processing-failed = Media processing failed.
 
-# squid/core/media/errors.py:134
+# squid/core/media/errors.py:129
 media-errors-reload-the-draft-and-choose-one-of = Reload the draft and choose one of its current attachments.
 
-# squid/core/media/errors.py:77
+# squid/core/media/errors.py:78
 media-errors-reload-the-draft-before-trying-again = Reload the draft before trying again.
 
 # squid/core/media/domain/models.py:86
 media-every-media-limit = Every media limit must be positive.
 
-# squid/core/media/errors.py:168
+# squid/core/media/errors.py:163
 media-file-processing-failed = The media file cannot be normalized.
 
 # squid/core/media/application/commands.py:34
 media-image-not-accept = Image processing does not accept a poster path.
 
-# squid/core/media/errors.py:285
+# squid/core/media/errors.py:280
 media-job-claim-expired = The media job claim is no longer valid.
 
-# squid/core/media/errors.py:160
+# squid/core/media/errors.py:155
 media-keep-attachment-locally = Keep the attachment locally and try uploading it again later.
 
 # squid/core/media/application/jobs.py:180
@@ -4252,7 +4255,7 @@ media-media-attempts-positive = Media processing attempts must be positive.
 # squid/core/media/domain/models.py:62
 media-media-batch-totals = Media batch totals cannot be negative.
 
-# squid/core/media/errors.py:72
+# squid/core/media/errors.py:73
 media-media-changed-submission = Media cannot be changed while this submission draft is locked.
 
 # squid/core/media/application/jobs.py:1028
@@ -4282,7 +4285,7 @@ media-media-job-heartbeat = Media job heartbeat interval must be positive.
 # squid/core/media/application/jobs.py:1022
 media-media-object-keys = Media object keys must be non-empty relative paths without traversal.
 
-# squid/core/media/errors.py:187
+# squid/core/media/errors.py:182
 media-media-processing-temporarily = Media processing is temporarily unavailable.
 
 # squid/core/media/application/jobs.py:691
@@ -4309,7 +4312,7 @@ media-media-upload-draft = Media upload and draft identifiers cannot be nil UUID
 # squid/core/media/application/jobs.py:414, squid/core/media/application/jobs.py:921
 media-media-upload-exceeds = Media upload exceeds the { $limit }-byte source limit.
 
-# squid/core/media/errors.py:232
+# squid/core/media/errors.py:227
 media-media-upload-exists = Media upload { $upload_id } already exists with different metadata.
 
 # squid/core/media/application/jobs.py:153
@@ -4330,13 +4333,13 @@ media-normalized-artifact-sha = Normalized artifact SHA-256 must be lowercase he
 # squid/core/media/domain/models.py:205
 media-normalized-images-png = Processed images must use a supported raster format.
 
-# squid/core/media/errors.py:274
+# squid/core/media/errors.py:269
 media-normalized-media-object = A normalized media object is being cleaned up.
 
 # squid/core/media/domain/models.py:193
 media-normalized-media-source = Normalized media source size cannot be negative.
 
-# squid/core/media/errors.py:265
+# squid/core/media/errors.py:260
 media-normalized-object-unconfirmed = Object storage did not confirm a normalized media artifact.
 
 # squid/core/media/domain/models.py:199
@@ -4345,13 +4348,13 @@ media-normalized-video-poster = A normalized video must have a poster artifact.
 # squid/core/media/domain/models.py:196
 media-normalized-videos-poster = Only normalized videos have a poster artifact.
 
-# squid/core/media/errors.py:258
+# squid/core/media/errors.py:253
 media-queued-raw-media = The queued raw media object is inconsistent with its metadata.
 
-# squid/core/media/errors.py:93
+# squid/core/media/errors.py:94
 media-reload-draft-upload = Reload the draft and upload the attachment again.
 
-# squid/core/media/errors.py:108
+# squid/core/media/errors.py:103
 media-reload-uploading-attachment = Reload your drafts before uploading the attachment again.
 
 # squid/core/media/domain/models.py:202
@@ -4360,13 +4363,13 @@ media-report-actions-duplicate = Normalization report actions cannot contain dup
 # squid/core/media/application/jobs.py:192
 media-reports-not-pixel = Normalization reports do not have pixel dimensions.
 
-# squid/core/media/errors.py:148
+# squid/core/media/errors.py:143
 media-retry-upload-attachment = Retry the upload with a new attachment identifier.
 
-# squid/core/media/errors.py:88
+# squid/core/media/errors.py:89
 media-submission-draft-changed = The submission draft changed while its attachment was uploading.
 
-# squid/core/media/errors.py:105
+# squid/core/media/errors.py:100
 media-submission-draft-not-found = Submission draft not found.
 
 # squid/core/media/domain/models.py:212
@@ -6078,7 +6081,7 @@ submissions-attachment-upload-authority = The draft attachment upload authority 
 # squid/core/submissions/application/finalization.py:243
 submissions-attention-retention-positive = finalization attention retention must be positive
 
-# squid/core/submissions/domain/drafts.py:136
+# squid/core/submissions/domain/drafts.py:130
 submissions-base-revision-negative = base_revision cannot be negative
 
 # squid/core/submissions/domain/forms.py:415
@@ -6132,7 +6135,7 @@ submissions-clear-opening-height = Clear opening height
 # squid/core/submissions/application/forms.py:521
 submissions-clear-opening-width = Clear opening width
 
-# squid/core/submissions/domain/drafts.py:141
+# squid/core/submissions/domain/drafts.py:135
 submissions-client-instance-id = client_instance_id has an invalid format
 
 # squid/core/submissions/application/forms.py:460
@@ -6153,7 +6156,7 @@ submissions-dimensions-versions = Size and version
 # squid/core/submissions/errors.py:34
 submissions-draft-account-required = No linked account was found for this request.
 
-# squid/core/submissions/domain/drafts.py:234
+# squid/core/submissions/domain/drafts.py:228
 submissions-draft-answers-exceed = The draft answers exceed the retained data limit.
 
 # squid/core/submissions/application/attachments.py:78
@@ -6162,13 +6165,13 @@ submissions-draft-attachment-upload = Draft attachment upload authority is inval
 # squid/core/submissions/application/drafts.py:271
 submissions-draft-capacity-positive = draft capacity must be positive
 
-# squid/core/submissions/domain/drafts.py:162
+# squid/core/submissions/domain/drafts.py:156
 submissions-draft-change-duplicate-field = a draft change may mutate each field at most once
 
 # squid/core/submissions/domain/drafts.py:68
 submissions-draft-change-keys = draft change keys must be 8-255 visible ASCII characters
 
-# squid/core/submissions/domain/drafts.py:151
+# squid/core/submissions/domain/drafts.py:145
 submissions-draft-changes-exceed = draft changes cannot exceed { $limit } operations
 
 # squid/core/submissions/application/drafts.py:405
@@ -6177,28 +6180,28 @@ submissions-draft-discovery-limit = draft discovery limit must be between 1 and 
 # squid/core/submissions/application/drafts.py:488
 submissions-draft-expiry-limit = draft expiry limit must be between 1 and 1000
 
-# squid/core/submissions/domain/drafts.py:312, squid/core/submissions/domain/drafts.py:320
+# squid/core/submissions/domain/drafts.py:306, squid/core/submissions/domain/drafts.py:314
 submissions-draft-json-compatible = draft values must be JSON-compatible
 
-# squid/core/submissions/domain/drafts.py:330
+# squid/core/submissions/domain/drafts.py:324
 submissions-draft-json-cycle-invalid = draft JSON values cannot contain cycles or shared containers
 
-# squid/core/submissions/domain/drafts.py:315, squid/core/submissions/domain/drafts.py:323
+# squid/core/submissions/domain/drafts.py:309, squid/core/submissions/domain/drafts.py:317
 submissions-draft-json-exceed = draft JSON values exceed the retained byte limit
 
-# squid/core/submissions/domain/drafts.py:290
+# squid/core/submissions/domain/drafts.py:284
 submissions-draft-json-integers = draft JSON integers are too large
 
-# squid/core/submissions/domain/drafts.py:282
+# squid/core/submissions/domain/drafts.py:276
 submissions-draft-json-nested = draft JSON values are nested too deeply
 
-# squid/core/submissions/domain/drafts.py:295
+# squid/core/submissions/domain/drafts.py:289
 submissions-draft-json-numbers = draft JSON numbers must be finite
 
-# squid/core/submissions/domain/drafts.py:303
+# squid/core/submissions/domain/drafts.py:297
 submissions-draft-json-object = draft JSON object keys must be strings
 
-# squid/core/submissions/domain/drafts.py:146
+# squid/core/submissions/domain/drafts.py:140
 submissions-draft-operation-required = draft changes require at least one operation
 
 # squid/core/submissions/errors.py:40
@@ -6210,7 +6213,7 @@ submissions-draft-retention-positive = draft retention must be positive
 # squid/core/submissions/errors.py:36
 submissions-draft-staff-unconfigured = Staff access to submission drafts is not configured for this service. Contact the service operator.
 
-# squid/core/submissions/domain/drafts.py:257
+# squid/core/submissions/domain/drafts.py:251
 submissions-draft-transition = draft cannot transition from { $current } to { $next_status }
 
 # squid/core/submissions/application/forms.py:777
@@ -6261,13 +6264,13 @@ submissions-form-revision-protocol = form revision and protocol bounds must be p
 # squid/core/submissions/application/forms.py:438
 submissions-i-permission-distribute = I have permission to distribute this schematic under the selected license.
 
-# squid/core/submissions/domain/drafts.py:102
+# squid/core/submissions/domain/drafts.py:96
 submissions-invalid-draft-field-id = invalid draft field ID: { $field_id }
 
 # squid/core/submissions/domain/finalization.py:128
 submissions-invalid-submission-attention = invalid submission attention field ID: { $field_id }
 
-# squid/core/submissions/domain/drafts.py:279
+# squid/core/submissions/domain/drafts.py:273
 submissions-json-contain-too = draft JSON values contain too many nodes
 
 # squid/core/submissions/domain/finalization.py:428
@@ -6306,7 +6309,7 @@ submissions-normalized-submission-schema = normalized submission schema origin i
 # squid/core/submissions/domain/normalization.py:219
 submissions-not-string-list = validated field { $field_id } is not a string list
 
-# squid/core/submissions/domain/drafts.py:158
+# squid/core/submissions/domain/drafts.py:152
 submissions-operation-ids-unique = operation IDs must be unique within a draft change
 
 # squid/core/submissions/application/forms.py:85
@@ -6318,7 +6321,7 @@ submissions-optional-default-timing = Timings
 # squid/core/submissions/application/forms.py:217
 submissions-optional-name-shown = Optional. Shown next to the title generated from the build's details.
 
-# squid/core/submissions/domain/drafts.py:190
+# squid/core/submissions/domain/drafts.py:184
 submissions-owner-account-id = owner_account_id must be positive
 
 # squid/core/submissions/domain/finalization.py:374
@@ -6375,7 +6378,7 @@ submissions-reviewer-schematics-carry = reviewer-only schematics cannot carry a 
 # squid/core/submissions/domain/forms.py:464
 submissions-schema-id-stable = schema_id must be a stable lowercase identifier
 
-# squid/core/submissions/domain/drafts.py:193
+# squid/core/submissions/domain/drafts.py:187
 submissions-schema-revision-positive = schema_revision must be positive and revision cannot be negative
 
 # squid/core/submissions/application/forms.py:397
@@ -6396,7 +6399,7 @@ submissions-sponsor-installation-match-required = Sponsor attribution requires a
 # squid/core/submissions/application/attachments.py:107
 submissions-staged-attachment-unavailable = The staged attachment is no longer available.
 
-# squid/core/submissions/domain/drafts.py:215
+# squid/core/submissions/domain/drafts.py:209
 submissions-state-edited = drafts in { $current_status } state cannot be edited
 
 # squid/core/submissions/domain/finalization.py:148
@@ -6423,7 +6426,7 @@ submissions-unique = { $label } must be unique
 # squid/core/submissions/domain/forms.py:519
 submissions-unknown-submission-category = unknown submission category: { $category }
 
-# squid/core/submissions/domain/drafts.py:108
+# squid/core/submissions/domain/drafts.py:102
 submissions-unset-operations-carry = unset operations cannot carry a value
 
 # squid/core/submissions/application/forms.py:170

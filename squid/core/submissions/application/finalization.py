@@ -311,7 +311,7 @@ class SubmissionFinalizationService:
             validated = await self._drafts.validate_snapshot(latest, locale=locale, context=context)
             if validated.draft.snapshot.revision != current.snapshot.revision:
                 raise DraftRevisionConflictError(
-                    expected=current.snapshot.revision, actual=validated.draft.snapshot.revision
+                    expected=current.snapshot.revision, current=validated.draft.snapshot.revision
                 )
         except DraftValidationError as error:
             issues = _manifest_issues(error)

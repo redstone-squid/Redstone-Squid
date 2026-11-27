@@ -1,6 +1,6 @@
 """Build context errors."""
 
-from squid.core.errors import ConflictError, DomainError, ErrorCode, NotFoundError, ValidationError
+from squid.core.errors import ConflictError, DomainError, ErrorCode, NotFoundError, StaleRevisionError, ValidationError
 from squid.core.i18n import tr
 from squid.core.validation import RuleIssue, ValidationIssue
 from squid_i18n import md_tr
@@ -80,24 +80,18 @@ class BuildRevisionRequiredError(DomainError):
         )
 
 
-class BuildRevisionMismatchError(DomainError):
+class BuildRevisionMismatchError(StaleRevisionError):
     """A caller's expected build revision is no longer current."""
 
     default_message = tr(t"builds-revision-conflict = The build changed after it was read.")
     default_title = tr(t"builds-errors-build-revision-mismatch = Build revision mismatch")
-    default_code = ErrorCode.BUILD_REVISION_MISMATCH
     default_resource = "build"
     default_end_user_action = tr(
         t"builds-revision-conflict-action = Fetch the latest build, merge the changes, and try again."
     )
 
-    def __init__(self, build_id: int, *, expected_revision: int | None, current_revision: int | None = None) -> None:
-        context = {"build_id": build_id}
-        if expected_revision is not None:
-            context["expected_revision"] = expected_revision
-        if current_revision is not None:
-            context["current_revision"] = current_revision
-        super().__init__(context=context, public_context=context)
+    def __init__(self, build_id: int, *, expected: int | None, current: int | None = None) -> None:
+        super().__init__(expected, current, public_context={"build_id": build_id})
 
 
 class RestrictionNotFoundError(NotFoundError):

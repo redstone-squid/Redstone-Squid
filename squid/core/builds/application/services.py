@@ -227,9 +227,7 @@ class BuildService:
     def _check_revision(build: Build, expected_revision: int | None) -> None:
         if expected_revision is not None and build.revision != expected_revision:
             assert build.id is not None
-            raise BuildRevisionMismatchError(
-                build.id, expected_revision=expected_revision, current_revision=build.revision
-            )
+            raise BuildRevisionMismatchError(build.id, expected=expected_revision, current=build.revision)
 
     @application_operation
     async def edit_decision(

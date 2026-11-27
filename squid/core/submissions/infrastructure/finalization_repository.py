@@ -585,7 +585,7 @@ def _require_expected_draft(model: SubmissionDraft, expected: StoredDraft) -> No
     if model.owner_account_id != expected.snapshot.owner_account_id:
         raise DraftAccessDeniedError
     if model.revision != expected.snapshot.revision:
-        raise DraftRevisionConflictError(expected=expected.snapshot.revision, actual=model.revision)
+        raise DraftRevisionConflictError(expected=expected.snapshot.revision, current=model.revision)
     if model.origin is not expected.origin or model.source_installation_id != expected.source_installation_id:
         msg = "submission draft installation origin changed during finalization"
         raise InvalidStateError(msg)

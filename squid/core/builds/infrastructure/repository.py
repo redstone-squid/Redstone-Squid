@@ -526,7 +526,7 @@ class BuildRepository:
             )
         ).scalar_one_or_none()
         if revision is None:
-            raise BuildRevisionMismatchError(current.id, expected_revision=current.revision)
+            raise BuildRevisionMismatchError(current.id, expected=current.revision)
         # The deferred subtype constraint permits the short interval while the
         # parent has its new discriminator but still has the old subtype row.
         await session.execute(delete(current_type).where(current_type.c.build_id == current.id))
@@ -596,8 +596,8 @@ class BuildRepository:
         if sql_build.revision != build.revision:
             raise BuildRevisionMismatchError(
                 build.id,
-                expected_revision=build.revision,
-                current_revision=sql_build.revision,
+                expected=build.revision,
+                current=sql_build.revision,
             )
         submitter_account_id = await self._resolve_submitter_account_id(session, build)
         if sql_build.category != build.category:
@@ -641,7 +641,7 @@ class BuildRepository:
                 await self._sync_source_messages(build, session)
             await session.flush()
         except StaleDataError as error:
-            raise BuildRevisionMismatchError(build.id, expected_revision=build.revision) from error
+            raise BuildRevisionMismatchError(build.id, expected=build.revision) from error
         build.revision = sql_build.revision
 
     async def _resolve_submitter_account_id(self, session: AsyncSession, build: Build) -> int:
@@ -899,9 +899,7 @@ class BuildRepository:
         if updated is None:
             current_revision = await session.scalar(select(Build.revision).where(Build.id == build.id))
             if current_revision is not None:
-                raise BuildRevisionMismatchError(
-                    build.id, expected_revision=build.revision, current_revision=current_revision
-                )
+                raise BuildRevisionMismatchError(build.id, expected=build.revision, current=current_revision)
             msg = f"Failed to {operation} submission in the database."
             raise PersistenceError(msg, context={"build_id": build.id, "operation": operation})
         for name, value in zip(("submission_status", "revision", "edited_time"), updated, strict=True):

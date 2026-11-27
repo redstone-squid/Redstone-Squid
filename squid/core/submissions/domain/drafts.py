@@ -16,7 +16,7 @@ from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from uuid import UUID
 
-from squid.core.errors import ConflictError, JSONValue, ValidationError
+from squid.core.errors import JSONValue, StaleRevisionError, ValidationError
 from squid.core.i18n import tr
 from squid.core.validation import (
     BelowMinimum,
@@ -72,18 +72,12 @@ class DraftChangeKey(str):
         return super().__new__(cls, value)
 
 
-class DraftRevisionConflictError(ConflictError):
+class DraftRevisionConflictError(StaleRevisionError):
     """A client attempted to mutate a stale draft revision."""
 
     default_message = "The draft changed in another client. Reload it before saving."
     default_title = "Draft changed"
     default_resource = "submission_draft"
-
-    def __init__(self, *, expected: int, actual: int) -> None:
-        super().__init__(
-            context={"expected_revision": expected, "actual_revision": actual},
-            public_context={"expected_revision": expected, "actual_revision": actual},
-        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -217,7 +211,7 @@ class DraftSnapshot:
                 public_context={"status": self.status.value},
             )
         if change.base_revision != self.revision:
-            raise DraftRevisionConflictError(expected=change.base_revision, actual=self.revision)
+            raise DraftRevisionConflictError(expected=change.base_revision, current=self.revision)
         answers = deepcopy(dict(self.answers))
         for operation in change.operations:
             if operation.kind is FieldOperationKind.SET:
