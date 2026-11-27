@@ -5823,6 +5823,9 @@ settings-channel-invalid = That channel selection is invalid.
 # squid/bot/settings/screen.py:544
 settings-custom-emoji-unavailable = The custom emoji { $emoji } is inaccessible.
 
+# squid/core/settings/application/discord.py:54
+settings-discord-unavailable = Discord is unavailable, so names cannot be looked up.
+
 # squid/bot/settings/screen.py:527
 settings-emoji-format-error = Each line must read `choice | emoji`.
 
@@ -5834,9 +5837,6 @@ settings-review-weighting-explained = Build reviews are weighted by the network'
 
 # squid/bot/settings/screen.py:655
 settings-role-multiplier-help = Multiplier; leave empty to remove this role's weight
-
-# squid/core/settings/domain/runtime.py:41
-settings-runtime-invalid-channel-ids = Channel IDs must be positive signed 64-bit integers
 
 # squid/bot/settings/screen.py:163
 settings-tab-diagnostics = Diagnostics

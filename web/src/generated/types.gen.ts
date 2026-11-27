@@ -391,6 +391,11 @@ export type ChallengeCreateResponse = {
 };
 
 /**
+ * ChannelType
+ */
+export type ChannelType = 'text' | 'announcement' | 'forum' | 'media' | 'voice' | 'stage' | 'thread' | 'category' | 'other';
+
+/**
  * ChoiceOptionResponse
  */
 export type ChoiceOptionResponse = {
@@ -593,6 +598,31 @@ export type CreditedAlias = {
  */
 export type CsrfTokenResponse = {
     csrf_token: string;
+};
+
+/**
+ * DiscordChannelDetail
+ */
+export type DiscordChannelDetail = {
+    id: string;
+    name: string;
+    type: ChannelType;
+};
+
+/**
+ * DiscordReference
+ */
+export type DiscordReference = {
+    id: string;
+    name: string | null;
+};
+
+/**
+ * DiscordRoleDetail
+ */
+export type DiscordRoleDetail = {
+    id: string;
+    name: string;
 };
 
 /**
@@ -2424,6 +2454,7 @@ export type RuleParams = {
  */
 export type RuntimeSettingsDetail = {
     revision: number;
+    names_resolved: boolean;
     welcome_forward_chance: number;
     welcome_enabled: boolean;
     redstoner_enabled: boolean;
@@ -2432,15 +2463,15 @@ export type RuntimeSettingsDetail = {
     delete_vote_pass_threshold: number;
     delete_vote_fail_threshold: number;
     notification_retention_days: number;
-    redstoner_starboard_author_id: string;
-    redstoner_starboard_channel_id: string;
-    redstoner_role_id: string;
-    redstoner_corner_channel_id: string;
-    redstoner_announcement_channel_id: string;
-    welcome_channel_id: string;
-    welcome_relay_channel_id: string;
-    version_tracker_channel_id: string;
-    build_log_channel_ids: Array<string>;
+    redstoner_starboard_author_id: DiscordReference;
+    redstoner_starboard_channel_id: DiscordReference;
+    redstoner_role_id: DiscordReference;
+    redstoner_corner_channel_id: DiscordReference;
+    redstoner_announcement_channel_id: DiscordReference;
+    welcome_channel_id: DiscordReference;
+    welcome_relay_channel_id: DiscordReference;
+    version_tracker_channel_id: DiscordReference;
+    build_log_channel_ids: Array<DiscordReference>;
 };
 
 /**
@@ -7932,6 +7963,80 @@ export type RuntimeSettingsUpdateResponses = {
 };
 
 export type RuntimeSettingsUpdateResponse = RuntimeSettingsUpdateResponses[keyof RuntimeSettingsUpdateResponses];
+
+export type RuntimeSettingsChannelsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/settings/runtime/channels';
+};
+
+export type RuntimeSettingsChannelsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type RuntimeSettingsChannelsError = RuntimeSettingsChannelsErrors[keyof RuntimeSettingsChannelsErrors];
+
+export type RuntimeSettingsChannelsResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: Array<DiscordChannelDetail>;
+};
+
+export type RuntimeSettingsChannelsResponse = RuntimeSettingsChannelsResponses[keyof RuntimeSettingsChannelsResponses];
+
+export type RuntimeSettingsRolesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/v1/settings/runtime/roles';
+};
+
+export type RuntimeSettingsRolesErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type RuntimeSettingsRolesError = RuntimeSettingsRolesErrors[keyof RuntimeSettingsRolesErrors];
+
+export type RuntimeSettingsRolesResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: Array<DiscordRoleDetail>;
+};
+
+export type RuntimeSettingsRolesResponse = RuntimeSettingsRolesResponses[keyof RuntimeSettingsRolesResponses];
 
 export type BrowserSessionGetData = {
     body?: never;

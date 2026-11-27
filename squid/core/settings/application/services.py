@@ -6,6 +6,11 @@ from typing import cast
 from squid.core.actors import ActingContext, application_operation
 from squid.core.permissions.application.services import PermissionService
 from squid.core.permissions.domain.catalogue import SETTINGS_RUNTIME_EDIT, SETTINGS_RUNTIME_VIEW
+from squid.core.settings.application.discord import (
+    DiscordChannel,
+    DiscordRole,
+    RuntimeDiscordReferences,
+)
 from squid.core.settings.application.edits import guild_snapshot
 from squid.core.settings.application.ports import GuildSettingsUnitOfWork
 from squid.core.settings.domain import Setting, SettingOptions
@@ -23,10 +28,12 @@ class SettingsService:
         uow_factory: UnitOfWorkFactory[GuildSettingsUnitOfWork],
         permissions: PermissionService,
         runtime_defaults: RuntimeSettings | None = None,
+        discord: RuntimeDiscordReferences | None = None,
     ) -> None:
         self._uow_factory = uow_factory
         self._permissions = permissions
         self._runtime_defaults = runtime_defaults or RuntimeSettings()
+        self._discord = discord or RuntimeDiscordReferences(None, owner_guild_id=None)
 
     @application_operation
     async def get_runtime(self, *, context: ActingContext) -> RuntimeSettings:
@@ -46,6 +53,27 @@ class SettingsService:
             result = RuntimeSettings.model_validate(row), row.revision
             await uow.commit()
             return result
+
+    @application_operation
+    async def runtime_names(self, settings: RuntimeSettings, *, context: ActingContext) -> Mapping[int, str] | None:
+        """Name the Discord IDs in `settings`, or return None when Discord is unavailable.
+
+        An ID missing from the result is one Discord no longer knows, or the bot cannot see.
+        """
+        await self._permissions.require(context.effective, SETTINGS_RUNTIME_VIEW)
+        return await self._discord.names(settings)
+
+    @application_operation
+    async def owner_guild_channels(self, *, context: ActingContext) -> Sequence[DiscordChannel]:
+        """List the channels runtime settings can pick from. Raises DiscordUnavailableError."""
+        await self._permissions.require(context.effective, SETTINGS_RUNTIME_VIEW)
+        return await self._discord.channels()
+
+    @application_operation
+    async def owner_guild_roles(self, *, context: ActingContext) -> Sequence[DiscordRole]:
+        """List the roles runtime settings can pick from. Raises DiscordUnavailableError."""
+        await self._permissions.require(context.effective, SETTINGS_RUNTIME_VIEW)
+        return await self._discord.roles()
 
     @application_operation
     async def guild_snapshot(self, guild_id: int, *, context: ActingContext) -> tuple[GuildSettings, int]:

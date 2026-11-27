@@ -19325,6 +19325,15 @@
       "squid/bot/settings/screen.py:544"
     ]
   },
+  "settings-discord-unavailable": {
+    "fingerprint": "c9f5a63e7299738874748c6face8781eaaa45d8ffc5392f899c6434699c89929",
+    "attributes": [],
+    "has_value": true,
+    "arguments": [],
+    "locations": [
+      "squid/core/settings/application/discord.py:54"
+    ]
+  },
   "settings-emoji-format-error": {
     "fingerprint": "462c19575c22b4cb3293ad60f430c9d49892c78918f332cfcf8ead92216060f5",
     "attributes": [],
@@ -19359,15 +19368,6 @@
     "arguments": [],
     "locations": [
       "squid/bot/settings/screen.py:655"
-    ]
-  },
-  "settings-runtime-invalid-channel-ids": {
-    "fingerprint": "8638fc76fea9abfe200dbef795c4979d4251b76f6aea779ed6881f930da7830b",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [],
-    "locations": [
-      "squid/core/settings/domain/runtime.py:41"
     ]
   },
   "settings-tab-diagnostics": {

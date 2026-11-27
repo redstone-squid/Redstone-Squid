@@ -14,12 +14,13 @@ from litestar.openapi.plugins import JsonRenderPlugin, SwaggerRenderPlugin
 from litestar.openapi.spec import OpenAPIFormat, OpenAPIType, Schema
 from litestar.plugins import OpenAPISchemaPlugin
 from litestar.typing import FieldDefinition
-from pydantic import TypeAdapter
+from pydantic import BaseModel, TypeAdapter
 from pydantic_core import to_jsonable_python
 from whenever import Instant
 
 from squid.api.contract import iter_contract_routes, validate_contract
 from squid.api.errors import ProblemDetail, ValidationProblemDetail, responses
+from squid.api.v1.schemas.settings import RuntimeSettingsDetail, RuntimeSettingsPatch
 from squid.api.v1.schemas.submissions import StoredDraftResponse
 from squid.api.validation import ValidationContext
 from squid.core.errors import JSONValue
@@ -32,6 +33,9 @@ from squid.core.submissions.domain import (
 from squid.core.validation import FieldErrorCode
 
 _HTTP_METHODS = ("get", "post", "put", "patch", "delete")
+# Litestar's Schema objects cannot hold `x-` keys, so property extensions these models
+# declare through json_schema_extra are copied in after rendering.
+_EXTENDED_MODELS: tuple[type[BaseModel], ...] = (RuntimeSettingsDetail, RuntimeSettingsPatch)
 
 
 def install_openapi_contract(app: Litestar) -> None:
@@ -116,6 +120,10 @@ def _postprocess(document: dict[str, Any]) -> None:
     schemas["ValidationProblemDetail"] = validation_problem
     schemas["ValidationContext"] = context
     schemas["FieldErrorCode"] = TypeAdapter(FieldErrorCode).json_schema()
+    for model in _EXTENDED_MODELS:
+        rendered = schemas[model.__name__]["properties"]
+        for name, prop in model.model_json_schema()["properties"].items():
+            rendered[name].update({key: value for key, value in prop.items() if key.startswith("x-")})
     _install_request_id_headers(document)
 
 

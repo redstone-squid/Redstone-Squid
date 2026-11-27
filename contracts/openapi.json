@@ -13817,7 +13817,7 @@
           "settings"
         ],
         "summary": "GetRuntimeSettings",
-        "description": "Read current global settings. Discord IDs are returned as decimal strings.",
+        "description": "Read current global settings, naming each Discord ID.\n\nDiscord IDs are decimal strings. A name is null when Discord no longer knows\nthe ID; when Discord is unavailable, `names_resolved` is false.",
         "operationId": "runtime_settings_get",
         "responses": {
           "200": {
@@ -13932,7 +13932,7 @@
           "settings"
         ],
         "summary": "UpdateRuntimeSettings",
-        "description": "Patch current settings, or require a specific revision with If-Match.\n\nNew vote defaults affect new sessions only.",
+        "description": "Patch current settings, or require a specific revision with If-Match.\n\nNew vote defaults affect new sessions only. A Discord ID of the wrong kind, such\nas a role in a channel field, fails with a `discord_channel`, `discord_role` or\n`discord_user` rule issue whose reason is `unknown` or `category`. While Discord\nis unavailable, IDs are stored unchecked.",
         "operationId": "runtime_settings_update",
         "parameters": [
           {
@@ -14120,6 +14120,224 @@
         },
         "x-required-api-scopes": [
           "settings.runtime.edit"
+        ]
+      }
+    },
+    "/v1/settings/runtime/channels": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "ListSettingChannels",
+        "description": "List the owner guild's channels, for picking a channel setting.",
+        "operationId": "runtime_settings_channels",
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DiscordChannelDetail"
+                  },
+                  "type": "array"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "WebSession": []
+          },
+          {
+            "DeviceSession": []
+          },
+          {
+            "ApiCredential": []
+          }
+        ],
+        "x-squid-private-response": true,
+        "x-squid-cli": {
+          "classification": "transport-only"
+        },
+        "x-required-api-scopes": [
+          "settings.runtime.view"
+        ]
+      }
+    },
+    "/v1/settings/runtime/roles": {
+      "get": {
+        "tags": [
+          "settings"
+        ],
+        "summary": "ListSettingRoles",
+        "description": "List the owner guild's roles, highest first, for picking a role setting.",
+        "operationId": "runtime_settings_roles",
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DiscordRoleDetail"
+                  },
+                  "type": "array"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "503": {
+            "description": "Service Unavailable",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "WebSession": []
+          },
+          {
+            "DeviceSession": []
+          },
+          {
+            "ApiCredential": []
+          }
+        ],
+        "x-squid-private-response": true,
+        "x-squid-cli": {
+          "classification": "transport-only"
+        },
+        "x-required-api-scopes": [
+          "settings.runtime.view"
         ]
       }
     },
@@ -23104,6 +23322,21 @@
         ],
         "title": "ChallengeCreateResponse"
       },
+      "ChannelType": {
+        "type": "string",
+        "enum": [
+          "text",
+          "announcement",
+          "forum",
+          "media",
+          "voice",
+          "stage",
+          "thread",
+          "category",
+          "other"
+        ],
+        "title": "ChannelType"
+      },
       "ChoiceOptionResponse": {
         "properties": {
           "value": {
@@ -23665,6 +23898,65 @@
           "csrf_token"
         ],
         "title": "CsrfTokenResponse"
+      },
+      "DiscordChannelDetail": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "$ref": "#/components/schemas/ChannelType"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "type"
+        ],
+        "title": "DiscordChannelDetail"
+      },
+      "DiscordReference": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "DiscordReference"
+      },
+      "DiscordRoleDetail": {
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "DiscordRoleDetail"
       },
       "DoorCandidate": {
         "properties": {
@@ -30322,59 +30614,88 @@
           "revision": {
             "type": "integer"
           },
+          "names_resolved": {
+            "type": "boolean"
+          },
           "welcome_forward_chance": {
-            "type": "number"
+            "type": "number",
+            "x-squid-group": "welcome"
           },
           "welcome_enabled": {
-            "type": "boolean"
+            "type": "boolean",
+            "x-squid-group": "welcome"
           },
           "redstoner_enabled": {
-            "type": "boolean"
+            "type": "boolean",
+            "x-squid-group": "redstoner"
           },
           "build_vote_pass_threshold": {
-            "type": "integer"
+            "type": "integer",
+            "x-squid-group": "voting"
           },
           "build_vote_fail_threshold": {
-            "type": "integer"
+            "type": "integer",
+            "x-squid-group": "voting"
           },
           "delete_vote_pass_threshold": {
-            "type": "integer"
+            "type": "integer",
+            "x-squid-group": "voting"
           },
           "delete_vote_fail_threshold": {
-            "type": "integer"
+            "type": "integer",
+            "x-squid-group": "voting"
           },
           "notification_retention_days": {
-            "type": "integer"
+            "type": "integer",
+            "x-squid-group": "notifications"
           },
           "redstoner_starboard_author_id": {
-            "type": "string"
+            "$ref": "#/components/schemas/DiscordReference",
+            "x-squid-discord-kind": "user",
+            "x-squid-group": "redstoner"
           },
           "redstoner_starboard_channel_id": {
-            "type": "string"
+            "$ref": "#/components/schemas/DiscordReference",
+            "x-squid-discord-kind": "channel",
+            "x-squid-group": "redstoner"
           },
           "redstoner_role_id": {
-            "type": "string"
+            "$ref": "#/components/schemas/DiscordReference",
+            "x-squid-discord-kind": "role",
+            "x-squid-group": "redstoner"
           },
           "redstoner_corner_channel_id": {
-            "type": "string"
+            "$ref": "#/components/schemas/DiscordReference",
+            "x-squid-discord-kind": "channel",
+            "x-squid-group": "redstoner"
           },
           "redstoner_announcement_channel_id": {
-            "type": "string"
+            "$ref": "#/components/schemas/DiscordReference",
+            "x-squid-discord-kind": "channel",
+            "x-squid-group": "redstoner"
           },
           "welcome_channel_id": {
-            "type": "string"
+            "$ref": "#/components/schemas/DiscordReference",
+            "x-squid-discord-kind": "channel",
+            "x-squid-group": "welcome"
           },
           "welcome_relay_channel_id": {
-            "type": "string"
+            "$ref": "#/components/schemas/DiscordReference",
+            "x-squid-discord-kind": "channel",
+            "x-squid-group": "welcome"
           },
           "version_tracker_channel_id": {
-            "type": "string"
+            "$ref": "#/components/schemas/DiscordReference",
+            "x-squid-discord-kind": "channel",
+            "x-squid-group": "versions"
           },
           "build_log_channel_ids": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/DiscordReference"
             },
-            "type": "array"
+            "type": "array",
+            "x-squid-discord-kind": "channel",
+            "x-squid-group": "builds"
           }
         },
         "type": "object",
@@ -30384,6 +30705,7 @@
           "build_vote_pass_threshold",
           "delete_vote_fail_threshold",
           "delete_vote_pass_threshold",
+          "names_resolved",
           "notification_retention_days",
           "redstoner_announcement_channel_id",
           "redstoner_corner_channel_id",
@@ -30410,7 +30732,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-squid-group": "welcome"
           },
           "welcome_enabled": {
             "oneOf": [
@@ -30420,7 +30743,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-squid-group": "welcome"
           },
           "redstoner_enabled": {
             "oneOf": [
@@ -30430,7 +30754,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-squid-group": "redstoner"
           },
           "build_vote_pass_threshold": {
             "oneOf": [
@@ -30440,7 +30765,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-squid-group": "voting"
           },
           "build_vote_fail_threshold": {
             "oneOf": [
@@ -30450,7 +30776,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-squid-group": "voting"
           },
           "delete_vote_pass_threshold": {
             "oneOf": [
@@ -30460,7 +30787,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-squid-group": "voting"
           },
           "delete_vote_fail_threshold": {
             "oneOf": [
@@ -30470,7 +30798,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-squid-group": "voting"
           },
           "notification_retention_days": {
             "oneOf": [
@@ -30480,7 +30809,8 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-squid-group": "notifications"
           },
           "redstoner_starboard_author_id": {
             "oneOf": [
@@ -30490,7 +30820,9 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-squid-discord-kind": "user",
+            "x-squid-group": "redstoner"
           },
           "redstoner_starboard_channel_id": {
             "oneOf": [
@@ -30500,7 +30832,9 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-squid-discord-kind": "channel",
+            "x-squid-group": "redstoner"
           },
           "redstoner_role_id": {
             "oneOf": [
@@ -30510,7 +30844,9 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-squid-discord-kind": "role",
+            "x-squid-group": "redstoner"
           },
           "redstoner_corner_channel_id": {
             "oneOf": [
@@ -30520,7 +30856,9 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-squid-discord-kind": "channel",
+            "x-squid-group": "redstoner"
           },
           "redstoner_announcement_channel_id": {
             "oneOf": [
@@ -30530,7 +30868,9 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-squid-discord-kind": "channel",
+            "x-squid-group": "redstoner"
           },
           "welcome_channel_id": {
             "oneOf": [
@@ -30540,7 +30880,9 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-squid-discord-kind": "channel",
+            "x-squid-group": "welcome"
           },
           "welcome_relay_channel_id": {
             "oneOf": [
@@ -30550,7 +30892,9 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-squid-discord-kind": "channel",
+            "x-squid-group": "welcome"
           },
           "version_tracker_channel_id": {
             "oneOf": [
@@ -30560,7 +30904,9 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-squid-discord-kind": "channel",
+            "x-squid-group": "versions"
           },
           "build_log_channel_ids": {
             "oneOf": [
@@ -30573,7 +30919,9 @@
               {
                 "type": "null"
               }
-            ]
+            ],
+            "x-squid-discord-kind": "channel",
+            "x-squid-group": "builds"
           }
         },
         "type": "object",

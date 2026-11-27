@@ -19,12 +19,15 @@ from squid.core.edits.domain import (
     Revision,
     RevisionConflictError,
 )
+from squid.core.errors import ValidationError
 from squid.core.permissions.application.services import PermissionService
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
+from squid.core.settings.application.discord import RuntimeDiscordReferences
 from squid.core.settings.application.edits import RUNTIME_EDIT, RUNTIME_TARGET, RuntimeSettingsEdit
 from squid.core.settings.application.services import SettingsService
 from squid.core.settings.domain.runtime import RuntimeSettings
 from squid.core.settings.models import RuntimeSettingChange
+from tests.support.discord_directory import OWNER_GUILD, REDSTONER, FakeDirectory
 from tests.support.runtime_edits import edit_runtime
 
 
@@ -131,3 +134,25 @@ async def test_unconditional_settings_edits_serialize_and_preserve_other_fields(
     assert not current.redstoner_enabled
     assert current_revision == revision + 2
     assert sorted(result.outcome.revisions[0].value for result in results) == [revision + 1, revision + 2]
+
+
+async def test_a_role_id_in_a_channel_setting_is_a_field_error(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    settings = SettingsService(uow_factory=factory, permissions=PermissionService(uow_factory=factory))
+    actor = await owner(migrated_session_factory)
+    discord = RuntimeDiscordReferences(FakeDirectory(), owner_guild_id=OWNER_GUILD)
+    executor = EditExecutor(
+        factory, {RUNTIME_EDIT: RuntimeSettingsEdit(PermissionService(uow_factory=factory), RuntimeSettings(), discord)}
+    )
+    command = EditCommand(
+        RUNTIME_EDIT, (LatestRevision(RUNTIME_TARGET),), EditValues.of({"welcome_channel_id": REDSTONER.id})
+    )
+
+    with pytest.raises(ValidationError) as rejected:
+        await executor.execute(command, context=ActingContext.direct(actor))
+
+    assert [issue.field for issue in rejected.value.field_issues] == ["welcome_channel_id"]
+    current, _revision = await settings.runtime_snapshot(context=ActingContext.direct(actor))
+    assert current.welcome_channel_id != REDSTONER.id

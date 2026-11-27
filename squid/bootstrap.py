@@ -125,8 +125,10 @@ from squid.core.schematics.bootstrap import create_schematic_service
 from squid.core.search.application import SearchEmbeddingService, SearchService
 from squid.core.search.application.projection import refresh_search_index
 from squid.core.settings.application import SettingsService
+from squid.core.settings.application.discord import RuntimeDiscordReferences
 from squid.core.settings.application.edits import GUILD_EDIT, RUNTIME_EDIT, GuildSettingsEdit, RuntimeSettingsEdit
 from squid.core.settings.domain.runtime import RuntimeSettings
+from squid.core.settings.infrastructure.discord_rest import DiscordRestDirectory
 from squid.core.starboard.application import StarboardService
 from squid.core.starboard.application.edits import (
     STARBOARD_CREATE,
@@ -284,7 +286,17 @@ class _ServiceGraph:
 
     @cached_property
     def settings(self) -> SettingsService:
-        return SettingsService(uow_factory=self.uow_factory, permissions=self.permissions)
+        return SettingsService(
+            uow_factory=self.uow_factory, permissions=self.permissions, discord=self.runtime_discord_references
+        )
+
+    @cached_property
+    def runtime_discord_references(self) -> RuntimeDiscordReferences:
+        client = self.discord_rest_client
+        return RuntimeDiscordReferences(
+            None if client is None else DiscordRestDirectory(client),
+            owner_guild_id=BotIdentityConfig().owner_server_id,
+        )
 
     @cached_property
     def edits(self) -> EditExecutor[SqlAlchemyUnitOfWork]:
@@ -307,7 +319,7 @@ class _ServiceGraph:
                 BUILD_EDIT: BuildFieldsEdit(self.builds),
                 BUILD_STATUS_EDIT: BuildStatusEdit(self.permissions),
                 BUILD_CATEGORY_EDIT: BuildCategoryEdit(self.permissions),
-                RUNTIME_EDIT: RuntimeSettingsEdit(self.permissions, RuntimeSettings()),
+                RUNTIME_EDIT: RuntimeSettingsEdit(self.permissions, RuntimeSettings(), self.runtime_discord_references),
                 GUILD_EDIT: GuildSettingsEdit(self.permissions),
                 PROFILE_CLEAR: AccountProfileClear(self.permissions),
                 PROFILE_EDIT: AccountProfileEdit(self.permissions),

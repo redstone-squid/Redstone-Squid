@@ -11,6 +11,7 @@ from squid.core.errors import AccountRequiredError, GuildContextRequiredError, V
 from squid.core.permissions.application.ports import PermissionUnitOfWork
 from squid.core.permissions.application.services import PermissionService
 from squid.core.permissions.domain.catalogue import SETTINGS_RUNTIME_EDIT, SETTINGS_SERVER_EDIT, SETTINGS_VOTING_EDIT
+from squid.core.settings.application.discord import RuntimeDiscordReferences
 from squid.core.settings.application.ports import GuildSettingsUnitOfWork, SettingsRepository
 from squid.core.settings.domain.events import GuildVotingChanged
 from squid.core.settings.domain.guild import CHANNEL_FIELDS, GuildSettings
@@ -35,7 +36,16 @@ class SettingsEditUnitOfWork(EditUnitOfWork, PermissionUnitOfWork, GuildSettings
 
 
 class RuntimeSettingsEdit(FieldCommand[SettingsEditUnitOfWork, RuntimeSetting, RuntimeSettings]):
-    def __init__(self, permissions: PermissionService, defaults: RuntimeSettings) -> None:
+    """Edit runtime settings, rejecting Discord IDs of the wrong kind when Discord can tell."""
+
+    def __init__(
+        self,
+        permissions: PermissionService,
+        defaults: RuntimeSettings,
+        discord: RuntimeDiscordReferences | None = None,
+    ) -> None:
+        self._discord = discord
+
         async def load(uow: SettingsEditUnitOfWork, command: EditCommand) -> RuntimeSetting:
             return await uow.settings.runtime(defaults, for_update=True)
 
@@ -58,6 +68,20 @@ class RuntimeSettingsEdit(FieldCommand[SettingsEditUnitOfWork, RuntimeSetting, R
             authorize,
             audit=audit,
         )
+
+    @override
+    async def validate(
+        self,
+        uow: SettingsEditUnitOfWork,
+        actor: Actor,
+        root: RuntimeSetting,
+        command: EditCommand,
+        before: RuntimeSettings,
+        after: RuntimeSettings,
+    ) -> RuntimeSettings:
+        if self._discord is not None and (issues := await self._discord.issues(before, after)):
+            raise ValidationError(issues=issues)
+        return after
 
 
 GUILD_EDIT = "settings.guild"

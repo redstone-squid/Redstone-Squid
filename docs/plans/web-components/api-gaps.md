@@ -101,11 +101,11 @@ Items 12, 13, 15 and 17 share one **record holder summary**: `{build_id, title, 
 
 ## Admin
 
-43. **Runtime settings metadata and Discord names.** Needed by X1, where raw snowflake inputs are unusable.
-    - Declare `group` and `discord_kind: channel | role | user | null` on the `RuntimeSettings` fields, so they reach OpenAPI and the SDK alongside the existing bounds. No separate schema endpoint. The web localizes labels and descriptions by field name.
-    - `GET /v1/settings/runtime` resolves each snowflake to `{id, name} | null`, with null when Discord no longer knows it.
-    - `PATCH` rejects an ID of the wrong kind, such as a role ID in a channel field, with a field error (item 50).
-    - Pickers need the channels and roles of the guild these IDs belong to. Nothing records that guild yet. Decide whether to add a `home_guild_id` setting or derive it from the configured channels, then add `GET /v1/discord/home/channels` and `/roles`.
+43. **Runtime settings metadata and Discord names (implemented).** Needed by X1, where raw snowflake inputs are unusable.
+    - `RuntimeSettings` fields are annotated with a `SettingGroup` and, for Discord IDs, a `DiscordKind`. Both reach every settings property in OpenAPI as `x-squid-group` and `x-squid-discord-kind`. The web localizes labels and descriptions by field name.
+    - `GET /v1/settings/runtime` returns each Discord ID as `{id, name}`. `name` is null when Discord no longer knows the ID or the bot cannot see it, and `names_resolved` is false when Discord was unavailable.
+    - `PATCH` rejects a newly set ID of the wrong kind with a `discord_channel`, `discord_role` or `discord_user` rule issue (item 50), whose reason is `unknown` or `category`. Roles must belong to the owner guild; channels may be in any guild the bot sees, since build logs are read from partner servers. While Discord is unavailable, IDs are stored unchecked.
+    - The owner guild is `BotIdentityConfig.owner_server_id`. `GET /v1/settings/runtime/channels` and `/roles` list its channels and roles for pickers.
 44. **Diagnostics (implemented).** Needed by X2.
     - The list filters by `surface`, `error_code`, `work_lost` and an `occurred_after`/`occurred_before` range (a time without an offset is UTC). Anchors already seek on `(occurred_at, id)`.
     - `GET /v1/diagnostics/errors/stats` returns `{retention_hours, days: [{day, surface, count}]}` for chart 7, counting unexpired reports per UTC day. Retention is configurable, so the chart takes its window from `retention_hours`.

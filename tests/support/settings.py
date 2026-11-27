@@ -1,6 +1,6 @@
 """Settings test doubles that capture entity state when the service commits."""
 
-from collections.abc import Collection, Iterable, Sequence
+from collections.abc import Collection, Iterable, Mapping, Sequence
 from dataclasses import replace
 from typing import override
 
@@ -77,3 +77,7 @@ class RuntimeSettingsStub(SettingsService):
     @override
     async def runtime_snapshot(self, *, context: ActingContext, for_edit: bool = False) -> tuple[RuntimeSettings, int]:
         return self.value, 1
+
+    @override
+    async def runtime_names(self, settings: RuntimeSettings, *, context: ActingContext) -> Mapping[int, str] | None:
+        return None
