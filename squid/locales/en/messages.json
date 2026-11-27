@@ -6542,7 +6542,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/bot/posts/vote_renderer.py:108"
+      "squid/bot/posts/vote_renderer.py:109"
     ]
   },
   "build-editor-build-deleted": {
@@ -23723,21 +23723,6 @@
     "arguments": [],
     "locations": [
       "squid/core/vocabulary.py:32"
-    ]
-  },
-  "vote-consent-required": {
-    "fingerprint": "3c54746d60dac391585c52c3ff5dcdae7d7cf4c611cec6893423a9bfd6dfadc7",
-    "attributes": [],
-    "has_value": true,
-    "arguments": [
-      {
-        "name": "user",
-        "function": null,
-        "options": []
-      }
-    ],
-    "locations": [
-      "squid/bot/voting/reactions.py:315"
     ]
   },
   "vote-message-guild-mismatch": {

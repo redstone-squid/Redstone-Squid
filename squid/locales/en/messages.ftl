@@ -1978,7 +1978,7 @@ build-edit-search-unavailable = Return to the editor before adding a pattern.
 # squid/bot/submission/ui/build_edit.py:482
 build-edit-submit-for-review = Submit for review
 
-# squid/bot/posts/vote_renderer.py:108
+# squid/bot/posts/vote_renderer.py:109
 build-edit-vote-title = Proposed build edit
 
 # squid/bot/submission/ui/controls.py:35
@@ -7121,9 +7121,6 @@ vocabulary-version-scope-all-time = All time
 
 # squid/core/vocabulary.py:32
 vocabulary-version-scope-up-to-date = Current version
-
-# squid/bot/voting/reactions.py:315
-vote-consent-required = { $user }, voting stores your Discord user ID. Run `/account consent` first.
 
 # squid/bot/voting/cog.py:347
 vote-message-guild-mismatch = The message is not from this guild.

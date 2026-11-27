@@ -36,7 +36,7 @@ from squid.core.accounts.domain import IdentityProvider
 from squid.core.actors import ActingContext
 from squid.core.i18n import tr
 from squid.core.permissions.domain.catalogue import VOTE_POLL_CLOSE_ANY, VOTE_POLL_NETWORK_CREATE, VOTE_POLL_RECOUNT
-from squid.core.voting.domain import PollScope, VoteMenu, VoteStatus, VoteVisibility
+from squid.core.voting.domain import PollScope, VoteMenu, Voter, VoteStatus, VoteVisibility
 from squid.core.voting.errors import InvalidVoteConfigurationError
 from squid_i18n import md_tr
 from squid_ui.ext.discord.i18n import to_locale_str
@@ -95,10 +95,10 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
     async def on_member_ban(self, guild: discord.Guild, user: discord.User | discord.Member) -> None:
         """Void the banned member's ballots in the sessions this guild weighs."""
         account_id = await self.bot.account_ids.resolve(self.bot.services.accounts, user.id)
-        if account_id is None:
-            return
-        for session in await self.vote_service.void_ballots(account_id, guild.id, context=ActingContext.current()):
-            await self.bot.refresh_posts("vote_session", str(session.id))
+        voters = [Voter.discord(user.id)] if account_id is None else [Voter.account(account_id), Voter.discord(user.id)]
+        for voter in voters:
+            for session in await self.vote_service.void_ballots(voter, guild.id, context=ActingContext.current()):
+                await self.bot.refresh_posts("vote_session", str(session.id))
 
     @sd.command(
         name=to_locale_str(tr(t"command-poll-name = poll")),

@@ -12,6 +12,7 @@ from squid.core.voting.application.recount import BallotRecounter, CardReactions
 from squid.core.voting.domain import (
     CastVoteResult,
     VoteMessage,
+    Voter,
     VoteRejection,
     VoteSelection,
     VoteSessionSnapshot,
@@ -29,7 +30,7 @@ class Votes(VoteService):
 
     snapshot: VoteSessionSnapshot
     rejection: VoteRejection | None = None
-    casts: list[tuple[int, str, str | None, bool]] = field(default_factory=list)
+    casts: list[tuple[Voter, str, str | None, bool]] = field(default_factory=list)
 
     @override
     async def get_session(self, vote_session_id: int, *, context: ActingContext) -> VoteSessionSnapshot | None:
@@ -47,7 +48,7 @@ class Votes(VoteService):
         context: ActingContext,
     ) -> CastVoteResult:
         assert context.effective == WorkerActor(worker_name="recount")
-        self.casts.append((voter.require_account_id(), option_id, emoji, False))
+        self.casts.append((Voter.of(voter.require_user()), option_id, emoji, False))
         return CastVoteResult(self.snapshot, self.rejection)
 
 
@@ -90,12 +91,12 @@ async def test_a_reaction_missed_while_offline_becomes_a_ballot() -> None:
     assert await _recounter(votes, cards).recount(1, context=ActingContext.worker("recount"))
 
     # Select, not toggle, so repeating the recount cannot withdraw the ballot.
-    assert votes.casts == [(1001, "two", "2️⃣", False)]
+    assert votes.casts == [(Voter.account(1001), "two", "2️⃣", False)]
     assert (cards.removed, cards.added) == ([], [])
 
 
 async def test_a_reaction_for_the_stored_option_wins_and_the_others_are_removed() -> None:
-    stored = VoteSelection(1001, 10, "two", "2️⃣", 1)
+    stored = VoteSelection(Voter.account(1001), 10, "two", "2️⃣", 1)
     votes = Votes(_snapshot(selections=(stored,)))
     cards = Cards({100: CardReactions({"1️⃣": [1], "2️⃣": [1]}, own=frozenset({"1️⃣", "2️⃣"}))})
 
@@ -114,24 +115,24 @@ async def test_conflicting_choices_without_a_ballot_remain_for_the_voter_to_reso
     assert cards.removed == []
 
 
-async def test_anonymous_reactions_are_removed_after_casting_and_unconsented_ones_are_not_cast() -> None:
+async def test_anonymous_reactions_are_removed_after_casting_even_without_an_account() -> None:
     votes = Votes(_snapshot(anonymous=True))
     cards = Cards({100: CardReactions({"1️⃣": [1, 99]}, own=frozenset({"1️⃣", "2️⃣"}))})
 
     await _recounter(votes, cards).recount(1, context=ActingContext.worker("recount"))
 
-    assert votes.casts == [(1001, "one", "1️⃣", False)]
+    assert votes.casts == [(Voter.account(1001), "one", "1️⃣", False), (Voter.discord(99), "one", "1️⃣", False)]
     assert sorted(cards.removed) == [("1️⃣", 1), ("1️⃣", 99)]
 
 
 async def test_a_refused_ballot_keeps_only_the_reaction_for_the_stored_option() -> None:
-    stored = VoteSelection(1001, 10, "one", "1️⃣", 1)
+    stored = VoteSelection(Voter.account(1001), 10, "one", "1️⃣", 1)
     votes = Votes(_snapshot(selections=(stored,)), rejection=VoteRejection.NOT_ELIGIBLE)
     cards = Cards({100: CardReactions({"2️⃣": [1, 2]}, own=frozenset({"1️⃣", "2️⃣"}))})
 
     assert not await _recounter(votes, cards).recount(1, context=ActingContext.worker("recount"))
 
-    assert [cast[:2] for cast in votes.casts] == [(1001, "two"), (1002, "two")]
+    assert [cast[:2] for cast in votes.casts] == [(Voter.account(1001), "two"), (Voter.account(1002), "two")]
     assert sorted(cards.removed) == [("2️⃣", 1), ("2️⃣", 2)]
 
 

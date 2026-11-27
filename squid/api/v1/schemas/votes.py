@@ -137,7 +137,7 @@ class VoteSessionDetail(BaseModel):
             )
         poll = session.poll
         own_selection = next(
-            (selection for selection in session.selections if selection.account_id == caller_account_id), None
+            (selection for selection in session.selections if selection.voter.account_id == caller_account_id), None
         )
         return cls(
             id=session.id,

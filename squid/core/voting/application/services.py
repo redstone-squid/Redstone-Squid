@@ -45,6 +45,7 @@ from squid.core.voting.domain import (
     VoteKind,
     VoteMenu,
     VoteOption,
+    Voter,
     VoteRejection,
     VoteSessionSnapshot,
     VoteStatus,
@@ -109,9 +110,10 @@ class VoteService:
         """Return the actor's base weight in a session, before the option multiplier.
 
         Weight comes from the voter's stored membership in the owner guild; a voter
-        it does not list is weighed as a member without roles. A poll limited to its
-        guild only admits that guild's members. With no owner guild, every eligible
-        voter weighs 1.
+        it does not list is weighed as a member without roles. A voter without an
+        account has no stored membership, so only the roles they react with in the
+        owner guild count. A poll limited to its guild only admits that guild's
+        members. With no owner guild, every eligible voter weighs 1.
         """
         if not (await self._permissions.check(actor, VOTE_POLL_CAST, uow=uow)).allowed:
             return VoteRejection.NOT_ELIGIBLE
@@ -119,7 +121,12 @@ class VoteService:
         if owner_guild_id is None:
             # Without a designated authority no guild's role table may speak for the session.
             return 1.0
-        member = await uow.votes.get_member(owner_guild_id, actor.require_account_id())
+        if actor.account_id is not None:
+            member = await uow.votes.get_member(owner_guild_id, actor.account_id)
+        elif actor.guild_id == owner_guild_id and actor.discord_user_id is not None:
+            member = GuildMember(actor.discord_user_id, actor.discord_role_ids, actor.discord_guild_admin)
+        else:
+            member = None
         if member is None and snapshot.members_only:
             return VoteRejection.NOT_ELIGIBLE
         weight_actor = UserActor(
@@ -419,7 +426,7 @@ class VoteService:
         count_revision: int | None,
         context: ActingContext,
     ) -> CastVoteResult:
-        account_id = actor.require_account_id()
+        voter = Voter.of(actor)
         snapshot = await self.get_session(vote_session_id, context=context)
         if snapshot is None:
             return CastVoteResult(session=None, rejection=VoteRejection.NOT_FOUND)
@@ -446,7 +453,7 @@ class VoteService:
             weight *= option.multiplier
             mutation = await uow.votes.cast_vote(
                 vote_session_id,
-                account_id,
+                voter,
                 option,
                 weight,
                 guild_id=actor.guild_id,
@@ -471,7 +478,7 @@ class VoteService:
     async def clear_vote(self, vote_session_id: int, *, context: ActingContext) -> CastVoteResult:
         """Remove the actor's ballot while the session is open, without toggling it back on."""
         actor = context.effective.require_user()
-        account_id = actor.require_account_id()
+        voter = Voter.of(actor)
         snapshot = await self.get_session(vote_session_id, context=context)
         if snapshot is None:
             return CastVoteResult(session=None, rejection=VoteRejection.NOT_FOUND)
@@ -482,7 +489,7 @@ class VoteService:
         async with self._uow_factory() as uow:
             if not (await self._permissions.check(actor, VOTE_POLL_CAST, uow=uow)).allowed:
                 return CastVoteResult(snapshot, VoteRejection.NOT_ELIGIBLE)
-            mutation = await uow.votes.clear_vote(vote_session_id, account_id)
+            mutation = await uow.votes.clear_vote(vote_session_id, voter)
             await uow.commit()
         if mutation is None:
             latest = await self.get_session(vote_session_id, context=context)
@@ -497,9 +504,9 @@ class VoteService:
 
     @application_operation
     async def void_ballots(
-        self, account_id: int, guild_id: int, *, context: ActingContext
+        self, voter: Voter, guild_id: int, *, context: ActingContext
     ) -> tuple[VoteSessionSnapshot, ...]:
-        """Void an account's ballots in the open sessions `guild_id` weighs, after it bans them.
+        """Void a voter's ballots in the open sessions `guild_id` weighs, after it bans them.
 
         Ballots keep their weight when roles change, so a ban is the one membership
         change that removes them. Removing a ballot can still close a threshold vote.
@@ -508,10 +515,10 @@ class VoteService:
         changed: list[VoteSessionSnapshot] = []
         for kind in VoteKind:
             for snapshot in await self.list_open(kind, context=context):
-                if self._owner_guild_id(snapshot) != guild_id or snapshot.selection_for(account_id) is None:
+                if self._owner_guild_id(snapshot) != guild_id or snapshot.selection_for(voter) is None:
                     continue
                 async with self._uow_factory() as uow:
-                    mutation = await uow.votes.clear_vote(snapshot.id, account_id, change=BallotChange.VOID)
+                    mutation = await uow.votes.clear_vote(snapshot.id, voter, change=BallotChange.VOID)
                     await uow.commit()
                 if mutation is not None:
                     changed.append(mutation.session)

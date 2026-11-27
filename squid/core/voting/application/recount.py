@@ -21,7 +21,7 @@ from typing import Protocol
 
 from squid.core.actors import ActingContext, UserActor, application_operation
 from squid.core.voting.application.services import VoteService
-from squid.core.voting.domain import VoteMessage, VoteRejection, VoteSessionSnapshot, VoteStatus
+from squid.core.voting.domain import VoteMessage, Voter, VoteRejection, VoteSessionSnapshot, VoteStatus
 
 
 @dataclass(frozen=True, slots=True)
@@ -79,10 +79,10 @@ class _ObservedReaction:
 
 @dataclass(frozen=True, slots=True)
 class _Ballot:
-    """What a recount did with one account's reactions."""
+    """What a recount did with one voter's reactions."""
 
     option_id: str | None
-    """The option the account's stored ballot now has, if any."""
+    """The option the voter's stored ballot now has, if any."""
     changed: bool = False
     unresolved: bool = False
     """True when the ballot could not be judged, so its reactions must be left in place."""
@@ -112,7 +112,7 @@ class BallotRecounter:
     async def recount(self, vote_session_id: int, *, context: ActingContext) -> bool:
         """Make the session's ballots and card reactions agree, as far as Discord allows.
 
-        For each account seen reacting:
+        For each voter seen reacting:
 
         - If one of its reactions is for its stored option, the ballot stays.
         - One distinct option becomes its ballot. Conflicting options preserve the stored
@@ -120,8 +120,8 @@ class BallotRecounter:
         - Reactions for any other option are removed from public polls, and every reaction
           is removed from anonymous polls, whose cards must not show who voted.
 
-        Reactions from people without a consented account are removed without casting.
-        Accounts with no reactions keep their stored ballots. Finally the bot adds back any
+        People without a consented account vote under their Discord ID. Voters with no
+        reactions keep their stored ballots. Finally the bot adds back any
         option reaction of its own that is missing, so people can still vote.
 
         Returns:
@@ -150,7 +150,7 @@ class BallotRecounter:
 
         # Read every reachable card.
         cards: list[tuple[VoteMessage, tuple[str, ...], CardReactions]] = []
-        observed: dict[int, list[_ObservedReaction]] = {}
+        observed: dict[Voter, list[_ObservedReaction]] = {}
         for card in snapshot.messages:
             aliases = snapshot.menu.aliases_for_guild(card.guild_id)
             emojis = tuple(alias.emoji for alias in aliases)
@@ -168,21 +168,19 @@ class BallotRecounter:
             for alias in aliases:
                 for user_id in reactions.voters.get(alias.emoji, ()):
                     account_id = await self._voters.consented_account_id(user_id)
-                    if account_id is None:
-                        await self._cards.remove(card, alias.emoji, user_id)
-                        continue
-                    observed.setdefault(account_id, []).append(
+                    voter = Voter.discord(user_id) if account_id is None else Voter.account(account_id)
+                    observed.setdefault(voter, []).append(
                         _ObservedReaction(card, user_id, alias.emoji, alias.option_id)
                     )
 
-        # Cast one ballot per account and tidy its reactions.
+        # Cast one ballot per voter and tidy its reactions.
         changed = False
-        for account_id, reactions_for_account in observed.items():
-            ballot = await self._apply(snapshot, account_id, reactions_for_account, count_revision)
+        for voter, reactions_for_voter in observed.items():
+            ballot = await self._apply(snapshot, voter, reactions_for_voter, count_revision)
             changed = changed or ballot.changed
             if ballot.unresolved:
                 continue
-            for reaction in reactions_for_account:
+            for reaction in reactions_for_voter:
                 if snapshot.is_anonymous or reaction.option_id != ballot.option_id:
                     await self._cards.remove(reaction.card, reaction.emoji, reaction.user_id)
 
@@ -196,12 +194,12 @@ class BallotRecounter:
     async def _apply(
         self,
         snapshot: VoteSessionSnapshot,
-        account_id: int,
+        voter: Voter,
         reactions: Sequence[_ObservedReaction],
         count_revision: int | None,
     ) -> _Ballot:
         """Cast the ballot these reactions imply, unless the stored one already matches."""
-        selection = snapshot.selection_for(account_id)
+        selection = snapshot.selection_for(voter)
         stored = None if selection is None else selection.option_id
         if any(reaction.option_id == stored for reaction in reactions):
             return _Ballot(stored)
@@ -209,7 +207,7 @@ class BallotRecounter:
             return _Ballot(stored, unresolved=stored is None)
         desired = reactions[0]
         # The card's guild picks the alias; the service weighs the ballot from stored membership.
-        actor = UserActor(account_id=account_id, discord_user_id=desired.user_id, guild_id=desired.card.guild_id)
+        actor = UserActor(account_id=voter.account_id, discord_user_id=desired.user_id, guild_id=desired.card.guild_id)
         result = await self._votes._record_observed_reaction(
             actor,
             snapshot.id,

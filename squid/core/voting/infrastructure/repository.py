@@ -6,7 +6,7 @@ from itertools import batched
 from typing import Any
 
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository
-from sqlalchemy import Select, Text, delete, func, insert, select
+from sqlalchemy import BigInteger, Select, Text, delete, func, insert, select
 from sqlalchemy import cast as cast_sql
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -46,6 +46,7 @@ from squid.core.voting.domain import (
     VoteMenu,
     VoteMessage,
     VoteOption,
+    Voter,
     VoteSelection,
     VoteSessionResult,
     VoteSessionSnapshot,
@@ -499,7 +500,7 @@ class VoteRepository:
     async def cast_vote(
         self,
         vote_session_id: int,
-        account_id: int,
+        voter: Voter,
         option: VoteOption,
         weight: float,
         *,
@@ -532,9 +533,7 @@ class VoteRepository:
             raise DataIntegrityError(msg, context={"vote_session_id": vote_session_id, "option_id": option.id})
         if guild_id is not None:
             await ensure_server_settings(session, (guild_id,))
-        previous = await session.scalar(
-            select(Vote).where(Vote.vote_session_id == row.id, Vote.account_id == account_id)
-        )
+        previous = await self._ballot(session, row.id, voter)
         previous_weight = previous.weight if previous is not None else None
         # Aliases of the same option toggle the same ballot: ✅ after 👍 still means "approve".
         if toggle and previous is not None and previous.option_identifier == option.id:
@@ -543,38 +542,85 @@ class VoteRepository:
             event = {"change": BallotChange.CLEAR, "guild_id": guild_id, "emoji": emoji}
         else:
             values = {"option_identifier": option.id, "guild_id": guild_id, "emoji": emoji, "weight": weight}
-            await session.execute(
-                pg_insert(Vote)
-                .values(vote_session_id=row.id, account_id=account_id, **values)
-                .on_conflict_do_update(index_elements=[Vote.vote_session_id, Vote.account_id], set_=values)
-            )
+            if previous is None:
+                session.add(
+                    Vote(
+                        vote_session_id=row.id,
+                        account_id=voter.account_id,
+                        discord_user_id=voter.discord_user_id,
+                        option_identifier=option.id,
+                        guild_id=guild_id,
+                        emoji=emoji,
+                        weight=weight,
+                    )
+                )
+            else:
+                for name, value in values.items():
+                    setattr(previous, name, value)
             current_weight = weight
             event = {"change": BallotChange.CAST, **values}
-        await session.execute(insert(VoteBallotEvent).values(vote_session_id=row.id, account_id=account_id, **event))
+        await session.flush()
+        await session.execute(insert(VoteBallotEvent).values(vote_session_id=row.id, **_voter_columns(voter), **event))
         just_closed = await self._close_at_threshold(session, row)
         return StoredVoteMutation(await self._to_snapshot(session, row), previous_weight, current_weight, just_closed)
 
     async def clear_vote(
-        self, vote_session_id: int, account_id: int, *, change: BallotChange = BallotChange.CLEAR
+        self, vote_session_id: int, voter: Voter, *, change: BallotChange = BallotChange.CLEAR
     ) -> StoredVoteMutation | None:
         """Remove a ballot from an open session and check thresholds.
 
         `change` records why: the voter withdrew it, or staff voided it. Removing a
-        ballot the account does not have records nothing.
+        ballot the voter does not have records nothing.
         """
         session = self._session()
         row = await self._lock_session_row(session, vote_session_id)
         if row is None or row.status is not VoteStatus.OPEN:
             return None
-        previous_weight = await session.scalar(
-            delete(Vote).where(Vote.vote_session_id == row.id, Vote.account_id == account_id).returning(Vote.weight)
-        )
-        if previous_weight is not None:
+        previous = await self._ballot(session, row.id, voter)
+        previous_weight = None if previous is None else previous.weight
+        if previous is not None:
+            await session.delete(previous)
+            await session.flush()
             await session.execute(
-                insert(VoteBallotEvent).values(vote_session_id=row.id, account_id=account_id, change=change)
+                insert(VoteBallotEvent).values(vote_session_id=row.id, **_voter_columns(voter), change=change)
             )
         just_closed = await self._close_at_threshold(session, row)
         return StoredVoteMutation(await self._to_snapshot(session, row), previous_weight, None, just_closed)
+
+    @staticmethod
+    async def _ballot(session: AsyncSession, vote_session_id: int, voter: Voter) -> Vote | None:
+        """Return the voter's ballot in a locked session.
+
+        An account first takes over any ballot one of its Discord identities cast
+        before the account could vote, so one person never holds two ballots. The
+        account's own ballot wins if it already has one.
+        """
+        if voter.account_id is None:
+            return await session.scalar(
+                select(Vote).where(
+                    Vote.vote_session_id == vote_session_id, Vote.discord_user_id == voter.discord_user_id
+                )
+            )
+        own = await session.scalar(
+            select(Vote).where(Vote.vote_session_id == vote_session_id, Vote.account_id == voter.account_id)
+        )
+        identities = select(cast_sql(AccountIdentity.subject, BigInteger)).where(
+            AccountIdentity.account_id == voter.account_id, AccountIdentity.provider == IdentityProvider.DISCORD
+        )
+        placeholders = (
+            await session.scalars(
+                select(Vote).where(Vote.vote_session_id == vote_session_id, Vote.discord_user_id.in_(identities))
+            )
+        ).all()
+        for placeholder in placeholders:
+            if own is None:
+                placeholder.account_id, placeholder.discord_user_id = voter.account_id, None
+                own = placeholder
+            else:
+                await session.delete(placeholder)
+        if placeholders:
+            await session.flush()
+        return own
 
     async def close(self, vote_session_id: int) -> StoredVoteMutation | None:
         """Close an open session with the CANCELLED result; return None if missing or already closed."""
@@ -835,15 +881,15 @@ class VoteRepository:
                     AccountProfile, (AccountProfile.account_id == Vote.account_id) & AccountProfile.hidden.is_(False)
                 )
                 .where(Vote.vote_session_id == row.id)
-                .order_by(Vote.account_id)
+                .order_by(Vote.id)
             )
         ).all()
         selections = tuple(
-            VoteSelection(vote.account_id, vote.guild_id, vote.option_identifier, vote.emoji, vote.weight, name)
+            VoteSelection(_voter(vote), vote.guild_id, vote.option_identifier, vote.emoji, vote.weight, name)
             for vote, _, name in vote_rows
         )
         signed_votes = {
-            vote.account_id: vote.weight * (-1 if choice is VoteChoice.DENY else 1) for vote, choice, _ in vote_rows
+            _voter(vote): vote.weight * (-1 if choice is VoteChoice.DENY else 1) for vote, choice, _ in vote_rows
         }
 
         target, poll = await VoteRepository._load_target(session, row)
@@ -931,3 +977,11 @@ def _reviews[S: Select[Any]](statement: S, filters: ReviewFilters) -> S:
     if filters.status is not None:
         statement = statement.where(VoteSession.status == filters.status)
     return statement
+
+
+def _voter(vote: Vote) -> Voter:
+    return Voter(account_id=vote.account_id, discord_user_id=vote.discord_user_id)
+
+
+def _voter_columns(voter: Voter) -> dict[str, int | None]:
+    return {"account_id": voter.account_id, "discord_user_id": voter.discord_user_id}

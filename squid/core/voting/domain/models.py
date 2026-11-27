@@ -286,20 +286,56 @@ class VoteMenu:
 
 
 @dataclass(frozen=True, slots=True)
+class Voter:
+    """Who a ballot belongs to: an account, or a Discord user who voted through the bot without one.
+
+    Voting through the bot needs no account, so a reaction from someone without a
+    consented account is stored under their Discord ID. When that person later votes
+    in the session with an account, the account takes the ballot over.
+    """
+
+    account_id: int | None = None
+    discord_user_id: int | None = None
+
+    def __post_init__(self) -> None:
+        if (self.account_id is None) == (self.discord_user_id is None):
+            msg = "A voter is either an account or a Discord user."
+            raise InvalidVoteConfigurationError(msg)
+
+    @classmethod
+    def account(cls, account_id: int) -> Voter:
+        return cls(account_id=account_id)
+
+    @classmethod
+    def discord(cls, discord_user_id: int) -> Voter:
+        return cls(discord_user_id=discord_user_id)
+
+    @classmethod
+    def of(cls, actor: UserActor) -> Voter:
+        """The actor's account if it has one, otherwise its Discord user."""
+        if actor.account_id is not None:
+            return cls.account(actor.account_id)
+        if actor.discord_user_id is None:
+            msg = "A voter needs an account or a Discord identity."
+            raise InvalidVoteConfigurationError(msg)
+        return cls.discord(actor.discord_user_id)
+
+
+@dataclass(frozen=True, slots=True)
 class VoteSelection:
-    """One account's ballot, with the positive weight it was cast with.
+    """One voter's ballot, with the positive weight it was cast with.
 
     `guild_id` and `emoji` record the card and alias it was cast with, or None for a
     ballot cast without Discord. The session's owner guild decides weight separately.
     """
 
-    account_id: int
+    voter: Voter
     guild_id: int | None
     option_id: str
     emoji: str | None
     weight: float
     display_name: str | None = None
-    """The voter's public profile name, or None if they have none or hide it."""
+    """The voter's public profile name, or None if they have none, hide it, or have no account."""
 
     def __post_init__(self) -> None:
         if not isfinite(self.weight) or self.weight <= 0:
@@ -433,7 +469,7 @@ def validate_session_payload(
 class VoteSessionSnapshot:
     """Validated session state used by application and presentation adapters.
 
-    `votes` maps account IDs to signed weights for score calculations. `selections`
+    `votes` maps voters to signed weights for score calculations. `selections`
     retains the ballots with positive weights and stable option IDs for tallies. For example, a deny ballot of weight 2 appears as -2 in `votes`
     and as weight 2 with the default option ID `deny` in `selections`.
     """
@@ -445,7 +481,7 @@ class VoteSessionSnapshot:
     result: VoteSessionResult
     pass_threshold: int | None
     fail_threshold: int | None
-    votes: Mapping[int, float]
+    votes: Mapping[Voter, float]
     messages: tuple[VoteMessage, ...]
     menu: VoteMenu
     target: VoteTarget = None
@@ -518,8 +554,8 @@ class VoteSessionSnapshot:
             recount_only and VOTE_POLL_RECOUNT.name in actor.capabilities
         )
 
-    def selection_for(self, account_id: int) -> VoteSelection | None:
-        return next((selection for selection in self.selections if selection.account_id == account_id), None)
+    def selection_for(self, voter: Voter) -> VoteSelection | None:
+        return next((selection for selection in self.selections if selection.voter == voter), None)
 
     def raw_tallies(self) -> Mapping[str, int]:
         """Return selection counts by stable option identifier."""

@@ -26,6 +26,7 @@ from squid.core.voting.domain.models import (
     VoteMenu,
     VoteMessage,
     VoteOption,
+    Voter,
     VoteRejection,
     VoteSelection,
     VoteSessionResult,
@@ -70,6 +71,7 @@ __all__ = [
     "VoteStatus",
     "VoteTarget",
     "VoteVisibility",
+    "Voter",
     "validate_session_payload",
     "validate_thresholds",
 ]

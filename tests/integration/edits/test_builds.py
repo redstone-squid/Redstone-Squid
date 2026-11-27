@@ -53,7 +53,7 @@ from squid.core.submissions.domain import DraftChange, DraftChangeKey, FieldOper
 from squid.core.tags.domain import TagAuthority, TagModerationStatus, TagValueType
 from squid.core.versions.application import VersionService
 from squid.core.voting.application.services import VoteService
-from squid.core.voting.domain import BuildEditVoteTarget, VoteChoice, VoteKind, VoteSessionResult
+from squid.core.voting.domain import BuildEditVoteTarget, VoteChoice, VoteKind, Voter, VoteSessionResult
 from squid.worker.events import ApplyBuildVoteOutcomeHandler
 from tests.support.build_edits import build_edit_session
 from tests.support.submission_form import Forms
@@ -209,7 +209,7 @@ async def test_credited_creator_proposes_published_changes_and_vote_applies_the_
     async with factory() as uow:
         option = next(option for option in snapshot.menu.options if option.choice is VoteChoice.APPROVE)
         assert owner.account_id is not None
-        mutation = await uow.votes.cast_vote(vote_id, owner.account_id, option, 3)
+        mutation = await uow.votes.cast_vote(vote_id, Voter.account(owner.account_id), option, 3)
         assert mutation is not None
         await uow.commit()
     closed = await VoteService(uow_factory=factory).get_session(vote_id, context=ActingContext.direct(AnonymousActor()))

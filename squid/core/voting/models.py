@@ -296,8 +296,8 @@ class GenericVoteSession(Base, kw_only=True):
     deadline: Mapped[Instant] = mapped_column(InstantUTC(), nullable=False)
 
 
-class Vote(Base):
-    """One account's selected option and the positive weight it was cast with."""
+class Vote(Base, kw_only=True):
+    """One voter's selected option and the positive weight it was cast with."""
 
     __tablename__ = "votes"
     __table_args__ = (
@@ -307,11 +307,27 @@ class Vote(Base):
             name="votes_option_fkey",
         ),
         Index("votes_account_idx", "account_id"),
+        Index(
+            "votes_session_account_key",
+            "vote_session_id",
+            "account_id",
+            unique=True,
+            postgresql_where=text("account_id IS NOT NULL"),
+        ),
+        Index(
+            "votes_session_discord_user_key",
+            "vote_session_id",
+            "discord_user_id",
+            unique=True,
+            postgresql_where=text("discord_user_id IS NOT NULL"),
+        ),
+        CheckConstraint("num_nonnulls(account_id, discord_user_id) = 1", name="votes_one_voter_check"),
         CheckConstraint(
             "weight > 0 AND weight != 'Infinity'::double precision AND weight != 'NaN'::double precision",
             name="votes_weight_check",
         ),
     )
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
     vote_session_id: Mapped[int] = mapped_column(
         BigInteger,
         ForeignKey(
@@ -320,25 +336,29 @@ class Vote(Base):
             ondelete="CASCADE",
             onupdate="CASCADE",
         ),
-        primary_key=True,
+        nullable=False,
     )
-    account_id: Mapped[int] = mapped_column(
-        ForeignKey("accounts.id", name="votes_account_id_fkey", ondelete="CASCADE"),
-        primary_key=True,
+    account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("accounts.id", name="votes_account_id_fkey", ondelete="CASCADE"), nullable=True, default=None
     )
+    discord_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True, default=None)
+    """The voter's Discord user ID when they voted through the bot without a consented account."""
     option_identifier: Mapped[str] = mapped_column(Text, nullable=False)
     guild_id: Mapped[int | None] = mapped_column(
         BigInteger,
         ForeignKey("server_settings.server_id", name="votes_guild_id_fkey", ondelete="RESTRICT"),
         nullable=True,
+        default=None,
     )
     """The guild whose card the ballot was cast on, or None for a ballot cast without Discord."""
-    emoji: Mapped[str | None] = mapped_column(Text, nullable=True)
+    emoji: Mapped[str | None] = mapped_column(Text, nullable=True, default=None)
     """The alias the ballot was cast with, which a public card keeps as the voter's reaction."""
     weight: Mapped[float] = mapped_column(Float, nullable=False)
     """Positive magnitude fixed at cast; the option's choice determines the sign used in threshold scoring."""
 
-    vote_session: Mapped[VoteSession] = relationship(back_populates="votes", lazy="raise_on_sql", repr=False)
+    vote_session: Mapped[VoteSession] = relationship(
+        back_populates="votes", lazy="raise_on_sql", repr=False, init=False
+    )
 
 
 class VoteBallotEvent(Base, kw_only=True):
@@ -359,6 +379,7 @@ class VoteBallotEvent(Base, kw_only=True):
             "(change = 'cast') = (option_identifier IS NOT NULL AND weight IS NOT NULL)",
             name="vote_ballot_events_selection_check",
         ),
+        CheckConstraint("num_nonnulls(account_id, discord_user_id) = 1", name="vote_ballot_events_one_voter_check"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True, init=False)
@@ -367,9 +388,11 @@ class VoteBallotEvent(Base, kw_only=True):
         ForeignKey("vote_sessions.id", name="vote_ballot_events_vote_session_id_fkey", ondelete="CASCADE"),
         nullable=False,
     )
-    account_id: Mapped[int] = mapped_column(
-        ForeignKey("accounts.id", name="vote_ballot_events_account_id_fkey", ondelete="CASCADE"), nullable=False
+    account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("accounts.id", name="vote_ballot_events_account_id_fkey", ondelete="CASCADE"), nullable=True
     )
+    discord_user_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    """The voter's Discord user ID when the change came from someone without a consented account."""
     change: Mapped[BallotChange] = mapped_column(StrEnumText(BallotChange), nullable=False)
     option_identifier: Mapped[str | None] = mapped_column(Text, nullable=True)
     """The option the ballot selects after a cast, or None after a clear or void."""

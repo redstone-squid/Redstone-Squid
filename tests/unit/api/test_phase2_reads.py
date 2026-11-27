@@ -42,6 +42,7 @@ from squid.core.voting.domain import (
     VoteKind,
     VoteMenu,
     VoteOption,
+    Voter,
     VoteSelection,
     VoteSessionSnapshot,
     VoteVisibility,
@@ -459,7 +460,7 @@ def test_hidden_vote_session_omits_ballots_and_live_tallies(
             ),
             (VoteAlias("red", "1"), VoteAlias("blue", "2", position=1)),
         ),
-        selections=(VoteSelection(111, 99, "red", "1", 2.5),),
+        selections=(VoteSelection(Voter.account(111), 99, "red", "1", 2.5),),
     )
     _override(app, votes=VoteFake(session))
 
@@ -479,13 +480,16 @@ def test_hidden_vote_session_omits_ballots_and_live_tallies(
 
 @pytest.mark.parametrize("visibility", [VoteVisibility.ANONYMOUS_LIVE, VoteVisibility.ANONYMOUS_HIDDEN])
 def test_anonymous_polls_do_not_name_their_voters(visibility: VoteVisibility) -> None:
-    selections = (VoteSelection(111, 99, "red", "1", 2.5, "Alex"),)
+    selections = (VoteSelection(Voter.account(111), 99, "red", "1", 2.5, "Alex"),)
 
     assert VoteSessionDetail.from_domain(poll_snapshot(visibility=visibility, selections=selections)).voters is None
 
 
 def test_visible_polls_name_each_voter_and_their_choice() -> None:
-    selections = (VoteSelection(111, 99, "red", "1", 2.5, "Alex"), VoteSelection(112, 99, "red", "1", 1.0))
+    selections = (
+        VoteSelection(Voter.account(111), 99, "red", "1", 2.5, "Alex"),
+        VoteSelection(Voter.account(112), 99, "red", "1", 1.0),
+    )
     detail = VoteSessionDetail.from_domain(poll_snapshot(visibility=VoteVisibility.VISIBLE_LIVE, selections=selections))
 
     assert [voter.model_dump() for voter in detail.voters or ()] == [
@@ -495,7 +499,9 @@ def test_visible_polls_name_each_voter_and_their_choice() -> None:
 
 
 def test_build_reviews_never_name_their_voters() -> None:
-    detail = VoteSessionDetail.from_domain(build_snapshot(selections=(VoteSelection(111, 10, "approve", "✅", 1.0),)))
+    detail = VoteSessionDetail.from_domain(
+        build_snapshot(selections=(VoteSelection(Voter.account(111), 10, "approve", "✅", 1.0),))
+    )
 
     assert detail.voters is None
 

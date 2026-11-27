@@ -18,6 +18,7 @@ from squid.core.voting.domain import (
     ReviewFilters,
     ReviewKind,
     ReviewSort,
+    Voter,
     VoteSelection,
     VoteSessionSnapshot,
     VoteStatus,
@@ -75,7 +76,7 @@ def reviewer() -> Caller:
 
 
 async def test_review_votes_carry_the_build_its_submitter_and_the_callers_ballot() -> None:
-    session = build_snapshot(selections=(VoteSelection(7, 10, "approve", "✅", 1.0),))
+    session = build_snapshot(selections=(VoteSelection(Voter.account(7), 10, "approve", "✅", 1.0),))
     votes = ReviewVotes(session, build_snapshot(id=13, target=BuildVoteTarget(2)))
 
     page = await list_review_votes.fn(

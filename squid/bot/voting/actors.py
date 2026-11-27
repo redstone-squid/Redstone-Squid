@@ -43,14 +43,17 @@ def describe_rejection(rejection: VoteRejection) -> Text:
     return REJECTION_MESSAGES[rejection]
 
 
-async def resolve_actor(bot: squid.bot.app.RedstoneSquid, member: discord.Member, *, account_id: int) -> UserActor:
+async def resolve_actor(
+    bot: squid.bot.app.RedstoneSquid, member: discord.Member, *, account_id: int | None
+) -> UserActor:
     """Resolve the member's vote capabilities in one permission query.
 
-    The caller supplies an account ID after checking consent when needed. This
-    function loads permissions and uses roles from the supplied member object;
-    it does not create an account or refresh Discord membership.
+    The caller supplies an account ID after checking consent when needed; None
+    makes the member vote under their Discord ID. This function loads permissions
+    and uses roles from the supplied member object; it does not create an account
+    or refresh Discord membership.
     """
-    subject = await bot.actors.resolve(member, account_id=account_id)
+    subject = replace(await bot.actors.resolve(member, account_id=account_id), account_id=account_id)
     capabilities = (
         await bot.services.permissions.check(
             subject, *(VOTE_LOG_DELETE_CAST, VOTE_WEIGHT_STAFF, VOTE_POLL_CLOSE_ANY, VOTE_POLL_RECOUNT)

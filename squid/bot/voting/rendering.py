@@ -11,7 +11,7 @@ from squid.bot.chrome import CHROME
 from squid.bot.ui import CardField, card_node, render_payload
 from squid.bot.voting.controls import poll_controls
 from squid.bot.voting.poll_display import poll_choices, poll_question
-from squid.core.voting.domain import VoteChoice, VoteOption, VoteSessionResult, VoteSessionSnapshot, VoteStatus
+from squid.core.voting.domain import VoteChoice, VoteOption, Voter, VoteSessionResult, VoteSessionSnapshot, VoteStatus
 from squid_i18n import discord_markup
 from squid_ui.ext.discord import primitives
 from squid_ui.ext.discord.target_types import ComponentsV2Target
@@ -137,7 +137,7 @@ def render_delete_log(snapshot: VoteSessionSnapshot, target_content: str) -> sd.
 
 def render_generic_poll(
     snapshot: VoteSessionSnapshot,
-    voter_discord_ids: Mapping[int, int] = {},
+    voter_discord_ids: Mapping[Voter, int] = {},
 ) -> sd.messages.payload.MessagePayload:
     """Render a user-created poll, honouring its visibility setting.
 
@@ -152,7 +152,7 @@ def render_generic_poll(
 
 def _generic_poll_nodes(
     snapshot: VoteSessionSnapshot,
-    voter_discord_ids: Mapping[int, int],
+    voter_discord_ids: Mapping[Voter, int],
 ) -> list[sl.LayoutNode[ComponentsV2Target, sd.Request]]:
     """Build the semantic content for a generic poll without its controls."""
     poll = snapshot.poll
@@ -184,7 +184,7 @@ def _generic_poll_nodes(
             voters = [
                 sl.mention(discord_id)
                 for vote in snapshot.selections
-                if vote.option_id == option.id and (discord_id := voter_discord_ids.get(vote.account_id)) is not None
+                if vote.option_id == option.id and (discord_id := voter_discord_ids.get(vote.voter)) is not None
             ]
             voter_suffix: sl.TextLike = ""
             if poll.visibility == "visible_live" and voters:
@@ -229,11 +229,11 @@ def _generic_poll_nodes(
     return nodes
 
 
-def generic_poll_text(snapshot: VoteSessionSnapshot, voter_discord_ids: Mapping[int, int] = {}) -> str:
+def generic_poll_text(snapshot: VoteSessionSnapshot, voter_discord_ids: Mapping[Voter, int] = {}) -> str:
     """The body of a generic poll card.
 
-    *voter_discord_ids* maps a voting account to the snowflake to mention it by. A
-    ballot records an account, not a snowflake, so the Discord spelling is supplied by
+    *voter_discord_ids* maps a voter to the snowflake to mention it by. An account's
+    ballot records the account, not a snowflake, so the Discord spelling is supplied by
     the caller that can look it up; an account with no Discord identity is simply not
     mentioned.
     """
@@ -252,7 +252,7 @@ def generic_poll_text(snapshot: VoteSessionSnapshot, voter_discord_ids: Mapping[
             voters = [
                 f"<@{discord_id}>"
                 for vote in snapshot.selections
-                if vote.option_id == option.id and (discord_id := voter_discord_ids.get(vote.account_id)) is not None
+                if vote.option_id == option.id and (discord_id := voter_discord_ids.get(vote.voter)) is not None
             ]
             if voters:
                 line += f" ({', '.join(voters)})"

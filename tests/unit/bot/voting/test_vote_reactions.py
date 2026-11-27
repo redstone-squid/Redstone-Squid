@@ -31,6 +31,7 @@ from squid.core.voting.domain import (
     GuildMember,
     VoteKind,
     VoteMessage,
+    Voter,
     VoteRejection,
     VoteSelection,
     VoteSessionSnapshot,
@@ -349,7 +350,9 @@ class ReactionHarness:
         return ReactionEvent(payload, emoji, ReactionResolver(self.bot, None), recovering=recovering)
 
     def selected(self) -> None:
-        self.votes.snapshot = replace(self.votes.snapshot, selections=(VoteSelection(7, 10, "one", "1️⃣", 1),))
+        self.votes.snapshot = replace(
+            self.votes.snapshot, selections=(VoteSelection(Voter.account(7), 10, "one", "1️⃣", 1),)
+        )
 
     def anonymous(self) -> None:
         self.votes.snapshot = poll_snapshot(messages=(VoteMessage(100, 200, 10),))
@@ -429,21 +432,16 @@ async def test_recount_changes_public_selection_but_keeps_it_when_discord_is_una
     assert reactions.refreshes == [("vote_session", "1")]
 
 
-async def test_anonymous_recount_cleans_committed_and_unconsented_reactions_without_replaying(
-    reactions: ReactionHarness,
-) -> None:
+async def test_anonymous_recount_cleans_committed_reactions_without_replaying(reactions: ReactionHarness) -> None:
     reactions.anonymous()
     reactions.selected()
     message = reactions.messages[100]
     message.reactions = [Reaction("1️⃣", (Member(reactions.guilds[10]),)), Reaction("2️⃣")]
     async with reactions.running():
         await reactions.cog.reactions.recount(1)
-        reactions.accounts.account = replace(reactions.accounts.account, consent=None)
-        reactions.votes.snapshot = replace(reactions.votes.snapshot, selections=())
-        await reactions.cog.reactions.recount(1)
 
     assert reactions.votes.casts == []
-    assert message.removed == [("1️⃣", 70)] * 2
+    assert message.removed == [("1️⃣", 70)]
 
 
 async def test_multi_guild_alias_recovery_is_idempotent_and_removal_unsets_the_stable_option(
@@ -466,7 +464,7 @@ async def test_multi_guild_alias_recovery_is_idempotent_and_removal_unsets_the_s
                 ),
             ),
         ),
-        selections=(VoteSelection(7, 10, "one", "1️⃣", 1),),
+        selections=(VoteSelection(Voter.account(7), 10, "one", "1️⃣", 1),),
     )
     reactions.messages[100].reactions = [Reaction("1️⃣"), Reaction("2️⃣")]
     second = reactions.messages[101]
@@ -501,20 +499,14 @@ async def test_clear_and_recovery_restore_options_without_toggling_ballots(react
     assert message.added == ["1️⃣", "2️⃣"] * 3
 
 
-async def test_unconsented_live_vote_explains_refusal_but_recovery_stays_quiet(reactions: ReactionHarness) -> None:
+async def test_a_member_without_a_consented_account_votes_under_their_discord_id(reactions: ReactionHarness) -> None:
     reactions.accounts.account = replace(reactions.accounts.account, consent=None)
     message = reactions.messages[100]
     async with reactions.running():
-        await reactions.cog.reactions.on_reaction_add(reactions.event(recovering=True))
-        assert message.removed == []
-        assert message.sent == []
         await reactions.cog.reactions.on_reaction_add(reactions.event())
 
-    assert reactions.votes.casts == []
-    assert message.removed == [("1️⃣", 70)]
-    assert len(message.sent) == 1
-    assert message.sent[0]["delete_after"] == 30
-    assert "/account consent" in str(cast(discord.ui.LayoutView, message.sent[0]["view"]).to_components())
+    assert reactions.votes.casts == [(UserActor(discord_user_id=70, guild_id=10), "one", "1️⃣")]
+    assert message.sent == []
 
 
 async def test_anonymous_refusal_removes_reactions_but_only_live_events_explain_it(reactions: ReactionHarness) -> None:

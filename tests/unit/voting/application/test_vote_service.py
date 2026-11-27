@@ -30,6 +30,7 @@ from squid.core.voting.domain import (
     VoteMenu,
     VoteMessage,
     VoteOption,
+    Voter,
     VoteRejection,
     VoteSelection,
     VoteSessionResult,
@@ -59,7 +60,7 @@ VOTING_GUILD_ID = 999
 @dataclass(frozen=True)
 class CastVoteCall:
     vote_session_id: int
-    account_id: int
+    account_id: int | None
     guild_id: int | None
     option_id: str
     emoji: str | None
@@ -100,7 +101,7 @@ class FakeVoteRepository:
     def __init__(self, session: VoteSessionSnapshot | None):
         self.session = session
         self.cast_calls: list[CastVoteCall] = []
-        self.clear_calls: list[tuple[int, int, BallotChange]] = []
+        self.clear_calls: list[tuple[int, Voter, BallotChange]] = []
         self.members: dict[tuple[int, int], GuildMember] = {}
         """Stored memberships by guild and account."""
         self.member_lookups: list[tuple[int, int]] = []
@@ -200,7 +201,7 @@ class FakeVoteRepository:
     async def cast_vote(
         self,
         vote_session_id: int,
-        account_id: int,
+        voter: Voter,
         option: VoteOption,
         weight: float,
         *,
@@ -212,7 +213,7 @@ class FakeVoteRepository:
         self.cast_calls.append(
             CastVoteCall(
                 vote_session_id=vote_session_id,
-                account_id=account_id,
+                account_id=voter.account_id,
                 guild_id=guild_id,
                 option_id=option.id,
                 emoji=emoji,
@@ -222,9 +223,9 @@ class FakeVoteRepository:
         return self.mutation
 
     async def clear_vote(
-        self, vote_session_id: int, account_id: int, *, change: BallotChange = BallotChange.CLEAR
+        self, vote_session_id: int, voter: Voter, *, change: BallotChange = BallotChange.CLEAR
     ) -> StoredVoteMutation | None:
-        self.clear_calls.append((vote_session_id, account_id, change))
+        self.clear_calls.append((vote_session_id, voter, change))
         return self.mutation
 
     async def close(self, vote_session_id: int) -> StoredVoteMutation | None:
@@ -581,7 +582,12 @@ async def test_closed_vote_is_rejected_before_mutation() -> None:
 
 async def test_atomic_closure_result_is_exposed_to_adapter_once() -> None:
     initial = snapshot(votes={2: 2.0})
-    closed = replace(initial, status=VoteStatus.CLOSED, result=VoteSessionResult.APPROVED, votes={2: 2.0, 7: 1.0})
+    closed = replace(
+        initial,
+        status=VoteStatus.CLOSED,
+        result=VoteSessionResult.APPROVED,
+        votes={Voter.account(2): 2.0, Voter.account(7): 1.0},
+    )
     repository = FakeVoteRepository(initial)
     repository.mutation = StoredVoteMutation(
         session=closed,
@@ -902,8 +908,10 @@ async def test_a_guild_poll_admits_only_its_guilds_members(member: bool, accepte
 
 async def test_casting_weighs_only_the_new_ballot() -> None:
     """Earlier ballots keep the weight they were cast with, whatever their voters' roles are now."""
-    selections = (VoteSelection(account_id=8, guild_id=OWNER_GUILD_ID, option_id="approve", emoji="👍", weight=4.0),)
-    initial = replace(shared_snapshot(), selections=selections, votes={8: 4.0})
+    selections = (
+        VoteSelection(voter=Voter.account(8), guild_id=OWNER_GUILD_ID, option_id="approve", emoji="👍", weight=4.0),
+    )
+    initial = replace(shared_snapshot(), selections=selections, votes={Voter.account(8): 4.0})
     repository = FakeVoteRepository(initial)
     repository.mutation = StoredVoteMutation(initial, None, 1.0, just_closed=False)
     service = VoteService(build_owner_guild_id=OWNER_GUILD_ID, uow_factory=lambda: VoteUnitOfWork(repository))
@@ -921,15 +929,17 @@ async def test_casting_weighs_only_the_new_ballot() -> None:
 
 @pytest.mark.parametrize(("guild_id", "voided"), [(OWNER_GUILD_ID, True), (VOTING_GUILD_ID, False)])
 async def test_a_ban_voids_ballots_only_in_the_sessions_that_guild_weighs(guild_id: int, voided: bool) -> None:
-    selections = (VoteSelection(account_id=7, guild_id=VOTING_GUILD_ID, option_id="approve", emoji="👍", weight=4.0),)
-    initial = replace(shared_snapshot(), selections=selections, votes={7: 4.0})
+    selections = (
+        VoteSelection(voter=Voter.account(7), guild_id=VOTING_GUILD_ID, option_id="approve", emoji="👍", weight=4.0),
+    )
+    initial = replace(shared_snapshot(), selections=selections, votes={Voter.account(7): 4.0})
     repository = FakeVoteRepository(initial)
     repository.mutation = StoredVoteMutation(replace(initial, selections=(), votes={}), 4.0, None, just_closed=False)
     service = VoteService(build_owner_guild_id=OWNER_GUILD_ID, uow_factory=lambda: VoteUnitOfWork(repository))
 
-    changed = await service.void_ballots(7, guild_id, context=ActingContext.worker("discord.ban"))
+    changed = await service.void_ballots(Voter.account(7), guild_id, context=ActingContext.worker("discord.ban"))
 
-    assert repository.clear_calls == ([(12, 7, BallotChange.VOID)] if voided else [])
+    assert repository.clear_calls == ([(12, Voter.account(7), BallotChange.VOID)] if voided else [])
     assert [session.id for session in changed] == ([12] if voided else [])
 
 
@@ -1005,7 +1015,7 @@ async def test_a_network_poll_records_its_scope() -> None:
 
 @pytest.mark.parametrize("recount_fails", [False, True])
 async def test_a_due_poll_is_recounted_before_it_closes_only_if_the_recount_succeeds(recount_fails: bool) -> None:
-    selections = (VoteSelection(account_id=7, guild_id=77, option_id="one", emoji="1️⃣", weight=9.0),)
+    selections = (VoteSelection(voter=Voter.account(7), guild_id=77, option_id="one", emoji="1️⃣", weight=9.0),)
     poll = replace(poll_snapshot(guild_id=77), selections=selections)
     repository = FakeVoteRepository(poll)
     repository.due = [poll]
@@ -1025,15 +1035,21 @@ async def test_a_due_poll_is_recounted_before_it_closes_only_if_the_recount_succ
     assert repository.session.status is (VoteStatus.COUNTING if recount_fails else VoteStatus.CLOSED)
 
 
-async def test_an_unlinked_discord_actor_cannot_cast_or_close_a_vote() -> None:
-    repository = FakeVoteRepository(shared_snapshot())
-    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository))
-    actor = UserActor(discord_user_id=70, guild_id=OWNER_GUILD_ID)
-    with pytest.raises(AuthenticationError):
-        await service.cast_vote(12, "approve", context=ActingContext.for_actor(actor))
+async def test_a_discord_user_without_an_account_can_vote_but_not_close() -> None:
+    initial = shared_snapshot()
+    repository = FakeVoteRepository(initial)
+    repository.mutation = StoredVoteMutation(initial, None, 1.0, just_closed=False)
+    service = VoteService(build_owner_guild_id=OWNER_GUILD_ID, uow_factory=lambda: VoteUnitOfWork(repository))
+    actor = UserActor(discord_user_id=70, guild_id=OWNER_GUILD_ID, discord_role_ids=frozenset({55}))
+    repository.role_weights = {(OWNER_GUILD_ID, VoteKind.BUILD): [RoleWeight(OWNER_GUILD_ID, VoteKind.BUILD, 55, 2.0)]}
+
+    result = await service.cast_vote(12, "approve", emoji="👍", context=ActingContext.for_actor(actor))
     with pytest.raises(AuthenticationError):
         await service.close(12, context=ActingContext.for_actor(actor))
-    assert repository.cast_calls == []
+
+    assert result.accepted
+    # Weighed from the roles they reacted with, since nothing is stored for them.
+    assert repository.cast_calls == [CastVoteCall(12, None, OWNER_GUILD_ID, "approve", "👍", 2.0)]
 
 
 async def test_failed_final_counts_pause_for_review_and_finalize_uses_collected_ballots() -> None:

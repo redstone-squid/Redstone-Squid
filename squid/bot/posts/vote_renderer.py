@@ -23,6 +23,7 @@ from squid.core.voting.domain import (
     BuildVoteTarget,
     DeleteLogVoteTarget,
     PollScope,
+    Voter,
     VoteSessionSnapshot,
 )
 from squid_i18n import Text
@@ -168,19 +169,22 @@ class VoteSessionRenderer[BotT: squid.bot.app.RedstoneSquid](PostRenderer):
             for channel_id, guild_id in channels.items()
         ]
 
-    async def _voter_discord_ids(self, snapshot: VoteSessionSnapshot) -> dict[int, int]:
+    async def _voter_discord_ids(self, snapshot: VoteSessionSnapshot) -> dict[Voter, int]:
         """Snowflakes to mention this poll's voters by, only when the card shows them."""
         poll = snapshot.poll
         if poll is None or poll.visibility != "visible_live":
             return {}
-        accounts = await self.bot.services.accounts.get_accounts(
-            [selection.account_id for selection in snapshot.selections]
-        )
-        resolved: dict[int, int] = {}
+        resolved = {
+            selection.voter: selection.voter.discord_user_id
+            for selection in snapshot.selections
+            if selection.voter.discord_user_id is not None
+        }
+        account_ids = [selection.voter.account_id for selection in snapshot.selections]
+        accounts = await self.bot.services.accounts.get_accounts([item for item in account_ids if item is not None])
         for account_id, account in accounts.items():
             identity = account.most_recent_identity_for(IdentityProvider.DISCORD)
             if identity is not None and identity.discord_id is not None:
-                resolved[account_id] = identity.discord_id
+                resolved[Voter.account(account_id)] = identity.discord_id
         return resolved
 
     async def _published_channels(self, snapshot: VoteSessionSnapshot) -> dict[int, int]:

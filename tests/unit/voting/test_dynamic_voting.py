@@ -23,6 +23,7 @@ from squid.core.voting.domain import (
     VoteKind,
     VoteMenu,
     VoteOption,
+    Voter,
     VoteRejection,
     VoteSelection,
     VoteSessionResult,
@@ -84,9 +85,9 @@ async def test_delete_policy_rejects_a_member_without_the_delete_log_node() -> N
 def test_generic_tallies_keep_raw_counts_separate_from_weights() -> None:
     snapshot = poll_snapshot(
         selections=(
-            VoteSelection(1, 10, "one", "1️⃣", 1),
-            VoteSelection(2, 10, "one", "1️⃣", 3),
-            VoteSelection(3, 10, "two", "2️⃣", 2),
+            VoteSelection(Voter.account(1), 10, "one", "1️⃣", 1),
+            VoteSelection(Voter.account(2), 10, "one", "1️⃣", 3),
+            VoteSelection(Voter.account(3), 10, "two", "2️⃣", 2),
         )
     )
 
@@ -98,8 +99,8 @@ def test_hidden_poll_suppresses_live_totals_and_reports_tie_at_close() -> None:
     hidden = poll_snapshot(
         visibility=VoteVisibility.ANONYMOUS_HIDDEN,
         selections=(
-            VoteSelection(1, 10, "one", "1️⃣", 2),
-            VoteSelection(2, 10, "two", "2️⃣", 2),
+            VoteSelection(Voter.account(1), 10, "one", "1️⃣", 2),
+            VoteSelection(Voter.account(2), 10, "two", "2️⃣", 2),
         ),
     )
     closed = replace(hidden, status=VoteStatus.CLOSED, result=VoteSessionResult.CANCELLED)
@@ -113,20 +114,20 @@ def test_hidden_poll_suppresses_live_totals_and_reports_tie_at_close() -> None:
 def test_visible_poll_lists_voters_and_keeps_their_reactions() -> None:
     visible = poll_snapshot(
         visibility=VoteVisibility.VISIBLE_LIVE,
-        selections=(VoteSelection(42, 10, "one", "1️⃣", 1),),
+        selections=(VoteSelection(Voter.account(42), 10, "one", "1️⃣", 1),),
     )
 
     assert not visible.is_anonymous
-    assert "<@420>" in generic_poll_text(visible, {42: 420})
+    assert "<@420>" in generic_poll_text(visible, {Voter.account(42): 420})
 
 
 def test_generic_poll_presentation_uses_host_owned_tallies() -> None:
     snapshot = poll_snapshot(
         visibility=VoteVisibility.VISIBLE_LIVE,
-        selections=(VoteSelection(42, 10, "one", "1儭", 2),),
+        selections=(VoteSelection(Voter.account(42), 10, "one", "1儭", 2),),
     )
 
-    presentation = render_generic_poll(snapshot, {42: 420})
+    presentation = render_generic_poll(snapshot, {Voter.account(42): 420})
     assert presentation.view is not None
     text = "\n".join(
         child.content for child in presentation.view.walk_children() if isinstance(child, discord.ui.TextDisplay)
@@ -140,7 +141,7 @@ def test_generic_poll_presentation_uses_host_owned_tallies() -> None:
 def test_closed_poll_presentation_has_readable_outcome() -> None:
     snapshot = poll_snapshot(
         status=VoteStatus.CLOSED,
-        selections=(VoteSelection(42, 10, "one", "1️⃣", 2),),
+        selections=(VoteSelection(Voter.account(42), 10, "one", "1️⃣", 2),),
     )
 
     presentation = render_generic_poll(snapshot)
@@ -167,7 +168,7 @@ def test_closed_poll_shows_scheduled_time_only_after_significant_drift(minutes_l
 def test_hidden_poll_presentation_omits_every_tally_value() -> None:
     snapshot = poll_snapshot(
         visibility=VoteVisibility.ANONYMOUS_HIDDEN,
-        selections=(VoteSelection(42, 10, "one", "1儭", 2),),
+        selections=(VoteSelection(Voter.account(42), 10, "one", "1儭", 2),),
     )
 
     presentation = render_generic_poll(snapshot)
@@ -186,11 +187,11 @@ def test_hidden_poll_presentation_omits_every_tally_value() -> None:
 def test_anonymous_polls_strip_the_voter_reaction(visibility: VoteVisibility) -> None:
     snapshot = poll_snapshot(
         visibility=visibility,
-        selections=(VoteSelection(42, 10, "one", "1️⃣", 1),),
+        selections=(VoteSelection(Voter.account(42), 10, "one", "1️⃣", 1),),
     )
 
     assert snapshot.is_anonymous
-    assert "<@420>" not in generic_poll_text(snapshot, {42: 420})
+    assert "<@420>" not in generic_poll_text(snapshot, {Voter.account(42): 420})
 
 
 @pytest.mark.parametrize("kind", [VoteKind.BUILD, VoteKind.DELETE_LOG])

@@ -38,6 +38,7 @@ from squid.core.voting.domain import (
     VoteKind,
     VoteMenu,
     VoteOption,
+    Voter,
     VoteSessionResult,
     VoteStatus,
     VoteVisibility,
@@ -200,7 +201,9 @@ async def cast_ballot(
     assert snapshot.menu.alias_for(option_id, GUILD_ID, emoji=emoji) is not None
     return await transact(
         repository,
-        lambda uow: uow.votes.cast_vote(session_id, account_id, option, weight, guild_id=GUILD_ID, emoji=emoji),
+        lambda uow: uow.votes.cast_vote(
+            session_id, Voter.account(account_id), option, weight, guild_id=GUILD_ID, emoji=emoji
+        ),
         commit=True,
     )
 
@@ -320,7 +323,7 @@ async def test_get_by_message_maps_votes_messages_and_delete_target(
 
     assert snapshot is not None
     assert snapshot.id == vote_session_id
-    assert snapshot.votes == {7: 1.0, 8: -1.0}
+    assert snapshot.votes == {Voter.account(7): 1.0, Voter.account(8): -1.0}
     assert [message.id for message in snapshot.messages] == [message_id]
     assert snapshot.menu == DEFAULT_VOTE_MENU
     assert snapshot.target == DeleteLogVoteTarget(TARGET_MESSAGE_ID, CHANNEL_ID, GUILD_ID)
@@ -388,13 +391,15 @@ async def test_selecting_the_stored_option_again_keeps_the_ballot(
 
     kept = await transact(
         repository,
-        lambda uow: uow.votes.cast_vote(session_id, 7, option, 2.0, guild_id=GUILD_ID, emoji="👍", toggle=False),
+        lambda uow: uow.votes.cast_vote(
+            session_id, Voter.account(7), option, 2.0, guild_id=GUILD_ID, emoji="👍", toggle=False
+        ),
         commit=True,
     )
 
     assert kept is not None
     assert (kept.previous_weight, kept.current_weight) == (1.0, 2.0)
-    assert set(kept.session.votes) == {7}
+    assert set(kept.session.votes) == {Voter.account(7)}
 
 
 @pytest.mark.parametrize(
@@ -815,7 +820,7 @@ async def test_ballot_keeps_the_card_and_alias_it_was_cast_with(
     await cast_ballot(repository, session_id, 7, "approve", "✅", 1.0)
     snapshot = await transact(repository, lambda uow: uow.votes.get_by_id(session_id))
     assert snapshot is not None
-    selection = snapshot.selection_for(7)
+    selection = snapshot.selection_for(Voter.account(7))
     assert selection is not None
     assert (selection.option_id, selection.guild_id, selection.emoji) == ("approve", GUILD_ID, "✅")
 
@@ -828,7 +833,7 @@ async def test_casting_an_option_the_session_does_not_store_is_an_integrity_erro
     stranger = VoteOption("strong_approve", VoteChoice.APPROVE, multiplier=2.0)
 
     with pytest.raises(DataIntegrityError, match="not one of the session's options"):
-        await transact(repository, lambda uow: uow.votes.cast_vote(session_id, 7, stranger, 1.0))
+        await transact(repository, lambda uow: uow.votes.cast_vote(session_id, Voter.account(7), stranger, 1.0))
 
 
 async def test_ballot_cannot_reference_an_option_its_session_lacks(
@@ -855,8 +860,12 @@ async def test_every_ballot_change_is_kept_as_an_event(
     await cast_ballot(repository, session_id, 7, "deny", "👎", 2.0)
     await cast_ballot(repository, session_id, 7, "deny", "❌", 2.0)
     await cast_ballot(repository, session_id, 8, "approve", "👍", 1.0)
-    await transact(repository, lambda uow: uow.votes.clear_vote(session_id, 8, change=BallotChange.VOID), commit=True)
-    await transact(repository, lambda uow: uow.votes.clear_vote(session_id, 8), commit=True)
+    await transact(
+        repository,
+        lambda uow: uow.votes.clear_vote(session_id, Voter.account(8), change=BallotChange.VOID),
+        commit=True,
+    )
+    await transact(repository, lambda uow: uow.votes.clear_vote(session_id, Voter.account(8)), commit=True)
 
     async with async_session_factory() as session:
         events = (
@@ -910,14 +919,43 @@ async def test_only_consented_accounts_have_their_guild_roles_stored(
     assert await transact(repository, lambda uow: uow.votes.get_member(GUILD_ID, consented)) is None
 
 
+async def test_an_account_takes_over_the_ballot_its_discord_identity_cast(
+    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    """One person never holds two ballots, even across consenting mid-vote."""
+    account_id = VOTER_ACCOUNT_IDS[0]
+    async with async_session_factory.begin() as session:
+        session.add(AccountIdentity(account_id=account_id, provider=IdentityProvider.DISCORD, subject="70"))
+    session_id, _ = await seed_delete_log_vote(async_session_factory, pass_threshold=10, fail_threshold=-10)
+    snapshot = await transact(repository, lambda uow: uow.votes.get_by_id(session_id))
+    assert snapshot is not None
+    approve, deny = snapshot.menu.option("approve"), snapshot.menu.option("deny")
+    assert approve is not None
+    assert deny is not None
+
+    placeholder = await transact(
+        repository, lambda uow: uow.votes.cast_vote(session_id, Voter.discord(70), approve, 1.0), commit=True
+    )
+    assert placeholder is not None
+    assert placeholder.session.votes == {Voter.discord(70): 1.0}
+
+    adopted = await transact(
+        repository, lambda uow: uow.votes.cast_vote(session_id, Voter.account(account_id), deny, 2.0), commit=True
+    )
+    assert adopted is not None
+    assert adopted.previous_weight == 1.0
+    assert adopted.session.votes == {Voter.account(account_id): -2.0}
+
+
 async def test_clearing_a_ballot_twice_keeps_it_absent(
     repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     session_id, _ = await seed_delete_log_vote(async_session_factory, pass_threshold=10, fail_threshold=-10)
     await cast_ballot(repository, session_id, 7, "approve", "👍", 1.0)
-    removed = await transact(repository, lambda uow: uow.votes.clear_vote(session_id, 7), commit=True)
-    repeated = await transact(repository, lambda uow: uow.votes.clear_vote(session_id, 7), commit=True)
+    removed = await transact(repository, lambda uow: uow.votes.clear_vote(session_id, Voter.account(7)), commit=True)
+    repeated = await transact(repository, lambda uow: uow.votes.clear_vote(session_id, Voter.account(7)), commit=True)
     assert removed is not None
     assert removed.previous_weight == 1.0
     assert repeated is not None
@@ -982,7 +1020,9 @@ async def test_review_preserves_collected_ballots_and_rejects_stale_decisions(
     assert review.poll
     assert review.poll.unreadable_cards == (100,)
     assert await transact(repository, lambda uow: uow.votes.pending_reviews(GUILD_ID)) == [session_id]
-    assert await transact(repository, lambda uow: uow.votes.clear_vote(session_id, 7), commit=True) is None
+    assert (
+        await transact(repository, lambda uow: uow.votes.clear_vote(session_id, Voter.account(7)), commit=True) is None
+    )
     closed = await transact(
         repository,
         lambda uow: uow.votes.transition_poll(
@@ -1078,4 +1118,7 @@ async def test_ballots_carry_their_voters_public_names_but_not_hidden_ones(
     snapshot = await transact(repository, lambda uow: uow.votes.get_by_id(session_id))
 
     assert snapshot is not None
-    assert [(item.account_id, item.display_name) for item in snapshot.selections] == [(shown, "Alex"), (hidden, None)]
+    assert [(item.voter.account_id, item.display_name) for item in snapshot.selections] == [
+        (shown, "Alex"),
+        (hidden, None),
+    ]

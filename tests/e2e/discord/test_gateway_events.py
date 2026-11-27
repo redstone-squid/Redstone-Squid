@@ -12,7 +12,7 @@ from squid.core.accounts.domain import AccountConsent
 from squid.core.actors import ActingContext
 from squid.core.posts.domain import StarboardEntryKey
 from squid.core.starboard.application.services import StarboardVoteResult
-from squid.core.voting.domain import CastVoteResult, VoteMessage, VoteSelection, VoteVisibility
+from squid.core.voting.domain import CastVoteResult, VoteMessage, Voter, VoteSelection, VoteVisibility
 from squid_ui.ext.discord.testing import AsyncCallRecorder
 from tests.e2e.discord.community_services import Boards, CommunityVotes, EmptyDomainEvents, ObservedMessages, VotePosts
 from tests.e2e.discord.environment import allow_idle_reaction_workers, command_environment
@@ -83,10 +83,8 @@ async def test_public_poll_reaction_casts_and_withdraws_a_ballot(monkeypatch: py
             nonlocal session
             assert session_id == session.id
             actor = context.effective.require_user()
-            previous = session.selection_for(actor.require_account_id())
-            selections = (
-                () if previous else (VoteSelection(actor.require_account_id(), actor.guild_id, option_id, emoji, 1),)
-            )
+            previous = session.selection_for(Voter.of(actor))
+            selections = () if previous else (VoteSelection(Voter.of(actor), actor.guild_id, option_id, emoji, 1),)
             session = replace(session, selections=selections)
             return CastVoteResult(session)
 
@@ -104,13 +102,13 @@ async def test_public_poll_reaction_casts_and_withdraws_a_ballot(monkeypatch: py
         )
 
         await voter.react(card, "👍")
-        selection = session.selection_for(18)
+        selection = session.selection_for(Voter.account(18))
         assert selection is not None
         assert (selection.guild_id, selection.emoji) == (env.guild.id, "👍")
         assert cast_vote.await_count == 1
 
         await voter.unreact(card, "👍")
-        assert session.selection_for(18) is None
+        assert session.selection_for(Voter.account(18)) is None
         assert cast_vote.await_count == 2
         assert cast_vote.records[1] == cast_vote.records[0]
 

@@ -1,14 +1,16 @@
 CREATE TABLE public.vote_ballot_events (
     id bigint NOT NULL,
     vote_session_id bigint NOT NULL,
-    account_id integer NOT NULL,
+    account_id integer,
     change text NOT NULL,
     option_identifier text,
     weight double precision,
     guild_id bigint,
     emoji text,
     recorded_at timestamp with time zone DEFAULT now() NOT NULL,
+    discord_user_id bigint,
     CONSTRAINT vote_ballot_events_change_check CHECK ((change = ANY (ARRAY['cast'::text, 'clear'::text, 'void'::text]))),
+    CONSTRAINT vote_ballot_events_one_voter_check CHECK ((num_nonnulls(account_id, discord_user_id) = 1)),
     CONSTRAINT vote_ballot_events_selection_check CHECK (((change = 'cast'::text) = ((option_identifier IS NOT NULL) AND (weight IS NOT NULL))))
 );
 
@@ -17,6 +19,8 @@ COMMENT ON TABLE public.vote_ballot_events IS 'One change to an account''s ballo
 COMMENT ON COLUMN public.vote_ballot_events.option_identifier IS 'The option the ballot selects after a cast, or None after a clear or void.';
 
 COMMENT ON COLUMN public.vote_ballot_events.guild_id IS 'The guild whose card the change came from, or None for a change made without Discord.';
+
+COMMENT ON COLUMN public.vote_ballot_events.discord_user_id IS 'The voter''s Discord user ID when the change came from someone without a consented account.';
 
 ALTER TABLE ONLY public.vote_ballot_events
     ADD CONSTRAINT vote_ballot_events_pkey PRIMARY KEY (id);

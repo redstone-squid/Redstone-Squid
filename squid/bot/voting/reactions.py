@@ -30,10 +30,9 @@ from squid.core.actors import ActingContext, UserActor
 from squid.core.locks import KeyedLock
 from squid.core.voting.application.accounts import AccountConsentedVoterLookup
 from squid.core.voting.application.recount import BallotRecounter
-from squid.core.voting.domain import CastVoteResult, VoteRejection, VoteSessionSnapshot
+from squid.core.voting.domain import CastVoteResult, Voter, VoteRejection, VoteSessionSnapshot
 from squid.runtime import JobHandle
-from squid_i18n import md_tr
-from squid_ui.content.text import Text, localization_scope, mention
+from squid_ui.content.text import localization_scope
 from squid_ui.ext.discord import send_to
 
 if TYPE_CHECKING:
@@ -131,15 +130,12 @@ class VoteReactionHandler:
         member = await event.member(humans_only=True)
         if message is None or member is None:
             return
+        # Without a consented account the member votes under their Discord ID.
         account_id = await self._voters.consented_account_id(member.id)
-        if account_id is None:
-            if not recovering:
-                await self._decline_unconsented_vote(message, member, payload.emoji)
-            return
         # The ballot is weighed from stored roles, so store the ones this reaction shows.
         await self._members.record((member,))
         actor = await resolve_actor(self.bot, member, account_id=account_id)
-        previous = snapshot.selection_for(actor.require_account_id())
+        previous = snapshot.selection_for(Voter.of(actor))
         if (
             not recovering
             and not snapshot.is_anonymous
@@ -184,10 +180,11 @@ class VoteReactionHandler:
             recovering = event.recovering
             if snapshot is None or snapshot.is_anonymous:
                 return
-            # Removing a reaction needs no fresh consent and must never create an account.
+            # Removing a reaction needs no fresh consent and must never create an account. An
+            # account whose consent lapsed still owns the ballots it cast as an account.
             account_id = await self.bot.account_ids.resolve(self.bot.services.accounts, payload.user_id)
-            if account_id is None:
-                return
+            if account_id is not None and snapshot.selection_for(Voter.account(account_id)) is None:
+                account_id = await self._voters.consented_account_id(payload.user_id)
             member = await event.member(humans_only=True)
             if member is None:
                 return
@@ -245,7 +242,7 @@ class VoteReactionHandler:
         option = snapshot.menu.option_for_emoji(emoji, actor.guild_id)
         if option is None:
             return CastVoteResult(snapshot, VoteRejection.INVALID_OPTION), False
-        current = snapshot.selection_for(actor.require_account_id())
+        current = snapshot.selection_for(Voter.of(actor))
         already_selected = current is not None and current.option_id == option.id
         if selected is already_selected:
             return CastVoteResult(snapshot), False
@@ -289,29 +286,3 @@ class VoteReactionHandler:
             payload = render_payload([text_node(describe_rejection(rejection))])
         with contextlib.suppress(discord.Forbidden, discord.NotFound):
             await send_to(message.channel)(payload)
-
-    async def _decline_unconsented_vote(
-        self,
-        message: discord.Message,
-        user: discord.Member | discord.User,
-        emoji: discord.PartialEmoji | str,
-    ) -> None:
-        """Remove the reaction and send a consent instruction that expires after 30 seconds.
-
-        The notice appears in the source channel because raw reactions cannot
-        receive an ephemeral interaction response. Repeated attempts can each
-        produce a notice.
-        """
-        await self._remove_reaction(message, emoji, user)
-        locale = await resolve_locale(message, self.bot.services.settings)
-        with localization_scope(localization_for(locale)):
-            payload = render_payload([text_node(_unconsented_vote_message(user.id))])
-        with contextlib.suppress(discord.HTTPException):
-            await send_to(message.channel, delete_after=30)(payload)
-
-
-def _unconsented_vote_message(user_id: int) -> Text:
-    user = mention(user_id)
-    return md_tr(
-        t"vote-consent-required = {user}, voting stores your Discord user ID. Run `/account consent` first.",
-    )
