@@ -4,50 +4,53 @@ Make voting independent of Discord so the web (and later other frontends) can ca
 ballots, and make ballot weight cheap to compute. This unblocked web voting
 ([api-gaps](web-components/api-gaps.md) item 40).
 
-The owner-guild rule stays: one authority weighs every ballot in a session, so a guild
-hosting a card cannot set its own multipliers and decide a shared outcome. "The guild
-the voter picks" and "the best of the voter's guilds" both break it.
+## Two kinds of session
+
+- **Discord-only sessions**: log deletion votes and server polls. They belong to one
+  guild, are voted on its cards, and are weighed by the roles a voter reacts with
+  there. Recounts read those roles live, from the gateway in the bot and over REST in
+  the worker.
+- **Network sessions**: build reviews and network polls. Any frontend can cast. A
+  network poll belongs to no guild: every ballot weighs 1, and its author or holders
+  of the global `vote.network.*` nodes close and review it. A build review is weighed
+  by the network's owner guild, from roles stored in `voter_guild_members`, so a
+  ballot from the web or another guild's card weighs the same. No guild hosting a
+  card can weight a shared outcome.
 
 ## Done
 
-- **Weight is frozen at cast.** A ballot keeps the weight it was cast with; role
-  changes mid-vote do not move it. There is no refresh. A ban voids the member's
-  open ballots in the sessions the banning guild weighs (`VoteService.void_ballots`).
+- **Weight is frozen at cast.** Role changes mid-vote do not move a ballot. A ban
+  voids the member's open ballots in the sessions the banning guild weighs.
 - **Options carry the multiplier.** `VoteOption` has a stable ID, a choice, a label
   and a multiplier, so small and big agreement are two approve options. `VoteAlias`
-  only maps an emoji to an option in one guild. `VoteMenu.shared` gives the first
-  guild's options their multipliers and every other guild's new options 1x.
+  only maps an emoji to an option in one guild.
 - **Ballot changes are events.** Every cast, clear and void appends to
-  `vote_ballot_events` in the same transaction. `votes` stays as the current-ballot
-  projection that threshold checks read.
-- **Weight comes from stored roles.** `voter_guild_members` holds consented voters'
-  roles per guild. The bot syncs it from each guild's member cache when the guild
-  becomes available, from member events, and from each reaction before casting.
-  Voting never asks Discord to weigh a ballot.
-- **Every frontend casts the same way.** A cast without a guild is a web ballot: it
-  picks the option directly. Polls kept to one guild only admit its members. The API
-  takes only `option_id` and shows the caller's eligibility and weight.
-- **Reactions stay** as one adapter over the same cast, with recounts for reactions
-  missed while the bot was offline.
+  `vote_ballot_events`; `votes` is the current-ballot projection.
+- **Anyone can vote through the bot.** A reaction from someone without a consented
+  account is stored under their Discord ID (`Voter`). When that person later votes in
+  the session with an account, the account takes the ballot over. Bot ballots are
+  stored by default; the privacy notice needs one line saying so.
+- **Only the owner guild's roles are stored**, for consented accounts, synced from
+  its member cache and member events.
 
 ## Not done
 
-1. **Session composition.** The owner guild is still derived from `VoteKind` in
-   `VoteService._owner_guild_id`, role weights are still keyed by kind, and build
-   review and log deletion still live in the voting package. Storing the authority on
-   each session needs the network's owner guild at every creation site, including
-   the build edit path, which only reaches the repository. The value is small until
-   another kind of session or authority appears, so this waits for one.
-2. **Configuring a big approve.** The model supports `strong_approve` at 2x, but the
-   settings emoji editor can only map emojis to `approve` and `deny`.
-3. **Consent after joining.** A member who consents after joining is weighed without
-   roles until their next member event, reaction or the guild's next sync.
+1. **Staff weight outside Discord roles.** Build-review weight still comes from
+   owner-guild Discord roles and guild-scoped grants. Moving per-role multipliers onto
+   bot roles would make them visible in `/perm` and settable per account, but the
+   settings screen edits them per Discord role, so that move needs a settings redesign.
+2. **Session composition.** The weighing authority is still chosen from `VoteKind`,
+   role weights are keyed by kind, and build review and log deletion live in the
+   voting package. Worth doing when another kind of session or authority appears.
+3. **Configuring a big approve.** The model supports `strong_approve` at 2x, but the
+   emoji editor can only map emojis to `approve` and `deny`.
+4. **Consent after joining.** A member who consents after joining the owner guild is
+   weighed without roles in build reviews until their next member event, reaction or
+   the next sync.
 
 ## Open questions
 
-- What base weight a network-wide authority gives an account with no guild membership,
-  and whether build votes accept such accounts before there is any sybil resistance.
-- Which perspective a trust-graph authority, such as
-  [EigenKarma](https://github.com/eigenkarmanetwork/EKN), computes from. Its trust is
-  relative to a viewer, but a shared outcome needs one fixed seed set. It would fill
-  the same role as `voter_guild_members`: a stored standing that voting reads.
+- Which perspective a trust-graph standing, such as
+  [EigenKarma](https://github.com/eigenkarmanetwork/EKN), would compute from. Its trust
+  is relative to a viewer, but a shared outcome needs one fixed seed set. It would
+  take the place `voter_guild_members` has for build reviews.
