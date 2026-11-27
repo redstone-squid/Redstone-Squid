@@ -28,7 +28,7 @@ async def test_poll_creation_and_closure_recheck_grants_and_credential_scope(
         await session.flush()
         session.add(PermissionGrant(pattern="vote.poll.create", effect=1, subject_account_id=creator.id))
         session.add(PermissionGrant(pattern="vote.poll.close_any", effect=1, subject_account_id=moderator.id))
-    operator = UserActor(account_id=creator.id, guild_id=10, capabilities=frozenset({"vote.poll.network_create"}))
+    operator = UserActor(account_id=creator.id, guild_id=10, capabilities=frozenset({"vote.network.create"}))
 
     async def create(context: ActingContext, scope: PollScope) -> int:
         return await service.create_generic_poll(
@@ -36,7 +36,7 @@ async def test_poll_creation_and_closure_recheck_grants_and_credential_scope(
             question="Ready?",
             visibility=VoteVisibility.VISIBLE_LIVE,
             duration_seconds=3600,
-            guild_id=10,
+            guild_id=10 if scope is PollScope.GUILD else None,
             scope=scope,
             menu=generic_menu(None),
         )

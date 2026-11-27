@@ -750,7 +750,7 @@ async def test_p11_accepted_role_edits_never_grow_the_editors_authority(scenario
 class TestGuildScopePatterns:
     @pytest.mark.parametrize(
         "pattern",
-        ["settings.server.**", "settings.server.edit", "starboard.*.edit", "vote.**"],
+        ["settings.server.**", "settings.server.edit", "starboard.*.edit", "vote.poll.**"],
     )
     def test_guild_only_patterns_are_delegable(self, pattern: str) -> None:
         service = admin(stored())

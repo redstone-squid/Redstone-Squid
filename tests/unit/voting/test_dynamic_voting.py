@@ -385,12 +385,11 @@ def test_a_guild_poll_may_only_be_closed_from_the_guild_that_owns_it() -> None:
     assert poll.can_close(UserActor(account_id=7, discord_user_id=70, guild_id=999)) is VoteRejection.WRONG_GUILD
 
 
-def test_a_network_poll_follows_its_author_but_pins_everyone_else() -> None:
-    poll = poll_snapshot(author_account_id=7, guild_id=10, scope=PollScope.NETWORK)
+def test_a_server_poll_is_closed_from_its_own_guild() -> None:
+    poll = poll_snapshot(author_account_id=7, guild_id=10)
     close_any = frozenset({VOTE_POLL_CLOSE_ANY.name})
 
-    # A network poll's author may close it from a different guild.
-    assert poll.can_close(UserActor(account_id=7, discord_user_id=70, guild_id=999)) is None
+    assert poll.can_close(UserActor(account_id=7, discord_user_id=70, guild_id=10)) is None
     # Staff elsewhere hold a capability resolved in the wrong guild.
     assert (
         poll.can_close(UserActor(account_id=8, discord_user_id=80, guild_id=999, capabilities=close_any))
@@ -467,7 +466,7 @@ async def test_publishing_a_network_poll_unscopes_its_options() -> None:
     )
 
     assert votes.created["scope"] is PollScope.NETWORK
-    assert votes.created["guild_id"] == 10
+    assert votes.created["guild_id"] is None
     assert all(alias.guild_id is None for alias in cast(VoteMenu, votes.created["menu"]).aliases)
 
 

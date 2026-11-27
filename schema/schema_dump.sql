@@ -3346,7 +3346,7 @@ CREATE TABLE public.generic_vote_sessions (
     count_attempts integer DEFAULT 0 NOT NULL,
     unreadable_cards jsonb DEFAULT '[]'::jsonb NOT NULL,
     review_history jsonb DEFAULT '[]'::jsonb NOT NULL,
-    CONSTRAINT generic_vote_sessions_network_guild_check CHECK (((scope = 'guild'::text) OR (guild_id IS NOT NULL))),
+    CONSTRAINT generic_vote_sessions_network_guild_check CHECK (((scope = 'guild'::text) OR (guild_id IS NULL))),
     CONSTRAINT generic_vote_sessions_scope_check CHECK ((scope = ANY (ARRAY['guild'::text, 'network'::text]))),
     CONSTRAINT generic_vote_sessions_visibility_check CHECK ((visibility = ANY (ARRAY['anonymous_live'::text, 'visible_live'::text, 'anonymous_hidden'::text])))
 );
@@ -3363,10 +3363,7 @@ COMMENT ON TABLE public.generic_vote_sessions IS 'Metadata for a user-created ge
 -- Name: COLUMN generic_vote_sessions.guild_id; Type: COMMENT; Schema: public; Owner: -
 --
 
-COMMENT ON COLUMN public.generic_vote_sessions.guild_id IS 'Owning guild used for emoji configuration and ballot role weights.
-
-Guild polls may be created without one; network polls require an owner.
-Presentation messages are attached separately.';
+COMMENT ON COLUMN public.generic_vote_sessions.guild_id IS 'The guild a server poll belongs to, whose roles weigh its ballots; network polls have none.';
 
 
 --

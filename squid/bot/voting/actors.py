@@ -9,6 +9,8 @@ from squid.bot.ui import tr
 from squid.core.actors import UserActor
 from squid.core.permissions.domain.catalogue import (
     VOTE_LOG_DELETE_CAST,
+    VOTE_NETWORK_CLOSE_ANY,
+    VOTE_NETWORK_RECOUNT,
     VOTE_POLL_CLOSE_ANY,
     VOTE_POLL_RECOUNT,
     VOTE_WEIGHT_STAFF,
@@ -56,7 +58,15 @@ async def resolve_actor(
     subject = replace(await bot.actors.resolve(member, account_id=account_id), account_id=account_id)
     capabilities = (
         await bot.services.permissions.check(
-            subject, *(VOTE_LOG_DELETE_CAST, VOTE_WEIGHT_STAFF, VOTE_POLL_CLOSE_ANY, VOTE_POLL_RECOUNT)
+            subject,
+            *(
+                VOTE_LOG_DELETE_CAST,
+                VOTE_WEIGHT_STAFF,
+                VOTE_POLL_CLOSE_ANY,
+                VOTE_POLL_RECOUNT,
+                VOTE_NETWORK_CLOSE_ANY,
+                VOTE_NETWORK_RECOUNT,
+            ),
         )
     ).allowed_nodes
     return replace(subject, capabilities=capabilities)

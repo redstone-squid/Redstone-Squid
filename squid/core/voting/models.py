@@ -261,7 +261,7 @@ class GenericVoteSession(Base, kw_only=True):
         ),
         CheckConstraint(f"scope IN ({_SCOPE_VALUES})", name="generic_vote_sessions_scope_check"),
         CheckConstraint(
-            "scope = 'guild' OR guild_id IS NOT NULL",
+            "scope = 'guild' OR guild_id IS NULL",
             name="generic_vote_sessions_network_guild_check",
         ),
         Index("generic_vote_sessions_deadline_idx", "deadline"),
@@ -274,11 +274,7 @@ class GenericVoteSession(Base, kw_only=True):
     guild_id: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("server_settings.server_id", ondelete="RESTRICT"), nullable=True
     )
-    """Owning guild used for emoji configuration and ballot role weights.
-
-    Guild polls may be created without one; network polls require an owner.
-    Presentation messages are attached separately.
-    """
+    """The guild a server poll belongs to, whose roles weigh its ballots; network polls have none."""
     question: Mapped[str] = mapped_column(Text, nullable=False)
     visibility: Mapped[VoteVisibility] = mapped_column(StrEnumText(VoteVisibility), nullable=False)
     scope: Mapped[PollScope] = mapped_column(

@@ -484,9 +484,9 @@ VOTE_POLL_CREATE = _b.node(
     NodeScope.GUILD,
     tr(t"permissions-create-poll = Create a poll."),
 )
-VOTE_POLL_NETWORK_CREATE = _b.node(
-    "vote.poll.network_create",
-    NodeScope.GUILD,
+VOTE_NETWORK_CREATE = _b.node(
+    "vote.network.create",
+    NodeScope.GLOBAL,
     tr(t"permissions-create-poll-carded = Create a poll carded in every server's vote channel."),
 )
 VOTE_POLL_RECOUNT = _b.node(
@@ -497,7 +497,17 @@ VOTE_POLL_RECOUNT = _b.node(
 VOTE_POLL_CLOSE_ANY = _b.node(
     "vote.poll.close_any",
     NodeScope.GUILD,
-    tr(t"permissions-close-refresh-poll = Close or refresh a poll you did not create."),
+    tr(t"permissions-close-server-poll = Close or review a server poll you did not create."),
+)
+VOTE_NETWORK_CLOSE_ANY = _b.node(
+    "vote.network.close_any",
+    NodeScope.GLOBAL,
+    tr(t"permissions-close-network-poll = Close or review a network poll you did not create."),
+)
+VOTE_NETWORK_RECOUNT = _b.node(
+    "vote.network.recount",
+    NodeScope.GLOBAL,
+    tr(t"permissions-recount-network-poll = Inspect and retry an incomplete final count of a network poll."),
 )
 VOTE_LOG_DELETE_CAST = _b.node(
     "vote.log_delete.cast",
@@ -627,7 +637,10 @@ GUILD_ADMIN = RoleDefinition(
         "starboard.**",
         "message.**",
         "redstoner.**",
-        "vote.**",
+        # Not vote.**: vote.network.* manages polls every guild votes in.
+        "vote.poll.**",
+        "vote.log_delete.**",
+        "vote.weight.**",
         "perm.grant.guild",
         "perm.subject.inspect",
         "role.definition.manage_guild",

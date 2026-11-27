@@ -15,10 +15,12 @@ from squid.core.permissions.application import PermissionService
 from squid.core.permissions.domain.catalogue import (
     BUILD_SUBMISSION_VIEW_PENDING,
     VOTE_LOG_DELETE_CAST,
+    VOTE_NETWORK_CLOSE_ANY,
+    VOTE_NETWORK_CREATE,
+    VOTE_NETWORK_RECOUNT,
     VOTE_POLL_CAST,
     VOTE_POLL_CLOSE_ANY,
     VOTE_POLL_CREATE,
-    VOTE_POLL_NETWORK_CREATE,
     VOTE_POLL_RECOUNT,
     VOTE_WEIGHT_STAFF,
 )
@@ -56,6 +58,9 @@ from squid.core.voting.errors import InvalidVoteConfigurationError
 from squid.core.worker_context import worker_scope
 
 logger = logging.getLogger(__name__)
+
+_POLL_STAFF_NODES = (VOTE_POLL_CLOSE_ANY, VOTE_POLL_RECOUNT, VOTE_NETWORK_CLOSE_ANY, VOTE_NETWORK_RECOUNT)
+"""Nodes that let someone other than the author close, recount, or review a poll."""
 
 
 type FinalRecount = Callable[[int, int], Awaitable[tuple[bool, tuple[int, ...]]]]
@@ -280,11 +285,12 @@ class VoteService:
         """Validate and persist a poll with a deadline derived from its duration.
 
         Publication is separate, so creating a poll does not require a Discord message.
-        Network polls require an owning guild and aliases usable in every guild.
+        A server poll belongs to the actor's guild. A network poll belongs to no guild
+        and needs aliases usable in every guild.
         """
         actor = context.effective.require_user()
         author_account_id = actor.require_account_id()
-        if actor.guild_id != guild_id:
+        if scope is PollScope.GUILD and actor.guild_id != guild_id:
             raise AuthorizationError
         with context.scope():
             async with self._uow_factory() as uow:
@@ -299,15 +305,15 @@ class VoteService:
                     msg = "Poll options must belong to the poll guild."
                     raise InvalidVoteConfigurationError(msg)
                 if scope is PollScope.NETWORK:
-                    if guild_id is None:
-                        # The owning guild weighs the ballots cast on every card.
-                        msg = "A network poll must belong to a guild."
+                    if guild_id is not None:
+                        # No guild may weigh or manage a poll every guild votes in.
+                        msg = "A network poll belongs to no guild."
                         raise InvalidVoteConfigurationError(msg)
                     if any(alias.guild_id is not None for alias in menu.aliases):
                         # Guild-scoped aliases would leave the other guilds' cards unvotable.
                         msg = "Network poll options must not be scoped to one guild."
                         raise InvalidVoteConfigurationError(msg)
-                    await self._permissions.require(actor, VOTE_POLL_NETWORK_CREATE, uow=uow)
+                    await self._permissions.require(actor, VOTE_NETWORK_CREATE, uow=uow)
                 await self._permissions.require(actor, VOTE_POLL_CREATE, uow=uow)
                 result = await uow.votes.create_generic_session(
                     author_account_id=author_account_id,
@@ -554,7 +560,7 @@ class VoteService:
             or current.status is not snapshot.status
         ):
             return VoteRejection.CLOSED
-        permissions = await self._permissions.check(actor, VOTE_POLL_CLOSE_ANY, VOTE_POLL_RECOUNT, uow=uow)
+        permissions = await self._permissions.check(actor, *_POLL_STAFF_NODES, uow=uow)
         if not isinstance(actor, UserActor):
             return VoteRejection.NOT_AUTHORIZED
         actor = replace(actor, capabilities=permissions.allowed_nodes)
@@ -562,7 +568,7 @@ class VoteService:
             if (
                 actor.account_id == current.author_account_id
                 and actor.credential_scopes is not None
-                and VOTE_POLL_CLOSE_ANY.name not in permissions.allowed_nodes
+                and not permissions.allowed_nodes & {VOTE_POLL_CLOSE_ANY.name, VOTE_NETWORK_CLOSE_ANY.name}
                 and not (await self._permissions.check(actor, VOTE_POLL_CREATE, uow=uow)).allowed
             ):
                 return VoteRejection.NOT_AUTHORIZED
@@ -639,9 +645,7 @@ class VoteService:
         async with self._uow_factory() as uow:
             if not isinstance(context.effective, UserActor) or context.effective.guild_id != guild_id:
                 raise AuthorizationError
-            await self._permissions.require(
-                context.effective, VOTE_POLL_CLOSE_ANY, VOTE_POLL_RECOUNT, mode="any", uow=uow
-            )
+            await self._permissions.require(context.effective, *_POLL_STAFF_NODES, mode="any", uow=uow)
             return await uow.votes.pending_reviews(guild_id)
 
     @application_operation

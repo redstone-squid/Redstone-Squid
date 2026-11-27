@@ -21,7 +21,12 @@ from whenever import Instant
 
 from squid.core.actors import Actor, UserActor
 from squid.core.errors import JSONValue
-from squid.core.permissions.domain.catalogue import VOTE_POLL_CLOSE_ANY, VOTE_POLL_RECOUNT
+from squid.core.permissions.domain.catalogue import (
+    VOTE_NETWORK_CLOSE_ANY,
+    VOTE_NETWORK_RECOUNT,
+    VOTE_POLL_CLOSE_ANY,
+    VOTE_POLL_RECOUNT,
+)
 from squid.core.scores import round_score
 from squid.core.voting.errors import InvalidVoteConfigurationError
 
@@ -387,9 +392,10 @@ class VoteMessage:
 class GenericPoll:
     """Question, deadline, and publication settings for a generic poll.
 
-    `guild_id` identifies the owner guild, whose role weights govern all ballots,
-    including those cast in another guild. With no owner guild, role multipliers
-    are not applied. A poll can exist before any Discord message is attached.
+    A server poll's `guild_id` is the guild whose roles weigh its ballots and whose
+    members alone may vote. A network poll belongs to no guild: every ballot weighs
+    1, and network staff manage it. A poll can exist before any Discord message is
+    attached.
     """
 
     question: str
@@ -529,21 +535,30 @@ class VoteSessionSnapshot:
         return self.visibility is not VoteVisibility.ANONYMOUS_HIDDEN or self.status is VoteStatus.CLOSED
 
     def can_close(self, actor: Actor) -> VoteRejection | None:
-        """Return why `actor` may not close this session, or None when they may."""
+        """Return why `actor` may not close this session, or None when they may.
+
+        The author may always close their poll. Anyone else needs network staff
+        authority for a network poll, or the owning guild's for a server poll.
+        """
         if not isinstance(actor, UserActor) or self.kind is not VoteKind.GENERIC or self.poll is None:
             return VoteRejection.NOT_AUTHORIZED
         author = actor.account_id == self.author_account_id
-        elsewhere = self.poll.guild_id is not None and self.poll.guild_id != actor.guild_id
-        # Only the author may close a network poll from another guild. Other
-        # actors must use capabilities resolved in the poll's owning guild.
-        if elsewhere and not (author and self.poll.scope is PollScope.NETWORK):
+        if self.poll.scope is PollScope.NETWORK:
+            return None if author or VOTE_NETWORK_CLOSE_ANY.name in actor.capabilities else VoteRejection.NOT_AUTHORIZED
+        if self.poll.guild_id is not None and self.poll.guild_id != actor.guild_id:
             return VoteRejection.WRONG_GUILD
         if not author and VOTE_POLL_CLOSE_ANY.name not in actor.capabilities:
             return VoteRejection.NOT_AUTHORIZED
         return None
 
     def can_review_poll(self, actor: Actor, *, recount_only: bool) -> bool:
-        if not isinstance(actor, UserActor) or self.poll is None or actor.guild_id is None:
+        if not isinstance(actor, UserActor) or self.poll is None:
+            return False
+        if self.poll.scope is PollScope.NETWORK:
+            return VOTE_NETWORK_CLOSE_ANY.name in actor.capabilities or (
+                recount_only and VOTE_NETWORK_RECOUNT.name in actor.capabilities
+            )
+        if actor.guild_id is None:
             return False
         if self.poll.guild_id is None:
             if actor.guild_id not in {card.guild_id for card in self.messages}:

@@ -35,7 +35,13 @@ from squid.bot.voting.spec import VotingExports, extension
 from squid.core.accounts.domain import IdentityProvider
 from squid.core.actors import ActingContext
 from squid.core.i18n import tr
-from squid.core.permissions.domain.catalogue import VOTE_POLL_CLOSE_ANY, VOTE_POLL_NETWORK_CREATE, VOTE_POLL_RECOUNT
+from squid.core.permissions.domain.catalogue import (
+    VOTE_NETWORK_CLOSE_ANY,
+    VOTE_NETWORK_CREATE,
+    VOTE_NETWORK_RECOUNT,
+    VOTE_POLL_CLOSE_ANY,
+    VOTE_POLL_RECOUNT,
+)
 from squid.core.voting.domain import PollScope, VoteMenu, Voter, VoteStatus, VoteVisibility
 from squid.core.voting.errors import InvalidVoteConfigurationError
 from squid_i18n import md_tr
@@ -182,14 +188,14 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
                     tr(t"poll-account-changed = Your account changed. Open the poll again.")
                 )
             if draft.scope is PollScope.NETWORK:
-                if not (await self.bot.services.permissions.check(subject, VOTE_POLL_NETWORK_CREATE)).allowed:
+                if not (await self.bot.services.permissions.check(subject, VOTE_NETWORK_CREATE)).allowed:
                     raise InvalidVoteConfigurationError(
                         tr(
                             t"bot-voting-vote-you-may-no-longer-publish-a-poll = You may no longer publish a poll "
                             t"to every server."
                         )
                     )
-                subject = replace(subject, capabilities=subject.capabilities | {VOTE_POLL_NETWORK_CREATE.name})
+                subject = replace(subject, capabilities=subject.capabilities | {VOTE_NETWORK_CREATE.name})
             publication = await self.publisher.create_and_publish(
                 context=ActingContext.for_actor(subject),
                 channel=cast(GuildMessageable, channel),
@@ -281,7 +287,10 @@ class VoteCog[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
             if (
                 not account
                 or actor.guild_id is None
-                or not actor.capabilities.intersection({VOTE_POLL_CLOSE_ANY.name, VOTE_POLL_RECOUNT.name})
+                or not actor.capabilities.intersection(
+                    node.name
+                    for node in (VOTE_POLL_CLOSE_ANY, VOTE_POLL_RECOUNT, VOTE_NETWORK_CLOSE_ANY, VOTE_NETWORK_RECOUNT)
+                )
             ):
                 return text_node("Poll review permission in this server is required.")
             pending = await self.vote_service.pending_reviews(actor.guild_id, context=ActingContext.current())

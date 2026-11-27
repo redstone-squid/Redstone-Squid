@@ -962,55 +962,99 @@ async def test_each_kind_names_the_guild_that_owns_its_weights() -> None:
     assert VoteService(uow_factory=lambda: VoteUnitOfWork(FakeVoteRepository(None)))._owner_guild_id(snapshot()) is None
 
 
-async def test_a_network_poll_needs_an_owning_guild_and_unscoped_options() -> None:
+async def test_a_network_poll_belongs_to_no_guild_and_needs_unscoped_options() -> None:
     service = VoteService(uow_factory=lambda: VoteUnitOfWork(FakeVoteRepository(None)))
-    unscoped = generic_menu(None)
+    creator = ActingContext.direct(UserActor(account_id=7, guild_id=10))
 
-    with pytest.raises(InvalidVoteConfigurationError, match="must belong to a guild"):
+    with pytest.raises(InvalidVoteConfigurationError, match="belongs to no guild"):
         await service.create_generic_poll(
-            context=ActingContext.direct(UserActor(account_id=7)),
+            context=creator,
             question="Which?",
             visibility=VoteVisibility.ANONYMOUS_LIVE,
             duration_seconds=3600,
-            menu=unscoped,
+            menu=generic_menu(None),
+            guild_id=10,
             scope=PollScope.NETWORK,
         )
-
     with pytest.raises(InvalidVoteConfigurationError, match="not be scoped to one guild"):
         await service.create_generic_poll(
-            context=ActingContext.direct(
-                UserActor(account_id=7, guild_id=10, capabilities=frozenset({"vote.poll.network_create"}))
-            ),
+            context=creator,
             question="Which?",
             visibility=VoteVisibility.ANONYMOUS_LIVE,
             duration_seconds=3600,
             menu=GENERIC_MENU,
-            guild_id=10,
             scope=PollScope.NETWORK,
         )
+
+
+async def test_a_network_poll_needs_a_network_grant_not_a_server_one() -> None:
+    repository = FakeVoteRepository(None)
+    server_grant = PermissionGrant(pattern="vote.network.create", effect=1, subject_account_id=7, scope_guild_id=10)
+    service = VoteService(
+        uow_factory=lambda: VoteUnitOfWork(repository, grants=(*vote_grants("vote.poll.create"), server_grant))
+    )
+
+    with pytest.raises(AuthorizationError):
+        await service.create_generic_poll(
+            context=ActingContext.direct(UserActor(account_id=7, guild_id=10)),
+            question="Which?",
+            visibility=VoteVisibility.ANONYMOUS_LIVE,
+            duration_seconds=3600,
+            menu=generic_menu(None),
+            scope=PollScope.NETWORK,
+        )
+    assert repository.generic_scopes == []
 
 
 async def test_a_network_poll_records_its_scope() -> None:
     repository = FakeVoteRepository(None)
     service = VoteService(
-        uow_factory=lambda: VoteUnitOfWork(
-            repository, grants=vote_grants("vote.poll.create", "vote.poll.network_create")
-        )
+        uow_factory=lambda: VoteUnitOfWork(repository, grants=vote_grants("vote.poll.create", "vote.network.create"))
     )
 
     await service.create_generic_poll(
-        context=ActingContext.direct(
-            UserActor(account_id=7, guild_id=10, capabilities=frozenset({"vote.poll.network_create"}))
-        ),
+        context=ActingContext.direct(UserActor(account_id=7, guild_id=10)),
         question="Which?",
         visibility=VoteVisibility.ANONYMOUS_LIVE,
         duration_seconds=3600,
         menu=generic_menu(None),
-        guild_id=10,
         scope=PollScope.NETWORK,
     )
 
     assert repository.generic_scopes == [PollScope.NETWORK]
+
+
+async def test_a_network_poll_weighs_every_ballot_one() -> None:
+    poll = poll_snapshot(guild_id=None, scope=PollScope.NETWORK, menu=generic_menu(None))
+    repository = FakeVoteRepository(poll)
+    repository.members = {(10, 7): GuildMember(70, frozenset({55}), manage_server=True)}
+    repository.mutation = StoredVoteMutation(poll, None, 1.0, just_closed=False)
+    service = VoteService(uow_factory=lambda: VoteUnitOfWork(repository, grants=vote_grants("vote.weight.staff")))
+
+    result = await service.cast_vote(poll.id, "one", context=ActingContext.for_actor(UserActor(account_id=7)))
+
+    assert result.accepted
+    assert repository.cast_calls[0].desired_weight == 1.0
+    assert repository.member_lookups == []
+
+
+@pytest.mark.parametrize(
+    ("capabilities", "author", "rejection"),
+    [
+        (frozenset(), True, None),
+        (frozenset(), False, VoteRejection.NOT_AUTHORIZED),
+        (frozenset({"vote.poll.close_any"}), False, VoteRejection.NOT_AUTHORIZED),
+        (frozenset({"vote.network.close_any"}), False, None),
+    ],
+)
+def test_only_the_author_or_network_staff_close_a_network_poll(
+    capabilities: frozenset[str], author: bool, rejection: VoteRejection | None
+) -> None:
+    poll = poll_snapshot(author_account_id=2, guild_id=None, scope=PollScope.NETWORK, menu=generic_menu(None))
+    actor = UserActor(account_id=2 if author else 3, guild_id=999, capabilities=capabilities)
+
+    assert poll.can_close(actor) is rejection
+    assert poll.can_review_poll(actor, recount_only=False) is ("vote.network.close_any" in capabilities)
 
 
 @pytest.mark.parametrize("recount_fails", [False, True])

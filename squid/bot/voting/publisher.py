@@ -18,7 +18,7 @@ from squid.bot.message_adapter import to_message_snapshot
 from squid.bot.ui import render_payload, text_node
 from squid.bot.voting.poll_wizard import parse_option_lines
 from squid.core.actors import ActingContext, application_operation
-from squid.core.permissions.domain.catalogue import VOTE_POLL_NETWORK_CREATE
+from squid.core.permissions.domain.catalogue import VOTE_NETWORK_CREATE
 from squid.core.voting.domain import PollScope, VoteKind, VoteMenu, VoteVisibility
 from squid_ui.ext.discord import send_to
 
@@ -126,7 +126,7 @@ class DiscordPollPublisher:
             visibility=visibility,
             duration_seconds=duration_seconds,
             menu=menu,
-            guild_id=channel.guild.id,
+            guild_id=None if scope is PollScope.NETWORK else channel.guild.id,
             scope=scope,
         )
         try:
@@ -152,7 +152,7 @@ class DiscordPollPublisher:
     async def may_create_network(self, member: discord.Member) -> bool:
         """Whether `member` may publish a poll into every server's vote channel."""
         subject = await self._bot.actors.resolve(member)
-        return (await self._bot.services.permissions.check(subject, VOTE_POLL_NETWORK_CREATE)).allowed
+        return (await self._bot.services.permissions.check(subject, VOTE_NETWORK_CREATE)).allowed
 
     async def attach(self, vote_session_id: int, channel: GuildMessageable) -> PollPublication:
         """Send and attach one card, preserving retry state if either step fails."""
