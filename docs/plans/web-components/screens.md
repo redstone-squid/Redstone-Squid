@@ -127,7 +127,7 @@ Rules that apply to every screen:
 **P15. System pages: 404, 503, `/offline`**
 - *Needs:* explanation, a way back, and search.
 
-**P16. Sponsors `/sponsors`** (optional, needs an API change)
+**P16. Sponsors `/sponsors`** (optional)
 - *Goal:* find servers that host the catalogue plugin.
 - *Needs:* server name, address with a copy button, description, website.
 

@@ -50,11 +50,6 @@ Unfinished items come first, then finished ones, each grouped by area. Numbers a
 
 40. **Web voting (blocked on a voting redesign).** `POST /v1/vote-sessions/{id}/votes` takes a `guild_id`, because weight comes from the guild: options have guild aliases with their own multipliers, role weights are stored per guild and vote kind, and every ballot stores the guild its weight is refreshed against. A website voter has no natural guild. Before an API change, decide where weight comes from (one network weight, a guild the voter picks, or the best of their guilds, which means looking up every membership on each vote), whether voters without a Discord membership can vote, and what a refresh recomputes. Then the session's `viewer` exposes eligibility and weight. Needed by M2.
 
-### Home and sponsors
-
-48. **Home data.** P1 is built from parallel calls: `records?sort=recently_changed&page_size=6`, `builds?sort=newest&page_size=6`, and `GET /v1/stats` returning `{builds, records, creators, records_by_month?}`. No home-specific aggregate is needed once items 9, 11 and 12 exist.
-49. **`GET /v1/sponsors`** returns public sponsor servers that opted in (P16).
-
 ### Cross-cutting
 
 51. **ETags.** `ETag` is already exposed through CORS, and accounts, drafts, builds, settings and notification preferences send it. Include `revision` in every editable body, as builds already do, and send `ETag` from the remaining editors.
@@ -158,6 +153,11 @@ Records, search and ranges share one **record holder summary**, `{build_id, titl
     - The website acts without a guild, so only global administrators can change permissions there; server admins keep using `/access`. Acting for a guild would need the caller's own membership resolved per request.
 46. **Record operations.** `POST /v1/records/{id}/recompute`, `GET /v1/records/{id}/inspection`, `POST /v1/records/recomputes`, `GET /v1/records/recompute-queue` and `GET /v1/records/drift`; see [Admin operations](../completed/incremental-records.md#admin-operations). Needed by X7.
 47. **Version corrections.** `POST /v1/versions` adds a release the announcement channel missed. `PATCH /v1/versions/{id}` corrects edition, release numbers or `data_version` in place, so builds and records that use the entry follow it; the change is recorded as a build edit of every build that uses it. `DELETE` only removes an entry nothing refers to and answers 409 `VERSION_IN_USE` otherwise. Needed by X8.
+
+### Home and servers
+
+48. **Home data.** P1 makes parallel calls: `records?sort=recently_changed&page_size=6`, `builds?sort=newest&page_size=6`, and `GET /v1/stats` for `{builds, records, creators}`. `builds` and `records` match the default lists' totals. `creators` counts the creators and designers on approved builds, one per public account. A per-month record chart can come later, since P1 doesn't show one.
+49. **Server directory.** `GET /v1/minecraft/servers` pages Paper servers with a public profile, oldest first, for P16. Turning on the public profile is the opt-in to being listed. `sponsor_opt_in` only credits the server on builds submitted from it, and it shows here as `sponsor`.
 
 ### Cross-cutting
 
