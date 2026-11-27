@@ -1,7 +1,6 @@
 """Private video requests backed by the existing durable job and artifact lifecycle."""
 
 import hashlib
-from dataclasses import replace
 from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel
@@ -137,7 +136,7 @@ class SchematicVideoService:
                 page_size=page_size,
                 context=context,
             )
-            return replace(page, items=tuple(_status(job) for job in page.items))
+            return Page(tuple(_status(job) for job in page.items), page.total, page.next, page.prev)
 
     async def open_video_content(self, job_id: int, *, context: ActingContext) -> bytes:
         with context.scope():
