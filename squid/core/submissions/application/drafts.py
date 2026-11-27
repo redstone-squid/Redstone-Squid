@@ -13,7 +13,7 @@ from squid.core.builds.domain.expansion import DoorExpansion
 from squid.core.errors import InvalidStateError, JSONValue, ValidationError
 from squid.core.i18n import tr
 from squid.core.messages.domain import MessageSnapshot
-from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
+from squid.core.pagination import FIRST_PAGE, Page, PageSelector
 from squid.core.permissions.application.ports import PermissionUnitOfWork
 from squid.core.permissions.domain import PermissionNode
 from squid.core.permissions.domain.catalogue import BUILD_SUBMISSION_EDIT
@@ -147,11 +147,7 @@ class DraftRepository(Protocol):
     form values; the repository enforces revision and replay checks when it writes.
     """
 
-    async def list_attention(
-        self, *, selector: PageSelector[UUID], limit: int, now: Instant
-    ) -> tuple[StoredDraft, ...]: ...
-
-    async def count_attention(self, *, now: Instant) -> int: ...
+    async def list_attention(self, *, selector: PageSelector, page_size: int, now: Instant) -> Page[StoredDraft]: ...
 
     async def list_active_for_account(
         self,
@@ -409,27 +405,16 @@ class SubmissionDraftService:
             return await uow.submission_drafts.list_active_for_account(account_id, now=self._now(), limit=limit)
 
     async def attention_inbox(
-        self, *, context: ActingContext, selector: PageSelector[UUID] = FIRST_PAGE, page_size: int = 20
-    ) -> Page[StoredDraft, UUID]:
-        """Page correction work oldest first after checking current staff permission.
-
-        Draft IDs are the page anchors. An anchor no longer needing attention raises
-        PageAnchorNotFoundError.
-        """
+        self, *, context: ActingContext, selector: PageSelector = FIRST_PAGE, page_size: int = 20
+    ) -> Page[StoredDraft]:
+        """Page correction work oldest first after checking current staff permission."""
         actor = context.effective
         with context.scope():
             async with self._uow_factory() as uow:
                 draft_actor_id(actor)
                 await self._require_staff(uow, actor)
                 now = self._now()
-                rows = await uow.submission_drafts.list_attention(selector=selector, limit=page_size + 1, now=now)
-                return keyset_page(
-                    rows,
-                    selector=selector,
-                    page_size=page_size,
-                    total=await uow.submission_drafts.count_attention(now=now),
-                    id_of=lambda draft: draft.snapshot.id,
-                )
+                return await uow.submission_drafts.list_attention(selector=selector, page_size=page_size, now=now)
 
     @application_operation
     async def get_owned(self, draft_id: UUID, *, context: ActingContext) -> StoredDraft:

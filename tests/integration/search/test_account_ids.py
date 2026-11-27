@@ -120,9 +120,9 @@ async def test_account_ids_follow_claims_and_identity_visibility(
         listed = await uow.builds.list_page(
             statuses=frozenset({BuildStatus.APPROVED}),
             filters=BuildListFilters(public_account_id=account.public_account_id),
-            limit=10,
+            page_size=10,
         )
-        assert {build.id for build in listed} == {by_alias, by_java}
+        assert {build.id for build in listed.items} == {by_alias, by_java}
         summaries = await uow.builds.get_public_summaries([by_java, by_private_discord])
         assert [summary.creators[0].account_id for summary in summaries] == [account.public_account_id, None]
         assert [summary.credits[0].account_id for summary in summaries] == [account.public_account_id, None]

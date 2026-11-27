@@ -16,7 +16,7 @@ from squid.core.builds.errors import BuildNotFoundError
 from squid.core.builds.history import BuildPublication, HistoryActor, PublicBuildRevision
 from squid.core.builds.models import Build, DoorBuild
 from squid.core.errors import DataIntegrityError
-from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
+from squid.core.pagination import FIRST_PAGE, Page, PageSelector
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.application.ports import PermissionUnitOfWork
 from squid.core.permissions.domain import Pattern
@@ -32,8 +32,8 @@ from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
 class BuildListSort(StrEnum):
     """A named display order for build listings.
 
-    Each order is total, so identifier anchors work with all of them. `ID` lists the newest IDs
-    first and seeks without looking up the anchor, which makes it the order for full traversal.
+    Each order is total, so cursors work with all of them. `ID` lists the newest IDs first and
+    never moves a row, which makes it the order for full traversal.
     """
 
     ID = "id"
@@ -207,11 +207,6 @@ def _public_preview(build: Build) -> PublicBuildPreview | None:
     return None
 
 
-def _persisted_build_id(build: Build) -> int:
-    assert build.id is not None, "a listed build has always been persisted"
-    return build.id
-
-
 class BuildQueryRepository(Protocol):
     """Build persistence queries required by search workflows."""
 
@@ -228,11 +223,9 @@ class BuildQueryRepository(Protocol):
         filters: BuildListFilters,
         submitter_account_id: int | None,
         sort: BuildListSort,
-        offset: int,
-        after_id: int | None,
-        before_id: int | None,
-        limit: int,
-    ) -> list[Build]: ...
+        selector: PageSelector,
+        page_size: int,
+    ) -> Page[Build]: ...
 
     async def count(
         self,
@@ -377,28 +370,13 @@ class BuildQueryService:
             if statuses != {BuildStatus.APPROVED} and not isinstance(actor, WorkerActor) and not own_submissions:
                 await self._permissions.require(actor, BUILD_SUBMISSION_VIEW_PENDING)
             async with self._uow_factory() as uow:
-                rows = await uow.builds.list_page(
+                return await uow.builds.list_page(
                     statuses=statuses,
                     filters=filters,
                     submitter_account_id=submitter_account_id,
                     sort=sort,
-                    offset=selector.offset,
-                    after_id=selector.after_id,
-                    before_id=selector.before_id,
-                    # One row past the page proves whether another page follows.
-                    limit=page_size + 1,
-                )
-                total = await uow.builds.count(
-                    statuses=statuses,
-                    filters=filters,
-                    submitter_account_id=submitter_account_id,
-                )
-                return keyset_page(
-                    rows,
                     selector=selector,
                     page_size=page_size,
-                    total=total,
-                    id_of=_persisted_build_id,
                 )
 
     async def semantic(self, query: str, *, context: ActingContext) -> Build | None:

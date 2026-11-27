@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Protocol
 from uuid import UUID
 
-from squid.core.pagination import PageSelector
+from squid.core.pagination import Page, PageSelector
 from squid.core.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery, RangeLabels
 from squid.core.records.application.live import DoorRecordCategory
 from squid.core.records.application.ports import RecordUnitOfWork
@@ -57,12 +57,10 @@ class RangePublicationRepository(Protocol):
     async def get(self, query_id: int) -> RangePublication | None: ...
 
     async def list_registrations(
-        self, filters: RangeListFilters, *, selector: PageSelector, limit: int
-    ) -> Sequence[RangeRegistration]:
-        """List registrations newest first; a `before_id` page is returned in display order."""
+        self, filters: RangeListFilters, *, selector: PageSelector, page_size: int
+    ) -> Page[RangeRegistration]:
+        """List registrations newest first."""
         ...
-
-    async def count_registrations(self, filters: RangeListFilters) -> int: ...
 
     async def labels(self, queries: Sequence[tuple[DoorRecordCategory, int | None]]) -> tuple[RangeLabels, ...]:
         """Name each category's tags and version, in the order given."""

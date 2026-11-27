@@ -34,8 +34,10 @@ from squid.core.notifications.models import (
     NotificationProfile,
     NotificationSubscription,
 )
+from squid.core.pagination import Page, PageSelector
 from squid.core.permissions.domain import BuiltinRoleKeys
 from squid.core.permissions.models import PermissionRole, PermissionRoleAssignment
+from squid.core.persistence.paging import KeysetOrder
 from squid.core.persistence.queue import VISIBILITY_TIMEOUT, retry_delay
 from squid.core.records.models import (
     Record,
@@ -329,31 +331,18 @@ class PostgresNotificationRepository:
         self,
         account_id: int,
         *,
-        offset: int,
-        after_id: int | None,
-        before_id: int | None,
-        limit: int,
+        selector: PageSelector,
+        page_size: int,
         visibility: InboxVisibility,
         unread_only: bool = False,
-    ) -> Sequence[InboxNotification]:
-        """List one newest-first inbox page; a `before_id` page carries its overfetch at the front."""
-        session = self._session()
+    ) -> Page[InboxNotification]:
+        """List one newest-first page of web-visible inbox items."""
         statement = _inbox_filter(
             select(InboxNotification), account_id=account_id, visibility=visibility, unread_only=unread_only
         )
-        reverse = before_id is not None
-        if before_id is not None:
-            # Walk away from the anchor in reversed display order; the page is flipped back below.
-            statement = statement.where(InboxNotification.id > before_id).order_by(InboxNotification.id.asc())
-        else:
-            if after_id is not None:
-                statement = statement.where(InboxNotification.id < after_id)
-            statement = statement.order_by(InboxNotification.id.desc())
-        if offset:
-            statement = statement.offset(offset)
-        rows = (await session.scalars(statement.limit(limit))).all()
-        ordered = reversed(rows) if reverse else rows
-        return tuple(row for row in ordered)
+        order = KeysetOrder("newest", InboxNotification.id, InboxNotification.id, descending=True)
+        total = await self.count_inbox(account_id, visibility=visibility, unread_only=unread_only)
+        return await order.page(self._session(), statement, selector, page_size=page_size, total=total)
 
     async def count_inbox(self, account_id: int, *, visibility: InboxVisibility, unread_only: bool = False) -> int:
         """Count web-visible inbox items, mirroring the visibility rules of `list_inbox`."""

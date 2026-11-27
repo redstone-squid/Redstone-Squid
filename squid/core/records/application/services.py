@@ -13,7 +13,7 @@ import anyio
 from squid.core.actors import ActingContext, application_operation
 from squid.core.errors import DataIntegrityError, InvalidStateError
 from squid.core.i18n import tr
-from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
+from squid.core.pagination import FIRST_PAGE, Page, PageSelector
 from squid.core.permissions.application.services import PermissionService
 from squid.core.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD
 from squid.core.records.application.affected import ScopeCategories, Threshold
@@ -627,16 +627,7 @@ class RecordService:
         """Return backstop differences, newest first."""
         await self._permissions.require(context.effective, RECORD_ENTRY_INSPECT)
         async with self._uow_factory() as uow:
-            rows = await uow.records.list_drift(
-                offset=selector.offset, after_id=selector.after_id, before_id=selector.before_id, limit=page_size + 1
-            )
-            return keyset_page(
-                rows,
-                selector=selector,
-                page_size=page_size,
-                total=await uow.records.count_drift(),
-                id_of=lambda drift: drift.id,
-            )
+            return await uow.records.list_drift(selector=selector, page_size=page_size)
 
 
 class PublicRecordQueryService:
@@ -659,19 +650,8 @@ class PublicRecordQueryService:
     ) -> Page[PublicRecordSummary]:
         """Return one page of current results in display order, with one summary load for the page."""
         async with self._uow_factory() as uow:
-            rows = await uow.records.list_published_records(
-                selector=selector,
-                sort=sort,
-                filters=filters,
-                # One row past the page proves whether another page follows.
-                limit=page_size + 1,
-            )
-            page = keyset_page(
-                rows,
-                selector=selector,
-                page_size=page_size,
-                total=await uow.records.count_published_records(filters=filters),
-                id_of=lambda record: record.result_id or 0,
+            page = await uow.records.list_published_records(
+                selector=selector, sort=sort, filters=filters, page_size=page_size
             )
         holder_ids = tuple(dict.fromkeys(build_id for record in page.items for build_id in record.holder_build_ids))
         builds = {build.id: build for build in await self._builds.get_public_summaries(holder_ids, context=context)}

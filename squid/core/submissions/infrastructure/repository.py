@@ -2,7 +2,7 @@
 
 import json
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from typing import Any, cast, override
 from uuid import UUID
 
@@ -17,7 +17,7 @@ from squid.core.media.domain.jobs import MediaJobStatus
 from squid.core.media.infrastructure.references import media_for_draft, retained_elsewhere
 from squid.core.media.models import MediaProcessingJobRecord, MediaUploadRecord
 from squid.core.messages.domain import MessageSnapshot
-from squid.core.pagination import PageSelector
+from squid.core.pagination import Page, PageSelector
 from squid.core.persistence.advisory_locks import (
     AdvisoryLockNamespace,
     lock_key,
@@ -84,20 +84,14 @@ class PostgresDraftRepository(DraftRepository):
         self._session = session
 
     @override
-    async def list_attention(
-        self, *, selector: PageSelector[UUID], limit: int, now: Instant
-    ) -> tuple[StoredDraft, ...]:
-        """Read drafts oldest first; a `before_id` page is read in reverse and restored to that order."""
+    async def list_attention(self, *, selector: PageSelector, page_size: int, now: Instant) -> Page[StoredDraft]:
         session = self._session()
-        order = KeysetOrder(SubmissionDraft.created_at, SubmissionDraft.id, descending=False)
-        statement = await order.apply(session, _needing_attention(select(SubmissionDraft), now), selector)
-        rows = tuple(_to_stored(model) for model in await session.scalars(statement.limit(limit)))
-        return rows[::-1] if selector.before_id is not None else rows
-
-    @override
-    async def count_attention(self, *, now: Instant) -> int:
-        statement = _needing_attention(select(func.count()).select_from(SubmissionDraft), now)
-        return await self._session().scalar(statement) or 0
+        order = KeysetOrder("oldest", SubmissionDraft.created_at, SubmissionDraft.id, descending=False)
+        total = await session.scalar(_needing_attention(select(func.count()).select_from(SubmissionDraft), now))
+        page = await order.page(
+            session, _needing_attention(select(SubmissionDraft), now), selector, page_size=page_size, total=total or 0
+        )
+        return replace(page, items=tuple(_to_stored(model) for model in page.items))
 
     @override
     async def list_active_for_account(

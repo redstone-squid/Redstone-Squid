@@ -14,7 +14,7 @@ from whenever import Instant
 
 from squid.core.actors import ActingContext, Actor, UserActor
 from squid.core.errors import ConflictError, ValidationError
-from squid.core.pagination import FIRST_PAGE, PageSelector
+from squid.core.pagination import FIRST_PAGE, Page, PageSelector, offset_page
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.application.administration import (
     PermissionAdministrationService,
@@ -225,12 +225,9 @@ class FakeStore:
         return True
 
     async def list_audit(
-        self, *, guild_id: int | None = None, limit: int = 20, selector: PageSelector[int] = FIRST_PAGE
-    ) -> tuple[PermissionAuditEntry, ...]:
-        return ()
-
-    async def count_audit(self, *, guild_id: int | None = None) -> int:
-        return 0
+        self, *, guild_id: int | None = None, selector: PageSelector = FIRST_PAGE, page_size: int = 20
+    ) -> Page[PermissionAuditEntry]:
+        return offset_page((), offset=selector.offset, page_size=page_size)
 
 
 class FakePermissionUnitOfWork(FakeUnitOfWork[FakeStore]):

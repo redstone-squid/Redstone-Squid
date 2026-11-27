@@ -896,7 +896,7 @@ Without JS, the trigger links to a confirmation page (for example `/account/devi
 
 ### Pagination
 
-- **Cursor listings** (anchors): previous and next only, plus "x–y of total" when `total` is known.
+- **Cursor listings**: previous and next only, plus "x–y of total" when `total` is known.
 - **Offset listings** (search): page numbers capped at the API maximum, and a page-size menu from 20 to 50.
 - Pages after the first are `noindex`.
 - After paging, the scroll position goes to the results heading (`PageHeader` or the `Section` heading). On full navigation, the `#results` anchor is added to the href.
@@ -904,7 +904,7 @@ Without JS, the trigger links to a confirmation page (for example `/account/devi
 
 ### URL state
 
-- **All listing state is in the query string:** `q`, `scope`, `sort` (`field` or `-field`), `view`, `offset` or `after_id`/`before_id`, filters, `hide` (hidden columns), `open` (expanded groups).
+- **All listing state is in the query string:** `q`, `scope`, `sort` (`field` or `-field`), `view`, `offset` or `cursor`, filters, `hide` (hidden columns), `open` (expanded groups).
 - **Default values are omitted.** The canonical URL drops paging and view.
 - **Readers** are zod-parsed in features. An invalid value falls back to the default and never errors, as `readPageAddress` already does.
 - **Island updates** use `history.replaceState` for view, columns and expansion (no new history entry) and `pushState` for query, filter, sort and page changes, so Back works.

@@ -10,7 +10,7 @@ import anyio
 
 from squid.core.actors import ActingContext, application_operation
 from squid.core.errors import ServiceUnavailableError
-from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
+from squid.core.pagination import FIRST_PAGE, Page, PageSelector
 from squid.core.permissions.application.services import PermissionService
 from squid.core.permissions.domain.catalogue import RECORD_ENTRY_REBUILD
 from squid.core.records.application.expansion_regions import DoorRangeQuery, DoorRangeResult
@@ -119,14 +119,7 @@ class RangePublicationService:
     ) -> Page[RangeRegistration]:
         """Return registered queries newest first, with their labels."""
         async with self._uow_factory() as uow:
-            rows = await uow.record_ranges.list_registrations(filters, selector=selector, limit=page_size + 1)
-            page = keyset_page(
-                rows,
-                selector=selector,
-                page_size=page_size,
-                total=await uow.record_ranges.count_registrations(filters),
-                id_of=lambda registration: registration.query_id,
-            )
+            page = await uow.record_ranges.list_registrations(filters, selector=selector, page_size=page_size)
             # Following the pin names the version it currently resolves to.
             pinned = await uow.records.active_current_version_id()
             labels = await uow.record_ranges.labels(

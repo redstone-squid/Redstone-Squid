@@ -10,7 +10,7 @@ from whenever import Instant
 
 from squid.core.actors import ActingContext, Actor, UserActor, WorkerActor, application_operation
 from squid.core.errors import AuthorizationError
-from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
+from squid.core.pagination import FIRST_PAGE, Page, PageSelector
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.domain.catalogue import (
     BUILD_SUBMISSION_VIEW_PENDING,
@@ -304,9 +304,7 @@ class VoteService:
         """Page build submission and edit votes for reviewers who can see unreviewed builds."""
         async with self._uow_factory() as uow:
             await self._permissions.require(context.effective, BUILD_SUBMISSION_VIEW_PENDING, uow=uow)
-            rows = await uow.votes.list_reviews(filters, sort=sort, selector=selector, limit=page_size + 1)
-            total = await uow.votes.count_reviews(filters)
-            return keyset_page(rows, selector=selector, page_size=page_size, total=total, id_of=lambda row: row.id)
+            return await uow.votes.list_reviews(filters, sort=sort, selector=selector, page_size=page_size)
 
     @application_operation
     async def cast_vote(

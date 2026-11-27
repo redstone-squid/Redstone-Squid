@@ -2,7 +2,6 @@
 
 from collections.abc import Sequence
 from typing import override
-from uuid import UUID
 
 import discord
 import simcord
@@ -140,9 +139,9 @@ class StoredReports(ErrorReportService):
         self,
         *,
         context: ActingContext,
-        selector: PageSelector[UUID] = FIRST_PAGE,
+        selector: PageSelector = FIRST_PAGE,
         page_size: int = 20,
         filters: ErrorReportFilters = EVERY_REPORT,
-    ) -> Page[ErrorReport, UUID]:
+    ) -> Page[ErrorReport]:
         self.recent_calls.append((page_size, filters.work_lost_only))
         return offset_page((self.report,), offset=selector.offset, page_size=page_size)

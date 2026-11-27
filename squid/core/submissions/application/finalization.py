@@ -17,7 +17,7 @@ from whenever import Instant
 from squid.core.actors import ActingContext, Actor, AnonymousActor, UserActor
 from squid.core.errors import DataIntegrityError, InvalidStateError
 from squid.core.i18n import tr
-from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
+from squid.core.pagination import FIRST_PAGE, Page, PageSelector
 from squid.core.permissions.errors import PermissionDeniedError
 from squid.core.submissions.application.drafts import (
     DEFAULT_DRAFT_RETENTION_DAYS,
@@ -163,10 +163,8 @@ class FinalizationJobRepository(Protocol):
     async def get_attempt(self, draft_id: UUID, attempt_id: UUID) -> FinalizationJobSnapshot | None: ...
 
     async def list_attempts(
-        self, draft_id: UUID, *, selector: PageSelector, limit: int
-    ) -> tuple[FinalizationJobSnapshot, ...]: ...
-
-    async def count_attempts(self, draft_id: UUID) -> int: ...
+        self, draft_id: UUID, *, selector: PageSelector, page_size: int
+    ) -> Page[FinalizationJobSnapshot]: ...
 
     async def enqueue(
         self,
@@ -433,19 +431,12 @@ class SubmissionFinalizationService:
     async def attempts(
         self, draft_id: UUID, *, context: ActingContext, selector: PageSelector = FIRST_PAGE, page_size: int = 20
     ) -> Page[FinalizationJobSnapshot]:
-        """Page attempt history newest first; attempt numbers are the page anchors."""
+        """Page attempt history newest first."""
         actor = context.effective
         with context.scope():
             async with self._uow_factory() as uow:
                 await self._drafts.get_accessible_in(uow, draft_id, actor)
-                rows = await uow.finalization_jobs.list_attempts(draft_id, selector=selector, limit=page_size + 1)
-                return keyset_page(
-                    rows,
-                    selector=selector,
-                    page_size=page_size,
-                    total=await uow.finalization_jobs.count_attempts(draft_id),
-                    id_of=lambda attempt: attempt.attempt_number,
-                )
+                return await uow.finalization_jobs.list_attempts(draft_id, selector=selector, page_size=page_size)
 
 
 class SubmissionFinalizationWorker:

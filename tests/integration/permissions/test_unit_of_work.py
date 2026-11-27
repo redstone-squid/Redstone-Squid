@@ -54,7 +54,7 @@ async def test_permission_writes_audit_and_epoch_share_the_callers_transaction(
             ),
         )
         assert (await permissions.check(subject, *[node], uow=uow)).allowed_nodes == frozenset({node})
-        assert len(await uow.permission_admin.list_audit()) == 1
+        assert len((await uow.permission_admin.list_audit()).items) == 1
         if commit:
             await uow.commit()
 
@@ -62,7 +62,7 @@ async def test_permission_writes_audit_and_epoch_share_the_callers_transaction(
     assert not (await permissions.check(subject, node)).allowed
     async with factory() as uow:
         assert bool(await uow.permission_admin.list_rules(subject_account_id=account_id)) == commit
-        assert bool(await uow.permission_admin.list_audit()) == commit
+        assert bool((await uow.permission_admin.list_audit()).items) == commit
         assert (await uow.permissions.epoch() > epoch) == commit
     await PermissionEpochWatcher(cache, uow_factory=factory).refresh()
     assert (await permissions.check(subject, node)).allowed == commit
@@ -98,7 +98,7 @@ async def test_role_creation_commits_with_audit_and_rolls_back_if_audit_fails(
             )
     async with factory() as uow:
         assert await uow.permission_admin.get_role("abandoned") is None
-        assert len(await uow.permission_admin.list_audit()) == 1
+        assert len((await uow.permission_admin.list_audit()).items) == 1
 
 
 async def test_role_aggregation_preserves_empty_roles_and_independent_pattern_edge_lists(

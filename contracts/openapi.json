@@ -3964,9 +3964,9 @@
                 }
               ],
               "maximum": 10000,
-              "description": "Number of items to skip. Excludes after_id and before_id."
+              "description": "Number of items to skip. Excludes cursor."
             },
-            "description": "Number of items to skip. Excludes after_id and before_id.",
+            "description": "Number of items to skip. Excludes cursor.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -4365,7 +4365,7 @@
             "schema": {
               "$ref": "#/components/schemas/BuildListSort"
             },
-            "description": "A named display order for build listings.\n\nEach order is total, so identifier anchors work with all of them. `ID` lists the newest IDs\nfirst and seeks without looking up the anchor, which makes it the order for full traversal.\n",
+            "description": "A named display order for build listings.\n\nEach order is total, so cursors work with all of them. `ID` lists the newest IDs first and\nnever moves a row, which makes it the order for full traversal.\n",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -4400,51 +4400,30 @@
                 }
               ],
               "maximum": 10000,
-              "description": "Number of items to skip. Excludes after_id and before_id."
+              "description": "Number of items to skip. Excludes cursor."
             },
-            "description": "Number of items to skip. Excludes after_id and before_id.",
+            "description": "Number of items to skip. Excludes cursor.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
             "allowReserved": false
           },
           {
-            "name": "after_id",
+            "name": "cursor",
             "in": "query",
             "schema": {
               "oneOf": [
                 {
-                  "type": "integer"
+                  "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "minimum": 1,
-              "description": "Return the items after this identifier in display order. Excludes offset."
+              "maxLength": 512,
+              "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
             },
-            "description": "Return the items after this identifier in display order. Excludes offset.",
-            "required": false,
-            "deprecated": false,
-            "allowEmptyValue": false,
-            "allowReserved": false
-          },
-          {
-            "name": "before_id",
-            "in": "query",
-            "schema": {
-              "oneOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "minimum": 1,
-              "description": "Return the items before this identifier in display order. Excludes offset."
-            },
-            "description": "Return the items before this identifier in display order. Excludes offset.",
+            "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -6092,51 +6071,30 @@
                 }
               ],
               "maximum": 10000,
-              "description": "Number of items to skip. Excludes after_id and before_id."
+              "description": "Number of items to skip. Excludes cursor."
             },
-            "description": "Number of items to skip. Excludes after_id and before_id.",
+            "description": "Number of items to skip. Excludes cursor.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
             "allowReserved": false
           },
           {
-            "name": "after_id",
+            "name": "cursor",
             "in": "query",
             "schema": {
               "oneOf": [
                 {
-                  "type": "string",
-                  "format": "uuid"
+                  "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "Return the items after this identifier in display order. Excludes offset."
+              "maxLength": 512,
+              "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
             },
-            "description": "Return the items after this identifier in display order. Excludes offset.",
-            "required": false,
-            "deprecated": false,
-            "allowEmptyValue": false,
-            "allowReserved": false
-          },
-          {
-            "name": "before_id",
-            "in": "query",
-            "schema": {
-              "oneOf": [
-                {
-                  "type": "string",
-                  "format": "uuid"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Return the items before this identifier in display order. Excludes offset."
-            },
-            "description": "Return the items before this identifier in display order. Excludes offset.",
+            "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -8545,9 +8503,9 @@
                 }
               ],
               "maximum": 10000,
-              "description": "Number of items to skip. Excludes after_id and before_id."
+              "description": "Number of items to skip. Excludes cursor."
             },
-            "description": "Number of items to skip. Excludes after_id and before_id.",
+            "description": "Number of items to skip. Excludes cursor.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -9544,51 +9502,30 @@
                 }
               ],
               "maximum": 10000,
-              "description": "Number of items to skip. Excludes after_id and before_id."
+              "description": "Number of items to skip. Excludes cursor."
             },
-            "description": "Number of items to skip. Excludes after_id and before_id.",
+            "description": "Number of items to skip. Excludes cursor.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
             "allowReserved": false
           },
           {
-            "name": "after_id",
+            "name": "cursor",
             "in": "query",
             "schema": {
               "oneOf": [
                 {
-                  "type": "integer"
+                  "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "minimum": 1,
-              "description": "Return the items after this identifier in display order. Excludes offset."
+              "maxLength": 512,
+              "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
             },
-            "description": "Return the items after this identifier in display order. Excludes offset.",
-            "required": false,
-            "deprecated": false,
-            "allowEmptyValue": false,
-            "allowReserved": false
-          },
-          {
-            "name": "before_id",
-            "in": "query",
-            "schema": {
-              "oneOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "minimum": 1,
-              "description": "Return the items before this identifier in display order. Excludes offset."
-            },
-            "description": "Return the items before this identifier in display order. Excludes offset.",
+            "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -10533,9 +10470,9 @@
                 }
               ],
               "maximum": 10000,
-              "description": "Number of items to skip. Excludes after_id and before_id."
+              "description": "Number of items to skip. Excludes cursor."
             },
-            "description": "Number of items to skip. Excludes after_id and before_id.",
+            "description": "Number of items to skip. Excludes cursor.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -11062,9 +10999,9 @@
                 }
               ],
               "maximum": 10000,
-              "description": "Number of items to skip. Excludes after_id and before_id."
+              "description": "Number of items to skip. Excludes cursor."
             },
-            "description": "Number of items to skip. Excludes after_id and before_id.",
+            "description": "Number of items to skip. Excludes cursor.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -12578,9 +12515,9 @@
                 }
               ],
               "maximum": 10000,
-              "description": "Number of items to skip. Excludes after_id and before_id."
+              "description": "Number of items to skip. Excludes cursor."
             },
-            "description": "Number of items to skip. Excludes after_id and before_id.",
+            "description": "Number of items to skip. Excludes cursor.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -13349,51 +13286,30 @@
                 }
               ],
               "maximum": 10000,
-              "description": "Number of items to skip. Excludes after_id and before_id."
+              "description": "Number of items to skip. Excludes cursor."
             },
-            "description": "Number of items to skip. Excludes after_id and before_id.",
+            "description": "Number of items to skip. Excludes cursor.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
             "allowReserved": false
           },
           {
-            "name": "after_id",
+            "name": "cursor",
             "in": "query",
             "schema": {
               "oneOf": [
                 {
-                  "type": "integer"
+                  "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "minimum": 1,
-              "description": "Return the items after this identifier in display order. Excludes offset."
+              "maxLength": 512,
+              "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
             },
-            "description": "Return the items after this identifier in display order. Excludes offset.",
-            "required": false,
-            "deprecated": false,
-            "allowEmptyValue": false,
-            "allowReserved": false
-          },
-          {
-            "name": "before_id",
-            "in": "query",
-            "schema": {
-              "oneOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "minimum": 1,
-              "description": "Return the items before this identifier in display order. Excludes offset."
-            },
-            "description": "Return the items before this identifier in display order. Excludes offset.",
+            "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -13808,51 +13724,30 @@
                 }
               ],
               "maximum": 10000,
-              "description": "Number of items to skip. Excludes after_id and before_id."
+              "description": "Number of items to skip. Excludes cursor."
             },
-            "description": "Number of items to skip. Excludes after_id and before_id.",
+            "description": "Number of items to skip. Excludes cursor.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
             "allowReserved": false
           },
           {
-            "name": "after_id",
+            "name": "cursor",
             "in": "query",
             "schema": {
               "oneOf": [
                 {
-                  "type": "integer"
+                  "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "minimum": 1,
-              "description": "Return the items after this identifier in display order. Excludes offset."
+              "maxLength": 512,
+              "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
             },
-            "description": "Return the items after this identifier in display order. Excludes offset.",
-            "required": false,
-            "deprecated": false,
-            "allowEmptyValue": false,
-            "allowReserved": false
-          },
-          {
-            "name": "before_id",
-            "in": "query",
-            "schema": {
-              "oneOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "minimum": 1,
-              "description": "Return the items before this identifier in display order. Excludes offset."
-            },
-            "description": "Return the items before this identifier in display order. Excludes offset.",
+            "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -14147,51 +14042,30 @@
                 }
               ],
               "maximum": 10000,
-              "description": "Number of items to skip. Excludes after_id and before_id."
+              "description": "Number of items to skip. Excludes cursor."
             },
-            "description": "Number of items to skip. Excludes after_id and before_id.",
+            "description": "Number of items to skip. Excludes cursor.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
             "allowReserved": false
           },
           {
-            "name": "after_id",
+            "name": "cursor",
             "in": "query",
             "schema": {
               "oneOf": [
                 {
-                  "type": "integer"
+                  "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "minimum": 1,
-              "description": "Return the items after this identifier in display order. Excludes offset."
+              "maxLength": 512,
+              "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
             },
-            "description": "Return the items after this identifier in display order. Excludes offset.",
-            "required": false,
-            "deprecated": false,
-            "allowEmptyValue": false,
-            "allowReserved": false
-          },
-          {
-            "name": "before_id",
-            "in": "query",
-            "schema": {
-              "oneOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "minimum": 1,
-              "description": "Return the items before this identifier in display order. Excludes offset."
-            },
-            "description": "Return the items before this identifier in display order. Excludes offset.",
+            "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -15552,51 +15426,30 @@
                 }
               ],
               "maximum": 10000,
-              "description": "Number of items to skip. Excludes after_id and before_id."
+              "description": "Number of items to skip. Excludes cursor."
             },
-            "description": "Number of items to skip. Excludes after_id and before_id.",
+            "description": "Number of items to skip. Excludes cursor.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
             "allowReserved": false
           },
           {
-            "name": "after_id",
+            "name": "cursor",
             "in": "query",
             "schema": {
               "oneOf": [
                 {
-                  "type": "integer"
+                  "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "minimum": 1,
-              "description": "Return the items after this identifier in display order. Excludes offset."
+              "maxLength": 512,
+              "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
             },
-            "description": "Return the items after this identifier in display order. Excludes offset.",
-            "required": false,
-            "deprecated": false,
-            "allowEmptyValue": false,
-            "allowReserved": false
-          },
-          {
-            "name": "before_id",
-            "in": "query",
-            "schema": {
-              "oneOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "minimum": 1,
-              "description": "Return the items before this identifier in display order. Excludes offset."
-            },
-            "description": "Return the items before this identifier in display order. Excludes offset.",
+            "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -15784,9 +15637,9 @@
                 }
               ],
               "maximum": 10000,
-              "description": "Number of items to skip. Excludes after_id and before_id."
+              "description": "Number of items to skip. Excludes cursor."
             },
-            "description": "Number of items to skip. Excludes after_id and before_id.",
+            "description": "Number of items to skip. Excludes cursor.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -16755,51 +16608,30 @@
                 }
               ],
               "maximum": 10000,
-              "description": "Number of items to skip. Excludes after_id and before_id."
+              "description": "Number of items to skip. Excludes cursor."
             },
-            "description": "Number of items to skip. Excludes after_id and before_id.",
+            "description": "Number of items to skip. Excludes cursor.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
             "allowReserved": false
           },
           {
-            "name": "after_id",
+            "name": "cursor",
             "in": "query",
             "schema": {
               "oneOf": [
                 {
-                  "type": "integer"
+                  "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "minimum": 1,
-              "description": "Return the items after this identifier in display order. Excludes offset."
+              "maxLength": 512,
+              "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
             },
-            "description": "Return the items after this identifier in display order. Excludes offset.",
-            "required": false,
-            "deprecated": false,
-            "allowEmptyValue": false,
-            "allowReserved": false
-          },
-          {
-            "name": "before_id",
-            "in": "query",
-            "schema": {
-              "oneOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "minimum": 1,
-              "description": "Return the items before this identifier in display order. Excludes offset."
-            },
-            "description": "Return the items before this identifier in display order. Excludes offset.",
+            "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -17456,9 +17288,9 @@
                 }
               ],
               "maximum": 10000,
-              "description": "Number of items to skip. Excludes after_id and before_id."
+              "description": "Number of items to skip. Excludes cursor."
             },
-            "description": "Number of items to skip. Excludes after_id and before_id.",
+            "description": "Number of items to skip. Excludes cursor.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -18499,7 +18331,7 @@
           "submissions"
         ],
         "summary": "ListCorrectionInbox",
-        "description": "List drafts needing staff correction oldest first, excluding attachment processing waits.\n\nDraft IDs are the page anchors; one that no longer needs attention returns PAGE_ANCHOR_NOT_FOUND.",
+        "description": "List drafts needing staff correction oldest first, excluding attachment processing waits.",
         "operationId": "submission_correction_inbox",
         "parameters": [
           {
@@ -18531,51 +18363,30 @@
                 }
               ],
               "maximum": 10000,
-              "description": "Number of items to skip. Excludes after_id and before_id."
+              "description": "Number of items to skip. Excludes cursor."
             },
-            "description": "Number of items to skip. Excludes after_id and before_id.",
+            "description": "Number of items to skip. Excludes cursor.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
             "allowReserved": false
           },
           {
-            "name": "after_id",
+            "name": "cursor",
             "in": "query",
             "schema": {
               "oneOf": [
                 {
-                  "type": "string",
-                  "format": "uuid"
+                  "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "Return the items after this identifier in display order. Excludes offset."
+              "maxLength": 512,
+              "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
             },
-            "description": "Return the items after this identifier in display order. Excludes offset.",
-            "required": false,
-            "deprecated": false,
-            "allowEmptyValue": false,
-            "allowReserved": false
-          },
-          {
-            "name": "before_id",
-            "in": "query",
-            "schema": {
-              "oneOf": [
-                {
-                  "type": "string",
-                  "format": "uuid"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Return the items before this identifier in display order. Excludes offset."
-            },
-            "description": "Return the items before this identifier in display order. Excludes offset.",
+            "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -20136,7 +19947,7 @@
           "submissions"
         ],
         "summary": "ListDraftAttempts",
-        "description": "List retained attempts newest first. Attempt numbers are the page anchors.",
+        "description": "List retained attempts newest first.",
         "operationId": "submission_attempts_list",
         "parameters": [
           {
@@ -20178,51 +19989,30 @@
                 }
               ],
               "maximum": 10000,
-              "description": "Number of items to skip. Excludes after_id and before_id."
+              "description": "Number of items to skip. Excludes cursor."
             },
-            "description": "Number of items to skip. Excludes after_id and before_id.",
+            "description": "Number of items to skip. Excludes cursor.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
             "allowReserved": false
           },
           {
-            "name": "after_id",
+            "name": "cursor",
             "in": "query",
             "schema": {
               "oneOf": [
                 {
-                  "type": "integer"
+                  "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "minimum": 1,
-              "description": "Return the items after this identifier in display order. Excludes offset."
+              "maxLength": 512,
+              "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
             },
-            "description": "Return the items after this identifier in display order. Excludes offset.",
-            "required": false,
-            "deprecated": false,
-            "allowEmptyValue": false,
-            "allowReserved": false
-          },
-          {
-            "name": "before_id",
-            "in": "query",
-            "schema": {
-              "oneOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "minimum": 1,
-              "description": "Return the items before this identifier in display order. Excludes offset."
-            },
-            "description": "Return the items before this identifier in display order. Excludes offset.",
+            "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -22817,51 +22607,30 @@
                 }
               ],
               "maximum": 10000,
-              "description": "Number of items to skip. Excludes after_id and before_id."
+              "description": "Number of items to skip. Excludes cursor."
             },
-            "description": "Number of items to skip. Excludes after_id and before_id.",
+            "description": "Number of items to skip. Excludes cursor.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
             "allowReserved": false
           },
           {
-            "name": "after_id",
+            "name": "cursor",
             "in": "query",
             "schema": {
               "oneOf": [
                 {
-                  "type": "string",
-                  "format": "uuid"
+                  "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "description": "Return the items after this identifier in display order. Excludes offset."
+              "maxLength": 512,
+              "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
             },
-            "description": "Return the items after this identifier in display order. Excludes offset.",
-            "required": false,
-            "deprecated": false,
-            "allowEmptyValue": false,
-            "allowReserved": false
-          },
-          {
-            "name": "before_id",
-            "in": "query",
-            "schema": {
-              "oneOf": [
-                {
-                  "type": "string",
-                  "format": "uuid"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "description": "Return the items before this identifier in display order. Excludes offset."
-            },
-            "description": "Return the items before this identifier in display order. Excludes offset.",
+            "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -23987,9 +23756,9 @@
                 }
               ],
               "maximum": 10000,
-              "description": "Number of items to skip. Excludes after_id and before_id."
+              "description": "Number of items to skip. Excludes cursor."
             },
-            "description": "Number of items to skip. Excludes after_id and before_id.",
+            "description": "Number of items to skip. Excludes cursor.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -24567,9 +24336,9 @@
                 }
               ],
               "maximum": 10000,
-              "description": "Number of items to skip. Excludes after_id and before_id."
+              "description": "Number of items to skip. Excludes cursor."
             },
-            "description": "Number of items to skip. Excludes after_id and before_id.",
+            "description": "Number of items to skip. Excludes cursor.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -25297,51 +25066,30 @@
                 }
               ],
               "maximum": 10000,
-              "description": "Number of items to skip. Excludes after_id and before_id."
+              "description": "Number of items to skip. Excludes cursor."
             },
-            "description": "Number of items to skip. Excludes after_id and before_id.",
+            "description": "Number of items to skip. Excludes cursor.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
             "allowReserved": false
           },
           {
-            "name": "after_id",
+            "name": "cursor",
             "in": "query",
             "schema": {
               "oneOf": [
                 {
-                  "type": "integer"
+                  "type": "string"
                 },
                 {
                   "type": "null"
                 }
               ],
-              "minimum": 1,
-              "description": "Return the items after this identifier in display order. Excludes offset."
+              "maxLength": 512,
+              "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
             },
-            "description": "Return the items after this identifier in display order. Excludes offset.",
-            "required": false,
-            "deprecated": false,
-            "allowEmptyValue": false,
-            "allowReserved": false
-          },
-          {
-            "name": "before_id",
-            "in": "query",
-            "schema": {
-              "oneOf": [
-                {
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "minimum": 1,
-              "description": "Return the items before this identifier in display order. Excludes offset."
-            },
-            "description": "Return the items before this identifier in display order. Excludes offset.",
+            "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
             "required": false,
             "deprecated": false,
             "allowEmptyValue": false,
@@ -26955,7 +26703,7 @@
           "title"
         ],
         "title": "BuildListSort",
-        "description": "A named display order for build listings.\n\nEach order is total, so identifier anchors work with all of them. `ID` lists the newest IDs\nfirst and seeks without looking up the anchor, which makes it the order for full traversal.\n",
+        "description": "A named display order for build listings.\n\nEach order is total, so cursors work with all of them. `ID` lists the newest IDs first and\nnever moves a row, which makes it the order for full traversal.\n",
         "default": "id"
       },
       "BuildMedia": {
@@ -29632,6 +29380,7 @@
           "INTERNAL_ERROR",
           "INVALID_BUILD",
           "INVALID_MESSAGE",
+          "INVALID_PAGE_CURSOR",
           "INVALID_QUERY",
           "INVALID_REQUEST",
           "INVALID_STATE",
@@ -29647,7 +29396,6 @@
           "MINECRAFT_ACCOUNT_NOT_FOUND",
           "MINECRAFT_SERVICE_UNAVAILABLE",
           "NOT_FOUND",
-          "PAGE_ANCHOR_NOT_FOUND",
           "PERSISTENCE_ERROR",
           "RATE_LIMITED",
           "RECORD_NOT_FOUND",
@@ -32213,28 +31961,10 @@
               }
             ]
           },
-          "after_id": {
+          "cursor": {
             "oneOf": [
               {
-                "type": "integer"
-              },
-              {
-                "type": "string",
-                "format": "uuid"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "before_id": {
-            "oneOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "string",
-                "format": "uuid"
+                "type": "string"
               },
               {
                 "type": "null"

@@ -1,6 +1,7 @@
-"""Bidirectional build paging preserves display order and agrees with count and offset queries."""
+"""Build paging by cursor preserves display order and agrees with count and offset queries."""
 
 from collections.abc import Sequence
+from dataclasses import replace
 from functools import partial
 
 import pytest
@@ -9,8 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from squid.core.accounts.models import Account
 from squid.core.builds.application.queries import BuildListSort
 from squid.core.builds.domain import BuildStatus
-from squid.core.builds.models import OtherBuild
-from squid.core.pagination import FIRST_PAGE, PageAnchorNotFoundError, PageSelector
+from squid.core.builds.models import Build, OtherBuild
+from squid.core.pagination import FIRST_PAGE, InvalidPageCursorError, Page, PageAnchor, PageSelector
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.unit_of_work import UnitOfWorkFactory
 from tests.support.build_edits import build_edit_session
@@ -47,55 +48,56 @@ async def seed(session_factory: async_sessionmaker[AsyncSession], count: int) ->
     return identifiers
 
 
-async def page_ids(
+async def page(
     repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     *,
     selector: PageSelector = FIRST_PAGE,
-    limit: int = 2,
+    page_size: int = 2,
     sort: BuildListSort = BuildListSort.ID,
-) -> Sequence[int]:
-    builds = await transact(
+) -> Page[Build]:
+    return await transact(
         repository,
-        lambda uow: uow.builds.list_page(
-            statuses=_CONFIRMED,
-            submitter_account_id=None,
-            sort=sort,
-            offset=selector.offset,
-            after_id=selector.after_id,
-            before_id=selector.before_id,
-            limit=limit,
-        ),
+        lambda uow: uow.builds.list_page(statuses=_CONFIRMED, sort=sort, selector=selector, page_size=page_size),
     )
+
+
+def ids(page: Page[Build]) -> list[int]:
     # ORM identity columns may still be None before flush.
-    return [build.id for build in builds if build.id is not None]  # pyright: ignore[reportUnnecessaryComparison]
+    return [build.id for build in page.items if build.id is not None]  # pyright: ignore[reportUnnecessaryComparison]
 
 
-async def test_a_backward_page_comes_back_in_display_order(
+def follow(anchor: PageAnchor | None) -> PageSelector:
+    assert anchor is not None
+    return anchor.selector()
+
+
+async def test_going_back_returns_the_previous_page_in_display_order(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     identifiers = await seed(migrated_session_factory, 5)
     repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     newest_first = list(reversed(identifiers))
 
-    forward = await page_ids(repository, selector=PageSelector(after_id=newest_first[1]))
-    backward = await page_ids(repository, selector=PageSelector(before_id=newest_first[3]))
+    first = await page(repository)
+    second = await page(repository, selector=follow(first.next))
+    back = await page(repository, selector=follow(second.prev))
 
-    assert list(forward) == newest_first[2:4]
-    # Walking back from the fourth row returns the preceding two rows, newest first.
-    assert list(backward) == newest_first[1:3]
+    assert ids(second) == newest_first[2:4]
+    assert ids(back) == ids(first) == newest_first[:2]
+    assert back.prev is None
 
 
-async def test_an_offset_page_and_a_keyset_page_agree(
+async def test_an_offset_page_and_a_cursor_page_agree(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    identifiers = await seed(migrated_session_factory, 5)
+    await seed(migrated_session_factory, 5)
     repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
-    newest_first = list(reversed(identifiers))
 
-    by_offset = await page_ids(repository, selector=PageSelector(offset=2))
-    by_anchor = await page_ids(repository, selector=PageSelector(after_id=newest_first[1]))
+    by_offset = await page(repository, selector=PageSelector(offset=2))
+    by_cursor = await page(repository, selector=follow((await page(repository)).next))
 
-    assert list(by_offset) == list(by_anchor) == newest_first[2:4]
+    assert ids(by_offset) == ids(by_cursor)
+    assert by_offset.next == PageAnchor(offset=4)
 
 
 async def test_the_total_matches_what_paging_actually_returns(
@@ -104,22 +106,14 @@ async def test_the_total_matches_what_paging_actually_returns(
     await seed(migrated_session_factory, 5)
     repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
 
-    total = await transact(repository, lambda uow: uow.builds.count(statuses=_CONFIRMED, submitter_account_id=None))
-    walked: list[int] = []
-    selector = FIRST_PAGE
-    while True:
-        # The third row is a sentinel; display two and advance from the last displayed row.
-        rows = list(await page_ids(repository, selector=selector, limit=3))
-        if not rows:
-            break
-        walked.extend(rows[:2])
-        if len(rows) <= 2:
-            break
-        selector = PageSelector(after_id=walked[-1])
+    current = await page(repository)
+    walked = ids(current)
+    while current.next is not None:
+        current = await page(repository, selector=follow(current.next))
+        walked.extend(ids(current))
 
-    assert total == 5
-    assert len(walked) == total
-    assert len(set(walked)) == total
+    assert current.total == 5
+    assert len(set(walked)) == len(walked) == 5
 
 
 async def set_widths(
@@ -137,38 +131,64 @@ async def test_volume_order_places_tied_builds_before_unknown_dimensions(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     identifiers = await seed(migrated_session_factory, 4)
-    factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     await set_widths(migrated_session_factory, identifiers, (3, None, 2, 2))
-    async with factory() as uow:
-        ordered = await uow.builds.list_page(statuses=_CONFIRMED, sort=BuildListSort.SMALLEST_VOLUME, limit=4)
-        assert [item.id for item in ordered] == [identifiers[2], identifiers[3], identifiers[0], identifiers[1]]
+
+    ordered = await page(repository, sort=BuildListSort.SMALLEST_VOLUME, page_size=4)
+
+    assert ids(ordered) == [identifiers[2], identifiers[3], identifiers[0], identifiers[1]]
 
 
-@pytest.mark.parametrize("sort", [BuildListSort.SMALLEST_VOLUME, BuildListSort.UPDATED, BuildListSort.NEWEST])
-async def test_anchors_walk_a_sorted_listing_through_ties_and_unknown_values(
+@pytest.mark.parametrize(
+    "sort", [BuildListSort.SMALLEST_VOLUME, BuildListSort.UPDATED, BuildListSort.NEWEST, BuildListSort.TITLE]
+)
+async def test_cursors_walk_a_sorted_listing_through_ties_and_unknown_values(
     migrated_session_factory: async_sessionmaker[AsyncSession], sort: BuildListSort
 ) -> None:
     identifiers = await seed(migrated_session_factory, 6)
     repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
     await set_widths(migrated_session_factory, identifiers, (3, None, 2, 2, None, 1))
-    display = list(await page_ids(repository, sort=sort, limit=6))
+    display = ids(await page(repository, sort=sort, page_size=6))
 
-    for index, anchor in enumerate(display):
-        after = await page_ids(repository, selector=PageSelector(after_id=anchor), sort=sort, limit=6)
-        before = await page_ids(repository, selector=PageSelector(before_id=anchor), sort=sort, limit=6)
-        assert list(after) == display[index + 1 :]
-        assert list(before) == display[:index]
+    forward = [await page(repository, sort=sort, page_size=1)]
+    while forward[-1].next is not None:
+        forward.append(await page(repository, selector=follow(forward[-1].next), sort=sort, page_size=1))
+    backward = [forward[-1]]
+    while backward[-1].prev is not None:
+        backward.append(await page(repository, selector=follow(backward[-1].prev), sort=sort, page_size=1))
+
+    assert [build_id for item in forward for build_id in ids(item)] == display
+    assert [build_id for item in reversed(backward) for build_id in ids(item)] == display
 
 
-async def test_a_sorted_anchor_outside_the_listing_is_rejected(
+async def test_a_cursor_survives_its_boundary_row_leaving_the_listing(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
-    identifiers = await seed(migrated_session_factory, 2)
+    identifiers = await seed(migrated_session_factory, 4)
     repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
-    missing = max(identifiers) + 100
+    first = await page(repository, sort=BuildListSort.NEWEST)
+    async with SqlAlchemyUnitOfWork(migrated_session_factory) as uow, uow.builds.editing(actor="test", source="test"):
+        boundary = await uow.builds.get_for_update(ids(first)[-1])
+        assert boundary is not None
+        boundary.submission_status = BuildStatus.PENDING
+        await uow.commit()
 
-    with pytest.raises(PageAnchorNotFoundError):
-        await page_ids(repository, selector=PageSelector(after_id=missing), sort=BuildListSort.SMALLEST_VOLUME)
-    # The ID sort seeks on the anchor itself, so a deleted anchor still continues the walk.
-    assert list(await page_ids(repository, selector=PageSelector(before_id=missing))) == []
-    assert list(await page_ids(repository, selector=PageSelector(after_id=missing))) == sorted(identifiers)[::-1]
+    second = await page(repository, selector=follow(first.next), sort=BuildListSort.NEWEST)
+
+    assert ids(second) == list(reversed(identifiers))[2:]
+
+
+async def test_a_cursor_from_another_sort_is_rejected(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await seed(migrated_session_factory, 3)
+    repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
+    newest = await page(repository, sort=BuildListSort.NEWEST)
+    assert newest.next is not None
+    assert newest.next.cursor is not None
+    mistyped = replace(newest.next.cursor, key="yesterday")
+
+    with pytest.raises(InvalidPageCursorError):
+        await page(repository, selector=follow(newest.next), sort=BuildListSort.OLDEST)
+    with pytest.raises(InvalidPageCursorError):
+        await page(repository, selector=PageSelector(cursor=mistyped), sort=BuildListSort.NEWEST)

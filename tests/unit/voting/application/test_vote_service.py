@@ -8,7 +8,7 @@ from whenever import Instant
 
 from squid.core.actors import ActingContext, AnonymousActor, UserActor
 from squid.core.errors import AuthenticationError, AuthorizationError
-from squid.core.pagination import FIRST_PAGE, PageSelector
+from squid.core.pagination import Page, PageSelector, offset_page
 from squid.core.permissions.domain.catalogue import VOTE_LOG_DELETE_CAST, VOTE_WEIGHT_STAFF
 from squid.core.permissions.models import PermissionGrant
 from squid.core.voting.application import VoteService
@@ -176,15 +176,13 @@ class FakeVoteRepository:
         return [] if self.session is None or self.session.kind is not kind else [self.session]
 
     async def list_reviews(
-        self, filters: ReviewFilters, *, sort: ReviewSort, selector: PageSelector, limit: int
-    ) -> Sequence[VoteSessionSnapshot]:
+        self, filters: ReviewFilters, *, sort: ReviewSort, selector: PageSelector, page_size: int
+    ) -> Page[VoteSessionSnapshot]:
         session = self.session
-        if session is None or session.kind not in filters.vote_kinds:
-            return []
-        return [] if filters.status not in (None, session.status) else [session]
-
-    async def count_reviews(self, filters: ReviewFilters) -> int:
-        return len(await self.list_reviews(filters, sort=ReviewSort.NEWEST, selector=FIRST_PAGE, limit=1))
+        visible = (
+            session is not None and session.kind in filters.vote_kinds and filters.status in (None, session.status)
+        )
+        return offset_page([session] if visible and session else [], offset=selector.offset, page_size=page_size)
 
     async def cast_vote(
         self,

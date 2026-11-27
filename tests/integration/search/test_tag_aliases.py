@@ -371,8 +371,10 @@ async def test_catalogue_listing_filters_by_tag_id_and_slug(
 
     async def listed(filters: BuildListFilters) -> list[int]:
         async with SqlAlchemyUnitOfWork(migrated_session_factory) as uow:
-            builds = await uow.builds.list_page(statuses=frozenset({BuildStatus.APPROVED}), filters=filters, limit=10)
-        return [build.id for build in builds]
+            builds = await uow.builds.list_page(
+                statuses=frozenset({BuildStatus.APPROVED}), filters=filters, page_size=10
+            )
+        return [build.id for build in builds.items]
 
     assert await listed(BuildListFilters(tag_ids=(tag_id,))) == [target_id]
     assert await listed(BuildListFilters(tag_slugs=(slug,))) == [target_id]

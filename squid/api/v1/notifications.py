@@ -13,8 +13,7 @@ from squid.api.dependencies import Notifications, Services, get_notifications
 from squid.api.errors import responses
 from squid.api.idempotency import edit_operation_id, reserve_edit_request
 from squid.api.pagination import (
-    AfterIdParam,
-    BeforeIdParam,
+    CursorParam,
     OffsetParam,
     PageSizeParam,
     resolve_selector,
@@ -247,13 +246,12 @@ async def list_inbox(
     caller: UserCaller,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
-    after_id: AfterIdParam = None,
-    before_id: BeforeIdParam = None,
+    cursor: CursorParam = None,
     unread_only: Annotated[bool, QueryParameter(description="Only list unread items.")] = False,
 ) -> InboxPage:
     """List the caller's web-visible inbox, hiding staff items after access revocation."""
     _account_id(caller)
-    selector = resolve_selector(offset=offset, after_id=after_id, before_id=before_id)
+    selector = resolve_selector(offset=offset, cursor=cursor)
     inbox = await notifications.inbox(
         context=caller.context(), selector=selector, page_size=page_size, unread_only=unread_only
     )

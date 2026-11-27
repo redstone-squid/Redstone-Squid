@@ -24,7 +24,7 @@ from squid.core.builds.application.queries import PublicBuildCreator, PublicBuil
 from squid.core.builds.domain import BuildCategory
 from squid.core.builds.domain.expansion import DoorExpansion, ExpansionBranch
 from squid.core.builds.domain.expansion_evaluation import PointStatus
-from squid.core.pagination import Page, PageAnchor
+from squid.core.pagination import Page, PageAnchor, PageCursor
 from squid.core.records.application import PublicRecordQueryService
 from squid.core.records.application.expansion_regions import (
     DoorRangeQuery,
@@ -97,7 +97,9 @@ async def test_record_listing_serializes_holders_and_metrics_and_passes_filters(
         {42: _holder()},
     )
     records = create_autospec(PublicRecordQueryService, instance=True)
-    records.list_page.return_value = Page(items=(record,), total=2, next=PageAnchor(after_id=7), prev=None)
+    records.list_page.return_value = Page(
+        items=(record,), total=2, next=PageAnchor(cursor=PageCursor("title", "x", 7)), prev=None
+    )
     handler = get("/records", dependencies={"records": Provide(lambda: records, sync_to_thread=False)})(list_records.fn)
     app = Litestar([handler], dependencies={"caller": Provide(lambda: ANONYMOUS, sync_to_thread=False)})
 

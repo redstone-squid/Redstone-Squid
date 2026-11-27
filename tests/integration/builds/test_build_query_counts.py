@@ -70,15 +70,14 @@ async def test_list_page_query_count_does_not_grow_with_the_page(
     repository = partial(SqlAlchemyUnitOfWork, migrated_session_factory)
 
     with record_queries(migrated_session_factory) as statements:
-        builds = await transact(
+        page = await transact(
             repository,
-            lambda uow: uow.builds.list_page(
-                statuses=frozenset({BuildStatus.PENDING}), submitter_account_id=None, after_id=None, limit=50
-            ),
+            lambda uow: uow.builds.list_page(statuses=frozenset({BuildStatus.PENDING}), page_size=50),
         )
 
-    assert len(builds) == count
-    assert len(statements) == _EXPECTED_PAGE_QUERIES, "\n".join(statements)
+    assert len(page.items) == count
+    # One more query counts the page's total.
+    assert len(statements) == _EXPECTED_PAGE_QUERIES + 1, "\n".join(statements)
 
 
 async def test_get_many_batches_cross_context_loads(

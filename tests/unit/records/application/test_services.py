@@ -16,7 +16,7 @@ from squid.core.builds.domain import BuildCategory
 from squid.core.builds.domain.expansion import DoorExpansion, ExpansionBranch, ExpansionParameter, ExpansionTiming
 from squid.core.builds.domain.expansion_evaluation import PointStatus
 from squid.core.errors import DataIntegrityError, ServiceUnavailableError
-from squid.core.pagination import FIRST_PAGE, PageSelector
+from squid.core.pagination import FIRST_PAGE, Page, PageSelector, offset_page
 from squid.core.permissions.application.services import PermissionService
 from squid.core.permissions.errors import PermissionDeniedError
 from squid.core.records.application.expansion_regions import (
@@ -181,9 +181,10 @@ class FakeRuns:
         selector: PageSelector = FIRST_PAGE,
         sort: RecordListSort = RecordListSort.ID,
         filters: RecordListFilters = ALL_RECORDS,
-        limit: int,
-    ) -> Sequence[PublishedRecordResult]:
+        page_size: int,
+    ) -> Page[PublishedRecordResult]:
         assert sort is RecordListSort.ID
+        assert selector.cursor is None
         ordered = sorted(
             (
                 key
@@ -192,12 +193,9 @@ class FakeRuns:
             ),
             reverse=True,
         )
-        if selector.before_id is not None:
-            kept = [rid for rid in ordered if rid > selector.before_id]
-            return tuple(self.published_records[rid] for rid in kept[-limit:])
-        if selector.after_id is not None:
-            ordered = [rid for rid in ordered if rid < selector.after_id]
-        return tuple(self.published_records[rid] for rid in ordered[selector.offset : selector.offset + limit])
+        return offset_page(
+            [self.published_records[rid] for rid in ordered], offset=selector.offset, page_size=page_size
+        )
 
     async def count_published_records(self, *, filters: RecordListFilters = ALL_RECORDS) -> int:
         return sum(
@@ -248,13 +246,8 @@ class FakeRuns:
     async def list_recompute_queue(self) -> Sequence[RecomputeItem]:
         return ()
 
-    async def list_drift(
-        self, *, offset: int, after_id: int | None, before_id: int | None, limit: int
-    ) -> Sequence[RecordDrift]:
-        return ()
-
-    async def count_drift(self) -> int:
-        return 0
+    async def list_drift(self, *, selector: PageSelector = FIRST_PAGE, page_size: int) -> Page[RecordDrift]:
+        return offset_page((), offset=selector.offset, page_size=page_size)
 
 
 def _full(*kinds: BuildKind) -> tuple[RecomputeLease, ...]:

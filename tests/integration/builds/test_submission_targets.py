@@ -135,10 +135,10 @@ async def test_repository_round_trips_and_updates_every_manifest_category(
     account_page = await transact(
         repository,
         lambda uow: uow.builds.list_page(
-            statuses=frozenset({BuildStatus.PENDING}), submitter_account_id=account_id, after_id=None, limit=10
+            statuses=frozenset({BuildStatus.PENDING}), submitter_account_id=account_id, page_size=10
         ),
     )
-    assert {build.category for build in account_page} == set(BuildCategory)
+    assert {build.category for build in account_page.items} == set(BuildCategory)
 
     for build in loaded:
         assert build is not None

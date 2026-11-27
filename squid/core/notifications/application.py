@@ -22,7 +22,7 @@ from squid.core.notifications.domain import (
     SubscriptionTarget,
 )
 from squid.core.notifications.models import InboxNotification, NotificationSubscription
-from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
+from squid.core.pagination import FIRST_PAGE, Page, PageSelector
 from squid.core.permissions.application.services import PermissionService
 from squid.core.permissions.domain.catalogue import ACCOUNT_SELF_READ, BUILD_SUBMISSION_VIEW_PENDING
 from squid.core.settings.domain.runtime import RuntimeSettings
@@ -107,13 +107,11 @@ class NotificationRepository(Protocol):
         self,
         account_id: int,
         *,
-        offset: int,
-        after_id: int | None,
-        before_id: int | None,
-        limit: int,
+        selector: PageSelector,
+        page_size: int,
         visibility: InboxVisibility,
         unread_only: bool = False,
-    ) -> Sequence[InboxNotification]: ...
+    ) -> Page[InboxNotification]: ...
 
     async def count_inbox(self, account_id: int, *, visibility: InboxVisibility, unread_only: bool = False) -> int: ...
 
@@ -248,23 +246,14 @@ class NotificationService:
             if not 1 <= page_size <= 100:
                 msg = tr(t"notifications-page-size = page_size must be between 1 and 100")
                 raise InvalidStateError(msg)
-            rows = await uow.notifications.list_inbox(
-                account_id,
-                offset=selector.offset,
-                after_id=selector.after_id,
-                before_id=selector.before_id,
-                # One row past the page proves whether another page follows.
-                limit=page_size + 1,
-                visibility=visibility,
-                unread_only=unread_only,
+            page = await uow.notifications.list_inbox(
+                account_id, selector=selector, page_size=page_size, visibility=visibility, unread_only=unread_only
             )
-            total = await uow.notifications.count_inbox(account_id, visibility=visibility, unread_only=unread_only)
             unread = (
-                total
+                page.total
                 if unread_only
                 else await uow.notifications.count_inbox(account_id, visibility=visibility, unread_only=True)
             )
-            page = keyset_page(rows, selector=selector, page_size=page_size, total=total, id_of=lambda item: item.id)
             build_ids = sorted({build_id for row in page.items if type(build_id := row.payload.get("build_id")) is int})
             titles = {build.id: build.one_line_title for build in await uow.builds.get_many(build_ids)}
         entries = tuple(

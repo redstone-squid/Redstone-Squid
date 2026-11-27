@@ -686,8 +686,8 @@ class MockSubmissionDrafts(SubmissionDraftService):
 
     @override
     async def attention_inbox(
-        self, *, context: ActingContext, selector: PageSelector[UUID] = FIRST_PAGE, page_size: int = 20
-    ) -> Page[StoredDraft, UUID]:
+        self, *, context: ActingContext, selector: PageSelector = FIRST_PAGE, page_size: int = 20
+    ) -> Page[StoredDraft]:
         return offset_page((), offset=selector.offset, page_size=page_size)
 
     @override

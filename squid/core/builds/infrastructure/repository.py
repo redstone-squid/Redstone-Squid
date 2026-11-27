@@ -66,7 +66,7 @@ from squid.core.errors import DataIntegrityError, InvalidStateError, Persistence
 from squid.core.events.infrastructure.repository import publish_domain_event
 from squid.core.messages.domain import MessageSnapshot
 from squid.core.messages.models import Message
-from squid.core.pagination import PageSelector
+from squid.core.pagination import FIRST_PAGE, Page, PageSelector
 from squid.core.persistence.paging import KeysetOrder
 from squid.core.records.models import DoorTimingVariant, ExtenderTimingVariant
 from squid.core.search.models import SearchDocument
@@ -386,32 +386,27 @@ class BuildRepository:
         filters: BuildListFilters = EMPTY_BUILD_FILTERS,
         submitter_account_id: int | None = None,
         sort: BuildListSort = BuildListSort.ID,
-        offset: int = 0,
-        after_id: int | None = None,
-        before_id: int | None = None,
-        limit: int,
-    ) -> list[Build]:
+        selector: PageSelector = FIRST_PAGE,
+        page_size: int,
+    ) -> Page[Build]:
         """Load a page in display order, filtered by status and optional submitter.
 
-        Ties in the sort value fall back to the ID, and unknown values sort last, so the order is
-        total and ID anchors work with every sort. Except for the ID sort, an anchor outside the
-        filtered listing raises PageAnchorNotFoundError. A `before_id` page is fetched in reversed
-        order and restored in memory; its overfetched row therefore sits at the front for the
-        caller to trim.
+        Ties in the sort value fall back to the ID and unknown values sort last, so every sort is total.
         """
-        if not statuses or limit <= 0:
-            return []
+        if not statuses:
+            return Page((), 0, None, None)
         session = self._session()
         listing = filter_build_listing(
             select(Build), statuses=statuses, submitter_account_id=submitter_account_id, filters=filters
         )
-        reverse = before_id is not None
-        statement = await _build_order(sort).apply(
-            session, listing, PageSelector(offset=offset, after_id=after_id, before_id=before_id)
+        page = await _build_order(sort).page(
+            session,
+            listing.options(*_mapper_load_options()),
+            selector,
+            page_size=page_size,
+            total=await self.count(statuses=statuses, filters=filters, submitter_account_id=submitter_account_id),
         )
-        rows = (await session.scalars(statement.limit(limit).options(*_mapper_load_options()))).unique().all()
-        ordered = list(reversed(rows)) if reverse else list(rows)
-        return await self._loader.load_many(session, ordered)
+        return replace(page, items=tuple(await self._loader.load_many(session, list(page.items))))
 
     async def count(
         self,
@@ -1014,23 +1009,27 @@ def _build_order(sort: BuildListSort) -> KeysetOrder:
     """Return the keyset order a build listing displays in."""
     match sort:
         case BuildListSort.ID:
-            return KeysetOrder(Build.id, Build.id, descending=True)
+            return KeysetOrder(sort, Build.id, Build.id, descending=True)
         case BuildListSort.NEWEST:
-            return KeysetOrder(Build.submission_time, Build.id, descending=True)
+            return KeysetOrder(sort, Build.submission_time, Build.id, descending=True)
         case BuildListSort.OLDEST:
-            return KeysetOrder(Build.submission_time, Build.id, descending=False)
+            return KeysetOrder(sort, Build.submission_time, Build.id, descending=False)
         case BuildListSort.UPDATED:
-            return KeysetOrder(Build.edited_time, Build.id, descending=True)
+            return KeysetOrder(sort, Build.edited_time, Build.id, descending=True)
         case BuildListSort.FASTEST_OPEN:
             doors = DoorBuild.__table__.c
             opening = select(doors.normal_opening_time).where(doors.build_id == Build.id).scalar_subquery()
-            return KeysetOrder(opening, Build.id, descending=False)
+            return KeysetOrder(sort, opening, Build.id, descending=False)
         case BuildListSort.SMALLEST_VOLUME:
-            return KeysetOrder(Build.width.cast(BigInteger) * Build.height * Build.depth, Build.id, descending=False)
+            return KeysetOrder(
+                sort, Build.width.cast(BigInteger) * Build.height * Build.depth, Build.id, descending=False
+            )
         case BuildListSort.TITLE:
             indexed = (
                 select(SearchDocument.title)
                 .where(SearchDocument.resource_kind == "build", SearchDocument.source_key == Build.id.cast(String))
                 .scalar_subquery()
             )
-            return KeysetOrder(func.lower(func.coalesce(Build.display_name, indexed)), Build.id, descending=False)
+            return KeysetOrder(
+                sort, func.lower(func.coalesce(Build.display_name, indexed), type_=String), Build.id, descending=False
+            )

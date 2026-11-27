@@ -17,7 +17,7 @@ from squid.core.media.domain import MediaKind
 from squid.core.media.domain.jobs import MediaJobStatus
 from squid.core.media.models import MediaDraftReference, MediaProcessingJobRecord, MediaUploadRecord
 from squid.core.messages.domain import MessageSnapshot
-from squid.core.pagination import FIRST_PAGE, PageAnchorNotFoundError, PageSelector
+from squid.core.pagination import FIRST_PAGE, PageSelector
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.submissions.application import StoredDraft
 from squid.core.submissions.domain import (
@@ -597,17 +597,17 @@ async def test_staff_edit_retains_owner_and_records_actual_actor(
     await transact(drafts, lambda uow: uow.submission_drafts.create(stored), commit=True)
     assert [
         draft.snapshot.id
-        for draft in await transact(
-            drafts, lambda uow: uow.submission_drafts.list_attention(selector=FIRST_PAGE, limit=1, now=NOW)
-        )
+        for draft in (
+            await transact(
+                drafts, lambda uow: uow.submission_drafts.list_attention(selector=FIRST_PAGE, page_size=1, now=NOW)
+            )
+        ).items
     ] == [DRAFT_ID]
-    assert (
-        await transact(
-            drafts, lambda uow: uow.submission_drafts.list_attention(selector=PageSelector(offset=1), limit=1, now=NOW)
-        )
-        == ()
+    later = await transact(
+        drafts, lambda uow: uow.submission_drafts.list_attention(selector=PageSelector(offset=1), page_size=1, now=NOW)
     )
-    assert await transact(drafts, lambda uow: uow.submission_drafts.count_attention(now=NOW)) == 1
+    assert later.items == ()
+    assert later.total == 1
     changed = await transact(
         drafts,
         lambda uow: uow.submission_drafts.apply_change(
@@ -623,15 +623,7 @@ async def test_staff_edit_retains_owner_and_records_actual_actor(
     assert changed.draft.snapshot.owner_account_id == account_id
     async with async_session_factory() as session:
         assert await session.scalar(select(SubmissionDraftChange.actor_account_id)) == staff_id
-    assert (
-        await transact(drafts, lambda uow: uow.submission_drafts.list_attention(selector=FIRST_PAGE, limit=1, now=NOW))
-        == ()
+    corrected = await transact(
+        drafts, lambda uow: uow.submission_drafts.list_attention(selector=FIRST_PAGE, page_size=1, now=NOW)
     )
-    # The corrected draft left the inbox, so it can no longer anchor a page.
-    with pytest.raises(PageAnchorNotFoundError):
-        await transact(
-            drafts,
-            lambda uow: uow.submission_drafts.list_attention(
-                selector=PageSelector(after_id=DRAFT_ID), limit=1, now=NOW
-            ),
-        )
+    assert corrected.items == ()

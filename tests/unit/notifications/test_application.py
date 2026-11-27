@@ -20,6 +20,7 @@ from squid.core.notifications.edits import (
     notification_target,
 )
 from squid.core.notifications.errors import NotificationSubscriptionNotFoundError
+from squid.core.pagination import Page
 from squid.core.permissions.application.services import PermissionService
 from squid.core.permissions.domain.catalogue import ACCOUNT_SELF_READ, BUILD_SUBMISSION_VIEW_PENDING
 from squid.core.settings.domain.runtime import RuntimeSettings
@@ -98,7 +99,7 @@ async def test_cleanup_reads_retention_each_time() -> None:
 @pytest.mark.parametrize("staff", [True, False])
 async def test_inbox_checks_the_reader_and_filters_staff_rows(staff: bool) -> None:
     repository = AsyncMock(spec=NotificationRepository)
-    repository.list_inbox.return_value = ()
+    repository.list_inbox.return_value = Page((), 0, None, None)
     repository.count_inbox.return_value = 0
     permissions = AsyncMock(spec=PermissionService)
     permissions.check.return_value.allowed = staff

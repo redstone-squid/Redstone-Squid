@@ -2,7 +2,6 @@
 
 from collections.abc import Callable, Sequence
 from typing import Any, cast, override
-from uuid import UUID
 
 from sqlalchemy import Select, delete, func, or_, select
 from sqlalchemy.engine import CursorResult
@@ -12,7 +11,7 @@ from whenever import Date, Instant
 from squid.core.diagnostics.application import ErrorReportRepository
 from squid.core.diagnostics.domain import EVERY_REPORT, ErrorReportDayCount, ErrorReportFilters
 from squid.core.diagnostics.models import ErrorReport
-from squid.core.pagination import PageSelector
+from squid.core.pagination import Page, PageSelector
 from squid.core.persistence.paging import KeysetOrder
 
 
@@ -52,16 +51,13 @@ class PostgresErrorReportRepository(ErrorReportRepository):
 
     @override
     async def list_recent(
-        self, *, selector: PageSelector[UUID], limit: int, now: Instant, filters: ErrorReportFilters = EVERY_REPORT
-    ) -> Sequence[ErrorReport]:
-        """Read reports newest first; a `before_id` page is read in reverse and restored to that order."""
-        session = self._session()
-        order = KeysetOrder(ErrorReport.occurred_at, ErrorReport.id, descending=True)
+        self, *, selector: PageSelector, page_size: int, now: Instant, filters: ErrorReportFilters = EVERY_REPORT
+    ) -> Page[ErrorReport]:
+        order = KeysetOrder("newest", ErrorReport.occurred_at, ErrorReport.id, descending=True)
         listing = _unexpired(select(ErrorReport), now, filters)
-        rows = (await session.scalars((await order.apply(session, listing, selector)).limit(limit))).all()
-        return rows[::-1] if selector.before_id is not None else rows
+        total = await self.count_recent(now=now, filters=filters)
+        return await order.page(self._session(), listing, selector, page_size=page_size, total=total)
 
-    @override
     async def count_recent(self, *, now: Instant, filters: ErrorReportFilters = EVERY_REPORT) -> int:
         statement = _unexpired(select(func.count()).select_from(ErrorReport), now, filters)
         return await self._session().scalar(statement) or 0

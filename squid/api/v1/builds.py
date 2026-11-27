@@ -25,8 +25,7 @@ from squid.api.i18n import locale_for_request
 from squid.api.idempotency import edit_operation_id, reserve_edit_before_request
 from squid.api.media_files import media_file
 from squid.api.pagination import (
-    AfterIdParam,
-    BeforeIdParam,
+    CursorParam,
     OffsetParam,
     Page,
     PageSizeParam,
@@ -242,8 +241,7 @@ async def list_builds(
     sort: FromQuery[BuildListSort] = BuildListSort.ID,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
-    after_id: AfterIdParam = None,
-    before_id: BeforeIdParam = None,
+    cursor: CursorParam = None,
 ) -> Response[Page[PublicBuildSummary]]:
     """List builds in a named order, approved ones unless another status is selected.
 
@@ -270,7 +268,7 @@ async def list_builds(
             public_account_id=account_id,
         ),
         sort=sort,
-        selector=resolve_selector(offset=offset, after_id=after_id, before_id=before_id),
+        selector=resolve_selector(offset=offset, cursor=cursor),
         page_size=page_size,
         context=caller.context(),
     )

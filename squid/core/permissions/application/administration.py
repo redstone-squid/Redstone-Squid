@@ -24,7 +24,7 @@ from whenever import Instant
 from squid.core.actors import ActingContext, Actor, UserActor, application_operation
 from squid.core.errors import AuthorizationError, ConflictError, NotFoundError, ServiceUnavailableError, ValidationError
 from squid.core.i18n import tr
-from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
+from squid.core.pagination import FIRST_PAGE, Page, PageSelector
 from squid.core.permissions.application.ports import AuditEntry, PermissionAdminUnitOfWork
 from squid.core.permissions.application.roles import PermissionRuleSnapshot
 from squid.core.permissions.application.services import PermissionService
@@ -534,7 +534,7 @@ class PermissionAdministrationService:
     ) -> tuple[PermissionAuditEntry, ...]:
         """The most recent permission mutations."""
         async with self._read() as uow:
-            return await uow.permission_admin.list_audit(guild_id=guild_id, limit=limit)
+            return (await uow.permission_admin.list_audit(guild_id=guild_id, page_size=limit)).items
 
     @application_operation
     async def audit_page(
@@ -542,14 +542,12 @@ class PermissionAdministrationService:
         *,
         context: ActingContext,
         guild_id: int | None = None,
-        selector: PageSelector[int] = FIRST_PAGE,
+        selector: PageSelector = FIRST_PAGE,
         page_size: int = 20,
-    ) -> Page[PermissionAuditEntry, int]:
-        """Page permission mutations newest first, anchored by entry ID."""
+    ) -> Page[PermissionAuditEntry]:
+        """Page permission mutations newest first."""
         async with self._read() as uow:
-            rows = await uow.permission_admin.list_audit(guild_id=guild_id, limit=page_size + 1, selector=selector)
-            total = await uow.permission_admin.count_audit(guild_id=guild_id)
-        return keyset_page(rows, selector=selector, page_size=page_size, total=total, id_of=lambda entry: entry.id)
+            return await uow.permission_admin.list_audit(guild_id=guild_id, selector=selector, page_size=page_size)
 
     @application_operation
     async def stored_grant(self, grant_id: int, *, context: ActingContext) -> PermissionGrant:

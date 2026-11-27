@@ -43,7 +43,7 @@ class RecordSource:
             filters=RecordListFilters(version_scope=self._version_scope),
             context=ActingContext.current(),
         )
-        # This source exposes offset jumps; the service may return ID links at offset zero.
+        # This source exposes offset jumps; the service may return cursor links at offset zero.
         return sl.sources.Batch(
             sl.sources.Position(str(page.items[0].result_id) if page.items else None, position.offset),
             page.items,

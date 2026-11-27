@@ -28,13 +28,13 @@ from squid.bot.ui import tr, truncate_display_text
 from squid.bot.utils.permissions import Grants
 from squid.core.accounts.application import AccountService
 from squid.core.actors import ActingContext, Actor
-from squid.core.builds.application import BuildQueryService, BuildService
+from squid.core.builds.application import BuildListSort, BuildQueryService, BuildService
 from squid.core.builds.application.edits import BUILD_STATUS_EDIT, build_target
 from squid.core.builds.domain import BuildStatus, Credit, CreditRole, EditAccess
 from squid.core.builds.models import Build
 from squid.core.edits.application import EditRunner
 from squid.core.edits.domain import EditValues
-from squid.core.pagination import PageSelector
+from squid.core.pagination import PageCursor, PageSelector
 from squid.core.permissions.domain.catalogue import (
     BUILD_SUBMISSION_APPROVE,
     BUILD_SUBMISSION_EDIT,
@@ -97,7 +97,7 @@ class _BuildSource:
             page_size=fetch_size,
             context=ActingContext.current(),
         )
-        # This source exposes offset jumps; the service may return ID links at offset zero.
+        # This source exposes offset jumps; the service may return cursor links at offset zero.
         return sl.sources.Batch(
             sl.sources.Position(str(page.items[0].id) if page.items else None, position.offset),
             page.items,
@@ -139,23 +139,24 @@ class _NeighbourBuildSource:
             if build is None or build.submission_status not in self.statuses:
                 return sl.sources.Batch(sl.sources.Position(), ())
             return self.initial(build).batch
-        selector = (
-            PageSelector(before_id=build_id)
-            if position.direction is sl.sources.Direction.BACKWARD
-            else PageSelector(after_id=build_id)
-        )
+        # Under the ID sort a build's ID is its sort key, so positions can stay plain build IDs.
+        backward = position.direction is sl.sources.Direction.BACKWARD
         page = await self.queries.list_page(
-            statuses=self.statuses, selector=selector, page_size=fetch_size, context=ActingContext.current()
+            statuses=self.statuses,
+            sort=BuildListSort.ID,
+            selector=PageSelector(cursor=PageCursor(BuildListSort.ID, build_id, build_id, backward=backward)),
+            page_size=fetch_size,
+            context=ActingContext.current(),
         )
+        prev = page.prev.cursor if page.prev is not None else None
+        next_ = page.next.cursor if page.next is not None else None
         return sl.sources.Batch(
             sl.sources.Position(str(page.items[0].id) if page.items else None),
             page.items,
-            previous=sl.sources.Position(str(page.prev.before_id), direction=sl.sources.Direction.BACKWARD)
-            if page.prev is not None and page.prev.before_id is not None
-            else None,
-            next=sl.sources.Position(str(page.next.after_id), direction=sl.sources.Direction.FORWARD)
-            if page.next is not None and page.next.after_id is not None
-            else None,
+            previous=None
+            if prev is None
+            else sl.sources.Position(str(prev.id), direction=sl.sources.Direction.BACKWARD),
+            next=None if next_ is None else sl.sources.Position(str(next_.id), direction=sl.sources.Direction.FORWARD),
         )
 
 

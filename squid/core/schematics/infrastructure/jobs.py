@@ -1,6 +1,7 @@
 """PostgreSQL adapter for durable schematic jobs."""
 
 from collections.abc import Callable, Mapping, Sequence
+from dataclasses import replace
 from datetime import timedelta
 from typing import Any, cast
 from uuid import uuid4
@@ -10,7 +11,7 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.core.errors import RateLimitedError
-from squid.core.pagination import PageSelector
+from squid.core.pagination import Page, PageSelector
 from squid.core.persistence.paging import KeysetOrder
 from squid.core.persistence.queue import ClaimedRowQueue, QueueSpec
 from squid.core.persistence.types import database_now
@@ -87,18 +88,19 @@ class PostgresSchematicJobRepository:
         return None if row is None else _snapshot(row)
 
     async def list_videos(
-        self, account_id: int, *, schematic_id: int | None, selector: PageSelector, limit: int
-    ) -> tuple[SchematicJobSnapshot, ...]:
-        """Read one newest-first page; a `before_id` page is read in reverse and restored."""
+        self, account_id: int, *, schematic_id: int | None, selector: PageSelector, page_size: int
+    ) -> Page[SchematicJobSnapshot]:
         session = self._session()
-        order = KeysetOrder(SchematicJob.id, SchematicJob.id, descending=True)
-        statement = await order.apply(session, _videos(select(SchematicJob), account_id, schematic_id), selector)
-        rows = tuple(_snapshot(row) for row in await session.scalars(statement.limit(limit)))
-        return rows[::-1] if selector.before_id is not None else rows
-
-    async def count_videos(self, account_id: int, *, schematic_id: int | None) -> int:
-        statement = _videos(select(func.count()).select_from(SchematicJob), account_id, schematic_id)
-        return await self._session().scalar(statement) or 0
+        order = KeysetOrder("newest", SchematicJob.id, SchematicJob.id, descending=True)
+        total = await session.scalar(_videos(select(func.count()).select_from(SchematicJob), account_id, schematic_id))
+        page = await order.page(
+            session,
+            _videos(select(SchematicJob), account_id, schematic_id),
+            selector,
+            page_size=page_size,
+            total=total or 0,
+        )
+        return replace(page, items=tuple(_snapshot(row) for row in page.items))
 
     async def claim(self, *, limit: int) -> Sequence[ClaimedSchematicJob]:
         return tuple(

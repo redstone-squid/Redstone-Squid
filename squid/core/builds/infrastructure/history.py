@@ -2,6 +2,7 @@
 
 from collections.abc import Callable, Mapping, Sequence
 from copy import deepcopy
+from dataclasses import replace
 from typing import cast
 
 from pydantic import JsonValue
@@ -25,7 +26,8 @@ from squid.core.builds.history import (
 )
 from squid.core.builds.history_models import BuildHistoryEntry, BuildHistorySnapshot
 from squid.core.builds.models import Build
-from squid.core.pagination import FIRST_PAGE, MAX_PAGE_OFFSET, Page, PageSelector, keyset_page
+from squid.core.pagination import FIRST_PAGE, MAX_PAGE_OFFSET, Page, PageSelector, offset_page
+from squid.core.persistence.paging import KeysetOrder
 from squid.core.voting.domain import VoteStatus
 from squid.core.voting.models import BuildVoteSession, VoteSession
 
@@ -142,12 +144,7 @@ class BuildHistoryQueries:
                     changes,
                 )
             )
-        return keyset_page(
-            items,
-            selector=PageSelector(offset=offset),
-            page_size=page_size,
-            total=total or 0,
-        )
+        return offset_page(items, offset=offset, page_size=page_size, total=total or 0)
 
     @staticmethod
     def public_fields(state: BuildHistorySnapshot | None) -> dict[str, JsonValue]:
@@ -208,10 +205,8 @@ class BuildHistoryQueries:
         if not 1 <= page_size <= 100:
             msg = "page_size must be between 1 and 100"
             raise ValueError(msg)
-        if not 0 <= selector.offset <= MAX_PAGE_OFFSET or (
-            sum((bool(selector.offset), selector.after_id is not None, selector.before_id is not None)) > 1
-        ):
-            msg = "Supply one valid page selector"
+        if not 0 <= selector.offset <= MAX_PAGE_OFFSET:
+            msg = "offset must be between 0 and MAX_PAGE_OFFSET"
             raise ValueError(msg)
         before = aliased(BuildHistorySnapshot)
         after = aliased(BuildHistorySnapshot)
@@ -221,26 +216,13 @@ class BuildHistoryQueries:
             .outerjoin(after, after.id == BuildHistoryEntry.after_state_id)
             .where(BuildHistoryEntry.build_id == build_id)
         )
-        if selector.after_id is not None:
-            statement = statement.where(BuildHistoryEntry.id < selector.after_id)
-        if selector.before_id is not None:
-            statement = statement.where(BuildHistoryEntry.id > selector.before_id)
-        statement = (
-            statement.order_by(
-                BuildHistoryEntry.id.asc() if selector.before_id is not None else BuildHistoryEntry.id.desc()
-            )
-            .offset(selector.offset)
-            .limit(page_size + 1)
-        )
         session = self._session()
-        rows = (await session.execute(statement)).all()
-        items = [_summary(record, old, new) for record, old, new in rows]
-        if selector.before_id is not None:
-            items.reverse()
         total = await session.scalar(
             select(func.count()).select_from(BuildHistoryEntry).where(BuildHistoryEntry.build_id == build_id)
         )
-        return keyset_page(items, selector=selector, page_size=page_size, total=total or 0, id_of=lambda item: item.id)
+        order = KeysetOrder("newest", BuildHistoryEntry.id, BuildHistoryEntry.id, descending=True)
+        page = await order.page(session, statement, selector, page_size=page_size, total=total or 0)
+        return replace(page, items=tuple(_summary(record, old, new) for record, old, new in page.items))
 
     async def get_history_entry(self, build_id: int, entry_id: int) -> BuildHistoryDetail | None:
         session = self._session()

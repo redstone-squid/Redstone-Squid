@@ -6,7 +6,7 @@ from typing import Protocol
 from whenever import Instant
 
 from squid.core.actors import UserActor
-from squid.core.pagination import PageSelector
+from squid.core.pagination import Page, PageSelector
 from squid.core.permissions.application.ports import PermissionUnitOfWork
 from squid.core.voting.domain import (
     EmojiPreset,
@@ -133,12 +133,10 @@ class VoteRepository(Protocol):
     async def list_open(self, kind: VoteKind) -> Sequence[VoteSessionSnapshot]: ...
 
     async def list_reviews(
-        self, filters: ReviewFilters, *, sort: ReviewSort, selector: PageSelector, limit: int
-    ) -> Sequence[VoteSessionSnapshot]:
+        self, filters: ReviewFilters, *, sort: ReviewSort, selector: PageSelector, page_size: int
+    ) -> Page[VoteSessionSnapshot]:
         """Read one page of build review sessions in display order."""
         ...
-
-    async def count_reviews(self, filters: ReviewFilters) -> int: ...
 
     async def cast_vote(
         self,

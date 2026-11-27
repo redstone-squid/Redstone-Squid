@@ -8,7 +8,6 @@ import dataclasses
 import io
 from collections.abc import Awaitable, Callable
 from typing import Any, Protocol, cast, override
-from uuid import UUID
 
 import discord
 
@@ -38,7 +37,7 @@ class ErrorReportOperations(Protocol):
 
     async def recent(
         self, *, context: ActingContext, page_size: int = 20, filters: ErrorReportFilters = EVERY_REPORT
-    ) -> Page[ErrorReport, UUID]: ...
+    ) -> Page[ErrorReport]: ...
 
     async def clear_all(self, *, context: ActingContext) -> int: ...
 

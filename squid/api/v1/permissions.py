@@ -20,7 +20,7 @@ from squid.api.contract import DEVICE, SERVICE, WEB, WEB_WRITE, contract, transp
 from squid.api.dependencies import CurrentCaller, PermissionAdmin, Services, get_permission_admin
 from squid.api.errors import responses
 from squid.api.idempotency import reserve_idempotent_before_request
-from squid.api.pagination import AfterIdParam, BeforeIdParam, OffsetParam, Page, PageSizeParam, resolve_selector
+from squid.api.pagination import CursorParam, OffsetParam, Page, PageSizeParam, resolve_selector
 from squid.api.security import Caller, requires
 from squid.api.v1.schemas.permissions import (
     SNOWFLAKE_PATTERN,
@@ -550,14 +550,13 @@ async def list_audit(
     guild_id: GuildQuery = None,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
-    after_id: AfterIdParam = None,
-    before_id: BeforeIdParam = None,
+    cursor: CursorParam = None,
 ) -> Page[AuditEntryDetail]:
     """List permission changes newest first. Anchors keep a reader's place while changes arrive."""
     page = await admin.audit_page(
         context=caller.context(),
         guild_id=_int(guild_id),
-        selector=resolve_selector(offset=offset, after_id=after_id, before_id=before_id),
+        selector=resolve_selector(offset=offset, cursor=cursor),
         page_size=page_size,
     )
     accounts = await _accounts(

@@ -16,11 +16,10 @@ from squid.api.contract import DEVICE, WEB, WEB_WRITE, contract, transport_only
 from squid.api.dependencies import CurrentCaller, Services
 from squid.api.idempotency import reserve_idempotent_request
 from squid.api.pagination import (
+    CursorParam,
     OffsetParam,
     Page,
     PageSizeParam,
-    UuidAfterIdParam,
-    UuidBeforeIdParam,
     resolve_selector,
 )
 from squid.api.private_responses import private_response
@@ -98,15 +97,14 @@ async def list_proposals(
     sort: FromQuery[RecalculationProposalSort] = RecalculationProposalSort.ID,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
-    after_id: UuidAfterIdParam = None,
-    before_id: UuidBeforeIdParam = None,
+    cursor: CursorParam = None,
 ) -> Page[RecalculationProposalResponse]:
     """Page recalculation proposals for staff review; `status=pending&sort=oldest` is the review queue."""
     caller.require_consented_account()
     page = await proposals.list_page(
         RecalculationProposalFilters(status, build_id),
         sort=sort,
-        selector=resolve_selector(offset=offset, after_id=after_id, before_id=before_id),
+        selector=resolve_selector(offset=offset, cursor=cursor),
         page_size=page_size,
         context=caller.context(),
     )

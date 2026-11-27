@@ -17,7 +17,7 @@ from squid.api.dependencies import (
 )
 from squid.api.errors import responses
 from squid.api.idempotency import reserve_idempotent_before_request
-from squid.api.pagination import AfterIdParam, BeforeIdParam, OffsetParam, Page, PageSizeParam, resolve_selector
+from squid.api.pagination import CursorParam, OffsetParam, Page, PageSizeParam, resolve_selector
 from squid.api.security import requires
 from squid.api.v1.schemas.votes import ReviewVoteSummary, VoteSessionDetail
 from squid.core.builds.application.queries import PublicBuildSummary
@@ -64,8 +64,7 @@ async def list_review_votes(
     sort: FromQuery[ReviewSort] = ReviewSort.NEWEST,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
-    after_id: AfterIdParam = None,
-    before_id: BeforeIdParam = None,
+    cursor: CursorParam = None,
 ) -> Page[ReviewVoteSummary]:
     """Page build submission and edit votes for reviewers; `status=open&sort=oldest` is the review queue.
 
@@ -75,7 +74,7 @@ async def list_review_votes(
     page = await votes.list_reviews(
         ReviewFilters(frozenset(kind or ()), status),
         sort=sort,
-        selector=resolve_selector(offset=offset, after_id=after_id, before_id=before_id),
+        selector=resolve_selector(offset=offset, cursor=cursor),
         page_size=page_size,
         context=caller.context(),
     )

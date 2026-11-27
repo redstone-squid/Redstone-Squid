@@ -24,8 +24,7 @@ from squid.api.dependencies import (
 from squid.api.errors import responses
 from squid.api.idempotency import reserve_idempotent_before_request
 from squid.api.pagination import (
-    AfterIdParam,
-    BeforeIdParam,
+    CursorParam,
     OffsetParam,
     Page,
     PageSizeParam,
@@ -96,8 +95,7 @@ async def list_records(
     sort: FromQuery[RecordListSort] = RecordListSort.ID,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
-    after_id: AfterIdParam = None,
-    before_id: BeforeIdParam = None,
+    cursor: CursorParam = None,
 ) -> Page[PublicRecordSummary]:
     """List current record results with their visible holders.
 
@@ -106,7 +104,7 @@ async def list_records(
     Door evidence is left out, so it is always null here; read it from the record.
     """
     page = await records.list_page(
-        selector=resolve_selector(offset=offset, after_id=after_id, before_id=before_id),
+        selector=resolve_selector(offset=offset, cursor=cursor),
         sort=sort,
         filters=RecordListFilters(
             build_kind,
@@ -158,13 +156,12 @@ async def list_door_ranges(
     depth: Annotated[int | None, QueryParameter(ge=1, le=2**31 - 1)] = None,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
-    after_id: AfterIdParam = None,
-    before_id: BeforeIdParam = None,
+    cursor: CursorParam = None,
 ) -> Page[RangeRegistration]:
     """List registered door range queries newest first, with the names of their tags and version."""
     page = await publications.list_page(
         RangeListFilters(orientation, height, depth),
-        selector=resolve_selector(offset=offset, after_id=after_id, before_id=before_id),
+        selector=resolve_selector(offset=offset, cursor=cursor),
         page_size=page_size,
         context=caller.context(),
     )
@@ -341,14 +338,13 @@ async def list_drift(
     caller: CurrentCaller,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
-    after_id: AfterIdParam = None,
-    before_id: BeforeIdParam = None,
+    cursor: CursorParam = None,
 ) -> Page[RecordDrift]:
     """List records the backstop changed although no queued change explained it, newest first.
 
     Each entry means the affected-set calculation missed a case.
     """
-    selector = resolve_selector(offset=offset, after_id=after_id, before_id=before_id)
+    selector = resolve_selector(offset=offset, cursor=cursor)
     page = await records.drift(selector=selector, page_size=page_size, context=caller.context())
     return Page[RecordDrift].from_domain(page)
 

@@ -43,8 +43,8 @@ class DraftListing(SubmissionDraftService):
 
     @override
     async def attention_inbox(
-        self, *, context: ActingContext, selector: PageSelector[UUID] = FIRST_PAGE, page_size: int = 20
-    ) -> Page[StoredDraft, UUID]:
+        self, *, context: ActingContext, selector: PageSelector = FIRST_PAGE, page_size: int = 20
+    ) -> Page[StoredDraft]:
         self.staff.append(context.effective)
         return offset_page(self.drafts, offset=selector.offset, page_size=page_size)
 
@@ -144,8 +144,7 @@ async def test_staff_loses_access_to_an_inbox_draft_after_authority_is_revoked(b
     uow = AsyncMock()
     uow.__aenter__.return_value = uow
     uow.submission_drafts.get.return_value = draft
-    uow.submission_drafts.list_attention.return_value = (draft,)
-    uow.submission_drafts.count_attention.return_value = 1
+    uow.submission_drafts.list_attention.return_value = Page((draft,), 1, None, None)
     permissions = PermissionService(uow_factory=lambda: uow)
     drafts = SubmissionDraftService(CheckedInFormManifestRegistry(), permissions=permissions, uow_factory=lambda: uow)
     services = bot_services(

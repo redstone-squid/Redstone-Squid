@@ -22,7 +22,7 @@ from squid.core.errors import DataIntegrityError
 from squid.core.media.domain import MediaKind
 from squid.core.media.domain.jobs import MediaJobStatus
 from squid.core.media.models import MediaDraftReference, MediaProcessingJobRecord, MediaUploadRecord
-from squid.core.pagination import FIRST_PAGE, PageSelector
+from squid.core.pagination import FIRST_PAGE
 from squid.core.persistence.alembic_entities import current_entities
 from squid.core.persistence.base import Base
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
@@ -491,24 +491,22 @@ async def test_retry_retains_failed_payload_and_rejects_its_stale_completion(
     assert latest is not None
     assert latest.job_id == second.job_id
     history = await transact(
-        repository, lambda uow: uow.finalization_jobs.list_attempts(DRAFT_ID, selector=FIRST_PAGE, limit=1)
+        repository, lambda uow: uow.finalization_jobs.list_attempts(DRAFT_ID, selector=FIRST_PAGE, page_size=1)
     )
-    assert [item.job_id for item in history] == [second.job_id]
+    assert [item.job_id for item in history.items] == [second.job_id]
+    assert history.total == 2
+    assert history.next is not None
     older = await transact(
         repository,
-        lambda uow: uow.finalization_jobs.list_attempts(
-            DRAFT_ID, selector=PageSelector(after_id=history[-1].attempt_number), limit=1
-        ),
+        lambda uow: uow.finalization_jobs.list_attempts(DRAFT_ID, selector=history.next.selector(), page_size=1),
     )
-    assert [item.job_id for item in older] == [first.job_id]
+    assert [item.job_id for item in older.items] == [first.job_id]
+    assert older.prev is not None
     newer = await transact(
         repository,
-        lambda uow: uow.finalization_jobs.list_attempts(
-            DRAFT_ID, selector=PageSelector(before_id=older[0].attempt_number), limit=1
-        ),
+        lambda uow: uow.finalization_jobs.list_attempts(DRAFT_ID, selector=older.prev.selector(), page_size=1),
     )
-    assert [item.job_id for item in newer] == [second.job_id]
-    assert await transact(repository, lambda uow: uow.finalization_jobs.count_attempts(DRAFT_ID)) == 2
+    assert [item.job_id for item in newer.items] == [second.job_id]
     retained = await transact(repository, lambda uow: uow.finalization_jobs.get_attempt(DRAFT_ID, first.job_id))
     assert retained is not None
     assert retained.issues == (issue,)
@@ -557,12 +555,10 @@ async def test_repeated_preparation_issue_does_not_append_history(
     )
 
     assert first == second
-    assert (
-        await transact(
-            repository, lambda uow: uow.finalization_jobs.list_attempts(DRAFT_ID, selector=FIRST_PAGE, limit=10)
-        )
-        == ()
+    attempts = await transact(
+        repository, lambda uow: uow.finalization_jobs.list_attempts(DRAFT_ID, selector=FIRST_PAGE, page_size=10)
     )
+    assert attempts.items == ()
 
 
 async def test_status_translates_malformed_attention_entries_to_data_integrity_error(
@@ -690,10 +686,10 @@ async def test_attachment_wait_reservation_recovers_and_never_creates_an_attempt
         jobs, lambda uow: uow.finalization_jobs.reserve_preparations(now=NOW.add(seconds=60), limit=1), commit=True
     )
     assert len(recovered) == 1
-    assert (
-        await transact(jobs, lambda uow: uow.finalization_jobs.list_attempts(DRAFT_ID, selector=FIRST_PAGE, limit=10))
-        == ()
+    attempts = await transact(
+        jobs, lambda uow: uow.finalization_jobs.list_attempts(DRAFT_ID, selector=FIRST_PAGE, page_size=10)
     )
+    assert attempts.items == ()
     changed = await transact(
         partial(SqlAlchemyUnitOfWork, async_session_factory),
         lambda uow: uow.submission_drafts.apply_change(

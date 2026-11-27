@@ -31,6 +31,7 @@ from squid.core.notifications.models import (
     NotificationProfile,
     NotificationSubscription,
 )
+from squid.core.pagination import FIRST_PAGE
 from squid.core.permissions.domain import BuiltinRoleKeys
 from squid.core.permissions.models import (
     PermissionRole,
@@ -425,26 +426,26 @@ async def test_inbox_count_and_both_keyset_directions_share_visibility(
     ordinary = InboxVisibility()
     newest = await transact(
         repository,
-        lambda uow: uow.notifications.list_inbox(
-            account.id, offset=0, after_id=None, before_id=None, limit=2, visibility=ordinary
-        ),
+        lambda uow: uow.notifications.list_inbox(account.id, selector=FIRST_PAGE, page_size=2, visibility=ordinary),
     )
+    assert newest.next is not None
     older = await transact(
         repository,
         lambda uow: uow.notifications.list_inbox(
-            account.id, offset=0, after_id=newest[-1].id, before_id=None, limit=2, visibility=ordinary
+            account.id, selector=newest.next.selector(), page_size=2, visibility=ordinary
         ),
     )
+    assert older.prev is not None
     newer = await transact(
         repository,
         lambda uow: uow.notifications.list_inbox(
-            account.id, offset=0, after_id=None, before_id=older[0].id, limit=2, visibility=ordinary
+            account.id, selector=older.prev.selector(), page_size=2, visibility=ordinary
         ),
     )
 
-    assert [item.payload["build_id"] for item in newest] == [4, 3]
-    assert [item.payload["build_id"] for item in older] == [2, 1]
-    assert [item.payload["build_id"] for item in newer] == [4, 3]
+    assert [item.payload["build_id"] for item in newest.items] == [4, 3]
+    assert [item.payload["build_id"] for item in older.items] == [2, 1]
+    assert [item.payload["build_id"] for item in newer.items] == [4, 3]
     assert await transact(repository, lambda uow: uow.notifications.count_inbox(account.id, visibility=ordinary)) == 4
     assert (
         await transact(
@@ -487,10 +488,10 @@ async def test_unread_filter_and_unread_ids_skip_read_and_newer_items(
     unread = await transact(
         repository,
         lambda uow: uow.notifications.list_inbox(
-            account.id, offset=0, after_id=None, before_id=None, limit=10, visibility=ordinary, unread_only=True
+            account.id, selector=FIRST_PAGE, page_size=10, visibility=ordinary, unread_only=True
         ),
     )
-    assert [item.payload["build_id"] for item in unread] == [4, 3, 1]
+    assert [item.payload["build_id"] for item in unread.items] == [4, 3, 1]
     assert (
         await transact(
             repository, lambda uow: uow.notifications.count_inbox(account.id, visibility=ordinary, unread_only=True)

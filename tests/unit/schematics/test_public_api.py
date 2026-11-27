@@ -293,8 +293,7 @@ async def test_public_listing_pages_multiple_attachments_with_offset_anchors() -
     assert first.total == 3
     assert first.next is not None
     assert first.next.offset == 2
-    assert first.next.after_id is None
-    assert first.next.before_id is None
+    assert first.next.cursor is None
     assert first.prev is None
 
     last = await list_build_schematics.fn(
@@ -311,8 +310,7 @@ async def test_public_listing_pages_multiple_attachments_with_offset_anchors() -
     assert last.next is None
     assert last.prev is not None
     assert last.prev.offset == 0
-    assert last.prev.after_id is None
-    assert last.prev.before_id is None
+    assert last.prev.cursor is None
 
 
 @pytest.mark.parametrize("source_format", list(SchematicFormat))

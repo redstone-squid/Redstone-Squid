@@ -2,7 +2,6 @@
 
 from collections.abc import Sequence
 from typing import Self, override
-from uuid import UUID
 
 import squid_ui as sl
 import squid_ui.ext.discord as sd
@@ -43,7 +42,7 @@ class SavedDraftsScreen(sd.Screen):
         if inbox:
             # The screen pages locally, so it needs the whole queue rather than the first API page.
             drafts: list[StoredDraft] = []
-            selector: PageSelector[UUID] | None = FIRST_PAGE
+            selector: PageSelector | None = FIRST_PAGE
             while selector is not None:
                 page = await services.submission_drafts.attention_inbox(
                     selector=selector, page_size=50, context=context

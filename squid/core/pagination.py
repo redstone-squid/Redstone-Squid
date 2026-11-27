@@ -1,138 +1,149 @@
-"""Page contents and the parameters used to request neighbouring pages.
+"""Page contents and the addresses of neighbouring pages.
 
-Services query the data and assemble pages; transports expose the anchors in
-their own response format. Identifier anchors support full traversal without
-the offset limit used for deep numbered pages. Anchors are integers unless a
-list is keyed by UUID, so the types take the key as a parameter defaulting to int.
+A request addresses its page by an offset, for numbered pages, or by a cursor naming the last
+row it has seen. Cursors carry that row's sort value, so following one still works after the
+row is deleted, filtered out or moved.
 """
 
-from collections.abc import Callable, Sequence
+import base64
+import binascii
+import json
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Self, cast
 from uuid import UUID
+
+from whenever import Instant
 
 from squid.core.errors import ErrorCode, ValidationError
 from squid.core.i18n import tr
 from squid.core.validation import FieldErrorCode, SimpleIssue
 
 MAX_PAGE_OFFSET = 10_000
-"""Maximum offset accepted by paginated endpoints.
+"""Maximum offset accepted by paginated endpoints; cursors reach deeper pages.
 
-Use identifier anchors for deeper traversal without scanning past every row
-before the requested offset. The assembly helpers here do not enforce this limit.
+The assembly helpers here do not enforce this limit.
 """
 
 
+class InvalidPageCursorError(ValidationError):
+    """A cursor is malformed or belongs to another sort. Clients restart from the first page."""
+
+    default_message = tr(t"core-page-cursor-invalid = This page link is out of date.")
+    default_title = tr(t"core-errors-page-cursor-invalid = Page link out of date")
+    default_code = ErrorCode.INVALID_PAGE_CURSOR
+    default_end_user_action = tr(t"core-page-cursor-invalid-action = Go back to the first page.")
+
+    def __init__(self) -> None:
+        super().__init__(issues=(SimpleIssue(field="/query/cursor", code=FieldErrorCode.INVALID_VALUE),))
+
+
 @dataclass(frozen=True, slots=True)
-class PageSelector[KeyT: int | UUID = int]:
-    """The single resolved way one request addresses its page."""
+class PageCursor:
+    """A row at a page boundary, and the direction to read from it.
+
+    Attributes:
+        order: Name of the sort the cursor belongs to.
+        key: The row's sort value. Orders by ID alone use the ID.
+        id: The row's ID.
+        backward: Read the rows before the boundary instead of after it.
+    """
+
+    order: str
+    key: object
+    id: int | UUID
+    backward: bool = False
+
+    def encode(self) -> str:
+        """Return the opaque token clients send back as `cursor`."""
+        payload = json.dumps([self.order, self.backward, _tagged(self.key), _tagged(self.id)], separators=(",", ":"))
+        return base64.urlsafe_b64encode(payload.encode()).decode().rstrip("=")
+
+    @classmethod
+    def decode(cls, token: str) -> Self:
+        """Read a token from `encode`, raising InvalidPageCursorError for anything else."""
+        try:
+            order, backward, key, identifier = json.loads(base64.urlsafe_b64decode(token + "=" * (-len(token) % 4)))
+            key, identifier = _untagged(key), _untagged(identifier)
+        except (binascii.Error, UnicodeDecodeError, TypeError, ValueError) as error:
+            raise InvalidPageCursorError from error
+        # bool is an int subclass, so check the exact type of the ID.
+        if not isinstance(order, str) or not isinstance(backward, bool) or type(identifier) not in (int, UUID):
+            raise InvalidPageCursorError
+        return cls(order, key, cast(int | UUID, identifier), backward)
+
+
+def _tagged(value: object) -> object:
+    """Wrap values JSON cannot tell apart from strings."""
+    match value:
+        case Instant():
+            return {"instant": value.format_iso()}
+        case UUID():
+            return {"uuid": str(value)}
+        case None | bool() | int() | float() | str():
+            return value
+        case _:
+            msg = f"Cannot encode a {type(value).__name__} sort value in a page cursor"
+            raise TypeError(msg)
+
+
+def _untagged(value: object) -> object:
+    if isinstance(value, dict) and len(value) == 1:
+        match next(iter(cast(dict[str, object], value).items())):
+            case ("instant", str(text)):
+                return Instant.parse_iso(text)
+            case ("uuid", str(text)):
+                return UUID(text)
+    if value is None or isinstance(value, bool | int | float | str):
+        return value
+    raise ValueError(value)
+
+
+@dataclass(frozen=True, slots=True)
+class PageSelector:
+    """The single way one request addresses its page."""
 
     offset: int = 0
-    after_id: KeyT | None = None
-    before_id: KeyT | None = None
+    cursor: PageCursor | None = None
 
 
 @dataclass(frozen=True, slots=True)
-class PageAnchor[KeyT: int | UUID = int]:
-    """An adjacent page address. Callers should set exactly one field."""
+class PageAnchor:
+    """An adjacent page address. Exactly one field is set."""
 
     offset: int | None = None
-    after_id: KeyT | None = None
-    before_id: KeyT | None = None
+    cursor: PageCursor | None = None
 
-    def selector(self) -> PageSelector[KeyT]:
+    def selector(self) -> PageSelector:
         """Return the selector that requests this page."""
-        return PageSelector(offset=self.offset or 0, after_id=self.after_id, before_id=self.before_id)
+        return PageSelector(offset=self.offset or 0, cursor=self.cursor)
 
 
 @dataclass(frozen=True, slots=True)
-class Page[ItemT, KeyT: int | UUID = int]:
-    """One page of results and the parameters addressing its neighbours."""
+class Page[ItemT]:
+    """One page of results and the addresses of its neighbours."""
 
     items: tuple[ItemT, ...]
     # TODO: If profiling shows count queries are costly, make totals optional for callers that only need navigation.
     total: int
-    next: PageAnchor[KeyT] | None
-    prev: PageAnchor[KeyT] | None
+    next: PageAnchor | None
+    prev: PageAnchor | None
 
 
-class PageAnchorNotFoundError(ValidationError):
-    """An `after_id` or `before_id` anchor is not in the listing it should seek within.
-
-    Sorts other than `id` need the anchor's sort value, so a deleted or filtered-out anchor
-    leaves nowhere to seek from. Clients restart from the first page.
-    """
-
-    default_message = tr(t"core-page-anchor-not-found = The page anchor is no longer in this list.")
-    default_title = tr(t"core-errors-page-anchor-not-found = Page anchor not found")
-    default_code = ErrorCode.PAGE_ANCHOR_NOT_FOUND
-    default_end_user_action = tr(t"core-page-anchor-not-found-action = Go back to the first page.")
-
-    def __init__(self, selector: PageSelector[int] | PageSelector[UUID]) -> None:
-        field = "after_id" if selector.after_id is not None else "before_id"
-        super().__init__(issues=(SimpleIssue(field=f"/query/{field}", code=FieldErrorCode.INVALID_VALUE),))
-
-
-FIRST_PAGE: PageSelector[Any] = PageSelector()
+FIRST_PAGE = PageSelector()
 """The selector a request that named no pagination parameter resolves to."""
 
 
-def offset_page[ItemT](rows: Sequence[ItemT], *, offset: int, page_size: int) -> Page[ItemT, Any]:
-    """Assemble one offset-addressed page from a collection already held in full.
+def offset_page[ItemT](rows: Sequence[ItemT], *, offset: int, page_size: int, total: int | None = None) -> Page[ItemT]:
+    """Assemble one offset-addressed page.
 
-    Its anchors are offsets only, so the page fits a list with any key type.
+    Without `total`, `rows` is the whole collection. With it, `rows` starts at `offset`.
     """
-    total = len(rows)
+    if total is None:
+        total, rows = len(rows), rows[offset:]
     return Page(
-        items=tuple(rows[offset : offset + page_size]),
+        items=tuple(rows[:page_size]),
         total=total,
         next=PageAnchor(offset=offset + page_size) if offset + page_size < total else None,
         prev=PageAnchor(offset=max(offset - page_size, 0)) if offset else None,
-    )
-
-
-def keyset_page[ItemT, KeyT: int | UUID = int](
-    rows: Sequence[ItemT],
-    *,
-    selector: PageSelector[KeyT],
-    page_size: int,
-    total: int,
-    id_of: Callable[[ItemT], KeyT] | None = None,
-) -> Page[ItemT, KeyT]:
-    """Assemble a page from at most `page_size + 1` rows in display order.
-
-    The extra row indicates another page in the direction of travel. Backward
-    queries must reverse their results into display order before calling this
-    helper; their extra row is removed from the front. Forward queries lose the
-    extra row at the end.
-
-    Pass `id_of` only when identifier anchors match the display order. Without it,
-    or with a nonzero offset, the page links its neighbours by offset. With it, a
-    zero offset is treated as the first identifier-based page.
-    """
-    overflow = len(rows) > page_size
-    backward = selector.before_id is not None
-    selected = tuple(rows[-page_size:] if backward else rows[:page_size]) if overflow else tuple(rows)
-    if id_of is None or selector.offset:
-        return Page(
-            items=selected,
-            total=total,
-            next=PageAnchor(offset=selector.offset + page_size) if selector.offset + page_size < total else None,
-            prev=PageAnchor(offset=max(selector.offset - page_size, 0)) if selector.offset else None,
-        )
-    if not selected:
-        return Page(items=selected, total=total, next=None, prev=None)
-    if backward:
-        # Arriving from a later page: there is always something ahead to go back to.
-        return Page(
-            items=selected,
-            total=total,
-            next=PageAnchor(after_id=id_of(selected[-1])),
-            prev=PageAnchor(before_id=id_of(selected[0])) if overflow else None,
-        )
-    return Page(
-        items=selected,
-        total=total,
-        next=PageAnchor(after_id=id_of(selected[-1])) if overflow else None,
-        prev=PageAnchor(before_id=id_of(selected[0])) if selector.after_id is not None else None,
     )

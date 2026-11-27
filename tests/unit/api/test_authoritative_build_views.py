@@ -1,6 +1,6 @@
 """Authoritative build collection views: moderation status and submitter ownership."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import NamedTuple, override
 
 import pytest
@@ -14,7 +14,8 @@ from squid.core.builds.application import BuildListSort, BuildQueryService
 from squid.core.builds.domain import EMPTY_BUILD_FILTERS, BuildListFilters, BuildStatus
 from squid.core.builds.models import Build, DoorBuild
 from squid.core.errors import AuthenticationError, AuthorizationError, ValidationError
-from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
+from squid.core.pagination import FIRST_PAGE, Page, PageCursor, PageSelector, offset_page
+from squid.core.pagination import PageAnchor as ResultPageAnchor
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.application.ports import PermissionUnitOfWork
 from squid.core.permissions.domain import CheckMode, Decision, PermissionCheck, PermissionNode, Reason
@@ -59,12 +60,16 @@ class BuildQueryRecorder(BuildQueryService):
         page_size: int = 20,
     ) -> Page[Build]:
         self.calls.append(ListPageCall(statuses, submitter_account_id, sort, selector, page_size))
-        return keyset_page(
-            self.builds,
-            selector=selector,
-            page_size=page_size,
-            total=len(self.builds),
-            id_of=lambda build: build.id or 0,
+        if selector.offset or not self.builds:
+            return offset_page(self.builds, offset=selector.offset, page_size=page_size)
+        items = tuple(self.builds[:page_size])
+        last, first = (PageCursor(sort, build.id or 0, build.id or 0) for build in (items[-1], items[0]))
+        backward = selector.cursor is not None and selector.cursor.backward
+        return Page(
+            items,
+            len(self.builds),
+            next=ResultPageAnchor(cursor=last) if len(self.builds) > page_size or backward else None,
+            prev=ResultPageAnchor(cursor=replace(first, backward=True)) if selector.cursor is not None else None,
         )
 
 
@@ -217,7 +222,7 @@ async def test_id_anchors_address_the_pages_on_either_side() -> None:
     ).content
 
     assert [item.id for item in first.items] == [9]
-    assert first.next == PageAnchor(after_id=9)
+    assert first.next == PageAnchor(cursor=PageCursor("id", 9, 9).encode())
     assert first.prev is None
     assert "Cache-Control" not in (await list_builds.fn(graph.build_queries, graph.permissions, ACCOUNT)).headers
 
@@ -227,13 +232,13 @@ async def test_id_anchors_address_the_pages_on_either_side() -> None:
             graph.permissions,
             ACCOUNT,
             page_size=1,
-            before_id=8,
+            cursor=PageCursor("id", 8, 8, backward=True).encode(),
         )
     ).content
 
-    assert graph.build_queries.calls[-1].selector.before_id == 8
+    assert graph.build_queries.calls[-1].selector == PageSelector(cursor=PageCursor("id", 8, 8, backward=True))
     assert back.prev is not None
-    assert back.next == PageAnchor(after_id=8)
+    assert back.next == PageAnchor(cursor=PageCursor("id", 9, 9).encode())
 
 
 @pytest.mark.asyncio
@@ -246,21 +251,24 @@ async def test_pagination_parameters_are_mutually_exclusive() -> None:
             graph.permissions,
             ACCOUNT,
             offset=20,
-            after_id=9,
+            cursor=PageCursor("id", 9, 9).encode(),
         )
 
     assert graph.build_queries.calls == []
 
 
 @pytest.mark.asyncio
-async def test_id_anchors_page_a_named_sort() -> None:
+async def test_a_cursor_pages_a_named_sort() -> None:
     graph = fakes(is_admin=True)
+    cursor = PageCursor("newest", None, 9)
 
-    await list_builds.fn(graph.build_queries, graph.permissions, ACCOUNT, sort=BuildListSort.NEWEST, after_id=9)
+    await list_builds.fn(
+        graph.build_queries, graph.permissions, ACCOUNT, sort=BuildListSort.NEWEST, cursor=cursor.encode()
+    )
 
     call = graph.build_queries.calls[-1]
     assert call.sort is BuildListSort.NEWEST
-    assert call.selector == PageSelector(after_id=9)
+    assert call.selector == PageSelector(cursor=cursor)
 
 
 @pytest.mark.asyncio
@@ -317,10 +325,12 @@ async def test_own_build_anchors_stay_scoped_to_the_submitter() -> None:
     graph = fakes(builds=[persisted_build(5)])
     other = Caller(kind="account", subject="account:2", nodes=UNBOUNDED, account_id=2)
 
-    await list_builds.fn(graph.build_queries, graph.permissions, other, submitted_by="me", after_id=9)
+    await list_builds.fn(
+        graph.build_queries, graph.permissions, other, submitted_by="me", cursor=PageCursor("id", 9, 9).encode()
+    )
 
     call = graph.build_queries.calls[-1]
-    assert call.selector.after_id == 9
+    assert call.selector.cursor == PageCursor("id", 9, 9)
     assert call.submitter_account_id == 2
 
 

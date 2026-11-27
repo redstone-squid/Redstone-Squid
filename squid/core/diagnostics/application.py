@@ -4,7 +4,7 @@ import logging
 import traceback
 from collections.abc import Callable, Mapping, Sequence
 from typing import Protocol
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 from whenever import Instant
 
@@ -19,7 +19,7 @@ from squid.core.diagnostics.domain import (
 from squid.core.diagnostics.models import ErrorReport
 from squid.core.errors import InvalidStateError, JSONValue, SquidError
 from squid.core.i18n import tr
-from squid.core.pagination import FIRST_PAGE, Page, PageSelector, keyset_page
+from squid.core.pagination import FIRST_PAGE, Page, PageSelector
 from squid.core.permissions.application.services import PermissionService
 from squid.core.permissions.domain.catalogue import DIAGNOSTICS_ERROR_CLEAR, DIAGNOSTICS_ERROR_READ
 from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
@@ -38,10 +38,8 @@ class ErrorReportRepository(Protocol):
     async def count_matching(self, reference: str, *, now: Instant, prefix: bool = False) -> int: ...
 
     async def list_recent(
-        self, *, selector: PageSelector[UUID], limit: int, now: Instant, filters: ErrorReportFilters = EVERY_REPORT
-    ) -> Sequence[ErrorReport]: ...
-
-    async def count_recent(self, *, now: Instant, filters: ErrorReportFilters = EVERY_REPORT) -> int: ...
+        self, *, selector: PageSelector, page_size: int, now: Instant, filters: ErrorReportFilters = EVERY_REPORT
+    ) -> Page[ErrorReport]: ...
 
     async def daily_counts(self, *, now: Instant) -> Sequence[ErrorReportDayCount]:
         """Count unexpired reports by UTC day and surface, oldest day first."""
@@ -147,25 +145,18 @@ class ErrorReportService:
         self,
         *,
         context: ActingContext,
-        selector: PageSelector[UUID] = FIRST_PAGE,
+        selector: PageSelector = FIRST_PAGE,
         page_size: int = 20,
         filters: ErrorReportFilters = EVERY_REPORT,
-    ) -> Page[ErrorReport, UUID]:
-        """Page unexpired reports, newest first, anchored by report ID.
-
-        An expired or filtered-out anchor raises PageAnchorNotFoundError.
-        """
+    ) -> Page[ErrorReport]:
+        """Page unexpired reports, newest first."""
         with context.scope():
             await self._permissions.require(context.effective, DIAGNOSTICS_ERROR_READ)
             now = self._now()
             async with self._uow_factory() as uow:
-                rows = await uow.error_reports.list_recent(
-                    selector=selector, limit=page_size + 1, now=now, filters=filters
+                return await uow.error_reports.list_recent(
+                    selector=selector, page_size=page_size, now=now, filters=filters
                 )
-                total = await uow.error_reports.count_recent(now=now, filters=filters)
-            return keyset_page(
-                rows, selector=selector, page_size=page_size, total=total, id_of=lambda report: report.id
-            )
 
     @property
     def retention_hours(self) -> int:

@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from whenever import Instant
 
 from squid.core.actors import UserActor
-from squid.core.pagination import FIRST_PAGE, PageSelector
+from squid.core.pagination import FIRST_PAGE, Page, PageSelector
 from squid.core.permissions.application.ports import AuditEntry, PermissionSubject, SubjectRecords
 from squid.core.permissions.domain.models import PatternMode
 from squid.core.permissions.models import (
@@ -531,18 +531,14 @@ class PostgresPermissionAdminRepository:
         return removed
 
     async def list_audit(
-        self, *, guild_id: int | None = None, limit: int = 20, selector: PageSelector[int] = FIRST_PAGE
-    ) -> tuple[PermissionAuditEntry, ...]:
-        """Read entries newest first; a `before_id` page is read in reverse and restored to that order."""
+        self, *, guild_id: int | None = None, selector: PageSelector = FIRST_PAGE, page_size: int = 20
+    ) -> Page[PermissionAuditEntry]:
         session = self._session()
-        order = KeysetOrder(PermissionAuditEntry.at, PermissionAuditEntry.id, descending=True)
-        statement = await order.apply(session, _audit_in(select(PermissionAuditEntry), guild_id), selector)
-        rows = (await session.scalars(statement.limit(limit))).all()
-        return tuple(rows[::-1] if selector.before_id is not None else rows)
-
-    async def count_audit(self, *, guild_id: int | None = None) -> int:
-        statement = _audit_in(select(func.count()).select_from(PermissionAuditEntry), guild_id)
-        return await self._session().scalar(statement) or 0
+        order = KeysetOrder("newest", PermissionAuditEntry.at, PermissionAuditEntry.id, descending=True)
+        total = await session.scalar(_audit_in(select(func.count()).select_from(PermissionAuditEntry), guild_id))
+        return await order.page(
+            session, _audit_in(select(PermissionAuditEntry), guild_id), selector, page_size=page_size, total=total or 0
+        )
 
 
 def _audit_in[S: Select[Any]](statement: S, guild_id: int | None) -> S:

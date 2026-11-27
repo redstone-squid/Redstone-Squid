@@ -2,7 +2,7 @@
 
 from collections import defaultdict
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from decimal import Decimal
 from itertools import batched, pairwise, zip_longest
@@ -13,6 +13,7 @@ from sqlalchemy import (
     ColumnElement,
     Row,
     Select,
+    String,
     and_,
     case,
     delete,
@@ -35,7 +36,7 @@ from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import DoorBuild, ExtenderBuild
 from squid.core.errors import ServiceUnavailableError
 from squid.core.events.infrastructure.repository import publish_domain_event
-from squid.core.pagination import FIRST_PAGE, PageSelector
+from squid.core.pagination import FIRST_PAGE, Page, PageSelector
 from squid.core.persistence.paging import KeysetOrder
 from squid.core.persistence.queue import ClaimedRowQueue, QueueSpec
 from squid.core.records.application.metrics import holder_metrics
@@ -732,21 +733,15 @@ class PostgresRecordRepository:
         selector: PageSelector = FIRST_PAGE,
         sort: RecordListSort = RecordListSort.ID,
         filters: RecordListFilters = ALL_RECORDS,
-        limit: int,
-    ) -> Sequence[PublishedRecordResult]:
-        """List one page of current results in display order.
-
-        Ties fall back to the result ID, so anchors work with every sort; except for
-        the ID sort, an anchor outside the filtered list raises PageAnchorNotFoundError.
-        A `before_id` page is fetched in reversed order and restored in memory,
-        leaving its overfetched row at the front for the caller.
-        """
+        page_size: int,
+    ) -> Page[PublishedRecordResult]:
+        """List one page of current results in display order; ties fall back to the result ID."""
         session = self._session()
         listing = await self._filtered(self._published_statement(include_evidence=False), filters)
-        statement = await _record_order(sort).apply(session, listing, selector)
-        rows = (await session.execute(statement.limit(limit))).all()
-        ordered = rows[::-1] if selector.before_id is not None else rows
-        return await self._published(ordered, include_evidence=False)
+        page = await _record_order(sort).page(
+            session, listing, selector, page_size=page_size, total=await self.count_published_records(filters=filters)
+        )
+        return replace(page, items=await self._published(page.items, include_evidence=False))
 
     async def count_published_records(self, *, filters: RecordListFilters = ALL_RECORDS) -> int:
         """Count current results."""
@@ -1016,9 +1011,7 @@ class PostgresRecordRepository:
             for row in rows
         )
 
-    async def list_drift(
-        self, *, offset: int, after_id: int | None, before_id: int | None, limit: int
-    ) -> Sequence[RecordDrift]:
+    async def list_drift(self, *, selector: PageSelector = FIRST_PAGE, page_size: int) -> Page[RecordDrift]:
         title = (
             select(RecordDefinition.title)
             .where(RecordDefinition.record_id == RecordDriftRow.record_id)
@@ -1027,33 +1020,29 @@ class PostgresRecordRepository:
             .correlate(RecordDriftRow)
             .scalar_subquery()
         )
-        statement = select(RecordDriftRow, title)
-        if before_id is not None:
-            statement = statement.where(RecordDriftRow.id > before_id).order_by(RecordDriftRow.id.asc())
-        else:
-            if after_id is not None:
-                statement = statement.where(RecordDriftRow.id < after_id)
-            statement = statement.order_by(RecordDriftRow.id.desc())
-        if offset:
-            statement = statement.offset(offset)
-        rows = list((await self._session().execute(statement.limit(limit))).all())
-        if before_id is not None:
-            rows.reverse()
-        return tuple(
-            RecordDrift(
-                id=row.id,
-                record_id=row.record_id,
-                title=row_title or "",
-                run_id=row.run_id,
-                detected_at=row.detected_at.to_stdlib(),
-                published=row.published,
-                computed=row.computed,
-            )
-            for row, row_title in rows
+        order = KeysetOrder("newest", RecordDriftRow.id, RecordDriftRow.id, descending=True)
+        page = await order.page(
+            self._session(),
+            select(RecordDriftRow, title),
+            selector,
+            page_size=page_size,
+            total=await self._session().scalar(select(func.count()).select_from(RecordDriftRow)) or 0,
         )
-
-    async def count_drift(self) -> int:
-        return await self._session().scalar(select(func.count()).select_from(RecordDriftRow)) or 0
+        return replace(
+            page,
+            items=tuple(
+                RecordDrift(
+                    id=row.id,
+                    record_id=row.record_id,
+                    title=row_title or "",
+                    run_id=row.run_id,
+                    detected_at=row.detected_at.to_stdlib(),
+                    published=row.published,
+                    computed=row.computed,
+                )
+                for row, row_title in page.items
+            ),
+        )
 
     async def _list_doors(self, session: AsyncSession) -> Sequence[CandidateBuild]:
         statement = (
@@ -1548,13 +1537,15 @@ def _record_order(sort: RecordListSort) -> KeysetOrder:
     """Return the keyset order a record listing displays in."""
     match sort:
         case RecordListSort.ID:
-            return KeysetOrder(RecordResult.id, RecordResult.id, descending=True)
+            return KeysetOrder(sort, RecordResult.id, RecordResult.id, descending=True)
         case RecordListSort.RECENTLY_CHANGED:
-            return KeysetOrder(RecordResult.computed_at, RecordResult.id, descending=True)
+            return KeysetOrder(sort, RecordResult.computed_at, RecordResult.id, descending=True)
         case RecordListSort.TITLE:
             # Many records share a title and differ only by subtitle.
-            title = func.lower(func.concat(RecordDefinition.title, " ", func.coalesce(RecordDefinition.subtitle, "")))
-            return KeysetOrder(title, RecordResult.id, descending=False)
+            title = func.lower(
+                func.concat(RecordDefinition.title, " ", func.coalesce(RecordDefinition.subtitle, "")), type_=String
+            )
+            return KeysetOrder(sort, title, RecordResult.id, descending=False)
 
 
 def _refresh_pending() -> ColumnElement[bool]:

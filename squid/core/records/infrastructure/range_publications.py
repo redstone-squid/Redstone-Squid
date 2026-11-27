@@ -3,6 +3,7 @@
 import hashlib
 import json
 from collections.abc import Callable, Sequence
+from dataclasses import replace
 from typing import Any, cast
 
 from pydantic import TypeAdapter
@@ -13,7 +14,7 @@ from sqlalchemy.orm import aliased
 from whenever import Instant
 
 from squid.core.errors import InvalidStateError
-from squid.core.pagination import PageSelector
+from squid.core.pagination import Page, PageSelector
 from squid.core.persistence.paging import KeysetOrder
 from squid.core.persistence.queue import ClaimedRowQueue, QueueSpec
 from squid.core.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery, RangeLabels, RangeTag
@@ -278,8 +279,8 @@ class PostgresRangePublicationRepository:
         )
 
     async def list_registrations(
-        self, filters: RangeListFilters, *, selector: PageSelector, limit: int
-    ) -> Sequence[RangeRegistration]:
+        self, filters: RangeListFilters, *, selector: PageSelector, page_size: int
+    ) -> Page[RangeRegistration]:
         session = self._session()
         active = aliased(DoorRangeRun)
         pending = select(DoorRangeRecomputeQueueItem.query_id).where(
@@ -291,22 +292,22 @@ class PostgresRangePublicationRepository:
             ),
             filters,
         )
-        order = KeysetOrder(DoorRangeRegistration.id, DoorRangeRegistration.id, descending=True)
-        rows = (await session.execute((await order.apply(session, listing, selector)).limit(limit))).all()
-        return tuple(
-            RangeRegistration(
-                registration.id,
-                DoorRangeQuery.model_validate(registration.query),
-                None if published_at is None else published_at.to_stdlib(),
-                None if registration.last_checked_at is None else registration.last_checked_at.to_stdlib(),
-                refresh_pending,
-            )
-            for registration, published_at, refresh_pending in (rows[::-1] if selector.before_id is not None else rows)
+        order = KeysetOrder("newest", DoorRangeRegistration.id, DoorRangeRegistration.id, descending=True)
+        total = await session.scalar(_filtered(select(func.count()).select_from(DoorRangeRegistration), filters))
+        page = await order.page(session, listing, selector, page_size=page_size, total=total or 0)
+        return replace(
+            page,
+            items=tuple(
+                RangeRegistration(
+                    registration.id,
+                    DoorRangeQuery.model_validate(registration.query),
+                    None if published_at is None else published_at.to_stdlib(),
+                    None if registration.last_checked_at is None else registration.last_checked_at.to_stdlib(),
+                    refresh_pending,
+                )
+                for registration, published_at, refresh_pending in page.items
+            ),
         )
-
-    async def count_registrations(self, filters: RangeListFilters) -> int:
-        statement = _filtered(select(func.count()).select_from(DoorRangeRegistration), filters)
-        return await self._session().scalar(statement) or 0
 
     async def labels(self, queries: Sequence[tuple[DoorRecordCategory, int | None]]) -> tuple[RangeLabels, ...]:
         session = self._session()

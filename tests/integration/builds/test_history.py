@@ -18,7 +18,6 @@ from squid.core.builds.history import BuildEditContext
 from squid.core.builds.history_models import BuildHistoryEntry, BuildHistorySnapshot, PendingBuildEdit
 from squid.core.builds.infrastructure.edit_scope import build_edit_scope
 from squid.core.builds.models import OtherBuild
-from squid.core.pagination import PageSelector
 from squid.core.persistence.account_merge import AccountMergeContext
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 
@@ -64,13 +63,9 @@ async def test_snapshot_reuse_pagination_and_final_state(sessions: async_session
         page = await uow.build_history.list_history(build_id, page_size=1)
         assert page.total == 3
         assert page.next is not None
-        second = await uow.build_history.list_history(
-            build_id, selector=PageSelector(after_id=page.next.after_id), page_size=1
-        )
+        second = await uow.build_history.list_history(build_id, selector=page.next.selector(), page_size=1)
         assert second.prev is not None
-        back = await uow.build_history.list_history(
-            build_id, selector=PageSelector(before_id=second.prev.before_id), page_size=1
-        )
+        back = await uow.build_history.list_history(build_id, selector=second.prev.selector(), page_size=1)
         assert back.items == page.items
         detail = await uow.build_history.get_history_entry(build_id, page.items[0].id)
         assert detail is not None

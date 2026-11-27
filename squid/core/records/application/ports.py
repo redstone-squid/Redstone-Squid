@@ -7,7 +7,7 @@ from typing import Protocol
 
 from squid.core.actors import ActingContext
 from squid.core.builds.application.queries import PublicBuildSummary
-from squid.core.pagination import PageSelector
+from squid.core.pagination import Page, PageSelector
 from squid.core.records.application.expansion_regions import DoorRangeAnalysis, DoorRangeQuery
 from squid.core.records.application.models import (
     CandidateBuild,
@@ -143,8 +143,8 @@ class RecordRunRepository(Protocol):
     async def stored_record(self, record_id: uuid.UUID) -> StoredRecord | None: ...
 
     async def list_published_records(
-        self, *, selector: PageSelector, sort: RecordListSort, filters: RecordListFilters, limit: int
-    ) -> Sequence[PublishedRecordResult]: ...
+        self, *, selector: PageSelector, sort: RecordListSort, filters: RecordListFilters, page_size: int
+    ) -> Page[PublishedRecordResult]: ...
 
     async def count_published_records(self, *, filters: RecordListFilters) -> int: ...
 
@@ -173,11 +173,7 @@ class RecordRunRepository(Protocol):
 
     async def list_recompute_queue(self) -> Sequence[RecomputeItem]: ...
 
-    async def list_drift(
-        self, *, offset: int, after_id: int | None, before_id: int | None, limit: int
-    ) -> Sequence[RecordDrift]: ...
-
-    async def count_drift(self) -> int: ...
+    async def list_drift(self, *, selector: PageSelector, page_size: int) -> Page[RecordDrift]: ...
 
 
 class RecordQueryUnitOfWork(UnitOfWork, Protocol):

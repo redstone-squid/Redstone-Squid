@@ -10,7 +10,6 @@ from squid.core.accounts.models import Account
 from squid.core.actors import ActingContext, AnonymousActor
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import DoorBuild
-from squid.core.pagination import PageSelector
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.records.application.metrics import MetricUnit, RecordMetric
 from squid.core.records.application.models import RecordListFilters, RecordListSort, RecordStatus
@@ -56,11 +55,14 @@ async def test_listing_filters_sorts_and_reports_holder_facts(
         records = uow.records
         smallest = RecordListFilters(criterion=RecordCriterion.SMALLEST, version_scope=VersionScope.ALL_TIME)
         assert await records.count_published_records(filters=smallest) == 2
-        by_title = await records.list_published_records(sort=RecordListSort.TITLE, filters=smallest, limit=1)
-        (first,) = by_title
-        (second,) = await records.list_published_records(
-            selector=PageSelector(after_id=first.result_id), sort=RecordListSort.TITLE, filters=smallest, limit=5
-        )
+        by_title = await records.list_published_records(sort=RecordListSort.TITLE, filters=smallest, page_size=1)
+        (first,) = by_title.items
+        assert by_title.next is not None
+        (second,) = (
+            await records.list_published_records(
+                selector=by_title.next.selector(), sort=RecordListSort.TITLE, filters=smallest, page_size=5
+            )
+        ).items
         assert first.one_line_title.lower() < second.one_line_title.lower()
         two = next(record for record in (first, second) if record.holder_build_ids == (small_id,))
         assert two.category_key.startswith("door:door|2x2|")
@@ -76,7 +78,9 @@ async def test_listing_filters_sorts_and_reports_holder_facts(
         assert await records.count_published_records(filters=RecordListFilters(build_kind=BuildKind.EXTENDER)) == 0
         assert await records.count_published_records(filters=RecordListFilters(tag_slugs=("no-such-tag",))) == 0
         assert await records.count_published_records(filters=RecordListFilters(tag_ids=(2**40,))) == 0
-        recent = await records.list_published_records(sort=RecordListSort.RECENTLY_CHANGED, limit=everything)
+        recent = (
+            await records.list_published_records(sort=RecordListSort.RECENTLY_CHANGED, page_size=everything)
+        ).items
         assert [record.computed_at for record in recent] == sorted(
             (record.computed_at for record in recent), reverse=True
         )

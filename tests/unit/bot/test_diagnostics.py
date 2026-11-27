@@ -3,7 +3,7 @@
 from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import override
-from uuid import NAMESPACE_URL, UUID, uuid5
+from uuid import NAMESPACE_URL, uuid5
 
 import anyio
 import discord
@@ -112,10 +112,10 @@ class ErrorReportRecorder(ErrorReportService):
         self,
         *,
         context: ActingContext,
-        selector: PageSelector[UUID] = FIRST_PAGE,
+        selector: PageSelector = FIRST_PAGE,
         page_size: int = 20,
         filters: ErrorReportFilters = EVERY_REPORT,
-    ) -> Page[ErrorReport, UUID]:
+    ) -> Page[ErrorReport]:
         self.recent_calls.append((page_size, filters.work_lost_only))
         return offset_page(self.reports, offset=selector.offset, page_size=page_size)
 
@@ -515,10 +515,10 @@ async def test_report_monitor_cancels_initial_check_and_remounts_with_a_new_run(
     async def recent(
         *,
         context: ActingContext,
-        selector: PageSelector[UUID] = FIRST_PAGE,
+        selector: PageSelector = FIRST_PAGE,
         page_size: int = 20,
         filters: ErrorReportFilters = EVERY_REPORT,
-    ) -> Page[ErrorReport, UUID]:
+    ) -> Page[ErrorReport]:
         nonlocal calls
         calls += 1
         if calls > 1:

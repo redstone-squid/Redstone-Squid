@@ -1,7 +1,7 @@
 """Stored error report routes and the node that gates them."""
 
 from typing import Any, cast
-from uuid import UUID, uuid4
+from uuid import uuid4
 
 import pytest
 from litestar.testing import TestClient
@@ -56,10 +56,10 @@ class StubErrorReports:
         self,
         *,
         context: ActingContext,
-        selector: PageSelector[UUID] = FIRST_PAGE,
+        selector: PageSelector = FIRST_PAGE,
         page_size: int = 20,
         filters: ErrorReportFilters = EVERY_REPORT,
-    ) -> Page[ErrorReport, UUID]:
+    ) -> Page[ErrorReport]:
         self.filters.append(filters)
         shown = self._report is not None and (self._report.work_lost or not filters.work_lost_only)
         return offset_page([self._report] if shown else [], offset=selector.offset, page_size=page_size)

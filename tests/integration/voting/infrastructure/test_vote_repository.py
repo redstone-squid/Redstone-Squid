@@ -16,7 +16,7 @@ from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build
 from squid.core.errors import DataIntegrityError
 from squid.core.messages.models import Message
-from squid.core.pagination import FIRST_PAGE, PageSelector
+from squid.core.pagination import FIRST_PAGE
 from squid.core.persistence.alembic_entities import current_entities
 from squid.core.persistence.base import Base
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
@@ -1028,27 +1028,29 @@ async def test_review_listing_pages_build_votes_in_creation_order_without_other_
     queue = ReviewFilters(status=VoteStatus.OPEN)
 
     first = await transact(
-        repository, lambda uow: uow.votes.list_reviews(queue, sort=ReviewSort.OLDEST, selector=FIRST_PAGE, limit=2)
+        repository, lambda uow: uow.votes.list_reviews(queue, sort=ReviewSort.OLDEST, selector=FIRST_PAGE, page_size=1)
     )
+    assert first.next is not None
     after = await transact(
         repository,
-        lambda uow: uow.votes.list_reviews(
-            queue, sort=ReviewSort.OLDEST, selector=PageSelector(after_id=older), limit=2
-        ),
+        lambda uow: uow.votes.list_reviews(queue, sort=ReviewSort.OLDEST, selector=first.next.selector(), page_size=2),
     )
     newest = await transact(
         repository,
-        lambda uow: uow.votes.list_reviews(ReviewFilters(), sort=ReviewSort.NEWEST, selector=FIRST_PAGE, limit=5),
+        lambda uow: uow.votes.list_reviews(ReviewFilters(), sort=ReviewSort.NEWEST, selector=FIRST_PAGE, page_size=5),
     )
     edits = await transact(
-        repository, lambda uow: uow.votes.count_reviews(ReviewFilters(frozenset({ReviewKind.BUILD_EDIT})))
+        repository,
+        lambda uow: uow.votes.list_reviews(
+            ReviewFilters(frozenset({ReviewKind.BUILD_EDIT})), sort=ReviewSort.NEWEST, selector=FIRST_PAGE, page_size=1
+        ),
     )
 
-    assert [item.id for item in first] == [older, newer]
-    assert [item.id for item in after] == [newer]
-    assert [item.id for item in newest] == [newer, closed, older]
-    assert await transact(repository, lambda uow: uow.votes.count_reviews(queue)) == 2
-    assert edits == 0
+    assert [item.id for item in first.items] == [older]
+    assert first.total == 2
+    assert [item.id for item in after.items] == [newer]
+    assert [item.id for item in newest.items] == [newer, closed, older]
+    assert edits.total == 0
 
 
 async def test_ballots_carry_their_voters_public_names_but_not_hidden_ones(

@@ -14,11 +14,10 @@ from squid.api.dependencies import CurrentCaller, ErrorReports, get_error_report
 from squid.api.errors import responses
 from squid.api.idempotency import reserve_idempotent_request
 from squid.api.pagination import (
+    CursorParam,
     OffsetParam,
     Page,
     PageSizeParam,
-    UuidAfterIdParam,
-    UuidBeforeIdParam,
     resolve_selector,
 )
 from squid.api.security import requires
@@ -78,8 +77,7 @@ async def list_error_reports(
     error_reports: ErrorReports,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
-    after_id: UuidAfterIdParam = None,
-    before_id: UuidBeforeIdParam = None,
+    cursor: CursorParam = None,
     work_lost: WorkLostParam = False,
     surface: SurfaceParam = None,
     error_code: ErrorCodeParam = None,
@@ -101,7 +99,7 @@ async def list_error_reports(
     )
     page = await error_reports.recent(
         context=caller.context(),
-        selector=resolve_selector(offset=offset, after_id=after_id, before_id=before_id),
+        selector=resolve_selector(offset=offset, cursor=cursor),
         page_size=page_size,
         filters=filters,
     )

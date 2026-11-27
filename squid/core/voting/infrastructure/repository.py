@@ -1,6 +1,7 @@
 """SQLAlchemy voting repository."""
 
 from collections.abc import Callable, Sequence
+from dataclasses import replace
 from typing import Any
 
 from advanced_alchemy.repository import SQLAlchemyAsyncRepository
@@ -15,7 +16,7 @@ from squid.core.accounts.models import AccountProfile
 from squid.core.errors import DataIntegrityError
 from squid.core.messages.errors import MessageNotFoundError
 from squid.core.messages.models import Message
-from squid.core.pagination import PageSelector
+from squid.core.pagination import Page, PageSelector
 from squid.core.persistence.paging import KeysetOrder
 from squid.core.posts.models import DiscordPost
 from squid.core.scores import round_score
@@ -370,20 +371,19 @@ class VoteRepository:
         return [await self._to_snapshot(session, row) for row in rows]
 
     async def list_reviews(
-        self, filters: ReviewFilters, *, sort: ReviewSort, selector: PageSelector, limit: int
-    ) -> Sequence[VoteSessionSnapshot]:
-        """Read one page in display order; a `before_id` page is read in reverse and restored."""
+        self, filters: ReviewFilters, *, sort: ReviewSort, selector: PageSelector, page_size: int
+    ) -> Page[VoteSessionSnapshot]:
         session = self._session()
-        order = KeysetOrder(VoteSession.id, VoteSession.id, descending=sort is ReviewSort.NEWEST)
-        statement = await order.apply(
-            session, _reviews(select(VoteSession).options(selectinload(VoteSession.options)), filters), selector
+        order = KeysetOrder(sort, VoteSession.id, VoteSession.id, descending=sort is ReviewSort.NEWEST)
+        total = await session.scalar(_reviews(select(func.count()).select_from(VoteSession), filters))
+        page = await order.page(
+            session,
+            _reviews(select(VoteSession).options(selectinload(VoteSession.options)), filters),
+            selector,
+            page_size=page_size,
+            total=total or 0,
         )
-        rows = [await self._to_snapshot(session, row) for row in await session.scalars(statement.limit(limit))]
-        return rows[::-1] if selector.before_id is not None else rows
-
-    async def count_reviews(self, filters: ReviewFilters) -> int:
-        statement = _reviews(select(func.count()).select_from(VoteSession), filters)
-        return await self._session().scalar(statement) or 0
+        return replace(page, items=tuple([await self._to_snapshot(session, row) for row in page.items]))
 
     async def transition_poll(
         self,

@@ -1,101 +1,60 @@
-"""Page assembly: overfetch trimming and the anchors each direction produces."""
+"""Page assembly from in-memory rows, and cursor tokens."""
 
-from dataclasses import dataclass
+from uuid import UUID
 
-from squid.core.pagination import FIRST_PAGE, PageAnchor, PageSelector, keyset_page, offset_page
+import pytest
+from whenever import Instant
 
-
-@dataclass(frozen=True, slots=True)
-class Row:
-    id: int
-
-
-def rows(*ids: int) -> list[Row]:
-    return [Row(identifier) for identifier in ids]
-
-
-def assemble(page_rows: list[Row], *, selector: PageSelector = FIRST_PAGE, page_size: int = 2, total: int = 9):
-    return keyset_page(
-        page_rows,
-        selector=selector,
-        page_size=page_size,
-        total=total,
-        id_of=lambda row: row.id,
-    )
+from squid.core.pagination import InvalidPageCursorError, PageAnchor, PageCursor, offset_page
 
 
 def test_offset_page_addresses_both_neighbours_by_offset() -> None:
-    page = offset_page(rows(9, 8, 7, 6, 5), offset=2, page_size=2)
+    page = offset_page([9, 8, 7, 6, 5], offset=2, page_size=2)
 
-    assert [row.id for row in page.items] == [7, 6]
+    assert page.items == (7, 6)
     assert page.total == 5
     assert page.next == PageAnchor(offset=4)
     assert page.prev == PageAnchor(offset=0)
 
 
 def test_offset_page_stops_at_either_end() -> None:
-    first = offset_page(rows(9, 8, 7), offset=0, page_size=2)
-    last = offset_page(rows(9, 8, 7), offset=2, page_size=2)
+    first = offset_page([9, 8, 7], offset=0, page_size=2)
+    last = offset_page([9, 8, 7], offset=2, page_size=2)
 
     assert (first.prev, first.next) == (None, PageAnchor(offset=2))
     assert (last.prev, last.next) == (PageAnchor(offset=0), None)
 
 
-def test_the_first_page_offers_no_way_back() -> None:
-    page = assemble(rows(9, 8, 7))
+def test_offset_page_with_a_total_takes_rows_that_start_at_the_offset() -> None:
+    page = offset_page([7, 6], offset=2, page_size=2, total=5)
 
-    assert [row.id for row in page.items] == [9, 8]
-    assert page.next == PageAnchor(after_id=8)
-    assert page.prev is None
-
-
-def test_a_short_first_page_ends_the_collection() -> None:
-    page = assemble(rows(9))
-
-    assert page.next is None
-    assert page.prev is None
+    assert page.items == (7, 6)
+    assert page.next == PageAnchor(offset=4)
 
 
-def test_a_forward_page_can_always_go_back_where_it_came_from() -> None:
-    page = assemble(rows(7, 6, 5), selector=PageSelector(after_id=8))
-
-    assert [row.id for row in page.items] == [7, 6]
-    assert page.next == PageAnchor(after_id=6)
-    assert page.prev == PageAnchor(before_id=7)
-
-
-def test_a_backward_page_trims_its_overfetch_from_the_front() -> None:
-    # A backward query returns rows in display order after reversal. Its extra row is
-    # therefore at the front, showing that another earlier page exists.
-    page = assemble(rows(9, 8, 7), selector=PageSelector(before_id=6))
-
-    assert [row.id for row in page.items] == [8, 7]
-    assert page.prev == PageAnchor(before_id=8)
-    assert page.next == PageAnchor(after_id=7)
+@pytest.mark.parametrize(
+    "cursor",
+    [
+        PageCursor("newest", Instant.from_utc(2026, 11, 20, 14, 3, 11, nanosecond=482913000), 812),
+        PageCursor("title", "3x3 piston door", 812, backward=True),
+        PageCursor("fastest_open", None, 812),
+        PageCursor("oldest", 6, UUID("6f1c2a52-3b5e-4c55-9a41-9d1f4e0b7d10")),
+    ],
+)
+def test_a_cursor_survives_its_token(cursor: PageCursor) -> None:
+    assert PageCursor.decode(cursor.encode()) == cursor
 
 
-def test_a_backward_page_at_the_top_offers_no_earlier_page() -> None:
-    page = assemble(rows(9, 8), selector=PageSelector(before_id=7))
-
-    assert [row.id for row in page.items] == [9, 8]
-    assert page.prev is None
-    assert page.next == PageAnchor(after_id=8)
+@pytest.mark.parametrize("token", ["", "not base64!", "bnVsbA", PageCursor("id", 1, 1).encode()[:-3]])
+def test_a_damaged_token_is_rejected(token: str) -> None:
+    with pytest.raises(InvalidPageCursorError):
+        PageCursor.decode(token)
 
 
-def test_an_offset_addressed_request_is_answered_with_offsets() -> None:
-    page = assemble(rows(7, 6, 5), selector=PageSelector(offset=4))
+def test_a_token_with_a_mistyped_id_is_rejected() -> None:
+    token = PageCursor("id", 1, 1).encode()
+    forged = PageCursor.decode(token)
+    object.__setattr__(forged, "id", True)
 
-    assert page.next == PageAnchor(offset=6)
-    assert page.prev == PageAnchor(offset=2)
-
-
-def test_an_unanchorable_order_is_answered_with_offsets() -> None:
-    page = keyset_page(
-        rows(9, 8, 7),
-        selector=FIRST_PAGE,
-        page_size=2,
-        total=9,
-    )
-
-    assert page.next == PageAnchor(offset=2)
-    assert page.prev is None
+    with pytest.raises(InvalidPageCursorError):
+        PageCursor.decode(forged.encode())

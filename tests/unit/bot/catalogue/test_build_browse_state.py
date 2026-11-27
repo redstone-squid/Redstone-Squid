@@ -21,11 +21,11 @@ from squid.bot.utils.web import MediaPreviewClient
 from squid.core.accounts.application import AccountService
 from squid.core.accounts.models import CataloguePreference
 from squid.core.actors import ActingContext, UserActor
-from squid.core.builds.application import BuildQueryService, BuildService
+from squid.core.builds.application import BuildListSort, BuildQueryService, BuildService
 from squid.core.builds.domain import BuildStatus, Credit, CreditRole
 from squid.core.builds.models import Build, DoorBuild
 from squid.core.messages.domain import MessageRef
-from squid.core.pagination import Page, PageAnchor, PageSelector
+from squid.core.pagination import Page, PageAnchor, PageCursor, PageSelector
 from squid.core.permissions.domain.catalogue import (
     BUILD_SUBMISSION_APPROVE,
     BUILD_SUBMISSION_REJECT,
@@ -431,7 +431,8 @@ async def test_detail_navigation_uses_id_anchors_and_preserves_visibility(newer:
         queries.list_page.assert_awaited_once_with(
             context=ActingContext.current(),
             statuses=frozenset({BuildStatus.APPROVED, BuildStatus.PENDING}),
-            selector=PageSelector(before_id=7) if newer else PageSelector(after_id=7),
+            sort=BuildListSort.ID,
+            selector=PageSelector(cursor=PageCursor(BuildListSort.ID, 7, 7, backward=newer)),
             page_size=1,
         )
 
@@ -902,7 +903,7 @@ async def test_catalogue_detail_crosses_a_service_keyset_boundary_using_its_offs
                 DoorBuild(id=identifier, submission_status=BuildStatus.APPROVED) for identifier in range(27, 12, -1)
             ),
             total=16,
-            next=PageAnchor(after_id=13),
+            next=PageAnchor(cursor=PageCursor(BuildListSort.ID, 13, 13)),
             prev=None,
         ),
         Page(

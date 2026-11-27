@@ -19,7 +19,7 @@ from squid.api.dependencies import (
 from squid.api.errors import responses
 from squid.api.idempotency import reserve_idempotent_before_request
 from squid.api.links import relative_url_for
-from squid.api.pagination import AfterIdParam, BeforeIdParam, OffsetParam, Page, PageSizeParam, resolve_selector
+from squid.api.pagination import CursorParam, OffsetParam, Page, PageSizeParam, resolve_selector
 from squid.api.private_responses import private_response
 from squid.api.v1.schemas.schematics import SchematicSummary, VideoCreateRequest, VideoResponse
 from squid.core.actors import ActingContext
@@ -298,8 +298,7 @@ async def list_own_schematic_videos(
     schematic_id: Annotated[int | None, QueryParameter(ge=1)] = None,
     page_size: PageSizeParam = 20,
     offset: OffsetParam = None,
-    after_id: AfterIdParam = None,
-    before_id: BeforeIdParam = None,
+    cursor: CursorParam = None,
 ) -> Page[VideoResponse]:
     """Page the videos the caller requested, newest first, optionally for one schematic.
 
@@ -310,7 +309,7 @@ async def list_own_schematic_videos(
         raise SchematicSupportUnavailableError
     page = await schematics.videos.list_videos(
         schematic_id=schematic_id,
-        selector=resolve_selector(offset=offset, after_id=after_id, before_id=before_id),
+        selector=resolve_selector(offset=offset, cursor=cursor),
         page_size=page_size,
         context=caller.context(),
     )

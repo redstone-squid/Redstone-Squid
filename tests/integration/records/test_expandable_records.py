@@ -62,7 +62,7 @@ async def test_ordinary_publication_uses_saved_configuration_and_survives_source
     computation = RecordComputationService(uow_factory=factory)
     await computation.rebuild(kinds=(BuildKind.DOOR,), context=ActingContext.direct(AnonymousActor()))
     async with factory() as uow:
-        listing = await uow.records.list_published_records(limit=20)
+        listing = (await uow.records.list_published_records(page_size=20)).items
         assert len(listing) == 5
         assert all(r.door_evidence is None for r in listing)
         assert all("6x3" in r.title for r in listing)
@@ -114,7 +114,7 @@ async def test_ordinary_publication_uses_saved_configuration_and_survives_source
         assert unchanged.door_evidence == original_evidence
     await computation.rebuild(kinds=(BuildKind.DOOR,), context=ActingContext.direct(AnonymousActor()))
     async with factory() as uow:
-        listing = await uow.records.list_published_records(limit=20)
+        listing = (await uow.records.list_published_records(page_size=20)).items
         replacement = next(r for r in listing if r.criterion is RecordCriterion.SMALLEST)
         assert replacement.record_id == smallest.record_id
         assert replacement.holder_build_ids == (fixed_id,)
@@ -128,7 +128,7 @@ async def test_ordinary_publication_uses_saved_configuration_and_survives_source
     )
     await computation.process_queue(context=ActingContext.worker("test-worker"))
     async with factory() as uow:
-        listing = await uow.records.list_published_records(limit=20)
+        listing = (await uow.records.list_published_records(page_size=20)).items
         # Only the family competes at 9999x3, and it has no completion date, so "first" has no result.
         assert len(listing) == 9
         large = next(r for r in listing if r.criterion is RecordCriterion.SMALLEST and "9999x3" in r.title)

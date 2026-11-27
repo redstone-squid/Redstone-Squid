@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from squid.core.accounts.models import Account
 from squid.core.actors import ActingContext, UserActor
 from squid.core.errors import NotFoundError, ServiceUnavailableError
-from squid.core.pagination import FIRST_PAGE, PageSelector
+from squid.core.pagination import FIRST_PAGE
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.application.administration import PermissionAdministrationService
 from squid.core.permissions.domain import Reason
@@ -81,5 +81,6 @@ async def test_audit_anchors_page_newest_first(migrated_session_factory: async_s
     first = await admin.audit_page(context=OWNER, page_size=2, selector=FIRST_PAGE)
     assert [entry.pattern for entry in first.items] == ["record.**", "tag.**"]
     assert first.total == 3
-    rest = await admin.audit_page(context=OWNER, page_size=2, selector=PageSelector(after_id=first.items[-1].id))
+    assert first.next is not None
+    rest = await admin.audit_page(context=OWNER, page_size=2, selector=first.next.selector())
     assert [entry.pattern for entry in rest.items] == ["build.**"]

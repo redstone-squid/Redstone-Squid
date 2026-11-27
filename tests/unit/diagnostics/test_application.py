@@ -6,7 +6,6 @@ from dataclasses import replace
 from functools import partial
 from typing import override
 from unittest.mock import Mock, create_autospec
-from uuid import UUID
 
 import pytest
 from whenever import Instant
@@ -21,7 +20,7 @@ from squid.core.diagnostics.domain import (
 )
 from squid.core.diagnostics.models import ErrorReport
 from squid.core.errors import AuthorizationError, ErrorCode, InvalidStateError
-from squid.core.pagination import PageSelector
+from squid.core.pagination import Page, PageSelector, offset_page
 from squid.core.permissions.application.services import PermissionService
 from squid.core.permissions.domain.catalogue import DIAGNOSTICS_ERROR_CLEAR
 from squid.core.records.errors import RecordNotFoundError
@@ -52,13 +51,10 @@ class FakeRepository:
         return len(self._matching(reference, now, prefix=prefix))
 
     async def list_recent(
-        self, *, selector: PageSelector[UUID], limit: int, now: Instant, filters: ErrorReportFilters = EVERY_REPORT
-    ) -> Sequence[ErrorReport]:
+        self, *, selector: PageSelector, page_size: int, now: Instant, filters: ErrorReportFilters = EVERY_REPORT
+    ) -> Page[ErrorReport]:
         newest_first = sorted(self._unexpired(now, filters), key=lambda report: report.occurred_at, reverse=True)
-        return newest_first[selector.offset : selector.offset + limit]
-
-    async def count_recent(self, *, now: Instant, filters: ErrorReportFilters = EVERY_REPORT) -> int:
-        return len(self._unexpired(now, filters))
+        return offset_page(newest_first, offset=selector.offset, page_size=page_size)
 
     async def daily_counts(self, *, now: Instant) -> Sequence[ErrorReportDayCount]:
         return ()

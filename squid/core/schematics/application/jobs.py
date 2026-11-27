@@ -11,7 +11,7 @@ from whenever import Instant
 from squid.core.actors import ActingContext
 from squid.core.errors import InvalidStateError
 from squid.core.i18n import tr
-from squid.core.pagination import Page, PageSelector, keyset_page
+from squid.core.pagination import Page, PageSelector
 from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
 from squid.core.worker_context import worker_scope
 
@@ -74,12 +74,10 @@ class SchematicJobRepository(Protocol):
     async def get(self, job_id: int) -> SchematicJobSnapshot | None: ...
 
     async def list_videos(
-        self, account_id: int, *, schematic_id: int | None, selector: PageSelector, limit: int
-    ) -> tuple[SchematicJobSnapshot, ...]:
+        self, account_id: int, *, schematic_id: int | None, selector: PageSelector, page_size: int
+    ) -> Page[SchematicJobSnapshot]:
         """Page an account's video jobs newest first, omitting those whose attachment changed file."""
         ...
-
-    async def count_videos(self, account_id: int, *, schematic_id: int | None) -> int: ...
 
     async def claim(self, *, limit: int) -> Sequence[ClaimedSchematicJob]: ...
 
@@ -169,11 +167,9 @@ class SchematicJobService:
     ) -> Page[SchematicJobSnapshot]:
         with context.scope():
             async with self._uow_factory() as uow:
-                rows = await uow.schematic_jobs.list_videos(
-                    account_id, schematic_id=schematic_id, selector=selector, limit=page_size + 1
+                return await uow.schematic_jobs.list_videos(
+                    account_id, schematic_id=schematic_id, selector=selector, page_size=page_size
                 )
-                total = await uow.schematic_jobs.count_videos(account_id, schematic_id=schematic_id)
-                return keyset_page(rows, selector=selector, page_size=page_size, total=total, id_of=lambda job: job.id)
 
     async def claim(self, *, context: ActingContext, limit: int = 8) -> Sequence[ClaimedSchematicJob]:
         """Commit and return up to limit leases that workers can begin processing."""
