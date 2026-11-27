@@ -50,7 +50,7 @@ async def resolve_actor(
 ) -> UserActor:
     """Resolve the member's vote capabilities in one permission query.
 
-    The caller supplies an account ID after checking consent when needed; None
+    The caller supplies an account ID when the voter has one; None
     makes the member vote under their Discord ID. This function loads permissions
     and uses roles from the supplied member object; it does not create an account
     or refresh Discord membership.

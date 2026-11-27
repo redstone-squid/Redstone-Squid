@@ -536,7 +536,7 @@ class DraftEditorScreen(BuildEditorScreen[None, DraftWorkspace]):
     @router.route("/drafts/{draft_id}")
     @classmethod
     async def open_draft(cls, request: AppRequest, draft_id: UUID, session: UUID | None = None) -> Self | None:
-        """Open one of the opener's drafts, after the account has consented."""
+        """Open one of the opener's drafts."""
         services = request.client.services
         resolve_actor = partial(request.client.actors.request_actor, request, session, f"draft:{draft_id}")
         await ensure_account(request, services.accounts, resolve_actor=resolve_actor)

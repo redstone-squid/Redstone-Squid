@@ -192,7 +192,7 @@ def _candidate_label(number: int, candidate: InferenceCandidate) -> sl.TextLike:
 
 @build_controls.builds.route("/inference/{run_id}/reopen")
 async def reopen_inference(request: AppRequest, run_id: UUID) -> InferenceCandidatesScreen | None:
-    """Recover candidates under current consent and owner or staff authority."""
+    """Recover candidates for the owner or authorized staff."""
     await ensure_account(request, request.client.services.accounts)
     actor = await request.client.actors.resolve(request)
     candidates = await request.client.services.submission_inference.get(run_id, context=ActingContext.for_actor(actor))

@@ -40,11 +40,11 @@ class BuildMessageIntake[BotT: squid.bot.app.RedstoneSquid]:
 
     def __init__(self, bot: BotT) -> None:
         self.bot = bot
-        self.consent_sticky: StickyMessage = BuildIndexingStickyMessage(bot.background_tasks)
+        self.indexing_sticky: StickyMessage = BuildIndexingStickyMessage(bot.background_tasks)
 
     async def close(self) -> None:
-        """Stop pending consent-banner updates when the cog unloads."""
-        await self.consent_sticky.close()
+        """Stop pending indexing reminder updates when the cog unloads."""
+        await self.indexing_sticky.close()
 
     async def _is_build_log_message(self, message: discord.Message) -> bool:
         """Check the shared author/channel eligibility rule for ingestion and recalculation."""
@@ -73,11 +73,11 @@ class BuildMessageIntake[BotT: squid.bot.app.RedstoneSquid]:
                 message.channel.id,
             )
             if CONSENT_STICKY_ENABLED:
-                await self.consent_sticky.trigger(message.channel)
+                await self.indexing_sticky.trigger(message.channel)
             return
 
         if CONSENT_STICKY_ENABLED:
-            self.consent_sticky.record_activity(message.channel.id)
+            self.indexing_sticky.record_activity(message.channel.id)
         preceding = [item async for item in message.channel.history(before=message, limit=3)]
         preceding.reverse()
         try:
@@ -120,7 +120,7 @@ class BuildMessageIntake[BotT: squid.bot.app.RedstoneSquid]:
         ):
             user_id = message.author.id
             if CONSENT_STICKY_ENABLED and isinstance(message.channel, discord.TextChannel):
-                await self.consent_sticky.trigger(message.channel)
+                await self.indexing_sticky.trigger(message.channel)
             return error_node(
                 tr(t"submit-author-indexing-off = Automatic indexing is off"),
                 md_tr(

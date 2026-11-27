@@ -52,7 +52,7 @@ class SearchModeChoice(StrEnum):
 
 
 class BuildCommands[BotT: squid.bot.app.RedstoneSquid](sd.Cog[BotT]):
-    """Own build search, browsing, editing, submission, and consent-message lifetime."""
+    """Own build search, browsing, editing, submission, and indexing reminders."""
 
     # Declare the group and its members together so reloading this module creates
     # a fresh command tree instead of mutating a group owned by an imported base.

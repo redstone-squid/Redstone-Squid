@@ -132,7 +132,7 @@ class VoteReactionHandler:
         member = await event.member(humans_only=True)
         if message is None or member is None:
             return
-        # Without a consented account the member votes under their Discord ID.
+        # Without an account the member votes under their Discord ID.
         account_id = await self._voters.voter_account_id(member.id)
         # Build reviews are weighed from stored owner-guild roles; keep this member's current.
         await self._members.record((member,))
@@ -182,8 +182,7 @@ class VoteReactionHandler:
             recovering = event.recovering
             if snapshot is None or snapshot.is_anonymous:
                 return
-            # Removing a reaction needs no fresh consent and must never create an account. An
-            # account whose consent lapsed still owns the ballots it cast as an account.
+            # Removing a reaction must never create an account.
             account_id = await self.bot.account_ids.resolve(self.bot.services.accounts, payload.user_id)
             if account_id is not None and snapshot.selection_for(Voter.account(account_id)) is None:
                 account_id = await self._voters.voter_account_id(payload.user_id)

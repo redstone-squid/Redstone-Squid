@@ -112,7 +112,7 @@ class InferenceBot:
 def _make_intake(*, account: Account | None) -> BuildMessageIntake[Any]:
     intake = BuildMessageIntake.__new__(BuildMessageIntake)
     intake.bot = cast(Any, InferenceBot(AccountRecorder(account)))
-    intake.consent_sticky = StickyRecorder()
+    intake.indexing_sticky = StickyRecorder()
     return intake
 
 
@@ -155,9 +155,9 @@ async def test_unknown_author_triggers_reminder_and_skips_indexing(
     with ActingContext.direct(UserActor(discord_user_id=message.author.id)).scope():
         await intake.infer_build_from_message(message)
 
-    assert isinstance(intake.consent_sticky, StickyRecorder)
-    assert intake.consent_sticky.triggers == [message.channel]
-    assert intake.consent_sticky.activity == []
+    assert isinstance(intake.indexing_sticky, StickyRecorder)
+    assert intake.indexing_sticky.triggers == [message.channel]
+    assert intake.indexing_sticky.activity == []
     mock_ingest.assert_not_awaited()
 
 
@@ -172,9 +172,9 @@ async def test_enabled_indexing_records_activity_and_processes_message(
     with ActingContext.direct(UserActor(discord_user_id=message.author.id)).scope():
         await intake.infer_build_from_message(message)
 
-    assert isinstance(intake.consent_sticky, StickyRecorder)
-    assert intake.consent_sticky.triggers == []
-    assert intake.consent_sticky.activity == [message.channel.id]
+    assert isinstance(intake.indexing_sticky, StickyRecorder)
+    assert intake.indexing_sticky.triggers == []
+    assert intake.indexing_sticky.activity == [message.channel.id]
     mock_ingest.assert_awaited_once()
 
 

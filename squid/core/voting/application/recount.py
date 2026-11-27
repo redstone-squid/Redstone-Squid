@@ -70,9 +70,9 @@ class ConsentedVoterLookup(Protocol):
     """Find the account a reacting Discord user may vote with."""
 
     async def voter_account_id(self, discord_id: int) -> int | None:
-        """Return the account ID if the account exists and its consent is current.
+        """Return the account ID if the voter already has an account.
 
-        A reaction gives no chance to ask for consent, so this never creates an account.
+        A reaction alone does not create an account.
         """
         ...
 
@@ -130,7 +130,7 @@ class BallotRecounter:
         - Reactions for any other option are removed from public polls, and every reaction
           is removed from anonymous polls, whose cards must not show who voted.
 
-        People without a consented account vote under their Discord ID. Voters with no
+        People without an account vote under their Discord ID. Voters with no
         reactions keep their stored ballots. Finally the bot adds back any
         option reaction of its own that is missing, so people can still vote.
 

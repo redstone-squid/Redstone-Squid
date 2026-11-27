@@ -5,7 +5,7 @@ ballot from the web or another guild's card weighs the same as one from the owne
 guild. Member events keep those rows current, and a full pass over the owner
 guild's member cache catches events missed while the bot was down. No other guild
 is stored: Discord-only sessions use the roles a voter reacts with. Only members
-with a consented account are stored.
+with an account are stored.
 """
 
 from collections.abc import Iterable

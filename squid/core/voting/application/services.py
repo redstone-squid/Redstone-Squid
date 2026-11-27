@@ -170,7 +170,7 @@ class VoteService:
     ) -> None:
         """Store what an adapter saw of guild members' roles, for weighing their ballots.
 
-        Only members with a consented account are kept. With `complete`, `members`
+        Only members with an account are kept. With `complete`, `members`
         is the whole guild and stored members missing from it are forgotten.
         """
         async with self._uow_factory() as uow:

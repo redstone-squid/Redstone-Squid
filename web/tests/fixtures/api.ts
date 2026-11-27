@@ -295,10 +295,19 @@ async function routeRequest(request: Request): Promise<Response> {
     url.pathname === "/v1/accounts/me/discord-build-indexing"
   ) {
     const user = cookie(request, "__Host-squid_session");
-    if (!user || !session(request).user) return problem(request, 401, "AUTHENTICATION_REQUIRED");
+    if (user === undefined || session(request).user === null)
+      return problem(request, 401, "AUTHENTICATION_REQUIRED");
     if (request.method === "PUT") {
       if (!csrfMatches(request)) return problem(request, 403, "FORBIDDEN");
-      indexing.set(user, (await request.json()).enabled === true);
+      const body: unknown = await request.json();
+      if (
+        typeof body !== "object" ||
+        body === null ||
+        !("enabled" in body) ||
+        typeof body.enabled !== "boolean"
+      )
+        return problem(request, 422, "INVALID_SETTING");
+      indexing.set(user, body.enabled);
     }
     return json({ discord_build_indexing_enabled: indexing.get(user) ?? false });
   }

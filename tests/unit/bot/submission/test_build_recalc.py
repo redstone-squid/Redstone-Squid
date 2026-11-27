@@ -15,7 +15,7 @@ from squid.bot.submission.indexing import BuildIndexingStickyMessage
 from squid.bot.submission.message_intake import BuildMessageIntake
 from squid.bot.utils.permissions import PermissionNodeRequired
 from squid.core.accounts.application import AccountService
-from squid.core.accounts.domain import PRIVACY_NOTICE_VERSION, IdentityProvider, PrivacyNoticeReceipt
+from squid.core.accounts.domain import IdentityProvider, PrivacyNoticeReceipt
 from squid.core.accounts.models import Account
 from squid.core.actors import ActingContext, Actor, UserActor
 from squid.core.builds.application.inference import BuildInferenceInput
@@ -74,6 +74,13 @@ class AccountRecorder(AccountService):
     async def get_account_by_identity(self, provider: IdentityProvider, subject: str) -> Account | None:
         return self.account
 
+    @override
+    async def get_or_create_identity(
+        self, provider: IdentityProvider, subject: str, *, consent: PrivacyNoticeReceipt | None = None
+    ) -> Account:
+        assert self.account is not None
+        return self.account
+
 
 class SettingsRecorder(SettingsService):
     def __init__(self) -> None:
@@ -103,7 +110,7 @@ class CommunityConfig:
     build_log_channel_ids: set[int]
 
 
-class ConsentStickyRecorder(BuildIndexingStickyMessage):
+class IndexingStickyRecorder(BuildIndexingStickyMessage):
     def __init__(self) -> None:
         self.calls: list[discord.TextChannel] = []
 
@@ -124,18 +131,9 @@ class RecordingMessageIntake(BuildMessageIntake[Any]):
         return text_node("Review the recalculation proposal.")
 
 
-def _intake(*, allowed: bool = True, account_consented: bool = True) -> RecordingMessageIntake:
+def _intake(*, allowed: bool = True, indexing_enabled: bool = True) -> RecordingMessageIntake:
     intake = RecordingMessageIntake()
-    account = (
-        Account(
-            discord_build_indexing_enabled=True,
-            id=1,
-            created_at=Instant.from_utc(2026, 8, 29),
-            consent=PrivacyNoticeReceipt(PRIVACY_NOTICE_VERSION, Instant.from_utc(2026, 8, 29)),
-        )
-        if account_consented
-        else None
-    )
+    account = Account(id=1, discord_build_indexing_enabled=indexing_enabled)
 
     intake.bot = cast(
         Any,
@@ -150,7 +148,7 @@ def _intake(*, allowed: bool = True, account_consented: bool = True) -> Recordin
             community_config=CommunityConfig(build_log_channel_ids={BUILD_LOG_CHANNEL}),
         ),
     )
-    intake.consent_sticky = ConsentStickyRecorder()
+    intake.indexing_sticky = IndexingStickyRecorder()
     return intake
 
 
@@ -164,7 +162,7 @@ def _interaction() -> discord.Interaction[Any]:
     return cast(discord.Interaction[Any], interaction)
 
 
-def _message(*, channel_id: int = BUILD_LOG_CHANNEL, from_bot: bool = False) -> discord.Message:
+def _message(*, channel_id: int = BUILD_LOG_CHANNEL, from_bot: bool = False, author_id: int = 42) -> discord.Message:
     # Use a TextChannel spec so the channel eligibility isinstance check succeeds.
     channel = MagicMock(spec=discord.TextChannel)
     channel.id = channel_id
@@ -179,7 +177,7 @@ def _message(*, channel_id: int = BUILD_LOG_CHANNEL, from_bot: bool = False) -> 
         author: Author
         channel: discord.TextChannel
 
-    return cast(discord.Message, Message(author=Author(id=42, bot=from_bot), channel=channel))
+    return cast(discord.Message, Message(author=Author(id=author_id, bot=from_bot), channel=channel))
 
 
 async def _run(intake: BuildMessageIntake[Any], message: discord.Message) -> discord.Interaction[Any]:
@@ -224,16 +222,23 @@ async def test_a_build_log_message_is_recalculated() -> None:
     assert intake.inferred == [message]
 
 
-async def test_recalc_refuses_when_author_is_unconsented() -> None:
-    intake = _intake(account_consented=False)
+async def test_author_can_scan_one_message_with_automatic_indexing_off() -> None:
+    intake = _intake(indexing_enabled=False)
+    message = _message(author_id=7)
+    await _run(intake, message)
+    assert intake.inferred == [message]
+
+
+async def test_recalc_requires_other_authors_to_enable_indexing() -> None:
+    intake = _intake(indexing_enabled=False)
     message = _message()
 
     interaction = await _run(intake, message)
 
     assert intake.inferred == []
     assert cast(Any, interaction).edit_original_response.await_count == 1
-    assert isinstance(intake.consent_sticky, ConsentStickyRecorder)
-    assert intake.consent_sticky.calls == [message.channel]
+    assert isinstance(intake.indexing_sticky, IndexingStickyRecorder)
+    assert intake.indexing_sticky.calls == [message.channel]
 
 
 class RetainedInference(SubmissionInferenceRuns):

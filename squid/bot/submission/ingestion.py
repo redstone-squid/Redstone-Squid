@@ -53,7 +53,7 @@ async def ingest_message_bundle(
 ) -> UUID:
     """Resume or infer candidates for a nonempty, ordered bundle of primary messages.
 
-    The first primary author owns the run; callers check that author's consent before
+    The first primary author owns the run; callers check that author's indexing preference before
     entering. Primary message IDs determine its retry identity. Admission may queue
     complete drafts, while missing categories and ambiguous files remain for review.
     """
