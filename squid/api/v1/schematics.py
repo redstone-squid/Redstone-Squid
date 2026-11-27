@@ -19,7 +19,8 @@ from squid.api.dependencies import (
 from squid.api.errors import responses
 from squid.api.idempotency import reserve_idempotent_before_request
 from squid.api.links import relative_url_for
-from squid.api.pagination import OffsetParam, Page, PageSizeParam, resolve_selector
+from squid.api.pagination import AfterIdParam, BeforeIdParam, OffsetParam, Page, PageSizeParam, resolve_selector
+from squid.api.private_responses import private_response
 from squid.api.v1.schemas.schematics import SchematicSummary, VideoCreateRequest, VideoResponse
 from squid.core.actors import ActingContext
 from squid.core.schematics.application.commands import MAX_RENDER_EXTENT, MIN_RENDER_EXTENT
@@ -283,6 +284,47 @@ async def submit_schematic_video(
 
 
 @get(
+    "/accounts/me/schematic-videos",
+    operation_id="account_schematic_video_list",
+    responses=responses(400, 401, 422, 503),
+    security=[WEB, DEVICE, MINECRAFT],
+    opt=contract(cli=transport_only()),
+)
+@private_response
+async def list_own_schematic_videos(
+    schematics: Schematics,
+    caller: CurrentCaller,
+    request: Request,
+    schematic_id: Annotated[int | None, QueryParameter(ge=1)] = None,
+    page_size: PageSizeParam = 20,
+    offset: OffsetParam = None,
+    after_id: AfterIdParam = None,
+    before_id: BeforeIdParam = None,
+) -> Page[VideoResponse]:
+    """Page the videos the caller requested, newest first, optionally for one schematic.
+
+    Opening a video still checks that its schematic is published.
+    """
+    caller.require_consented_account()
+    if schematics.videos is None:
+        raise SchematicSupportUnavailableError
+    page = await schematics.videos.list_videos(
+        schematic_id=schematic_id,
+        selector=resolve_selector(offset=offset, after_id=after_id, before_id=before_id),
+        page_size=page_size,
+        context=caller.context(),
+    )
+    return Page[VideoResponse].from_domain(
+        page,
+        lambda status: VideoResponse.from_status(
+            status,
+            status_url=relative_url_for(request, "get_schematic_video", video_id=status.id),
+            download_url=relative_url_for(request, "get_schematic_video_content", video_id=status.id),
+        ),
+    )
+
+
+@get(
     "/schematic-videos/{video_id:int}",
     operation_id="schematic_video_status",
     name="get_schematic_video",
@@ -372,6 +414,7 @@ router = Router(
         get_schematic_resource_pack,
         get_schematic_resource_pack_content,
         submit_schematic_video,
+        list_own_schematic_videos,
         get_schematic_video,
         get_schematic_video_content,
     ],

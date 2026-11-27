@@ -5,11 +5,13 @@ from datetime import timedelta
 from typing import Any, cast
 from uuid import uuid4
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import Select, delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.core.errors import RateLimitedError
+from squid.core.pagination import PageSelector
+from squid.core.persistence.paging import KeysetOrder
 from squid.core.persistence.queue import ClaimedRowQueue, QueueSpec
 from squid.core.persistence.types import database_now
 from squid.core.schematics.application.jobs import (
@@ -19,7 +21,7 @@ from squid.core.schematics.application.jobs import (
     SchematicJobOperation,
     SchematicJobSnapshot,
 )
-from squid.core.schematics.models import SchematicJob
+from squid.core.schematics.models import BuildSchematic, SchematicJob
 
 SCHEMATIC_JOB_SPEC = QueueSpec(
     name="schematic_jobs",
@@ -81,24 +83,22 @@ class PostgresSchematicJobRepository:
         return job_id
 
     async def get(self, job_id: int) -> SchematicJobSnapshot | None:
+        row = await self._session().get(SchematicJob, job_id)
+        return None if row is None else _snapshot(row)
+
+    async def list_videos(
+        self, account_id: int, *, schematic_id: int | None, selector: PageSelector, limit: int
+    ) -> tuple[SchematicJobSnapshot, ...]:
+        """Read one newest-first page; a `before_id` page is read in reverse and restored."""
         session = self._session()
-        row = await session.get(SchematicJob, job_id)
-        if row is None:
-            return None
-        return SchematicJobSnapshot(
-            id=row.id,
-            completed_at=row.completed_at,
-            dead_at=row.dead_at,
-            result=cast(Mapping[str, Any] | None, row.result),
-            result_object_key=row.result_object_key,
-            last_error=row.last_error,
-            error_kind=cast(SchematicJobErrorKind | None, row.error_kind),
-            error_context=cast(Mapping[str, Any], row.error_context),
-            operation=row.operation,
-            params=row.params,
-            claimed_at=row.claimed_at,
-            expires_at=row.expires_at,
-        )
+        order = KeysetOrder(SchematicJob.id, SchematicJob.id, descending=True)
+        statement = await order.apply(session, _videos(select(SchematicJob), account_id, schematic_id), selector)
+        rows = tuple(_snapshot(row) for row in await session.scalars(statement.limit(limit)))
+        return rows[::-1] if selector.before_id is not None else rows
+
+    async def count_videos(self, account_id: int, *, schematic_id: int | None) -> int:
+        statement = _videos(select(func.count()).select_from(SchematicJob), account_id, schematic_id)
+        return await self._session().scalar(statement) or 0
 
     async def claim(self, *, limit: int) -> Sequence[ClaimedSchematicJob]:
         return tuple(
@@ -244,3 +244,33 @@ class PostgresSchematicJobRepository:
                 .where(SchematicJob.id == job.id, SchematicJob.claim_token == job.claim_token)
                 .values(claim_token=None, claimed_at=None)
             )
+
+
+def _snapshot(row: SchematicJob) -> SchematicJobSnapshot:
+    return SchematicJobSnapshot(
+        id=row.id,
+        completed_at=row.completed_at,
+        dead_at=row.dead_at,
+        result=cast(Mapping[str, Any] | None, row.result),
+        result_object_key=row.result_object_key,
+        last_error=row.last_error,
+        error_kind=cast(SchematicJobErrorKind | None, row.error_kind),
+        error_context=cast(Mapping[str, Any], row.error_context),
+        operation=row.operation,
+        params=row.params,
+        claimed_at=row.claimed_at,
+        expires_at=row.expires_at,
+    )
+
+
+def _videos[S: Select[Any]](statement: S, account_id: int, schematic_id: int | None) -> S:
+    """Keep the account's video jobs whose attachment still holds the file they rendered."""
+    video = SchematicJob.params["video"]
+    statement = statement.join(
+        BuildSchematic,
+        (BuildSchematic.id == video["schematic_id"].as_integer())
+        & (BuildSchematic.file_sha256 == video["source_sha256"].as_string()),
+    ).where(SchematicJob.operation == "render_video", video["account_id"].as_integer() == account_id)
+    if schematic_id is not None:
+        statement = statement.where(BuildSchematic.id == schematic_id)
+    return statement

@@ -1,6 +1,7 @@
 """Private video requests backed by the existing durable job and artifact lifecycle."""
 
 import hashlib
+from dataclasses import replace
 from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel
@@ -9,6 +10,7 @@ from whenever import Instant
 from squid.core.actors import ActingContext
 from squid.core.artifacts import ArtifactStore
 from squid.core.errors import ConflictError, InfrastructureError, NotFoundError
+from squid.core.pagination import FIRST_PAGE, Page, PageSelector
 from squid.core.permissions.domain.catalogue import BUILD_SCHEMATIC_VIEW_PRIVATE
 from squid.core.schematics.application.attachments import StoredSchematic
 from squid.core.schematics.application.jobs import SchematicJobService, SchematicJobSnapshot
@@ -112,28 +114,30 @@ class SchematicVideoService:
 
     async def get_video(self, job_id: int, *, context: ActingContext) -> VideoStatus:
         with context.scope():
-            snapshot = await self._authorized_job(job_id, context)
-            metadata = snapshot.params["video"]
-            state: Literal["queued", "running", "succeeded", "failed", "expired"] = "queued"
-            if snapshot.expires_at is not None and snapshot.expires_at <= Instant.now():
-                state = "expired"
-            elif snapshot.dead_at is not None:
-                state = "failed"
-            elif snapshot.completed_at is not None:
-                state = "succeeded"
-            elif snapshot.claimed_at is not None:
-                state = "running"
-            return VideoStatus(
-                id=job_id,
-                build_id=metadata["build_id"],
-                schematic_id=metadata["schematic_id"],
-                status=state,
-                expires_at=snapshot.expires_at.format_iso() if snapshot.expires_at is not None else None,
-                error=snapshot.error_kind if state == "failed" else None,
-                input_candidates=tuple(
-                    tuple(position) for position in snapshot.error_context.get("input_candidates", ())
-                ),
+            return _status(await self._authorized_job(job_id, context))
+
+    async def list_videos(
+        self,
+        *,
+        schematic_id: int | None = None,
+        selector: PageSelector = FIRST_PAGE,
+        page_size: int = 20,
+        context: ActingContext,
+    ) -> Page[VideoStatus]:
+        """Page the caller's own videos newest first, optionally for one attachment.
+
+        Videos of a file the attachment no longer holds are left out, as `get_video` refuses them.
+        Publication is checked when the caller opens a video, not here.
+        """
+        with context.scope():
+            page = await self._jobs.list_videos(
+                context.effective.require_account_id(),
+                schematic_id=schematic_id,
+                selector=selector,
+                page_size=page_size,
+                context=context,
             )
+            return replace(page, items=tuple(_status(job) for job in page.items))
 
     async def open_video_content(self, job_id: int, *, context: ActingContext) -> bytes:
         with context.scope():
@@ -173,3 +177,25 @@ class SchematicVideoService:
         if not stored.publication.is_public_downloadable and stored.uploaded_by_account_id != account_id:
             await self._permissions.require(context.effective, BUILD_SCHEMATIC_VIEW_PRIVATE)
         return stored
+
+
+def _status(job: SchematicJobSnapshot) -> VideoStatus:
+    metadata = job.params["video"]
+    state: Literal["queued", "running", "succeeded", "failed", "expired"] = "queued"
+    if job.expires_at is not None and job.expires_at <= Instant.now():
+        state = "expired"
+    elif job.dead_at is not None:
+        state = "failed"
+    elif job.completed_at is not None:
+        state = "succeeded"
+    elif job.claimed_at is not None:
+        state = "running"
+    return VideoStatus(
+        id=job.id,
+        build_id=metadata["build_id"],
+        schematic_id=metadata["schematic_id"],
+        status=state,
+        expires_at=job.expires_at.format_iso() if job.expires_at is not None else None,
+        error=job.error_kind if state == "failed" else None,
+        input_candidates=tuple(tuple(position) for position in job.error_context.get("input_candidates", ())),
+    )

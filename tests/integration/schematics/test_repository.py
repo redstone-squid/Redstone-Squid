@@ -23,9 +23,11 @@ from squid.core.artifacts import ArtifactMetadata
 from squid.core.artifacts.infrastructure import LocalArtifactStore
 from squid.core.builds.infrastructure.schematic_summary import SchematicServiceSummaryProvider
 from squid.core.errors import DataIntegrityError
+from squid.core.pagination import FIRST_PAGE
 from squid.core.permissions.application import PermissionService
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.schematics.application import SchematicPublication, SchematicService
+from squid.core.schematics.application.jobs import SchematicJobService
 from squid.core.schematics.application.preview_storage import PreviewCleanupInProgressError, SchematicPreviewStorage
 from squid.core.schematics.application.storage import SchematicStorageService
 from squid.core.schematics.domain.models import (
@@ -36,6 +38,7 @@ from squid.core.schematics.domain.models import (
     SchematicVisibility,
     SimulationResult,
 )
+from squid.core.schematics.models import SchematicJob
 from tests.support.build_edits import build_edit_session
 from tests.support.services import unconfigured
 from tests.unit.schematics.fakes import FakeSchematicAnalyzer, FakeVersionResolver, make_analysis
@@ -797,3 +800,57 @@ async def test_card_measurements_and_refresh_follow_replacement_and_withdrawal(
         )
     assert await provider.summary_for(1, context=ActingContext.direct(AnonymousActor())) is None
     assert await generation() > second_generation
+
+
+async def test_reanalysis_keeps_the_attachment_time_and_replaces_block_counts(
+    repository: SchematicStorageService,
+) -> None:
+    digest = await repository.put_file(b"door", source_format=SchematicFormat.LITEMATIC)
+    context = ActingContext.worker("test")
+    await repository.record_analysis(
+        1, digest, make_analysis(block_counts={"minecraft:lever[powered=true]": 2}), context=context, primary=True
+    )
+    first = (await repository.list_for_build(1))[0]
+
+    await repository.record_analysis(
+        1, digest, make_analysis(block_counts={"minecraft:stone": 5}), context=context, primary=True
+    )
+
+    second = (await repository.list_for_build(1))[0]
+    assert first.analysis.metrics.block_counts == {"minecraft:lever[powered=true]": 2}
+    assert second.analysis.metrics.block_counts == {"minecraft:stone": 5}
+    assert second.attached_at == first.attached_at is not None
+
+
+async def test_video_listing_keeps_the_callers_jobs_for_files_their_attachment_still_holds(
+    repository: SchematicStorageService,
+    async_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    context = ActingContext.worker("test")
+    door = await repository.put_file(b"door", source_format=SchematicFormat.LITEMATIC)
+    door_id = await repository.record_analysis(1, door, make_analysis(), context=context, primary=True)
+    lamp = await repository.put_file(b"lamp", source_format=SchematicFormat.LITEMATIC)
+    lamp_id = await repository.record_analysis(2, lamp, make_analysis(), context=context, primary=True)
+    jobs = SchematicJobService(uow_factory=partial(SqlAlchemyUnitOfWork, async_session_factory))
+
+    async def submit(account_id: int, schematic_id: int, sha256: str) -> int:
+        # Insert directly: submission admits only two unfinished videos per account.
+        video = {"account_id": account_id, "build_id": 1, "schematic_id": schematic_id, "source_sha256": sha256}
+        async with async_session_factory.begin() as session:
+            job = SchematicJob(operation="render_video", params={"video": video})
+            session.add(job)
+            await session.flush()
+            return job.id
+
+    older = await submit(10, door_id, door)
+    await submit(11, door_id, door)
+    await submit(10, door_id, "f" * 64)
+    newer = await submit(10, lamp_id, lamp)
+
+    listed = await jobs.list_videos(10, schematic_id=None, selector=FIRST_PAGE, page_size=1, context=context)
+    assert ([job.id for job in listed.items], listed.total) == ([newer], 2)
+    assert listed.next is not None
+    rest = await jobs.list_videos(10, schematic_id=None, selector=listed.next.selector(), page_size=1, context=context)
+    assert [job.id for job in rest.items] == [older]
+    one = await jobs.list_videos(10, schematic_id=door_id, selector=FIRST_PAGE, page_size=20, context=context)
+    assert [job.id for job in one.items] == [older]

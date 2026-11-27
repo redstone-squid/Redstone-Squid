@@ -11,6 +11,7 @@ from whenever import Instant
 from squid.core.actors import ActingContext, UserActor
 from squid.core.artifacts.infrastructure import LocalArtifactStore
 from squid.core.errors import AuthorizationError, NotFoundError
+from squid.core.pagination import Page
 from squid.core.permissions.application import PermissionService
 from squid.core.schematics.application.attachments import StoredSchematic
 from squid.core.schematics.application.jobs import SchematicJobService, SchematicJobSnapshot
@@ -115,3 +116,29 @@ async def test_download_rechecks_owner_source_and_expiry(components: Components)
     ).status == "expired"
     with pytest.raises(NotFoundError):
         await service.open_video_content(41, context=ActingContext.direct(UserActor(account_id=10, is_bot_owner=True)))
+
+
+async def test_listing_pages_the_callers_videos_with_their_status(components: Components) -> None:
+    service, _, jobs, _ = components
+    video = {"account_id": 10, "build_id": 7, "schematic_id": 1, "source_sha256": "a" * 64}
+    finished = SchematicJobSnapshot(
+        id=41,
+        completed_at=Instant.now(),
+        dead_at=None,
+        result={},
+        result_object_key="output.mp4",
+        last_error=None,
+        error_kind=None,
+        error_context={},
+        operation="render_video",
+        params={"video": video},
+    )
+    jobs.list_videos.return_value = Page(
+        items=(replace(finished, id=42, completed_at=None), finished), total=2, next=None, prev=None
+    )
+
+    page = await service.list_videos(schematic_id=1, context=ActingContext.direct(UserActor(account_id=10)))
+
+    assert [(item.id, item.status) for item in page.items] == [(42, "queued"), (41, "succeeded")]
+    assert jobs.list_videos.call_args.args == (10,)
+    assert jobs.list_videos.call_args.kwargs["schematic_id"] == 1
