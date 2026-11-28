@@ -8,7 +8,7 @@ Unfinished items come first, then finished ones, each grouped by area. Numbers a
 
 ### Creators and accounts
 
-28. **Product decision: account deletion.** A2 can download account records through `GET /v1/accounts/me/export` in JSON or zipped CSV. Decide whether to offer `DELETE /v1/accounts/me` before promising deletion.
+28. **Account deletion.** A2 can download account records through `GET /v1/accounts/me/export` in JSON or zipped CSV. `DELETE /v1/accounts/me` follows [the account deletion plan](../account-deletion.md).
 
 ## Finished
 
