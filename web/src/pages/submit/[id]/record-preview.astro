@@ -1,0 +1,15 @@
+---
+import RecordPrediction from "@/layouts/RecordPrediction.astro";
+import { submissionDraftRecordPreview } from "@/generated/sdk.gen";
+import { load } from "@/server/api";
+import { requireSession } from "@/server/session";
+const preview = await load(
+  submissionDraftRecordPreview({
+    client: Astro.locals.api,
+    headers: { Cookie: requireSession(Astro) },
+    path: { draft_id: Astro.params.id ?? "" },
+  }),
+);
+---
+
+<RecordPrediction {preview} />

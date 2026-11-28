@@ -130,4 +130,10 @@ const title = row.title ?? m.submissionBuildNumber({ id: row.build_id });
       )}
     </form>
   )}
+  <Button
+    href={localizePath(`/submissions/${row.id}/record-preview`) + Astro.url.search}
+    target="_blank"
+  >
+    {m.predictionTitle()}
+  </Button>
 </CatalogueLayout>

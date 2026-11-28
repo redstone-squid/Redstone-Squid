@@ -1,0 +1,20 @@
+---
+import RecordPrediction from "@/layouts/RecordPrediction.astro";
+import { submissionRecordPreview } from "@/generated/sdk.gen";
+import { load } from "@/server/api";
+import { requireSession } from "@/server/session";
+const preview = await load(
+  submissionRecordPreview({
+    client: Astro.locals.api,
+    headers: { Cookie: requireSession(Astro) },
+    path: { submission_id: Astro.params.id ?? "" },
+    query: {
+      review_session_id: Astro.url.searchParams.has("review_session_id")
+        ? Number(Astro.url.searchParams.get("review_session_id"))
+        : undefined,
+    },
+  }),
+);
+---
+
+<RecordPrediction {preview} />

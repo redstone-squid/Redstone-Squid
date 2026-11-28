@@ -16,20 +16,23 @@ const response = await submissionFinalizationGet({
 const result = unwrap(response);
 const active =
   "status" in result && ["pending", "claimed", "waiting_for_artifacts"].includes(result.status);
-const url = new URL(
-  `/v1/submissions/drafts/${encodeURIComponent(id)}/status`,
-  Astro.locals.config.apiBaseUrl,
-);
+const statusPath = `/v1/submissions/drafts/${encodeURIComponent(id)}/status`;
 if ("submission_id" in result && result.submission_id)
   return Astro.redirect(localizePath(`/submissions/${result.submission_id}`), 303);
 if ("review_vote_id" in result && !result.review_vote_id)
   return Astro.redirect(localizePath(`/builds/${result.build_id}`), 303);
-const title = m.submissionProcessing();
+const title = active
+  ? m.submissionProcessing()
+  : "status" in result && result.status === "needs_attention"
+    ? m.finalizationNeedsAttention()
+    : "status" in result && result.status === "dead"
+      ? m.finalizationFailed()
+      : m.finalizationFinished();
 ---
 
 <CatalogueLayout {title} noindex>
   {active && (
-    <finalization-status data-url={url.href} data-etag={response.response?.headers.get("etag")} />
+    <finalization-status data-url={statusPath} data-etag={response.response?.headers.get("etag")} />
   )}
   <PageHeader {title} description={"status" in result ? result.status : undefined} />
   {"issues" in result && (
@@ -43,49 +46,9 @@ const title = m.submissionProcessing();
   )}
   <Button href={localizePath(`/submit/${id}`)}>{m.accountDrafts()}</Button>
   <Button href={localizePath(`/submit/${id}/status`)}>{m.submissionRefresh()}</Button>
+  <Button href={localizePath(`/submit/${id}/record-preview`)} target="_blank">
+    {m.predictionSavedDraft()}
+  </Button>
 </CatalogueLayout>
 
-<script>
-  class FinalizationStatus extends HTMLElement {
-    private controller?: AbortController;
-    private timer?: number;
-    private delay = 2000;
-    connectedCallback() {
-      this.controller = new AbortController();
-      document.addEventListener("visibilitychange", this.schedule, {
-        signal: this.controller.signal,
-      });
-      this.schedule();
-    }
-    disconnectedCallback() {
-      this.controller?.abort();
-      window.clearTimeout(this.timer);
-    }
-    private schedule = () => {
-      window.clearTimeout(this.timer);
-      if (!document.hidden && !this.controller?.signal.aborted)
-        this.timer = window.setTimeout(() => void this.poll(), this.delay);
-    };
-    private async poll() {
-      const signal = this.controller?.signal;
-      if (!signal || !this.dataset.url) return;
-      try {
-        const response = await fetch(this.dataset.url, {
-          headers: this.dataset.etag ? { "If-None-Match": this.dataset.etag } : {},
-          credentials: "include",
-          cache: "no-store",
-          signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]),
-        });
-        if (response.ok || [401, 403, 404].includes(response.status)) {
-          location.reload();
-          return;
-        }
-      } catch {
-        if (signal.aborted) return;
-      }
-      this.delay = Math.min(this.delay * 2, 30000);
-      this.schedule();
-    }
-  }
-  customElements.define("finalization-status", FinalizationStatus);
-</script>
+<script src="../../../features/submissions/finalization-status.ts"></script>

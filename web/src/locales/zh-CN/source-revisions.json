@@ -978,5 +978,21 @@
   "submission-media": "5fd5780035add50a35f198486b90c2838708c1c46999c17a2124123dfbf24b62",
   "submission-choose-file": "5dcf3520ff731a5b7e5791fee2fa09d3af750be57712554e41a3502e55f22724",
   "submission-file-rejected": "b3b22a28417d040ab596e341d2b00c548a104afdbb36ccefb284ca9a59eaea25",
-  "submission-correction-inbox": "5cde9b1d71086cb7cce151de31a6f7d0eafd15ce832f8a254869a60eb9b70664"
+  "submission-correction-inbox": "5cde9b1d71086cb7cce151de31a6f7d0eafd15ce832f8a254869a60eb9b70664",
+  "prediction-title": "f156edbe4b0ed25f196316864fbd3874008e27b75dfa4c0bb238c3c09708dc66",
+  "prediction-saved-draft": "2a970ae7ed98776d89715b23d448bb2fa7201fe90bebca21a914385695e16917",
+  "prediction-explanation": "692ec8e366a5ee772cf383da4b2415db21583bbbd51384fbabbe7bd025014d95",
+  "prediction-holds": "034677b5190151ed073547a64576db67a3412f2432e32aeb7a3adbc5e5d6adab",
+  "prediction-shares": "6306298e16e94c845b69038091a53bd49ef83e20352693a5bdb8a9bd43e1a284",
+  "prediction-ties": "4fa776da560a9af31fc4480e354be56b395c87088c11a513106e28df5878fb24",
+  "prediction-loses": "234b2db10fdab4294aa9ff1a110f3874baff0395e83df3047940bd84c267544c",
+  "prediction-undecided": "bf2be16aa6efad6b2092b7609cee48b5568a8afb4cb11e8acd8f9f4248009222",
+  "prediction-missing": "85acfe36d6f9407d3ebe10852514dc50f066aca864f0b6cc76612e99d7d785d0",
+  "prediction-no-categories": "87f664237ccfae0548a8d0be49e1640527f424ffa38a3aad327b2d859b1f1f7b",
+  "prediction-all-time": "8fdbdd5c4aa1bfdff961a2001bac5b2954c0863fffeae754d051988a0fcfbc44",
+  "prediction-current": "bc3cef269fafd7dd6233bccf678e43c3b254754d0aef033beea581a459ded63a",
+  "prediction-current-holder": "4869a9677129094e73f6b49282f947936f1d5b58beb44370e109d1b75044320c",
+  "finalization-needs-attention": "dd878bcbc62dee5f0b426127c57675bff7a5d405cb7a38b56b40a639af4bbc20",
+  "finalization-failed": "4178b1fd56261f00d506ff5121ab6152ae586657b7bf27c883537ed8eb21c807",
+  "finalization-finished": "e8defcb199c11d891b80db565bd5769b15d8a68d5f9ea227c63c4242c221dc2e"
 }

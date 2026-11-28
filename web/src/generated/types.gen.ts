@@ -1769,6 +1769,17 @@ export type MetadataSearchResult = {
 };
 
 /**
+ * MetricDelta
+ */
+export type MetricDelta = {
+    metric: string;
+    unit: string;
+    candidate: number | string;
+    holder: number | string;
+    difference: number;
+};
+
+/**
  * MetricUnit
  */
 export type MetricUnit = 'blocks' | 'game_ticks' | 'date';
@@ -2179,6 +2190,39 @@ export type PointStatus = 'supported' | 'outside_domain' | 'unresolved' | 'unmap
  * How far a generic poll is published.
  */
 export type PollScope = 'guild' | 'network';
+
+/**
+ * PredictedRecord
+ */
+export type PredictedRecord = {
+    record_id: string | null;
+    category_key: string;
+    title: string;
+    criterion: RecordCriterion;
+    scope: VersionScope;
+    version_id: number | null;
+    outcome: 'holds' | 'shares' | 'ties_later' | 'loses' | 'undecided';
+    missing: Array<PreviewGap>;
+    current_holders: Array<PreviewHolder>;
+};
+
+/**
+ * PreviewGap
+ */
+export type PreviewGap = {
+    fact: RecordFact;
+    fields: Array<string>;
+    build_id: number | null;
+};
+
+/**
+ * PreviewHolder
+ */
+export type PreviewHolder = {
+    build_id: number;
+    title: string | null;
+    deltas: Array<MetricDelta>;
+};
 
 /**
  * PrivacyNoticeDetail
@@ -2777,6 +2821,16 @@ export type RecordMetric = {
  * How a tag assignment satisfies a record-category predicate.
  */
 export type RecordOperator = 'present' | 'exact' | 'at_most' | 'at_least';
+
+/**
+ * RecordPreview
+ */
+export type RecordPreview = {
+    revision: number | null;
+    evaluated_at: string;
+    missing_fields: Array<string>;
+    records: Array<PredictedRecord>;
+};
 
 /**
  * RecordResolution
@@ -10288,6 +10342,102 @@ export type BrowserImpersonationGetResponses = {
 
 export type BrowserImpersonationGetResponse = BrowserImpersonationGetResponses[keyof BrowserImpersonationGetResponses];
 
+export type SubmissionDraftRecordPreviewData = {
+    body?: never;
+    path: {
+        draft_id: string;
+    };
+    query?: never;
+    url: '/v1/submissions/drafts/{draft_id}/record-preview';
+};
+
+export type SubmissionDraftRecordPreviewErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type SubmissionDraftRecordPreviewError = SubmissionDraftRecordPreviewErrors[keyof SubmissionDraftRecordPreviewErrors];
+
+export type SubmissionDraftRecordPreviewResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: RecordPreview;
+};
+
+export type SubmissionDraftRecordPreviewResponse = SubmissionDraftRecordPreviewResponses[keyof SubmissionDraftRecordPreviewResponses];
+
+export type SubmissionRecordPreviewData = {
+    body?: never;
+    path: {
+        submission_id: string;
+    };
+    query?: {
+        review_session_id?: number | null;
+    };
+    url: '/v1/submissions/{submission_id}/record-preview';
+};
+
+export type SubmissionRecordPreviewErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type SubmissionRecordPreviewError = SubmissionRecordPreviewErrors[keyof SubmissionRecordPreviewErrors];
+
+export type SubmissionRecordPreviewResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: RecordPreview;
+};
+
+export type SubmissionRecordPreviewResponse = SubmissionRecordPreviewResponses[keyof SubmissionRecordPreviewResponses];
+
 export type SubmissionsDecideData = {
     body: SubmissionDecision;
     headers?: {
@@ -11170,7 +11320,7 @@ export type SubmissionFinalizationGetError = SubmissionFinalizationGetErrors[key
 
 export type SubmissionFinalizationGetResponses = {
     /**
-     * Request fulfilled, document follows
+     * Current finalization status.
      */
     200: SubmissionAttemptResponse | DraftPreparationResponse | DraftEditResult;
 };

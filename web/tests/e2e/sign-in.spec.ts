@@ -74,6 +74,19 @@ test.describe("with JavaScript disabled", () => {
     );
   });
 
+  test("opens a prediction for the reviewed revision", async ({ page, context }) => {
+    await signInAs(context, "member");
+    await page.goto("/account/submissions");
+    await page.getByRole("link", { name: "Piston relay" }).click();
+    const [prediction] = await Promise.all([
+      context.waitForEvent("page"),
+      page.getByRole("link", { name: m.predictionTitle("en") }).click(),
+    ]);
+    await expect(prediction.getByRole("heading", { name: "First 2×2 door" })).toBeVisible();
+    await expect(prediction.getByText(/Undecided/)).toBeVisible();
+    await expect(prediction.getByText(/Missing facts: completion/)).toBeVisible();
+  });
+
   test("opens a rejected submission and a separate credited build", async ({ page, context }) => {
     await signInAs(context, "member");
     await page.goto("/account/submissions");
@@ -105,6 +118,27 @@ test.describe("with JavaScript disabled", () => {
     await expect(page).toHaveURL("/zh-cn/builds");
     await expect(page.getByRole("link", { name: m.navSignIn("zh-CN") })).toBeVisible();
   });
+});
+
+test("polls pending finalization using the status read during rendering", async ({
+  page,
+  context,
+}) => {
+  await signInAs(context, "member");
+  // The production gateway serves /v1 on the site's origin. The fixture runs on its own port.
+  await page.route("**/v1/submissions/drafts/active/status", async (route) => {
+    const response = await route.fetch({
+      url: `http://127.0.0.1:${API_PORT}/v1/submissions/drafts/active/status`,
+    });
+    await route.fulfill({ response });
+  });
+  const poll = page.waitForRequest(
+    (request) =>
+      request.url().endsWith("/v1/submissions/drafts/active/status") && request.method() === "GET",
+  );
+  await page.goto("/submit/active/status");
+  expect((await poll).headers()["if-none-match"]).toBe('"pending"');
+  await expect(page.getByRole("heading", { name: m.submissionProcessing("en") })).toBeVisible();
 });
 
 test("sign-in, terms and the account menu pass axe", async ({ page, context }) => {

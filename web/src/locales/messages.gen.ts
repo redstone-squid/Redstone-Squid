@@ -4235,3 +4235,201 @@ export function submissionCorrectionInbox(locale: Locale = getLocale()): string 
       return "[" + "Đŕåƒţš ñééđîñĝ çöŕŕéçţîöñ" + "··········]";
   }
 }
+
+/** Record prediction */
+export function predictionTitle(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Record prediction";
+    case "zh-CN":
+      return "纪录预测";
+    case "en-XA":
+      return "[" + "Ŕéçöŕđ þŕéđîçţîöñ" + "·······]";
+  }
+}
+
+/** Predict records for saved draft (opens in a new tab) */
+export function predictionSavedDraft(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Predict records for saved draft (opens in a new tab)";
+    case "zh-CN":
+      return "预测已保存草稿的纪录（在新标签页打开）";
+    case "en-XA":
+      return (
+        "[" + "Þŕéđîçţ ŕéçöŕđš ƒöŕ šåṽéđ đŕåƒţ (öþéñš îñ å ñéŵ ţåƀ)" + "·····················]"
+      );
+  }
+}
+
+/** Compared with currently approved builds. Approvals and changes to the rules can change this prediction. */
+export function predictionExplanation(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Compared with currently approved builds. Approvals and changes to the rules can change this prediction.";
+    case "zh-CN":
+      return "与当前已批准的作品比较。新作品获批或规则调整可能改变预测结果。";
+    case "en-XA":
+      return (
+        "[" +
+        "Çöɱþåŕéđ ŵîţĥ çûŕŕéñţļý åþþŕöṽéđ ƀûîļđš. Åþþŕöṽåļš åñđ çĥåñĝéš ţö ţĥé ŕûļéš çåñ çĥåñĝé ţĥîš þŕéđîçţîöñ." +
+        "··········································]"
+      );
+  }
+}
+
+/** Would hold */
+export function predictionHolds(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Would hold";
+    case "zh-CN":
+      return "预计独占纪录";
+    case "en-XA":
+      return "[" + "Ŵöûļđ ĥöļđ" + "····]";
+  }
+}
+
+/** Would share */
+export function predictionShares(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Would share";
+    case "zh-CN":
+      return "预计共享纪录";
+    case "en-XA":
+      return "[" + "Ŵöûļđ šĥåŕé" + "·····]";
+  }
+}
+
+/** Would tie with a later completion */
+export function predictionTies(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Would tie with a later completion";
+    case "zh-CN":
+      return "预计追平，但完成较晚";
+    case "en-XA":
+      return "[" + "Ŵöûļđ ţîé ŵîţĥ å ļåţéŕ çöɱþļéţîöñ" + "··············]";
+  }
+}
+
+/** Would lose */
+export function predictionLoses(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Would lose";
+    case "zh-CN":
+      return "预计未能打破纪录";
+    case "en-XA":
+      return "[" + "Ŵöûļđ ļöšé" + "····]";
+  }
+}
+
+/** Undecided */
+export function predictionUndecided(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Undecided";
+    case "zh-CN":
+      return "尚未确定";
+    case "en-XA":
+      return "[" + "Ûñđéçîđéđ" + "····]";
+  }
+}
+
+/** Missing facts: */
+export function predictionMissing(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Missing facts:";
+    case "zh-CN":
+      return "缺少的数据：";
+    case "en-XA":
+      return "[" + "Ṁîššîñĝ ƒåçţš:" + "······]";
+  }
+}
+
+/** No applicable record categories. */
+export function predictionNoCategories(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "No applicable record categories.";
+    case "zh-CN":
+      return "没有适用的纪录类别。";
+    case "en-XA":
+      return "[" + "Ñö åþþļîçåƀļé ŕéçöŕđ çåţéĝöŕîéš." + "·············]";
+  }
+}
+
+/** All time */
+export function predictionAllTime(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "All time";
+    case "zh-CN":
+      return "所有版本";
+    case "en-XA":
+      return "[" + "Åļļ ţîɱé" + "····]";
+  }
+}
+
+/** Current version */
+export function predictionCurrent(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Current version";
+    case "zh-CN":
+      return "当前版本";
+    case "en-XA":
+      return "[" + "Çûŕŕéñţ ṽéŕšîöñ" + "······]";
+  }
+}
+
+/** Current holder: */
+export function predictionCurrentHolder(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Current holder:";
+    case "zh-CN":
+      return "当前保持者：";
+    case "en-XA":
+      return "[" + "Çûŕŕéñţ ĥöļđéŕ:" + "······]";
+  }
+}
+
+/** Draft needs attention */
+export function finalizationNeedsAttention(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Draft needs attention";
+    case "zh-CN":
+      return "草稿需要处理";
+    case "en-XA":
+      return "[" + "Đŕåƒţ ñééđš åţţéñţîöñ" + "·········]";
+  }
+}
+
+/** Finalization failed */
+export function finalizationFailed(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Finalization failed";
+    case "zh-CN":
+      return "提交处理失败";
+    case "en-XA":
+      return "[" + "Ƒîñåļîžåţîöñ ƒåîļéđ" + "········]";
+  }
+}
+
+/** Finalization complete */
+export function finalizationFinished(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Finalization complete";
+    case "zh-CN":
+      return "提交处理完成";
+    case "en-XA":
+      return "[" + "Ƒîñåļîžåţîöñ çöɱþļéţé" + "·········]";
+  }
+}

@@ -332,8 +332,41 @@ async function routeRequest(request: Request): Promise<Response> {
     published: false,
     decided_revision: 2,
   };
+  if (url.pathname === "/v1/submissions/drafts/active/status") {
+    if (request.headers.get("If-None-Match") === '"pending"')
+      return new Response(null, { status: 304, headers: { ETag: '"pending"' } });
+    const response = json({
+      draft_id: "active",
+      draft_revision: 2,
+      status: "pending",
+      attempt_number: 1,
+      issues: [],
+      build_id: null,
+    });
+    response.headers.set("ETag", '"pending"');
+    return response;
+  }
   if (url.pathname === "/v1/submissions")
     return json({ items: [submitted], total: 1, prev: null, next: null });
+  if (url.pathname === `/v1/submissions/${submissionId}/record-preview`)
+    return json({
+      revision: 1,
+      evaluated_at: frozenDate,
+      missing_fields: [],
+      records: [
+        {
+          record_id: null,
+          category_key: "door:2x2",
+          title: "First 2×2 door",
+          criterion: "first",
+          scope: "all_time",
+          version_id: null,
+          outcome: "undecided",
+          missing: [{ fact: "completion_at", fields: ["completion"], build_id: null }],
+          current_holders: [],
+        },
+      ],
+    });
   if (url.pathname === `/v1/submissions/${submissionId}`)
     return json({
       submission: submitted,

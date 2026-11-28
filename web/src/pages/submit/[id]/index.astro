@@ -240,4 +240,7 @@ const title = String(draft.answers.display_name ?? category?.label ?? draft.cate
       </Button>
     </form>
   )}
+  <Button href={localizePath(`/submit/${draft.id}/record-preview`)} target="_blank">
+    {m.predictionSavedDraft()}
+  </Button>
 </CatalogueLayout>
