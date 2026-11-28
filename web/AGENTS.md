@@ -177,6 +177,9 @@ rejects `Astro.cookies` and `document.cookie` elsewhere. The API sets its own se
 
 ## Text
 
+Use a subtitle only when it helps visitors interpret the content or decide what to do.
+Delete redundant copy instead of moving it from the header into the page body.
+
 Every visible string lives in the Fluent catalogs `src/locales/<locale>/messages.ftl`, with the
 same IDs in every locale. `bun run i18n:generate` compiles them into `src/locales/messages.gen.ts`,
 one typed function per message. Workbench stories import their own generated module
