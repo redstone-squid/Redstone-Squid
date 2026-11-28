@@ -20,6 +20,7 @@ from squid.core.accounts.application import AccountService
 from squid.core.accounts.domain import CreatorProfile
 from squid.core.accounts.domain.profiles import PublicCreatorProfile
 from squid.core.accounts.errors import MinecraftAccountNotFoundError
+from squid.core.accounts.infrastructure.export import AccountExports
 from squid.core.accounts.models import AccountIdentity, AccountProfile, CreatorAlias
 from squid.core.actors import ActingContext
 from squid.core.auth.application.viewer import ViewerQueries
@@ -33,6 +34,7 @@ from squid.core.builds.domain.models import BuildStatus
 from squid.core.builds.errors import BuildNotFoundError
 from squid.core.builds.models import Build
 from squid.core.catalogue.application import CatalogueStats, CatalogueStatsService
+from squid.core.catalogue_exports import CatalogueExports
 from squid.core.cli_auth.application import CliAuthorizationService
 from squid.core.cli_auth.domain import CliIdentity, IssuedCliEnrollment, IssuedCliSession, IssuedCliSessionChallenge
 from squid.core.cli_auth.errors import InvalidCliEnrollmentError
@@ -884,6 +886,8 @@ def build_services(
     rejects unknown sources. Other services use the transport fakes above.
     """
     return ApiServices(
+        catalogue_exports=create_autospec(CatalogueExports, instance=True),
+        account_exports=create_autospec(AccountExports, instance=True),
         impersonation=create_autospec(ImpersonationService, instance=True),
         record_previews=create_autospec(RecordPreviews, instance=True),
         submission_reviews=create_autospec(SubmissionReviews, instance=True),

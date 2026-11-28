@@ -21,6 +21,7 @@ from squid.core.actors import ActingContext, current_acting_context
 from squid.core.auth.application.providers import DiscordOAuthProvider
 from squid.core.auth.application.web import WebSessionService
 from squid.core.auth.impersonation import AuthorizedImpersonation
+from squid.core.exports import Download
 from squid.core.idempotency import IdempotencyService, PendingRequest, StoredResponse, UnsafeHttpMethod
 from tests.support.identity_uow import WebScope
 from tests.unit.api.fakes import TEST_CONFIG, TEST_SYNERGY_SECRET, build_app
@@ -266,3 +267,18 @@ def test_anonymous_invocations_are_scoped_to_one_request(login: BrowserLogin) ->
     second = login.client.get("/v1/public-invocation")
     assert first.status_code == second.status_code == 200
     assert first.text != second.text
+
+
+def test_account_export_delivers_the_selected_file_to_its_owner(login: BrowserLogin) -> None:
+    endpoint = "/v1/accounts/me/export?format=csv"
+    assert login.client.get(endpoint).status_code in (401, 403)
+    login.sign_in()
+    exports = login.client.app.state.runtime.services.account_exports
+    exports.download.return_value = Download(b"archive bytes", "zip", "application/zip")
+    response = login.client.get(endpoint)
+    assert response.status_code == 200
+    assert response.content == b"archive bytes"
+    assert response.headers["content-type"] == "application/zip"
+    assert "no-store" in response.headers["cache-control"]
+    assert response.headers["content-disposition"] == 'attachment; filename="squid-account.zip"'
+    assert exports.download.await_args.args[1] == "csv"

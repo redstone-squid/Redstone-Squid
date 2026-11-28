@@ -23,6 +23,7 @@ from squid.api.dependencies import (
     get_permissions,
 )
 from squid.api.errors import responses
+from squid.api.exports import FormatParam, export_contract, export_response
 from squid.api.i18n import locale_for_request
 from squid.api.idempotency import edit_operation_id, reserve_edit_before_request
 from squid.api.media_files import media_file
@@ -54,6 +55,7 @@ from squid.core.builds.errors import (
 from squid.core.builds.history import PublicBuildRevision
 from squid.core.builds.models import Build
 from squid.core.edits.domain import EditCommand, LatestRevision, Revision
+from squid.core.exports import ExportFormat
 from squid.core.pagination import ChronologicalSort
 from squid.core.permissions.application import PermissionService
 from squid.core.permissions.domain.catalogue import (
@@ -115,6 +117,78 @@ async def edit_build(
         headers["Build-Edit-Vote"] = str(result.outcome.review_vote_id)
         return Response(BuildDetail.from_domain(build), status_code=202, headers=headers)
     return Response(BuildDetail.from_domain(build), headers=headers)
+
+
+async def build_listing(
+    permissions: Permissions,
+    caller: CurrentCaller,
+    status: FromQuery[list[BuildStatusFilter] | None] = None,
+    category: FromQuery[list[BuildCategory] | None] = None,
+    version_id: FromQuery[list[Annotated[int, Meta(ge=1)]] | None] = None,
+    tag_id: FromQuery[list[int] | None] = None,
+    tag_slug: FromQuery[list[str] | None] = None,
+    account_id: FromQuery[list[UUID] | None] = None,
+    creator_name_id: FromQuery[list[Annotated[int, Meta(ge=1)]] | None] = None,
+    submitted_by: FromQuery[list[Literal["me"]] | None] = None,
+) -> tuple[frozenset[BuildStatus], int | None, BuildListFilters]:
+    submitter_id = caller.require_account_id() if submitted_by is not None else None
+    if status:
+        requested = frozenset(item.to_domain() for item in status)
+        statuses = requested if len(requested) == 1 else frozenset()
+    else:
+        statuses = frozenset(BuildStatus) if submitter_id is not None else frozenset({BuildStatus.APPROVED})
+    if statuses != {BuildStatus.APPROVED} and submitter_id is None:
+        await _require_pending_view(permissions, caller)
+    return (
+        statuses,
+        submitter_id,
+        BuildListFilters(
+            tuple(dict.fromkeys(category or ())),
+            tuple(dict.fromkeys(version_id or ())),
+            tag_ids=tuple(dict.fromkeys(tag_id or ())),
+            tag_slugs=tuple(dict.fromkeys(tag_slug or ())),
+            public_account_ids=tuple(dict.fromkeys(account_id or ())),
+            creator_name_ids=tuple(dict.fromkeys(creator_name_id or ())),
+        ),
+    )
+
+
+@get(
+    "/export",
+    operation_id="builds_export",
+    responses=responses(400, 401, 403, 422, 503),
+    security=[ANONYMOUS, SERVICE, WEB, DEVICE],
+    opt={**contract(cli=transport_only()), "responses": export_contract()},
+    media_type="application/octet-stream",
+)
+async def export_builds(
+    services: Services,
+    caller: CurrentCaller,
+    permissions: Permissions,
+    status: FromQuery[list[BuildStatusFilter] | None] = None,
+    category: FromQuery[list[BuildCategory] | None] = None,
+    version_id: FromQuery[list[Annotated[int, Meta(ge=1)]] | None] = None,
+    tag_id: FromQuery[list[int] | None] = None,
+    tag_slug: FromQuery[list[str] | None] = None,
+    account_id: FromQuery[list[UUID] | None] = None,
+    creator_name_id: FromQuery[list[Annotated[int, Meta(ge=1)]] | None] = None,
+    submitted_by: FromQuery[list[Literal["me"]] | None] = None,
+    sort: FromQuery[BuildListSort] = BuildListSort.ID,
+    file_format: FormatParam = ExportFormat.JSON,
+) -> Response[bytes]:
+    """Download all matching builds results in display order."""
+    statuses, submitter_id, filters = await build_listing(
+        permissions, caller, status, category, version_id, tag_id, tag_slug, account_id, creator_name_id, submitted_by
+    )
+    download = await services.catalogue_exports.builds(
+        file_format,
+        statuses=statuses,
+        submitter_account_id=submitter_id,
+        filters=filters,
+        sort=sort,
+        context=caller.context(),
+    )
+    return export_response("builds", download)
 
 
 @get(
@@ -284,25 +358,13 @@ async def list_builds(
     other unpublished listings require build.submission.view_pending permission. Text search
     lives at /v1/search.
     """
-    submitter_id = caller.require_account_id() if submitted_by is not None else None
-    if status:
-        requested = frozenset(item.to_domain() for item in status)
-        statuses = requested if len(requested) == 1 else frozenset()
-    else:
-        statuses = frozenset(BuildStatus) if submitter_id is not None else frozenset({BuildStatus.APPROVED})
-    if statuses != {BuildStatus.APPROVED} and submitter_id is None:
-        await _require_pending_view(permissions, caller)
+    statuses, submitter_id, filters = await build_listing(
+        permissions, caller, status, category, version_id, tag_id, tag_slug, account_id, creator_name_id, submitted_by
+    )
     page = await build_queries.list_page(
         statuses=statuses,
         submitter_account_id=submitter_id,
-        filters=BuildListFilters(
-            tuple(dict.fromkeys(category or ())),
-            tuple(dict.fromkeys(version_id or ())),
-            tag_ids=tuple(dict.fromkeys(tag_id or ())),
-            tag_slugs=tuple(dict.fromkeys(tag_slug or ())),
-            public_account_ids=tuple(dict.fromkeys(account_id or ())),
-            creator_name_ids=tuple(dict.fromkeys(creator_name_id or ())),
-        ),
+        filters=filters,
         sort=sort,
         selector=resolve_selector(offset=offset, cursor=cursor),
         page_size=page_size,
@@ -351,6 +413,7 @@ router = Router(
     path="/builds",
     tags=["builds"],
     route_handlers=[
+        export_builds,
         edit_build,
         get_build,
         get_build_form,

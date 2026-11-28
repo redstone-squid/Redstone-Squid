@@ -8,7 +8,14 @@ from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTOConfig
 from litestar import Response, Router, delete, get, patch, post, put
 from litestar.di import NamedDependency, Provide
 from litestar.dto import DataclassDTO, DTOConfig
-from litestar.params import FromPath, FromQuery, HeaderParameter, JSONBody, PathParameter, SkipValidation
+from litestar.params import (
+    FromPath,
+    FromQuery,
+    HeaderParameter,
+    JSONBody,
+    PathParameter,
+    SkipValidation,
+)
 from litestar.typing import FieldDefinition
 
 from squid.api.contract import (
@@ -23,6 +30,7 @@ from squid.api.contract import (
 )
 from squid.api.dependencies import Accounts, BuildQueries, CurrentCaller, Services, get_accounts, get_build_queries
 from squid.api.errors import responses
+from squid.api.exports import FormatParam, export_contract, export_response
 from squid.api.idempotency import edit_operation_id, reserve_edit_request, reserve_idempotent_request
 from squid.api.pagination import CursorParam, OffsetParam, Page, PageSizeParam, resolve_selector
 from squid.api.revisions import EDIT_ETAG, RevisionRequiredError, expected_revision, revision_etag
@@ -55,6 +63,7 @@ from squid.core.builds.application.queries import CreatorStats
 from squid.core.builds.domain import BuildListFilters
 from squid.core.edits.domain import EditCommand, EditValues, Revision
 from squid.core.errors import AuthenticationError
+from squid.core.exports import ExportFormat
 from squid.core.pagination import ChronologicalSort
 from squid.core.permissions.domain.catalogue import (
     ACCOUNT_IDENTITY_REFRESH,
@@ -171,6 +180,30 @@ async def get_me(accounts: Accounts, caller: UserCaller) -> Response[AccountDeta
     return Response(
         content, headers={"ETag": revision_etag(Revision(account_target(caller.account_id), content.revision))}
     )
+
+
+@get(
+    "/me/export",
+    operation_id="account_export",
+    security=[WEB],
+    opt={**contract(cli=browser_only()), "responses": export_contract(archive=True)},
+    responses=responses(401, 403, 422, 503),
+    guards=[requires(ACCOUNT_SELF_READ)],
+    media_type="application/octet-stream",
+)
+async def export_me(
+    services: Services,
+    caller: UserCaller,
+    file_format: FormatParam = ExportFormat.JSON,
+) -> Response[bytes]:
+    """Download profile, identities, credits, claims, submissions, drafts, preferences and notice receipt.
+
+    Sign in with the owning browser session. The JSON document or ZIP of CSV tables includes
+    attachment references. Each download carries its schema version and generation time.
+    """
+    caller.browser_binding()
+    download = await services.account_exports.download(caller.require_account_id(), file_format)
+    return export_response("account", download)
 
 
 @put(
@@ -647,6 +680,7 @@ router = Router(
     route_handlers=[
         credited_builds,
         get_me,
+        export_me,
         own_credit_claims,
         account_creator_stats,
         set_build_indexing,

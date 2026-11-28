@@ -31,6 +31,7 @@ from squid.core.accounts.application.edits import (
     AccountVisibilityEdit,
 )
 from squid.core.accounts.application.services import generate_verification_code
+from squid.core.accounts.infrastructure.export import AccountExports
 from squid.core.accounts.infrastructure.mojang import MojangClient
 from squid.core.actors import ActingContext
 from squid.core.artifacts import ArtifactStore
@@ -55,6 +56,7 @@ from squid.core.builds.infrastructure.embeddings import OpenAIEmbeddingModel
 from squid.core.builds.infrastructure.schematic_summary import SchematicServiceSummaryProvider
 from squid.core.builds.infrastructure.text_generation import OpenAITextGenerator
 from squid.core.catalogue.application import CatalogueStatsService
+from squid.core.catalogue_exports import CatalogueExports
 from squid.core.cli_auth import CliAuthorizationService, CliSecretCodec
 from squid.core.community.application import WelcomeRelayService
 from squid.core.community.domain import WelcomeRelayPolicy
@@ -676,6 +678,8 @@ def create_api_services(db: DatabaseEngine, config: RuntimeConfig, resources_sta
         raise RuntimeError(msg)
     views = ViewerQueries(graph.uow_factory, graph.permissions)
     return ApiServices(
+        catalogue_exports=CatalogueExports(db.async_session, graph.embedding_service, graph.permissions),
+        account_exports=AccountExports(db.async_session),
         impersonation=ImpersonationService(graph.uow_factory, graph.permissions),
         viewer_queries=views,
         record_previews=RecordPreviews(

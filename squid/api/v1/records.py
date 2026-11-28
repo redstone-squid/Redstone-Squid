@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Annotated
 from uuid import UUID
 
-from litestar import Router, get, post
+from litestar import Response, Router, get, post
 from litestar.di import Provide
 from litestar.params import FromPath, FromQuery, JSONBody, PathParameter
 from msgspec import Meta
@@ -23,6 +23,7 @@ from squid.api.dependencies import (
     get_records,
 )
 from squid.api.errors import responses
+from squid.api.exports import FormatParam, export_contract, export_response
 from squid.api.idempotency import reserve_idempotent_before_request
 from squid.api.pagination import (
     CursorParam,
@@ -35,6 +36,7 @@ from squid.api.pagination import (
 from squid.api.security import requires
 from squid.api.v1.browser_views import BrowserViews
 from squid.core.builds.domain import DoorOrientationLiteral
+from squid.core.exports import ExportFormat
 from squid.core.pagination import ChronologicalSort
 from squid.core.permissions.domain.catalogue import RECORD_ENTRY_INSPECT, RECORD_ENTRY_REBUILD
 from squid.core.records.application.expansion_regions import DoorRangeQuery, DoorRangeResult
@@ -53,6 +55,54 @@ from squid.core.records.application.range_ports import RangeListFilters
 from squid.core.records.application.range_snapshots import RangePublication, RangeRegistration
 from squid.core.records.domain import BuildKind, RecordCriterion, VersionScope
 from squid.core.records.errors import RecordNotFoundError
+
+
+def record_filters(
+    build_kind: FromQuery[list[BuildKind] | None] = None,
+    criterion: FromQuery[list[RecordCriterion] | None] = None,
+    version_scope: FromQuery[list[VersionScope] | None] = None,
+    status: FromQuery[list[RecordStatus] | None] = None,
+    tag_id: FromQuery[list[int] | None] = None,
+    tag_slug: FromQuery[list[str] | None] = None,
+) -> RecordListFilters:
+    return RecordListFilters(
+        tuple(dict.fromkeys(build_kind or ())),
+        tuple(dict.fromkeys(criterion or ())),
+        tuple(dict.fromkeys(version_scope or ())),
+        tuple(dict.fromkeys(status or ())),
+        tag_ids=tuple(dict.fromkeys(tag_id or ())),
+        tag_slugs=tuple(dict.fromkeys(tag_slug or ())),
+    )
+
+
+@get(
+    "/export",
+    operation_id="records_export",
+    responses=responses(400, 401, 403, 422, 503),
+    security=[ANONYMOUS],
+    opt={**contract(cli=transport_only()), "responses": export_contract()},
+    media_type="application/octet-stream",
+)
+async def export_records(
+    services: Services,
+    caller: CurrentCaller,
+    build_kind: FromQuery[list[BuildKind] | None] = None,
+    criterion: FromQuery[list[RecordCriterion] | None] = None,
+    version_scope: FromQuery[list[VersionScope] | None] = None,
+    status: FromQuery[list[RecordStatus] | None] = None,
+    tag_id: FromQuery[list[int] | None] = None,
+    tag_slug: FromQuery[list[str] | None] = None,
+    sort: FromQuery[RecordListSort] = RecordListSort.ID,
+    file_format: FormatParam = ExportFormat.JSON,
+) -> Response[bytes]:
+    """Download all matching records results in display order."""
+    download = await services.catalogue_exports.records(
+        file_format,
+        filters=record_filters(build_kind, criterion, version_scope, status, tag_id, tag_slug),
+        sort=sort,
+        context=caller.context(),
+    )
+    return export_response("records", download)
 
 
 @get(
@@ -110,14 +160,7 @@ async def list_records(
     page = await records.list_page(
         selector=resolve_selector(offset=offset, cursor=cursor),
         sort=sort,
-        filters=RecordListFilters(
-            tuple(dict.fromkeys(build_kind or ())),
-            tuple(dict.fromkeys(criterion or ())),
-            tuple(dict.fromkeys(version_scope or ())),
-            tuple(dict.fromkeys(status or ())),
-            tag_ids=tuple(dict.fromkeys(tag_id or ())),
-            tag_slugs=tuple(dict.fromkeys(tag_slug or ())),
-        ),
+        filters=record_filters(build_kind, criterion, version_scope, status, tag_id, tag_slug),
         page_size=page_size,
         context=caller.context(),
     )
@@ -374,6 +417,7 @@ router = Router(
     path="/records",
     tags=["records"],
     route_handlers=[
+        export_records,
         get_record,
         list_records,
         lookup_door_ranges,

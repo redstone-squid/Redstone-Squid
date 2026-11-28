@@ -4,13 +4,14 @@ import logging
 from collections.abc import Sequence
 from typing import Annotated
 
-from litestar import Request, Router, get
+from litestar import Request, Response, Router, get
 from litestar.di import Provide
 from litestar.params import QueryParameter
 
 from squid.api.contract import ANONYMOUS, contract, transport_only
-from squid.api.dependencies import BuildQueries, CurrentCaller, Search, get_build_queries, get_search
+from squid.api.dependencies import BuildQueries, CurrentCaller, Search, Services, get_build_queries, get_search
 from squid.api.errors import responses
+from squid.api.exports import FormatParam, export_contract, export_response
 from squid.api.pagination import ListResponse, OffsetParam, PageAnchor, PageSizeParam
 from squid.api.v1.schemas.search import (
     BuildSearchResult,
@@ -31,6 +32,7 @@ from squid.core.actors import ActingContext
 from squid.core.builds.application import BuildQueryService, PublicBuildSummary
 from squid.core.builds.domain import BuildStatus
 from squid.core.errors import DataIntegrityError, ValidationError
+from squid.core.exports import ExportFormat
 from squid.core.pagination import InvalidPageCursorError
 from squid.core.search.application.results import SearchHit
 from squid.core.search.domain import SearchMode, SearchRequest, SearchScope, SearchSort
@@ -41,6 +43,74 @@ logger = logging.getLogger(__name__)
 # Public search always restricts results to approved builds. This separate filter
 # also applies when the query itself asks for another status.
 PUBLIC_SEARCH_STATUSES = frozenset({"approved"})
+
+
+def search_request(
+    q: Annotated[str, QueryParameter(max_length=1_000)],
+    search_scope: Annotated[SearchScope, QueryParameter(name="scope")] = SearchScope.ALL,
+    sort: Annotated[str | None, QueryParameter(max_length=80)] = None,
+    group_by_build: Annotated[
+        bool, QueryParameter(description="Combine matching records and builds before pagination.")
+    ] = False,
+    width_min: Annotated[int | None, QueryParameter(ge=0)] = None,
+    width_max: Annotated[int | None, QueryParameter(ge=0)] = None,
+    opening_time_min: Annotated[int | None, QueryParameter(ge=0)] = None,
+    opening_time_max: Annotated[int | None, QueryParameter(ge=0)] = None,
+    page_size: int = 50,
+    offset: int = 0,
+) -> SearchRequest:
+    return SearchRequest(
+        query=q,
+        ranges=tuple(
+            control
+            for control in (
+                SearchRange("width", width_min, width_max),
+                SearchRange("opening_time", opening_time_min, opening_time_max),
+            )
+            if control.lower is not None or control.upper is not None
+        ),
+        scope=search_scope,
+        mode=SearchMode.LEXICAL,
+        page_size=page_size,
+        offset=offset or 0,
+        sort=SearchSort.parse(sort),
+        visible_statuses=PUBLIC_SEARCH_STATUSES,
+        group_by_build=group_by_build,
+    )
+
+
+@get(
+    "/export",
+    operation_id="search_export",
+    responses=responses(400, 401, 403, 422, 503),
+    security=[ANONYMOUS],
+    opt={**contract(cli=transport_only()), "responses": export_contract()},
+    media_type="application/octet-stream",
+)
+async def export_search(
+    services: Services,
+    caller: CurrentCaller,
+    q: Annotated[str, QueryParameter(max_length=1_000)],
+    search_scope: Annotated[SearchScope, QueryParameter(name="scope")] = SearchScope.ALL,
+    sort: Annotated[str | None, QueryParameter(max_length=80)] = None,
+    group_by_build: Annotated[
+        bool, QueryParameter(description="Combine matching records and builds before pagination.")
+    ] = False,
+    width_min: Annotated[int | None, QueryParameter(ge=0)] = None,
+    width_max: Annotated[int | None, QueryParameter(ge=0)] = None,
+    opening_time_min: Annotated[int | None, QueryParameter(ge=0)] = None,
+    opening_time_max: Annotated[int | None, QueryParameter(ge=0)] = None,
+    file_format: FormatParam = ExportFormat.JSON,
+) -> Response[bytes]:
+    """Download the complete browsable search result in display order, including grouped matches.
+
+    Relevance searches use the same ranked candidate pool as the search screen.
+    """
+    request = search_request(
+        q, search_scope, sort, group_by_build, width_min, width_max, opening_time_min, opening_time_max
+    )
+    download = await services.catalogue_exports.search(file_format, request, context=caller.context())
+    return export_response("search", download)
 
 
 @get(
@@ -121,23 +191,17 @@ async def search(
                 raise ValidationError(msg)
             if field not in fields:
                 fields.append(field)
-    request = SearchRequest(
-        query=q,
-        ranges=tuple(
-            control
-            for control in (
-                SearchRange("width", width_min, width_max),
-                SearchRange("opening_time", opening_time_min, opening_time_max),
-            )
-            if control.lower is not None or control.upper is not None
-        ),
-        scope=search_scope,
-        mode=SearchMode.LEXICAL,
-        page_size=page_size,
-        offset=offset or 0,
-        sort=SearchSort.parse(sort),
-        visible_statuses=PUBLIC_SEARCH_STATUSES,
-        group_by_build=group_by_build,
+    request = search_request(
+        q,
+        search_scope,
+        sort,
+        group_by_build,
+        width_min,
+        width_max,
+        opening_time_min,
+        opening_time_max,
+        page_size,
+        offset or 0,
     )
     result = await search_service.search(request, context=caller.context())
     builds = await hydrate_builds(build_queries, result.hits, context=caller.context())
@@ -238,5 +302,5 @@ router = Router(
     },
     path="/search",
     tags=["search"],
-    route_handlers=[list_search_fields, suggest_terms, search],
+    route_handlers=[export_search, list_search_fields, suggest_terms, search],
 )

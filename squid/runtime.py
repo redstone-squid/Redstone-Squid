@@ -21,6 +21,7 @@ from anyio.abc import TaskGroup
 from whenever import Instant
 
 from squid.core.accounts.application import AccountService
+from squid.core.accounts.infrastructure.export import AccountExports
 from squid.core.actors import ActingContext
 from squid.core.artifacts import ArtifactStore
 from squid.core.auth.application import ApiKeyService
@@ -30,6 +31,7 @@ from squid.core.auth.impersonation import ImpersonationService
 from squid.core.builds.application import BuildInferenceService, BuildQueryService, BuildService, RestrictionService
 from squid.core.builds.application.ports import BuildSchematicSummaryProvider
 from squid.core.catalogue.application import CatalogueStatsService
+from squid.core.catalogue_exports import CatalogueExports
 from squid.core.cli_auth import CliAuthorizationService
 from squid.core.community.application import WelcomeRelayService
 from squid.core.diagnostics.application import ErrorReportService
@@ -116,6 +118,9 @@ PERMISSION_EPOCH_JOB = RuntimeJob.PERMISSION_EPOCH
 @dataclass(frozen=True, slots=True)
 class ApiServices:
     """Capabilities exposed by the HTTP API process."""
+
+    catalogue_exports: CatalogueExports
+    account_exports: AccountExports
 
     settings: SettingsService
     edits: EditRunner

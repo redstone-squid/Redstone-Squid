@@ -1297,6 +1297,11 @@ export type ExpansionTiming = {
 };
 
 /**
+ * ExportFormat
+ */
+export type ExportFormat = 'json' | 'csv';
+
+/**
  * ExtenderDetails
  */
 export type ExtenderDetails = {
@@ -4730,6 +4735,58 @@ export type AccountGetResponses = {
 
 export type AccountGetResponse = AccountGetResponses[keyof AccountGetResponses];
 
+export type AccountExportData = {
+    body?: never;
+    path?: never;
+    query?: {
+        format?: ExportFormat;
+    };
+    url: '/v1/accounts/me/export';
+};
+
+export type AccountExportErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type AccountExportError = AccountExportErrors[keyof AccountExportErrors];
+
+export type AccountExportResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: {
+        manifest: {
+            [key: string]: unknown;
+        };
+        data: {
+            [key: string]: Array<{
+                [key: string]: unknown;
+            }>;
+        };
+    };
+};
+
+export type AccountExportResponse = AccountExportResponses[keyof AccountExportResponses];
+
 export type AccountCreditClaimsData = {
     body?: never;
     path?: never;
@@ -5912,6 +5969,78 @@ export type BrowserAuthorizationCallbackErrors = {
 };
 
 export type BrowserAuthorizationCallbackError = BrowserAuthorizationCallbackErrors[keyof BrowserAuthorizationCallbackErrors];
+
+export type BuildsExportData = {
+    body?: never;
+    path?: never;
+    query?: {
+        status?: Array<BuildStatusFilter> | null;
+        category?: Array<BuildCategory> | null;
+        version_id?: Array<number> | null;
+        tag_id?: Array<number> | null;
+        tag_slug?: Array<string> | null;
+        account_id?: Array<string> | null;
+        creator_name_id?: Array<number> | null;
+        submitted_by?: Array<'me'> | null;
+        /**
+         * A named display order for build listings.
+         *
+         * Each order is total, so cursors work with all of them. `ID` lists the newest IDs first and
+         * never moves a row, which makes it the order for full traversal.
+         *
+         */
+        sort?: BuildListSort;
+        format?: ExportFormat;
+    };
+    url: '/v1/builds/export';
+};
+
+export type BuildsExportErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type BuildsExportError = BuildsExportErrors[keyof BuildsExportErrors];
+
+export type BuildsExportResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: {
+        manifest: {
+            [key: string]: unknown;
+        };
+        data: {
+            [key: string]: Array<{
+                [key: string]: unknown;
+            }>;
+        };
+    };
+};
+
+export type BuildsExportResponse = BuildsExportResponses[keyof BuildsExportResponses];
 
 export type BuildsGetData = {
     body?: never;
@@ -9211,6 +9340,76 @@ export type PermissionsAuditResponses = {
 
 export type PermissionsAuditResponse = PermissionsAuditResponses[keyof PermissionsAuditResponses];
 
+export type RecordsExportData = {
+    body?: never;
+    path?: never;
+    query?: {
+        build_kind?: Array<BuildKind> | null;
+        criterion?: Array<RecordCriterion> | null;
+        version_scope?: Array<VersionScope> | null;
+        status?: Array<RecordStatus> | null;
+        tag_id?: Array<number> | null;
+        tag_slug?: Array<string> | null;
+        /**
+         * A named display order for record listings.
+         *
+         * `ID` lists the newest results first. A result keeps its ID while it is
+         * updated, so `RECENTLY_CHANGED` orders by when its contents last changed.
+         *
+         */
+        sort?: RecordListSort;
+        format?: ExportFormat;
+    };
+    url: '/v1/records/export';
+};
+
+export type RecordsExportErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type RecordsExportError = RecordsExportErrors[keyof RecordsExportErrors];
+
+export type RecordsExportResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: {
+        manifest: {
+            [key: string]: unknown;
+        };
+        data: {
+            [key: string]: Array<{
+                [key: string]: unknown;
+            }>;
+        };
+    };
+};
+
+export type RecordsExportResponse = RecordsExportResponses[keyof RecordsExportResponses];
+
 export type RecordsGetData = {
     body?: never;
     path: {
@@ -10337,6 +10536,76 @@ export type SchematicVideoContentResponses = {
 };
 
 export type SchematicVideoContentResponse = SchematicVideoContentResponses[keyof SchematicVideoContentResponses];
+
+export type SearchExportData = {
+    body?: never;
+    path?: never;
+    query: {
+        q: string;
+        /**
+         * Resources included in a search.
+         */
+        scope?: SearchScope;
+        sort?: string | null;
+        /**
+         * Combine matching records and builds before pagination.
+         */
+        group_by_build?: boolean;
+        width_min?: number | null;
+        width_max?: number | null;
+        opening_time_min?: number | null;
+        opening_time_max?: number | null;
+        format?: ExportFormat;
+    };
+    url: '/v1/search/export';
+};
+
+export type SearchExportErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type SearchExportError = SearchExportErrors[keyof SearchExportErrors];
+
+export type SearchExportResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: {
+        manifest: {
+            [key: string]: unknown;
+        };
+        data: {
+            [key: string]: Array<{
+                [key: string]: unknown;
+            }>;
+        };
+    };
+};
+
+export type SearchExportResponse = SearchExportResponses[keyof SearchExportResponses];
 
 export type SearchFieldsListData = {
     body?: never;
