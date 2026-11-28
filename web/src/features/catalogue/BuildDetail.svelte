@@ -168,7 +168,7 @@
       {/if}
       {#if (build.records_held ?? []).length > 0}
         <Badge tone="success"
-          >{m.buildRecordsHeldCount({ count: (build.records_held ?? []).length })}</Badge
+          >{m.buildRecordCount({ count: (build.records_held ?? []).length })}</Badge
         >
       {/if}
     {/snippet}

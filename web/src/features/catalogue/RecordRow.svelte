@@ -54,7 +54,7 @@
     <Badge>{m.recordFormer()}</Badge>
   {/if}
   {#if record.since != null}
-    <Text as="span" size="xs" tone="muted">{m.recordHeldSince({ date: record.since })}</Text>
+    <Text as="span" size="xs" tone="muted">{m.recordSince({ date: record.since })}</Text>
   {/if}
 {/snippet}
 {#snippet headline()}

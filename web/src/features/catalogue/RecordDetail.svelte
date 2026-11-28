@@ -139,7 +139,6 @@
     {:else if record.holder_builds[0]}
       <FeaturedBuild
         build={record.holder_builds[0]}
-        eyebrow={m.recordHolders()}
         {measurements}
         since={record.holder_since ?? null}
       />

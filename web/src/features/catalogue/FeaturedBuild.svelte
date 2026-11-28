@@ -57,7 +57,7 @@
         ]}
       />
       {#if since !== null}
-        <Text size="sm" tone="muted">{m.recordHeldSince({ date: since })}</Text>
+        <Text size="sm" tone="muted">{m.recordSince({ date: since })}</Text>
       {/if}
     </Layout>
   </Layout>

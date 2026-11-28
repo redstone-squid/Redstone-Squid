@@ -115,7 +115,7 @@ placeholder-rebuilding = The Redstone Squid website is being rebuilt.
 offline-title = You are offline
 offline-body = This page needs a connection. Reconnect and try again.
 
-records-intro = The current holder of every record, recomputed whenever a build is approved.
+records-intro = Every active record, recomputed whenever a build is approved.
 records-empty = No records have been published yet.
 record-holders = Record holder
 record-co-holders = Shared record
@@ -123,18 +123,18 @@ record-co-holders-description = These builds were completed at the same moment, 
 record-co-holders-undated = These builds share the record until their completion dates are known.
 record-no-holders = No build holds this record yet.
 record-contenders = Could take this record
-record-contenders-description = Each of these builds is missing a fact needed to compare it with the holder. If you know it, add it to the build.
+record-contenders-description = Each of these builds is missing a fact needed to compare it with the record. If you know it, add it to the build.
 record-changeable = { $count ->
     [one] One build is missing facts that could let it take this record.
    *[other] { $count } builds are missing facts that could let them take this record.
     }
 record-tied = Tied record
-record-tied-description = Matched the holder on every measure, but was completed later.
+record-tied-description = Matched the record on every measure, but was completed later.
 build-missing-facts = Missing: { $facts }
 record-current = Current
 record-retired = Retired { DATETIME($date, dateStyle: "medium") }
 record-retired-description = No build competes for this record any more. It comes back, with the same link, when one does.
-record-history = Holder history
+record-history = Record history
 record-history-build = Build #{ $id }
 record-build-kind = Build kind
 record-version-scope = Versions
@@ -1018,17 +1018,17 @@ prediction-ties = Would tie
 prediction-loses = Would lose
 prediction-undecided = Undecided
 prediction-no-categories = No applicable record categories.
-prediction-current-holder = Current holder:
+prediction-current-holder = Current record:
 finalization-needs-attention = Draft needs attention
 finalization-failed = Finalization failed
 finalization-finished = Finalization complete
 story-catalogue = Builds and records
-workbench-catalogue-description = Every way a build or record appears: mentions, rows, cards, tables, the featured holder, and whole pages.
+workbench-catalogue-description = Every way a build or record appears: mentions, rows, cards, tables, a featured build, and whole pages.
 story-buildpreview-description = Shows the build image or a placeholder if the image is unavailable.
 story-buildfacts-description = The build’s creators, dimensions, and opening time.
 story-buildcard-description = A preview of a build with its creators, dimensions, and opening time.
-story-featuredbuild-description = One build shown large with the numbers it is featured for, such as a record’s only holder.
-story-recordcard-description = A record’s deciding numbers with its holder underneath.
+story-featuredbuild-description = One build shown large with the numbers it is featured for, such as the build that set a record.
+story-recordcard-description = A record’s deciding numbers, with the build that set it underneath.
 story-recordlist-description = A page of record cards with its pagination, or the empty state.
 story-recorddetail-description = A whole record page in each layout it can take.
 story-creatorcredits-description = A creator's builds, yearly counts, and records held, with the form to claim their credits.
@@ -1087,9 +1087,9 @@ build-role-designer = Designer
 build-role-layout = Layout
 build-role-contributor = Contributor
 build-records = Records
-build-records-held-count = { $count ->
-    [one] Holds 1 record
-   *[other] Holds { $count } records
+build-record-count = { $count ->
+    [one] 1 record
+   *[other] { $count } records
 }
 build-specifications = Specifications
 build-tags = Tags
@@ -1105,7 +1105,7 @@ catalogue-record = Record
 catalogue-record-value = Value
 catalogue-volume = Volume
 catalogue-submitted = Submitted
-catalogue-held-since = Held since
+catalogue-record-since = Record since
 catalogue-date = { DATETIME($date, dateStyle: "medium") }
 catalogue-builds-empty = No builds match.
 catalogue-table-columns = Columns
@@ -1118,23 +1118,23 @@ catalogue-gallery-close = Close
 catalogue-gallery-open = Open full size
 catalogue-gallery-position = { $current } of { $total }
 catalogue-external = opens another site
-creator-records-held = Records held
-creator-records-ever = Records ever held
+creator-records-held = Records
+creator-records-ever = Records, past and present
 creator-builds-empty = No builds credited to this name yet.
 creator-records-empty = { $ever ->
-    [0] Holds no records yet.
-    [one] Holds no records now, and has held 1 before.
-   *[other] Holds no records now, and has held { $ever } before.
+    [0] No records yet.
+    [one] No records now, and 1 in the past.
+   *[other] No records now, and { $ever } in the past.
 }
 creator-builds-per-year = Builds per year
 creator-builds-per-year-description = How many credited builds were submitted each year.
 creator-year = Year
 creator-claim-title = Claim these credits
 creator-claim-description = If you built these under this name, choose the credits that are yours. A moderator reviews each claim.
-record-held-since = Held since { DATETIME($date, dateStyle: "medium") }
+record-since = Record since { DATETIME($date, dateStyle: "medium") }
 record-retired-short = Retired
-record-former = Lost
-record-no-holders-short = No holder
+record-former = Past record
+record-none-yet = None yet
 record-history-since = Since { DATETIME($from, dateStyle: "medium") }
 record-history-range = { DATETIME($from, dateStyle: "medium") } to { DATETIME($until, dateStyle: "medium") }
 record-history-metric = { $label }: { $value }
@@ -1169,7 +1169,6 @@ submission-diff-unchanged = Unchanged
 story-as-a-table = As a table
 story-build-description = A compact showcase door for survival. The input line sits at the rear and it resets on its own.
 story-build-numbers-only = Build numbers only
-story-build-only = Build only
 story-builddetail-description = A whole build page: media, timings, records, specifications, credits, and downloads.
 story-buildmention-description = A build named by its thumbnail and title, wherever another view refers to it.
 story-buildrow-description = A build as one row: for search results, a creator’s builds, and builds beside a record.
@@ -1183,18 +1182,18 @@ story-doors-competing = Doors competing for the record
 story-first-iris = First iris door
 story-from-a-record-summary = From a record summary
 story-full-seamless = Full seamless
-story-holder = Holder
-story-holdertimeline-description = Who held a record and when, newest first, with the number each holder set.
+story-record-badge = Record
+story-holdertimeline-description = How a record changed over time, newest first, with each build and its number.
 story-named-holders = Named holders
 story-no-observers = No observers
 story-no-slime = No slime blocks
 story-on-a-build-page = On a build page
 story-pending-extender = Extender awaiting review
 story-recordrow-description = A record as one row: for the records a build or creator holds.
-story-recordtable-description = Every record’s value and holder in one table, for scanning many at once.
+story-recordtable-description = Every record’s value and build in one table, for scanning many at once.
 story-smallest-extender = Smallest piston extender
 story-smallest-flush-door = Smallest 3×3 flush piston door
-story-sorted-with-holder = Sorted, holder marked
+story-sorted-with-record = Sorted, record marked
 story-sponsor-description = A public survival server for redstone builders.
 story-thumbnails = Thumbnails
 story-title-only = Title only
@@ -1205,4 +1204,6 @@ story-orientation-flush = Flush
 story-tiles = Tiles
 story-inline-leading = Inline, first number leading
 story-icon-fallback = Thumbnail fallback
-prediction-ties-description = It matches the holder on every measure but was completed later, so the holder keeps the record.
+prediction-ties-description = It matches the record on every measure but was completed later, so the record stands.
+story-with-eyebrow = With an eyebrow
+story-build-of-the-week = Build of the week

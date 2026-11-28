@@ -179,7 +179,7 @@
   source="features/catalogue/BuildTable.svelte"
   description={m.storyBuildtableDescription()}
 >
-  <Variant label={m.storySortedWithHolder()}>
+  <Variant label={m.storySortedWithRecord()}>
     <BuildTable
       builds={[...buildFixtures(), builds.unknownMeasurements]}
       caption={m.storyDoorsCompeting()}
@@ -187,7 +187,7 @@
       {sortHref}
       {visibilityHref}
       hidden={["submitted"]}
-      highlight={{ ids: [1], label: m.storyHolder() }}
+      highlight={{ ids: [1], label: m.storyRecordBadge() }}
     />
   </Variant>
   <Variant label={m.storyEmpty()}>
@@ -203,7 +203,6 @@
   <Variant label={m.storyRecordHolder()}>
     <FeaturedBuild
       build={builds.standard}
-      eyebrow={m.recordHolders()}
       measurements={fastest === undefined ? [] : recordMeasurements(fastest)}
       since="2026-01-12T00:00:00Z"
     />
@@ -211,11 +210,12 @@
   <Variant label={m.storyNoPreview()}>
     <FeaturedBuild
       build={builds.noPreview}
-      eyebrow={m.recordHolders()}
       measurements={recordMeasurements(smallestExtender ?? records.single)}
     />
   </Variant>
-  <Variant label={m.storyBuildOnly()}><FeaturedBuild build={builds.crowded} /></Variant>
+  <Variant label={m.storyWithEyebrow()}>
+    <FeaturedBuild build={builds.crowded} eyebrow={m.storyBuildOfTheWeek()} />
+  </Variant>
 </Story>
 
 <Story

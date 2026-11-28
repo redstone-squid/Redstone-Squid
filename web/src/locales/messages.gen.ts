@@ -1378,18 +1378,18 @@ export function offlineBody(locale: Locale = getLocale()): string {
   }
 }
 
-/** The current holder of every record, recomputed whenever a build is approved. */
+/** Every active record, recomputed whenever a build is approved. */
 export function recordsIntro(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "The current holder of every record, recomputed whenever a build is approved.";
+      return "Every active record, recomputed whenever a build is approved.";
     case "zh-CN":
-      return "每项纪录当前的保持者，作品通过审核后会重新计算。";
+      return "所有现行纪录，每当有作品获批时重新计算。";
     case "en-XA":
       return (
         "[" +
-        "Ţĥé çûŕŕéñţ ĥöļđéŕ öƒ éṽéŕý ŕéçöŕđ, ŕéçöɱþûţéđ ŵĥéñéṽéŕ å ƀûîļđ îš åþþŕöṽéđ." +
-        "·······························]"
+        "Éṽéŕý åçţîṽé ŕéçöŕđ, ŕéçöɱþûţéđ ŵĥéñéṽéŕ å ƀûîļđ îš åþþŕöṽéđ." +
+        "·························]"
       );
   }
 }
@@ -1403,18 +1403,6 @@ export function recordsEmpty(locale: Locale = getLocale()): string {
       return "尚未发布任何纪录。";
     case "en-XA":
       return "[" + "Ñö ŕéçöŕđš ĥåṽé ƀééñ þûƀļîšĥéđ ýéţ." + "··············]";
-  }
-}
-
-/** Record holder */
-export function recordHolders(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "Record holder";
-    case "zh-CN":
-      return "纪录保持者";
-    case "en-XA":
-      return "[" + "Ŕéçöŕđ ĥöļđéŕ" + "······]";
   }
 }
 
@@ -1486,17 +1474,17 @@ export function recordContenders(locale: Locale = getLocale()): string {
   }
 }
 
-/** Each of these builds is missing a fact needed to compare it with the holder. If you know it, add it to the build. */
+/** Each of these builds is missing a fact needed to compare it with the record. If you know it, add it to the build. */
 export function recordContendersDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Each of these builds is missing a fact needed to compare it with the holder. If you know it, add it to the build.";
+      return "Each of these builds is missing a fact needed to compare it with the record. If you know it, add it to the build.";
     case "zh-CN":
-      return "这些作品缺少与保持者比较所需的数据。如果你知道，请补充到作品中。";
+      return "这些作品缺少与现有纪录比较所需的数据。如果你知道，请补充到作品中。";
     case "en-XA":
       return (
         "[" +
-        "Éåçĥ öƒ ţĥéšé ƀûîļđš îš ɱîššîñĝ å ƒåçţ ñééđéđ ţö çöɱþåŕé îţ ŵîţĥ ţĥé ĥöļđéŕ. Îƒ ýöû ķñöŵ îţ, åđđ îţ ţö ţĥé ƀûîļđ." +
+        "Éåçĥ öƒ ţĥéšé ƀûîļđš îš ɱîššîñĝ å ƒåçţ ñééđéđ ţö çöɱþåŕé îţ ŵîţĥ ţĥé ŕéçöŕđ. Îƒ ýöû ķñöŵ îţ, åđđ îţ ţö ţĥé ƀûîļđ." +
         "··············································]"
       );
   }
@@ -1550,17 +1538,17 @@ export function recordTied(locale: Locale = getLocale()): string {
   }
 }
 
-/** Matched the holder on every measure, but was completed later. */
+/** Matched the record on every measure, but was completed later. */
 export function recordTiedDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Matched the holder on every measure, but was completed later.";
+      return "Matched the record on every measure, but was completed later.";
     case "zh-CN":
-      return "各项指标均与保持者相同，但完成时间较晚。";
+      return "各项指标均与现有纪录相同，但完成时间较晚。";
     case "en-XA":
       return (
         "[" +
-        "Ṁåţçĥéđ ţĥé ĥöļđéŕ öñ éṽéŕý ɱéåšûŕé, ƀûţ ŵåš çöɱþļéţéđ ļåţéŕ." +
+        "Ṁåţçĥéđ ţĥé ŕéçöŕđ öñ éṽéŕý ɱéåšûŕé, ƀûţ ŵåš çöɱþļéţéđ ļåţéŕ." +
         "·························]"
       );
   }
@@ -1623,15 +1611,15 @@ export function recordRetiredDescription(locale: Locale = getLocale()): string {
   }
 }
 
-/** Holder history */
+/** Record history */
 export function recordHistory(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Holder history";
+      return "Record history";
     case "zh-CN":
-      return "保持者历史";
+      return "纪录历史";
     case "en-XA":
-      return "[" + "Ĥöļđéŕ ĥîšţöŕý" + "······]";
+      return "[" + "Ŕéçöŕđ ĥîšţöŕý" + "······]";
   }
 }
 
@@ -4282,15 +4270,15 @@ export function predictionNoCategories(locale: Locale = getLocale()): string {
   }
 }
 
-/** Current holder: */
+/** Current record: */
 export function predictionCurrentHolder(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Current holder:";
+      return "Current record:";
     case "zh-CN":
-      return "当前保持者：";
+      return "现有纪录：";
     case "en-XA":
-      return "[" + "Çûŕŕéñţ ĥöļđéŕ:" + "······]";
+      return "[" + "Çûŕŕéñţ ŕéçöŕđ:" + "······]";
   }
 }
 
@@ -4342,18 +4330,18 @@ export function storyCatalogue(locale: Locale = getLocale()): string {
   }
 }
 
-/** Every way a build or record appears: mentions, rows, cards, tables, the featured holder, and whole pages. */
+/** Every way a build or record appears: mentions, rows, cards, tables, a featured build, and whole pages. */
 export function workbenchCatalogueDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Every way a build or record appears: mentions, rows, cards, tables, the featured holder, and whole pages.";
+      return "Every way a build or record appears: mentions, rows, cards, tables, a featured build, and whole pages.";
     case "zh-CN":
-      return "作品和纪录的各种呈现方式：提及、单行、卡片、表格、精选保持者和完整页面。";
+      return "作品和纪录的各种呈现方式：提及、单行、卡片、表格、精选作品和完整页面。";
     case "en-XA":
       return (
         "[" +
-        "Éṽéŕý ŵåý å ƀûîļđ öŕ ŕéçöŕđ åþþéåŕš: ɱéñţîöñš, ŕöŵš, çåŕđš, ţåƀļéš, ţĥé ƒéåţûŕéđ ĥöļđéŕ, åñđ ŵĥöļé þåĝéš." +
-        "··········································]"
+        "Éṽéŕý ŵåý å ƀûîļđ öŕ ŕéçöŕđ åþþéåŕš: ɱéñţîöñš, ŕöŵš, çåŕđš, ţåƀļéš, å ƒéåţûŕéđ ƀûîļđ, åñđ ŵĥöļé þåĝéš." +
+        "·········································]"
       );
   }
 }
@@ -4612,34 +4600,28 @@ export function buildRecords(locale: Locale = getLocale()): string {
   }
 }
 
-/** { $count -> [one] Holds 1 record *[other] Holds { $count } records } */
-export function buildRecordsHeldCount(
-  args: { count: number },
-  locale: Locale = getLocale(),
-): string {
+/** { $count -> [one] 1 record *[other] { $count } records } */
+export function buildRecordCount(args: { count: number }, locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
       return select(
         locale,
         args.count,
-        { one: "Holds 1 record", other: "Holds " + formatNumber(locale, args.count) + " records" },
+        { one: "1 record", other: formatNumber(locale, args.count) + " records" },
         "other",
       );
     case "zh-CN":
-      return "保持 " + formatNumber(locale, args.count) + " 项纪录";
+      return formatNumber(locale, args.count) + " 项纪录";
     case "en-XA":
       return (
         "[" +
         select(
           locale,
           args.count,
-          {
-            one: "Ĥöļđš 1 ŕéçöŕđ",
-            other: "Ĥöļđš " + formatNumber(locale, args.count) + " ŕéçöŕđš",
-          },
+          { one: "1 ŕéçöŕđ", other: formatNumber(locale, args.count) + " ŕéçöŕđš" },
           "other",
         ) +
-        "······]"
+        "····]"
       );
   }
 }
@@ -4815,15 +4797,15 @@ export function catalogueSubmitted(locale: Locale = getLocale()): string {
   }
 }
 
-/** Held since */
-export function catalogueHeldSince(locale: Locale = getLocale()): string {
+/** Record since */
+export function catalogueRecordSince(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Held since";
+      return "Record since";
     case "zh-CN":
-      return "保持起始";
+      return "纪录起始";
     case "en-XA":
-      return "[" + "Ĥéļđ šîñçé" + "····]";
+      return "[" + "Ŕéçöŕđ šîñçé" + "·····]";
   }
 }
 
@@ -4984,27 +4966,27 @@ export function catalogueExternal(locale: Locale = getLocale()): string {
   }
 }
 
-/** Records held */
+/** Records */
 export function creatorRecordsHeld(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Records held";
+      return "Records";
     case "zh-CN":
-      return "保持的纪录";
+      return "纪录";
     case "en-XA":
-      return "[" + "Ŕéçöŕđš ĥéļđ" + "·····]";
+      return "[" + "Ŕéçöŕđš" + "···]";
   }
 }
 
-/** Records ever held */
+/** Records, past and present */
 export function creatorRecordsEver(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Records ever held";
+      return "Records, past and present";
     case "zh-CN":
-      return "曾保持的纪录";
+      return "纪录（含过往）";
     case "en-XA":
-      return "[" + "Ŕéçöŕđš éṽéŕ ĥéļđ" + "·······]";
+      return "[" + "Ŕéçöŕđš, þåšţ åñđ þŕéšéñţ" + "··········]";
   }
 }
 
@@ -5020,7 +5002,7 @@ export function creatorBuildsEmpty(locale: Locale = getLocale()): string {
   }
 }
 
-/** { $ever -> [0] Holds no records yet. [one] Holds no records now, and has held 1 before. *[other] Holds no records now, and has held { $ever } before. } */
+/** { $ever -> [0] No records yet. [one] No records now, and 1 in the past. *[other] No records now, and { $ever } in the past. } */
 export function creatorRecordsEmpty(args: { ever: number }, locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
@@ -5028,10 +5010,9 @@ export function creatorRecordsEmpty(args: { ever: number }, locale: Locale = get
         locale,
         args.ever,
         {
-          "0": "Holds no records yet.",
-          one: "Holds no records now, and has held 1 before.",
-          other:
-            "Holds no records now, and has held " + formatNumber(locale, args.ever) + " before.",
+          "0": "No records yet.",
+          one: "No records now, and 1 in the past.",
+          other: "No records now, and " + formatNumber(locale, args.ever) + " in the past.",
         },
         "other",
       );
@@ -5040,8 +5021,8 @@ export function creatorRecordsEmpty(args: { ever: number }, locale: Locale = get
         locale,
         args.ever,
         {
-          "0": "尚未保持任何纪录。",
-          other: "目前没有保持纪录，曾保持 " + formatNumber(locale, args.ever) + " 项。",
+          "0": "暂无纪录。",
+          other: "目前没有纪录，过往有 " + formatNumber(locale, args.ever) + " 项。",
         },
         "other",
       );
@@ -5052,14 +5033,13 @@ export function creatorRecordsEmpty(args: { ever: number }, locale: Locale = get
           locale,
           args.ever,
           {
-            "0": "Ĥöļđš ñö ŕéçöŕđš ýéţ.",
-            one: "Ĥöļđš ñö ŕéçöŕđš ñöŵ, åñđ ĥåš ĥéļđ 1 ƀéƒöŕé.",
-            other:
-              "Ĥöļđš ñö ŕéçöŕđš ñöŵ, åñđ ĥåš ĥéļđ " + formatNumber(locale, args.ever) + " ƀéƒöŕé.",
+            "0": "Ñö ŕéçöŕđš ýéţ.",
+            one: "Ñö ŕéçöŕđš ñöŵ, åñđ 1 îñ ţĥé þåšţ.",
+            other: "Ñö ŕéçöŕđš ñöŵ, åñđ " + formatNumber(locale, args.ever) + " îñ ţĥé þåšţ.",
           },
           "other",
         ) +
-        "··················]"
+        "··············]"
       );
   }
 }
@@ -5128,19 +5108,19 @@ export function creatorClaimDescription(locale: Locale = getLocale()): string {
   }
 }
 
-/** Held since { DATETIME($date, dateStyle: "medium") } */
-export function recordHeldSince(
-  args: { date: Date | string },
-  locale: Locale = getLocale(),
-): string {
+/** Record since { DATETIME($date, dateStyle: "medium") } */
+export function recordSince(args: { date: Date | string }, locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Held since " + formatDateTime(locale, args.date, { dateStyle: "medium" });
+      return "Record since " + formatDateTime(locale, args.date, { dateStyle: "medium" });
     case "zh-CN":
-      return "自 " + formatDateTime(locale, args.date, { dateStyle: "medium" }) + " 起保持";
+      return "纪录始于 " + formatDateTime(locale, args.date, { dateStyle: "medium" });
     case "en-XA":
       return (
-        "[" + "Ĥéļđ šîñçé " + formatDateTime(locale, args.date, { dateStyle: "medium" }) + "·····]"
+        "[" +
+        "Ŕéçöŕđ šîñçé " +
+        formatDateTime(locale, args.date, { dateStyle: "medium" }) +
+        "······]"
       );
   }
 }
@@ -5157,27 +5137,27 @@ export function recordRetiredShort(locale: Locale = getLocale()): string {
   }
 }
 
-/** Lost */
+/** Past record */
 export function recordFormer(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "Lost";
+      return "Past record";
     case "zh-CN":
-      return "已失去";
+      return "过往纪录";
     case "en-XA":
-      return "[" + "Ļöšţ" + "··]";
+      return "[" + "Þåšţ ŕéçöŕđ" + "·····]";
   }
 }
 
-/** No holder */
-export function recordNoHoldersShort(locale: Locale = getLocale()): string {
+/** None yet */
+export function recordNoneYet(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "No holder";
+      return "None yet";
     case "zh-CN":
-      return "暂无保持者";
+      return "暂无";
     case "en-XA":
-      return "[" + "Ñö ĥöļđéŕ" + "····]";
+      return "[" + "Ñöñé ýéţ" + "····]";
   }
 }
 
@@ -5766,18 +5746,18 @@ export function storyOrientationFlush(locale: Locale = getLocale()): string {
   }
 }
 
-/** It matches the holder on every measure but was completed later, so the holder keeps the record. */
+/** It matches the record on every measure but was completed later, so the record stands. */
 export function predictionTiesDescription(locale: Locale = getLocale()): string {
   switch (locale) {
     case "en":
-      return "It matches the holder on every measure but was completed later, so the holder keeps the record.";
+      return "It matches the record on every measure but was completed later, so the record stands.";
     case "zh-CN":
-      return "各项指标与保持者相同，但完成时间较晚，因此纪录仍归保持者。";
+      return "各项指标与现有纪录相同，但完成时间较晚，因此现有纪录保持不变。";
     case "en-XA":
       return (
         "[" +
-        "Îţ ɱåţçĥéš ţĥé ĥöļđéŕ öñ éṽéŕý ɱéåšûŕé ƀûţ ŵåš çöɱþļéţéđ ļåţéŕ, šö ţĥé ĥöļđéŕ ķééþš ţĥé ŕéçöŕđ." +
-        "······································]"
+        "Îţ ɱåţçĥéš ţĥé ŕéçöŕđ öñ éṽéŕý ɱéåšûŕé ƀûţ ŵåš çöɱþļéţéđ ļåţéŕ, šö ţĥé ŕéçöŕđ šţåñđš." +
+        "··································]"
       );
   }
 }

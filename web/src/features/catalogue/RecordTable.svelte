@@ -56,13 +56,13 @@
     },
     {
       id: "holder",
-      header: m.recordHolders(),
+      header: m.catalogueBuild(),
       value: (record) => record.holders.map(buildName).join(", "),
       width: "md",
     },
     {
       id: "since",
-      header: m.catalogueHeldSince(),
+      header: m.catalogueRecordSince(),
       value: (record) =>
         record.holder_since != null ? m.catalogueDate({ date: record.holder_since }) : null,
       sortKey: "since",
@@ -111,7 +111,7 @@
           {/each}
         </Layout>
       {:else}
-        <Text as="span" size="sm" tone="muted">{m.recordNoHoldersShort()}</Text>
+        <Text as="span" size="sm" tone="muted">{m.recordNoneYet()}</Text>
       {/if}
     {:else}
       {column.value(record) ?? ""}
