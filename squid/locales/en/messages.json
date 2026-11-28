@@ -16972,8 +16972,8 @@
       }
     ],
     "locations": [
-      "squid/core/records/application/services.py:818",
-      "squid/core/records/application/services.py:849"
+      "squid/core/records/application/services.py:865",
+      "squid/core/records/application/services.py:896"
     ]
   },
   "records-category-id": {
@@ -17097,7 +17097,7 @@
       }
     ],
     "locations": [
-      "squid/core/records/application/services.py:862"
+      "squid/core/records/application/services.py:909"
     ]
   },
   "records-fixed-volume-positive": {
@@ -17321,7 +17321,7 @@
     "has_value": true,
     "arguments": [],
     "locations": [
-      "squid/core/records/application/services.py:779"
+      "squid/core/records/application/services.py:826"
     ]
   },
   "records-rebuild-summary": {
@@ -17404,7 +17404,7 @@
       }
     ],
     "locations": [
-      "squid/core/records/application/services.py:880"
+      "squid/core/records/application/services.py:927"
     ]
   },
   "records-remove-restriction": {
