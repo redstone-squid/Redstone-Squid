@@ -36,21 +36,18 @@ Unfinished items come first, then finished ones, each grouped by area. Numbers a
 ### Cross-cutting
 
 51. **ETags.** `ETag` is already exposed through CORS, and accounts, drafts, builds, settings and notification preferences send it. Include `revision` in every editable body, as builds already do, and send `ETag` from the remaining editors.
-55. **One pagination system.** Lists return `{items, total, next, prev}`. The total counts all matches before pagination and can change between requests. To follow a link, keep filters, sort and page size, remove the current selector, then apply the neighbour’s query parameters. A null link ends traversal in that direction.
-    - Numbered pages use `offset=(page-1)*page_size`, including zero. Offset links stop before the next offset would exceed 10,000. Inserts or deletes can repeat or skip rows. Ranked search supports offset pagination only.
-    - Seekable lists default to cursors. Review queues, proposals, claims, the notification inbox, diagnostics and permission audit log use this mode for work in progress. Each opaque cursor carries the boundary’s sort value and ID. A deleted boundary still works. If the remaining queue empties, the request succeeds with an empty page. Backward pages preserve display order.
-    - A malformed or wrong-sort cursor returns 400 `INVALID_PAGE_CURSOR`. Restart at the first page. One-way traversal by immutable ID avoids duplicates with unchanged filters. Changing sort values or queue membership can move a row past the reader.
-    - Supply at most one of `offset` and `cursor`. Lists accept `page_size` from 1 to 50. Completions keep `limit` and use `cursor` for the caret position.
-    - List ETags support `If-None-Match` caching. Sequence-based sync (`changed_since`) is planned separately.
-58. **Filters and sorts.** Every list follows these rules; items above name only their own filters and sorts.
-    - **Sorts are named** (`newest`, `fastest_open`), declared as a `StrEnum` in core beside the list's query, and each maps to one `KeysetOrder`, so every sort takes cursors. `id` is on every list: newest IDs first, the order for complete traversal. Direction is part of the name; offer `largest_volume` rather than a `-` prefix.
-    - **Search alone sorts by field**, because its sortable fields come from the field catalogue: `field` or `-field`.
-    - **Filters** are one frozen `XListFilters` dataclass per list in core, as `BuildListFilters` is. Parameters use the field name for enums and `<thing>_id` for IDs. Repeating a parameter means all must match; OR, when needed, gets its own parameter. `me` is the only sentinel.
-    - **`q` means text search** and belongs to `/v1/search`, where filters are query clauses. Repository lists have no `q` until one needs prefix matching for a picker.
-    - **Errors.** An unknown value carries a field issue on `/query/<param>`. Enum parameters fail in request decoding with 422; search checks its sort against the catalogue and answers 400 `INVALID_QUERY` with the `allowed` sorts.
-    - A personalized list, such as `submitted_by=me` or an unpublished status, answers `Cache-Control: no-store`.
 
 ## Finished
+
+### Collections
+
+55. **Pagination.** Independently browsable collections return `{items, total, next, prev}`. Keep the filters, sort and page size when following an anchor. Replace the current selector with the neighbour’s parameters. A null anchor ends traversal. The total counts matches before pagination and may change between reads.
+    - Seekable lists default to opaque cursors. Each carries the sort value and ID. Deleting the boundary row is safe, an exhausted queue returns an empty page, and backward pages preserve display order. A malformed or wrong-sort cursor returns 400 `INVALID_PAGE_CURSOR`. Restart at the first page.
+    - Numbered pages send `offset=(page-1)*page_size`, including zero. The maximum offset is 10,000, and page size is 1–50. Send at most one selector. Ranked search uses offsets. Completions use `limit` and a caret position.
+    - Public pages support `ETag` and `If-None-Match`. Personalized pages use `Cache-Control: no-store`. Bounded editor snapshots, embedded attachments, and option catalogues are read as a whole. Sequence-based sync is separate.
+58. **Filters and sorts.** Each pageable repository collection exposes descending `id` for stable traversal with unchanged membership. Named display orders serve the resource, such as `highest_rank` for permission roles and `release` for versions. Moving sort values or changing membership may skip or repeat rows. Search accepts catalogue field names with an optional descending `-` prefix.
+    - Repeated filters must all match. Review votes also accept `kind_any` to match any selected kind. IDs use `<thing>_id`, and `me` selects the caller. Text search uses `q` on search and picker endpoints.
+    - Invalid enum parameters return 422 with a field issue under `/query`. An unsupported search sort returns 400 `INVALID_QUERY` with the allowed fields.
 
 ### Identity, session and permissions
 
