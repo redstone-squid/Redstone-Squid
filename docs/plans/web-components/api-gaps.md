@@ -31,11 +31,9 @@ Unfinished items come first, then finished ones, each grouped by area. Numbers a
 
 ### Creators and accounts
 
-24. **Creator lookup (partial: the route returns only the alias).** `GET /v1/creator-aliases/lookup?name=` should return `{alias: {id, name, claimed}, account: PublicAccountDetail | null, stats: {build_count, records_held, records_ever, builds_by_year: [{year, count}]}, records_held: [record summary]}`. This removes the alias-then-account waterfall on P13.
-25. **Creator builds.** `GET /v1/builds?account_id=` (item 9) serves claimed creators. Unclaimed names have no account, so add `creator_alias_id`. Needed by P13.
-26. **Alias claims:**
-    - `POST /v1/creator-aliases/{id}/claims` and `GET /v1/accounts/me/claims` (P13, A3).
-    - `GET /v1/claims?status&sort=oldest` (a queue), `POST /v1/claims/{id}/{approve|reject}` (X4).
+24. **Creator pages (P13, proposed).** Keep name lookup small. An account page shows builds attributed to one person across all their credited names. A name page shows builds that use that name, with the public attribution of each credit where available. Two people can share a credited name, so a single account or `claimed` flag cannot describe the name. Load the page summary in one request, including build count, builds by year, current and historical record counts, and summaries of records currently held. The routes and the counting rule for historical records are open.
+25. **Creator builds (P13).** Filter `GET /v1/builds` by account for attributed credits, or by credited name for all uses of that name. Each result contains a build once, even when the same account has two credits on it. The filtered total should match the corresponding page's build count.
+26. **Credit claims (P13, A3, X4).** Users can request credit for builds under a name and see their claims. Staff need a review queue and can approve matching credits together, exclude individual credits, or reject the claim. Approval covers the selected build credits only. Later uses of the name require their own attribution. Staff can correct one attribution while preserving the name printed on the build. The claim payload and review endpoints are open.
 27. **Account lookup.** `GET /v1/accounts?q=&limit=` returns `{id, display_name, identities}` for staff. It serves pickers, so it's a completion with `limit`, not a paged list. Needed by X5 and X6.
 28. **Product decision: account deletion and data export.** `DELETE /v1/accounts/me` and `GET /v1/accounts/me/export`. Needed for A2 if the privacy notice promises them.
 53. **Merge code normalization.** `POST /v1/accounts/me/merge` and `/merge/preview` compare the code exactly, while CLI and Minecraft codes go through `normalize_user_code`. Normalize merge codes the same way (case, spaces, hyphens), since `CodeEntry` submits the grouped text. Needed by A3's merge flow.
