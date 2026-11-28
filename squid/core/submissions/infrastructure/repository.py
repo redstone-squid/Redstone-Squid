@@ -331,27 +331,7 @@ class PostgresDraftRepository(DraftRepository):
         status = model.status
         if status not in {DraftStatus.EDITING, DraftStatus.NEEDS_ATTENTION}:
             raise DraftStateConflictError(status.value, operation="delete")
-        # Retain artifact rows and object keys: normalized content is addressable by hash and may be shared,
-        # so deleting it safely requires reference-aware garbage collection rather than a draft cascade.
-        await session.execute(
-            update(MediaProcessingJobRecord)
-            .where(
-                MediaProcessingJobRecord.upload_id.in_(
-                    select(MediaUploadRecord.id).where(media_for_draft(draft_id), ~retained_elsewhere(draft_id))
-                ),
-                MediaProcessingJobRecord.status != MediaJobStatus.DISCARDED.value,
-            )
-            .values(
-                status=MediaJobStatus.DISCARDED,
-                claimed_at=None,
-                claim_token=None,
-                completed_at=None,
-                dead_at=None,
-                discarded_at=func.now(),
-                last_error=None,
-            )
-        )
-        await session.delete(model)
+        await discard_draft(session, model)
         return True
 
     @override
@@ -480,6 +460,31 @@ def _to_model(draft: StoredDraft) -> SubmissionDraft:
         updated_at=draft.updated_at,
         expires_at=draft.expires_at,
     )
+
+
+async def discard_draft(session: AsyncSession, model: SubmissionDraft) -> None:
+    """Delete a draft the caller has locked, and stop processing media no other draft or build keeps."""
+    # Retain artifact rows and object keys: normalized content is addressable by hash and may be shared,
+    # so deleting it safely requires reference-aware garbage collection rather than a draft cascade.
+    await session.execute(
+        update(MediaProcessingJobRecord)
+        .where(
+            MediaProcessingJobRecord.upload_id.in_(
+                select(MediaUploadRecord.id).where(media_for_draft(model.id), ~retained_elsewhere(model.id))
+            ),
+            MediaProcessingJobRecord.status != MediaJobStatus.DISCARDED.value,
+        )
+        .values(
+            status=MediaJobStatus.DISCARDED,
+            claimed_at=None,
+            claim_token=None,
+            completed_at=None,
+            dead_at=None,
+            discarded_at=func.now(),
+            last_error=None,
+        )
+    )
+    await session.delete(model)
 
 
 async def _with_editors(session: AsyncSession, models: Sequence[SubmissionDraft]) -> tuple[StoredDraft, ...]:
