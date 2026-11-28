@@ -45,6 +45,26 @@ test("a settings POST without a CSRF token renders access denied", async ({ requ
   expect(await response.text()).toContain(m.errorForbidden("en"));
 });
 
+test("a credited name lists its builds, links the public account, and accepts a selected credit", async ({
+  request,
+}) => {
+  const path = "/zh-cn/creators/Space%20Builder";
+  const response = await request.get(path);
+  expect(response.status()).toBe(200);
+  const html = await response.text();
+  expect(html).toContain("Observerless Iris");
+  const profile = "/zh-cn/accounts/00000000-0000-4000-8000-000000000007";
+  expect(html).toContain(profile);
+  expect((await request.get(profile)).status()).toBe(200);
+  const posted = await request.post(path, {
+    headers: { Cookie: "__Host-squid_session=member; squid_csrf=fixture-csrf" },
+    form: { credit: "00000000-0000-4000-8000-000000000017" },
+    maxRedirects: 0,
+  });
+  expect(posted.status()).toBe(303);
+  expect(posted.headers().location).toBe("/zh-cn/settings#claims");
+});
+
 test("the sitemap lists the indexable home pages during the rebuild", async ({ request }) => {
   const response = await request.get("/sitemap.xml");
   expect(response.ok()).toBe(true);

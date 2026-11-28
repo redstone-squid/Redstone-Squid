@@ -1,5 +1,5 @@
 ---
-import { accountGet, accountBuildIndexingSet } from "@/generated/sdk.gen";
+import { accountGet, accountBuildIndexingSet, accountCreditClaims } from "@/generated/sdk.gen";
 import CatalogueLayout from "@/layouts/CatalogueLayout.astro";
 import { localizePath } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
@@ -24,7 +24,10 @@ if (Astro.request.method === "POST") {
   );
   return Astro.redirect(localizePath("/settings"), 303);
 }
-const loaded = await load(accountGet({ client, headers: { Cookie: cookie } }));
+const [loaded, claims] = await Promise.all([
+  load(accountGet({ client, headers: { Cookie: cookie } })),
+  load(accountCreditClaims({ client, headers: { Cookie: cookie } })),
+]);
 const title = m.indexingTitle();
 ---
 
@@ -39,4 +42,23 @@ const title = m.indexingTitle();
     />
     <Button type="submit">{m.indexingSave()}</Button>
   </form>
+  <section id="claims">
+    <h2>{m.creatorClaims()}</h2>
+    {claims.length === 0 ? (
+      <p>{m.creatorClaimsEmpty()}</p>
+    ) : (
+      <ul>
+        {claims.map((claim) => (
+          <li>
+            {claim.name} ·{" "}
+            {claim.status === "approved"
+              ? m.creatorClaimApproved()
+              : claim.status === "rejected"
+                ? m.creatorClaimRejected()
+                : m.creatorClaimPending()}
+          </li>
+        ))}
+      </ul>
+    )}
+  </section>
 </CatalogueLayout>

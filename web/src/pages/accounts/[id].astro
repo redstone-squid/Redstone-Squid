@@ -1,6 +1,39 @@
 ---
-import PlaceholderPage from "@/layouts/PlaceholderPage.astro";
+import CreatorCredits from "@/features/catalogue/CreatorCredits.svelte";
+import { accountPublicGet, accountCreatorStats, buildsList } from "@/generated/sdk.gen";
+import CatalogueLayout from "@/layouts/CatalogueLayout.astro";
+import { localizePath } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
+import { load } from "@/server/api";
+import { pageHref, readPageAddress } from "@/server/pagination";
+import PageHeader from "@/ui/patterns/PageHeader.svelte";
+
+const client = Astro.locals.api;
+const page = readPageAddress(Astro.url.searchParams);
+const id = Astro.params.id ?? "";
+const path = { account_id: id };
+const profile = await load(accountPublicGet({ client, path }));
+if (profile.canonical_id && profile.canonical_id !== id)
+  return Astro.redirect(localizePath(`/accounts/${profile.canonical_id}${Astro.url.search}`), 308);
+const listing = profile.hidden
+  ? null
+  : await Promise.all([
+      load(accountCreatorStats({ client, path })),
+      load(buildsList({ client, query: { ...page, account_id: id } })),
+    ]);
+const title = profile.hidden
+  ? m.creatorHidden()
+  : (profile.display_name ?? profile.aliases?.[0]?.name ?? m.buildCreators());
 ---
 
-<PlaceholderPage title={m.buildCreators} />
+<CatalogueLayout {title} noindex={profile.hidden || Object.keys(page).length > 0}>
+  <PageHeader {title} description={profile.bio ?? undefined} />
+  {listing && (
+    <CreatorCredits
+      stats={listing[0]}
+      builds={listing[1].items}
+      prevHref={listing[1].prev ? pageHref(Astro.url, listing[1].prev) : null}
+      nextHref={listing[1].next ? pageHref(Astro.url, listing[1].next) : null}
+    />
+  )}
+</CatalogueLayout>

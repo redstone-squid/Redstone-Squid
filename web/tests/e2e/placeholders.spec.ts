@@ -4,12 +4,10 @@ import { expect, test } from "@tests/support/test";
 const routes = [
   "/",
   "/about",
-  "/accounts/00000000-0000-4000-8000-000000000007",
   "/admin/settings",
   "/builds",
   "/builds/1",
   "/cli/link?user_code=example",
-  "/creators/Space%20Builder",
   "/minecraft/link?user_code=example",
   "/search?q=door",
   "/search/help",

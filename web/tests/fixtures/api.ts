@@ -278,6 +278,75 @@ async function routeRequest(request: Request): Promise<Response> {
   const url = new URL(request.url);
   if (url.pathname === "/livez") return new Response("ok");
 
+  const profileId = "00000000-0000-4000-8000-000000000007";
+  const creditId = "00000000-0000-4000-8000-000000000017";
+  const stats = {
+    build_count: 1,
+    builds_by_year: [{ year: 2026, count: 1 }],
+    records_held: [],
+    records_ever: 0,
+  };
+  if (
+    url.pathname === "/v1/creator-aliases/summary" &&
+    url.searchParams.get("name") === "Space Builder"
+  )
+    return json({ id: 7, name: "Space Builder", stats });
+  if (url.pathname === `/v1/accounts/${profileId}`)
+    return json({ id: profileId, hidden: false, display_name: "Space Builder" });
+  if (url.pathname === `/v1/accounts/${profileId}/creator-stats`) return json(stats);
+  if (
+    url.pathname === "/v1/builds" &&
+    (url.searchParams.has("creator_name_id") || url.searchParams.has("account_id"))
+  )
+    return json({
+      items: [
+        {
+          ...builds[1],
+          creators: [{ name: "Space Builder", account_id: profileId }],
+          credits: [
+            {
+              credit_id: creditId,
+              name_id: 7,
+              name: "Space Builder",
+              role: "creator",
+              kind: "name",
+              account_id: profileId,
+              attribution: "explicit",
+              username: null,
+            },
+          ],
+        },
+      ],
+      total: 1,
+      prev: null,
+      next: null,
+    });
+  if (url.pathname === "/v1/accounts/me/claims") return json([]);
+  if (
+    url.pathname === "/v1/creator-aliases/7/claims" &&
+    request.method === "POST" &&
+    csrfMatches(request)
+  ) {
+    const body: unknown = await request.json();
+    if (
+      typeof body === "object" &&
+      body !== null &&
+      "credit_ids" in body &&
+      Array.isArray(body.credit_ids) &&
+      body.credit_ids.includes(creditId)
+    )
+      return json(
+        {
+          id: 1,
+          name: "Space Builder",
+          status: "pending",
+          credits: [{ credit_id: creditId, build_id: 2 }],
+          approved_credit_ids: [],
+        },
+        201,
+      );
+    return problem(request, 422, "VALIDATION_ERROR");
+  }
   if (url.pathname === "/v1/session" && cookie(request, "__Host-squid_session") === "outage")
     return problem(request, 503, "SERVICE_UNAVAILABLE");
   if (url.pathname === "/v1/records/rate-limited") {

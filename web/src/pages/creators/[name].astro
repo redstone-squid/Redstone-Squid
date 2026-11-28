@@ -1,6 +1,44 @@
 ---
-import PlaceholderPage from "@/layouts/PlaceholderPage.astro";
-import * as m from "@/locales/messages.gen";
+import CreatorCredits from "@/features/catalogue/CreatorCredits.svelte";
+import { buildsList, creatorNameSummary, creatorCreditClaim } from "@/generated/sdk.gen";
+import CatalogueLayout from "@/layouts/CatalogueLayout.astro";
+import { ApiError } from "@/api-client/api-error";
+import { requireSession, writeHeaders } from "@/server/session";
+import { localizePath } from "@/locales/locale";
+import { load } from "@/server/api";
+import { pageHref, readPageAddress } from "@/server/pagination";
+import PageHeader from "@/ui/patterns/PageHeader.svelte";
+
+const client = Astro.locals.api;
+const page = readPageAddress(Astro.url.searchParams);
+const summary = await load(
+  creatorNameSummary({ client, query: { name: Astro.params.name ?? "" } }),
+);
+if (Astro.request.method === "POST") {
+  requireSession(Astro);
+  const headers = writeHeaders(Astro);
+  if (!headers) throw new ApiError(403);
+  const form = await Astro.request.formData();
+  await load(
+    creatorCreditClaim({
+      client,
+      headers,
+      path: { alias_id: summary.id },
+      body: { credit_ids: form.getAll("credit").map(String) },
+    }),
+  );
+  return Astro.redirect(localizePath("/settings#claims"), 303);
+}
+const builds = await load(buildsList({ client, query: { ...page, creator_name_id: summary.id } }));
 ---
 
-<PlaceholderPage title={m.buildCreators} />
+<CatalogueLayout title={summary.name} noindex={Object.keys(page).length > 0}>
+  <PageHeader title={summary.name} />
+  <CreatorCredits
+    claimNameId={summary.id}
+    stats={summary.stats}
+    builds={builds.items}
+    prevHref={builds.prev ? pageHref(Astro.url, builds.prev) : null}
+    nextHref={builds.next ? pageHref(Astro.url, builds.next) : null}
+  />
+</CatalogueLayout>

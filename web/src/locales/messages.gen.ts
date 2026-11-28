@@ -242,6 +242,152 @@ export function buildsTitle(locale: Locale = getLocale()): string {
   }
 }
 
+/** Select the build credits you want to claim */
+export function creatorClaimSelect(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Select the build credits you want to claim";
+    case "zh-CN":
+      return "选择要认领的作品署名";
+    case "en-XA":
+      return "[" + "Šéļéçţ ţĥé ƀûîļđ çŕéđîţš ýöû ŵåñţ ţö çļåîɱ" + "·················]";
+  }
+}
+
+/** Request credit */
+export function creatorClaimSubmit(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Request credit";
+    case "zh-CN":
+      return "申请认领";
+    case "en-XA":
+      return "[" + "Ŕéǫûéšţ çŕéđîţ" + "······]";
+  }
+}
+
+/** Your credit claims */
+export function creatorClaims(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Your credit claims";
+    case "zh-CN":
+      return "我的署名申请";
+    case "en-XA":
+      return "[" + "Ýöûŕ çŕéđîţ çļåîɱš" + "········]";
+  }
+}
+
+/** No credit claims yet. */
+export function creatorClaimsEmpty(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "No credit claims yet.";
+    case "zh-CN":
+      return "尚无署名申请。";
+    case "en-XA":
+      return "[" + "Ñö çŕéđîţ çļåîɱš ýéţ." + "·········]";
+  }
+}
+
+/** Approved */
+export function creatorClaimApproved(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Approved";
+    case "zh-CN":
+      return "已批准";
+    case "en-XA":
+      return "[" + "Åþþŕöṽéđ" + "····]";
+  }
+}
+
+/** Rejected */
+export function creatorClaimRejected(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Rejected";
+    case "zh-CN":
+      return "已拒绝";
+    case "en-XA":
+      return "[" + "Ŕéĵéçţéđ" + "····]";
+  }
+}
+
+/** Awaiting review */
+export function creatorClaimPending(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Awaiting review";
+    case "zh-CN":
+      return "待审核";
+    case "en-XA":
+      return "[" + "Åŵåîţîñĝ ŕéṽîéŵ" + "······]";
+  }
+}
+
+/** Builds ({ $count }) */
+export function creatorBuildCount(
+  args: { count: string | number },
+  locale: Locale = getLocale(),
+): string {
+  switch (locale) {
+    case "en":
+      return "Builds (" + formatValue(locale, args.count) + ")";
+    case "zh-CN":
+      return "作品（" + formatValue(locale, args.count) + "）";
+    case "en-XA":
+      return "[" + "Ɓûîļđš (" + formatValue(locale, args.count) + ")" + "····]";
+  }
+}
+
+/** Currently held: { $held }. Ever held: { $ever }. */
+export function creatorRecordCounts(
+  args: { ever: string | number; held: string | number },
+  locale: Locale = getLocale(),
+): string {
+  switch (locale) {
+    case "en":
+      return (
+        "Currently held: " +
+        formatValue(locale, args.held) +
+        ". Ever held: " +
+        formatValue(locale, args.ever) +
+        "."
+      );
+    case "zh-CN":
+      return (
+        "目前保持：" +
+        formatValue(locale, args.held) +
+        "。曾经保持：" +
+        formatValue(locale, args.ever) +
+        "。"
+      );
+    case "en-XA":
+      return (
+        "[" +
+        "Çûŕŕéñţļý ĥéļđ: " +
+        formatValue(locale, args.held) +
+        ". Éṽéŕ ĥéļđ: " +
+        formatValue(locale, args.ever) +
+        "." +
+        "············]"
+      );
+  }
+}
+
+/** Hidden creator profile */
+export function creatorHidden(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Hidden creator profile";
+    case "zh-CN":
+      return "已隐藏的创作者资料";
+    case "en-XA":
+      return "[" + "Ĥîđđéñ çŕéåţöŕ þŕöƒîļé" + "·········]";
+  }
+}
+
 /** Creators */
 export function buildCreators(locale: Locale = getLocale()): string {
   switch (locale) {
