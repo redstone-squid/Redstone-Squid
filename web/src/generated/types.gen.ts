@@ -11129,6 +11129,9 @@ export type SubmissionFinalizationStartResponse = SubmissionFinalizationStartRes
 
 export type SubmissionFinalizationGetData = {
     body?: never;
+    headers?: {
+        'If-None-Match'?: string | null;
+    };
     path: {
         draft_id: string;
     };

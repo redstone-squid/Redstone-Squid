@@ -22241,7 +22241,7 @@
           "submissions"
         ],
         "summary": "GetDraftSubmission",
-        "description": "Return retained finalization state after rechecking draft ownership.",
+        "description": "Return the current attempt or a conditional response after checking ownership.",
         "operationId": "submission_finalization_get",
         "parameters": [
           {
@@ -22252,6 +22252,22 @@
               "format": "uuid"
             },
             "required": true,
+            "deprecated": false
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "required": false,
             "deprecated": false
           }
         ],
@@ -22365,6 +22381,14 @@
                 }
               }
             },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "304": {
+            "description": "Finalization status is unchanged.",
             "headers": {
               "Request-Id": {
                 "$ref": "#/components/headers/RequestId"

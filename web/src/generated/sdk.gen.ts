@@ -2571,7 +2571,7 @@ export const submissionFinalizationStart = <ThrowOnError extends boolean = false
 /**
  * GetDraftSubmission
  *
- * Return retained finalization state after rechecking draft ownership.
+ * Return the current attempt or a conditional response after checking ownership.
  */
 export const submissionFinalizationGet = <ThrowOnError extends boolean = false>(options: Options<SubmissionFinalizationGetData, ThrowOnError>): RequestResult<SubmissionFinalizationGetResponses, SubmissionFinalizationGetErrors, ThrowOnError> => (options.client ?? client).get<SubmissionFinalizationGetResponses, SubmissionFinalizationGetErrors, ThrowOnError>({
     security: [

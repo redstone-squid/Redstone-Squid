@@ -8,12 +8,14 @@ finalization attempt that produces a build.
 """
 
 from dataclasses import dataclass
+from hashlib import sha256
 from typing import Annotated, Literal, Protocol, cast
 from uuid import UUID
 
 from litestar import Request, Response, Router, delete, get, post
 from litestar import status_codes as status
 from litestar.di import NamedDependency, Provide
+from litestar.openapi.datastructures import ResponseSpec
 from litestar.params import (
     FromPath,
     FromQuery,
@@ -23,6 +25,7 @@ from litestar.params import (
     QueryParameter,
     SkipValidation,
 )
+from litestar.serialization import encode_json
 
 from squid.api.contract import ANONYMOUS, DEVICE, MINECRAFT, WEB, WEB_WRITE, cli_command, contract, transport_only
 from squid.api.dependencies import Services
@@ -637,7 +640,10 @@ async def submit_draft(
 
 @get(
     "/drafts/{draft_id:uuid}/status",
-    responses=responses(401, 403, 404, 422, 503),
+    responses={
+        **responses(401, 403, 404, 422, 503),
+        304: ResponseSpec(None, description="Finalization status is unchanged."),
+    },
     operation_id="submission_finalization_get",
     security=[WEB, DEVICE, MINECRAFT],
     opt=contract(
@@ -651,17 +657,27 @@ async def submit_draft(
 )
 @private_response
 async def get_draft_submission(
-    draft_id: FromPath[UUID], finalization: Finalization, context: SubmissionContext
-) -> SubmissionAttemptResponse | DraftPreparationResponse | DraftEditResult:
-    """Return retained finalization state after rechecking draft ownership."""
+    draft_id: FromPath[UUID],
+    finalization: Finalization,
+    context: SubmissionContext,
+    if_none_match: Annotated[str | None, HeaderParameter(name="If-None-Match")] = None,
+) -> Response[SubmissionAttemptResponse | DraftPreparationResponse | DraftEditResult]:
+    """Return the current attempt or a conditional response after checking ownership."""
     snapshot = await finalization.status(draft_id, context=context)
     if snapshot is None:
         raise SubmissionFinalizationNotFoundError
     if isinstance(snapshot, DraftEditResult):
-        return snapshot
-    if isinstance(snapshot, DraftPreparationSnapshot):
-        return DraftPreparationResponse.from_domain(snapshot)
-    return SubmissionAttemptResponse.from_domain(snapshot)
+        result = snapshot
+    elif isinstance(snapshot, DraftPreparationSnapshot):
+        result = DraftPreparationResponse.from_domain(snapshot)
+    else:
+        result = SubmissionAttemptResponse.from_domain(snapshot)
+    digest = sha256(encode_json(result)).hexdigest()
+    etag = f'"{digest}"'
+    headers = {"ETag": etag}
+    if if_none_match and any(tag.strip().removeprefix("W/") in {etag, "*"} for tag in if_none_match.split(",")):
+        return Response(status_code=304, content=None, headers=headers)
+    return Response(content=result, headers=headers)
 
 
 @get(
