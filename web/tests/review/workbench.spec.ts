@@ -45,7 +45,10 @@ for (const theme of ["light", "dark"] as const) {
       await expect(page.getByRole("heading", { level: 1, name: title, exact: true })).toBeVisible();
       expect(await fitsViewport(page)).toBe(true);
       await expect(page).toHaveAlignedControls();
-      await expect(page).toPassAxe();
+      // The catalogue shows the same record page in several states, so its regions share names.
+      await expect(page).toPassAxe({
+        disableRules: group === "catalogue" ? ["landmark-unique"] : [],
+      });
       const name = `${group}-${theme}`;
       await captureForReview(page, testInfo, name, "disabled");
     });

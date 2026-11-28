@@ -44,18 +44,6 @@ export function storyIrisDoorIllustration(locale: Locale = getLocale()): string 
   }
 }
 
-/** No preview */
-export function storyNoPreview(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "No preview";
-    case "zh-CN":
-      return "暂无预览";
-    case "en-XA":
-      return "[" + "Ñö þŕéṽîéŵ" + "····]";
-  }
-}
-
 /** A fixed frame with a fallback. */
 export function storyImageDescription(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -113,18 +101,6 @@ export function storyMissing(locale: Locale = getLocale()): string {
       return "缺失";
     case "en-XA":
       return "[" + "ɱîššîñĝ" + "···]";
-  }
-}
-
-/** failed to load */
-export function storyFailedToLoad(locale: Locale = getLocale()): string {
-  switch (locale) {
-    case "en":
-      return "failed to load";
-    case "zh-CN":
-      return "加载失败";
-    case "en-XA":
-      return "[" + "ƒåîļéđ ţö ļöåđ" + "······]";
   }
 }
 
@@ -690,10 +666,12 @@ export {
   storyDoorEvidence,
   storyEdited3DaysAgo,
   storyEmpty,
+  storyFailedToLoad,
   storyFastest,
   storyFlushPistonDoor,
   storyIrisDoor,
   storyMeasuredWithATickCounterOnJava1,
+  storyNoPreview,
   storyNotifications,
   storyOpeningTime,
   storyPendingReviewByStaff,

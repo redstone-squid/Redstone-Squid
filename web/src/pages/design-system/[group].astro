@@ -4,6 +4,7 @@ import Notice from "@/ui/feedback/Notice.svelte";
 import PageHeader from "@/ui/patterns/PageHeader.svelte";
 import { workbench } from "@/workbench/appearance";
 import { GROUPS, isGroup } from "@/workbench/groups";
+import CatalogueStories from "@/workbench/stories/CatalogueStories.svelte";
 import ActionsStories from "@/workbench/stories/ActionsStories.svelte";
 import ContentStories from "@/workbench/stories/ContentStories.svelte";
 import DataStories from "@/workbench/stories/DataStories.svelte";
@@ -41,5 +42,6 @@ const description = GROUPS[group].description();
   {group === "chart" && <ChartStories client:load />}
   {group === "overlays" && <OverlaysStories client:load />}
   {group === "patterns" && <PatternsStories forms={workbench.patternForms(Astro)} client:load />}
+  {group === "catalogue" && <CatalogueStories client:load />}
   {group === "motion" && <MotionStories client:load />}
 </WorkbenchLayout>

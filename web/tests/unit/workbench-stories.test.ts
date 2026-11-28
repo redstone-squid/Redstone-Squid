@@ -8,6 +8,7 @@ import { workbench } from "@/workbench/appearance";
 import DraftDialog from "@/workbench/DraftDialog.svelte";
 import Foundations from "@/workbench/Foundations.svelte";
 import { GROUPS, isGroup } from "@/workbench/groups";
+import CatalogueStories from "@/workbench/stories/CatalogueStories.svelte";
 import ActionsStories from "@/workbench/stories/ActionsStories.svelte";
 import ContentStories from "@/workbench/stories/ContentStories.svelte";
 import DataStories from "@/workbench/stories/DataStories.svelte";
@@ -60,6 +61,7 @@ describe("workbench", () => {
     ["table", TableStories],
     ["chart", ChartStories],
     ["overlays", OverlaysStories],
+    ["catalogue", CatalogueStories],
     ["motion", MotionStories],
   ])("renders the %s stories", (_group, Stories) => {
     const { container } = render(Stories);

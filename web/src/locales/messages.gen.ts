@@ -2290,6 +2290,30 @@ export function storyMeasuredWithATickCounterOnJava1(locale: Locale = getLocale(
   }
 }
 
+/** No preview */
+export function storyNoPreview(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "No preview";
+    case "zh-CN":
+      return "暂无预览";
+    case "en-XA":
+      return "[" + "Ñö þŕéṽîéŵ" + "····]";
+  }
+}
+
+/** failed to load */
+export function storyFailedToLoad(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "failed to load";
+    case "zh-CN":
+      return "加载失败";
+    case "en-XA":
+      return "[" + "ƒåîļéđ ţö ļöåđ" + "······]";
+  }
+}
+
 /** Door evidence */
 export function storyDoorEvidence(locale: Locale = getLocale()): string {
   switch (locale) {
@@ -4431,5 +4455,33 @@ export function finalizationFinished(locale: Locale = getLocale()): string {
       return "提交处理完成";
     case "en-XA":
       return "[" + "Ƒîñåļîžåţîöñ çöɱþļéţé" + "·········]";
+  }
+}
+
+/** Builds and records */
+export function storyCatalogue(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Builds and records";
+    case "zh-CN":
+      return "作品与纪录";
+    case "en-XA":
+      return "[" + "Ɓûîļđš åñđ ŕéçöŕđš" + "········]";
+  }
+}
+
+/** Every way a build or record appears: cards, list items, the featured holder, and whole record pages. */
+export function workbenchCatalogueDescription(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Every way a build or record appears: cards, list items, the featured holder, and whole record pages.";
+    case "zh-CN":
+      return "作品和纪录的所有呈现方式：卡片、列表项、特别展示的保持者，以及完整的纪录页面。";
+    case "en-XA":
+      return (
+        "[" +
+        "Éṽéŕý ŵåý å ƀûîļđ öŕ ŕéçöŕđ åþþéåŕš: çåŕđš, ļîšţ îţéɱš, ţĥé ƒéåţûŕéđ ĥöļđéŕ, åñđ ŵĥöļé ŕéçöŕđ þåĝéš." +
+        "········································]"
+      );
   }
 }

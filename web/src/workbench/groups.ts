@@ -28,6 +28,10 @@ export const GROUPS = {
     description: m.workbenchOverlaysDescription,
   },
   patterns: { title: m.storyPatterns, description: m.workbenchPatternsDescription },
+  catalogue: {
+    title: m.storyCatalogue,
+    description: m.workbenchCatalogueDescription,
+  },
   motion: { title: m.storyMotion, description: m.workbenchMotionDescription },
 } as const;
 export type Group = keyof typeof GROUPS;

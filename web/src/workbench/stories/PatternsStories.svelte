@@ -10,7 +10,6 @@
   import Vote from "@lucide/svelte/icons/vote";
   import BuildCard from "@/features/catalogue/BuildCard.svelte";
   import RecordCard from "@/features/catalogue/RecordCard.svelte";
-  import SchematicViewer from "@/features/catalogue/SchematicViewer.svelte";
   import Button from "@/ui/actions/Button.svelte";
   import Avatar from "@/ui/data/Avatar.svelte";
   import Badge from "@/ui/feedback/Badge.svelte";
@@ -770,36 +769,4 @@
       </SplitLayout>
     </div>
   </Variant>
-</Story>
-
-<Story
-  name="Catalogue cards"
-  heading={m.storyCatalogueCards()}
-  source="features/catalogue"
-  description={m.storyCatalogueCardsDescription()}
->
-  <Layout as="ul" pattern="grid">
-    {#each buildFixtures() as build, index (build.id)}
-      <BuildCard {build} category={categories[index] ?? ""} as="li" />
-    {/each}
-  </Layout>
-  <Layout as="ul" pattern="grid" min="card-wide">
-    {#each recordFixtures() as record (record.record_id)}
-      <RecordCard {record} as="li" />
-    {/each}
-  </Layout>
-</Story>
-
-<Story
-  name="Schematic viewer"
-  heading={m.storySchematicViewer()}
-  source="features/catalogue"
-  description={m.storySchematicViewerDescription()}
->
-  <SchematicViewer
-    title={m.storyCopperBolt55()}
-    schematicUrl="/fixtures/piston-door.schem"
-    previewUrl="/fixtures/copper-door.svg"
-    resourcePackUrl="/v1/schematic-resource-pack"
-  />
 </Story>

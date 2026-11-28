@@ -10,7 +10,8 @@ import { misalignedRows } from "./alignment";
  * failures that assertions miss. `await expect(page).toPassAxe()` fails on any axe violation.
  * Fixture media URLs on media.fixture.invalid are served locally; `broken.png` is not an image,
  * so pages can show their broken-image fallback. `toHaveAlignedControls()` fails when controls
- * side by side start at different heights (see `misalignedRows`).
+ * side by side start at different heights (see `misalignedRows`). `toPassAxe` takes
+ * `disableRules` for a page that breaks a rule on purpose; say why where it is used.
  */
 const fixtureImage = readFileSync("public/fixtures/copper-door.svg");
 
@@ -57,8 +58,10 @@ export const expect = baseExpect.extend({
           : `Controls side by side start at different heights:\n${problems.join("\n")}`,
     };
   },
-  async toPassAxe(page: Page) {
-    const { violations } = await new AxeBuilder({ page }).analyze();
+  async toPassAxe(page: Page, options: { disableRules?: string[] } = {}) {
+    const { violations } = await new AxeBuilder({ page })
+      .disableRules(options.disableRules ?? [])
+      .analyze();
     const summary = violations.map(
       (violation) =>
         `${violation.id}: ${violation.help} (${violation.nodes.map((node) => node.target.join(" ")).join(", ")})`,

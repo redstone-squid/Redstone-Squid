@@ -4,6 +4,9 @@ import catalogue from "./playwright.config";
 export default defineConfig({
   ...catalogue,
   testDir: "./tests/review",
+  // Headless Chromium repaints the catalogue group's tall page of shadowed cards slowly, which
+  // the reflow sweep repeats at 54 widths.
+  timeout: 120_000,
   outputDir: "test-results/review",
   snapshotPathTemplate: "{testDir}/__screenshots__/{projectName}/{arg}{ext}",
   reporter: [

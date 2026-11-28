@@ -13,7 +13,7 @@ test("a schematic opens in 3D under the production policy", async ({ page }) => 
       contentType: "application/zip",
     }),
   );
-  await page.goto("/design-system/patterns#schematic-viewer");
+  await page.goto("/design-system/catalogue#schematic-viewer");
   const story = page.locator("#schematic-viewer");
   await story.getByRole("button", { name: m.schematicViewerOpen("en") }).click();
   // The renderer and Nucleation's WebAssembly are several megabytes; meshing runs in workers.
