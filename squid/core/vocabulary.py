@@ -16,8 +16,8 @@ RECORD_CRITERIA: Mapping[RecordCriterion, Text] = {
     RecordCriterion.FIRST: tr(t"vocabulary-criterion-first = First"),
     RecordCriterion.FASTEST: tr(t"vocabulary-criterion-fastest = Fastest"),
     RecordCriterion.SMALLEST: tr(t"vocabulary-criterion-smallest = Smallest"),
-    RecordCriterion.FASTEST_SMALLEST: tr(t"vocabulary-criterion-fastest-smallest = Fastest, then smallest"),
-    RecordCriterion.SMALLEST_FASTEST: tr(t"vocabulary-criterion-smallest-fastest = Smallest, then fastest"),
+    RecordCriterion.FASTEST_SMALLEST: tr(t"vocabulary-criterion-fastest-smallest = Fastest Smallest"),
+    RecordCriterion.SMALLEST_FASTEST: tr(t"vocabulary-criterion-smallest-fastest = Smallest Fastest"),
 }
 
 BUILD_KINDS: Mapping[BuildKind, Text] = {

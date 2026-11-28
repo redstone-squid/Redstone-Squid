@@ -22914,7 +22914,7 @@
     ]
   },
   "vocabulary-criterion-fastest-smallest": {
-    "fingerprint": "28f452ce7ec2cda9956ab78cb033c466c98e4e8bfdff44d882af8957b9be1136",
+    "fingerprint": "942f83966c783590dfe6c909a621254fcd5a42085ba3cd698cbf0a7952b8fe0a",
     "attributes": [],
     "has_value": true,
     "arguments": [],
@@ -22941,7 +22941,7 @@
     ]
   },
   "vocabulary-criterion-smallest-fastest": {
-    "fingerprint": "0ab593f1f7b930d83bb7a410ef45064c07e783da5749d7daba61c1dd94ab5f3b",
+    "fingerprint": "3c0d34276d9874b86c8acf64de2ab10c3d1410cd19e05a0668d2cf14c79239d1",
     "attributes": [],
     "has_value": true,
     "arguments": [],

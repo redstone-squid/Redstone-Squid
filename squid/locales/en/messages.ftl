@@ -6851,7 +6851,7 @@ vocabulary-build-status-rejected = Rejected
 vocabulary-criterion-fastest = Fastest
 
 # squid/core/vocabulary.py:19
-vocabulary-criterion-fastest-smallest = Fastest, then smallest
+vocabulary-criterion-fastest-smallest = Fastest Smallest
 
 # squid/core/vocabulary.py:16
 vocabulary-criterion-first = First
@@ -6860,7 +6860,7 @@ vocabulary-criterion-first = First
 vocabulary-criterion-smallest = Smallest
 
 # squid/core/vocabulary.py:20
-vocabulary-criterion-smallest-fastest = Smallest, then fastest
+vocabulary-criterion-smallest-fastest = Smallest Fastest
 
 # squid/core/vocabulary.py:40
 vocabulary-record-fact-closing = Closing time
