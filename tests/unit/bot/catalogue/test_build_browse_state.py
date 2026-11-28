@@ -1022,14 +1022,15 @@ async def test_catalogue_jump_form_requests_the_numbered_build_page() -> None:
         *, context: ActingContext, statuses: frozenset[BuildStatus], selector: PageSelector, page_size: int
     ) -> Page[Build]:
         assert BuildStatus.APPROVED in statuses
+        offset = selector.offset or 0
         return Page(
             items=tuple(
                 DoorBuild(id=index + 1, submission_status=BuildStatus.APPROVED)
-                for index in range(selector.offset, selector.offset + page_size)
+                for index in range(offset, offset + page_size)
             ),
             total=400,
-            next=PageAnchor(offset=selector.offset + page_size) if selector.offset + page_size < 400 else None,
-            prev=PageAnchor(offset=max(0, selector.offset - page_size)) if selector.offset else None,
+            next=PageAnchor(offset=offset + page_size) if offset + page_size < 400 else None,
+            prev=PageAnchor(offset=max(0, offset - page_size)) if offset else None,
         )
 
     queries.list_page.side_effect = page

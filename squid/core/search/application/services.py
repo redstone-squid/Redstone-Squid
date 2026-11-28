@@ -6,7 +6,7 @@ from typing import Protocol
 
 from squid.core.actors import ActingContext, application_operation
 from squid.core.errors import ErrorCode, ValidationError
-from squid.core.pagination import PageAnchor
+from squid.core.pagination import MAX_PAGE_OFFSET, PageAnchor
 from squid.core.records.application.metrics import RecordHolderSummary
 from squid.core.records.application.ports import PublicBuildSummaryReader
 from squid.core.search.application.embeddings import SearchEmbeddingModel
@@ -118,7 +118,7 @@ class SearchService:
         return SearchPage(
             hits=await self._with_holders(result.hits, context=context),
             total=result.total,
-            next=PageAnchor(offset=following) if following < result.total else None,
+            next=PageAnchor(offset=following) if following <= MAX_PAGE_OFFSET and following < result.total else None,
             prev=PageAnchor(offset=max(offset - request.page_size, 0)) if offset else None,
             warnings=result.warnings,
             offset=offset,

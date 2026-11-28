@@ -281,7 +281,7 @@ class SchematicService:
         with context.scope():
             return offset_page(
                 await self.list_public_for_build(build_id, context=context),
-                offset=selector.offset,
+                offset=selector.offset or 0,
                 page_size=page_size,
             )
 

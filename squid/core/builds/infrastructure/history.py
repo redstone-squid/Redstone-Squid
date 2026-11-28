@@ -205,7 +205,7 @@ class BuildHistoryQueries:
         if not 1 <= page_size <= 100:
             msg = "page_size must be between 1 and 100"
             raise ValueError(msg)
-        if not 0 <= selector.offset <= MAX_PAGE_OFFSET:
+        if selector.offset is not None and not 0 <= selector.offset <= MAX_PAGE_OFFSET:
             msg = "offset must be between 0 and MAX_PAGE_OFFSET"
             raise ValueError(msg)
         before = aliased(BuildHistorySnapshot)

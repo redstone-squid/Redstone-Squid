@@ -98,6 +98,9 @@ async def test_an_offset_page_and_a_cursor_page_agree(
 
     assert ids(by_offset) == ids(by_cursor)
     assert by_offset.next == PageAnchor(offset=4)
+    first = await page(repository, selector=follow(by_offset.prev))
+    assert first.prev is None
+    assert first.next == PageAnchor(offset=2)
 
 
 async def test_the_total_matches_what_paging_actually_returns(

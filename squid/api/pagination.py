@@ -88,7 +88,7 @@ class Page[ItemT]:
 def resolve_selector(*, offset: int | None, cursor: str | None = None) -> PageSelector:
     """Resolve the mutually exclusive `offset` and `cursor` parameters into one selector.
 
-    With neither, start at offset zero.
+    With neither, seekable lists start in cursor mode.
 
     Raises:
         ValidationError: Both were supplied.
@@ -104,4 +104,4 @@ def resolve_selector(*, offset: int | None, cursor: str | None = None) -> PageSe
                 for key in ("offset", "cursor")
             ),
         )
-    return PageSelector(offset=offset or 0, cursor=None if cursor is None else PageCursor.decode(cursor))
+    return PageSelector(offset=offset, cursor=None if cursor is None else PageCursor.decode(cursor))

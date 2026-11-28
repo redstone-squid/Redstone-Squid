@@ -6,7 +6,7 @@ from typing import Any, cast
 from sqlalchemy import ColumnElement, Select, SQLColumnExpression, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from squid.core.pagination import InvalidPageCursorError, Page, PageAnchor, PageCursor, PageSelector
+from squid.core.pagination import InvalidPageCursorError, Page, PageAnchor, PageCursor, PageSelector, offset_page
 
 _KEY = "keyset_key"
 _ID = "keyset_id"
@@ -59,13 +59,8 @@ class KeysetOrder:
         if backward:
             rows.reverse()
         items = tuple(row[0] if width == 1 else tuple(row[:width]) for row in rows)
-        if selector.offset:
-            return Page(
-                items,
-                total,
-                next=PageAnchor(offset=selector.offset + page_size) if overflow else None,
-                prev=PageAnchor(offset=max(selector.offset - page_size, 0)),
-            )
+        if selector.offset is not None:
+            return offset_page(items, offset=selector.offset, page_size=page_size, total=total)
         if not rows:
             return Page(items, total, next=None, prev=None)
         first, last = (PageCursor(self.name, row[-2], row[-1]) for row in (rows[0], rows[-1]))

@@ -20,10 +20,7 @@ from squid.core.i18n import tr
 from squid.core.validation import FieldErrorCode, SimpleIssue
 
 MAX_PAGE_OFFSET = 10_000
-"""Maximum offset accepted by paginated endpoints; cursors reach deeper pages.
-
-The assembly helpers here do not enforce this limit.
-"""
+"""Maximum offset accepted by paginated endpoints."""
 
 
 class InvalidPageCursorError(ValidationError):
@@ -63,7 +60,9 @@ class PageCursor:
     def decode(cls, token: str) -> Self:
         """Read a token from `encode`, raising InvalidPageCursorError for anything else."""
         try:
-            order, backward, key, identifier = json.loads(base64.urlsafe_b64decode(token + "=" * (-len(token) % 4)))
+            order, backward, key, identifier = json.loads(
+                base64.b64decode(token + "=" * (-len(token) % 4), altchars=b"-_", validate=True)
+            )
             key, identifier = _untagged(key), _untagged(identifier)
         except (binascii.Error, UnicodeDecodeError, TypeError, ValueError) as error:
             raise InvalidPageCursorError from error
@@ -103,7 +102,7 @@ def _untagged(value: object) -> object:
 class PageSelector:
     """The single way one request addresses its page."""
 
-    offset: int = 0
+    offset: int | None = None
     cursor: PageCursor | None = None
 
 
@@ -116,7 +115,7 @@ class PageAnchor:
 
     def selector(self) -> PageSelector:
         """Return the selector that requests this page."""
-        return PageSelector(offset=self.offset or 0, cursor=self.cursor)
+        return PageSelector(offset=self.offset, cursor=self.cursor)
 
 
 @dataclass(frozen=True, slots=True)
@@ -134,16 +133,21 @@ FIRST_PAGE = PageSelector()
 """The selector a request that named no pagination parameter resolves to."""
 
 
-def offset_page[ItemT](rows: Sequence[ItemT], *, offset: int, page_size: int, total: int | None = None) -> Page[ItemT]:
+def offset_page[ItemT](
+    rows: Sequence[ItemT], *, offset: int | None, page_size: int, total: int | None = None
+) -> Page[ItemT]:
     """Assemble one offset-addressed page.
 
     Without `total`, `rows` is the whole collection. With it, `rows` starts at `offset`.
     """
+    offset = offset or 0
     if total is None:
         total, rows = len(rows), rows[offset:]
     return Page(
         items=tuple(rows[:page_size]),
         total=total,
-        next=PageAnchor(offset=offset + page_size) if offset + page_size < total else None,
+        next=PageAnchor(offset=offset + page_size)
+        if offset + page_size <= MAX_PAGE_OFFSET and offset + page_size < total
+        else None,
         prev=PageAnchor(offset=max(offset - page_size, 0)) if offset else None,
     )
