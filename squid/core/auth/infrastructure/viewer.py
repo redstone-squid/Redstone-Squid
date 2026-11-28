@@ -129,25 +129,7 @@ class PostgresViewerRepository:
         if review_session_id is not None and vote is None:
             return None
         vote_id = vote.vote_session_id if vote is not None else None
-        # Retained execution inputs also carry private identity and installation data.
-        fields = (
-            "category",
-            "description",
-            "details",
-            "capture_dimensions",
-            "version_compatibility",
-            "tags",
-            "completion",
-        )
-        if row.edit_vote_id is None:
-            facts = {key: row.content[key] for key in fields if key in row.content}
-        else:
-            patch = row.content.get("patch")
-            facts = (
-                {key: value for key, value in patch.items() if key not in {"credits", "extra_info"}}
-                if isinstance(patch, dict)
-                else {}
-            )
+        facts = row.visible_content
         review_revision = row.base_revision or revision
         if row.base_revision is None and row.decision != "pending":
             review_revision = row.decided_revision - 1 if row.decided_revision else None

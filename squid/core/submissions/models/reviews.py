@@ -39,3 +39,24 @@ class BuildSubmission(Base, kw_only=True):
     decision: Mapped[str] = mapped_column(Text, default="pending", server_default=text("'pending'"))
     decided_revision: Mapped[int | None] = mapped_column(BigInteger, default=None)
     feedback: Mapped[str | None] = mapped_column(Text, default=None)
+
+    @property
+    def visible_content(self) -> dict[str, object]:
+        """Return submitted facts visible to the owner, omitting private execution inputs."""
+        if self.edit_vote_id is not None:
+            patch = self.content.get("patch")
+            return (
+                {key: value for key, value in patch.items() if key not in {"credits", "extra_info"}}
+                if isinstance(patch, dict)
+                else {}
+            )
+        fields = (
+            "category",
+            "description",
+            "details",
+            "capture_dimensions",
+            "version_compatibility",
+            "tags",
+            "completion",
+        )
+        return {key: self.content[key] for key in fields if key in self.content}
