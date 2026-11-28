@@ -12,10 +12,10 @@ export type PageAddress = { cursor?: string; offset?: number };
 export function readPageAddress(params: URLSearchParams, pageSize = 20): PageAddress {
   const cursor = params.get("cursor")?.trim() ?? "";
   if (cursor !== "") return { cursor };
-  const rawOffset = params.get("offset")?.trim();
+  const rawOffset = params.get("offset")?.trim() ?? "";
   const page = Number(params.get("page"));
-  if (!rawOffset && (!Number.isSafeInteger(page) || page < 1)) return {};
-  const offset = rawOffset ? Number(rawOffset) : (page - 1) * pageSize;
+  if (rawOffset === "" && (!Number.isSafeInteger(page) || page < 1)) return {};
+  const offset = rawOffset !== "" ? Number(rawOffset) : (page - 1) * pageSize;
   return Number.isSafeInteger(offset) && offset >= 0 && offset <= 10_000 ? { offset } : {};
 }
 

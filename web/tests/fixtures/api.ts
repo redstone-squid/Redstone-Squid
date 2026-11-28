@@ -321,6 +321,38 @@ async function routeRequest(request: Request): Promise<Response> {
       prev: null,
       next: null,
     });
+  const submissionId = "babfbdfd-c205-469d-ba81-ae5228ea79ca";
+  const submitted = {
+    id: submissionId,
+    build_id: 77,
+    title: "Piston relay",
+    kind: "new_build",
+    status: "rejected",
+    submitted_at: frozenDate,
+    published: false,
+    decided_revision: 2,
+  };
+  if (url.pathname === "/v1/submissions")
+    return json({ items: [submitted], total: 1, prev: null, next: null });
+  if (url.pathname === `/v1/submissions/${submissionId}`)
+    return json({
+      submission: submitted,
+      base_revision: null,
+      vote_session_id: null,
+      facts: { description: "A submitted relay" },
+      reviewed_facts: {},
+      review_revision: null,
+      feedback: "Missing timing evidence",
+      can_approve: false,
+      can_reject: false,
+    });
+  if (url.pathname === "/v1/accounts/me/builds")
+    return json({
+      items: [{ build_id: 1, title: "Copper Bolt", roles: ["creator"] }],
+      total: 1,
+      prev: null,
+      next: null,
+    });
   if (url.pathname === "/v1/accounts/me/claims")
     return json({ items: [], total: 0, next: null, prev: null });
   if (

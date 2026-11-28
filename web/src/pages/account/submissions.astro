@@ -1,0 +1,59 @@
+---
+import CatalogueLayout from "@/layouts/CatalogueLayout.astro";
+import { localizePath } from "@/locales/locale";
+import * as m from "@/locales/messages.gen";
+import { load } from "@/server/api";
+import { requireSession } from "@/server/session";
+import PageHeader from "@/ui/patterns/PageHeader.svelte";
+import type { SubmissionStatus } from "@/generated/types.gen";
+import Link from "@/ui/content/Link.svelte";
+import { submissionsList } from "@/generated/sdk.gen";
+import { statusLabel } from "@/features/submissions/status";
+import List from "@/ui/data/List.svelte";
+import ListItem from "@/ui/data/ListItem.svelte";
+import Pagination from "@/ui/navigation/Pagination.svelte";
+import { readPageAddress, pageHref } from "@/server/pagination";
+const headers = { Cookie: requireSession(Astro) };
+
+const statuses: SubmissionStatus[] = ["pending", "approved", "rejected", "cancelled", "stale"];
+const status = statuses.find((value) => value === Astro.url.searchParams.get("status"));
+const page = await load(
+  submissionsList({
+    client: Astro.locals.api,
+    headers,
+    query: { ...readPageAddress(Astro.url.searchParams), status },
+  }),
+);
+const title = m.accountSubmissions();
+---
+
+<CatalogueLayout {title} noindex>
+  <PageHeader {title} />
+  <nav aria-label={m.submissionFilter()}>
+    <Link href={localizePath("/account/submissions")}>{m.submissionAll()}</Link>
+    {statuses.map((value) => (
+      <Link href={localizePath(`/account/submissions?status=${value}`)}>{statusLabel(value)}</Link>
+    ))}
+  </nav>
+  {page.items.length === 0 ? (
+    <p>{m.submissionEmpty()}</p>
+  ) : (
+    <List>
+      {page.items.map((row) => (
+        <ListItem
+          title={row.title ?? m.submissionBuildNumber({ id: row.build_id })}
+          description={[
+            row.kind === "edit" ? m.submissionEdit() : m.submissionNew(),
+            statusLabel(row.status),
+          ].join(" · ")}
+          href={localizePath(`/submissions/${row.id}`)}
+        />
+      ))}
+    </List>
+  )}
+  <Pagination
+    prevHref={page.prev ? pageHref(Astro.url, page.prev) : null}
+    nextHref={page.next ? pageHref(Astro.url, page.next) : null}
+    labels={{ nav: m.navPagination(), previous: m.commonPrevious(), next: m.commonNext() }}
+  />
+</CatalogueLayout>

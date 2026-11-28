@@ -74,6 +74,17 @@ test.describe("with JavaScript disabled", () => {
     );
   });
 
+  test("opens a rejected submission and a separate credited build", async ({ page, context }) => {
+    await signInAs(context, "member");
+    await page.goto("/account/submissions");
+    await page.getByRole("link", { name: "Piston relay" }).click();
+    await expect(page.getByText("Missing timing evidence")).toBeVisible();
+    await expect(page.getByRole("link", { name: m.submissionViewPublic("en") })).toHaveCount(0);
+    await page.goto("/account/builds");
+    await page.getByRole("link", { name: "Copper Bolt" }).click();
+    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Copper Bolt");
+  });
+
   test("can enable and disable indexing without JavaScript", async ({ page, context }) => {
     await signInAs(context, "member");
     await page.goto("/settings");

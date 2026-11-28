@@ -242,6 +242,13 @@ export type BuildDetail = {
 };
 
 /**
+ * BuildEditMode
+ *
+ * Actions offered before the editor knows which fields will change.
+ */
+export type BuildEditMode = 'direct' | 'field_dependent' | 'propose' | 'unavailable';
+
+/**
  * BuildIndexingRequest
  */
 export type BuildIndexingRequest = {
@@ -400,6 +407,7 @@ export type BuildStatusFilter = 'pending' | 'approved' | 'rejected';
  * BuildViewer
  */
 export type BuildViewer = {
+    edit_mode: BuildEditMode;
     can_edit: boolean;
     can_review: boolean;
     can_download_private_schematics: boolean;
@@ -731,6 +739,15 @@ export type CreditedAlias = {
 };
 
 /**
+ * CreditedBuild
+ */
+export type CreditedBuild = {
+    build_id: number;
+    title: string | null;
+    roles: Array<string>;
+};
+
+/**
  * CreditedNameSummary
  */
 export type CreditedNameSummary = {
@@ -987,6 +1004,7 @@ export type DraftEditResult = {
     build_id: number;
     revision: number;
     review_vote_id: number | null;
+    submission_id?: string | null;
 };
 
 /**
@@ -1131,6 +1149,14 @@ export type DraftSummaryResponse = {
     created_at: string;
     updated_at: string;
     expires_at: string;
+};
+
+/**
+ * DraftViewer
+ */
+export type DraftViewer = {
+    can_edit: boolean;
+    can_discard: boolean;
 };
 
 /**
@@ -2066,6 +2092,26 @@ export type PageSquidCoreRecordsApplicationRangeSnapshotsRangeRegistration = {
 };
 
 /**
+ * Page[CreditedBuild]
+ */
+export type PageSquidCoreSubmissionsApplicationReviewsCreditedBuild = {
+    items: Array<CreditedBuild>;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+};
+
+/**
+ * Page[SubmissionSummary]
+ */
+export type PageSquidCoreSubmissionsApplicationReviewsSubmissionSummary = {
+    items: Array<SubmissionSummary>;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+};
+
+/**
  * PaperChallengeCreateRequest
  */
 export type PaperChallengeCreateRequest = {
@@ -2864,6 +2910,7 @@ export type ReviewVoteSummary = {
     result: VoteSessionResult;
     pass_threshold: number | null;
     fail_threshold: number | null;
+    submission_id?: string | null;
     build_id: number | null;
     options: Array<VoteOptionSummary>;
     tallies: VoteTallies | null;
@@ -3415,6 +3462,7 @@ export type StartImpersonation = {
  * StoredDraftResponse
  */
 export type StoredDraftResponse = {
+    viewer: DraftViewer;
     id: string;
     source_build_id?: number | null;
     source_revision?: number | null;
@@ -3443,6 +3491,7 @@ export type StoredDraftResponse = {
  */
 export type SubmissionAttemptResponse = {
     draft_id: string;
+    submission_id?: string | null;
     attempt_id: string;
     attempt_number: number;
     input_sha256: string | null;
@@ -3468,11 +3517,62 @@ export type SubmissionAttentionIssueResponse = {
 export type SubmissionAttentionReason = 'unknown_field' | 'required' | 'wrong_type' | 'required_value' | 'below_minimum' | 'above_maximum' | 'too_short' | 'too_long' | 'too_few_items' | 'too_many_items' | 'unknown_option' | 'schema_unsupported' | 'schematic_required' | 'schematic_processing' | 'schematic_rejected' | 'schematic_primary_required' | 'media_processing' | 'media_rejected' | 'sponsor_unavailable' | 'target_rejected' | 'retry_exhausted' | 'permission_revoked';
 
 /**
+ * SubmissionDecision
+ */
+export type SubmissionDecision = {
+    revision: number;
+    decision: 'approve' | 'reject';
+    feedback?: string | null;
+};
+
+/**
+ * SubmissionDetail
+ */
+export type SubmissionDetail = {
+    submission: SubmissionSummary;
+    base_revision: number | null;
+    vote_session_id: number | null;
+    facts: {
+        [key: string]: Array<unknown> | {
+            [key: string]: unknown;
+        } | string | boolean | number | number | null;
+    };
+    review_revision: number | null;
+    reviewed_facts: {
+        [key: string]: Array<unknown> | {
+            [key: string]: unknown;
+        } | string | boolean | number | number | null;
+    };
+    feedback?: string | null;
+    can_approve?: boolean;
+    can_reject?: boolean;
+};
+
+/**
  * SubmissionOrigin
  *
  * The client or platform from which a submission draft originated.
  */
 export type SubmissionOrigin = 'discord' | 'web' | 'cli' | 'paper' | 'fabric';
+
+/**
+ * SubmissionStatus
+ */
+export type SubmissionStatus = 'pending' | 'approved' | 'rejected' | 'cancelled' | 'stale';
+
+/**
+ * SubmissionSummary
+ */
+export type SubmissionSummary = {
+    id: string;
+    build_id: number;
+    title: string | null;
+    kind: 'new_build' | 'edit';
+    status: SubmissionStatus;
+    submitted_at: string;
+    published: boolean;
+    decided_revision: number | null;
+};
 
 /**
  * SubscriptionKind
@@ -3976,6 +4076,7 @@ export type VoteSessionDetail = {
     result: VoteSessionResult;
     pass_threshold: number | null;
     fail_threshold: number | null;
+    submission_id?: string | null;
     build_id: number | null;
     options: Array<VoteOptionSummary>;
     tallies: VoteTallies | null;
@@ -4227,6 +4328,60 @@ export type VerificationCreateCompatibilityResponses = {
 };
 
 export type VerificationCreateCompatibilityResponse = VerificationCreateCompatibilityResponses[keyof VerificationCreateCompatibilityResponses];
+
+export type AccountCreditedBuildsData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Number of items to skip. Excludes cursor.
+         */
+        offset?: number | null;
+        /**
+         * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
+         */
+        cursor?: string | null;
+        /**
+         * Maximum number of items to return.
+         */
+        page_size?: number;
+    };
+    url: '/v1/accounts/me/builds';
+};
+
+export type AccountCreditedBuildsErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type AccountCreditedBuildsError = AccountCreditedBuildsErrors[keyof AccountCreditedBuildsErrors];
+
+export type AccountCreditedBuildsResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: PageSquidCoreSubmissionsApplicationReviewsCreditedBuild;
+};
+
+export type AccountCreditedBuildsResponse = AccountCreditedBuildsResponses[keyof AccountCreditedBuildsResponses];
 
 export type AccountGetData = {
     body?: never;
@@ -10132,6 +10287,225 @@ export type BrowserImpersonationGetResponses = {
 };
 
 export type BrowserImpersonationGetResponse = BrowserImpersonationGetResponses[keyof BrowserImpersonationGetResponses];
+
+export type SubmissionsDecideData = {
+    body: SubmissionDecision;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        submission_id: string;
+    };
+    query?: never;
+    url: '/v1/submissions/{submission_id}/decision';
+};
+
+export type SubmissionsDecideErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type SubmissionsDecideError = SubmissionsDecideErrors[keyof SubmissionsDecideErrors];
+
+export type SubmissionsDecideResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: SubmissionDetail;
+};
+
+export type SubmissionsDecideResponse = SubmissionsDecideResponses[keyof SubmissionsDecideResponses];
+
+export type SubmissionsReviewQueueData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Number of items to skip. Excludes cursor.
+         */
+        offset?: number | null;
+        /**
+         * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
+         */
+        cursor?: string | null;
+        /**
+         * Maximum number of items to return.
+         */
+        page_size?: number;
+    };
+    url: '/v1/submissions/review-queue';
+};
+
+export type SubmissionsReviewQueueErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type SubmissionsReviewQueueError = SubmissionsReviewQueueErrors[keyof SubmissionsReviewQueueErrors];
+
+export type SubmissionsReviewQueueResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: PageSquidCoreSubmissionsApplicationReviewsSubmissionSummary;
+};
+
+export type SubmissionsReviewQueueResponse = SubmissionsReviewQueueResponses[keyof SubmissionsReviewQueueResponses];
+
+export type SubmissionsListData = {
+    body?: never;
+    path?: never;
+    query?: {
+        status?: SubmissionStatus | null;
+        /**
+         * Number of items to skip. Excludes cursor.
+         */
+        offset?: number | null;
+        /**
+         * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
+         */
+        cursor?: string | null;
+        /**
+         * Maximum number of items to return.
+         */
+        page_size?: number;
+    };
+    url: '/v1/submissions';
+};
+
+export type SubmissionsListErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type SubmissionsListError = SubmissionsListErrors[keyof SubmissionsListErrors];
+
+export type SubmissionsListResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: PageSquidCoreSubmissionsApplicationReviewsSubmissionSummary;
+};
+
+export type SubmissionsListResponse = SubmissionsListResponses[keyof SubmissionsListResponses];
+
+export type SubmissionsGetData = {
+    body?: never;
+    path: {
+        submission_id: string;
+    };
+    query?: {
+        review_session_id?: number | null;
+    };
+    url: '/v1/submissions/{submission_id}';
+};
+
+export type SubmissionsGetErrors = {
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+    /**
+     * Service Unavailable
+     */
+    503: ProblemDetail;
+};
+
+export type SubmissionsGetError = SubmissionsGetErrors[keyof SubmissionsGetErrors];
+
+export type SubmissionsGetResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: SubmissionDetail;
+};
+
+export type SubmissionsGetResponse = SubmissionsGetResponses[keyof SubmissionsGetResponses];
 
 export type SubmissionCorrectionInboxData = {
     body?: never;

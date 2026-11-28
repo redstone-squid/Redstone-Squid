@@ -1,0 +1,45 @@
+---
+import CatalogueLayout from "@/layouts/CatalogueLayout.astro";
+import { localizePath } from "@/locales/locale";
+import * as m from "@/locales/messages.gen";
+import { load } from "@/server/api";
+import { requireSession } from "@/server/session";
+import PageHeader from "@/ui/patterns/PageHeader.svelte";
+import { accountCreditedBuilds } from "@/generated/sdk.gen";
+import List from "@/ui/data/List.svelte";
+import ListItem from "@/ui/data/ListItem.svelte";
+import Pagination from "@/ui/navigation/Pagination.svelte";
+import { readPageAddress, pageHref } from "@/server/pagination";
+const headers = { Cookie: requireSession(Astro) };
+
+const page = await load(
+  accountCreditedBuilds({
+    client: Astro.locals.api,
+    headers,
+    query: { ...readPageAddress(Astro.url.searchParams) },
+  }),
+);
+const title = m.accountBuilds();
+---
+
+<CatalogueLayout {title} noindex>
+  <PageHeader {title} />
+  {page.items.length === 0 ? (
+    <p>{m.portfolioEmpty()}</p>
+  ) : (
+    <List>
+      {page.items.map((row) => (
+        <ListItem
+          title={row.title ?? m.submissionBuildNumber({ id: row.build_id })}
+          description={row.roles.join(", ")}
+          href={localizePath(`/builds/${row.build_id}`)}
+        />
+      ))}
+    </List>
+  )}
+  <Pagination
+    prevHref={page.prev ? pageHref(Astro.url, page.prev) : null}
+    nextHref={page.next ? pageHref(Astro.url, page.next) : null}
+    labels={{ nav: m.navPagination(), previous: m.commonPrevious(), next: m.commonNext() }}
+  />
+</CatalogueLayout>

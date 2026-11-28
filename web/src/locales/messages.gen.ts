@@ -3770,3 +3770,480 @@ export function indexingSave(locale: Locale = getLocale()): string {
       return "[" + "Šåṽé šéţţîñĝ" + "·····]";
   }
 }
+
+/** My Builds */
+export function accountBuilds(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "My Builds";
+    case "zh-CN":
+      return "我的作品";
+    case "en-XA":
+      return "[" + "Ṁý Ɓûîļđš" + "····]";
+  }
+}
+
+/** My Submissions */
+export function accountSubmissions(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "My Submissions";
+    case "zh-CN":
+      return "我的提交";
+    case "en-XA":
+      return "[" + "Ṁý Šûƀɱîššîöñš" + "······]";
+  }
+}
+
+/** New build */
+export function submissionNew(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "New build";
+    case "zh-CN":
+      return "新作品";
+    case "en-XA":
+      return "[" + "Ñéŵ ƀûîļđ" + "····]";
+  }
+}
+
+/** Proposed edit */
+export function submissionEdit(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Proposed edit";
+    case "zh-CN":
+      return "修改提案";
+    case "en-XA":
+      return "[" + "Þŕöþöšéđ éđîţ" + "······]";
+  }
+}
+
+/** Build #{ $id } */
+export function submissionBuildNumber(
+  args: { id: string | number },
+  locale: Locale = getLocale(),
+): string {
+  switch (locale) {
+    case "en":
+      return "Build #" + formatValue(locale, args.id);
+    case "zh-CN":
+      return "作品 #" + formatValue(locale, args.id);
+    case "en-XA":
+      return "[" + "Ɓûîļđ #" + formatValue(locale, args.id) + "···]";
+  }
+}
+
+/** No submissions yet. */
+export function submissionEmpty(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "No submissions yet.";
+    case "zh-CN":
+      return "尚无提交。";
+    case "en-XA":
+      return "[" + "Ñö šûƀɱîššîöñš ýéţ." + "········]";
+  }
+}
+
+/** No published builds credit this account yet. */
+export function portfolioEmpty(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "No published builds credit this account yet.";
+    case "zh-CN":
+      return "尚无已发布作品将此账户列入贡献者名单。";
+    case "en-XA":
+      return "[" + "Ñö þûƀļîšĥéđ ƀûîļđš çŕéđîţ ţĥîš åççöûñţ ýéţ." + "··················]";
+  }
+}
+
+/** View published build */
+export function submissionViewPublic(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "View published build";
+    case "zh-CN":
+      return "查看已发布作品";
+    case "en-XA":
+      return "[" + "Ṽîéŵ þûƀļîšĥéđ ƀûîļđ" + "········]";
+  }
+}
+
+/** Cancelled */
+export function submissionCancelled(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Cancelled";
+    case "zh-CN":
+      return "已取消";
+    case "en-XA":
+      return "[" + "Çåñçéļļéđ" + "····]";
+  }
+}
+
+/** Review queue */
+export function submissionReviewQueue(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Review queue";
+    case "zh-CN":
+      return "审核队列";
+    case "en-XA":
+      return "[" + "Ŕéṽîéŵ ǫûéûé" + "·····]";
+  }
+}
+
+/** No open reviews. */
+export function submissionReviewEmpty(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "No open reviews.";
+    case "zh-CN":
+      return "没有待处理的审核。";
+    case "en-XA":
+      return "[" + "Ñö öþéñ ŕéṽîéŵš." + "·······]";
+  }
+}
+
+/** Withdraw vote */
+export function submissionWithdraw(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Withdraw vote";
+    case "zh-CN":
+      return "撤回投票";
+    case "en-XA":
+      return "[" + "Ŵîţĥđŕåŵ ṽöţé" + "······]";
+  }
+}
+
+/** Submitted details */
+export function submissionReviewFacts(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Submitted details";
+    case "zh-CN":
+      return "提交详情";
+    case "en-XA":
+      return "[" + "Šûƀɱîţţéđ đéţåîļš" + "·······]";
+  }
+}
+
+/** Needs fresh review */
+export function submissionReviewStale(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Needs fresh review";
+    case "zh-CN":
+      return "需要重新审核";
+    case "en-XA":
+      return "[" + "Ñééđš ƒŕéšĥ ŕéṽîéŵ" + "········]";
+  }
+}
+
+/** Reviewed revision { $revision } */
+export function submissionReviewedVersion(
+  args: { revision: string | number },
+  locale: Locale = getLocale(),
+): string {
+  switch (locale) {
+    case "en":
+      return "Reviewed revision " + formatValue(locale, args.revision);
+    case "zh-CN":
+      return "审核版本 " + formatValue(locale, args.revision);
+    case "en-XA":
+      return "[" + "Ŕéṽîéŵéđ ŕéṽîšîöñ " + formatValue(locale, args.revision) + "········]";
+  }
+}
+
+/** Approve */
+export function submissionApprove(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Approve";
+    case "zh-CN":
+      return "批准";
+    case "en-XA":
+      return "[" + "Åþþŕöṽé" + "···]";
+  }
+}
+
+/** Reject */
+export function submissionReject(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Reject";
+    case "zh-CN":
+      return "拒绝";
+    case "en-XA":
+      return "[" + "Ŕéĵéçţ" + "···]";
+  }
+}
+
+/** Approve { $up } / { $pass } · Reject { $down } / { $fail } */
+export function submissionTally(
+  args: {
+    down: string | number;
+    fail: string | number;
+    pass: string | number;
+    up: string | number;
+  },
+  locale: Locale = getLocale(),
+): string {
+  switch (locale) {
+    case "en":
+      return (
+        "Approve " +
+        formatValue(locale, args.up) +
+        " / " +
+        formatValue(locale, args.pass) +
+        " · Reject " +
+        formatValue(locale, args.down) +
+        " / " +
+        formatValue(locale, args.fail)
+      );
+    case "zh-CN":
+      return (
+        "赞成 " +
+        formatValue(locale, args.up) +
+        " / " +
+        formatValue(locale, args.pass) +
+        " · 反对 " +
+        formatValue(locale, args.down) +
+        " / " +
+        formatValue(locale, args.fail)
+      );
+    case "en-XA":
+      return (
+        "[" +
+        "Åþþŕöṽé " +
+        formatValue(locale, args.up) +
+        " / " +
+        formatValue(locale, args.pass) +
+        " · Ŕéĵéçţ " +
+        formatValue(locale, args.down) +
+        " / " +
+        formatValue(locale, args.fail) +
+        "··········]"
+      );
+  }
+}
+
+/** Reason for rejection (visible to the submitter) */
+export function submissionFeedback(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Reason for rejection (visible to the submitter)";
+    case "zh-CN":
+      return "拒绝原因（提交者可见）";
+    case "en-XA":
+      return "[" + "Ŕéåšöñ ƒöŕ ŕéĵéçţîöñ (ṽîšîƀļé ţö ţĥé šûƀɱîţţéŕ)" + "···················]";
+  }
+}
+
+/** Drafts */
+export function accountDrafts(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Drafts";
+    case "zh-CN":
+      return "草稿";
+    case "en-XA":
+      return "[" + "Đŕåƒţš" + "···]";
+  }
+}
+
+/** Create draft */
+export function submissionCreateDraft(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Create draft";
+    case "zh-CN":
+      return "创建草稿";
+    case "en-XA":
+      return "[" + "Çŕéåţé đŕåƒţ" + "·····]";
+  }
+}
+
+/** Discard draft */
+export function submissionDiscard(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Discard draft";
+    case "zh-CN":
+      return "删除草稿";
+    case "en-XA":
+      return "[" + "Đîšçåŕđ đŕåƒţ" + "······]";
+  }
+}
+
+/** Submission status */
+export function submissionProcessing(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Submission status";
+    case "zh-CN":
+      return "提交状态";
+    case "en-XA":
+      return "[" + "Šûƀɱîššîöñ šţåţûš" + "·······]";
+  }
+}
+
+/** Refresh status */
+export function submissionRefresh(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Refresh status";
+    case "zh-CN":
+      return "刷新状态";
+    case "en-XA":
+      return "[" + "Ŕéƒŕéšĥ šţåţûš" + "······]";
+  }
+}
+
+/** Edit build */
+export function submissionEditBuild(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Edit build";
+    case "zh-CN":
+      return "编辑作品";
+    case "en-XA":
+      return "[" + "Éđîţ ƀûîļđ" + "····]";
+  }
+}
+
+/** Yes */
+export function commonYes(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Yes";
+    case "zh-CN":
+      return "是";
+    case "en-XA":
+      return "[" + "Ýéš" + "··]";
+  }
+}
+
+/** No */
+export function commonNo(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "No";
+    case "zh-CN":
+      return "否";
+    case "en-XA":
+      return "[" + "Ñö" + "·]";
+  }
+}
+
+/** All */
+export function submissionAll(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "All";
+    case "zh-CN":
+      return "全部";
+    case "en-XA":
+      return "[" + "Åļļ" + "··]";
+  }
+}
+
+/** Review status */
+export function submissionFilter(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Review status";
+    case "zh-CN":
+      return "审核状态";
+    case "en-XA":
+      return "[" + "Ŕéṽîéŵ šţåţûš" + "······]";
+  }
+}
+
+/** Name */
+export function submissionCreditName(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Name";
+    case "zh-CN":
+      return "名称";
+    case "en-XA":
+      return "[" + "Ñåɱé" + "··]";
+  }
+}
+
+/** Contribution */
+export function submissionCreditRole(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Contribution";
+    case "zh-CN":
+      return "贡献角色";
+    case "en-XA":
+      return "[" + "Çöñţŕîƀûţîöñ" + "·····]";
+  }
+}
+
+/** Schematic */
+export function submissionSchematic(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Schematic";
+    case "zh-CN":
+      return "原理图";
+    case "en-XA":
+      return "[" + "Šçĥéɱåţîç" + "····]";
+  }
+}
+
+/** Images and videos */
+export function submissionMedia(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Images and videos";
+    case "zh-CN":
+      return "图片和视频";
+    case "en-XA":
+      return "[" + "Îɱåĝéš åñđ ṽîđéöš" + "·······]";
+  }
+}
+
+/** Choose a file */
+export function submissionChooseFile(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Choose a file";
+    case "zh-CN":
+      return "选择文件";
+    case "en-XA":
+      return "[" + "Çĥööšé å ƒîļé" + "······]";
+  }
+}
+
+/** Choose an image or video within the upload size limit. */
+export function submissionFileRejected(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Choose an image or video within the upload size limit.";
+    case "zh-CN":
+      return "请选择未超过上传大小限制的图片或视频。";
+    case "en-XA":
+      return (
+        "[" + "Çĥööšé åñ îɱåĝé öŕ ṽîđéö ŵîţĥîñ ţĥé ûþļöåđ šîžé ļîɱîţ." + "······················]"
+      );
+  }
+}
+
+/** Drafts needing correction */
+export function submissionCorrectionInbox(locale: Locale = getLocale()): string {
+  switch (locale) {
+    case "en":
+      return "Drafts needing correction";
+    case "zh-CN":
+      return "需要更正的草稿";
+    case "en-XA":
+      return "[" + "Đŕåƒţš ñééđîñĝ çöŕŕéçţîöñ" + "··········]";
+  }
+}

@@ -6,12 +6,10 @@ const routes = [
   "/about",
   "/admin/settings",
   "/builds",
-  "/builds/1",
   "/cli/link?user_code=example",
   "/minecraft/link?user_code=example",
   "/search?q=door",
   "/search/help",
-  "/submit",
 ];
 
 for (const [prefix, locale] of [

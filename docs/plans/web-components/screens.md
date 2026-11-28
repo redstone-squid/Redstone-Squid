@@ -64,7 +64,7 @@ Rules that apply to every screen:
   - Signed-in users: follow the creators, and suggest a correction (opens a draft prefilled from the build).
   - Owners and staff: edit the build.
   - Staff on a pending build: vote, approve, reject.
-- Pending and rejected builds are visible to their owner and to staff, with a status banner.
+- Reviewers and submitters open unpublished work at `/submissions/[id]`.
 - *Related links:* records held, versions, history (edits).
 - *Primary action:* staff on a pending build: vote; owners and staff: edit; everyone else: download.
 
@@ -158,9 +158,9 @@ Rules that apply to every screen:
   - Paper server installations: label, sponsor profile, created and rotated dates, with create, rotate secret, edit sponsor profile, and revoke. The secret is shown once.
   - Sign out.
 
-**A5. My builds `/account/builds`**
-- *Goal:* track submissions.
-- *Needs:* tabs for pending, approved and rejected, with counts. Pending rows show vote progress against thresholds. Rejected rows show the reason when there is one. Each row offers edit (pending) and view.
+**A5. My Submissions `/account/submissions` and My Builds `/account/builds`**
+- My Submissions tracks new builds and proposed edits by submitter. Each row opens the submitted details and review outcome.
+- My Builds lists published work by credit, including submissions by other people. Each row shows the caller’s roles and opens the public build.
 
 **A6. Notifications `/notifications`**
 - *Goal:* catch up on what happened.
@@ -216,7 +216,7 @@ Rules that apply to every screen:
 - *Goal:* process pending builds and correction proposals.
 - *Needs:* a table of pending builds with title, category, submitter, submitted date, vote tallies against pass and fail thresholds, and my vote. A second tab holds correction proposals with source, build, expiry and change count. Filters and sort.
 
-**M2. Review build `/review/builds/[id]`**
+**M2. Review submission `/submissions/[id]`**
 - *Goal:* decide on one build.
 - *Needs:* the P5 content and the records approval would change, plus a vote panel (options, my vote, tallies, thresholds) and edit access. Approve and reject are shown only if the user has those permissions.
 

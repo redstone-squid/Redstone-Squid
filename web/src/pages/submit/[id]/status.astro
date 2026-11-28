@@ -1,0 +1,38 @@
+---
+import { submissionFinalizationGet } from "@/generated/sdk.gen";
+import CatalogueLayout from "@/layouts/CatalogueLayout.astro";
+import { localizePath } from "@/locales/locale";
+import * as m from "@/locales/messages.gen";
+import { load } from "@/server/api";
+import { requireSession } from "@/server/session";
+import PageHeader from "@/ui/patterns/PageHeader.svelte";
+import Button from "@/ui/actions/Button.svelte";
+const id = Astro.params.id ?? "";
+const result = await load(
+  submissionFinalizationGet({
+    client: Astro.locals.api,
+    headers: { Cookie: requireSession(Astro) },
+    path: { draft_id: id },
+  }),
+);
+if ("submission_id" in result && result.submission_id)
+  return Astro.redirect(localizePath(`/submissions/${result.submission_id}`), 303);
+if ("review_vote_id" in result && !result.review_vote_id)
+  return Astro.redirect(localizePath(`/builds/${result.build_id}`), 303);
+const title = m.submissionProcessing();
+---
+
+<CatalogueLayout {title} noindex>
+  <PageHeader {title} description={"status" in result ? result.status : undefined} />
+  {"issues" in result && (
+    <ul>
+      {result.issues.map((issue) => (
+        <li>
+          {issue.field_id} · {issue.reason}
+        </li>
+      ))}
+    </ul>
+  )}
+  <Button href={localizePath(`/submit/${id}`)}>{m.accountDrafts()}</Button>
+  <Button href={localizePath(`/submit/${id}/status`)}>{m.submissionRefresh()}</Button>
+</CatalogueLayout>

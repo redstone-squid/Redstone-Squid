@@ -1,0 +1,133 @@
+---
+import CatalogueLayout from "@/layouts/CatalogueLayout.astro";
+import { localizePath } from "@/locales/locale";
+import * as m from "@/locales/messages.gen";
+import { load } from "@/server/api";
+import { requireSession } from "@/server/session";
+import PageHeader from "@/ui/patterns/PageHeader.svelte";
+import {
+  submissionsGet,
+  submissionsDecide,
+  voteSessionGet,
+  voteCast,
+  voteClear,
+} from "@/generated/sdk.gen";
+import { factRows, statusLabel } from "@/features/submissions/status";
+import { writeHeaders } from "@/server/session";
+import { ApiError } from "@/api-client/api-error";
+import TextField from "@/ui/forms/TextField.svelte";
+import Button from "@/ui/actions/Button.svelte";
+import DescriptionList from "@/ui/data/DescriptionList.svelte";
+import Section from "@/ui/patterns/Section.svelte";
+const client = Astro.locals.api;
+const headers = { Cookie: requireSession(Astro) };
+const reviewSession = Astro.url.searchParams.get("review_session_id");
+const detail = await load(
+  submissionsGet({
+    client,
+    headers,
+    query: reviewSession === null ? {} : { review_session_id: Number(reviewSession) },
+    path: { submission_id: Astro.params.id ?? "" },
+  }),
+);
+const row = detail.submission;
+const votePath =
+  detail.vote_session_id === null ? null : { vote_session_id: detail.vote_session_id };
+if (Astro.request.method === "POST") {
+  const writes = writeHeaders(Astro);
+  if (!writes) throw new ApiError(403);
+  const form = await Astro.request.formData();
+  const decision = form.get("decision");
+  if (decision === "approve" || decision === "reject") {
+    await load(
+      submissionsDecide({
+        client,
+        headers: writes,
+        path: { submission_id: row.id },
+        body: {
+          decision,
+          revision: Number(form.get("revision")),
+          feedback:
+            decision === "reject" ? String(form.get("feedback") ?? "").trim() || null : null,
+        },
+      }),
+    );
+    return Astro.redirect(localizePath(`/submissions/${row.id}`), 303);
+  }
+  if (!votePath || Number(form.get("vote_session_id")) !== detail.vote_session_id)
+    throw new ApiError(409);
+  const option = form.get("option");
+  if (typeof option !== "string") throw new ApiError(400);
+  if (option)
+    await load(voteCast({ client, headers: writes, path: votePath, body: { option_id: option } }));
+  else await load(voteClear({ client, headers: writes, path: votePath }));
+  return Astro.redirect(localizePath(`/submissions/${row.id}`) + Astro.url.search, 303);
+}
+const vote = votePath ? await load(voteSessionGet({ client, headers, path: votePath })) : null;
+const title = row.title ?? m.submissionBuildNumber({ id: row.build_id });
+---
+
+<CatalogueLayout {title} noindex>
+  <PageHeader
+    {title}
+    description={[
+      row.kind === "edit" ? m.submissionEdit() : m.submissionNew(),
+      statusLabel(row.status),
+    ].join(" · ")}
+  />
+  <Section title={m.submissionReviewFacts()}>
+    <DescriptionList items={factRows(detail.facts)} />
+  </Section>
+  {detail.feedback && <p>{detail.feedback}</p>}
+  {row.published && (
+    <Button href={localizePath(`/builds/${row.build_id}`)}>{m.submissionViewPublic()}</Button>
+  )}
+  {Object.keys(detail.reviewed_facts).length > 0 && (
+    <Section title={m.submissionReviewedVersion({ revision: detail.review_revision ?? 0 })}>
+      <DescriptionList items={factRows(detail.reviewed_facts)} />
+    </Section>
+  )}
+  {(detail.can_approve || detail.can_reject) && (
+    <form method="post">
+      <input type="hidden" name="revision" value={detail.review_revision} />
+      {detail.can_reject && (
+        <TextField label={m.submissionFeedback()} name="feedback" maxlength={2000} />
+      )}
+      {detail.can_approve && (
+        <Button type="submit" name="decision" value="approve">
+          {m.submissionApprove()}
+        </Button>
+      )}
+      {detail.can_reject && (
+        <Button type="submit" name="decision" value="reject">
+          {m.submissionReject()}
+        </Button>
+      )}
+    </form>
+  )}
+  {vote?.tallies && (
+    <p>
+      {m.submissionTally({
+        up: vote.tallies.upvotes,
+        down: vote.tallies.downvotes,
+        pass: vote.pass_threshold ?? 0,
+        fail: Math.abs(vote.fail_threshold ?? 0),
+      })}
+    </p>
+  )}
+  {vote?.viewer?.eligible && (
+    <form method="post">
+      <input type="hidden" name="vote_session_id" value={vote.id} />
+      {vote.options.map((option) => (
+        <Button type="submit" name="option" value={option.id}>
+          {option.label ?? option.id}
+        </Button>
+      ))}
+      {vote.own_selection && (
+        <Button type="submit" name="option" value="">
+          {m.submissionWithdraw()}
+        </Button>
+      )}
+    </form>
+  )}
+</CatalogueLayout>

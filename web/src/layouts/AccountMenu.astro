@@ -26,6 +26,15 @@ const inFlow = unprefixedPath(Astro.url.pathname) === "/sign-in";
     label={m.navAccount()}
     trigger={{ label: user.display_name ?? m.navAccount(), icon: CircleUser }}
     items={[
+      { label: m.accountDrafts(), href: localizePath("/submit") },
+      { label: m.accountBuilds(), href: localizePath("/account/builds") },
+      { label: m.accountSubmissions(), href: localizePath("/account/submissions") },
+      ...(session?.counts.review_queue != null
+        ? [{ label: m.submissionReviewQueue(), href: localizePath("/review") }]
+        : []),
+      ...(session?.permissions.includes("build.submission.edit")
+        ? [{ label: m.submissionCorrectionInbox(), href: localizePath("/review?tab=corrections") }]
+        : []),
       { label: m.indexingTitle(), href: localizePath("/settings"), icon: ShieldCheck },
       {
         label: m.navSignOut(),

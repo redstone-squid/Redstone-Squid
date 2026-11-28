@@ -1,0 +1,53 @@
+---
+import CatalogueLayout from "@/layouts/CatalogueLayout.astro";
+import { localizePath } from "@/locales/locale";
+import * as m from "@/locales/messages.gen";
+import { load } from "@/server/api";
+import { requireSession } from "@/server/session";
+import PageHeader from "@/ui/patterns/PageHeader.svelte";
+import { submissionCorrectionInbox, submissionsReviewQueue } from "@/generated/sdk.gen";
+import List from "@/ui/data/List.svelte";
+import ListItem from "@/ui/data/ListItem.svelte";
+import Pagination from "@/ui/navigation/Pagination.svelte";
+import { readPageAddress, pageHref } from "@/server/pagination";
+const headers = { Cookie: requireSession(Astro) };
+
+const corrections = Astro.url.searchParams.get("tab") === "corrections";
+const args = { client: Astro.locals.api, headers, query: readPageAddress(Astro.url.searchParams) };
+const page = corrections
+  ? await load(submissionCorrectionInbox(args))
+  : await load(submissionsReviewQueue(args));
+const title = corrections ? m.submissionCorrectionInbox() : m.submissionReviewQueue();
+---
+
+<CatalogueLayout {title} noindex>
+  <PageHeader {title} />
+  {page.items.length === 0 ? (
+    <p>{m.submissionReviewEmpty()}</p>
+  ) : (
+    <List>
+      {page.items.map((row) => (
+        <ListItem
+          title={
+            "build_id" in row
+              ? (row.title ?? m.submissionBuildNumber({ id: row.build_id }))
+              : (row.display_name ?? row.category)
+          }
+          description={
+            "kind" in row
+              ? row.kind === "edit"
+                ? m.submissionEdit()
+                : m.submissionNew()
+              : row.origin
+          }
+          href={localizePath("build_id" in row ? `/submissions/${row.id}` : `/submit/${row.id}`)}
+        />
+      ))}
+    </List>
+  )}
+  <Pagination
+    prevHref={page.prev ? pageHref(Astro.url, page.prev) : null}
+    nextHref={page.next ? pageHref(Astro.url, page.next) : null}
+    labels={{ nav: m.navPagination(), previous: m.commonPrevious(), next: m.commonNext() }}
+  />
+</CatalogueLayout>

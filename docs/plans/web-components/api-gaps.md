@@ -11,10 +11,6 @@ Unfinished items come first, then finished ones, each grouped by area. Numbers a
 56. **OAuth error locale.** Carry the sign-in locale through OAuth state so callback errors return to the localized sign-in page.
 57. **List Minecraft grants.** A4 lists grants with origin, server and expiry, but `/v1/minecraft` has only `DELETE /grants/{id}`. Add `GET /v1/accounts/me/minecraft/grants`.
 
-### Builds
-
-8. **Owner and staff access to unpublished detail (deferred).** P5, A5, and M2 need a visibility decision in the service layer. The detail route still serves approved builds.
-
 ### Search
 
 19. **Search response additions (implemented except distributions).**
@@ -75,6 +71,7 @@ Unfinished items come first, then finished ones, each grouped by area. Numbers a
 ### Builds
 
 5. **Build summaries.** Cards receive the subtitle, typed category and status, creator names with nullable public IDs, and current and former record counts. External preview dimensions can be unknown.
+8. **Submission detail.** Submitters and reviewers open `GET /v1/submissions/{id}`. The account portfolio lists published builds by credit at `GET /v1/accounts/me/builds`.
 6. **Build detail.** P5 receives current and former records, a typed gallery, public schematic count and primary download, submission and approval metadata, and the public history count. Missing historical approval dates are null. An unpublished primary schematic contributes neither metadata nor a download link.
 7. **Public history.** `GET /v1/builds/{id}/history` pages published revisions newest first. Changes cover public dimensions, names, description, version specification, timings, orientation, and creator names. The first published revision has no public predecessor.
 9. **Catalogue filters and sorts.** `GET /v1/builds` takes `category`, `version_id`, repeated `tag_id` and `tag_slug`, `account_id`, `creator_name_id`, `status` and `submitted_by=me`, which lists the caller's builds in every status unless `status` narrows it. Sorts are `id`, `newest`, `oldest`, `updated`, `fastest_open`, `smallest_volume` and `title`. Text search is `/v1/search`, where the same filters are query clauses (`tag:`, `creator:`, `version:`).

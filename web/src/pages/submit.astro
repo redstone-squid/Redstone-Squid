@@ -1,6 +1,69 @@
 ---
-import PlaceholderPage from "@/layouts/PlaceholderPage.astro";
+import {
+  submissionDraftCreate,
+  submissionDraftsList,
+  submissionFormCurrent,
+} from "@/generated/sdk.gen";
+import CatalogueLayout from "@/layouts/CatalogueLayout.astro";
+import { localizePath } from "@/locales/locale";
 import * as m from "@/locales/messages.gen";
+import { ApiError } from "@/api-client/api-error";
+import { load } from "@/server/api";
+import { requireSession, writeHeaders } from "@/server/session";
+import SelectField from "@/ui/forms/SelectField.svelte";
+import PageHeader from "@/ui/patterns/PageHeader.svelte";
+import Button from "@/ui/actions/Button.svelte";
+import List from "@/ui/data/List.svelte";
+import ListItem from "@/ui/data/ListItem.svelte";
+const client = Astro.locals.api;
+const headers = { Cookie: requireSession(Astro) };
+const manifest = await load(submissionFormCurrent({ client, headers }));
+if (Astro.request.method === "POST") {
+  const writes = writeHeaders(Astro);
+  if (!writes) throw new ApiError(403);
+  const form = await Astro.request.formData();
+  const category = manifest.categories.find((item) => item.code === form.get("category"));
+  if (!category) throw new ApiError(400);
+  const fields = [...manifest.common_sections, ...category.sections].flatMap(
+    (section) => section.fields,
+  );
+  const draft = await load(
+    submissionDraftCreate({
+      client,
+      headers: writes,
+      body: {
+        origin: "web",
+        category: category.code,
+        source_build_id: form.has("source_build_id") ? Number(form.get("source_build_id")) : null,
+        client_capabilities: fields.flatMap((field) =>
+          field.required_capability ? [field.required_capability] : [],
+        ),
+      },
+    }),
+  );
+  return Astro.redirect(localizePath(`/submit/${draft.id}`), 303);
+}
+const { drafts } = await load(submissionDraftsList({ client, headers }));
+const title = m.accountDrafts();
 ---
 
-<PlaceholderPage title={m.submissionPageTitle} />
+<CatalogueLayout {title} noindex>
+  <PageHeader {title} />
+  <List>
+    {drafts.map((draft) => (
+      <ListItem
+        title={draft.display_name ?? draft.category}
+        description={draft.status}
+        href={localizePath(`/submit/${draft.id}`)}
+      />
+    ))}
+  </List>
+  <form method="post">
+    <SelectField
+      name="category"
+      label={m.recordBuildKind()}
+      options={manifest.categories.map((c) => ({ value: c.code, label: c.label }))}
+    />
+    <Button type="submit">{m.submissionCreateDraft()}</Button>
+  </form>
+</CatalogueLayout>

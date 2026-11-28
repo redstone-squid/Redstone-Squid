@@ -1,0 +1,243 @@
+---
+import {
+  submissionDraftChange,
+  submissionMediaList,
+  submissionSchematicList,
+  submissionDraftDelete,
+  submissionDraftGet,
+  submissionFinalizationStart,
+  submissionFormRevisionGet,
+  submissionFormOptionsGet,
+} from "@/generated/sdk.gen";
+import DraftAttachments from "@/features/submissions/DraftAttachments.svelte";
+import CatalogueLayout from "@/layouts/CatalogueLayout.astro";
+import { localizePath } from "@/locales/locale";
+import * as m from "@/locales/messages.gen";
+import { ApiError } from "@/api-client/api-error";
+import { load } from "@/server/api";
+import { requireSession, writeHeaders } from "@/server/session";
+import Button from "@/ui/actions/Button.svelte";
+import CheckField from "@/ui/forms/CheckField.svelte";
+import TextField from "@/ui/forms/TextField.svelte";
+import FieldGroup from "@/ui/forms/FieldGroup.svelte";
+import { DraftFields } from "@/features/submissions/draft-fields";
+import TextareaField from "@/ui/forms/TextareaField.svelte";
+import SelectField from "@/ui/forms/SelectField.svelte";
+import PageHeader from "@/ui/patterns/PageHeader.svelte";
+import Section from "@/ui/patterns/Section.svelte";
+const client = Astro.locals.api;
+const path = { draft_id: Astro.params.id ?? "" };
+const headers = { Cookie: requireSession(Astro) };
+const draft = await load(submissionDraftGet({ client, headers, path }));
+if (draft.status === "submitted" || draft.status === "processing")
+  return Astro.redirect(localizePath(`/submit/${draft.id}/status`), 303);
+const manifest = await load(
+  submissionFormRevisionGet({
+    client,
+    headers,
+    path: { schema_id: draft.schema_id, revision: draft.schema_revision },
+  }),
+);
+const category = manifest.categories.find((item) => item.code === draft.category);
+const sections = [...manifest.common_sections, ...(category?.sections ?? [])];
+const fields = sections
+  .flatMap((s) => s.fields)
+  .filter((field) => {
+    if (
+      !field.origins.includes(draft.origin) ||
+      (draft.source_build_id != null && !(field.id in draft.answers))
+    )
+      return false;
+    const rule = field.visible_when;
+    if (!rule) return true;
+    const value = draft.answers[rule.field_id];
+    if (rule.operator === "in") return Array.isArray(rule.value) && rule.value.includes(value);
+    return rule.operator === "equals" ? value === rule.value : value !== rule.value;
+  });
+const sources = [...new Set(fields.flatMap((f) => (f.option_source ? [f.option_source] : [])))];
+const options = new Map(
+  await Promise.all(
+    sources.map(
+      async (source) =>
+        [
+          source,
+          (
+            await load(
+              submissionFormOptionsGet({
+                client,
+                headers,
+                path: { source },
+                query: { category: draft.category },
+              }),
+            )
+          ).options,
+        ] as const,
+    ),
+  ),
+);
+const editor = new DraftFields(draft.answers);
+if (Astro.request.method === "POST") {
+  const writes = writeHeaders(Astro);
+  if (!writes) throw new ApiError(403);
+  const form = await Astro.request.formData();
+  const action = form.get("action");
+  if (action === "discard") {
+    await load(submissionDraftDelete({ client, headers: writes, path }));
+    return Astro.redirect(localizePath("/submit"), 303);
+  }
+  const base_revision = Number(form.get("revision"));
+  if (base_revision !== draft.revision) throw new ApiError(409);
+  const operations = editor.operations(form, fields);
+  if (operations.length)
+    await load(
+      submissionDraftChange({
+        client,
+        headers: writes,
+        path,
+        body: {
+          base_revision,
+          client_instance_id: "web:editor",
+          idempotency_key: writes["Idempotency-Key"]!,
+          operations,
+        },
+      }),
+    );
+  if (action === "submit") {
+    const result = await load(
+      submissionFinalizationStart({ client, headers: writeHeaders(Astro)!, path }),
+    );
+    if ("submission_id" in result && result.submission_id)
+      return Astro.redirect(localizePath(`/submissions/${result.submission_id}`), 303);
+    return Astro.redirect(localizePath(`/submit/${draft.id}/status`), 303);
+  }
+  return Astro.redirect(localizePath(`/submit/${draft.id}`), 303);
+}
+const attachments =
+  draft.source_build_id == null
+    ? await Promise.all([
+        load(submissionSchematicList({ client, headers, path })),
+        load(submissionMediaList({ client, headers, path })),
+      ])
+    : null;
+const title = String(draft.answers.display_name ?? category?.label ?? draft.category);
+---
+
+<CatalogueLayout {title} noindex>
+  <PageHeader {title} description={draft.status} />
+  <form method="post">
+    <input type="hidden" name="revision" value={draft.revision} />
+    {sections.map((section) => (
+      <Section title={section.title}>
+        {section.fields
+          .filter((field) => fields.includes(field))
+          .map((field) => {
+            const choices = field.option_source ? options.get(field.option_source) : field.options;
+            if (field.control === "credits")
+              return (
+                <FieldGroup label={field.label}>
+                  {[...editor.objects(field), {}].map((credit) => (
+                    <div>
+                      <TextField
+                        label={m.submissionCreditName()}
+                        name={`${field.id}.name`}
+                        value={String(credit.name ?? "")}
+                      />
+                      <SelectField
+                        label={m.submissionCreditRole()}
+                        name={`${field.id}.role`}
+                        value={String(credit.role ?? "creator")}
+                        options={["creator", "designer", "layout", "contributor"].map((role) => ({
+                          value: role,
+                          label: role,
+                        }))}
+                      />
+                    </div>
+                  ))}
+                </FieldGroup>
+              );
+            if (field.control === "multi_choice" || field.control === "showcase_tags") {
+              const tags = editor.objects(field);
+              const answer = draft.answers[field.id];
+              return (
+                <FieldGroup label={field.label}>
+                  {choices?.map((choice) => {
+                    const tag = tags.find((item) => item.key === choice.value);
+                    return (
+                      <div>
+                        <CheckField
+                          name={field.id}
+                          value={choice.value}
+                          checked={
+                            !!tag || (Array.isArray(answer) && answer.includes(choice.value))
+                          }
+                          label={choice.label}
+                        />
+                        {choice.value_type && field.control === "showcase_tags" && (
+                          <TextField
+                            name={`${field.id}.${choice.value}`}
+                            label={choice.label}
+                            value={String(tag?.value ?? "")}
+                          />
+                        )}
+                      </div>
+                    );
+                  })}
+                </FieldGroup>
+              );
+            }
+            return field.control === "choice" || field.control === "boolean" ? (
+              <SelectField
+                name={field.id}
+                label={field.label}
+                hint={field.help_text ?? undefined}
+                value={editor.display(field)}
+                options={[
+                  { value: "", label: "—" },
+                  ...(field.control === "boolean"
+                    ? [
+                        { value: "true", label: m.commonYes() },
+                        { value: "false", label: m.commonNo() },
+                      ]
+                    : (choices ?? [])),
+                ]}
+              />
+            ) : (
+              <TextareaField
+                name={field.id}
+                label={field.label}
+                hint={field.help_text ?? undefined}
+                value={editor.display(field)}
+              />
+            );
+          })}
+      </Section>
+    ))}
+    {draft.viewer.can_edit && (
+      <Button type="submit" name="action" value="save">
+        {m.workbenchSaveDraft()}
+      </Button>
+    )}
+    {draft.viewer.can_edit && (
+      <Button type="submit" name="action" value="submit">
+        {m.navSubmit()}
+      </Button>
+    )}
+  </form>
+  {attachments && (
+    <DraftAttachments
+      client:load
+      baseUrl={Astro.locals.config.apiBaseUrl}
+      draftId={draft.id}
+      schematics={attachments[0]}
+      media={attachments[1]}
+      editable={draft.viewer.can_edit}
+    />
+  )}
+  {draft.viewer.can_discard && (
+    <form method="post">
+      <Button variant="danger" type="submit" name="action" value="discard">
+        {m.submissionDiscard()}
+      </Button>
+    </form>
+  )}
+</CatalogueLayout>
