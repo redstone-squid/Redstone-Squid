@@ -9,7 +9,7 @@ if (panel && input instanceof HTMLInputElement && trigger && hint) {
   hint.hidden = false;
   panel.addEventListener("beforetoggle", () => {
     const header = root?.closest("header");
-    if (header && trigger.getClientRects().length)
+    if (header && trigger.getClientRects().length > 0)
       panel.style.top = `${header.getBoundingClientRect().bottom}px`;
   });
   panel.addEventListener("toggle", () => {
@@ -30,7 +30,7 @@ if (panel && input instanceof HTMLInputElement && trigger && hint) {
     )
       return;
     event.preventDefault();
-    if (trigger.getClientRects().length && !panel.matches(":popover-open")) panel.showPopover();
+    if (trigger.getClientRects().length > 0 && !panel.matches(":popover-open")) panel.showPopover();
     input.focus();
     input.select();
   });
