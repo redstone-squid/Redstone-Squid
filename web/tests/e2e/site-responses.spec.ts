@@ -86,6 +86,11 @@ test("policy violation reports are accepted and other bodies refused", async ({ 
     data: JSON.stringify([report, { type: "deprecation", body: {} }]),
   });
   expect(accepted.status()).toBe(204);
+  const fromWebKit = await request.post("/telemetry/csp", {
+    headers: { "Content-Type": "application/csp-report" },
+    data: JSON.stringify(report),
+  });
+  expect(fromWebKit.status()).toBe(204);
   const wrongType = await request.post("/telemetry/csp", { data: [report] });
   expect(wrongType.status()).toBe(415);
 });

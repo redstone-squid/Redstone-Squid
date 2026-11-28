@@ -15,6 +15,9 @@ const violation = z.object({
     lineNumber: z.int().optional(),
   }),
 });
+// WebKit posts each report on its own, in the Reporting API's shape but with the content type of
+// the older `report-uri` mechanism.
+const contentTypes = new Set(["application/reports+json", "application/csp-report"]);
 // Other report types can share the endpoint in future; skip them rather than reject the batch.
 const reportsSchema = z.array(z.unknown()).max(100);
 
@@ -24,11 +27,11 @@ const reportsSchema = z.array(z.unknown()).max(100);
  * their origin and path: query strings and script samples can carry visitor data.
  */
 export const POST: APIRoute = async ({ request }) => {
-  if (request.headers.get("Content-Type") !== "application/reports+json")
+  if (!contentTypes.has(request.headers.get("Content-Type") ?? ""))
     return new Response(null, { status: 415 });
   const read = await intake.read(request);
   if ("rejection" in read) return read.rejection;
-  const reports = reportsSchema.safeParse(read.body);
+  const reports = reportsSchema.safeParse(Array.isArray(read.body) ? read.body : [read.body]);
   if (!reports.success) return new Response(null, { status: 400 });
 
   for (const report of reports.data) {
