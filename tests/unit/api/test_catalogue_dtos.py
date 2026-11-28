@@ -9,7 +9,7 @@ from litestar.di import Provide
 
 from squid.api.security import ANONYMOUS
 from squid.api.v1.search import list_search_fields
-from squid.api.v1.tags import PublicTagDTO, get_tag, list_tags
+from squid.api.v1.tags import get_tag, list_tags
 from squid.core.search.application import SearchService
 from squid.core.search.application.fields import DEFAULT_FIELD_REGISTRY, FieldDefinition, FieldRegistry, FieldType
 from squid.core.tags.application import TagService
@@ -40,7 +40,7 @@ async def test_tag_dto_preserves_public_fields_and_decimal_precision() -> None:
     dependencies = {"tags": Provide(lambda: tags, sync_to_thread=False)}
     app = Litestar(
         [
-            get("/tags", return_dto=PublicTagDTO, dependencies=dependencies)(list_tags.fn),
+            get("/tags", dependencies=dependencies)(list_tags.fn),
             get(
                 "/tags/{tag_id:int}",
                 dependencies={
@@ -59,6 +59,9 @@ async def test_tag_dto_preserves_public_fields_and_decimal_precision() -> None:
     expected = {
         "id": 7,
         "slug": "height",
+        "aliases": [],
+        "build_count": 0,
+        "record_count": 0,
         "key": "height",
         "name": "Height",
         "query_name": "height",
@@ -72,10 +75,11 @@ async def test_tag_dto_preserves_public_fields_and_decimal_precision() -> None:
         "numeric_step": "1E-19",
     }
     assert detail.status_code == listing.status_code == 200
-    assert detail.json() == {**expected, "viewer": None}
+    details = {**expected, "viewer": None, "description": None, "rules_anchor": None, "revision": definition.revision}
+    assert detail.json() == details
     assert listing.json() == {"items": [expected], "total": 1, "next": None, "prev": None}
     schema = app.openapi_schema.to_schema()["components"]["schemas"]["TagDetail"]
-    assert set(schema["properties"]) == {*expected, "viewer"}
+    assert set(schema["properties"]) == set(details)
 
 
 async def test_search_fields_describe_syntax_without_storage_or_coercion_details() -> None:

@@ -39,7 +39,7 @@ class TagViewer:
     filter_subscription_id: int | None
 
 
-class TagDetail(BaseModel):
+class TagSummary(BaseModel):
     id: int
     slug: str
     key: str = Field(validation_alias="stable_key")
@@ -53,6 +53,19 @@ class TagDetail(BaseModel):
     canonical_unit: str | None
     display_unit: str | None = Field(validation_alias="default_display_unit")
     numeric_step: Decimal | None
+    aliases: list[str] = Field(validation_alias="alias_names")
+    build_count: int
+    record_count: int
+
+    @classmethod
+    def from_definition(cls, definition: TagDefinition) -> TagSummary:
+        return cls.model_validate(definition, from_attributes=True)
+
+
+class TagDetail(TagSummary):
+    description: str | None
+    rules_anchor: str | None
+    revision: int
     viewer: TagViewer | None = None
 
 

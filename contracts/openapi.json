@@ -27637,7 +27637,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/Page_litestar.dto._backend.TagSummary_"
+                  "$ref": "#/components/schemas/Page_squid.api.v1.browser_views.TagSummary_"
                 }
               }
             }
@@ -27951,6 +27951,1183 @@
         "x-squid-cli": {
           "classification": "transport-only"
         }
+      }
+    },
+    "/v1/tags/proposals": {
+      "get": {
+        "tags": [
+          "tags"
+        ],
+        "summary": "ListProposals",
+        "description": "Page showcase proposals in the selected moderation state.",
+        "operationId": "tag_proposals_list",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/TagModerationStatus"
+            },
+            "description": "Publication state of a tag definition.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "sort",
+            "in": "query",
+            "schema": {
+              "$ref": "#/components/schemas/ChronologicalSort"
+            },
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "maximum": 50.0,
+              "minimum": 1.0,
+              "description": "Maximum number of items to return.",
+              "default": 20
+            },
+            "description": "Maximum number of items to return.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset."
+            },
+            "description": "An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maximum": 10000,
+              "description": "Number of items to skip. Excludes cursor."
+            },
+            "description": "Number of items to skip. Excludes cursor.",
+            "required": false,
+            "deprecated": false,
+            "allowEmptyValue": false,
+            "allowReserved": false
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_squid.api.v1.tag_proposals.TagProposalDetail_"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "WebSession": []
+          },
+          {
+            "DeviceSession": []
+          }
+        ],
+        "x-squid-cli": {
+          "classification": "transport-only"
+        },
+        "x-required-api-scopes": [
+          "tag.proposal.list"
+        ]
+      },
+      "post": {
+        "tags": [
+          "tags"
+        ],
+        "summary": "CreateProposal",
+        "description": "Propose a showcase tag for staff review.",
+        "operationId": "tag_proposal_create",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maxLength": 255,
+              "minLength": 1,
+              "pattern": "^[\\x21-\\x7e]+$",
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+            "required": false,
+            "deprecated": false
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TagProposalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Document created, URL follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagEditResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "WebSession": [],
+            "CsrfToken": []
+          },
+          {
+            "DeviceSession": []
+          }
+        ],
+        "x-squid-cli": {
+          "classification": "transport-only"
+        }
+      }
+    },
+    "/v1/tags/proposals/{tag_id}/approve": {
+      "post": {
+        "tags": [
+          "tags"
+        ],
+        "summary": "Moderate",
+        "operationId": "tag_proposal_approve",
+        "parameters": [
+          {
+            "name": "tag_id",
+            "in": "path",
+            "schema": {
+              "type": "integer"
+            },
+            "required": true,
+            "deprecated": false
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maxLength": 255,
+              "minLength": 1,
+              "pattern": "^[\\x21-\\x7e]+$",
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+            "required": false,
+            "deprecated": false
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TagRevisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagEditResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "WebSession": [],
+            "CsrfToken": []
+          },
+          {
+            "DeviceSession": []
+          }
+        ],
+        "x-squid-cli": {
+          "classification": "transport-only"
+        },
+        "x-required-api-scopes": [
+          "tag.proposal.approve"
+        ]
+      }
+    },
+    "/v1/tags/proposals/{tag_id}/reject": {
+      "post": {
+        "tags": [
+          "tags"
+        ],
+        "summary": "Moderate",
+        "operationId": "tag_proposal_reject",
+        "parameters": [
+          {
+            "name": "tag_id",
+            "in": "path",
+            "schema": {
+              "type": "integer"
+            },
+            "required": true,
+            "deprecated": false
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maxLength": 255,
+              "minLength": 1,
+              "pattern": "^[\\x21-\\x7e]+$",
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+            "required": false,
+            "deprecated": false
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TagRevisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagEditResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "WebSession": [],
+            "CsrfToken": []
+          },
+          {
+            "DeviceSession": []
+          }
+        ],
+        "x-squid-cli": {
+          "classification": "transport-only"
+        },
+        "x-required-api-scopes": [
+          "tag.proposal.reject"
+        ]
+      }
+    },
+    "/v1/tags/proposals/{tag_id}/archive": {
+      "post": {
+        "tags": [
+          "tags"
+        ],
+        "summary": "Moderate",
+        "operationId": "tag_proposal_archive",
+        "parameters": [
+          {
+            "name": "tag_id",
+            "in": "path",
+            "schema": {
+              "type": "integer"
+            },
+            "required": true,
+            "deprecated": false
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maxLength": 255,
+              "minLength": 1,
+              "pattern": "^[\\x21-\\x7e]+$",
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+            "required": false,
+            "deprecated": false
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TagRevisionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Request fulfilled, document follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagEditResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "WebSession": [],
+            "CsrfToken": []
+          },
+          {
+            "DeviceSession": []
+          }
+        ],
+        "x-squid-cli": {
+          "classification": "transport-only"
+        },
+        "x-required-api-scopes": [
+          "tag.proposal.archive"
+        ]
+      }
+    },
+    "/v1/tags/{tag_id}/aliases": {
+      "post": {
+        "tags": [
+          "tags"
+        ],
+        "summary": "AddAlias",
+        "description": "Add an alternate name to an official restriction.",
+        "operationId": "tag_alias_create",
+        "parameters": [
+          {
+            "name": "tag_id",
+            "in": "path",
+            "schema": {
+              "type": "integer"
+            },
+            "required": true,
+            "deprecated": false
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "schema": {
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "maxLength": 255,
+              "minLength": 1,
+              "pattern": "^[\\x21-\\x7e]+$",
+              "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours."
+            },
+            "description": "Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.",
+            "required": false,
+            "deprecated": false
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TagAliasRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Document created, URL follows",
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TagEditResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "429": {
+            "description": "Too Many Requests",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "409": {
+            "description": "Conflict",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "412": {
+            "description": "Precondition Failed",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          },
+          "422": {
+            "description": "Unprocessable Content",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationProblemDetail"
+                }
+              }
+            },
+            "headers": {
+              "Request-Id": {
+                "$ref": "#/components/headers/RequestId"
+              }
+            }
+          }
+        },
+        "deprecated": false,
+        "security": [
+          {
+            "WebSession": [],
+            "CsrfToken": []
+          },
+          {
+            "DeviceSession": []
+          }
+        ],
+        "x-squid-cli": {
+          "classification": "transport-only"
+        },
+        "x-required-api-scopes": [
+          "restriction.alias.create"
+        ]
       }
     },
     "/v1/creator-aliases/{alias_id}": {
@@ -36547,7 +37724,7 @@
         "required": [],
         "title": "PageAnchor"
       },
-      "Page_litestar.dto._backend.TagSummary_": {
+      "Page_squid.api.v1.browser_views.TagSummary_": {
         "properties": {
           "items": {
             "items": {
@@ -37366,6 +38543,47 @@
           "total"
         ],
         "title": "Page[RecalculationProposalResponse]"
+      },
+      "Page_squid.api.v1.tag_proposals.TagProposalDetail_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/TagProposalDetail"
+            },
+            "type": "array"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "next": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "prev": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/PageAnchor"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "next",
+          "prev",
+          "total"
+        ],
+        "title": "Page[TagProposalDetail]"
       },
       "Page_squid.core.builds.application.queries.PublicBuildSummary_": {
         "properties": {
@@ -43840,6 +45058,25 @@
         "title": "Tag",
         "description": "A category that selects related nodes across namespaces.\n\nRoles can exclude a tag such as `@destructive` so newly declared nodes with\nthat tag receive the same exclusion.\n"
       },
+      "TagAliasRequest": {
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 1.0
+          },
+          "alias": {
+            "type": "string",
+            "maxLength": 120,
+            "minLength": 1
+          }
+        },
+        "type": "object",
+        "required": [
+          "alias",
+          "revision"
+        ],
+        "title": "TagAliasRequest"
+      },
       "TagAuthority": {
         "type": "string",
         "enum": [
@@ -43932,6 +45169,41 @@
               }
             ]
           },
+          "aliases": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "build_count": {
+            "type": "integer"
+          },
+          "record_count": {
+            "type": "integer"
+          },
+          "description": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "rules_anchor": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "revision": {
+            "type": "integer"
+          },
           "viewer": {
             "oneOf": [
               {
@@ -43945,8 +45217,11 @@
         },
         "type": "object",
         "required": [
+          "aliases",
           "authority",
+          "build_count",
           "canonical_unit",
+          "description",
           "display_unit",
           "id",
           "key",
@@ -43954,12 +45229,31 @@
           "name",
           "numeric_step",
           "query_name",
+          "record_count",
           "record_operator",
           "restriction_type",
+          "revision",
+          "rules_anchor",
           "slug",
           "value_type"
         ],
         "title": "TagDetail"
+      },
+      "TagEditResponse": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "revision": {
+            "type": "integer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "revision"
+        ],
+        "title": "TagEditResponse"
       },
       "TagListSort": {
         "type": "string",
@@ -43969,6 +45263,18 @@
         ],
         "title": "TagListSort",
         "default": "display"
+      },
+      "TagModerationStatus": {
+        "type": "string",
+        "enum": [
+          "pending",
+          "approved",
+          "rejected",
+          "archived"
+        ],
+        "title": "TagModerationStatus",
+        "description": "Publication state of a tag definition.",
+        "default": "pending"
       },
       "TagPredicateInput": {
         "properties": {
@@ -44010,6 +45316,99 @@
         ],
         "title": "TagPredicateInput"
       },
+      "TagProposalDetail": {
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "revision": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "query_name": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "value_type": {
+            "$ref": "#/components/schemas/TagValueType"
+          },
+          "status": {
+            "$ref": "#/components/schemas/TagModerationStatus"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "created_by_account_id": {
+            "oneOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "created_at",
+          "created_by_account_id",
+          "id",
+          "name",
+          "query_name",
+          "revision",
+          "status",
+          "value_type"
+        ],
+        "title": "TagProposalDetail"
+      },
+      "TagProposalRequest": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "value_type": {
+            "$ref": "#/components/schemas/TagValueType"
+          },
+          "query_name": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "TagProposalRequest"
+      },
+      "TagRevisionRequest": {
+        "properties": {
+          "revision": {
+            "type": "integer",
+            "minimum": 1.0
+          }
+        },
+        "type": "object",
+        "required": [
+          "revision"
+        ],
+        "title": "TagRevisionRequest"
+      },
       "TagSemanticKind": {
         "type": "string",
         "enum": [
@@ -44025,6 +45424,15 @@
           "id": {
             "type": "integer"
           },
+          "slug": {
+            "type": "string"
+          },
+          "key": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
           "query_name": {
             "oneOf": [
               {
@@ -44034,6 +45442,15 @@
                 "type": "null"
               }
             ]
+          },
+          "authority": {
+            "$ref": "#/components/schemas/TagAuthority"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/TagSemanticKind"
+          },
+          "value_type": {
+            "$ref": "#/components/schemas/TagValueType"
           },
           "restriction_type": {
             "oneOf": [
@@ -44085,32 +45502,35 @@
               }
             ]
           },
-          "key": {
-            "type": "string"
+          "aliases": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
-          "name": {
-            "type": "string"
+          "build_count": {
+            "type": "integer"
           },
-          "authority": {
-            "$ref": "#/components/schemas/TagAuthority"
-          },
-          "kind": {
-            "$ref": "#/components/schemas/TagSemanticKind"
-          },
-          "value_type": {
-            "$ref": "#/components/schemas/TagValueType"
-          },
-          "slug": {
-            "type": "string"
+          "record_count": {
+            "type": "integer"
           }
         },
         "type": "object",
         "required": [
+          "aliases",
           "authority",
+          "build_count",
+          "canonical_unit",
+          "display_unit",
           "id",
           "key",
           "kind",
           "name",
+          "numeric_step",
+          "query_name",
+          "record_count",
+          "record_operator",
+          "restriction_type",
           "slug",
           "value_type"
         ],
@@ -44125,7 +45545,8 @@
           "boolean"
         ],
         "title": "TagValueType",
-        "description": "The scalar value attached to a tag."
+        "description": "The scalar value attached to a tag.",
+        "default": "none"
       },
       "TagViewer": {
         "properties": {

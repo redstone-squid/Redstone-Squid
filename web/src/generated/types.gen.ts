@@ -1918,7 +1918,7 @@ export type PageAnchor = {
 /**
  * Page[TagSummary]
  */
-export type PageLitestarDtoBackendTagSummary = {
+export type PageSquidApiV1BrowserViewsTagSummary = {
     items: Array<TagSummary>;
     total: number;
     next: PageAnchor | null;
@@ -2110,6 +2110,16 @@ export type PageSquidApiV1SchemasVotesReviewVoteSummary = {
  */
 export type PageSquidApiV1SubmissionRecalculationsRecalculationProposalResponse = {
     items: Array<RecalculationProposalResponse>;
+    total: number;
+    next: PageAnchor | null;
+    prev: PageAnchor | null;
+};
+
+/**
+ * Page[TagProposalDetail]
+ */
+export type PageSquidApiV1TagProposalsTagProposalDetail = {
+    items: Array<TagProposalDetail>;
     total: number;
     next: PageAnchor | null;
     prev: PageAnchor | null;
@@ -3862,6 +3872,14 @@ export type SuppliedFileResponse = {
 export type Tag = 'destructive' | 'moderation' | 'diagnostic' | 'readonly';
 
 /**
+ * TagAliasRequest
+ */
+export type TagAliasRequest = {
+    revision: number;
+    alias: string;
+};
+
+/**
  * TagAuthority
  *
  * Who controls a tag definition.
@@ -3885,7 +3903,21 @@ export type TagDetail = {
     canonical_unit: string | null;
     display_unit: string | null;
     numeric_step: string | null;
+    aliases: Array<string>;
+    build_count: number;
+    record_count: number;
+    description: string | null;
+    rules_anchor: string | null;
+    revision: number;
     viewer?: TagViewer | null;
+};
+
+/**
+ * TagEditResponse
+ */
+export type TagEditResponse = {
+    id: number;
+    revision: number;
 };
 
 /**
@@ -3894,12 +3926,49 @@ export type TagDetail = {
 export type TagListSort = 'id' | 'display';
 
 /**
+ * TagModerationStatus
+ *
+ * Publication state of a tag definition.
+ */
+export type TagModerationStatus = 'pending' | 'approved' | 'rejected' | 'archived';
+
+/**
  * TagPredicateInput
  */
 export type TagPredicateInput = {
     tag_id: number;
     operator?: 'present' | 'exact';
     value?: string | number | number | boolean | null;
+};
+
+/**
+ * TagProposalDetail
+ */
+export type TagProposalDetail = {
+    id: number;
+    revision: number;
+    name: string;
+    query_name: string | null;
+    value_type: TagValueType;
+    status: TagModerationStatus;
+    created_at: string;
+    created_by_account_id: number | null;
+};
+
+/**
+ * TagProposalRequest
+ */
+export type TagProposalRequest = {
+    name: string;
+    value_type?: TagValueType;
+    query_name?: string | null;
+};
+
+/**
+ * TagRevisionRequest
+ */
+export type TagRevisionRequest = {
+    revision: number;
 };
 
 /**
@@ -3914,18 +3983,21 @@ export type TagSemanticKind = 'restriction' | 'pattern' | 'showcase';
  */
 export type TagSummary = {
     id: number;
-    query_name?: string | null;
-    restriction_type?: string | null;
-    record_operator?: RecordOperator | null;
-    canonical_unit?: string | null;
-    display_unit?: string | null;
-    numeric_step?: string | null;
+    slug: string;
     key: string;
     name: string;
+    query_name: string | null;
     authority: TagAuthority;
     kind: TagSemanticKind;
     value_type: TagValueType;
-    slug: string;
+    restriction_type: string | null;
+    record_operator: RecordOperator | null;
+    canonical_unit: string | null;
+    display_unit: string | null;
+    numeric_step: string | null;
+    aliases: Array<string>;
+    build_count: number;
+    record_count: number;
 };
 
 /**
@@ -12765,7 +12837,7 @@ export type TagsListResponses = {
     /**
      * Request fulfilled, document follows
      */
-    200: PageLitestarDtoBackendTagSummary;
+    200: PageSquidApiV1BrowserViewsTagSummary;
 };
 
 export type TagsListResponse = TagsListResponses[keyof TagsListResponses];
@@ -12847,6 +12919,360 @@ export type TagsLookupResponses = {
 };
 
 export type TagsLookupResponse = TagsLookupResponses[keyof TagsLookupResponses];
+
+export type TagProposalsListData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Publication state of a tag definition.
+         */
+        status?: TagModerationStatus;
+        sort?: ChronologicalSort;
+        /**
+         * Maximum number of items to return.
+         */
+        page_size?: number;
+        /**
+         * An opaque cursor from a page's `next` or `prev`. Send it with the same sort. Excludes offset.
+         */
+        cursor?: string | null;
+        /**
+         * Number of items to skip. Excludes cursor.
+         */
+        offset?: number | null;
+    };
+    url: '/v1/tags/proposals';
+};
+
+export type TagProposalsListErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type TagProposalsListError = TagProposalsListErrors[keyof TagProposalsListErrors];
+
+export type TagProposalsListResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: PageSquidApiV1TagProposalsTagProposalDetail;
+};
+
+export type TagProposalsListResponse = TagProposalsListResponses[keyof TagProposalsListResponses];
+
+export type TagProposalCreateData = {
+    body: TagProposalRequest;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path?: never;
+    query?: never;
+    url: '/v1/tags/proposals';
+};
+
+export type TagProposalCreateErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type TagProposalCreateError = TagProposalCreateErrors[keyof TagProposalCreateErrors];
+
+export type TagProposalCreateResponses = {
+    /**
+     * Document created, URL follows
+     */
+    201: TagEditResponse;
+};
+
+export type TagProposalCreateResponse = TagProposalCreateResponses[keyof TagProposalCreateResponses];
+
+export type TagProposalApproveData = {
+    body: TagRevisionRequest;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        tag_id: number;
+    };
+    query?: never;
+    url: '/v1/tags/proposals/{tag_id}/approve';
+};
+
+export type TagProposalApproveErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Precondition Failed
+     */
+    412: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type TagProposalApproveError = TagProposalApproveErrors[keyof TagProposalApproveErrors];
+
+export type TagProposalApproveResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: TagEditResponse;
+};
+
+export type TagProposalApproveResponse = TagProposalApproveResponses[keyof TagProposalApproveResponses];
+
+export type TagProposalRejectData = {
+    body: TagRevisionRequest;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        tag_id: number;
+    };
+    query?: never;
+    url: '/v1/tags/proposals/{tag_id}/reject';
+};
+
+export type TagProposalRejectErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Precondition Failed
+     */
+    412: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type TagProposalRejectError = TagProposalRejectErrors[keyof TagProposalRejectErrors];
+
+export type TagProposalRejectResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: TagEditResponse;
+};
+
+export type TagProposalRejectResponse = TagProposalRejectResponses[keyof TagProposalRejectResponses];
+
+export type TagProposalArchiveData = {
+    body: TagRevisionRequest;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        tag_id: number;
+    };
+    query?: never;
+    url: '/v1/tags/proposals/{tag_id}/archive';
+};
+
+export type TagProposalArchiveErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Precondition Failed
+     */
+    412: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type TagProposalArchiveError = TagProposalArchiveErrors[keyof TagProposalArchiveErrors];
+
+export type TagProposalArchiveResponses = {
+    /**
+     * Request fulfilled, document follows
+     */
+    200: TagEditResponse;
+};
+
+export type TagProposalArchiveResponse = TagProposalArchiveResponses[keyof TagProposalArchiveResponses];
+
+export type TagAliasCreateData = {
+    body: TagAliasRequest;
+    headers?: {
+        /**
+         * Deduplicate an equivalent mutation in its server-derived caller namespace for 24 hours.
+         */
+        'Idempotency-Key'?: string | null;
+    };
+    path: {
+        tag_id: number;
+    };
+    query?: never;
+    url: '/v1/tags/{tag_id}/aliases';
+};
+
+export type TagAliasCreateErrors = {
+    /**
+     * Bad Request
+     */
+    400: ProblemDetail;
+    /**
+     * Unauthorized
+     */
+    401: ProblemDetail;
+    /**
+     * Forbidden
+     */
+    403: ProblemDetail;
+    /**
+     * Not Found
+     */
+    404: ProblemDetail;
+    /**
+     * Conflict
+     */
+    409: ProblemDetail;
+    /**
+     * Precondition Failed
+     */
+    412: ProblemDetail;
+    /**
+     * Unprocessable Content
+     */
+    422: ValidationProblemDetail;
+    /**
+     * Too Many Requests
+     */
+    429: ProblemDetail;
+};
+
+export type TagAliasCreateError = TagAliasCreateErrors[keyof TagAliasCreateErrors];
+
+export type TagAliasCreateResponses = {
+    /**
+     * Document created, URL follows
+     */
+    201: TagEditResponse;
+};
+
+export type TagAliasCreateResponse = TagAliasCreateResponses[keyof TagAliasCreateResponses];
 
 export type CreatorAliasGetData = {
     body?: never;

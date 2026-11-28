@@ -2,7 +2,6 @@
 
 from typing import Annotated
 
-from advanced_alchemy.extensions.litestar.dto import SQLAlchemyDTO, SQLAlchemyDTOConfig
 from litestar import Router, get
 from litestar.di import Provide
 from litestar.params import FromPath, FromQuery, QueryParameter
@@ -11,40 +10,12 @@ from squid.api.contract import ANONYMOUS, WEB, contract, transport_only
 from squid.api.dependencies import CurrentCaller, Services, Tags, get_tags
 from squid.api.errors import responses
 from squid.api.pagination import CursorParam, ListResponse, OffsetParam, Page, PageSizeParam, resolve_selector
-from squid.api.v1.browser_views import BrowserViews, TagDetail
+from squid.api.v1 import tag_proposals
+from squid.api.v1.browser_views import BrowserViews, TagDetail, TagSummary
 from squid.core.actors import ActingContext
 from squid.core.tags.domain import TagAuthority, TagSemanticKind
 from squid.core.tags.errors import TagNotFoundError
-from squid.core.tags.models import TagDefinition, TagListSort
-
-
-class PublicTagDTO(SQLAlchemyDTO[TagDefinition]):
-    """Publish tag vocabulary without moderation, ownership, or relationship fields."""
-
-    __schema_name__ = "TagSummary"
-    config = SQLAlchemyDTOConfig(
-        include={
-            "id",
-            "stable_key",
-            "slug",
-            "display_name",
-            "query_name",
-            "authority",
-            "semantic_kind",
-            "value_type",
-            "restriction_type",
-            "record_operator",
-            "canonical_unit",
-            "default_display_unit",
-            "numeric_step",
-        },
-        rename_fields={
-            "stable_key": "key",
-            "display_name": "name",
-            "semantic_kind": "kind",
-            "default_display_unit": "display_unit",
-        },
-    )
+from squid.core.tags.models import TagListSort
 
 
 @get(
@@ -52,7 +23,6 @@ class PublicTagDTO(SQLAlchemyDTO[TagDefinition]):
     responses=responses(400, 422, 503),
     response_class=ListResponse,
     operation_id="tags_list",
-    return_dto=PublicTagDTO,
     security=[ANONYMOUS],
     opt=contract(cli=transport_only()),
 )
@@ -65,11 +35,11 @@ async def list_tags(
     sort: FromQuery[TagListSort] = TagListSort.DISPLAY,
     cursor: CursorParam = None,
     offset: OffsetParam = None,
-) -> Page[TagDefinition]:
+) -> Page[TagSummary]:
     """List published tag definitions."""
     definitions = await tags.public_definitions(kind=kind, authority=authority, q=q, context=ActingContext.current())
     page = sort.page(definitions, selector=resolve_selector(offset=offset, cursor=cursor), page_size=page_size)
-    return Page[TagDefinition].from_domain(page)
+    return Page[TagSummary].from_domain(page, TagSummary.from_definition)
 
 
 @get(
@@ -110,5 +80,15 @@ router = Router(
     dependencies={"tags": Provide(get_tags, sync_to_thread=False)},
     path="/tags",
     tags=["tags"],
-    route_handlers=[list_tags, get_tag, look_up_tag],
+    route_handlers=[
+        list_tags,
+        get_tag,
+        look_up_tag,
+        tag_proposals.list_proposals,
+        tag_proposals.create_proposal,
+        tag_proposals.approve,
+        tag_proposals.reject,
+        tag_proposals.archive,
+        tag_proposals.add_alias,
+    ],
 )

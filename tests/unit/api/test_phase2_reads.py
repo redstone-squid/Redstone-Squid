@@ -306,6 +306,9 @@ def test_tag_and_version_collections_use_page_envelope(
         {
             "id": 4,
             "key": "official_seamless",
+            "aliases": [],
+            "build_count": 0,
+            "record_count": 0,
             "slug": "seamless",
             "name": "Seamless",
             "query_name": "seamless",
@@ -583,3 +586,11 @@ class TestTypedNotFound:
         assert problem["code"] == "RECORD_NOT_FOUND"
         assert problem["resource"] == "record"
         assert problem["context"] == {"record_id": record_id}
+
+
+def test_tag_moderation_requires_authentication(client: TestClient) -> None:
+    assert client.get("/v1/tags/proposals").status_code == 401
+    assert client.post("/v1/tags/proposals", json={"name": "Compact"}).status_code == 401
+    for action in ("approve", "reject", "archive"):
+        assert client.post(f"/v1/tags/proposals/1/{action}", json={"revision": 1}).status_code == 401
+    assert client.post("/v1/tags/1/aliases", json={"alias": "Hip", "revision": 1}).status_code == 401

@@ -6,11 +6,6 @@ Unfinished items come first, then finished ones, each grouped by area. Numbers a
 
 ## Not finished
 
-### Tags
-
-21. **`GET /v1/tags` filters:** `kind`, `authority`, and `q` as a name and alias prefix match for pickers. `TagDetail` gains `description`, `aliases`, `build_count`, `record_count`, and `rules_anchor` (a link into `/rules`). Needed by P11 and P12.
-23. **Tag proposals:** `GET /v1/tags/proposals?status&sort=oldest` (a queue), `POST /v1/tags/proposals` (users propose showcase tags), `POST /v1/tags/proposals/{id}/{approve|reject|archive}`, `POST /v1/tags/{id}/aliases`. Needed by X3.
-
 ### Creators and accounts
 
 28. **Product decision: account deletion and data export.** `DELETE /v1/accounts/me` and `GET /v1/accounts/me/export`. Needed for A2 if the privacy notice promises them.
@@ -82,7 +77,9 @@ Records, search and ranges share one **record holder summary**, `{build_id, titl
 
 ### Tags
 
+21. **Public glossary (P11, P12).** Filter `GET /v1/tags` by kind, authority and name or alias prefix. Each entry includes aliases and counts of approved builds and current records. Detail includes the description, rules link and edit revision.
 22. **Tag page builds.** `GET /v1/builds?tag_slug=` (items 9 and 59) avoids the waterfall of tag, then query name, then search on P12.
+23. **Tag moderation (X3).** Users submit showcase tags to `POST /v1/tags/proposals`. Staff page the queue by status (pending, oldest first by default), approve or reject pending proposals, archive approved tags, and add aliases to official restrictions. Writes to existing tags take the revision the user reviewed.
 
 ### Creators and accounts
 
