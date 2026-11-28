@@ -263,3 +263,18 @@ async def test_search_lists_filters_and_counts_scopes_only_on_request() -> None:
         },
     ]
     assert uncounted.filters[0].without == 'NOT restriction:"no slime" AND door_width IS SET AND piston'
+
+
+async def test_value_lists_preserve_negation_and_removal_in_response() -> None:
+    parser = SearchQueryParser(scope=SearchScope.BUILDS)
+    query = parser.parse("width<=5 NOT tag:any(slim,seamless)")
+    graph = fakes(SearchPage(hits=(), total=0, next=None, prev=None, query=query, clauses=parser.clauses(query)))
+    result = await search.fn(ANONYMOUS, graph.search, graph.build_queries, q=query.normalized)
+    assert result.normalized_query == "width<=5 AND NOT (tag:slim OR tag:seamless)"
+    tree = result.model_dump()["expression"]
+    assert tree["kind"] == "and"
+    negated = tree["children"][1]
+    assert negated["kind"] == "not"
+    assert negated["child"]["kind"] == "or"
+    assert [leaf["value"] for leaf in negated["child"]["children"]] == ["slim", "seamless"]
+    assert result.filters[1].without == "width<=5 AND NOT tag:seamless"

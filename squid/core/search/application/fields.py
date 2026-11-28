@@ -265,6 +265,7 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
         FieldDefinition(
             "tag",
             FieldType.TEXT,
+            multi_valued=True,
             ranked=True,
             free_text=FreeTextWeight.B,
             group=FieldGroup.CLASSIFICATION,
@@ -273,6 +274,7 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
         FieldDefinition(
             "restriction",
             FieldType.TEXT,
+            multi_valued=True,
             ranked=True,
             scopes=CATALOGUE_SCOPES,
             unranked_scopes=_RECORDS,
@@ -283,6 +285,7 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
         FieldDefinition(
             "type",
             FieldType.TEXT,
+            multi_valued=True,
             ranked=True,
             scopes=CATALOGUE_SCOPES,
             unranked_scopes=_RECORDS,
@@ -293,6 +296,7 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
         FieldDefinition(
             "pattern",
             FieldType.TEXT,
+            multi_valued=True,
             ranked=True,
             free_text=FreeTextWeight.B,
             group=FieldGroup.CLASSIFICATION,
@@ -301,6 +305,7 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
         FieldDefinition(
             "creator",
             FieldType.TEXT,
+            multi_valued=True,
             ranked=True,
             scopes=CATALOGUE_SCOPES,
             free_text=FreeTextWeight.C,
@@ -311,6 +316,7 @@ DEFAULT_FIELD_REGISTRY = FieldRegistry(
         FieldDefinition(
             "version",
             FieldType.TEXT,
+            multi_valued=True,
             free_text=FreeTextWeight.D,
             group=FieldGroup.CLASSIFICATION,
             examples=("version:1.21",),

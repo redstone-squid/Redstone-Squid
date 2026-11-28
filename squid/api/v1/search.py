@@ -25,6 +25,7 @@ from squid.api.v1.schemas.search import (
     SearchResult,
     SearchResultPage,
     SearchSuggestions,
+    search_node,
 )
 from squid.core.actors import ActingContext
 from squid.core.builds.application import BuildQueryService, PublicBuildSummary
@@ -183,6 +184,8 @@ async def search(
         total=result.total,
         next=PageAnchor.from_domain(result.next) if result.next is not None else None,
         prev=PageAnchor.from_domain(result.prev) if result.prev is not None else None,
+        normalized_query=result.query.normalized,
+        expression=search_node(result.query.expression) if result.query.expression is not None else None,
         filters=[SearchFilter.from_domain(clause) for clause in result.clauses],
         counts=SearchCounts.from_domain(scope_counts) if scope_counts is not None else None,
     )

@@ -102,6 +102,7 @@ class SearchService:
             parser = SearchQueryParser(registry, scope=request.scope)
             query = parser.parse(request.query)
             clauses = parser.clauses(query)
+        input_query = query
         if request.ranges:
             assert registry is not None
             query = _apply_ranges(SearchQueryParser(registry, scope=request.scope), query, request.ranges)
@@ -143,6 +144,7 @@ class SearchService:
             warnings=result.warnings,
             offset=offset,
             clauses=clauses,
+            query=input_query,
         )
 
     async def _with_holders(self, hits: tuple[SearchHit, ...], *, context: ActingContext) -> tuple[SearchHit, ...]:

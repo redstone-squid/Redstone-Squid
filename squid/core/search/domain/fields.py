@@ -70,6 +70,7 @@ class FieldDefinition:
     supports_sort: bool = False
     ranked: bool = False
     """Whether the value of a clause on this field also counts as text for relevance ranking."""
+    multi_valued: bool = False
     holder_scoped: bool = False
     """In Records, compare this field against one published holder."""
     unranked_scopes: frozenset[SearchScope] = frozenset()

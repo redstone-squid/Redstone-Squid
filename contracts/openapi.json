@@ -4698,19 +4698,19 @@
           "200": {
             "description": "Request fulfilled, document follows",
             "headers": {
-              "Cache-Control": {
-                "schema": {
-                  "type": "string"
-                },
-                "required": false,
-                "deprecated": false
-              },
               "ETag": {
                 "schema": {
                   "type": "string"
                 },
                 "description": "Revision of the edit target. Send this value unchanged on writes that accept If-Match.",
                 "required": true,
+                "deprecated": false
+              },
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "required": false,
                 "deprecated": false
               },
               "Request-Id": {
@@ -5058,19 +5058,19 @@
           "200": {
             "description": "Request fulfilled, document follows",
             "headers": {
-              "Cache-Control": {
-                "schema": {
-                  "type": "string"
-                },
-                "required": false,
-                "deprecated": false
-              },
               "ETag": {
                 "schema": {
                   "type": "string"
                 },
                 "description": "Revision of the edit target. Send this value unchanged on writes that accept If-Match.",
                 "required": true,
+                "deprecated": false
+              },
+              "Cache-Control": {
+                "schema": {
+                  "type": "string"
+                },
+                "required": false,
                 "deprecated": false
               },
               "Request-Id": {
@@ -30569,6 +30569,15 @@
         "title": "BelowMinimumParams",
         "type": "object"
       },
+      "BooleanOperator": {
+        "type": "string",
+        "enum": [
+          "and",
+          "or"
+        ],
+        "title": "BooleanOperator",
+        "description": "Boolean operators supported by search."
+      },
       "BrowserProvider": {
         "properties": {
           "id": {
@@ -42270,6 +42279,9 @@
             "type": "array",
             "description": "Catalogue tabs that can use the field. The all and metadata scopes accept every field."
           },
+          "multi_valued": {
+            "type": "boolean"
+          },
           "supports_range": {
             "type": "boolean"
           },
@@ -42321,6 +42333,7 @@
           "group",
           "label",
           "metric",
+          "multi_valued",
           "name",
           "scopes",
           "supports_range",
@@ -42487,6 +42500,35 @@
         ],
         "title": "SearchFilterRange"
       },
+      "SearchGroup": {
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/BooleanOperator"
+          },
+          "children": {
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/SearchPredicate"
+                },
+                {
+                  "$ref": "#/components/schemas/SearchGroup"
+                },
+                {
+                  "$ref": "#/components/schemas/SearchNegation"
+                }
+              ]
+            },
+            "type": "array"
+          }
+        },
+        "type": "object",
+        "required": [
+          "children",
+          "kind"
+        ],
+        "title": "SearchGroup"
+      },
       "SearchHistogram": {
         "properties": {
           "kind": {
@@ -42555,6 +42597,113 @@
         ],
         "title": "SearchMatch"
       },
+      "SearchNegation": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "const": "not"
+          },
+          "child": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SearchPredicate"
+              },
+              {
+                "$ref": "#/components/schemas/SearchGroup"
+              },
+              {
+                "$ref": "#/components/schemas/SearchNegation"
+              }
+            ]
+          }
+        },
+        "type": "object",
+        "required": [
+          "child",
+          "kind"
+        ],
+        "title": "SearchNegation"
+      },
+      "SearchPredicate": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "text",
+              "field",
+              "presence"
+            ]
+          },
+          "field": {
+            "oneOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The canonical field name, or null for bare text."
+          },
+          "operator": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/ComparisonOperator"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "value": {
+            "oneOf": [
+              {
+                "oneOf": [
+                  {
+                    "type": "string"
+                  },
+                  {
+                    "type": "integer"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "boolean"
+                  }
+                ]
+              },
+              {
+                "$ref": "#/components/schemas/SearchFilterRange"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The coerced value: numbers in the field's unit, timestamps as ISO 8601. Null for presence."
+          },
+          "is_set": {
+            "oneOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "For presence clauses, whether the field must have a value."
+          }
+        },
+        "type": "object",
+        "required": [
+          "field",
+          "is_set",
+          "kind",
+          "operator",
+          "value"
+        ],
+        "title": "SearchPredicate"
+      },
       "SearchResultPage": {
         "properties": {
           "items": {
@@ -42596,6 +42745,25 @@
               }
             ]
           },
+          "normalized_query": {
+            "type": "string"
+          },
+          "expression": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/SearchPredicate"
+              },
+              {
+                "$ref": "#/components/schemas/SearchGroup"
+              },
+              {
+                "$ref": "#/components/schemas/SearchNegation"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "filters": {
             "items": {
               "$ref": "#/components/schemas/SearchFilter"
@@ -42630,9 +42798,11 @@
         "type": "object",
         "required": [
           "counts",
+          "expression",
           "filters",
           "items",
           "next",
+          "normalized_query",
           "prev",
           "total"
         ],

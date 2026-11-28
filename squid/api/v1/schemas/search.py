@@ -13,6 +13,8 @@ from squid.core.errors import ValidationError
 from squid.core.records.application.metrics import RecordHolderSummary, RecordMetric
 from squid.core.search.application.results import MetadataSearchHit, RecordSearchHit
 from squid.core.search.domain import (
+    BooleanExpression,
+    BooleanOperator,
     ComparisonOperator,
     FieldDefinition,
     FieldExpression,
@@ -27,7 +29,7 @@ from squid.core.search.domain import (
     SearchScope,
     TextExpression,
 )
-from squid.core.search.domain.query import ScalarValue
+from squid.core.search.domain.query import QueryExpression, ScalarValue
 
 
 class SearchFieldChoice(BaseModel):
@@ -59,6 +61,7 @@ class SearchField(BaseModel):
     scopes: list[SearchScope] = Field(
         description="Catalogue tabs that can use the field. The all and metadata scopes accept every field."
     )
+    multi_valued: bool
     supports_range: bool
     supports_sort: bool
     metric: bool = Field(description="A holder measurement that the records table shows as a column.")
@@ -78,6 +81,7 @@ class SearchField(BaseModel):
             group=field.group,
             unit=field.unit,
             scopes=sorted(field.scopes),
+            multi_valued=field.multi_valued,
             supports_range=field.supports_range,
             supports_sort=field.supports_sort,
             metric=field.holder_scoped,
@@ -218,8 +222,8 @@ class SearchFilterRange(BaseModel):
     upper: SearchFilterValue
 
 
-class SearchFilter(BaseModel):
-    """One clause of the parsed query, shown as a removable filter."""
+class SearchPredicate(BaseModel):
+    """A typed search predicate."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -230,6 +234,26 @@ class SearchFilter(BaseModel):
         description="The coerced value: numbers in the field's unit, timestamps as ISO 8601. Null for presence."
     )
     is_set: bool | None = Field(description="For presence clauses, whether the field must have a value.")
+
+    @classmethod
+    def from_leaf(cls, expression: QueryExpression) -> SearchPredicate:
+        match expression:
+            case TextExpression(value=value):
+                return cls(kind="text", field=None, operator=None, value=value, is_set=None)
+            case PresenceExpression(field=field, is_set=is_set):
+                return cls(kind="presence", field=field.name, operator=None, value=None, is_set=is_set)
+            case FieldExpression(field=field, operator=operator, value=RangeValue(lower=lower, upper=upper)):
+                bounds = SearchFilterRange(lower=_filter_value(lower), upper=_filter_value(upper))
+                return cls(kind="field", field=field.name, operator=operator, value=bounds, is_set=None)
+            case FieldExpression(field=field, operator=operator, value=value):
+                assert not isinstance(value, RangeValue)
+                return cls(kind="field", field=field.name, operator=operator, value=_filter_value(value), is_set=None)
+            case _:
+                msg = "Query leaves are text, field or presence clauses."
+                raise AssertionError(msg)
+
+
+class SearchFilter(SearchPredicate):
     negated: bool
     text: str = Field(description="The clause in query syntax.")
     without: str = Field(description="The normalized query with this clause removed.")
@@ -240,23 +264,36 @@ class SearchFilter(BaseModel):
         negated = isinstance(expression, NotExpression)
         if isinstance(expression, NotExpression):
             expression = expression.operand
-        common = {"negated": negated, "text": clause.text, "without": clause.without}
-        match expression:
-            case TextExpression(value=value):
-                return cls(kind="text", field=None, operator=None, value=value, is_set=None, **common)
-            case PresenceExpression(field=field, is_set=is_set):
-                return cls(kind="presence", field=field.name, operator=None, value=None, is_set=is_set, **common)
-            case FieldExpression(field=field, operator=operator, value=RangeValue(lower=lower, upper=upper)):
-                bounds = SearchFilterRange(lower=_filter_value(lower), upper=_filter_value(upper))
-                return cls(kind="field", field=field.name, operator=operator, value=bounds, is_set=None, **common)
-            case FieldExpression(field=field, operator=operator, value=value):
-                assert not isinstance(value, RangeValue)
-                return cls(
-                    kind="field", field=field.name, operator=operator, value=_filter_value(value), is_set=None, **common
-                )
-            case _:
-                msg = "Query leaves are text, field or presence clauses."
-                raise AssertionError(msg)
+        return cls(
+            **SearchPredicate.from_leaf(expression).model_dump(),
+            negated=negated,
+            text=clause.text,
+            without=clause.without,
+        )
+
+
+class SearchGroup(BaseModel):
+    kind: BooleanOperator
+    children: list[SearchPredicate | SearchGroup | SearchNegation]
+
+
+class SearchNegation(BaseModel):
+    kind: Literal["not"]
+    child: SearchPredicate | SearchGroup | SearchNegation
+
+
+SearchGroup.model_rebuild()
+
+
+type SearchNode = SearchPredicate | SearchGroup | SearchNegation
+
+
+def search_node(expression: QueryExpression) -> SearchNode:
+    if isinstance(expression, BooleanExpression):
+        return SearchGroup(kind=expression.operator, children=[search_node(item) for item in expression.operands])
+    if isinstance(expression, NotExpression):
+        return SearchNegation(kind="not", child=search_node(expression.operand))
+    return SearchPredicate.from_leaf(expression)
 
 
 def _filter_value(value: ScalarValue) -> SearchFilterValue:
@@ -297,6 +334,8 @@ class SearchResultPage(BaseModel):
     total: int
     next: PageAnchor | None
     prev: PageAnchor | None
+    normalized_query: str
+    expression: SearchNode | None
     filters: list[SearchFilter]
     distributions: dict[str, SearchHistogram] | None = None
     counts: SearchCounts | None = Field(

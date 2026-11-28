@@ -195,6 +195,13 @@ export type BelowMinimumParams = {
 };
 
 /**
+ * BooleanOperator
+ *
+ * Boolean operators supported by search.
+ */
+export type BooleanOperator = 'and' | 'or';
+
+/**
  * BrowserProvider
  */
 export type BrowserProvider = {
@@ -3387,6 +3394,7 @@ export type SearchField = {
      * Catalogue tabs that can use the field. The all and metadata scopes accept every field.
      */
     scopes: Array<SearchScope>;
+    multi_valued: boolean;
     supports_range: boolean;
     supports_sort: boolean;
     /**
@@ -3456,6 +3464,14 @@ export type SearchFilterRange = {
 };
 
 /**
+ * SearchGroup
+ */
+export type SearchGroup = {
+    kind: BooleanOperator;
+    children: Array<SearchPredicate | SearchGroup | SearchNegation>;
+};
+
+/**
  * SearchHistogram
  */
 export type SearchHistogram = {
@@ -3482,6 +3498,34 @@ export type SearchMatch = {
 };
 
 /**
+ * SearchNegation
+ */
+export type SearchNegation = {
+    kind: 'not';
+    child: SearchPredicate | SearchGroup | SearchNegation;
+};
+
+/**
+ * SearchPredicate
+ */
+export type SearchPredicate = {
+    kind: 'text' | 'field' | 'presence';
+    /**
+     * The canonical field name, or null for bare text.
+     */
+    field: string | null;
+    operator: ComparisonOperator | null;
+    /**
+     * The coerced value: numbers in the field's unit, timestamps as ISO 8601. Null for presence.
+     */
+    value: string | number | number | boolean | SearchFilterRange | null;
+    /**
+     * For presence clauses, whether the field must have a value.
+     */
+    is_set: boolean | null;
+};
+
+/**
  * SearchResultPage
  */
 export type SearchResultPage = {
@@ -3489,6 +3533,8 @@ export type SearchResultPage = {
     total: number;
     next: PageAnchor | null;
     prev: PageAnchor | null;
+    normalized_query: string;
+    expression: SearchPredicate | SearchGroup | SearchNegation | null;
     filters: Array<SearchFilter>;
     distributions?: {
         [key: string]: SearchHistogram;

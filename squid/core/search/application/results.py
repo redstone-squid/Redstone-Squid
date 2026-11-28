@@ -6,7 +6,7 @@ from typing import Literal
 
 from squid.core.pagination import PageAnchor
 from squid.core.records.application.metrics import RecordHolderSummary, RecordMetric
-from squid.core.search.domain import QueryClause, SearchEvidence, SearchMatch
+from squid.core.search.domain import QueryClause, SearchEvidence, SearchMatch, SearchQuery
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,3 +94,4 @@ class SearchPage:
     offset: int | None = None
     clauses: tuple[QueryClause, ...] = ()
     """The clauses of `SearchRequest.query`; empty when the request supplied a parsed query."""
+    query: SearchQuery = SearchQuery(None, "")
