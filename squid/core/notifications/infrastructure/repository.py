@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from squid.core.accounts.domain import IdentityProvider
 from squid.core.accounts.infrastructure.attribution import attributed_credits
 from squid.core.accounts.models import Account, AccountIdentity
-from squid.core.builds.domain import BuildStatus
+from squid.core.builds.domain import BuildStatus, CreditRole
 from squid.core.builds.models import Build
 from squid.core.events.models import DomainEvent, DomainEventDeliveryRecord
 from squid.core.notifications.domain import (
@@ -587,14 +587,24 @@ class PostgresNotificationRepository:
         kind = (
             NotificationKind.BUILD_CONFIRMED if event.event_type == "build.confirmed" else NotificationKind.BUILD_DENIED
         )
-        assert build.submitter_account_id is not None
+        # Every maintainer hears the outcome, matching who may edit the build (`Build.maintainer_account_ids`).
+        credited = func.build_credit_accounts(build.id).table_valued("account_id", "role")
+        maintainers = set(
+            (
+                await session.scalars(select(credited.c.account_id).where(credited.c.role == CreditRole.CREATOR.value))
+            ).all()
+        )
+        if build.submitter_account_id is not None:
+            maintainers.add(build.submitter_account_id)
+        payload = {"build_id": build.id, **await self._submission_link(session, build.id)}
         candidates = [
             NotificationCandidate(
-                account_id=build.submitter_account_id,
+                account_id=account_id,
                 kind=kind,
-                source_key=NotificationSource(event.id, kind).key_for(build.submitter_account_id),
-                payload={"build_id": build.id, **await self._submission_link(session, build.id)},
+                source_key=NotificationSource(event.id, kind).key_for(account_id),
+                payload=payload,
             )
+            for account_id in sorted(maintainers)
         ]
         if event.event_type != "build.confirmed" or not await self._is_first_confirmation(session, event):
             await self._insert_candidates(session, event=event, candidates=candidates)
