@@ -7,10 +7,13 @@ owner hid.
 
 from sqlalchemy import Subquery, case, column, select, table, union
 
-from squid.core.accounts.models import Account, AccountIdentity, CreatorAlias, PublicAccountRedirect
+from squid.core.accounts.models import Account, AccountIdentity, AccountProfile, PublicAccountRedirect
 
 BUILD_CREDITS = table(
     "build_credits",
+    column("id"),
+    column("account_id"),
+    column("account_source"),
     column("build_id"),
     column("position"),
     column("alias_id"),
@@ -28,9 +31,8 @@ whole `Build` relationship graph into the accounts context.
 def attributed_credits() -> Subquery:
     """Build credits with the account each one publicly belongs to.
 
-    A credit belongs to the account that claimed its alias, and to the account with a
-    public identity matching its provider subject. A private identity never attributes
-    a credit, so attribution cannot reveal it. Each credit appears at most once per account.
+    An explicit build-credit owner takes precedence. A provider match is public
+    only while its identity is public. Hidden profiles never identify a credit.
 
     Columns: `build_id`, `position`, `name`, `account_id`.
     """
@@ -40,17 +42,25 @@ def attributed_credits() -> Subquery:
         (BUILD_CREDITS.c.kind == "minecraft_bedrock", "bedrock"),
     )
     credit = (BUILD_CREDITS.c.build_id, BUILD_CREDITS.c.position, BUILD_CREDITS.c.name)
-    return union(
+    owners = union(
         select(*credit, AccountIdentity.account_id)
         .join(
             AccountIdentity,
             (AccountIdentity.subject == BUILD_CREDITS.c.subject) & (AccountIdentity.provider == provider),
         )
-        .where(AccountIdentity.is_public.is_(True)),
-        select(*credit, CreatorAlias.account_id)
-        .join(CreatorAlias, CreatorAlias.id == BUILD_CREDITS.c.alias_id)
-        .where(CreatorAlias.account_id.is_not(None)),
-    ).subquery("attributed_credits")
+        .where(
+            AccountIdentity.is_public.is_(True),
+            BUILD_CREDITS.c.account_id.is_(None),
+            BUILD_CREDITS.c.account_source == "automatic",
+        ),
+        select(*credit, BUILD_CREDITS.c.account_id).where(BUILD_CREDITS.c.account_id.is_not(None)),
+    ).subquery()
+    return (
+        select(owners)
+        .outerjoin(AccountProfile, AccountProfile.account_id == owners.c.account_id)
+        .where(AccountProfile.hidden.is_not(True))
+        .subquery("attributed_credits")
+    )
 
 
 def public_account_ids() -> Subquery:

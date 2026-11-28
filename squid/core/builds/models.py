@@ -521,6 +521,9 @@ class BuildCredit(Base):
         UniqueConstraint(
             "build_id", "position", name="build_credits_position_key", deferrable=True, initially="DEFERRED"
         ),
+        CheckConstraint(
+            "account_source IN ('automatic', 'reviewed', 'conflict')", name="build_credits_account_source_check"
+        ),
         Index("build_credits_alias_idx", "alias_id"),
         Index("build_credits_subject_idx", "kind", "subject"),
         CheckConstraint("position >= 0", name="build_credits_position_nonnegative"),
@@ -561,11 +564,20 @@ class BuildCredit(Base):
         default=None,
     )
 
+    account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("accounts.id", ondelete="SET NULL"), default=None, index=True
+    )
+    account_source: Mapped[str] = mapped_column(Text, default="automatic", server_default=text("'automatic'"))
+    proposed_account_id: Mapped[int | None] = mapped_column(
+        ForeignKey("accounts.id", ondelete="SET NULL"), default=None, index=True
+    )
+
     build: Mapped[Build] = relationship(back_populates="build_credits", lazy="raise_on_sql", repr=False, default=None)
 
     def to_credit(self, public_account_id: uuid.UUID | None = None) -> Credit:
         return Credit(
             credit_id=self.id,
+            name_id=self.alias_id,
             account_id=public_account_id,
             name=self.name,
             kind=self.kind,

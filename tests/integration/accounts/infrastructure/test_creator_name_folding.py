@@ -19,6 +19,7 @@ from squid.core.accounts.domain import fold_creator_name
 from squid.core.accounts.models import CreatorAlias
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.unit_of_work import UnitOfWorkFactory
+from tests.support.creator_credits import publish_credits
 from tests.support.schema import model_table
 from tests.support.unit_of_work import transact
 
@@ -99,9 +100,7 @@ async def test_names_that_only_casefold_unifies_are_one_creator(
     migrated_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
     """Greek sigma variants share a casefolded key and therefore collide at the unique index."""
-    async with migrated_session_factory.begin() as session:
-        session.add(CreatorAlias(name="ΣΣ"))
-
+    await publish_credits(migrated_session_factory, ["ΣΣ"])
     async with migrated_session_factory() as session:
         session.add(CreatorAlias(name="Σς"))
         with pytest.raises(IntegrityError):

@@ -29,6 +29,26 @@ from squid.core.permissions.domain.catalogue import (
 from squid.core.unit_of_work import UnitOfWork, UnitOfWorkFactory
 
 
+@dataclass(frozen=True, slots=True)
+class CreatorYear:
+    year: int
+    count: int
+
+
+@dataclass(frozen=True, slots=True)
+class CreatorRecord:
+    id: UUID
+    title: str
+
+
+@dataclass(frozen=True, slots=True)
+class CreatorStats:
+    build_count: int
+    builds_by_year: tuple[CreatorYear, ...]
+    records_held: tuple[CreatorRecord, ...]
+    records_ever: int
+
+
 class BuildListSort(StrEnum):
     """A named display order for build listings.
 
@@ -97,6 +117,8 @@ class PublicBuildCredit:
     role: CreditRole
     attribution: CreditAttribution
     account_id: UUID | None
+    credit_id: UUID | None = None
+    name_id: int | None = None
 
 
 class PublicBuildStatus(StrEnum):
@@ -167,6 +189,8 @@ class PublicBuildSummary:
             credits=tuple(
                 PublicBuildCredit(
                     name=credit.name,
+                    credit_id=credit.credit_id,
+                    name_id=credit.name_id,
                     account_id=credit.account_id,
                     kind=credit.kind,
                     username=credit.username,
@@ -209,6 +233,8 @@ def _public_preview(build: Build) -> PublicBuildPreview | None:
 
 class BuildQueryRepository(Protocol):
     """Build persistence queries required by search workflows."""
+
+    async def creator_stats(self, filters: BuildListFilters) -> CreatorStats: ...
 
     async def get_by_id(self, build_id: int) -> Build | None: ...
 
@@ -292,6 +318,12 @@ class BuildQueryService:
     async def get(self, build_id: int, *, context: ActingContext) -> Build | None:
         rows = await self.get_many((build_id,), context=context)
         return rows[0] if rows else None
+
+    async def creator_stats(self, filters: BuildListFilters, *, context: ActingContext) -> CreatorStats:
+        """Summarize the approved builds in a creator's catalogue listing."""
+        with context.scope():
+            async with self._uow_factory() as uow:
+                return await uow.builds.creator_stats(filters)
 
     async def get_public(self, build_id: int, *, context: ActingContext) -> Build:
         """Return a approved build, or raise BuildNotFoundError.

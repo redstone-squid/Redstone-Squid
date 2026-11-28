@@ -547,7 +547,9 @@ class AccountService:
                 await uow.commit()
                 return result
 
-    async def request_alias_claim(self, name: str, *, context: ActingContext) -> AliasClaim:
+    async def request_alias_claim(
+        self, name: str, *, context: ActingContext, credit_ids: Collection[UUID] | None = None
+    ) -> AliasClaim:
         """Open a staff-reviewed request to be credited under a creator name."""
         account_id = context.effective.require_account_id()
         with context.scope():
@@ -559,7 +561,7 @@ class AccountService:
                 if account is None or account.id is None:  # pyright: ignore[reportUnnecessaryComparison]
                     raise AccountNotFoundError(account_id)
                 try:
-                    result = await uow.accounts.request_claim(name=name, account_id=account.id)
+                    result = await uow.accounts.request_claim(name=name, account_id=account.id, credit_ids=credit_ids)
                 except AliasAlreadyClaimedError as conflict:
                     raise await self._name_the_holder(uow, conflict) from None
                 await uow.commit()
@@ -581,6 +583,10 @@ class AccountService:
             return conflict
         return conflict.with_holder_name(profile.aliases[0])
 
+    async def own_credit_claims(self, *, context: ActingContext) -> Sequence[AliasClaim]:
+        async with self._uow_factory() as uow:
+            return await uow.accounts.claims_for_account(context.effective.require_account_id())
+
     async def pending_alias_claims(
         self, *, context: ActingContext, with_claimants: bool = False
     ) -> Sequence[AliasClaim]:
@@ -594,14 +600,23 @@ class AccountService:
                 await self._permissions.require(context.effective, ACCOUNT_CLAIM_LIST, uow=uow)
                 return await uow.accounts.pending_claims(with_claimants=with_claimants)
 
-    async def approve_alias_claim(self, claim_id: int, *, context: ActingContext, reassign: bool = False) -> AliasClaim:
+    async def approve_alias_claim(
+        self,
+        claim_id: int,
+        *,
+        context: ActingContext,
+        reassign: bool = False,
+        credit_ids: Collection[UUID] | None = None,
+    ) -> AliasClaim:
         """Credit the claimant with the alias and close the request.
 
         *reassign* is required to take a name that is currently credited to someone else, which
         is what a rename into a contested name produces.
         """
         with context.scope():
-            return await self._resolve_claim(claim_id, ClaimStatus.APPROVED, context.effective, reassign=reassign)
+            return await self._resolve_claim(
+                claim_id, ClaimStatus.APPROVED, context.effective, reassign=reassign, credit_ids=credit_ids
+            )
 
     async def reject_alias_claim(self, claim_id: int, *, context: ActingContext) -> AliasClaim:
         """Close the request without crediting the claimant."""
@@ -609,7 +624,13 @@ class AccountService:
             return await self._resolve_claim(claim_id, ClaimStatus.REJECTED, context.effective)
 
     async def _resolve_claim(
-        self, claim_id: int, status: ClaimStatus, actor: Actor, *, reassign: bool = False
+        self,
+        claim_id: int,
+        status: ClaimStatus,
+        actor: Actor,
+        *,
+        reassign: bool = False,
+        credit_ids: Collection[UUID] | None = None,
     ) -> AliasClaim:
         staff_account_id = actor.require_account_id()
         async with (
@@ -627,6 +648,7 @@ class AccountService:
                     status=status,
                     resolved_by_account_id=staff_account_id,
                     reassign=reassign,
+                    credit_ids=credit_ids,
                 )
             except AliasAlreadyClaimedError as conflict:
                 # A reviewer needs to know who holds the name they are being stopped from granting.

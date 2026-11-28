@@ -72,7 +72,7 @@ def project_submission(
         "display_name": source.display_name,
         "description": source.description,
         **(
-            {"credits": [credit.to_json() for credit in source.credits]}
+            {"credits": [credit.to_json(include_id=False) for credit in source.credits]}
             if manifest.revision >= 5
             else {"creators": list(source.creators_ign)}
         ),

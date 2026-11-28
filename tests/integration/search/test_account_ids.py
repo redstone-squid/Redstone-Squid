@@ -8,7 +8,7 @@ from sqlalchemy import insert, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.core.accounts.domain import PRIVACY_NOTICE_VERSION, ClaimMethod, PrivacyNoticeReceipt
+from squid.core.accounts.domain import PRIVACY_NOTICE_VERSION, ClaimStatus, PrivacyNoticeReceipt
 from squid.core.accounts.models import AccountIdentity, CreatorAlias
 from squid.core.actors import ActingContext, AnonymousActor
 from squid.core.builds.domain import BuildListFilters, BuildStatus
@@ -100,10 +100,13 @@ async def test_account_ids_follow_claims_and_identity_visibility(
     )
     # Anyone can type someone's ID as a credited name; that must not attribute the build.
     impostor = await _credited_build(migrated_session_factory, account.id, name=public_id)
+    claim = await transact(
+        uow_factory, lambda uow: uow.accounts.request_claim(name="Old Name", account_id=account.id), commit=True
+    )
     await transact(
         uow_factory,
-        lambda uow: uow.accounts.claim_unclaimed_alias(
-            account_id=account.id, name="Old Name", method=ClaimMethod.STAFF_APPROVED
+        lambda uow: uow.accounts.resolve_claim(
+            claim_id=claim.id, status=ClaimStatus.APPROVED, resolved_by_account_id=account.id
         ),
         commit=True,
     )

@@ -14,12 +14,10 @@ from whenever import Instant
 from squid.core.accounts.application.ports import VerificationLinkResult
 from squid.core.accounts.domain import (
     AccountMerge,
-    ClaimMethod,
     ClaimStatus,
     CreatorProfile,
     CreatorProfileRecord,
     CreditedAlias,
-    CreditPreview,
     IdentityProvider,
     IdentityRefresh,
     LinkPreview,
@@ -38,13 +36,14 @@ from squid.core.accounts.errors import (
     MinecraftAccountNotFoundError,
 )
 from squid.core.accounts.infrastructure.account_merge import merge_accounts
-from squid.core.accounts.infrastructure.attribution import BUILD_CREDITS, attributed_credits
+from squid.core.accounts.infrastructure.attribution import attributed_credits
 from squid.core.accounts.models import (
     Account,
     AccountIdentity,
     AccountProfile,
     AliasClaim,
     CataloguePreference,
+    ClaimedCredit,
     CreatorAlias,
     MergeTicket,
     ProfileClearAudit,
@@ -52,11 +51,13 @@ from squid.core.accounts.models import (
 )
 from squid.core.accounts.models import VerificationAttempt as VerificationAttemptModel
 from squid.core.accounts.models import VerificationCode as VerificationCodeModel
+from squid.core.builds.domain import BuildStatus
+from squid.core.builds.models import Build, BuildCredit
 from squid.core.edits.domain import Revision
+from squid.core.errors import ConflictError, ValidationError
 from squid.core.persistence.account_merge import AccountMergeContext
 from squid.core.persistence.revisions import flush_revision
 from squid.core.persistence.types import InstantUTC
-from squid_i18n import md_tr
 
 
 def _hydrate_account(model: Account, identities: Sequence[AccountIdentity]) -> Account:
@@ -68,12 +69,6 @@ def _hydrate_account(model: Account, identities: Sequence[AccountIdentity]) -> A
             version=model.privacy_notice_version, granted_at=model.privacy_notice_acknowledged_at
         )
     return model
-
-
-def _hydrate_creator(alias: CreatorAlias, public_account_id: uuid.UUID | None = None) -> CreatorAlias:
-    """Populate the public creator ID on the same loaded alias."""
-    alias.public_account_id = public_account_id
-    return alias
 
 
 def _hydrate_claim(claim: AliasClaim, alias_name: str, claimant: Account | None = None) -> AliasClaim:
@@ -374,10 +369,17 @@ class AccountRepository:
             )
             if owner != account_id:
                 raise AccountIdentityNotFoundError(avatar_identity_id, account_id=account_id)
+        was_hidden = model.hidden
         update_request.apply(model)
         model.updated_at = Instant.now()
         account.revision += 1
         await session.flush()
+        if was_hidden != model.hidden:
+            await session.execute(
+                text("""SELECT public.upsert_search_projection_request('build', target.build_id::text, 'upsert')
+                FROM (SELECT DISTINCT build_id FROM public.build_credit_accounts() WHERE account_id = :account_id ORDER BY build_id) target"""),
+                {"account_id": account_id},
+            )
         return model
 
     async def record_profile_clear(
@@ -463,14 +465,15 @@ class AccountRepository:
         return await self._hydrated_alias(CreatorAlias.normalized_name == fold_creator_name(name))
 
     async def _hydrated_alias(self, condition: ColumnElement[bool]) -> CreatorAlias | None:
-        row = (
-            await self._session().execute(
-                select(CreatorAlias, Account.public_account_id)
-                .outerjoin(Account, Account.id == CreatorAlias.account_id)
-                .where(condition)
+        return await self._session().scalar(
+            select(CreatorAlias).where(
+                condition,
+                select(BuildCredit.id)
+                .join(Build, Build.id == BuildCredit.build_id)
+                .where(BuildCredit.alias_id == CreatorAlias.id, Build.submission_status == BuildStatus.APPROVED)
+                .exists(),
             )
-        ).one_or_none()
-        return None if row is None else _hydrate_creator(row[0], row[1])
+        )
 
     async def account_id_for_public_id(self, public_id: uuid.UUID) -> int | None:
         """Return the account a public ID names, following merge redirects."""
@@ -503,11 +506,14 @@ class AccountRepository:
         if account is None:
             return None
         canonical_id = account.public_account_id
+        attributed = attributed_credits()
         aliases = (
             await session.scalars(
-                select(CreatorAlias.name)
-                .where(CreatorAlias.account_id == account.id)
-                .order_by(CreatorAlias.normalized_name)
+                select(attributed.c.name)
+                .distinct()
+                .join(Build, Build.id == attributed.c.build_id)
+                .where(attributed.c.account_id == account.id, Build.submission_status == BuildStatus.APPROVED)
+                .order_by(attributed.c.name)
             )
         ).all()
         return CreatorProfile(public_id=public_id, aliases=tuple(aliases), canonical_public_id=canonical_id)
@@ -533,31 +539,16 @@ class AccountRepository:
                 .order_by(AccountIdentity.provider, AccountIdentity.id)
             )
         ).all()
-        # One grouped count for every alias at once: a creator page renders every name they
-        # hold, and a count per name would be an N+1 on the most public read in the system.
-        credit_counts = (
-            select(BUILD_CREDITS.c.alias_id, func.count().label("build_count"))
-            .group_by(BUILD_CREDITS.c.alias_id)
-            .subquery()
-        )
-        alias_rows = (
-            await session.execute(
-                select(CreatorAlias.name, func.coalesce(credit_counts.c.build_count, 0))
-                .outerjoin(credit_counts, credit_counts.c.alias_id == CreatorAlias.id)
-                .where(CreatorAlias.account_id == account.id)
-                .order_by(CreatorAlias.normalized_name)
-            )
-        ).all()
         attributed = attributed_credits()
         attributed_rows = (
             await session.execute(
                 select(attributed.c.name, func.count(func.distinct(attributed.c.build_id)))
-                .where(attributed.c.account_id == account.id)
+                .join(Build, Build.id == attributed.c.build_id)
+                .where(attributed.c.account_id == account.id, Build.submission_status == BuildStatus.APPROVED)
                 .group_by(attributed.c.name)
             )
         ).all()
-        counts = {name: count for name, count in alias_rows}
-        counts.update({name: count for name, count in attributed_rows})
+        counts = {name: count for name, count in attributed_rows}
         return CreatorProfileRecord(
             public_id=public_id,
             account_id=account.id,
@@ -581,48 +572,57 @@ class AccountRepository:
         )
         return {position: public_id for position, public_id in rows}
 
-    async def claim_unclaimed_alias(self, *, account_id: int, name: str, method: ClaimMethod) -> CreatorAlias | None:
-        """Claim an alias only if it remains unclaimed at update time."""
+    async def request_claim(
+        self, *, name: str, account_id: int, credit_ids: Collection[uuid.UUID] | None = None
+    ) -> AliasClaim:
+        """Snapshot the published credits being claimed. Later builds never join a request."""
         session = self._session()
         alias = await session.scalar(
-            update(CreatorAlias)
-            .where(
-                CreatorAlias.normalized_name == fold_creator_name(name),
-                CreatorAlias.account_id.is_(None),
-            )
-            .values(account_id=account_id, claimed_at=Instant.now(), claim_method=method)
-            .returning(CreatorAlias)
-        )
-        public_id = await session.scalar(select(Account.public_account_id).where(Account.id == account_id))
-        return None if alias is None else _hydrate_creator(alias, public_id)
-
-    async def request_claim(self, *, name: str, account_id: int) -> AliasClaim:
-        """Open a pending alias claim, reusing an existing matching request."""
-        session = self._session()
-        alias = await session.scalar(
-            select(CreatorAlias).where(CreatorAlias.normalized_name == fold_creator_name(name))
+            select(CreatorAlias).where(CreatorAlias.normalized_name == fold_creator_name(name)).with_for_update()
         )
         if alias is None:
             raise CreatorAliasNotFoundError(name)
-        if alias.account_id is not None:
-            raise AliasAlreadyClaimedError(
-                alias.name,
-                holder_public_account_id=await self._public_account_id(session, alias.account_id),
-                holder_account_id=alias.account_id,
+        owners = func.build_credit_accounts().table_valued("build_id", "position", "account_id")
+        query = (
+            select(BuildCredit.id, BuildCredit.build_id, owners.c.account_id)
+            .join(Build, Build.id == BuildCredit.build_id)
+            .outerjoin(
+                owners, (owners.c.build_id == BuildCredit.build_id) & (owners.c.position == BuildCredit.position)
             )
+            .where(BuildCredit.alias_id == alias.id, Build.submission_status == BuildStatus.APPROVED)
+        )
+        if credit_ids is not None:
+            query = query.where(BuildCredit.id.in_(credit_ids))
+        selected = {
+            str(row.id): ClaimedCredit(build_id=row.build_id, account_id=row.account_id)
+            for row in await session.execute(query)
+        }
+        if not selected or (credit_ids is not None and set(map(str, credit_ids)) != selected.keys()):
+            msg = "Select published credits under this name."
+            raise ValidationError(msg)
         existing = await session.scalar(
             select(AliasClaim).where(
                 AliasClaim.alias_id == alias.id,
                 AliasClaim.account_id == account_id,
                 AliasClaim.status == ClaimStatus.PENDING,
+                AliasClaim.selected_credits == selected,
             )
         )
         if existing is not None:
             return _hydrate_claim(existing, alias.name)
-        claim = AliasClaim(alias_id=alias.id, account_id=account_id)
+        claim = AliasClaim(alias_id=alias.id, account_id=account_id, selected_credits=selected)
         session.add(claim)
         await session.flush()
         return _hydrate_claim(claim, alias.name)
+
+    async def claims_for_account(self, account_id: int) -> Sequence[AliasClaim]:
+        rows = await self._session().execute(
+            select(AliasClaim, CreatorAlias.name)
+            .join(CreatorAlias, CreatorAlias.id == AliasClaim.alias_id)
+            .where(AliasClaim.account_id == account_id)
+            .order_by(AliasClaim.created_at.desc(), AliasClaim.id.desc())
+        )
+        return tuple(_hydrate_claim(claim, name) for claim, name in rows)
 
     async def get_claim(self, claim_id: int) -> AliasClaim | None:
         """Return one claim by identifier."""
@@ -648,7 +648,7 @@ class AccountRepository:
                 select(AliasClaim, CreatorAlias.name)
                 .join(CreatorAlias, CreatorAlias.id == AliasClaim.alias_id)
                 .where(AliasClaim.status == ClaimStatus.PENDING)
-                .order_by(AliasClaim.created_at)
+                .order_by(AliasClaim.created_at, AliasClaim.id)
             )
         ).all()
         claimants: dict[int, Account] = {}
@@ -668,13 +668,12 @@ class AccountRepository:
         status: ClaimStatus,
         resolved_by_account_id: int,
         reassign: bool = False,
+        credit_ids: Collection[uuid.UUID] | None = None,
     ) -> AliasClaim:
         """Approve or reject a pending claim.
 
-        Approving a name that is already credited to someone else is refused unless *reassign*
-        is set. A rename into a contested name opens exactly such a claim, so staff need a way
-        to move the credit — but moving it is a deliberate act, never a side effect of routine
-        approval.
+        Reassignment requires explicit confirmation. If another reviewer changed a
+        selected credit after filing, the whole decision fails.
         """
         session = self._session()
         claim = await session.get(AliasClaim, claim_id, with_for_update=True)
@@ -684,21 +683,57 @@ class AccountRepository:
         if alias is None:
             raise ClaimNotFoundError(claim_id)
         if status is ClaimStatus.APPROVED:
-            if alias.account_id is not None and not (reassign and alias.account_id != claim.account_id):
-                raise AliasAlreadyClaimedError(
-                    alias.name,
-                    holder_public_account_id=await self._public_account_id(session, alias.account_id),
-                    holder_account_id=alias.account_id,
-                    # Staff audience: the flag that moves a held credit already exists, so say so
-                    # rather than telling a reviewer to ask staff.
-                    end_user_action=md_tr(
-                        t"accounts-claim-reassign-required = "
-                        t"Approve with `reassign: True` to move the name to the claimant.",
-                    ),
+            ids = set(credit_ids) if credit_ids is not None else {uuid.UUID(key) for key in claim.selected_credits}
+            if not ids or (claim.selected_credits and not all(str(key) in claim.selected_credits for key in ids)):
+                msg = "Select the individual credits to approve."
+                raise ValidationError(msg)
+            credits = (
+                await session.scalars(
+                    select(BuildCredit)
+                    .join(Build, Build.id == BuildCredit.build_id)
+                    .where(
+                        BuildCredit.id.in_(ids),
+                        BuildCredit.alias_id == claim.alias_id,
+                        Build.submission_status == BuildStatus.APPROVED,
+                    )
+                    .order_by(BuildCredit.build_id, BuildCredit.id)
+                    .with_for_update()
                 )
-            alias.account_id = claim.account_id
-            alias.claimed_at = Instant.now()
-            alias.claim_method = ClaimMethod.STAFF_APPROVED
+            ).all()
+            owners = func.build_credit_accounts().table_valued("build_id", "position", "account_id")
+            current = dict(
+                (
+                    await session.execute(
+                        select(BuildCredit.id, owners.c.account_id)
+                        .select_from(BuildCredit)
+                        .outerjoin(
+                            owners,
+                            (owners.c.build_id == BuildCredit.build_id) & (owners.c.position == BuildCredit.position),
+                        )
+                        .where(BuildCredit.id.in_(ids))
+                    )
+                )
+                .tuples()
+                .all()
+            )
+            if len(credits) != len(ids) or (
+                claim.selected_credits
+                and any(current[key] != claim.selected_credits[str(key)]["account_id"] for key in ids)
+            ):
+                msg = "The selected credits changed after filing. Review a new request."
+                raise ConflictError(msg)
+            if not claim.selected_credits:
+                claim.selected_credits = {
+                    str(credit.id): ClaimedCredit(build_id=credit.build_id, account_id=current[credit.id])
+                    for credit in credits
+                }
+            for credit in credits:
+                owner = current[credit.id]
+                if owner is not None and owner != claim.account_id and not reassign:
+                    raise AliasAlreadyClaimedError(alias.name, holder_account_id=owner)
+                credit.account_id = claim.account_id
+                credit.account_source = "reviewed"
+            claim.approved_credit_ids = sorted(map(str, ids))
         claim.status = status
         claim.resolved_at = Instant.now()
         claim.resolved_by_account_id = resolved_by_account_id
@@ -775,30 +810,9 @@ class AccountRepository:
                 AccountIdentity.subject == java_subject,
             )
         )
-        alias_row = (
-            await session.execute(
-                select(CreatorAlias, Account.public_account_id)
-                .outerjoin(Account, CreatorAlias.account_id == Account.id)
-                .where(CreatorAlias.normalized_name == fold_creator_name(row.username))
-            )
-        ).first()
-
-        credit = None
-        if alias_row is not None:
-            alias, public_account_id = alias_row
-            build_count = await session.scalar(
-                select(func.count()).select_from(BUILD_CREDITS).where(BUILD_CREDITS.c.alias_id == alias.id)
-            )
-            credit = CreditPreview(
-                name=alias.name,
-                build_count=build_count or 0,
-                # Only a *held* alias reports an owner; an unclaimed one has no account to join to.
-                held_by_public_account_id=public_account_id if alias.account_id is not None else None,
-            )
         return LinkPreview(
             java_uuid=row.minecraft_uuid,
             username=row.username,
-            credit=credit,
             java_uuid_held_elsewhere=held_elsewhere is not None,
         )
 
@@ -963,11 +977,10 @@ class AccountRepository:
         account.privacy_notice_acknowledged_at = consent.granted_at
         verification_code.valid = False
 
-        refresh = await self._reconcile_java_name(
-            session,
-            account=account,
+        refresh = IdentityRefresh(
+            account_id=account.id,
             java_uuid=verification_code.minecraft_uuid,
-            username=verification_code.username,
+            current_name=verification_code.username,
             previous_name=previous_name,
         )
         await session.flush()
@@ -1008,103 +1021,8 @@ class AccountRepository:
         identity.display_name = username
         identity.verified_at = Instant.now()
         account.revision += 1
-        return await self._reconcile_java_name(
-            session,
-            account=account,
-            java_uuid=java_uuid,
-            username=username,
-            previous_name=previous_name,
-        )
-
-    @staticmethod
-    async def _reconcile_java_name(
-        session: AsyncSession,
-        *,
-        account: Account,
-        java_uuid: uuid.UUID,
-        username: str,
-        previous_name: str | None,
-    ) -> IdentityRefresh:
-        """Claim the verified name's creator credit, or request review if someone else holds it.
-
-        Create unknown aliases, claim unowned ones, and leave an already owned alias in
-        place. A conflicting owner produces a pending claim instead of a transfer.
-        Previously claimed names remain credited to the account after a rename.
-        """
-        folded = fold_creator_name(username)
-        claimed: CreatorAlias | None = None
-        contested: CreatorAlias | None = None
-        opened_claim: AliasClaim | None = None
-
-        alias = await session.scalar(
-            select(CreatorAlias).where(CreatorAlias.normalized_name == folded).with_for_update()
-        )
-        if alias is None:
-            # No build has credited this name yet. Create it so the public profile shows the
-            # current name rather than lagging until someone happens to credit it.
-            inserted = await session.scalar(
-                insert(CreatorAlias)
-                .values(
-                    name=username,
-                    account_id=account.id,
-                    claimed_at=Instant.now(),
-                    claim_method=ClaimMethod.VERIFIED_IGN,
-                )
-                .on_conflict_do_nothing(index_elements=[CreatorAlias.normalized_name])
-                .returning(CreatorAlias)
-            )
-            alias = inserted or await session.scalar(
-                select(CreatorAlias).where(CreatorAlias.normalized_name == folded).with_for_update()
-            )
-            assert alias is not None
-        if alias.account_id is None:
-            alias.account_id = account.id
-            alias.claimed_at = Instant.now()
-            alias.claim_method = ClaimMethod.VERIFIED_IGN
-            claimed = _hydrate_creator(alias, account.public_account_id)
-        elif alias.account_id == account.id:
-            claimed = _hydrate_creator(alias, account.public_account_id)
-        else:
-            # Someone else is credited under this name. Never transfer on a rename; open a
-            # claim so it lands in the staff queue instead of vanishing.
-            contested = _hydrate_creator(alias)
-            claim = await session.scalar(
-                insert(AliasClaim)
-                .values(alias_id=alias.id, account_id=account.id, status=ClaimStatus.PENDING)
-                # `creator_alias_claims_one_pending_per_account` is partial, so the predicate has
-                # to be restated here or Postgres cannot match the conflict to it.
-                .on_conflict_do_nothing(
-                    index_elements=[AliasClaim.alias_id, AliasClaim.account_id],
-                    index_where=text("status = 'pending'"),
-                )
-                .returning(AliasClaim)
-            )
-            claim = claim or await session.scalar(
-                select(AliasClaim).where(
-                    AliasClaim.alias_id == alias.id,
-                    AliasClaim.account_id == account.id,
-                    AliasClaim.status == ClaimStatus.PENDING,
-                )
-            )
-            opened_claim = None if claim is None else _hydrate_claim(claim, alias.name)
-
-        await session.flush()
-        retained = (
-            await session.scalars(
-                select(CreatorAlias.name)
-                .where(CreatorAlias.account_id == account.id, CreatorAlias.normalized_name != folded)
-                .order_by(CreatorAlias.normalized_name)
-            )
-        ).all()
         return IdentityRefresh(
-            account_id=account.id,
-            java_uuid=java_uuid,
-            current_name=username,
-            previous_name=previous_name,
-            claimed_alias=claimed,
-            retained_alias_names=tuple(retained),
-            contested_alias=contested,
-            opened_claim=opened_claim,
+            account_id=account.id, java_uuid=java_uuid, current_name=username, previous_name=previous_name
         )
 
     async def replace_verification_code(

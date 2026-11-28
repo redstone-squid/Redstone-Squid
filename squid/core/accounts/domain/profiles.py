@@ -288,8 +288,7 @@ class PublicCreatorProfile:
     def from_record(cls, record: CreatorProfileRecord) -> PublicCreatorProfile:
         """Return the public view of a creator profile.
 
-        A hidden profile still exposes its public ID, aliases, and build counts so
-        build attribution remains available. Other profile fields are omitted. Visible
+        A hidden profile exposes only its public ID and redirect. Other profile fields are omitted. Visible
         profiles include only public identities, including when choosing an avatar.
         """
         aliases = record.aliases
@@ -297,7 +296,7 @@ class PublicCreatorProfile:
             return cls(
                 public_id=record.public_id,
                 hidden=True,
-                aliases=aliases,
+                aliases=(),
                 canonical_public_id=record.canonical_public_id,
             )
 

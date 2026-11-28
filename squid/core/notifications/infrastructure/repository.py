@@ -12,7 +12,8 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from squid.core.accounts.domain import IdentityProvider
-from squid.core.accounts.models import Account, AccountIdentity, CreatorAlias
+from squid.core.accounts.infrastructure.attribution import attributed_credits
+from squid.core.accounts.models import Account, AccountIdentity
 from squid.core.builds.domain import BuildStatus
 from squid.core.builds.models import Build
 from squid.core.events.models import DomainEvent, DomainEventDeliveryRecord
@@ -254,10 +255,13 @@ class PostgresNotificationRepository:
     async def subscription_target_exists(self, kind: SubscriptionKind, subject_id: UUID) -> bool:
         session = self._session()
         if kind is SubscriptionKind.CREATOR:
+            credits = attributed_credits()
             statement = select(
                 exists().where(
                     Account.public_account_id == subject_id,
-                    CreatorAlias.account_id == Account.id,
+                    credits.c.account_id == Account.id,
+                    Build.id == credits.c.build_id,
+                    Build.submission_status == BuildStatus.APPROVED,
                 )
             )
         else:
@@ -288,9 +292,12 @@ class PostgresNotificationRepository:
             .order_by(RecordDefinition.record_id, RecordDefinition.id.desc())
             .subquery()
         )
+        credits = attributed_credits()
         aliases = (
-            select(Account.public_account_id, func.min(CreatorAlias.name).label("name"))
-            .join(CreatorAlias, CreatorAlias.account_id == Account.id)
+            select(Account.public_account_id, func.min(credits.c.name).label("name"))
+            .join(credits, credits.c.account_id == Account.id)
+            .join(Build, Build.id == credits.c.build_id)
+            .where(Build.submission_status == BuildStatus.APPROVED)
             .group_by(Account.public_account_id)
             .subquery()
         )
@@ -870,13 +877,14 @@ class PostgresNotificationRepository:
 
     @staticmethod
     async def _creator_public_ids(session: AsyncSession, build_id: int) -> Sequence[UUID]:
-        credits = func.build_credit_accounts(build_id).table_valued(
-            "build_id", "position", "account_id", "name", "role"
-        )
+        credits = attributed_credits()
         return tuple(
             (
                 await session.execute(
-                    select(Account.public_account_id).join(credits, credits.c.account_id == Account.id).distinct()
+                    select(Account.public_account_id)
+                    .join(credits, credits.c.account_id == Account.id)
+                    .where(credits.c.build_id == build_id)
+                    .distinct()
                 )
             ).scalars()
         )
@@ -904,10 +912,17 @@ class PostgresNotificationRepository:
                 .where(credits.c.build_id.in_(build_ids))
             )
         ).all()
-        public_account_ids: dict[int, set[UUID]] = defaultdict(set)
-        for build_id, account_id, public_account_id in creator_rows:
+        for build_id, account_id, _ in creator_rows:
             recipients[build_id][account_id] = None
-            public_account_ids[build_id].add(public_account_id)
+        visible = attributed_credits()
+        public_account_ids: dict[int, set[UUID]] = defaultdict(set)
+        for build_id, public_id in await session.execute(
+            select(visible.c.build_id, Account.public_account_id)
+            .join(Account, Account.id == visible.c.account_id)
+            .where(visible.c.build_id.in_(build_ids))
+            .distinct()
+        ):
+            public_account_ids[build_id].add(public_id)
 
         relevant_subjects: set[UUID] = set().union(*public_account_ids.values())
         relevant_subjects.update(gain.record_id for build_gains in gains.values() for gain in build_gains)

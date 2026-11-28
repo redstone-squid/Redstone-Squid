@@ -51,6 +51,8 @@ class Credit:
     role: CreditRole = CreditRole.CREATOR
     attribution: CreditAttribution = CreditAttribution.EXPLICIT
     source_message_id: int | None = None
+    proposed_account_id: UUID | None = None
+    name_id: int | None = field(default=None, compare=False)
     credit_id: UUID | None = field(default=None, compare=False)
     account_id: UUID | None = field(default=None, compare=False)
     """The public ID of the account the credit resolves to, filled on load."""
@@ -96,8 +98,10 @@ class Credit:
             msg = "Sender attribution requires a Discord ID and source message."
             raise ValidationError(msg)
 
-    def to_json(self) -> dict[str, JSONValue]:
+    def to_json(self, *, include_id: bool = True) -> dict[str, JSONValue]:
         return {
+            **({"credit_id": str(self.credit_id)} if include_id and self.credit_id is not None else {}),
+            **({"proposed_account_id": str(self.proposed_account_id)} if self.proposed_account_id else {}),
             "kind": self.kind.value,
             "name": self.name,
             "username": self.username,
@@ -113,9 +117,13 @@ class Credit:
         name = value.get("name")
         username = value.get("username")
         subject = value.get("subject")
+        credit_id = value.get("credit_id")
+        proposed = value.get("proposed_account_id")
         message_id = value.get("source_message_id")
         if (
             not isinstance(name, str)
+            or (credit_id is not None and not isinstance(credit_id, str))
+            or (proposed is not None and not isinstance(proposed, str))
             or (username is not None and not isinstance(username, str))
             or (subject is not None and not isinstance(subject, str))
             or (message_id is not None and (not isinstance(message_id, int) or isinstance(message_id, bool)))
@@ -125,6 +133,8 @@ class Credit:
         try:
             return cls(
                 name=name,
+                credit_id=UUID(credit_id) if credit_id is not None else None,
+                proposed_account_id=UUID(proposed) if proposed is not None else None,
                 kind=CreditKind(value.get("kind", "name")),
                 username=username,
                 subject=subject,

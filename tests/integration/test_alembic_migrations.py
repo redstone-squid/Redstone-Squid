@@ -2851,3 +2851,62 @@ def test_public_account_id_migration_renames_columns_and_stored_keys(
             assert connection.execute(text("SELECT to_regclass('public.public_creator_redirects')")).scalar_one()
     finally:
         engine.dispose()
+
+
+def test_credit_attribution_migrates_historical_owners_as_automatic(
+    migration_database_url: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("SQUID_DATABASE_URL", migration_database_url)
+    config = Config(toml_file="pyproject.toml")
+    command.upgrade(config, "b67a02f1de93")
+    engine = create_engine(migration_database_url)
+    try:
+        with engine.begin() as connection:
+            _begin_build_edit(connection)
+            owner, other = [
+                connection.scalar(text("INSERT INTO accounts DEFAULT VALUES RETURNING id")) for _ in range(2)
+            ]
+            connection.execute(
+                text("INSERT INTO account_identities(account_id,provider,subject) VALUES (:id,'discord','123')"),
+                {"id": other},
+            )
+            alias = connection.scalar(
+                text(
+                    "INSERT INTO creator_aliases(name,normalized_name,account_id,claimed_at,claim_method) VALUES ('RedFox','redfox',:id,now(),'staff_approved') RETURNING id"
+                ),
+                {"id": owner},
+            )
+            build = connection.scalar(
+                text(
+                    "INSERT INTO builds(submission_status,category,submitter_account_id,ai_generated) VALUES (1,'Other',:id,false) RETURNING id"
+                ),
+                {"id": owner},
+            )
+            connection.execute(text("INSERT INTO other_builds(build_id) VALUES (:id)"), {"id": build})
+            connection.execute(
+                text("""INSERT INTO build_credits(build_id,position,name,kind,subject,role,attribution,alias_id) VALUES
+                (:build,0,'RedFox','name',NULL,'creator','legacy',:alias),
+                (:build,1,'RedFox','discord','123','designer','legacy',:alias),
+                (:build,2,'OtherName','name',NULL,'layout','legacy',NULL)"""),
+                {"build": build, "alias": alias},
+            )
+            connection.execute(
+                text("INSERT INTO creator_alias_claims(alias_id,account_id,status) VALUES (:alias,:id,'pending')"),
+                {"alias": alias, "id": other},
+            )
+        command.upgrade(config, "c6a923d9bc70")
+        with engine.connect() as connection:
+            assert connection.execute(
+                text(
+                    "SELECT account_id,account_source,alias_id IS NOT NULL FROM build_credits WHERE build_id=:id ORDER BY position"
+                ),
+                {"id": build},
+            ).all() == [(owner, "automatic", True), (None, "conflict", True), (None, "automatic", True)]
+            assert (
+                connection.scalar(
+                    text("SELECT selected_credits FROM creator_alias_claims WHERE alias_id=:alias"), {"alias": alias}
+                )
+                == {}
+            )
+    finally:
+        engine.dispose()

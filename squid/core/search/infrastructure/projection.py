@@ -28,6 +28,7 @@ from sqlalchemy.orm import selectinload
 from squid.core.accounts.infrastructure.attribution import attributed_credits, public_account_ids
 from squid.core.accounts.models import CreatorAlias
 from squid.core.actors import ActingContext
+from squid.core.builds.domain import BuildStatus
 from squid.core.builds.domain.titles import format_build_category
 from squid.core.builds.errors import InvalidBuildError
 from squid.core.builds.infrastructure.loading import BuildLoader
@@ -689,19 +690,25 @@ class SearchProjectionLoader:
                 )
             )
         if subtype == "creator":
-            creator = await self._session.get(CreatorAlias, source_id)
+            creator = await self._session.scalar(
+                select(CreatorAlias).where(
+                    CreatorAlias.id == source_id,
+                    select(BuildCredit.id)
+                    .join(Build, Build.id == BuildCredit.build_id)
+                    .where(BuildCredit.alias_id == CreatorAlias.id, Build.submission_status == BuildStatus.APPROVED)
+                    .exists(),
+                )
+            )
             if creator is None:
                 return None
             creator_name = _mapped_text(creator, "name")
             if creator_name is None:
                 return None
-            # The claiming account's identifiers stay out of the public index;
-            # only whether the credit has been claimed is searchable.
             return _metadata_projection(
                 source_key=f"creator:{source_id}",
                 title=creator_name,
                 subtype="creator",
-                data={"alias_id": source_id, "claimed": creator.account_id is not None},
+                data={"alias_id": source_id},
             )
         if subtype == "version":
             version = await self._session.get(Version, source_id)

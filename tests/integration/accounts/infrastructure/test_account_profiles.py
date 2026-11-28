@@ -1,6 +1,5 @@
 """Integration coverage for profile storage, visibility, and identity unlinking."""
 
-from collections.abc import AsyncGenerator
 from functools import partial
 from uuid import UUID
 
@@ -8,13 +7,12 @@ import anyio
 import pytest
 from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
 from squid.core.accounts.application import AccountService
 from squid.core.accounts.domain import (
     PRIVACY_NOTICE_VERSION,
-    ClaimMethod,
     IdentityProvider,
     PrivacyNoticeReceipt,
     ProfileLink,
@@ -24,44 +22,27 @@ from squid.core.accounts.errors import AccountIdentityNotFoundError, LastIdentit
 from squid.core.accounts.models import AccountIdentity as AccountIdentityModel
 from squid.core.accounts.models import AccountIdentity as AccountIdentityValue
 from squid.core.accounts.models import AccountProfile as AccountProfileModel
-from squid.core.accounts.models import CreatorAlias as CreatorAliasModel
 from squid.core.actors import ActingContext, UserActor
-from squid.core.persistence.base import Base
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
 from squid.core.unit_of_work import UnitOfWorkFactory
+from tests.support.creator_credits import publish_credits
 from tests.support.unit_of_work import transact
 
 CONSENT = PrivacyNoticeReceipt(PRIVACY_NOTICE_VERSION, Instant.from_utc(2026, 8, 4))
 MINECRAFT_UUID = UUID("11111111-1111-1111-1111-111111111111")
 
-_TABLES = [
-    Base.metadata.tables["accounts"],
-    Base.metadata.tables["account_identities"],
-    Base.metadata.tables["account_profiles"],
-    Base.metadata.tables["public_account_redirects"],
-    Base.metadata.tables["creator_aliases"],
-    Base.metadata.tables["creator_alias_claims"],
-    Base.metadata.tables["verification_codes"],
-]
-
 
 @pytest.fixture
-async def account_tables(async_engine: AsyncEngine) -> AsyncGenerator[AsyncEngine]:
-    async with async_engine.begin() as connection:
-        await connection.run_sync(Base.metadata.create_all, tables=_TABLES)
-    try:
-        yield async_engine
-    finally:
-        async with async_engine.begin() as connection:
-            await connection.run_sync(Base.metadata.drop_all, tables=list(reversed(_TABLES)))
+def async_session_factory(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> async_sessionmaker[AsyncSession]:
+    return migrated_session_factory
 
 
 @pytest.fixture
 def repository(
-    account_tables: AsyncEngine,
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> UnitOfWorkFactory[SqlAlchemyUnitOfWork]:
-    del account_tables
     return partial(SqlAlchemyUnitOfWork, async_session_factory, verification_code_pepper="pepper")
 
 
@@ -419,15 +400,7 @@ class TestIdentityVisibilityAndUnlink:
         )
         assert account.id is not None
         account_id = account.id
-        async with async_session_factory.begin() as session:
-            session.add(
-                CreatorAliasModel(
-                    name="Player",
-                    account_id=account_id,
-                    claimed_at=CONSENT.granted_at,
-                    claim_method=ClaimMethod.VERIFIED_IGN,
-                )
-            )
+        (credit,) = await publish_credits(async_session_factory, ["Player"], owner=account_id)
 
         async def unused_username_lookup(_uuid: UUID) -> str | None:
             return None
@@ -465,9 +438,8 @@ class TestIdentityVisibilityAndUnlink:
         assert reloaded is not None
         (remaining,) = reloaded.identities
         assert remaining.id is not None
-        alias = await transact(repository, lambda uow: uow.accounts.get_alias_by_name("Player"))
-        assert alias is not None
-        assert alias.account_id == account_id
+        owners = await transact(repository, lambda uow: uow.accounts.credit_owners(credit.build_id))
+        assert owners == {0: account.public_account_id}
 
         await transact(
             repository,

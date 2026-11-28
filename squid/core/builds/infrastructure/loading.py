@@ -2,7 +2,7 @@
 
 from collections import defaultdict
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from sqlalchemy import and_, case, false, func, select, true
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -176,8 +176,26 @@ class BuildLoader:
 
         credits: dict[int, list[Credit]] = {build_id: [] for build_id in build_ids}
         creator_accounts: dict[int, set[int]] = {build_id: set() for build_id in build_ids}
-        for row, linked_account, public_account_id in await session.execute(BuildLoader.credit_rows(build_ids)):
-            credits[row.build_id].append(row.to_credit(public_account_id))
+        results = (await session.execute(BuildLoader.credit_rows(build_ids))).all()
+        proposals = {row.proposed_account_id for row, _, _ in results if row.proposed_account_id is not None}
+        proposed = (
+            dict(
+                (await session.execute(select(Account.id, Account.public_account_id).where(Account.id.in_(proposals))))
+                .tuples()
+                .all()
+            )
+            if proposals
+            else {}
+        )
+        for row, linked_account, public_account_id in results:
+            credits[row.build_id].append(
+                replace(
+                    row.to_credit(public_account_id),
+                    proposed_account_id=proposed.get(row.proposed_account_id)
+                    if row.proposed_account_id is not None
+                    else None,
+                )
+            )
             if row.role is CreditRole.CREATOR and linked_account is not None:
                 creator_accounts[row.build_id].add(linked_account)
 

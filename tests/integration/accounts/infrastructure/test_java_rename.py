@@ -4,7 +4,6 @@ The cases cover unchanged names, new or unclaimed aliases, retained earlier cred
 contested aliases that require a staff decision before ownership can move.
 """
 
-import asyncio
 from collections.abc import AsyncGenerator
 from functools import partial
 from uuid import UUID
@@ -16,13 +15,11 @@ from whenever import Instant
 
 from squid.core.accounts.domain import (
     PRIVACY_NOTICE_VERSION,
-    ClaimMethod,
-    ClaimStatus,
     IdentityProvider,
     PrivacyNoticeReceipt,
 )
-from squid.core.accounts.errors import AliasAlreadyClaimedError, MinecraftAccountNotFoundError
-from squid.core.accounts.models import AccountIdentity, AliasClaim, CreatorAlias
+from squid.core.accounts.errors import MinecraftAccountNotFoundError
+from squid.core.accounts.models import AccountIdentity, CreatorAlias
 from squid.core.accounts.models import AccountIdentity as AccountIdentityValue
 from squid.core.persistence.base import Base
 from squid.core.persistence.unit_of_work import SqlAlchemyUnitOfWork
@@ -104,154 +101,27 @@ async def test_unchanged_name_reports_no_rename(repository: UnitOfWorkFactory[Sq
     assert refresh.is_contested is False
 
 
-async def test_rename_creates_and_claims_an_uncredited_name(
+@pytest.mark.parametrize("already_credited", [True, False])
+async def test_rename_does_not_claim_or_publish_a_name(
     repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
+    already_credited: bool,
 ) -> None:
     account_id = await _linked_account_id(repository, username="OldName")
-
+    if already_credited:
+        await _add_alias(async_session_factory, "NewName")
     refresh = await transact(
         repository,
         lambda uow: uow.accounts.refresh_java_identity(account_id=account_id, java_uuid=JAVA_UUID, username="NewName"),
         commit=True,
     )
-
-    assert refresh.renamed is True
-    assert refresh.previous_name == "OldName"
-    assert refresh.claimed_alias is not None
-    assert refresh.claimed_alias.name == "NewName"
-    assert refresh.claimed_alias.claim_method is ClaimMethod.VERIFIED_IGN
-    assert refresh.claimed_alias.account_id == account_id
-    async with async_session_factory() as session:
-        stored = await session.scalar(select(CreatorAlias).where(CreatorAlias.name == "NewName"))
-        assert stored is not None
-        assert stored.account_id == account_id
-
-
-async def test_rename_claims_an_existing_unclaimed_name(
-    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
-    async_session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    account_id = await _linked_account_id(repository, username="OldName")
-    alias_id = await _add_alias(async_session_factory, "NewName")
-
-    refresh = await transact(
-        repository,
-        lambda uow: uow.accounts.refresh_java_identity(account_id=account_id, java_uuid=JAVA_UUID, username="NewName"),
-        commit=True,
-    )
-
-    assert refresh.claimed_alias is not None
-    assert refresh.claimed_alias.id == alias_id
-    assert refresh.is_contested is False
-
-
-async def test_rename_retains_credit_under_the_previous_name(
-    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
-    async_session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    """A rename does not retract credit for work published under the old name."""
-    account_id = await _linked_account_id(repository, username="OldName")
-    await _add_alias(async_session_factory, "OldName")
-    await transact(
-        repository,
-        lambda uow: uow.accounts.claim_unclaimed_alias(
-            account_id=account_id, name="OldName", method=ClaimMethod.VERIFIED_IGN
-        ),
-        commit=True,
-    )
-
-    refresh = await transact(
-        repository,
-        lambda uow: uow.accounts.refresh_java_identity(account_id=account_id, java_uuid=JAVA_UUID, username="NewName"),
-        commit=True,
-    )
-
-    assert refresh.retained_alias_names == ("OldName",)
-    assert refresh.claimed_alias is not None
-    assert refresh.claimed_alias.name == "NewName"
-
-
-async def test_rename_into_a_held_name_opens_a_claim_and_transfers_nothing(
-    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
-    async_session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    account_id = await _linked_account_id(repository, discord_id=1, username="OldName")
-    holder = await transact(
-        repository,
-        lambda uow: uow.accounts.create(consent=CONSENT, identities=(AccountIdentityValue.discord(2),)),
-        commit=True,
-    )
-    assert holder.id is not None
-    await _add_alias(async_session_factory, "Contested")
-    await transact(
-        repository,
-        lambda uow: uow.accounts.claim_unclaimed_alias(
-            account_id=holder.id, name="Contested", method=ClaimMethod.VERIFIED_IGN
-        ),
-        commit=True,
-    )
-
-    refresh = await transact(
-        repository,
-        lambda uow: uow.accounts.refresh_java_identity(
-            account_id=account_id, java_uuid=JAVA_UUID, username="Contested"
-        ),
-        commit=True,
-    )
-
-    assert refresh.is_contested is True
+    assert refresh.renamed
     assert refresh.claimed_alias is None
-    assert refresh.contested_alias is not None
-    assert refresh.contested_alias.account_id == holder.id, "the credit must not move"
-    opened_claim = refresh.opened_claim
-    assert opened_claim is not None
-    assert opened_claim.status is ClaimStatus.PENDING
-    assert [claim.id for claim in await transact(repository, lambda uow: uow.accounts.pending_claims())] == [
-        opened_claim.id
-    ]
-
-
-async def test_repeated_refresh_into_a_held_name_reuses_one_claim(
-    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
-    async_session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    account_id = await _linked_account_id(repository, discord_id=1, username="OldName")
-    holder = await transact(
-        repository,
-        lambda uow: uow.accounts.create(consent=CONSENT, identities=(AccountIdentityValue.discord(2),)),
-        commit=True,
-    )
-    assert holder.id is not None
-    await _add_alias(async_session_factory, "Contested")
-    await transact(
-        repository,
-        lambda uow: uow.accounts.claim_unclaimed_alias(
-            account_id=holder.id, name="Contested", method=ClaimMethod.VERIFIED_IGN
-        ),
-        commit=True,
-    )
-
-    first = await transact(
-        repository,
-        lambda uow: uow.accounts.refresh_java_identity(
-            account_id=account_id, java_uuid=JAVA_UUID, username="Contested"
-        ),
-        commit=True,
-    )
-    second = await transact(
-        repository,
-        lambda uow: uow.accounts.refresh_java_identity(
-            account_id=account_id, java_uuid=JAVA_UUID, username="Contested"
-        ),
-        commit=True,
-    )
-
-    assert first.opened_claim is not None
-    assert second.opened_claim is not None
-    assert first.opened_claim.id == second.opened_claim.id
+    assert refresh.opened_claim is None
     async with async_session_factory() as session:
-        assert len((await session.scalars(select(AliasClaim))).all()) == 1
+        alias = await session.scalar(select(CreatorAlias).where(CreatorAlias.name == "NewName"))
+        assert (alias is not None) == already_credited
+        assert alias is None or alias.account_id is None
 
 
 async def test_refresh_is_idempotent(repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]) -> None:
@@ -268,40 +138,9 @@ async def test_refresh_is_idempotent(repository: UnitOfWorkFactory[SqlAlchemyUni
         commit=True,
     )
 
-    assert first.claimed_alias is not None
-    assert second.claimed_alias is not None
-    assert first.claimed_alias.id == second.claimed_alias.id
+    assert first.claimed_alias is None
+    assert second.claimed_alias is None
     assert second.renamed is False, "the second refresh sees the name it just stored"
-
-
-async def test_concurrent_refresh_produces_one_claim(
-    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
-    async_session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    account_id = await _linked_account_id(repository, username="OldName")
-
-    results = await asyncio.gather(
-        transact(
-            repository,
-            lambda uow: uow.accounts.refresh_java_identity(
-                account_id=account_id, java_uuid=JAVA_UUID, username="NewName"
-            ),
-            commit=True,
-        ),
-        transact(
-            repository,
-            lambda uow: uow.accounts.refresh_java_identity(
-                account_id=account_id, java_uuid=JAVA_UUID, username="NewName"
-            ),
-            commit=True,
-        ),
-    )
-
-    claimed = {result.claimed_alias.id for result in results if result.claimed_alias is not None}
-    assert len(claimed) == 1
-    async with async_session_factory() as session:
-        aliases = (await session.scalars(select(CreatorAlias).where(CreatorAlias.name == "NewName"))).all()
-        assert len(aliases) == 1
 
 
 async def test_refresh_stores_the_new_display_name(
@@ -345,70 +184,6 @@ async def test_refresh_of_an_unlinked_uuid_is_rejected(repository: UnitOfWorkFac
         )
 
 
-async def test_approving_a_contested_claim_needs_reassign(
-    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
-    async_session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    """Staff can move a credit, but only by saying so."""
-    account_id = await _linked_account_id(repository, discord_id=1, username="OldName")
-    holder = await transact(
-        repository,
-        lambda uow: uow.accounts.create(consent=CONSENT, identities=(AccountIdentityValue.discord(2),)),
-        commit=True,
-    )
-    staff = await transact(
-        repository,
-        lambda uow: uow.accounts.create(consent=CONSENT, identities=(AccountIdentityValue.discord(3),)),
-        commit=True,
-    )
-    assert holder.id is not None
-    assert staff.id is not None
-    await _add_alias(async_session_factory, "Contested")
-    await transact(
-        repository,
-        lambda uow: uow.accounts.claim_unclaimed_alias(
-            account_id=holder.id, name="Contested", method=ClaimMethod.VERIFIED_IGN
-        ),
-        commit=True,
-    )
-    refresh = await transact(
-        repository,
-        lambda uow: uow.accounts.refresh_java_identity(
-            account_id=account_id, java_uuid=JAVA_UUID, username="Contested"
-        ),
-        commit=True,
-    )
-    opened_claim = refresh.opened_claim
-    assert opened_claim is not None
-
-    with pytest.raises(AliasAlreadyClaimedError):
-        await transact(
-            repository,
-            lambda uow: uow.accounts.resolve_claim(
-                claim_id=opened_claim.id, status=ClaimStatus.APPROVED, resolved_by_account_id=staff.id
-            ),
-            commit=True,
-        )
-
-    resolved = await transact(
-        repository,
-        lambda uow: uow.accounts.resolve_claim(
-            claim_id=opened_claim.id,
-            status=ClaimStatus.APPROVED,
-            resolved_by_account_id=staff.id,
-            reassign=True,
-        ),
-        commit=True,
-    )
-
-    assert resolved.status is ClaimStatus.APPROVED
-    async with async_session_factory() as session:
-        alias = await session.scalar(select(CreatorAlias).where(CreatorAlias.name == "Contested"))
-        assert alias is not None
-        assert alias.account_id == account_id
-        assert alias.claim_method == ClaimMethod.STAFF_APPROVED
-
-
 async def test_linking_reconciles_the_same_way_a_refresh_does(
     repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
@@ -434,10 +209,6 @@ async def test_linking_reconciles_the_same_way_a_refresh_does(
 
     assert result.account is not None
     assert result.refresh is not None
-    assert result.refresh.claimed_alias is not None
-    assert result.refresh.claimed_alias.name == "FreshName"
-    assert result.claimed_alias == result.refresh.claimed_alias
+    assert result.refresh.claimed_alias is None
     async with async_session_factory() as session:
-        stored = await session.scalar(select(CreatorAlias).where(CreatorAlias.name == "FreshName"))
-        assert stored is not None
-        assert stored.account_id == result.account.id
+        assert await session.scalar(select(CreatorAlias).where(CreatorAlias.name == "FreshName")) is None

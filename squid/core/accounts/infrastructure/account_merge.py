@@ -40,6 +40,8 @@ IDENTITY_PROFILE_REFERENCES = (
 
 
 CREATOR_CREDIT_REFERENCES = (
+    AccountReference("build_credits", "account_id"),
+    AccountReference("build_credits", "proposed_account_id"),
     AccountReference("creator_aliases", "account_id"),
     AccountReference("creator_alias_claims", "resolved_by_account_id"),
 )
@@ -55,6 +57,7 @@ def _collapse_alias_claims_statement(context: AccountMergeContext) -> Delete:
             and_(
                 survivor.account_id == context.survivor,
                 survivor.alias_id == absorbed.alias_id,
+                survivor.selected_credits == absorbed.selected_credits,
                 survivor.status == ClaimStatus.PENDING,
             ),
         )

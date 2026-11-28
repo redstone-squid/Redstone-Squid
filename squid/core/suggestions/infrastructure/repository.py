@@ -12,7 +12,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from squid.core.accounts.domain import fold_creator_name
-from squid.core.accounts.models import Account, CreatorAlias
+from squid.core.accounts.infrastructure.attribution import attributed_credits
+from squid.core.accounts.models import Account, AccountProfile, CreatorAlias
+from squid.core.builds.domain import BuildStatus
+from squid.core.builds.models import Build, BuildCredit
 from squid.core.records.domain import VersionScope
 from squid.core.records.models import Record, RecordDefinition
 from squid.core.search.models import SearchDocument, SearchValue
@@ -169,19 +172,35 @@ class PostgresSuggestionRepository:
         ]
 
     async def creator_profiles(self, query: str, *, limit: int) -> Sequence[tuple[str, str]]:
-        """Return public UUIDs labelled by a matching claimed alias."""
-        statement = (
-            select(Account.public_account_id, func.min(CreatorAlias.name).label("name"))
-            .join(CreatorAlias, CreatorAlias.account_id == Account.id)
-            .group_by(Account.public_account_id)
-        )
+        """Suggest visible profiles by their display name or published credit."""
         terms = fold_creator_name(query)
-        if terms:
-            statement = statement.where(CreatorAlias.normalized_name.startswith(terms, autoescape=True))
-        statement = statement.order_by("name").limit(limit)
-        session = self._session()
-        rows = (await session.execute(statement)).all()
-        return [(str(row.public_account_id), row.name) for row in rows]
+        owners = attributed_credits()
+        credits = (
+            select(owners.c.account_id, owners.c.name)
+            .join(
+                BuildCredit, (BuildCredit.build_id == owners.c.build_id) & (BuildCredit.position == owners.c.position)
+            )
+            .join(CreatorAlias, CreatorAlias.id == BuildCredit.alias_id)
+            .join(Build, Build.id == BuildCredit.build_id)
+            .where(
+                Build.submission_status == BuildStatus.APPROVED,
+                CreatorAlias.normalized_name.startswith(terms, autoescape=True),
+            )
+        )
+        profiles = select(AccountProfile.account_id, AccountProfile.display_name.label("name")).where(
+            AccountProfile.hidden.is_(False),
+            AccountProfile.display_name.is_not(None),
+            func.lower(AccountProfile.display_name).startswith(query.strip().lower(), autoescape=True),
+        )
+        matches = credits.union_all(profiles).subquery()
+        statement = (
+            select(Account.public_account_id, func.min(matches.c.name).label("name"))
+            .join(matches, matches.c.account_id == Account.id)
+            .group_by(Account.public_account_id)
+            .order_by("name", Account.public_account_id)
+            .limit(limit)
+        )
+        return [(str(row.public_account_id), row.name) for row in await self._session().execute(statement)]
 
     async def filter_values(self, field_name: str, prefix: str, *, limit: int) -> Sequence[str]:
         """Return distinct indexed text values for a field, ordered by the database.
@@ -225,7 +244,12 @@ class PostgresSuggestionRepository:
 
     async def creators(self, query: str, *, limit: int) -> Sequence[tuple[str, bool]]:
         """Return credited creator names and whether each has been claimed by an account."""
-        statement = select(CreatorAlias.name, CreatorAlias.account_id)
+        statement = select(CreatorAlias.name).where(
+            select(BuildCredit.id)
+            .join(Build, Build.id == BuildCredit.build_id)
+            .where(BuildCredit.alias_id == CreatorAlias.id, Build.submission_status == BuildStatus.APPROVED)
+            .exists()
+        )
         # Folded the same way the stored column is, so a prefix typed in any case or
         # compatibility form matches. Anchored on `normalized_name`, which the unique index
         # and the `text_pattern_ops` prefix index are both built on.
@@ -234,4 +258,4 @@ class PostgresSuggestionRepository:
             statement = statement.where(CreatorAlias.normalized_name.startswith(terms, autoescape=True))
         statement = statement.order_by(CreatorAlias.normalized_name).limit(limit)
         session = self._session()
-        return [(row.name, row.account_id is not None) for row in (await session.execute(statement)).all()]
+        return [(name, False) for name in await session.scalars(statement)]

@@ -10,7 +10,7 @@ from whenever import Instant
 
 from squid.core.accounts.domain import (
     PRIVACY_NOTICE_VERSION,
-    ClaimMethod,
+    ClaimStatus,
     IdentityProvider,
     PrivacyNoticeReceipt,
     ProfileUpdate,
@@ -97,10 +97,13 @@ async def test_record_carries_profile_identities_and_credit_counts(
     assert account.id is not None
     assert account.public_account_id is not None
     await _credit_builds(async_session_factory, alias_name="Notch", submitter_id=account.id, count=3)
+    claim = await transact(
+        repository, lambda uow: uow.accounts.request_claim(name="Notch", account_id=account.id), commit=True
+    )
     await transact(
         repository,
-        lambda uow: uow.accounts.claim_unclaimed_alias(
-            account_id=account.id, name="Notch", method=ClaimMethod.VERIFIED_IGN
+        lambda uow: uow.accounts.resolve_claim(
+            claim_id=claim.id, status=ClaimStatus.APPROVED, resolved_by_account_id=account.id
         ),
         commit=True,
     )
@@ -140,18 +143,10 @@ async def test_unclaimed_names_do_not_appear_and_uncredited_names_count_zero(
     await _credit_builds(async_session_factory, alias_name="Someone Else", submitter_id=account.id, count=2)
     async with build_edit_session(async_session_factory) as session:
         session.add(CreatorAlias(name="Uncredited"))
-    await transact(
-        repository,
-        lambda uow: uow.accounts.claim_unclaimed_alias(
-            account_id=account.id, name="Uncredited", method=ClaimMethod.STAFF_APPROVED
-        ),
-        commit=True,
-    )
-
     record = await transact(repository, lambda uow: uow.accounts.get_creator_profile_record(account.public_account_id))
 
     assert record is not None
-    assert [(alias.name, alias.build_count) for alias in record.aliases] == [("Uncredited", 0)]
+    assert [(alias.name, alias.build_count) for alias in record.aliases] == []
 
 
 async def test_record_follows_a_merge_redirect(repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]) -> None:

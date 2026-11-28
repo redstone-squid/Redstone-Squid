@@ -9,11 +9,11 @@ from uuid import UUID
 
 import anyio
 import pytest
-from sqlalchemy import insert, select, text, update
+from sqlalchemy import insert, select, text
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 from whenever import Instant
 
-from squid.core.accounts.domain import PRIVACY_NOTICE_VERSION, ClaimMethod, LinkReservation, PrivacyNoticeReceipt
+from squid.core.accounts.domain import PRIVACY_NOTICE_VERSION, LinkReservation, PrivacyNoticeReceipt
 from squid.core.accounts.models import Account as AccountModel
 from squid.core.accounts.models import AccountIdentity, CreatorAlias
 from squid.core.accounts.models import AccountIdentity as AccountIdentityModel
@@ -297,7 +297,7 @@ async def test_a_cancelled_prompt_stores_nothing_about_the_user(
         assert (await session.scalars(select(AccountIdentityModel))).all() == []
 
 
-async def test_the_preview_reports_an_unclaimed_credit_and_its_build_count(
+async def test_link_preview_does_not_offer_to_assign_matching_builds(
     repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
     async_session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
@@ -338,87 +338,7 @@ async def test_the_preview_reports_an_unclaimed_credit_and_its_build_count(
     )
 
     assert reservation is not None
-    credit = reservation.preview.credit
-    assert credit is not None
-    assert credit.name == "Notch"
-    assert credit.build_count == 3
-    assert not credit.is_contested
-
-
-async def test_the_preview_reports_a_contested_credit_by_public_creator(
-    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork],
-    async_session_factory: async_sessionmaker[AsyncSession],
-) -> None:
-    """Agreeing would move nothing here, so the prompt has to say so before the button is pressed."""
-    await _seed_code(repository, username="Notch")
-    holder = await transact(
-        repository, lambda uow: uow.accounts.create(identities=[AccountIdentity.discord(999)]), commit=True
-    )
-    assert holder.id is not None
-    async with async_session_factory.begin() as session:
-        session.add(
-            CreatorAlias(
-                name="Notch",
-                account_id=holder.id,
-                claimed_at=Instant.now(),
-                claim_method=ClaimMethod.STAFF_APPROVED,
-            )
-        )
-
-    reservation = await transact(
-        repository, lambda uow: uow.accounts.reserve_verification_code(CODE, ttl_seconds=TTL), commit=True
-    )
-
-    assert reservation is not None
-    credit = reservation.preview.credit
-    assert credit is not None
-    assert credit.is_contested
-    assert credit.held_by_public_account_id == holder.public_account_id
-
-
-async def test_an_unclaimed_preview_can_become_contested_before_commit(
-    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork], async_session_factory: async_sessionmaker[AsyncSession]
-) -> None:
-    """The atomic commit must re-evaluate ownership changed while the reader considered the preview."""
-    await _seed_code(repository, username="Notch")
-    claimant = await transact(
-        repository, lambda uow: uow.accounts.create(identities=[AccountIdentity.discord(1)]), commit=True
-    )
-    holder = await transact(
-        repository, lambda uow: uow.accounts.create(identities=[AccountIdentity.discord(2)]), commit=True
-    )
-    assert claimant.id is not None
-    assert holder.id is not None
-    async with async_session_factory.begin() as session:
-        session.add(CreatorAlias(name="Notch"))
-
-    reservation = await transact(
-        repository, lambda uow: uow.accounts.reserve_verification_code(CODE, ttl_seconds=TTL), commit=True
-    )
-    assert reservation is not None
-    assert reservation.preview.credit is not None
-    assert not reservation.preview.credit.is_contested
-
-    async with async_session_factory.begin() as session:
-        await session.execute(
-            update(CreatorAlias)
-            .where(CreatorAlias.name == "Notch")
-            .values(account_id=holder.id, claimed_at=Instant.now(), claim_method=ClaimMethod.STAFF_APPROVED)
-        )
-
-    result = await transact(
-        repository,
-        lambda uow: uow.accounts.consume_code_and_link_account(
-            account_id=claimant.id, code=CODE, consent=CONSENT, reservation_token=reservation.token
-        ),
-        commit=True,
-    )
-
-    assert result.refresh is not None
-    assert result.refresh.contested_alias is not None
-    assert result.refresh.contested_alias.account_id == holder.id
-    assert result.refresh.opened_claim is not None
-    assert result.refresh.opened_claim.account_id == claimant.id
+    assert reservation.preview.credit is None
 
 
 async def test_the_preview_reports_a_java_uuid_already_linked_elsewhere(
@@ -437,23 +357,6 @@ async def test_the_preview_reports_a_java_uuid_already_linked_elsewhere(
 
     assert reservation is not None
     assert reservation.preview.java_uuid_held_elsewhere is True
-
-
-async def test_the_preview_folds_the_username_to_find_the_credit(
-    repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork], async_session_factory: async_sessionmaker[AsyncSession]
-) -> None:
-    """The credit is matched by the same folding that defines creator identity, not by spelling."""
-    await _seed_code(repository, username="NOTCH")
-    async with async_session_factory.begin() as session:
-        session.add(CreatorAlias(name="notch"))
-
-    reservation = await transact(
-        repository, lambda uow: uow.accounts.reserve_verification_code(CODE, ttl_seconds=TTL), commit=True
-    )
-
-    assert reservation is not None
-    assert reservation.preview.credit is not None
-    assert reservation.preview.credit.name == "notch"
 
 
 async def test_an_unknown_or_spent_code_cannot_be_reserved(repository: UnitOfWorkFactory[SqlAlchemyUnitOfWork]) -> None:

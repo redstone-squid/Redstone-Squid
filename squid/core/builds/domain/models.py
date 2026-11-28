@@ -136,6 +136,7 @@ class BuildListFilters:
     """Current or former slugs."""
     public_account_id: uuid.UUID | None = None
     """An account credited as creator or designer."""
+    creator_name_id: int | None = None
 
 
 EMPTY_BUILD_FILTERS = BuildListFilters()

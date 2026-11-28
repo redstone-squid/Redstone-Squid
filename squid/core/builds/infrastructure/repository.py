@@ -28,10 +28,13 @@ from whenever import Instant
 
 from squid.core.accounts.domain import fold_creator_name
 from squid.core.accounts.infrastructure.attribution import attributed_credits
-from squid.core.accounts.models import Account, CreatorAlias
+from squid.core.accounts.models import Account, AccountProfile, CreatorAlias
 from squid.core.builds.application.queries import (
     BuildListSort,
     BuildRecordSummary,
+    CreatorRecord,
+    CreatorStats,
+    CreatorYear,
     PublicBuildSummary,
     PublicBuildTag,
 )
@@ -41,7 +44,6 @@ from squid.core.builds.domain import (
     BuildListFilters,
     BuildStatus,
     Credit,
-    CreditAttribution,
     CreditRole,
     Info,
     UnresolvedTags,
@@ -427,6 +429,34 @@ class BuildRepository:
         )
         return await session.scalar(statement) or 0
 
+    async def creator_stats(self, filters: BuildListFilters) -> CreatorStats:
+        session = self._session()
+        query = filter_build_listing(
+            select(Build.id),
+            statuses=frozenset({BuildStatus.APPROVED}),
+            submitter_account_id=None,
+            filters=filters,
+        )
+        dated = query.add_columns(func.extract("year", func.coalesce(Build.completion_at, Build.submission_time)))
+        years: dict[int, int] = defaultdict(int)
+        ids = []
+        for build_id, year in await session.execute(dated):
+            ids.append(build_id)
+            if year is not None:
+                years[int(year)] += 1
+        held = {}
+        ever = set()
+        for records in (await BuildLoader.records(session, ids)).values():
+            for record in records.held:
+                held[record.record_id] = CreatorRecord(record.record_id, record.title)
+            ever.update(record.record_id for record in records.former)
+        return CreatorStats(
+            len(ids),
+            tuple(CreatorYear(year, count) for year, count in sorted(years.items())),
+            tuple(sorted(held.values(), key=lambda record: (record.title, record.id))),
+            len(ever | held.keys()),
+        )
+
     async def count_creators(self) -> int:
         """Count the distinct people credited as creators or designers on approved builds, as cards list them.
 
@@ -693,20 +723,30 @@ class BuildRepository:
     ) -> None:
         """Rebuild creator, version, and tag relationships from the prepared build."""
         sql_build.build_versions = []
-        legacy = list(
-            {
-                fold_creator_name(credit.name): credit.name
-                for credit in build.credits
-                if credit.attribution is CreditAttribution.LEGACY
-            }.values()
-        )
-        aliases = dict(
-            zip(
-                map(fold_creator_name, legacy),
-                await self._get_or_create_aliases(session, legacy),
-                strict=True,
+        names = {fold_creator_name(credit.name): credit.name for credit in build.credits}
+        aliases = dict(zip(names, await self._get_or_create_aliases(session, list(names.values())), strict=True))
+        proposed_ids = {
+            credit.proposed_account_id for credit in build.credits if credit.proposed_account_id is not None
+        }
+        accounts = {}
+        if proposed_ids:
+            if build.submission_status is not BuildStatus.PENDING:
+                msg = "Account nominations require a pending submission."
+                raise InvalidBuildError(msg)
+            accounts = dict(
+                (
+                    await session.execute(
+                        select(Account.public_account_id, Account.id)
+                        .outerjoin(AccountProfile, AccountProfile.account_id == Account.id)
+                        .where(Account.public_account_id.in_(proposed_ids), AccountProfile.hidden.is_not(True))
+                    )
+                )
+                .tuples()
+                .all()
             )
-        )
+            if accounts.keys() != proposed_ids:
+                msg = "A nominated profile is unavailable."
+                raise InvalidBuildError(msg)
         by_id = {row.id: row for row in previous_credits}
         by_value: dict[Credit, list[BuildCredit]] = defaultdict(list)
         reserved = {credit.credit_id for credit in build.credits if credit.credit_id is not None}
@@ -717,7 +757,7 @@ class BuildRepository:
         rows = []
         for position, credit in enumerate(build.credits):
             if credit.credit_id is None:
-                matches = by_value[credit]
+                matches = by_value[replace(credit, proposed_account_id=None)]
                 row = matches.pop() if matches else BuildCredit(position=position, name=credit.name)
             else:
                 existing = by_id.pop(credit.credit_id, None)
@@ -733,9 +773,8 @@ class BuildRepository:
             row.role = credit.role
             row.attribution = credit.attribution
             row.source_message_id = credit.source_message_id
-            row.alias_id = (
-                aliases.get(fold_creator_name(credit.name)) if credit.attribution is CreditAttribution.LEGACY else None
-            )
+            row.alias_id = aliases[fold_creator_name(credit.name)]
+            row.proposed_account_id = accounts[credit.proposed_account_id] if credit.proposed_account_id else None
             rows.append(row)
         sql_build.build_credits = rows
 
@@ -948,6 +987,12 @@ class BuildRepository:
                 raise BuildRevisionMismatchError(build.id, expected=build.revision, current=current_revision)
             msg = f"Failed to {operation} submission in the database."
             raise PersistenceError(msg, context={"build_id": build.id, "operation": operation})
+        if status is BuildStatus.APPROVED:
+            await session.execute(
+                update(BuildCredit)
+                .where(BuildCredit.build_id == build.id, BuildCredit.proposed_account_id.is_not(None))
+                .values(account_id=BuildCredit.proposed_account_id, account_source="reviewed", proposed_account_id=None)
+            )
         for name, value in zip(("submission_status", "revision", "edited_time"), updated, strict=True):
             set_committed_value(build, name, value)
 

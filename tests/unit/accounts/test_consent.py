@@ -8,7 +8,7 @@ def test_the_notice_names_everything_it_is_consent_to() -> None:
     assert "discord user id" in notice  # what is stored
     assert "minecraft uuid" in notice
     assert "build credit" in notice  # what is claimed
-    assert "claim for staff to review" in notice  # and what is not taken from others
+    assert "staff review requests" in notice  # and what is not taken from others
     assert "submitting a build publishes it" in notice  # what submitting does
     assert "public catalogue" in notice
     assert "licence" in notice  # deferred to the per-submission choice, but named

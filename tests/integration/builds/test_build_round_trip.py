@@ -9,6 +9,7 @@ including the relationships and enum types that ordinary scalar equality can mis
 # characters; they are its inputs, not typos.
 
 from dataclasses import fields as dataclass_fields
+from dataclasses import replace
 from functools import partial
 from typing import Any
 
@@ -19,6 +20,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from whenever import Instant
 
+from squid.core.accounts.domain import ClaimStatus
 from squid.core.accounts.models import Account, AccountIdentity, CreatorAlias
 from squid.core.actors import ActingContext, AnonymousActor
 from squid.core.builds.application.tag_service import BuildTagService
@@ -425,6 +427,56 @@ async def test_credit_ids_follow_credits_through_edits(
     assert saved is not None
     assert saved.credits[0].credit_id == bob.credit_id
     assert saved.credits[1].credit_id not in {None, alice.credit_id, bob.credit_id}
+
+
+async def test_approval_and_claims_attribute_only_selected_credits(
+    migrated_session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    account_id = await _seed_catalogue(migrated_session_factory)
+    factory = partial(SqlAlchemyUnitOfWork, migrated_session_factory, verification_code_pepper="test")
+    async with migrated_session_factory.begin() as session:
+        creator = Account()
+        session.add(creator)
+        await session.flush()
+        public_id = creator.public_account_id
+    assert public_id is not None
+    first = _make_build(BuildCategory.UTILITY, account_id)
+    first.credits = [replace(name_credits(["Shared"])[0], proposed_account_id=public_id)]
+    await _resolve_and_save(migrated_session_factory, factory, first)
+    pending = await transact(factory, lambda uow: uow.builds.get_by_id(first.id))
+    assert pending is not None
+    assert pending.credits[0].account_id is None
+    assert pending.credits[0].proposed_account_id == public_id
+    assert not pending.is_creator(creator.id)
+    await transact(factory, lambda uow: uow.builds.approve(first), commit=True)
+    approved = await transact(factory, lambda uow: uow.builds.get_by_id(first.id))
+    assert approved is not None
+    assert approved.credits[0].account_id == public_id
+    key = approved.credits[0].credit_id
+    assert key is not None
+    claim = await transact(
+        factory,
+        lambda uow: uow.accounts.request_claim(name="Shared", account_id=account_id, credit_ids=[key]),
+        commit=True,
+    )
+    second = _make_build(BuildCategory.UTILITY, account_id)
+    second.credits = name_credits(["Shared"])
+    await _resolve_and_save(migrated_session_factory, factory, second)
+    await transact(factory, lambda uow: uow.builds.approve(second), commit=True)
+    await transact(
+        factory,
+        lambda uow: uow.accounts.resolve_claim(
+            claim_id=claim.id, status=ClaimStatus.APPROVED, resolved_by_account_id=account_id, reassign=True
+        ),
+        commit=True,
+    )
+    claimed = await transact(factory, lambda uow: uow.builds.get_by_id(first.id))
+    other = await transact(factory, lambda uow: uow.builds.get_by_id(second.id))
+    assert claimed is not None
+    assert claimed.credits[0].account_id is not None
+    assert claimed.credits[0].account_id != public_id
+    assert other is not None
+    assert other.credits[0].account_id is None
 
 
 async def test_alias_resolves_to_canonical_display_name(

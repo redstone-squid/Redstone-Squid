@@ -9,7 +9,6 @@ from whenever import Instant
 
 from squid.core.accounts.domain import (
     AccountMerge,
-    ClaimMethod,
     ClaimStatus,
     CreatorProfile,
     CreatorProfileRecord,
@@ -138,11 +137,11 @@ class AccountRepository(Protocol):
 
     async def credit_owners(self, build_id: int) -> dict[int, UUID]: ...
 
-    async def claim_unclaimed_alias(
-        self, *, account_id: int, name: str, method: ClaimMethod
-    ) -> CreatorAlias | None: ...
+    async def request_claim(
+        self, *, name: str, account_id: int, credit_ids: Collection[UUID] | None = None
+    ) -> AliasClaim: ...
 
-    async def request_claim(self, *, name: str, account_id: int) -> AliasClaim: ...
+    async def claims_for_account(self, account_id: int) -> Sequence[AliasClaim]: ...
 
     async def get_claim(self, claim_id: int) -> AliasClaim | None: ...
 
@@ -155,6 +154,7 @@ class AccountRepository(Protocol):
         status: ClaimStatus,
         resolved_by_account_id: int,
         reassign: bool = False,
+        credit_ids: Collection[UUID] | None = None,
     ) -> AliasClaim: ...
 
     async def consume_code_and_link_account(

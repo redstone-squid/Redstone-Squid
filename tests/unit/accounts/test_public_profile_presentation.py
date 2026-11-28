@@ -97,7 +97,7 @@ class TestHiddenIdentities:
 
 
 class TestHiddenProfile:
-    def test_hidden_profile_degrades_to_aliases_and_credits(self) -> None:
+    def test_hidden_profile_omits_credit_links(self) -> None:
         profile = AccountProfile(
             account_id=7,
             display_name="Notch",
@@ -109,7 +109,7 @@ class TestHiddenProfile:
         )
         public = PublicCreatorProfile.from_record(record(profile))
         assert public.hidden
-        assert public.aliases == (CreditedAlias("Notch", build_count=3),)
+        assert public.aliases == ()
         assert public.display_name is None
         assert public.bio is None
         assert public.pronouns is None

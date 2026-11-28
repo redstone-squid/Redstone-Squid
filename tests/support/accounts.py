@@ -249,14 +249,6 @@ class FakeAccountRepository:
             canonical_public_id=public_id,
         )
 
-    async def claim_unclaimed_alias(self, *, account_id: int, name: str, method: ClaimMethod) -> CreatorAlias | None:
-        alias = await self.get_alias_by_name(name)
-        if alias is None or alias.account_id is not None:
-            return None
-        claimed = replace(alias, account_id=account_id, claimed_at=NOW, claim_method=method)
-        self.aliases[alias.id] = claimed
-        return claimed
-
     async def lock_for_edit(self, account_id: int) -> Account:
         account = await self.get_by_id(account_id)
         if account is None:
@@ -341,7 +333,9 @@ class FakeAccountRepository:
         held = (alias.name for alias in self.aliases.values() if alias.account_id == account_id)
         return tuple(sorted(held, key=fold_creator_name))
 
-    async def request_claim(self, *, name: str, account_id: int) -> AliasClaim:
+    async def request_claim(
+        self, *, name: str, account_id: int, credit_ids: Collection[UUID] | None = None
+    ) -> AliasClaim:
         alias = await self.get_alias_by_name(name)
         assert alias is not None
         claim = AliasClaim(
@@ -354,6 +348,9 @@ class FakeAccountRepository:
         )
         self.claims[claim.id] = claim
         return claim
+
+    async def claims_for_account(self, account_id: int) -> Sequence[AliasClaim]:
+        return [c for c in self.claims.values() if c.account_id == account_id]
 
     async def get_claim(self, claim_id: int) -> AliasClaim | None:
         return self.claims.get(claim_id)
@@ -378,6 +375,7 @@ class FakeAccountRepository:
         status: ClaimStatus,
         resolved_by_account_id: int,
         reassign: bool = False,
+        credit_ids: Collection[UUID] | None = None,
     ) -> AliasClaim:
         self.reassign_requested = reassign
         claim = self.claims[claim_id]

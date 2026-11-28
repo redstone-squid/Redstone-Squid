@@ -11,7 +11,7 @@ account's public creator ID after the merge.
 """
 
 import uuid
-from typing import override
+from typing import TypedDict, override
 
 from sqlalchemy import (
     UUID,
@@ -345,7 +345,7 @@ class PublicAccountRedirect(Base):
 
 
 class CreatorAlias(CreatedAtMixin, Base, kw_only=True):
-    """A creator name credited on a build, optionally claimed by an account."""
+    """A searchable spelling shared by build credits. Ownership is recorded on each credit."""
 
     __tablename__ = "creator_aliases"
     __table_args__ = (
@@ -410,6 +410,11 @@ def _refold_on_name_change(_mapper: object, _connection: object, target: Creator
         target.normalized_name = fold_creator_name(target.name)
 
 
+class ClaimedCredit(TypedDict):
+    build_id: int
+    account_id: int | None
+
+
 class AliasClaim(CreatedAtMixin, Base, kw_only=True):
     """An account's request to be credited under a creator alias."""
 
@@ -417,13 +422,6 @@ class AliasClaim(CreatedAtMixin, Base, kw_only=True):
     __table_args__ = (
         Index("creator_alias_claims_account_idx", "account_id"),
         Index("creator_alias_claims_resolved_by_idx", "resolved_by_account_id"),
-        Index(
-            "creator_alias_claims_one_pending_per_account",
-            "alias_id",
-            "account_id",
-            unique=True,
-            postgresql_where=text("status = 'pending'"),
-        ),
         CheckConstraint(
             "status IN ('pending', 'approved', 'rejected')",
             name="creator_alias_claims_status_check",
@@ -450,6 +448,14 @@ class AliasClaim(CreatedAtMixin, Base, kw_only=True):
         Integer,
         ForeignKey("accounts.id", name="creator_alias_claims_resolved_by_account_id_fkey", ondelete="SET NULL"),
         default=None,
+    )
+
+    selected_credits: Mapped[dict[str, ClaimedCredit]] = mapped_column(
+        JSONB, default_factory=dict, server_default=text("'{}'::jsonb")
+    )
+    """Credit IDs selected at filing and the effective owners staff will review."""
+    approved_credit_ids: Mapped[list[str]] = mapped_column(
+        JSONB, default_factory=list, server_default=text("'[]'::jsonb")
     )
 
     alias_name: str = ""
